@@ -62,7 +62,7 @@ enum GamePhotoMoments {
         PhotoMoment(
             id: id.hasPrefix("achievement:") ? id : "achievement:\(id)",
             emblem: .achievement(rarity: rarity),
-            kicker: String(localized: "game.photo.kicker.achievement", defaultValue: "Succès", bundle: .main),
+            kicker: String(localized: "game.photo.kicker.achievement", defaultValue: "Haut fait", bundle: .main),
             title: title
         )
     }
@@ -72,7 +72,7 @@ enum GamePhotoMoments {
         PhotoMoment(
             id: "mission:\(id)",
             emblem: .mission(templateKey: templateKey, target: target),
-            kicker: String(localized: "game.photo.kicker.mission", defaultValue: "Mission accomplie", bundle: .main),
+            kicker: String(localized: "game.photo.kicker.mission", defaultValue: "Rêve réalisé", bundle: .main),
             title: GameCopy.missionTitle(templateKey: templateKey, target: target)
         )
     }
@@ -90,7 +90,7 @@ enum GamePhotoMoments {
     /// après un Prestige est un moment neuf, et son titre dit combien de fois il a été atteint (« Palier Lueur ×2 »).
     static func tier(_ tier: LevelTierKey, level: Int, prestige: Int = 0, times: Int = 1) -> PhotoMoment {
         let name = GameCopy.tierName(tier)
-        let title = String(localized: "game.photo.title.tier", defaultValue: "Palier \(name)", bundle: .main)
+        let title = String(localized: "game.photo.title.tier", defaultValue: "Ta lumière en \(name)", bundle: .main)
         return PhotoMoment(
             id: GamePhotoCatchUpLaw.tierStepId(tier, prestige: prestige),
             emblem: .tier(tier, level: level),
@@ -112,10 +112,10 @@ enum GamePhotoMoments {
             emblem: .levelHundred(prestige: prestige),
             kicker: prestige == 0
                 ? String(localized: "game.photo.kicker.summit", defaultValue: "Au sommet", bundle: .main)
-                : String(localized: "game.photo.kicker.new_lap", defaultValue: "Nouveau tour", bundle: .main),
+                : String(localized: "game.photo.kicker.new_lap", defaultValue: "Nouvel Âge", bundle: .main),
             title: prestige == 0
                 ? String(localized: "game.photo.title.level_100", defaultValue: "Niveau 100", bundle: .main)
-                : String(localized: "game.photo.title.prestige", defaultValue: "Prestige \(GameCopy.formatCount(prestige))", bundle: .main)
+                : String(localized: "game.photo.title.prestige", defaultValue: "Renaissance \(GameCopy.formatCount(prestige))", bundle: .main)
         )
     }
 
@@ -141,7 +141,7 @@ enum GamePhotoMoments {
         PhotoMoment(
             id: "treasury:\(tier.rawValue)",
             emblem: .treasury(tier),
-            kicker: String(localized: "game.photo.kicker.treasury", defaultValue: "Trésor", bundle: .main),
+            kicker: String(localized: "game.photo.kicker.treasury", defaultValue: "Héritage", bundle: .main),
             title: GameCopy.treasuryName(tier)
         )
     }

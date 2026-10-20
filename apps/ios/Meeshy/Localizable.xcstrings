@@ -237086,7 +237086,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@ Gloire"
+            "value": "+%@ de gloire"
           }
         },
         "it": {
@@ -250019,7 +250019,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@ Gloire"
+            "value": "+%@ de gloire"
           }
         },
         "it": {
@@ -250677,7 +250677,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ / %@ · %@ · +%@ Gloire"
+            "value": "%@ / %@ · %@ · +%@ de gloire"
           }
         },
         "it": {
@@ -255472,7 +255472,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau %@, palier %@, %@ palier"
+            "value": "Niveau %@, %@, %@ état de ta lumière"
           }
         },
         "it": {
@@ -256976,7 +256976,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les 20 paliers"
+            "value": "Les 20 états de ta lumière"
           }
         },
         "it": {
@@ -257023,7 +257023,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vingt paliers, de la braise à la singularité : ton anneau change à chacun."
+            "value": "Vingt états, de l’Étincelle à la Singularité : ton anneau change à chacun."
           }
         },
         "it": {
@@ -257305,7 +257305,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gloire du premier passage : %@ par niveau jusqu’au %@, puis %@ tous les dix niveaux."
+            "value": "La gloire du premier passage : %@ par niveau jusqu’au %@, puis %@ tous les dix niveaux."
           }
         },
         "it": {
@@ -257775,7 +257775,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La Gloire fait monter ton rang. Il ne redescend jamais, même quand tu frappes."
+            "value": "Ta gloire fait grandir ton rang. Il ne recule jamais, même quand tu frappes."
           }
         },
         "it": {
@@ -257822,7 +257822,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les 100 premiers à atteindre 1 000 000 de Gloire"
+            "value": "Les 100 premiers à atteindre 1 000 000 de gloire"
           }
         },
         "it": {
@@ -273215,7 +273215,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trésor : %@"
+            "value": "Héritage : %@"
           }
         },
         "en": {
@@ -274132,7 +274132,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ranger ma vitrine"
+            "value": "Ranger mes trophées"
           }
         },
         "it": {
@@ -275354,7 +275354,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Palier"
+            "value": "État de ta lumière"
           }
         },
         "it": {
@@ -275965,7 +275965,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trésor"
+            "value": "Héritage"
           }
         },
         "it": {
@@ -293649,7 +293649,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Assez de lumière pour une Meesh"
+            "value": "De quoi frapper une Meesh"
           }
         },
         "it": {
