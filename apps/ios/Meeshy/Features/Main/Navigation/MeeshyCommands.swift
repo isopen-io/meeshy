@@ -6,6 +6,7 @@ struct MeeshyCommands: Commands {
     @FocusedValue(\.meeshyNewConversation) private var newConversation
     @FocusedValue(\.meeshySearch) private var search
     @FocusedValue(\.meeshyCloseWindow) private var closeWindow
+    @FocusedValue(\.meeshySendMessage) private var sendMessage
     @ObservedObject private var preferences = UserPreferencesManager.shared
 
     private var targets: SceneCommandTargets {
@@ -13,7 +14,8 @@ struct MeeshyCommands: Commands {
             navigation: navigation,
             newConversation: newConversation,
             search: search,
-            closeWindow: closeWindow
+            closeWindow: closeWindow,
+            sendMessage: sendMessage
         )
     }
 
@@ -27,6 +29,9 @@ struct MeeshyCommands: Commands {
             Divider()
             item(.back)
             item(.search)
+        }
+        CommandMenu(String(localized: "commands.menu.message", defaultValue: "Message", bundle: .main)) {
+            item(.sendMessage)
         }
     }
 

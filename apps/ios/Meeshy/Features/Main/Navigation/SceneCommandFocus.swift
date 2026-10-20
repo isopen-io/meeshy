@@ -30,6 +30,10 @@ private struct MeeshyCloseWindowKey: FocusedValueKey {
     typealias Value = MeeshySceneAction
 }
 
+private struct MeeshySendMessageKey: FocusedValueKey {
+    typealias Value = MeeshySceneAction
+}
+
 extension FocusedValues {
     var meeshySceneNavigation: MeeshySceneNavigation? {
         get { self[MeeshySceneNavigationKey.self] }
@@ -49,6 +53,11 @@ extension FocusedValues {
     var meeshyCloseWindow: MeeshySceneAction? {
         get { self[MeeshyCloseWindowKey.self] }
         set { self[MeeshyCloseWindowKey.self] = newValue }
+    }
+
+    var meeshySendMessage: MeeshySceneAction? {
+        get { self[MeeshySendMessageKey.self] }
+        set { self[MeeshySendMessageKey.self] = newValue }
     }
 }
 
@@ -75,17 +84,20 @@ struct SceneCommandTargets {
     let newConversation: MeeshySceneAction?
     let search: MeeshySceneAction?
     let closeWindow: MeeshySceneAction?
+    let sendMessage: MeeshySceneAction?
 
     init(
         navigation: MeeshySceneNavigation? = nil,
         newConversation: MeeshySceneAction? = nil,
         search: MeeshySceneAction? = nil,
-        closeWindow: MeeshySceneAction? = nil
+        closeWindow: MeeshySceneAction? = nil,
+        sendMessage: MeeshySceneAction? = nil
     ) {
         self.navigation = navigation
         self.newConversation = newConversation
         self.search = search
         self.closeWindow = closeWindow
+        self.sendMessage = sendMessage
     }
 
     func action(for shortcut: MeeshyShortcut) -> (() -> Void)? {
@@ -93,6 +105,7 @@ struct SceneCommandTargets {
         case .newConversation: return newConversation?.perform
         case .search: return search?.perform
         case .closeWindow: return closeWindow?.perform
+        case .sendMessage: return sendMessage?.perform
         case .back: return backAction()
         case .conversations, .contacts, .notifications, .settings: return sectionAction(shortcut)
         }
