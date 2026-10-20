@@ -289,8 +289,9 @@ services:
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
       - UPLOAD_PATH=/app/uploads
       # Volume DÉDIÉ à la bibliothèque de sons. Surtout PAS sous UPLOAD_PATH :
-      # ce dernier est monté en lecture seule par nginx (static.<domaine>) et
-      # servi sans authentification — les sons ne le sont que par la route JWT.
+      # ce dernier a été servi sans authentification par nginx (static.<domaine>)
+      # jusqu'à #11256 ; les sons ne le sont que par la route JWT, et rester
+      # hors de l'arbre des uploads les garde d'un remontage futur.
       - UPLOAD_DIR=/app/sounds
       # Capture de sons OUVERTE (décision produit du 2026-07-31). Alimentée par
       # les contenus PUBLIC **et COMMUNITY** — cf. `soundEligibility.ts`.

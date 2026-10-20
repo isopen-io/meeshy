@@ -108,6 +108,14 @@ describe('les uploads de la passerelle ne rejoignent JAMAIS un magasin public (#
     it('la passerelle, elle, le monte bien sur /app/uploads — la route authentifiée doit pouvoir les lire', () => {
       expect(source).toContain(`${volumeUploads}:/app/uploads`);
     });
+
+    it(`AUCUN autre service ne monte "${volumeUploads}" — seule la passerelle sert ces octets`, () => {
+      const montages = source
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith(`- ${volumeUploads}:`));
+      expect(montages).toEqual([`- ${volumeUploads}:/app/uploads`]);
+    });
   });
 
   describe.each(CONFS_NGINX.map((p) => [path.relative(INFRA_DIR, p), p] as const))('%s', (_nom, chemin) => {

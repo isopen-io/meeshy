@@ -7,37 +7,53 @@
  * DONNÉES soumise au feu vert du porteur (#9223), précédée d'une sauvegarde
  * vérifiée — pas un effet de bord de ce compte.
  *
+ * Il balaie TOUTE colonne qui peut graver une adresse de média (pièces
+ * jointes, médias de post, piste d'un post, avatars et bannières, sons) :
+ * la liste vit dans `STATIC_UPLOAD_URL_COLUMNS`.
+ *
  * FAÇADE MINCE : la décision et le balayage vivent dans
- * `src/services/attachments/staticUploadUrlCount.ts` (sous `src/`, donc lus par
- * `tsc`, comme `normalize-media-urls.ts`), les requêtes dans `mediaUrlStores.ts`.
+ * `src/services/attachments/staticUploadUrlCount.ts`, les requêtes dans
+ * `staticUploadUrlStores.ts` (sous `src/`, donc lues par `tsc`).
  *
  * ⚠ Lancé depuis un poste de travail, `DATABASE_URL` cible la base LOCALE. À
- * exécuter DANS le conteneur du gateway de l'environnement visé.
+ * exécuter DANS le conteneur du gateway de l'environnement visé :
  *
- * Usage:
+ *   docker exec -it meeshy-gateway-staging sh -lc 'cd /app && bunx tsx scripts/count-static-upload-urls.ts'
  *   docker exec -it meeshy-gateway sh -lc 'cd /app && bunx tsx scripts/count-static-upload-urls.ts'
  *
  * Code de sortie : 0 = aucune ligne, le retrait peut suivre ; 3 = des lignes
  * existent (migration de données d'abord) ; 1 = erreur.
+ *
+ * LE SECOND PRÉALABLE est le TRAFIC : une adresse que la base ne grave plus
+ * peut encore vivre dans un cache client, un e-mail, un lien partagé. Le
+ * journal d'accès de Traefik est un fichier JSON tourné chaque jour (14 jours
+ * gardés, `/var/log/meeshy/traefik/` sur l'hôte, #10855) — pas `docker logs`.
+ * Sept jours de requêtes `GET /uploads/` sur le domaine statique, par hôte, statut
+ * et par client :
+ *
+ *   cd /var/log/meeshy/traefik && find . -name 'access.log*' -mtime -7 \
+ *     -exec sh -c 'case "$1" in *.gz) zcat "$1";; *) cat "$1";; esac' _ {} \; \
+ *   | jq -r 'select((.RequestHost // "") | startswith("static.")) | select((.RequestPath // "") | startswith("/uploads/"))
+ *            | [.RequestHost, .DownstreamStatus, (."request_User-Agent" // "-")] | @tsv' \
+ *   | sort | uniq -c | sort -rn | head -40
+ *
+ * Zéro ligne en `200` : rien ne lit plus ce chemin, le retrait ne casse
+ * personne. Sinon, l'agent utilisateur dit QUEL client grave encore l'adresse.
  */
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
-import { attachmentUrlStore, postMediaUrlStore } from '../src/services/attachments/mediaUrlStores';
 import { countStaticUploadUrls } from '../src/services/attachments/staticUploadUrlCount';
+import { staticUploadUrlStores } from '../src/services/attachments/staticUploadUrlStores';
 
 async function main(): Promise<number> {
   const prisma = new PrismaClient();
   try {
-    const report = await countStaticUploadUrls({
-      stores: [attachmentUrlStore(prisma.messageAttachment), postMediaUrlStore(prisma.postMedia)],
-    });
+    const report = await countStaticUploadUrls({ stores: staticUploadUrlStores(prisma) });
 
     console.log('Adresses static.<domaine>/uploads en base (#11256)');
     for (const [nom, tally] of Object.entries(report.parCollection)) {
-      console.log(`  ${nom}`);
-      console.log(`    lignes examinées : ${tally.scanned}`);
-      console.log(`    fileUrl          : ${tally.fileUrl}`);
-      console.log(`    thumbnailUrl     : ${tally.thumbnailUrl}`);
+      console.log(`  ${nom} — lignes examinées : ${tally.scanned}`);
+      for (const [colonne, n] of Object.entries(tally.parColonne)) console.log(`    ${colonne.padEnd(14)}: ${n}`);
     }
     for (const exemple of report.exemples) console.log(`    ${exemple}`);
     console.log('');

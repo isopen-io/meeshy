@@ -260,7 +260,8 @@ services:
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - UPLOAD_PATH=/app/uploads
       # Volume DÉDIÉ à la bibliothèque de sons — même règle qu'en prod :
-      # surtout PAS sous UPLOAD_PATH (servi sans authentification par nginx).
+      # surtout PAS sous UPLOAD_PATH (servi sans authentification par nginx
+      # jusqu'à #11256 : rester hors de cet arbre garde d'un remontage futur).
       # Sans UPLOAD_DIR ni volume, l'image écrirait les sons dans un
       # /app/sounds éphémère et les perdrait à chaque recréation du conteneur.
       - UPLOAD_DIR=/app/sounds
