@@ -369,7 +369,17 @@ struct FeedView: View {
                 quoteTargetPost = viewModel.posts.first(where: { $0.id == postId })
             },
             onEdit: { post in editingPost = post },
-            onOpenReelComments: { post in reelCommentsPost = post }
+            onOpenReelComments: { post in reelCommentsPost = post },
+            onAuthorMoodTap: { userId, point in statusViewModel.moodTapHandler(for: userId)?(point) },
+            moodLookup: { userId in
+                (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+                 tapHandler: statusViewModel.moodTapHandler(for: userId))
+            },
+            onViewAuthorStory: { authorId in
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
+            }
         )
     }
 
@@ -680,9 +690,6 @@ struct FeedView: View {
 
     private var scrollContent: some View {
         ScrollViewReader { scrollProxy in
-            // Wrapper Meeshy : `.refreshable` natif iOS + indicator brand
-            // anime (logo dashes + degrade indigo). Meme experience que la
-            // liste de conversations — UX coherente cross-screen.
             MeeshyRefreshableScroll(
                 onRefresh: {
                     async let feedRefresh: Void = viewModel.refresh()
@@ -696,9 +703,6 @@ struct FeedView: View {
                 topPadding: CollapsibleHeaderMetrics.expandedHeight
             ) {
                 LazyVStack(spacing: MeeshySpacing.lg) {
-                    // Anchor pour le banner "nouveaux posts" → scroll vers
-                    // le haut. L'id est attache a un Color.clear de hauteur 0
-                    // au sommet du contenu.
                     Color.clear.frame(height: 0).id("feed-top")
 
                     // Story tray — same component used by the conversation list
@@ -772,8 +776,11 @@ struct FeedView: View {
                             viewModel: viewModel,
                             reelAutoplay: reelAutoplay,
                             engagement: engagement.snapshot(for: post),
+                            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
+                            authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
                             actions: postRowActions
                         )
+                            .equatable()
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                                 viewModel.prefetchMediaForPost(post.id)

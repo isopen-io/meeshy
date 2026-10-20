@@ -11,22 +11,22 @@ final class CallRecordingAckTests: XCTestCase {
     }
 
     func test_ack_success_returnsTheRecordingId() {
-        let result = MessageSocketManager.callRecordingAck(["success": true, "recordingId": "rec-1"])
+        let result = MessageSocketManager.callRecordingAck(SocketAck<CallRecordingAckBody>.parse(["success": true, "recordingId": "rec-1"], payloadAt: .root))
         XCTAssertEqual(try? result.get(), "rec-1")
     }
 
     func test_ack_refusal_carriesTheGatewayCode() {
-        let result = MessageSocketManager.callRecordingAck(["success": false, "code": "NO_PEER_TO_CONSENT"])
+        let result = MessageSocketManager.callRecordingAck(SocketAck<CallRecordingAckBody>.parse(["success": false, "code": "NO_PEER_TO_CONSENT"], payloadAt: .root))
         XCTAssertEqual(refusalCode(result), "NO_PEER_TO_CONSENT")
     }
 
     func test_ack_timeout_isARefusal() {
-        let result = MessageSocketManager.callRecordingAck("NO ACK")
+        let result = MessageSocketManager.callRecordingAck(SocketAck<CallRecordingAckBody>.parse("NO ACK", payloadAt: .root))
         XCTAssertEqual(refusalCode(result), "TIMEOUT")
     }
 
     func test_ack_successWithoutRecordingId_isARefusal() {
-        let result = MessageSocketManager.callRecordingAck(["success": true])
+        let result = MessageSocketManager.callRecordingAck(SocketAck<CallRecordingAckBody>.parse(["success": true], payloadAt: .root))
         XCTAssertEqual(refusalCode(result), "MALFORMED_ACK")
     }
 }

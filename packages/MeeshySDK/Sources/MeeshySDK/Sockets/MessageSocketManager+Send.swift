@@ -40,6 +40,15 @@ extension MessageSocketManager {
         return WireDate.date(from: string)
     }
 
+    static func sendMessageAck(from ack: SocketAck<SendMessageAckBody>, requestCid: String) -> SendMessageAck? {
+        guard case .accepted(let body) = ack else { return nil }
+        return SendMessageAck(
+            messageId: body.messageId,
+            clientMessageId: body.clientMessageId ?? requestCid,
+            createdAt: parseAckDate(body.createdAt)
+        )
+    }
+
     /// Interne (plus `private`) pour que le témoin de #4823 mesure la charge
     /// RÉELLEMENT émise — pas une reconstruction du test.
     func buildAttachmentPayload(
@@ -136,30 +145,18 @@ extension MessageSocketManager {
             replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted,
             clientMessageId: cid, location: location, sticker: sticker
         )
-        return await withCheckedContinuation { continuation in
-            // 10s (was 30s): the gateway acks as soon as the message row is
-            // created — attachments were already uploaded separately, so a
-            // healthy ack lands in well under 2s. Holding the optimistic
-            // bubble in `.sending` for 30s only prolonged the clock icon; on
-            // timeout the caller falls through to the outbox retry loop,
-            // which remains the durable safety net. Matches `sendAsync`'s
-            // 10s default on the text path.
-            socket.emitWithAck("message:send-with-attachments", payload).timingOut(after: 10) { items in
-                if let response = items.first as? [String: Any],
-                   let success = response["success"] as? Bool, success,
-                   let data = response["data"] as? [String: Any],
-                   let messageId = data["messageId"] as? String {
-                    let ackCid = data["clientMessageId"] as? String ?? cid
-                    continuation.resume(returning: SendMessageAck(
-                        messageId: messageId,
-                        clientMessageId: ackCid,
-                        createdAt: MessageSocketManager.parseAckDate(data["createdAt"])
-                    ))
-                } else {
-                    continuation.resume(returning: nil)
-                }
-            }
-        }
+        // 10s (was 30s): the gateway acks as soon as the message row is
+        // created — attachments were already uploaded separately, so a
+        // healthy ack lands in well under 2s. Holding the optimistic
+        // bubble in `.sending` for 30s only prolonged the clock icon; on
+        // timeout the caller falls through to the outbox retry loop,
+        // which remains the durable safety net. Matches `sendAsync`'s
+        // 10s default on the text path.
+        let ack = await socket.emitWithAck(
+            .messageSendWithAttachments, payload,
+            as: SendMessageAckBody.self, payloadAt: .data, timingOutAfter: 10
+        )
+        return Self.sendMessageAck(from: ack, requestCid: cid)
     }
 
     // MARK: - Send Text (WebSocket-first)
@@ -217,23 +214,11 @@ extension MessageSocketManager {
         // Lieu partagé — même clé `location` que le corps REST ; le handler
         // socket la valide via `parseSharedPlace` (MessageHandler.ts).
         if let location { payload["location"] = MessageSocketManager.locationSocketPayload(location) }
-        return await withCheckedContinuation { continuation in
-            socket.emitWithAck("message:send", payload).timingOut(after: timeoutSeconds) { items in
-                if let response = items.first as? [String: Any],
-                   let success = response["success"] as? Bool, success,
-                   let data = response["data"] as? [String: Any],
-                   let messageId = data["messageId"] as? String {
-                    let ackCid = data["clientMessageId"] as? String ?? cid
-                    continuation.resume(returning: SendMessageAck(
-                        messageId: messageId,
-                        clientMessageId: ackCid,
-                        createdAt: MessageSocketManager.parseAckDate(data["createdAt"])
-                    ))
-                } else {
-                    continuation.resume(returning: nil)
-                }
-            }
-        }
+        let ack = await socket.emitWithAck(
+            .messageSend, payload,
+            as: SendMessageAckBody.self, payloadAt: .data, timingOutAfter: timeoutSeconds
+        )
+        return Self.sendMessageAck(from: ack, requestCid: cid)
     }
 
     /// Chemin de repli socket pour `ConversationViewModel.sendMessage`, appelé
@@ -285,5 +270,22 @@ extension MessageSocketManager {
             location: location,
             sticker: sticker
         )
+    }
+}
+
+struct SendMessageAckBody: Decodable, Sendable {
+    let messageId: String
+    let clientMessageId: String?
+    let createdAt: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case messageId, clientMessageId, createdAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        messageId = try container.decode(String.self, forKey: .messageId)
+        clientMessageId = try? container.decodeIfPresent(String.self, forKey: .clientMessageId)
+        createdAt = try? container.decodeIfPresent(String.self, forKey: .createdAt)
     }
 }
