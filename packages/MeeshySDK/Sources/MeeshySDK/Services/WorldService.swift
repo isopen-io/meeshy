@@ -11,7 +11,7 @@ public protocol GuestLinkJoining: Sendable {
     func joinAsGuest(key: String, nickname: String, language: String) async throws -> LinkMembershipResponse
 }
 
-public final class WorldService: WorldEntryProviding, GuestLinkJoining, @unchecked Sendable {
+public final class WorldService: WorldEntryProviding, GuestLinkJoining, Sendable {
     public static let shared = WorldService()
 
     private let api: APIClientProviding

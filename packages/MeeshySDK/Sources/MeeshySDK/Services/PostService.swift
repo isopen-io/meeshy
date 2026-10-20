@@ -395,7 +395,7 @@ public extension PostServiceProviding {
     }
 }
 
-public final class PostService: PostServiceProviding, @unchecked Sendable {
+public final class PostService: PostServiceProviding, Sendable {
     public static let shared = PostService()
     let api: APIClientProviding
     /// #10502 — les interactions RÉUSSIES par appel direct (réels, profil,

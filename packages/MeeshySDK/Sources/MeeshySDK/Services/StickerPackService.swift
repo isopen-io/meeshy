@@ -22,7 +22,7 @@ extension StickerPackServiceProviding {
     }
 }
 
-public final class StickerPackService: StickerPackServiceProviding, @unchecked Sendable {
+public final class StickerPackService: StickerPackServiceProviding, Sendable {
     public static let shared = StickerPackService()
     private let packs: PackService<StickerPack>
 

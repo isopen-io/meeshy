@@ -1,6 +1,6 @@
 import Foundation
 
-public final class ConversationAnalysisService: @unchecked Sendable {
+public final class ConversationAnalysisService: Sendable {
     public static let shared = ConversationAnalysisService()
     private let api: APIClientProviding
 

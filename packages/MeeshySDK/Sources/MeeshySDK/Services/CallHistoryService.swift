@@ -64,7 +64,7 @@ public protocol CallHistoryServiceProviding: Sendable {
 /// Reads the call journal from `GET /api/v1/calls/history` (cursor-paginated,
 /// filtered and searched server-side — #8203)
 /// and erases it for the reader alone (`DELETE /api/v1/calls/history[/:callId]`).
-public final class CallHistoryService: CallHistoryServiceProviding, @unchecked Sendable {
+public final class CallHistoryService: CallHistoryServiceProviding, Sendable {
     public static let shared = CallHistoryService()
     private let api: APIClientProviding
 

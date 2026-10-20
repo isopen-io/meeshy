@@ -45,7 +45,7 @@ public struct ConsumeAfterReadResponse: Decodable, Sendable {
     public let consumed: [String]
 }
 
-public final class MessageService: MessageServiceProviding, AfterReadConsuming, @unchecked Sendable {
+public final class MessageService: MessageServiceProviding, AfterReadConsuming, Sendable {
     public static let shared = MessageService()
     private let api: APIClientProviding
 
