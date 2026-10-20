@@ -3520,6 +3520,7 @@
 		0FD96C7886598F8EBD040FF7 /* ConversationViewModelRetryFidelityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB14C95A7485714B336F6BD /* ConversationViewModelRetryFidelityTests.swift */; };
 		3DBDC9F60CE5D2D70ECC2B48 /* ConversationViewModelSendCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1EC738F9142572E1A00CFD3 /* ConversationViewModelSendCoordinatorTests.swift */; };
 		DE26F6F30B3442F619FE08C3 /* ConversationSendCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98FD6CF2AAFEFD7ABE662F31 /* ConversationSendCoordinatorTests.swift */; };
+		951320951D3D339B143839B4 /* StarredSnapshotFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F7CE84F775B44CA0F9ECAD0 /* StarredSnapshotFactoryTests.swift */; };
 		95D6407C76F1C12364F72F88 /* MessageServerIdRekeyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20D96944B077DDB7545ACB27 /* MessageServerIdRekeyTests.swift */; };
 		619179CA66F3012BB03D9602 /* ConversationMessageMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF14B12B0039D783A6F2C2C6 /* ConversationMessageMergeTests.swift */; };
 		34330B7DBFC59A2C272A4EC8 /* EphemeralExpiryLawTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA7868B848BEA451C64C7A3 /* EphemeralExpiryLawTests.swift */; };
@@ -4659,6 +4660,7 @@
 		EEB14C95A7485714B336F6BD /* ConversationViewModelRetryFidelityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelRetryFidelityTests.swift; sourceTree = "<group>"; };
 		D1EC738F9142572E1A00CFD3 /* ConversationViewModelSendCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelSendCoordinatorTests.swift; sourceTree = "<group>"; };
 		98FD6CF2AAFEFD7ABE662F31 /* ConversationSendCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSendCoordinatorTests.swift; sourceTree = "<group>"; };
+		7F7CE84F775B44CA0F9ECAD0 /* StarredSnapshotFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarredSnapshotFactoryTests.swift; sourceTree = "<group>"; };
 		20D96944B077DDB7545ACB27 /* MessageServerIdRekeyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageServerIdRekeyTests.swift; sourceTree = "<group>"; };
 		BF14B12B0039D783A6F2C2C6 /* ConversationMessageMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMessageMergeTests.swift; sourceTree = "<group>"; };
 		7AA7868B848BEA451C64C7A3 /* EphemeralExpiryLawTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EphemeralExpiryLawTests.swift; sourceTree = "<group>"; };
@@ -11940,6 +11942,7 @@
 				EEB14C95A7485714B336F6BD /* ConversationViewModelRetryFidelityTests.swift */,
 				D1EC738F9142572E1A00CFD3 /* ConversationViewModelSendCoordinatorTests.swift */,
 				98FD6CF2AAFEFD7ABE662F31 /* ConversationSendCoordinatorTests.swift */,
+				7F7CE84F775B44CA0F9ECAD0 /* StarredSnapshotFactoryTests.swift */,
 				20D96944B077DDB7545ACB27 /* MessageServerIdRekeyTests.swift */,
 				BF14B12B0039D783A6F2C2C6 /* ConversationMessageMergeTests.swift */,
 				7AA7868B848BEA451C64C7A3 /* EphemeralExpiryLawTests.swift */,
@@ -15504,6 +15507,7 @@
 				0FD96C7886598F8EBD040FF7 /* ConversationViewModelRetryFidelityTests.swift in Sources */,
 				3DBDC9F60CE5D2D70ECC2B48 /* ConversationViewModelSendCoordinatorTests.swift in Sources */,
 				DE26F6F30B3442F619FE08C3 /* ConversationSendCoordinatorTests.swift in Sources */,
+				951320951D3D339B143839B4 /* StarredSnapshotFactoryTests.swift in Sources */,
 				95D6407C76F1C12364F72F88 /* MessageServerIdRekeyTests.swift in Sources */,
 				619179CA66F3012BB03D9602 /* ConversationMessageMergeTests.swift in Sources */,
 				34330B7DBFC59A2C272A4EC8 /* EphemeralExpiryLawTests.swift in Sources */,
