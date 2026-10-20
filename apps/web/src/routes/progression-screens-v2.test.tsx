@@ -53,21 +53,21 @@ async function open(Screen: ComponentType) {
 describe('chaque écran se peint depuis la progression de démonstration', () => {
   test('la Ligue : le titre, le classement du groupe, la mission en duo', async () => {
     const host = await open(LigueScreen);
-    expect(host.querySelector('h1')?.textContent).toBe('Ligue');
+    expect(host.querySelector('h1')?.textContent).toBe('Joute');
     expect(host.querySelector('[data-game-standings]')).not.toBeNull();
     expect(host.querySelector('#game-duo')).not.toBeNull();
   });
 
   test('la Saison : ses quarante étapes et le compte en haut à droite', async () => {
     const host = await open(SaisonScreen);
-    expect(host.querySelector('h1')?.textContent).toBe('Saison');
+    expect(host.querySelector('h1')?.textContent).toBe('Voyage');
     expect(host.querySelectorAll('[data-game-season-step]')).toHaveLength(40);
     expect(host.textContent).toContain('14 / 40');
   });
 
   test('la Vitrine : les trois trophées', async () => {
     const host = await open(VitrineScreen);
-    expect(host.querySelector('h1')?.textContent).toBe('Vitrine de trophées');
+    expect(host.querySelector('h1')?.textContent).toBe('Tes trophées');
     expect(host.querySelectorAll('[data-game-trophy-shelf] > li')).toHaveLength(3);
   });
 
@@ -79,7 +79,7 @@ describe('chaque écran se peint depuis la progression de démonstration', () =>
 
   test('le Prestige : l’anneau et les étoiles, pas d’offre sous le niveau 100', async () => {
     const host = await open(PrestigeScreen);
-    expect(host.querySelector('h1')?.textContent).toBe('Prestige');
+    expect(host.querySelector('h1')?.textContent).toBe('Renaissance');
     expect(host.querySelector('[data-game-prestige-scene]')).not.toBeNull();
     expect(host.querySelector('[data-game-prestige-go]')).toBeNull();
   });

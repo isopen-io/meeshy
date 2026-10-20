@@ -129,7 +129,7 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
 
   test('avant le niveau 5, les missions disent où elles s’ouvrent et où tu en es', () => {
     const early = withFacts({ score: 400, levelRecord: 2 });
-    expect(state('missions', early)).toContain('Les missions s’ouvrent au niveau 5');
+    expect(state('missions', early)).toContain('Au niveau 5, tes aïeux t’envoient chaque nuit un rêve');
     expect(state('missions', early)).toContain('Tu es au niveau 2');
   });
 
@@ -152,7 +152,7 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
   });
 
   test('le Prestige dit où il s’ouvre et où tu en es', () => {
-    expect(state('prestige', playing)).toBe('Le Prestige s’ouvre au niveau 100. Tu es au niveau 11.');
+    expect(state('prestige', playing)).toBe('La Renaissance s’ouvre au niveau 100. Tu es au niveau 11.');
   });
 });
 

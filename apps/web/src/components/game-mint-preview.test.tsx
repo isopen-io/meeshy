@@ -54,7 +54,7 @@ describe('une frappe possible', () => {
   const page = text(html);
 
   test('une ligne de titre : le numéro de la prochaine pièce', () => {
-    expect(page).toContain('Prochaine Meesh · n° 4');
+    expect(page).toContain('La Meesh n° 4');
   });
 
   test('un chiffre fort : le prix en étincelles', () => {
@@ -72,7 +72,7 @@ describe('une frappe possible', () => {
     const levels = mintLevels(gameBlockFixture({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks }).mint);
     expect(levels.levelsLost).toBeGreaterThan(0);
     expect(impactLines(spending)).toEqual([
-      `+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`,
+      `+${formatCount(GLORY_POINTS.mint, 'fr')} de gloire`,
       `Niveau ${formatCount(levels.levelBefore, 'fr')} → ${formatCount(levels.levelAfter, 'fr')}`,
     ]);
     expect(text(spending)).not.toMatch(/badge/i);
@@ -82,7 +82,7 @@ describe('une frappe possible', () => {
     const sparks = { pocket: 90_000, cycle: 90_000, lifetime: 90_000, debt: 0 };
     const game = gameBlockFixture({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks });
     const steady = renderToStaticMarkup(<GameMintPreview {...props({}, { mint: { ...game.mint, levelsLost: 0, levelAfter: game.mint.levelBefore, ladder: undefined } })} />);
-    expect(impactLines(steady)).toEqual([`+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`]);
+    expect(impactLines(steady)).toEqual([`+${formatCount(GLORY_POINTS.mint, 'fr')} de gloire`]);
   });
 
   test('aucun paragraphe : ni tableau de lignes, ni phrase d’explication', () => {
@@ -213,7 +213,7 @@ describe('une frappe fermée par une dette ou par un rang', () => {
     const html = renderToStaticMarkup(<GameMintPreview {...closed({ blockedBy: 'debt', sparksDebt: 120 })} />);
     expect(html).toContain('data-game-mint-blocked="debt"');
     expect(text(html)).toContain('120 étincelles');
-    expect(text(html)).toMatch(/remboursent/);
+    expect(text(html)).toMatch(/dissiperont/);
     expect(html).not.toContain('data-game-mint-action');
   });
 

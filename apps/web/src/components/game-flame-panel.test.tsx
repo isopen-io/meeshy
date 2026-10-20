@@ -47,11 +47,11 @@ describe('les gels', () => {
   test('la réserve se compte, et le prix se dit', () => {
     const page = text(renderToStaticMarkup(<GameFlamePanel {...props()} />));
     expect(page).toContain('Veilleuses : 1 / 2');
-    expect(page).toContain('Acheter un gel · 1 Meesh');
+    expect(page).toContain('Prendre une Veilleuse · 1 Meesh');
   });
 
   test('le bonus de Flamme s’explique', () => {
-    expect(text(renderToStaticMarkup(<GameFlamePanel {...props()} />))).toContain('+2 % par jour de série');
+    expect(text(renderToStaticMarkup(<GameFlamePanel {...props()} />))).toContain('+2 % d’étincelles par acte');
   });
 
   test('le toucher achète', async () => {
@@ -64,7 +64,7 @@ describe('les gels', () => {
   test('réserve pleine : plus de bouton, la raison est dite', () => {
     const html = renderToStaticMarkup(<GameFlamePanel {...props({ freezes: 2 })} />);
     expect(html).not.toContain('data-game-freeze-buy');
-    expect(text(html)).toContain('Réserve pleine');
+    expect(text(html)).toContain('Tes Veilleuses sont au complet');
   });
 
   test('trésor vide : le bouton se tait et dit combien il manque', () => {
@@ -93,7 +93,7 @@ describe('les gels', () => {
   });
 
   test('l’échec se lit', () => {
-    const html = renderToStaticMarkup(<GameFlamePanel {...props({}, { errors: { freeze: 'Tu as déjà deux gels en réserve : c’est le maximum.' } })} />);
+    const html = renderToStaticMarkup(<GameFlamePanel {...props({}, { errors: { freeze: 'Deux Veilleuses gardent déjà ta Flamme : c’est le plus possible.' } })} />);
     expect(html).toContain('role="alert"');
   });
 });

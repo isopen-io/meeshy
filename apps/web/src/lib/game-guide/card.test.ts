@@ -130,8 +130,8 @@ describe('une étape qui attend son geste', () => {
     const waiting = cardOfStep(stepOf('missions'), view({ score: 800, missions: [] }));
     expect(waiting.awaiting).toBe(true);
     expect(waiting.action).toBe('see-missions');
-    expect(waiting.copy.action).toBe('Voir les missions');
-    expect(waiting.copy.next).toContain('mission la plus facile');
+    expect(waiting.copy.action).toBe('Voir mon rêve');
+    expect(waiting.copy.next).toContain('premier acte du rêve');
     expect(waiting.stepKey).toBe('missions');
   });
 

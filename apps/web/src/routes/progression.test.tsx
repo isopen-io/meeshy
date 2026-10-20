@@ -127,7 +127,7 @@ describe('le hub — un utilisateur à mi-chemin', () => {
 
   test('la carte de niveau nomme le RANG suivant, jamais le seuil de points', () => {
     const manque = (fixture.level.nextThreshold ?? 0) - fixture.level.value;
-    expect(html).toContain(`Encore ${formatCount(manque)} étincelles avant le niveau ${fixture.level.level + 1}`);
+    expect(html).toContain(`${formatCount(manque)} étincelles jusqu’au niveau ${fixture.level.level + 1}`);
     expect(html).not.toContain(`niveau ${fixture.level.nextThreshold}`);
   });
 
@@ -137,7 +137,7 @@ describe('le hub — un utilisateur à mi-chemin', () => {
    * les valeurs RÉELLES : les recopier passerait au vert sur une énumération figée.
    */
   test('le hero du niveau ÉNUMÈRE comment gagner, avec les points du catalogue', () => {
-    expect(html).toContain('Comment gagner des étincelles');
+    expect(html).toContain('Comment faire jaillir des étincelles');
     for (const p of Object.values(ENGAGEMENT_FAMILY_TOP_POINTS)) expect(html).toContain(`jusqu’à\u00a0+${formatCount(p)}`);
   });
 

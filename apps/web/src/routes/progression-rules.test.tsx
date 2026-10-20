@@ -42,7 +42,7 @@ describe('les sept étapes de l’intégration', () => {
     for (let i = 1; i <= 7; i += 1) expect(text).toContain(`Étape ${i} sur 7`);
     expect(text).toContain('Salut, c’est Mee !');
     expect(text).toContain('Ton rang ne baisse jamais.');
-    expect(text).toContain('Un gel couvre un jour manqué.');
+    expect(text).toContain('Une Veilleuse la garde allumée un jour d’absence.');
   });
 
   test('le carnet n’a pas de bouton qui agit : il explique', () => {

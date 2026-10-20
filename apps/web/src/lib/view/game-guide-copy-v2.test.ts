@@ -40,18 +40,18 @@ describe('les huit moments, dans les sept langues', () => {
 
   test('les chiffres de la loi passent dans le texte', () => {
     const promoted = momentCopyV2(guideMomentV2(EVENTS['league-promoted'], []), 'fr');
-    expect(promoted.what).toBe('Tu montes en ligue Saphir !');
+    expect(promoted.what).toBe('Tu gravis le cercle : joute Saphir !');
     expect(promoted.means).toContain('place 3');
-    expect(promoted.means).toContain('ligue Jade');
-    expect(momentCopyV2(guideMomentV2(EVENTS['league-first'], []), 'fr').next).toBe('Encore 12 étincelles pour monter cette semaine.');
+    expect(promoted.means).toContain('joute Jade');
+    expect(momentCopyV2(guideMomentV2(EVENTS['league-first'], []), 'fr').next).toBe('12 étincelles jusqu’au cercle suivant cette semaine.');
   });
 
   test('une fin de saison terminée ne dit pas la même chose qu’une fin inachevée', () => {
     const done = momentCopyV2(guideMomentV2(EVENTS['season-end'], []), 'fr');
     const partial = momentCopyV2(guideMomentV2({ kind: 'season-end', season: 1, stepsReached: 22, completed: false, gloryGained: 0 }, []), 'fr');
-    expect(done.what).toContain('parcours complet');
-    expect(done.means).toContain('500 de Gloire');
-    expect(partial.means).toContain('étape 22 sur 40');
+    expect(done.what).toContain('tu es allé au bout');
+    expect(done.means).toContain('500 de gloire');
+    expect(partial.means).toContain('halte 22 sur 40');
     expect(partial.means).not.toContain('Gloire');
   });
 
@@ -64,7 +64,7 @@ describe('les huit moments, dans les sept langues', () => {
 
   test('au sommet des ligues : pas d’écart à la montée', () => {
     const top = momentCopyV2(guideMomentV2({ kind: 'league-first', league: 'prisme', pointsToPromotion: null }, []), 'fr');
-    expect(top.next).toContain('sommet');
+    expect(top.next).toContain('plus haut cercle');
   });
 
   test('une descente sans écart connu : la phrase sans nombre', () => {
@@ -73,10 +73,10 @@ describe('les huit moments, dans les sept langues', () => {
   });
 
   test('les boutons : quatre nouveaux, et « voir mon niveau » pour le Prestige', () => {
-    expect(actionLabelV2('see-league', 'fr')).toBe('Voir ma ligue');
-    expect(actionLabelV2('see-season', 'fr')).toBe('Voir la saison');
-    expect(actionLabelV2('see-trophies', 'fr')).toBe('Voir ma vitrine');
+    expect(actionLabelV2('see-league', 'fr')).toBe('Voir ma joute');
+    expect(actionLabelV2('see-season', 'fr')).toBe('Voir mon voyage');
+    expect(actionLabelV2('see-trophies', 'fr')).toBe('Voir mes trophées');
     expect(actionLabelV2('see-atlas', 'fr')).toBe('Voir mon Atlas');
-    expect(actionLabelV2('see-level', 'fr')).toBe('Voir mon niveau');
+    expect(actionLabelV2('see-level', 'fr')).toBe('Voir ma lumière');
   });
 });

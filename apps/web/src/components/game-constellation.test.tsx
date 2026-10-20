@@ -32,7 +32,7 @@ describe('la constellation du membre', () => {
   test('23 fragments : deux étoiles allumées, sept fragments vers la troisième, deux cosmétiques', () => {
     const html = renderToStaticMarkup(<GameConstellation collected={23} />);
     const t = text(html);
-    expect(t).toContain('Constellation');
+    expect(t).toContain('Le ciel des aïeux');
     expect(t).toContain('2 étoiles allumées');
     expect(t).toContain('7 fragments d’étoile jusqu’à la prochaine étoile');
     expect(t).toContain('Halo · étoile 1');
@@ -45,7 +45,7 @@ describe('la constellation du membre', () => {
     const t = text(renderToStaticMarkup(<GameConstellation collected={0} />));
     expect(t).toContain('0 étoile allumée');
     expect(t).toContain('10 fragments d’étoile jusqu’à la prochaine étoile');
-    expect(t).not.toContain('Cosmétiques débloqués');
+    expect(t).not.toContain('Parures offertes');
   });
 
   test('aucune valeur : ni points, ni Meesh, ni argent', () => {

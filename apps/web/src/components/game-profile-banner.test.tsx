@@ -150,12 +150,12 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
       expect(node?.querySelectorAll('[role="img"]').length).toBe(0);
     }
     const level = host.querySelector('[data-profile-banner-level]')?.getAttribute('aria-label') ?? '';
-    expect(level.startsWith('Niveau 12, palier Braise')).toBe(true);
+    expect(level.startsWith('Niveau 12, ta lumière en ')).toBe(true);
     expect(level).toContain('976 étincelles');
     expect(level).not.toContain('Gloire');
     expect(level).toContain('ta plus haute lumière : niveau 12');
     expect(level.endsWith(', 624 jusqu’au niveau 13')).toBe(true);
-    expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe(`Murmure V, Gloire ${formatCount(41_250, 'fr')}`);
+    expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe(`Murmure V, ${formatCount(41_250, 'fr')} de gloire`);
   });
 
   test('chaque langue nomme les deux groupes et écrit les points', async () => {

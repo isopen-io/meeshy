@@ -54,14 +54,14 @@ describe('une saison en cours', () => {
 
   test('le numéro, la semaine, le thème nommé dans la langue, les étoiles', () => {
     const t = text(html);
-    expect(t).toContain('Saison 1 · semaine 4 sur 8');
+    expect(t).toContain('Voyage 1 · semaine 4 sur 8');
     expect(t).toContain('Thème : Français');
-    expect(t).toContain('56 étoiles');
+    expect(t).toContain('56 pas');
   });
 
   test('ce qu’il manque pour l’étape suivante, et comment on gagne des étoiles', () => {
-    expect(text(html)).toContain('étoiles pour l’étape suivante');
-    expect(text(html)).toContain('4 étoiles ouvrent une étape');
+    expect(text(html)).toContain('pas jusqu’à la halte suivante');
+    expect(text(html)).toContain('4 pas mènent à la halte suivante');
   });
 
   test('quarante étapes, chacune lisible : réclamée, à réclamer, à venir', () => {
@@ -69,8 +69,8 @@ describe('une saison en cours', () => {
     expect(html).toContain('data-game-season-state="claimed"');
     expect(html).toContain('data-game-season-state="ready"');
     expect(html).toContain('data-game-season-state="locked"');
-    expect(html).toContain('aria-label="Étape 1, réclamée, +100"');
-    expect(html).toContain('aria-label="Étape 5, à réclamer, Un fragment d’étoile"');
+    expect(html).toContain('aria-label="Halte 1, réclamée, +100"');
+    expect(html).toContain('aria-label="Halte 5, à réclamer, Un fragment d’étoile"');
   });
 
   test('les trois premières sont réclamées, les onze suivantes à réclamer, le reste à venir', () => {
@@ -93,7 +93,7 @@ describe('réclamer', () => {
   test('le bouton nomme l’étape à réclamer et le geste part avec elle', async () => {
     const claimed: number[] = [];
     const host = await mount(<GameSeason {...props({ onClaim: (step) => claimed.push(step) })} />);
-    expect(host.querySelector('[data-game-season-claim]')?.textContent).toContain('Réclamer l’étape 4');
+    expect(host.querySelector('[data-game-season-claim]')?.textContent).toContain('Réclamer la halte 4');
     await click(host.querySelector('[data-game-season-claim]'));
     expect(claimed).toEqual([4]);
   });
@@ -118,7 +118,7 @@ describe('réclamer', () => {
   });
 
   test('un refus de la passerelle se lit', () => {
-    expect(text(renderToStaticMarkup(<GameSeason {...props({ errors: { claim: 'Cette étape est déjà réclamée.' } })} />))).toContain('déjà réclamée');
+    expect(text(renderToStaticMarkup(<GameSeason {...props({ errors: { claim: 'Cette halte est déjà réclamée.' } })} />))).toContain('déjà réclamée');
   });
 
   test('tout est réclamé : plus de bouton', () => {
@@ -154,7 +154,7 @@ describe('le Sceau', () => {
 
   test('déjà possédé : on le dit, plus d’achat', () => {
     const html = renderToStaticMarkup(<GameSeason {...props({ season: season({ sealOwned: true }) })} />);
-    expect(text(html)).toContain('Tu as le Sceau de cette saison.');
+    expect(text(html)).toContain('Tu as le Sceau de ce voyage.');
     expect(html).not.toContain('data-game-seal-buy');
   });
 });
@@ -164,20 +164,20 @@ describe('les autres états', () => {
     const done = season({ steps: 40, stars: 160, completed: true, starsToNext: 0, progress: 1, claimedSteps: Array.from({ length: 40 }, (_, i) => i + 1), nextReward: null });
     // #9674 — la Gloire dite est celle que le serveur verse (`GLORY_POINTS.season`), jamais un nombre recopié.
     expect(text(renderToStaticMarkup(<GameSeason {...props({ season: done })} />)).replace(/\s/g, ' ')).toContain(
-      `une coupe, un badge daté et ${formatCount(GLORY_POINTS.season, 'fr').replace(/\s/g, ' ')} de Gloire`,
+      `une coupe, une médaille datée et ${formatCount(GLORY_POINTS.season, 'fr').replace(/\s/g, ' ')} de gloire`,
     );
   });
 
   test('aucune saison ouverte : on dit que la prochaine arrive', () => {
-    expect(text(renderToStaticMarkup(<GameSeason {...props({ season: null })} />))).toContain('Aucune saison n’est ouverte');
+    expect(text(renderToStaticMarkup(<GameSeason {...props({ season: null })} />))).toContain('Aucun voyage n’est en cours');
   });
 
   test('avant le lundi 21 décembre 2026 : la saison 1 s’annonce, avec son thème, jamais un vide (#10014)', () => {
     const upcoming = { number: 1, themeKey: 'language:fr', startDay: '2026-12-21', endDay: '2027-02-14' };
     const html = renderToStaticMarkup(<GameSeason {...props({ season: null, upcoming })} />);
     expect(html).toContain('data-game-season-upcoming="2026-12-21"');
-    expect(text(html)).toContain('La saison 1 ouvre le 21 décembre 2026');
-    expect(text(html)).not.toContain('Aucune saison n’est ouverte');
+    expect(text(html)).toContain('Le voyage 1 part le 21 décembre 2026');
+    expect(text(html)).not.toContain('Aucun voyage n’est en cours');
     expect(html).not.toContain('data-game-season-step=');
   });
 });
