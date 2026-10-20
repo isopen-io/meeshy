@@ -165,7 +165,7 @@ public protocol SessionServiceProviding: Sendable {
 
 // MARK: - Implementation
 
-public final class SessionService: SessionServiceProviding, @unchecked Sendable {
+public final class SessionService: SessionServiceProviding, Sendable {
     public static let shared = SessionService()
     private let api: APIClientProviding
 

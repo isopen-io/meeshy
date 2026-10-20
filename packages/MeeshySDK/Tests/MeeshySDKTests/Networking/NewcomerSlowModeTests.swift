@@ -53,14 +53,15 @@ struct NewcomerSlowModeTests {
 
     @Test("le transport ne rejoue pas le mode lent en silence")
     func transportDoesNotSilentlyRetry() throws {
+        #expect(APIRetryPolicy.shouldRetry(
+            statusCode: 429, attempt: 0, retryPolicy: .standard, hasDailyLimit: false, hasSlowMode: true
+        ) == false)
         let source = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-                .appendingPathComponent("Sources/MeeshySDK/Networking/APIClient.swift"),
+                .appendingPathComponent("Sources/MeeshySDK/Networking/APIRequestPipeline.swift"),
             encoding: .utf8
         )
-        #expect(source.contains("dailyLimit == nil && slowMode == nil && Self.retryableStatusCodes.contains(statusCode)"))
-        #expect(source.contains("throw MeeshyError.rejected(slowMode.rejection(message: errorMsg))"))
-        #expect(source.contains("throw MeeshyError.rejected(slowMode.rejection(message: message))"))
+        #expect(source.contains("return .rejected(slowMode.rejection(message: message))"))
     }
 }

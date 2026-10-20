@@ -302,7 +302,6 @@
     "packages/MeeshySDK/Sources/MeeshySDK/Models/Story/StoryTextEffect.swift::StoryTextEffect.shadow": 83,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryItem+ReaderSlide.swift::StoryItem.toRenderableSlide": 111,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/StoryItem.swift::Array.toStoryGroups": 117,
-    "packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient.swift::APIClient.performRequestWithHeaders": 333,
     "packages/MeeshySDK/Sources/MeeshySDK/Networking/TusUploadManager.swift::TusUploadManager.performTusUpload": 248,
     "packages/MeeshySDK/Sources/MeeshySDK/Persistence/BubbleLayoutEngine.swift::BubbleLayoutEngine.computeLayout": 118,
     "packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor+Mutations.swift::MessagePersistenceActor.applyAttachmentEnrichment": 86,

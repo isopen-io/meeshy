@@ -7,7 +7,7 @@ public protocol AffiliateServiceProviding: Sendable {
     func fetchStats() async throws -> AffiliateStats
 }
 
-public final class AffiliateService: AffiliateServiceProviding, @unchecked Sendable {
+public final class AffiliateService: AffiliateServiceProviding, Sendable {
     public static let shared = AffiliateService()
     private let api: APIClientProviding
 

@@ -99,7 +99,7 @@ public extension FriendServiceProviding {
     }
 }
 
-public final class FriendService: FriendServiceProviding, @unchecked Sendable {
+public final class FriendService: FriendServiceProviding, Sendable {
     public static let shared = FriendService()
     private let api: APIClientProviding
 

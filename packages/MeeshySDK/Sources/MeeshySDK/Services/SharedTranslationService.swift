@@ -26,7 +26,7 @@ public protocol SharedTranslationServiceProviding: Sendable {
     func fetch(conversationId: String, messageIds: [String], languages: [String]) async throws -> [SharedTranslation]
 }
 
-public final class SharedTranslationService: SharedTranslationServiceProviding, @unchecked Sendable {
+public final class SharedTranslationService: SharedTranslationServiceProviding, Sendable {
     public static let shared = SharedTranslationService()
 
     private let api: APIClientProviding

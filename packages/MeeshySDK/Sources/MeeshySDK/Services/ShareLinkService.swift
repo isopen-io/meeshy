@@ -21,7 +21,7 @@ public protocol ShareLinkManaging: Sendable {
     func deleteLink(linkId: String) async throws
 }
 
-public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, @unchecked Sendable {
+public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, Sendable {
     public static let shared = ShareLinkService()
     #if DEBUG
     /// Vitrine App Store (#8855, DEBUG uniquement) : un aperçu de lien fixé, servi sans

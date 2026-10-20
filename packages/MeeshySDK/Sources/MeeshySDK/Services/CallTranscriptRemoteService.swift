@@ -47,7 +47,7 @@ public protocol CallTranscriptRemoteServiceProviding: Sendable {
 /// participants effectifs de l'appel (403 sinon). Atome réseau typé — la
 /// cascade « cache local d'abord, distant en fallback » est app-side
 /// (SDK Purity).
-public final class CallTranscriptRemoteService: CallTranscriptRemoteServiceProviding, @unchecked Sendable {
+public final class CallTranscriptRemoteService: CallTranscriptRemoteServiceProviding, Sendable {
     public static let shared = CallTranscriptRemoteService()
     private let api: APIClientProviding
 

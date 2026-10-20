@@ -85,7 +85,7 @@ public protocol BirthDateServiceProviding: Sendable {
     func setBirthDate(_ birthDate: Date) async throws -> APIBirthDateDeclaration
 }
 
-public final class BirthDateService: BirthDateServiceProviding, @unchecked Sendable {
+public final class BirthDateService: BirthDateServiceProviding, Sendable {
     public static let shared = BirthDateService()
     private let api: APIClientProviding
     private let timeZone: TimeZone

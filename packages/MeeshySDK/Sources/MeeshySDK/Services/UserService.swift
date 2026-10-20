@@ -37,7 +37,7 @@ public struct UserSearchPage: Sendable, Equatable {
     }
 }
 
-public final class UserService: UserServiceProviding, @unchecked Sendable {
+public final class UserService: UserServiceProviding, Sendable {
     public static let shared = UserService()
     private let api: APIClientProviding
     private let urlSession: URLSession
