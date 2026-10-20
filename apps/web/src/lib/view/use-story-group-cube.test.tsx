@@ -124,7 +124,7 @@ describe('useStoryGroupCube — la scène tourne au doigt', () => {
     expect(journal.events).toEqual(['pause', 'land:next-entry', 'resume']);
     expect(face.style.transform).toBe('');
     expect(face.style.visibility).toBe('');
-    expect(side('right')?.style.visibility).toBe('hidden');
+    expect(side('right')).toBeNull();
   });
 
   test('relâché avant la moitié : le cube revient, sans changer d’auteur', async () => {
@@ -164,6 +164,22 @@ describe('useStoryGroupCube — la scène tourne au doigt', () => {
     await release(face, 280);
     await frames(450);
     expect(journal.events).toEqual(['pause', 'land:next-entry', 'resume']);
+  });
+
+  /* Une face montée au repos garde ses images dans le document : le navigateur
+     les charge pour rien, et un média mort y peint son icône de lien brisé
+     (gate `check-medias-absents`). La face n'existe que le temps du geste. */
+  test('au repos, aucune face voisine dans le document ; elle naît avec le geste et part avec lui', async () => {
+    const { face, side } = await mount({ neighbours: both });
+    expect(side('left')).toBeNull();
+    expect(side('right')).toBeNull();
+    await press(face, 300, [290, 250]);
+    expect(side('right')).not.toBeNull();
+    expect(side('left')).not.toBeNull();
+    await release(face, 250);
+    await frames(400);
+    expect(side('left')).toBeNull();
+    expect(side('right')).toBeNull();
   });
 
   test('une pause déjà demandée n’est ni reprise ni doublée par le glissé', async () => {

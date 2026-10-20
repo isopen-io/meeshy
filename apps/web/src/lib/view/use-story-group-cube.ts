@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type { ViewerHorizontalDrag } from '@/components/viewer-chrome-gestures';
 import {
@@ -84,12 +84,18 @@ export function useStoryGroupCube<T extends StoryCubeNeighbourTarget>(params: {
 }): StoryGroupCube<T> {
   const latest = useRef(params);
   latest.current = params;
-  const sides = useMemo(
+  const neighbourSides = useMemo(
     () => (params.rtl ? { left: params.neighbours.next, right: params.neighbours.previous } : { left: params.neighbours.previous, right: params.neighbours.next }),
     [params.rtl, params.neighbours.next, params.neighbours.previous],
   );
-  const sidesRef = useRef(sides);
-  sidesRef.current = sides;
+  const sidesRef = useRef(neighbourSides);
+  sidesRef.current = neighbourSides;
+  /* Les faces voisines n'existent que LE TEMPS DU GESTE : montées au repos,
+     leurs images restaient dans le document — chargées pour rien, et un média
+     mort y peignait son icône de lien brisé (`check-medias-absents`). Deux
+     rendus par geste (son début, sa fin), jamais un par image. */
+  const [engaged, setEngaged] = useState(false);
+  const sides = useMemo(() => (engaged ? neighbourSides : { left: null, right: null }), [engaged, neighbourSides]);
 
   const face = useRef<HTMLElement | null>(null);
   const sideElements = useRef<{ left: HTMLElement | null; right: HTMLElement | null }>({ left: null, right: null });
@@ -127,6 +133,7 @@ export function useStoryGroupCube<T extends StoryCubeNeighbourTarget>(params: {
     paint(0);
     face.current?.style.removeProperty('--cube-shade');
     phase.current = 'idle';
+    setEngaged(false);
   }, [paint, stopFrames]);
 
   const releaseHold = useCallback(() => {
@@ -169,6 +176,7 @@ export function useStoryGroupCube<T extends StoryCubeNeighbourTarget>(params: {
     size.current = { width: Math.max(current?.clientWidth ?? 1, 1), height: Math.max(current?.clientHeight ?? 1, 1) };
     reduced.current = prefersReducedMotion();
     phase.current = 'dragging';
+    setEngaged(true);
     const { paused, pause } = latest.current;
     if (!paused) {
       ownsPause.current = true;
