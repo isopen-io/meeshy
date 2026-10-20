@@ -4,6 +4,8 @@ final class LockedSweepSourceGuardTests: XCTestCase {
 
     private static let migrated: [String] = [
         "Diagnostics/CryptoSignposts.swift",
+        "Networking/DailyGestureLimit.swift",
+        "Services/ListingContext.swift",
     ]
 
     private static let keepsHistoricUncheckedSendable: Set<String> = [

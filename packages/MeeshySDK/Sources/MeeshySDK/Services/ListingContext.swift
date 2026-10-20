@@ -85,30 +85,23 @@ public struct ListingPageIndex: Sendable, Equatable {
 /// chaque page servie, la file d'impressions de l'app y lit le contexte d'une
 /// carte. Rien n'est persisté, et l'identifiant de page n'est rattaché à
 /// aucun compte.
-public final class ListingContextLedger: ListingContextProviding, @unchecked Sendable {
+public final class ListingContextLedger: ListingContextProviding, Sendable {
     public static let shared = ListingContextLedger()
 
-    private let lock = NSLock()
-    private var index = ListingPageIndex()
+    private let index = Locked(ListingPageIndex())
 
     public init() {}
 
     public func note(surface: ReachSurface, feedRequestId: String?, items: [ListedItem]) {
-        lock.lock()
-        defer { lock.unlock() }
-        index.note(surface: surface, feedRequestId: feedRequestId, items: items)
+        index.mutate { $0.note(surface: surface, feedRequestId: feedRequestId, items: items) }
     }
 
     public func listing(on surface: ReachSurface?, postId: String, position: Int?) -> SocialListing? {
-        lock.lock()
-        defer { lock.unlock() }
-        return index.listing(on: surface, postId: postId, position: position)
+        index.read { $0.listing(on: surface, postId: postId, position: position) }
     }
 
     /// À la déconnexion : les pages d'un compte ne situent pas le suivant.
     public func reset() {
-        lock.lock()
-        defer { lock.unlock() }
-        index = ListingPageIndex()
+        index.mutate { $0 = ListingPageIndex() }
     }
 }
