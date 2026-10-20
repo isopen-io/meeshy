@@ -87,6 +87,20 @@ struct FeedPostRow: View {
         }
     }
 
+    /// Reels open straight into the immersive full-screen pager, seeded with
+    /// the feed's reels, never the detail page.
+    private func openTappedPost(_ post: FeedPost) {
+        guard post.isReel else { return router.openPostDetail(post, from: .feed) }
+        HapticFeedback.medium()
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
+            ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id, from: .feed)
+        }
+    }
+
+    private var removalOffer: ((String) -> Void)? {
+        ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.deletePost($0, reason: $1) }
+    }
+
     /// Carte Réel plein-cadre. Réutilise EXACTEMENT les handlers optimistes de
     /// `standardFeedPostCardView` (toggle cœur/repartage/signet/partage) + le
     /// même bloc d'ouverture viewer (`ReelsPresenter.present`). Le tap média
@@ -146,6 +160,7 @@ struct FeedPostRow: View {
             onDelete: isOwnPost ? { postId in
                 Task { await viewModel.deletePost(postId) }
             } : nil,
+            onRemove: removalOffer,
             onReport: !isOwnPost ? { postId in
                 Task { await viewModel.reportPost(postId) }
             } : nil,
@@ -200,27 +215,14 @@ struct FeedPostRow: View {
             onSelectLanguage: { postId, language in
                 viewModel.setTranslationOverride(postId: postId, language: language)
             },
-            onTapPost: { post in
-                if post.isReel {
-                    // Reels open straight into the immersive full-screen pager,
-                    // seeded with the feed's reels, never the detail page.
-                    HapticFeedback.medium()
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                        ReelsPresenter.shared.present(
-                            posts: viewModel.posts,
-                            startId: post.id, from: .feed
-                        )
-                    }
-                } else {
-                    router.openPostDetail(post, from: .feed)
-                }
-            },
+            onTapPost: { openTappedPost($0) },
             onTapRepost: { repostId in
                 router.openPostDetail(id: repostId, from: .feed)
             },
             onDelete: isOwnPost ? { postId in
                 Task { await viewModel.deletePost(postId) }
             } : nil,
+            onRemove: removalOffer,
             onReport: !isOwnPost ? { postId in
                 Task { await viewModel.reportPost(postId) }
             } : nil,

@@ -22,10 +22,10 @@ extension PostDetailViewModel {
     /// list to remove from (this IS the single loaded post), so success just
     /// reports true and the caller (`PostDetailView`) pops the screen.
     @discardableResult
-    func deletePost(_ postId: String) async -> Bool {
+    func deletePost(_ postId: String, reason: String? = nil) async -> Bool {
         do {
-            try await postService.delete(postId: postId)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
+            try await postService.delete(postId: postId, reason: reason)
+            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
             return true
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))

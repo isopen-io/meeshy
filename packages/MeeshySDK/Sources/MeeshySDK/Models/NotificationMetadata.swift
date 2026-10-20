@@ -103,6 +103,12 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
     public let step: Int?
     public let completed: Bool?
 
+    // MARK: - Retrait par la modération (#11151)
+    /// L’identifiant du contenu retiré (`contentType` dit lequel).
+    public let contentId: String?
+    /// Le motif du retrait, que l'auteur doit lire.
+    public let reason: String?
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         messagePreview = try container.decodeIfPresent(String.self, forKey: .messagePreview)
@@ -154,6 +160,8 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         season = try container.decodeIfPresent(Int.self, forKey: .season)
         step = try container.decodeIfPresent(Int.self, forKey: .step)
         completed = try container.decodeIfPresent(Bool.self, forKey: .completed)
+        contentId = try container.decodeIfPresent(String.self, forKey: .contentId)
+        reason = try container.decodeIfPresent(String.self, forKey: .reason)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -164,5 +172,6 @@ public struct NotificationMetadata: Codable, Sendable, Equatable {
         case ipAddress, country, countryName, city, location
         case achievementKey, axisKey, threshold, level, tierRank, value
         case route, gameSection, duoId, weekKey, league, outcome, cup, season, step, completed
+        case contentId, reason
     }
 }

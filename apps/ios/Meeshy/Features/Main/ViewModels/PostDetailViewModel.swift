@@ -594,7 +594,7 @@ class PostDetailViewModel: ObservableObject {
     /// via `CommentRowView`). Retrait optimiste immédiat (racine + réponses, ou
     /// réponse avec décrément du parent), puis appel API, rollback du snapshot
     /// si l'API échoue. Miroir du flux optimiste de `submitCommentWithMedia`.
-    func deleteComment(_ comment: FeedComment) async {
+    func deleteComment(_ comment: FeedComment, reason: String? = nil) async {
         guard let post else { return }
         let snapshotComments = comments
         let snapshotReplies = repliesMap
@@ -622,9 +622,9 @@ class PostDetailViewModel: ObservableObject {
         }
 
         do {
-            try await postService.deleteComment(postId: post.id, commentId: comment.id)
+            try await postService.deleteComment(postId: post.id, commentId: comment.id, reason: reason)
             try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main)))
         } catch {
             comments = snapshotComments
             repliesMap = snapshotReplies

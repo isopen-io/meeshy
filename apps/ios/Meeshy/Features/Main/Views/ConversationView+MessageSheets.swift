@@ -22,6 +22,8 @@ struct ConversationMessageActions {
     let edit: (Message) -> Void
     let export: (Message, Bool) -> Void
     let compose: (Message) -> Void
+    /// #11151 — « Retirer » le message d'un autre s'offre-t-il ? (créateur compris, jamais en direct)
+    var canRemove: (Message) -> Bool = { _ in false }
 }
 
 struct ConversationMessageSheets: ViewModifier {
@@ -43,7 +45,7 @@ struct ConversationMessageSheets: ViewModifier {
                 let ctx = MessageMenuContext(
                     isMine: msg.isMe,
                     canEdit: msg.isMe || isAdminOrMod,
-                    canDelete: msg.isMe || isAdminOrMod,
+                    canDelete: msg.isMe || isAdminOrMod || actions.canRemove(msg),
                     hasText: !msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                     hasMedia: !msg.attachments.isEmpty,
                     hasTimebasedMedia: msg.attachments.contains { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack },

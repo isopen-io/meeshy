@@ -267,6 +267,15 @@ struct ConversationView: View {
         return modRoles.contains(convRole) || modRoles.contains(platformRole)
     }
 
+    /// « Retirer » le message d'un AUTRE (#11151) — créateur compris, jamais en direct.
+    func canRemoveMessage(_ message: Message) -> Bool {
+        guard let conversation else { return false }
+        return ContentRemovalPolicy.mayRemoveMessage(
+            authoredByViewer: message.isMe, conversationType: conversation.type,
+            conversationRole: conversation.currentUserRole, platformRole: AuthManager.shared.currentUser?.role
+        )
+    }
+
     // MARK: - Init
 
     init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, showsOwnConnectionBanner: Bool = false, onOpenFullConversation: (() -> Void)? = nil, forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil, landsOnMessage: Bool = false) {
@@ -636,7 +645,8 @@ struct ConversationView: View {
             requestDelete: { requestDeleteMessage($0) },
             edit: { beginEdit($0) },
             export: { beginMessageExport($0, quick: $1) },
-            compose: { composerState.composeMediaTarget = ComposerSeedTarget(message: $0) }
+            compose: { composerState.composeMediaTarget = ComposerSeedTarget(message: $0) },
+            canRemove: { canRemoveMessage($0) }
         )
     }
 

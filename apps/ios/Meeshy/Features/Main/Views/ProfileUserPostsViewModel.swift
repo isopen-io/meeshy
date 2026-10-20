@@ -420,16 +420,16 @@ final class ProfileUserPostsViewModel: ObservableObject {
 
     // MARK: - Options « … » (parité avec FeedViewModel — menu de la carte poste/réel)
 
-    func deletePost(_ postId: String) async {
+    func deletePost(_ postId: String, reason: String? = nil) async {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
         let removed = posts.remove(at: index)
         do {
-            try await postService.delete(postId: postId)
+            try await postService.delete(postId: postId, reason: reason)
             // Le cache vit sous PLUSIEURS clés (`user:<id>`, main-feed, la clé
             // détail, bookmarks) : sans cette purge, la carte supprimée
             // ressortait à la réouverture du profil, servie cache-first.
             await CacheCoordinator.shared.feed.removeEverywhere(itemId: postId)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
         } catch {
             // Défaire CE retrait (`OptimisticRollback`) : un post supprimé par
             // socket ou une page chargée pendant l'attente survivaient mal à
