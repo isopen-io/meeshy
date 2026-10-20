@@ -82,6 +82,25 @@ describe('performDeleteForEveryone — la route unitaire, message par message, c
     expect(isTombstone(rowOf(queryClient, 'm-2'))).toBe(true);
   });
 
+  test('RETIRER (#11150) : le motif voyage en corps `{ reason }` ; un refus de la passerelle rend la rangée', async () => {
+    const queryClient = threadWith();
+    const seen: HttpRequest[] = [];
+    const removed = await performDeleteForEveryone({ queryClient, conversationId: 'c-a', messages: [REPLY], reason: 'Propos haineux', transport: transportBy(() => OK, seen) });
+    expect(seen).toEqual([{ method: 'DELETE', path: '/api/v1/conversations/c-a/messages/m-4', body: { reason: 'Propos haineux' } }]);
+    expect(removed).toEqual({ deleted: 1, failed: 0, offline: false });
+
+    const refusedClient = threadWith();
+    const refused = await performDeleteForEveryone({
+      queryClient: refusedClient,
+      conversationId: 'c-a',
+      messages: [REPLY],
+      reason: 'Propos haineux',
+      transport: transportBy(() => ({ ok: false, status: 403, error: 'Forbidden' }), []),
+    });
+    expect(refused).toEqual({ deleted: 0, failed: 1, offline: false });
+    expect(rowOf(refusedClient, 'm-4')).toEqual(REPLY);
+  });
+
   test('la citation qu’une réponse embarque devient une pierre tombale elle aussi', async () => {
     const queryClient = threadWith();
     await performDeleteForEveryone({ queryClient, conversationId: 'c-a', messages: [M2], transport: transportBy(() => OK, []) });

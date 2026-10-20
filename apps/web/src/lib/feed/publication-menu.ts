@@ -43,8 +43,14 @@
  * « à moi » — et ne peut rien signaler non plus : la route de signalement
  * exige un compte. La passerelle reste l'autorité (403) ; ceci ne décide que
  * de ce qu'on MONTRE.
+ *
+ * ## « RETIRER » (#11150) — LA MODÉRATION, SUR LA PUBLICATION D'UN AUTRE
+ *
+ * Un rôle de plateforme MODERATOR, ADMIN ou BIGBOSS (`moderatesPlatformContent`,
+ * `lib/view/content-removal.ts`) retire le post, le réel ou la story d'un
+ * autre, avec un MOTIF dont l'auteur est prévenu. L'entrée précède « Signaler ».
  */
-export type PostMenuEntry = 'open' | 'copyText' | 'share' | 'save' | 'views' | 'pin' | 'edit' | 'delete' | 'report';
+export type PostMenuEntry = 'open' | 'copyText' | 'share' | 'save' | 'views' | 'pin' | 'edit' | 'delete' | 'remove' | 'report';
 
 export function postMenuEntries(params: {
   readonly viewerId: string | null;
@@ -55,6 +61,8 @@ export function postMenuEntries(params: {
   readonly canSave: boolean;
   /** ADMIN/BIGBOSS — la seule personne à qui « Vues » s'offre sur un post ou un réel. */
   readonly viewerIsAdministrator: boolean;
+  /** MODERATOR/ADMIN/BIGBOSS (#11150) — absent ⇒ non : « Retirer » ne s'offre pas. */
+  readonly viewerModerates?: boolean;
 }): readonly PostMenuEntry[] {
   const { viewerId, authorId, isDetail, hasText, canShare, canSave, viewerIsAdministrator } = params;
   const signedIn = viewerId !== null && viewerId !== '';
@@ -67,6 +75,7 @@ export function postMenuEntries(params: {
     ...(canSave && signedIn ? (['save'] as const) : []),
     ...(signedIn && viewerIsAdministrator ? (['views'] as const) : []),
     ...(isOwn ? (['pin', 'edit', 'delete'] as const) : []),
+    ...(signedIn && !isOwn && params.viewerModerates === true ? (['remove'] as const) : []),
     ...(signedIn && !isOwn ? (['report'] as const) : []),
   ];
 }

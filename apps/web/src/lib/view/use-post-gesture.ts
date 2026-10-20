@@ -21,7 +21,8 @@ import { href, navigate } from '@/routes/route-table';
 import { withCommentsAnchor } from './comments-anchor';
 import { copyPlainText } from './copy-text';
 import { openPublicationShare } from './publication-share';
-import { useAdministrationRank } from './use-admin-access';
+import { moderatesPlatformContent } from './content-removal';
+import { useAdministrationRank, useServedGlobalRole } from './use-admin-access';
 import { useLiveAnnouncer } from './use-live-announcer';
 
 /**
@@ -93,6 +94,8 @@ type MenuNotice =
   | 'feed.post.edit_busy'
   | 'feed.post.deleted'
   | 'feed.post.delete_failed'
+  | 'moderation.remove.done'
+  | 'moderation.remove.failed'
   | 'report.done'
   | 'report.throttled'
   | 'report.failed';
@@ -131,6 +134,7 @@ export function usePostGesture(options?: {
   });
   const viewerId = useStore(sessionStore, (s) => (s.session.status === 'authenticated' ? s.session.user.id : null));
   const viewerIsAdministrator = useAdministrationRank();
+  const viewerModerates = moderatesPlatformContent(useServedGlobalRole());
 
   const onGesture = useCallback(
     (postId: string, kind: PostToggleKind) => {
@@ -193,6 +197,7 @@ export function usePostGesture(options?: {
     return {
       viewerId,
       viewerIsAdministrator,
+      viewerModerates,
       editDrafts: draftStore,
       onCopyText: (text: string) => {
         void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed'));
@@ -215,6 +220,12 @@ export function usePostGesture(options?: {
           if (outcome === 'done') onDeletedRef.current?.(postId);
         });
       },
+      onRemove: (postId: string, reason: string) => {
+        void deletePostAction(postId, reason).then((outcome) => {
+          say(outcome === 'done' ? 'moderation.remove.done' : 'moderation.remove.failed');
+          if (outcome === 'done') onDeletedRef.current?.(postId);
+        });
+      },
       onReportOpen: (postId: string) => readingTelemetry.recordV2(negativeOf(postId, 'report_open')),
       onReport: (postId, reason) => {
         void reportPostAction(postId, reason).then((outcome) => {
@@ -223,7 +234,7 @@ export function usePostGesture(options?: {
         });
       },
     };
-  }, [viewerId, viewerIsAdministrator, announce]);
+  }, [viewerId, viewerIsAdministrator, viewerModerates, announce]);
 
   return { announcement, onGesture, onShare, onComment, onRepost, pendingRepostId, confirmRepost, cancelRepost, repostConfirm, menu };
 }
