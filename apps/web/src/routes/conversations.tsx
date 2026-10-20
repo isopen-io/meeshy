@@ -603,8 +603,13 @@ export default function ConversationsScreen() {
   return (
     /* `pt-safe` : l'encoche HAUTE est portee par le CADRE de l'ecran, dans ses
        100dvh (box-sizing: border-box) — jamais par `<body>`, qui l'AJOUTAIT
-       et poussait la barre de recherche hors du cadre (#5604, app.css). */
-    <div className="relative flex h-app flex-col overflow-hidden pt-safe">
+       et poussait la barre de recherche hors du cadre (#5604, app.css).
+       `overflow-clip`, jamais `overflow-hidden` (#11090) : escamotée, la barre
+       de recherche déborde du bas par `transform` ; un cadre `hidden` reste un
+       scrollport, et un focus ou un `scrollIntoView` le faisait défiler de
+       toute la hauteur escamotée, puis le retour de la barre le ramenait à 0 —
+       l'écran entier glissait et refermait le menu de rangée ouvert. */
+    <div className="relative flex h-app flex-col overflow-clip pt-safe">
       <ListHeader pinned={pinned} railProps={railProps} conversations={conversations} viewerId={viewer.id ?? ''} />
       <PullIndicator phase={pull.phase} offsetPx={pull.offsetPx} reducedMotion={pull.reducedMotion} />
 

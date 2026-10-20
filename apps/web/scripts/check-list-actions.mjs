@@ -254,6 +254,13 @@ for (const row of rows) {
   check(hit.ok, `la cible tactile du bouton d'actions de « ${row} » couvre ${TAP_FLOOR}×${TAP_FLOOR} (${hit.why})`);
 }
 
+/* LE CADRE DE L'ÉCRAN NE DÉFILE JAMAIS (#11090) — la barre de recherche, escamotée
+   par `transform` au défilement, déborde du bas du cadre : `overflow-hidden` en
+   faisait un scrollport que chaque `scrollIntoView` ci-dessus décalait, et dont
+   le retour à 0, au retour de la barre, refermait le menu de rangée du § 4. */
+const shellScroll = await page.$eval('.h-app', (el) => ({ top: el.scrollTop, overflow: getComputedStyle(el).overflowY }));
+check(shellScroll.top === 0, `le cadre de l'écran n'a pas défilé sous les scrollIntoView (${JSON.stringify(shellScroll)})`);
+
 // ------------------------------------------------------- 3. clavier
 /** La DERNIÈRE rangée — jamais la première : au chargement c'est la première
  *  qui est magnifiée, et un témoin écrit sur elle serait vert même si les
