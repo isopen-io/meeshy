@@ -20,11 +20,11 @@ final class ConversationSendStateProjectionTests: XCTestCase {
         try await super.tearDown()
     }
 
-    private func makeSUT() async throws -> ConversationViewModel {
+    private func makeSUT(pool: DatabaseQueue? = nil) async throws -> ConversationViewModel {
         await CacheCoordinator.shared.messages.invalidate(for: conversationId)
         let auth = MockAuthManager()
         auth.simulateLoggedIn(user: MeeshyUser(id: userId, username: "etat", displayName: "État"))
-        let pool = try DatabaseQueue()
+        let pool = try pool ?? DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: pool)
         MessageSocketManager.shared.isConnected = true
         let sut = ConversationViewModel(
@@ -77,6 +77,21 @@ final class ConversationSendStateProjectionTests: XCTestCase {
         let state = sut.outgoingState(of: "inconnu")
 
         XCTAssertNil(state)
+    }
+
+    func test_outgoingState_messageWhoseDeliveryFailed_isFailed() async throws {
+        let pool = try DatabaseQueue()
+        let sut = try await makeSUT(pool: pool)
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "echec", conversationId: conversationId, senderId: userId, content: "jamais parti", state: .failed
+        )
+        try await MessagePersistenceActor(dbWriter: pool).insertOptimistic(record)
+        _ = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == "echec" }
+
+        let state = sut.outgoingState(of: "echec")
+
+        XCTAssertEqual(state?.messageId, "echec")
+        XCTAssertEqual(state?.isFailed, true)
     }
 
     func test_viewModelFamily_declaresNoPublishedSendFlag() throws {
