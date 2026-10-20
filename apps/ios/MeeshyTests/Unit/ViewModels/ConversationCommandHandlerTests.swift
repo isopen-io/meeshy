@@ -278,6 +278,58 @@ final class ConversationCommandHandlerTests: XCTestCase {
         XCTAssertTrue(calls.isEmpty)
     }
 
+    // MARK: - Retrait d'une sélection (#11159)
+
+    private func selection(
+        _ id: String, mine: Bool = false, unsent: Bool = false
+    ) -> SelectionRemovalTarget {
+        SelectionRemovalTarget(messageId: id, serverId: "srv-\(id)", isMine: mine, isUnsent: unsent)
+    }
+
+    func test_removeSelection_offline_refusesBeforeDiscardingOrTouchingTheStore() async {
+        let rig = makeRig(isOnline: false)
+        var discarded: [String] = []
+
+        let failure = await rig.sut.removeSelection(
+            [selection("a"), selection("b", mine: true, unsent: true)], reason: "spam"
+        ) { discarded.append($0) }
+
+        let calls = await rig.persistence.calls
+        XCTAssertNotNil(failure)
+        XCTAssertTrue(discarded.isEmpty)
+        XCTAssertTrue(calls.isEmpty)
+        XCTAssertEqual(rig.service.deleteCallCount, 0)
+    }
+
+    func test_removeSelection_mixed_othersCarryTheReason_ownLeaveWithoutOne_unsentAreOnlyDiscarded() async {
+        let rig = makeRig()
+        var discarded: [String] = []
+
+        let failure = await rig.sut.removeSelection(
+            [selection("a"), selection("mine", mine: true), selection("draft", mine: true, unsent: true)],
+            reason: "Propos haineux"
+        ) { discarded.append($0) }
+
+        let calls = await rig.persistence.calls
+        XCTAssertNil(failure)
+        XCTAssertEqual(discarded, ["draft"])
+        XCTAssertEqual(calls, [.markDeleted(localId: "a"), .markDeleted(localId: "mine")])
+        XCTAssertEqual(rig.service.deleteCallCount, 2)
+        XCTAssertEqual(rig.service.deleteReasonsByMessageId["srv-a"], .some("Propos haineux"))
+        XCTAssertEqual(rig.service.deleteReasonsByMessageId["srv-mine"], .some(nil))
+    }
+
+    func test_removeSelection_oneRefusal_restoresOnlyThatMessage_andReportsTheFailure() async {
+        let rig = makeRig()
+        rig.service.deleteFailingMessageIds = ["srv-b"]
+
+        let failure = await rig.sut.removeSelection([selection("a"), selection("b")], reason: "spam") { _ in }
+
+        let calls = await rig.persistence.calls
+        XCTAssertNotNil(failure)
+        XCTAssertEqual(calls, [.markDeleted(localId: "a"), .markDeleted(localId: "b"), .markUndeleted(localId: "b")])
+    }
+
     // MARK: - Édition
 
     func test_editMessage_serviceFailure_restoresOriginal_andDropsEditHistory() async {

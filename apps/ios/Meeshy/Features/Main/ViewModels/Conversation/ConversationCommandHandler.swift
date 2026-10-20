@@ -16,6 +16,9 @@ protocol ConversationCommandProviding: AnyObject {
     func withdrawUnsent(messageId: String) async
     func deleteForEveryone(messageId: String, serverId: String) async -> ConversationCommandFailure?
     func removeForModeration(messageId: String, serverId: String, reason: String) async -> ConversationCommandFailure?
+    func removeSelection(
+        _ targets: [SelectionRemovalTarget], reason: String, discardUnsent: (String) async -> Void
+    ) async -> ConversationCommandFailure?
     func removeAttachment(messageId: String, attachmentId: String, original: [MeeshyMessageAttachment]) async -> ConversationCommandFailure?
     func togglePin(messageId: String, serverId: String, previous: MessagePinState, currentUserId: String?) async -> ConversationCommandFailure?
     func editMessage(
@@ -23,6 +26,35 @@ protocol ConversationCommandProviding: AnyObject {
         beforeOptimisticWrite: () -> Void
     ) async -> ConversationCommandFailure?
     func compensate(_ payload: OfflineRetryExhausted, currentUserId: String, serverId: (String) -> String) async
+}
+
+/// Un message de la sélection à retirer : son id serveur, la main qui l'a écrit (les messages des autres
+/// portent le motif, les siens partent sans) et s'il n'a jamais atteint le serveur (`.failed`).
+struct SelectionRemovalTarget: Equatable {
+    let messageId: String
+    let serverId: String
+    let isMine: Bool
+    let isUnsent: Bool
+}
+
+/// **Retirer une SÉLECTION de messages** (#11159) : lit le fil du view-model, confie la règle au
+/// handler (`removeSelection`) et rend compte du refus. Hors du view-model : une responsabilité, un type.
+@MainActor
+struct ConversationSelectionRemoval {
+    let viewModel: ConversationViewModel
+
+    func run(_ ids: Set<String>, reason: String) async {
+        let targets = viewModel.messages.filter { ids.contains($0.id) }.map {
+            SelectionRemovalTarget(
+                messageId: $0.id, serverId: viewModel.serverId(for: $0.id), isMine: $0.isMe,
+                isUnsent: $0.isMe && viewModel.outgoingState(of: $0.id)?.isFailed == true
+            )
+        }
+        let failure = await viewModel.commands.removeSelection(targets, reason: reason) {
+            await viewModel.deleteMessage(messageId: $0, mode: .everyone)
+        }
+        if let failure { viewModel.error = failure.userMessage }
+    }
 }
 
 @MainActor
@@ -149,8 +181,7 @@ final class ConversationCommandHandler: ConversationCommandProviding {
     }
 
     func deleteForEveryone(messageId: String, serverId: String) async -> ConversationCommandFailure? {
-        try? await persistence.markDeleted(localId: messageId, deletedAt: now(), sparingOpenedViewOnce: false, expired: false)
-        StarredMessagesStore.shared.remove(messageId: serverId)
+        await eraseLocally(messageId: messageId, serverId: serverId, deletedAt: now())
         guard networkMonitor.isOnline else {
             try? await offlineQueue.enqueueDelete(OfflineDeletePayload(
                 messageId: serverId, clientMessageId: messageId, conversationId: conversationId
@@ -168,15 +199,8 @@ final class ConversationCommandHandler: ConversationCommandProviding {
 
     /// Retrait du message d'un AUTRE, avec son motif : jamais par la file hors ligne, qui ne porte pas de motif.
     func removeForModeration(messageId: String, serverId: String, reason: String) async -> ConversationCommandFailure? {
-        guard networkMonitor.isOnline else {
-            return ConversationCommandFailure(userMessage: String(
-                localized: "moderation.removal.offline",
-                defaultValue: "Connectez-vous pour retirer ce contenu.",
-                bundle: .main
-            ))
-        }
-        try? await persistence.markDeleted(localId: messageId, deletedAt: now(), sparingOpenedViewOnce: false, expired: false)
-        StarredMessagesStore.shared.remove(messageId: serverId)
+        guard networkMonitor.isOnline else { return Self.offlineRemovalRefusal }
+        await eraseLocally(messageId: messageId, serverId: serverId, deletedAt: now())
         do {
             try await messageService.delete(conversationId: conversationId, messageId: serverId, reason: reason)
             return nil
@@ -184,6 +208,44 @@ final class ConversationCommandHandler: ConversationCommandProviding {
             try? await persistence.markUndeleted(localId: messageId)
             return ConversationCommandFailure(error)
         }
+    }
+
+    /// Retrait d'une SÉLECTION (#11159) : en ligne seulement ; les non-envoyés se retirent localement
+    /// (`discardUnsent`), toute la sélection envoyée s'efface aussitôt, puis chaque refus ne ramène que
+    /// son message. UN motif pour les messages des autres, les siens partent sans motif.
+    func removeSelection(
+        _ targets: [SelectionRemovalTarget], reason: String, discardUnsent: (String) async -> Void
+    ) async -> ConversationCommandFailure? {
+        guard networkMonitor.isOnline else { return Self.offlineRemovalRefusal }
+        for target in targets where target.isUnsent { await discardUnsent(target.messageId) }
+        let sent = targets.filter { !$0.isUnsent }
+        let deletedAt = now()
+        for target in sent { await eraseLocally(messageId: target.messageId, serverId: target.serverId, deletedAt: deletedAt) }
+        var refusal: ConversationCommandFailure?
+        for target in sent {
+            do {
+                try await messageService.delete(
+                    conversationId: conversationId, messageId: target.serverId, reason: target.isMine ? nil : reason
+                )
+            } catch {
+                try? await persistence.markUndeleted(localId: target.messageId)
+                refusal = ConversationCommandFailure(error)
+            }
+        }
+        return refusal
+    }
+
+    private static var offlineRemovalRefusal: ConversationCommandFailure {
+        ConversationCommandFailure(userMessage: String(
+            localized: "moderation.removal.offline",
+            defaultValue: "Connectez-vous pour retirer ce contenu.",
+            bundle: .main
+        ))
+    }
+
+    private func eraseLocally(messageId: String, serverId: String, deletedAt: Date) async {
+        try? await persistence.markDeleted(localId: messageId, deletedAt: deletedAt, sparingOpenedViewOnce: false, expired: false)
+        StarredMessagesStore.shared.remove(messageId: serverId)
     }
 
     func removeAttachment(
