@@ -25,33 +25,43 @@ public enum SearchIndexMigrations {
 
     /// Register migrations without running — for use with a shared migrator.
     public static func registerAll(in migrator: inout DatabaseMigrator) {
-        migrator.registerMigration("search_idx_v1_conversations_users_fts5") { db in
-            // Standalone FTS5 (no `content=…`): the FTS table itself stores
-            // the searchable columns. UPSERT semantics are emulated in Swift
-            // via DELETE-then-INSERT keyed on `id` (UNINDEXED).
-            try db.execute(sql: """
-                CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
-                    id UNINDEXED,
-                    title,
-                    description,
-                    identifier,
-                    lastMessagePreview,
-                    participantUsername,
-                    tokenize='unicode61 remove_diacritics 2'
-                )
-                """)
+        migrator.register(all)
+    }
 
-            try db.execute(sql: """
-                CREATE VIRTUAL TABLE IF NOT EXISTS users_fts USING fts5(
-                    id UNINDEXED,
-                    username,
-                    displayName,
-                    firstName,
-                    lastName,
-                    bio,
-                    tokenize='unicode61 remove_diacritics 2'
-                )
-                """)
-        }
+    static let all: [any DatabaseMigration] = [
+        SearchIdxV1ConversationsUsersFts5Migration(),
+    ]
+}
+
+struct SearchIdxV1ConversationsUsersFts5Migration: DatabaseMigration {
+    let identifier = "search_idx_v1_conversations_users_fts5"
+
+    func migrate(_ db: Database) throws {
+        // Standalone FTS5 (no `content=…`): the FTS table itself stores
+        // the searchable columns. UPSERT semantics are emulated in Swift
+        // via DELETE-then-INSERT keyed on `id` (UNINDEXED).
+        try db.execute(sql: """
+            CREATE VIRTUAL TABLE IF NOT EXISTS conversations_fts USING fts5(
+                id UNINDEXED,
+                title,
+                description,
+                identifier,
+                lastMessagePreview,
+                participantUsername,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """)
+
+        try db.execute(sql: """
+            CREATE VIRTUAL TABLE IF NOT EXISTS users_fts USING fts5(
+                id UNINDEXED,
+                username,
+                displayName,
+                firstName,
+                lastName,
+                bio,
+                tokenize='unicode61 remove_diacritics 2'
+            )
+            """)
     }
 }
