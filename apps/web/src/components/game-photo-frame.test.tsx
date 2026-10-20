@@ -80,8 +80,10 @@ describe('un emblème par sorte de moment', () => {
     });
   }
 
-  test('une Meesh frappée montre son numéro', () => {
-    expect(text(render(meeshMoment({ number: 10, edition: 'silver' })))).toContain('N° 10');
+  test('une Meesh frappée montre son numéro, « Nº » dans toutes les langues (épopée § 6)', () => {
+    const html = render(meeshMoment({ number: 10, edition: 'silver' }));
+    expect(html).toContain('data-game-number="10"');
+    expect(text(html)).not.toContain('N° 10');
   });
 });
 

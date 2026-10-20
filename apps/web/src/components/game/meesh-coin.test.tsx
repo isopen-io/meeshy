@@ -27,6 +27,20 @@ const face = (side: MeeshCoinSide, edition: MeeshEdition = 'silver'): string =>
 
 const count = (html: string, needle: string): number => html.split(needle).length - 1;
 
+/** Le dessin de la pièce SANS ses oiseaux : Mee et Meo portent leurs propres couleurs d'illustration (`lib/mee/art`). */
+const withoutBirds = (html: string): string => {
+  const open = html.indexOf('<g data-game-bird=');
+  if (open < 0) return html;
+  const tags = /<g[\s>]|<\/g>/g;
+  tags.lastIndex = open;
+  let depth = 0;
+  for (let tag = tags.exec(html); tag !== null; tag = tags.exec(html)) {
+    depth += tag[0] === '</g>' ? -1 : 1;
+    if (depth === 0) return withoutBirds(html.slice(0, open) + html.slice(tag.index + 4));
+  }
+  return html;
+};
+
 const decors = (html: string): readonly string[] => [...html.matchAll(/data-game-decor="([a-z-]+)"/g)].map((m) => m[1] ?? '');
 
 /** La couronne lue dans l'ordre de son pourtour : chaque lettre, et chaque séparateur (point ou étoile) lu « · ». */
@@ -182,7 +196,7 @@ describe('MeeshCoin — les matières', () => {
 
   test('aucun littéral de couleur', () => {
     for (const edition of EDITIONS) {
-      for (const side of SIDES) expect(face(side, edition)).not.toMatch(/(stroke|fill|stop-color)="#/);
+      for (const side of SIDES) expect(withoutBirds(face(side, edition))).not.toMatch(/(stroke|fill|stop-color)="#/);
     }
   });
 });

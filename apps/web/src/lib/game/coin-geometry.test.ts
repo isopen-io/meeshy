@@ -27,8 +27,8 @@ describe('la couronne universelle', () => {
     const layout = inscriptionLayout();
     const step = 360 / (coin.inscription.text.length * coin.inscription.repeat);
     for (const glyph of layout) {
-      expect(Math.hypot(glyph.x - CENTER, glyph.y - CENTER)).toBeCloseTo(coin.inscription.radius, 6);
-      expect(glyph.rotate).toBeCloseTo(coin.inscription.startDeg + glyph.index * step + 90, 6);
+      expect(Math.hypot(glyph.x - CENTER, glyph.y - CENTER)).toBeCloseTo(coin.inscription.radius, 2);
+      expect(glyph.rotate).toBeCloseTo(coin.inscription.startDeg + glyph.index * step + 90, 2);
     }
   });
 

@@ -189,13 +189,13 @@ describe('après la frappe', () => {
     }
     const CONFIRMED: Readonly<Record<number, { number: number; edition: 'silver'; key: number }>> = { 4: { number: 4, edition: 'silver', key: 1 } };
     const host = await mount(<Bench />);
-    const scene = (): string => host.querySelector('[data-game-mint-scene]')?.textContent ?? '';
+    const scene = (): string => host.querySelector('[data-game-mint-scene] [data-game-number]')?.getAttribute('data-game-number') ?? '';
     await act(async () => set({ strikeKey: 1, next: 4, confirmed: null }));
-    expect(scene()).toContain('N° 4');
+    expect(scene()).toBe('4');
     await act(async () => set({ strikeKey: 1, next: 5, confirmed: 4 }));
-    expect(scene()).toContain('N° 4');
+    expect(scene()).toBe('4');
     await act(async () => set({ strikeKey: 2, next: 5, confirmed: 4 }));
-    expect(scene()).toContain('N° 5');
+    expect(scene()).toBe('5');
   });
 });
 
