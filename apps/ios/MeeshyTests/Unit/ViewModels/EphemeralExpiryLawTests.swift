@@ -7,6 +7,8 @@ final class EphemeralExpiryLawTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
+    private let ledger = EphemeralReceiptLedger(defaults: UserDefaults(suiteName: "meeshy.tests.\(UUID().uuidString)")!)
+
     private func makeMessage(id: String, expiresAt: Date? = nil, isBurning: Bool = false) -> Message {
         var message = Message(
             id: id,
@@ -23,21 +25,21 @@ final class EphemeralExpiryLawTests: XCTestCase {
     func test_aMessageWithoutExpiry_hasNoDeadlineAndIsNeverElapsed() {
         let messages = [makeMessage(id: "plain")]
 
-        XCTAssertTrue(EphemeralExpiryLaw.deadlines(of: messages, now: now).isEmpty)
-        XCTAssertTrue(EphemeralExpiryLaw.elapsedIds(in: messages, now: now).isEmpty)
+        XCTAssertTrue(EphemeralExpiryLaw.deadlines(of: messages, now: now, ledger: ledger).isEmpty)
+        XCTAssertTrue(EphemeralExpiryLaw.elapsedIds(in: messages, now: now, ledger: ledger).isEmpty)
     }
 
     func test_aFutureExpiry_isADeadline_notAnElapsedMessage() {
         let messages = [makeMessage(id: "soon", expiresAt: now.addingTimeInterval(600))]
 
-        XCTAssertEqual(EphemeralExpiryLaw.deadlines(of: messages, now: now).keys.sorted(), ["soon"])
-        XCTAssertTrue(EphemeralExpiryLaw.elapsedIds(in: messages, now: now).isEmpty)
+        XCTAssertEqual(EphemeralExpiryLaw.deadlines(of: messages, now: now, ledger: ledger).keys.sorted(), ["soon"])
+        XCTAssertTrue(EphemeralExpiryLaw.elapsedIds(in: messages, now: now, ledger: ledger).isEmpty)
     }
 
     func test_aPastExpiry_isElapsed() {
         let messages = [makeMessage(id: "gone", expiresAt: now.addingTimeInterval(-600))]
 
-        XCTAssertEqual(EphemeralExpiryLaw.elapsedIds(in: messages, now: now), ["gone"])
+        XCTAssertEqual(EphemeralExpiryLaw.elapsedIds(in: messages, now: now, ledger: ledger), ["gone"])
     }
 
     func test_scheduled_marksElapsedMessagesAsDueNow_exceptTheOnesAlreadyBurning() {
@@ -47,7 +49,7 @@ final class EphemeralExpiryLawTests: XCTestCase {
             makeMessage(id: "soon", expiresAt: now.addingTimeInterval(600)),
         ]
 
-        let table = EphemeralExpiryLaw.scheduled(for: messages, now: now)
+        let table = EphemeralExpiryLaw.scheduled(for: messages, now: now, ledger: ledger)
 
         XCTAssertEqual(table["gone"], .distantPast)
         XCTAssertNil(table["burning"])
