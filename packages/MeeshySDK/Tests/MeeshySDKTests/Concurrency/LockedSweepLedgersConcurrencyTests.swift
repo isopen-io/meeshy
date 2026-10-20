@@ -115,4 +115,33 @@ final class LockedSweepLedgersConcurrencyTests: XCTestCase {
 
         XCTAssertEqual(memo.count, 4)
     }
+
+    func test_track_concurrentDistinctUsers_belowCapacity_keepsEveryMapping() async {
+        let cache = UserDisplayNameCache(capacity: 1_000)
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<300 {
+                group.addTask { cache.track(username: "User\(index)", displayName: "Name \(index)") }
+            }
+        }
+
+        XCTAssertEqual(cache.allMappings().count, 300)
+        XCTAssertEqual(cache.displayName(for: "user7"), "Name 7")
+    }
+
+    func test_trackFromMentionedUsers_concurrentBatches_neverExceedsCapacity() async {
+        let cache = UserDisplayNameCache(capacity: 64)
+        let batches = (0..<20).map { batch in
+            (0..<30).map { index in
+                MentionedUser(userId: "id\(batch)-\(index)", username: "u\(batch)-\(index)", displayName: "N\(batch)-\(index)", avatar: nil)
+            }
+        }
+        await withTaskGroup(of: Void.self) { group in
+            for batch in batches {
+                group.addTask { cache.trackFromMentionedUsers(batch) }
+            }
+        }
+
+        XCTAssertLessThanOrEqual(cache.allMappings().count, 64)
+        XCTAssertGreaterThan(cache.allMappings().count, 0)
+    }
 }
