@@ -31,6 +31,9 @@ function buildPrisma(
     globalRole?: string | null;
     userThrows?: boolean;
     participantThrows?: boolean;
+    /** `Conversation.type` — défaut `group`. `null` = conversation introuvable. */
+    conversationType?: string | null;
+    conversationThrows?: boolean;
   } = {}
 ) {
   const findUnique = jest.fn<any>(async () => {
@@ -46,7 +49,12 @@ function buildPrisma(
       user: { role: overrides.memberGlobalRole ?? 'USER' },
     };
   });
-  return { user: { findUnique }, participant: { findFirst } };
+  const conversationFindUnique = jest.fn<any>(async () => {
+    if (overrides.conversationThrows) throw new Error('db down');
+    if (overrides.conversationType === null) return null;
+    return { type: overrides.conversationType ?? 'group' };
+  });
+  return { user: { findUnique }, participant: { findFirst }, conversation: { findUnique: conversationFindUnique } };
 }
 
 const admit = (params: {
@@ -179,6 +187,7 @@ describe("admitMessageDelete — le `Participant.id` de l'ACTEUR", () => {
     await expect(admit({ prisma, deleterUserId: OTHER })).resolves.toEqual({
       admitted: true,
       actorParticipantId: PART_ID,
+      byModeration: true,
     });
   });
 
@@ -188,6 +197,7 @@ describe("admitMessageDelete — le `Participant.id` de l'ACTEUR", () => {
     await expect(admit({ prisma, deleterUserId: OTHER })).resolves.toEqual({
       admitted: true,
       actorParticipantId: PART_ID,
+      byModeration: true,
     });
   });
 
@@ -200,7 +210,7 @@ describe("admitMessageDelete — le `Participant.id` de l'ACTEUR", () => {
   it("est absent pour l'admin GLOBAL non participant — il n'a aucune ligne à lire", async () => {
     const prisma = buildPrisma({ conversationRole: null, globalRole: 'ADMIN' });
 
-    await expect(admit({ prisma, deleterUserId: OTHER })).resolves.toEqual({ admitted: true });
+    await expect(admit({ prisma, deleterUserId: OTHER })).resolves.toEqual({ admitted: true, byModeration: true });
   });
 
   it("n'est jamais rendu avec un REFUS — rien ne doit pouvoir l'employer sans avoir lu `admitted`", async () => {
@@ -244,5 +254,63 @@ describe('admitMessageDelete — toute lecture échoue FERMÉE', () => {
 
     await expect(admit({ prisma, deleterUserId: OTHER, onError })).resolves.toMatchObject({ admitted: false });
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('admitMessageDelete — le retrait par un TIERS (#11149)', () => {
+  it("admet le CRÉATEUR de la conversation", async () => {
+    const prisma = buildPrisma({ conversationRole: 'creator', memberGlobalRole: 'USER' });
+
+    await expect(admit({ prisma, deleterUserId: OTHER })).resolves.toEqual({
+      admitted: true,
+      actorParticipantId: PART_ID,
+      byModeration: true,
+    });
+  });
+
+  it.each(['group', 'public', 'global', 'broadcast'])('admet un tiers privilégié dans une conversation %s', async (type) => {
+    const prisma = buildPrisma({ conversationRole: 'admin', conversationType: type });
+
+    await expect(admit({ prisma, deleterUserId: OTHER })).resolves.toMatchObject({ admitted: true, byModeration: true });
+  });
+
+  it.each([
+    ['admin de conversation', { conversationRole: 'admin' }],
+    ['créateur', { conversationRole: 'creator' }],
+    ['BIGBOSS membre', { conversationRole: 'member', memberGlobalRole: 'BIGBOSS' }],
+    ['ADMIN global non participant', { conversationRole: null, globalRole: 'ADMIN' }],
+  ] as const)('refuse le %s dans une conversation DIRECTE', async (_label, roles) => {
+    const prisma = buildPrisma({ ...roles, conversationType: 'direct' });
+
+    await expect(admit({ prisma, deleterUserId: OTHER })).resolves.toEqual({ admitted: false });
+  });
+
+  it("refuse quand la conversation est introuvable", async () => {
+    const prisma = buildPrisma({ conversationRole: 'admin', conversationType: null });
+
+    await expect(admit({ prisma, deleterUserId: OTHER })).resolves.toEqual({ admitted: false });
+  });
+
+  it("refuse quand le type de conversation est illisible", async () => {
+    const onError = jest.fn();
+    const prisma = buildPrisma({ conversationRole: null, globalRole: 'BIGBOSS', conversationThrows: true });
+
+    await expect(admit({ prisma, deleterUserId: OTHER, onError })).resolves.toEqual({ admitted: false });
+    expect(onError).toHaveBeenCalled();
+  });
+
+  it("laisse l'auteur supprimer son message d'une conversation directe, sans lecture et sans modération", async () => {
+    const prisma = buildPrisma({ conversationType: 'direct' });
+
+    await expect(admit({ prisma, deleterUserId: AUTHOR })).resolves.toEqual({ admitted: true });
+    expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("ne lit pas le type de conversation pour un simple membre", async () => {
+    const prisma = buildPrisma({ conversationRole: 'member', memberGlobalRole: 'USER' });
+
+    await admit({ prisma, deleterUserId: OTHER });
+
+    expect(prisma.conversation.findUnique).not.toHaveBeenCalled();
   });
 });

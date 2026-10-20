@@ -45,7 +45,8 @@ extension ConversationView {
             composerState: $composerState, accentColor: accentColor, onChoice: { sendStickerChoice($0) }))
         .modifier(ConversationComposerEditingCovers(
             composerState: $composerState, scrollState: $scrollState, accentColor: accentColor,
-            onRetouched: { replacePendingWithRetouchedPieces($0) }, onSceneMedia: { stageSceneMedia($0) }))
+            onRetouched: { replacePendingWithRetouchedPieces($0) }, onSceneMedia: { stageSceneMedia($0) },
+            onRemovePiece: { detachPendingPieces([$0]) }))
     }
 
     /// Accent RÉSOLU que l'hôte remet au composer : le bleu de marque quand un

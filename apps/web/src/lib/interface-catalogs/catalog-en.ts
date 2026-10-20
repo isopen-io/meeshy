@@ -40,6 +40,7 @@ import enDownload from './catalog-en-download';
 import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
 import enContentRefused from './catalog-en-content-refused';
+import enContentRemoval from './catalog-en-content-removal';
 import enPublicEntry from './catalog-en-public-entry';
 import enThreadSearch from './catalog-en-thread-search';
 
@@ -1072,6 +1073,7 @@ const en = {
   ...enContactDiscovery,
   ...enUserProfile,
   ...enContentRefused,
+  ...enContentRemoval,
   ...enPublicEntry,
   ...enThreadSearch,
 } satisfies InterfaceCatalog;

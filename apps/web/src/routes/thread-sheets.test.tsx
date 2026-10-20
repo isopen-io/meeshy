@@ -321,7 +321,7 @@ describe('ThreadMessageSheets — le dialogue de suppression (#10582)', () => {
     const journal: string[] = [];
     const host = await mountSheets(
       menuOf({
-        deleteRequest: { messageIds: [SERVER_MESSAGE_ID], offer: { forEveryone: false, forMe: true } },
+        deleteRequest: { messageIds: [SERVER_MESSAGE_ID], offer: { forEveryone: false, forMe: true, remove: false } },
         onConfirmDelete: (mode) => journal.push(mode),
       }),
       [ownMessage()],

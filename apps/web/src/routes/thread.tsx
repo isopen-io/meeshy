@@ -45,6 +45,8 @@ import { useTypistAvatar } from '@/lib/view/use-typist-avatar';
 import { useSend } from '@/lib/view/use-send';
 import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
+import { moderatesConversation } from '@/lib/view/content-removal';
+import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
@@ -509,6 +511,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * la PIÈCE ; valeur STABLE, lue par chaque grille de médias (`Attachments`).
    */
   const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation });
+  const platformRole = useServedGlobalRole();
 
   const messageMenu = useMessageMenu({
     conversationId,
@@ -519,6 +522,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     canStar: !viewer.isAnonymous,
     reply: compose,
     announce: announcer.announce,
+    moderates: conversation !== undefined && moderatesConversation({ conversation, platformRole }),
   });
 
   /**

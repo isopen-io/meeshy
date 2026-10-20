@@ -466,8 +466,8 @@ export async function performCommentEdit(
   }
 }
 
-export async function performCommentDelete(params: GestureParams): Promise<CommentGestureResult> {
-  const { postId, commentId, deps } = params;
+export async function performCommentDelete(params: GestureParams & { readonly reason?: string }): Promise<CommentGestureResult> {
+  const { postId, commentId, deps, reason } = params;
   const flightKey = `delete:${commentId}`;
   if (inFlight.has(flightKey)) return { ok: true };
 
@@ -484,6 +484,7 @@ export async function performCommentDelete(params: GestureParams): Promise<Comme
       method: 'DELETE',
       path: postsEndpoints.byPostIdCommentsByCommentId(postId, commentId),
       idempotent: true,
+      ...(reason === undefined ? {} : { body: { reason } }),
       fixture: { deleted: true },
     }).catch(() => null);
 
@@ -524,7 +525,13 @@ export type CommentGestureRequest = (
        * DÉJÀ basculé et enverrait le verbe INVERSE (défaut majeur 2). */
       readonly on: boolean;
     }
-  | { readonly kind: 'delete'; readonly postId: string; readonly commentId: string }
+  | {
+      readonly kind: 'delete';
+      readonly postId: string;
+      readonly commentId: string;
+      /** RETIRER (#11150) — le motif de la modération ; absent, l'auteur supprime le sien. */
+      readonly reason?: string | undefined;
+    }
   | {
       readonly kind: 'edit';
       readonly postId: string;
@@ -545,7 +552,13 @@ export function performCommentGesture(
   if (request.kind === 'like')
     return performCommentLike({ postId: request.postId, commentId: request.commentId, on: request.on, ...parent, deps });
   if (request.kind === 'delete')
-    return performCommentDelete({ postId: request.postId, commentId: request.commentId, ...parent, deps });
+    return performCommentDelete({
+      postId: request.postId,
+      commentId: request.commentId,
+      ...parent,
+      ...(request.reason === undefined ? {} : { reason: request.reason }),
+      deps,
+    });
   return performCommentEdit({
     postId: request.postId,
     commentId: request.commentId,
