@@ -13,13 +13,15 @@ final class SceneCommandTargetsTests: XCTestCase {
         role: MeeshySceneRole = .main,
         newConversation: MeeshySceneAction? = nil,
         search: MeeshySceneAction? = nil,
-        closeWindow: MeeshySceneAction? = nil
+        closeWindow: MeeshySceneAction? = nil,
+        sendMessage: MeeshySceneAction? = nil
     ) -> SceneCommandTargets {
         SceneCommandTargets(
             navigation: router.map { MeeshySceneNavigation(router: $0, role: role) },
             newConversation: newConversation,
             search: search,
-            closeWindow: closeWindow
+            closeWindow: closeWindow,
+            sendMessage: sendMessage
         )
     }
 
@@ -95,5 +97,16 @@ final class SceneCommandTargetsTests: XCTestCase {
         targets.action(for: .search)?()
         targets.action(for: .closeWindow)?()
         XCTAssertEqual([created.count, searched.count, closed.count], [1, 1, 1])
+    }
+
+    func test_sendMessage_withPublishedAction_runsIt() {
+        let sent = Counter()
+        let targets = makeTargets(sendMessage: MeeshySceneAction { sent.count += 1 })
+        targets.action(for: .sendMessage)?()
+        XCTAssertEqual(sent.count, 1)
+    }
+
+    func test_sendMessage_withoutPublishedAction_isNil() {
+        XCTAssertNil(makeTargets().action(for: .sendMessage))
     }
 }

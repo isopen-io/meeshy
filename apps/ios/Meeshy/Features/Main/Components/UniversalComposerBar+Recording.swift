@@ -91,14 +91,9 @@ extension UniversalComposerBar {
                         handleSend()
                     }
                     // Clavier MATÉRIEL (iPad) : Maj+Retour / Option+Retour passe à la ligne (iOS 17+, `onKeyPress` ;
-                    // iOS 16 garde la règle du texte seule), Cmd+Retour envoie quelle que soit la longueur.
+                    // iOS 16 garde la règle du texte seule).
                     .modifier(HardwareReturnModifiers { literalNewlinePending = true })
-                    .background {
-                        Button("") { handleSend() }
-                            .keyboardShortcut(.return, modifiers: .command)
-                            .opacity(0)
-                            .accessibilityHidden(true)
-                    }
+                    .modifier(PublishesComposerSend(send: handleSend))
                     .accessibilityLabel(String(localized: "a11y.composer.textField", defaultValue: "Champ de message", bundle: .main))
                     .accessibilityValue(text.isEmpty ? resolvedPlaceholder : text)
                     .accessibilityHint(protection?.accessibilityState ?? "")

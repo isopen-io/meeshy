@@ -109,3 +109,11 @@ struct HardwareReturnModifiers: ViewModifier {
         }
     }
 }
+
+struct PublishesComposerSend: ViewModifier {
+    let send: () -> Void
+
+    func body(content: Content) -> some View {
+        content.focusedValue(\.meeshySendMessage, MeeshySceneAction(perform: send))
+    }
+}
