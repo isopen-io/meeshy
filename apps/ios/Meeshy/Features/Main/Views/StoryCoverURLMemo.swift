@@ -28,7 +28,7 @@ import MeeshySDK
 ///
 /// - **la cover écrite APRÈS coup** (une story reçue dont la couverture
 ///   composite est rendue plus tard) : `bumpGeneration()` vide la mémoire, et
-///   c'est le site qui incrémente déjà `receiverCoverRenderTick` qui l'appelle
+///   c'est `StoryCoverRenderSignal.bump()` qui l'appelle
 ///   — le même signal, au même endroit ;
 /// - **la purge de logout** : la mémoire porte l'identité du compte pour
 ///   lequel elle a été remplie. Un changement de compte la vide de lui-même,

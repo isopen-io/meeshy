@@ -63,7 +63,6 @@ extension StoryViewModel {
             // dans l'item, il n'était jamais relu — une republication rejouée
             // partait orpheline.
             repostOfId: item.repostOfId,
-            progress: 0,
             phase: .uploading,
             authorId: user?.id ?? "",
             authorName: user?.displayName ?? user?.username ?? "",
@@ -265,7 +264,6 @@ extension StoryViewModel {
             thumbnailImage: thumbnail,
             draftId: draftId,
             repostOfId: repostOfId,
-            progress: 0,
             phase: .preparing,
             authorId: user?.id ?? "",
             authorName: user?.displayName ?? user?.username ?? "",
@@ -387,6 +385,11 @@ extension StoryViewModel {
     func mutateUpload(id: String, _ body: (inout StoryUploadState) -> Void) {
         guard let idx = activeUploads.firstIndex(where: { $0.id == id }) else { return }
         body(&activeUploads[idx])
+    }
+
+    func reportUploadProgress(_ fraction: Double, for id: String) {
+        guard activeUploads.contains(where: { $0.id == id }) else { return }
+        uploadProgress.report(fraction, for: id)
     }
 
     /// Démarre l'upload suivant si aucun ne monte. Les uploads se déroulent un
@@ -744,7 +747,7 @@ extension StoryViewModel {
                 _ = try await self.runStoryUpload(
                     upload,
                     onProgress: { [weak self] progress in
-                        self?.mutateUpload(id: id) { $0.progress = progress }
+                        self?.reportUploadProgress(progress, for: id)
                     },
                     onPhase: { [weak self] phase in
                         self?.mutateUpload(id: id) { $0.phase = phase }
