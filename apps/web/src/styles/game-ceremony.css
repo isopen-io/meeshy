@@ -249,11 +249,15 @@
   box-shadow: inset 0 -3px 0 var(--ceremony-shade);
 }
 
-[data-ceremony-flash] {
-  width: 360px;
-  height: 640px;
+/* L'éclair déborde la scène de tous côtés : sur un écran plus haut que 9:16, il couvre aussi les bandes. Son
+   centre reste sur l'enclume (180, 448 de la scène) et ses arrêts gardent le rayon de la maquette. */
+[data-ceremony-scene] > [data-ceremony-layer] > [data-ceremony-flash] {
+  left: -180px;
+  top: -320px;
+  width: 720px;
+  height: 1280px;
   opacity: 0;
-  background: radial-gradient(circle at 50% 70%, var(--ceremony-flash-0) 0%, var(--ceremony-flash-1) 22%, var(--ceremony-flash-2) 62%);
+  background: radial-gradient(circle at 50% 60%, var(--ceremony-flash-0) 0%, var(--ceremony-flash-1) 11.3%, var(--ceremony-flash-2) 31.9%);
 }
 
 [data-ceremony-ring] {
@@ -284,6 +288,10 @@
     var(--ceremony-iris-5) 28deg 35deg,
     transparent 35deg 45deg
   );
+}
+
+[data-ceremony-tchak] > span {
+  position: static;
 }
 
 [data-ceremony-tchak] {
@@ -353,4 +361,17 @@
 [data-ceremony-scene] *,
 [data-game-ceremony] > * {
   pointer-events: none;
+}
+
+/* Ce qui bouge à chaque image vit sur sa propre couche : Mee et Meo portent un filtre SVG (le contour du
+   sticker) qu'aucune image ne doit repeindre, seulement déplacer. */
+[data-ceremony-actor],
+[data-ceremony-coin],
+[data-ceremony-face],
+[data-ceremony-die],
+[data-ceremony-hammer],
+[data-ceremony-glow],
+[data-ceremony-rays],
+[data-ceremony-ombre] {
+  will-change: transform, opacity;
 }

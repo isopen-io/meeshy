@@ -117,6 +117,8 @@ const PARTS = [
   'flash',
   'ring',
   'tchak',
+  'tchakLight',
+  'tchakFinal',
   'rays',
   'sign',
   'say',
@@ -134,6 +136,10 @@ const readPalette = (root: Element): CeremonyPalette => {
 };
 
 const px = (value: number): string => value.toFixed(2);
+
+/** Des images qui tardent (au-delà d'une image à 60 Hz et demie) plusieurs fois de suite : la scène ne peint plus qu'un fil sur deux. */
+const SLOW_FRAME_MS = 24;
+const SLOW_FRAMES = 4;
 
 const place = (el: HTMLElement | null | undefined, transform: string, opacity?: number): void => {
   if (el === null || el === undefined) return;
@@ -161,7 +167,6 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
   const ready = readyLanguage === language;
   const [number, setNumber] = useState(shownNumber);
   const [refusal, setRefusal] = useState<MintRefusalReason | null>(null);
-  const [final, setFinal] = useState(false);
   const parts = useRef<Parts>({});
   const rootRef = useRef<HTMLDivElement>(null);
   const doneRef = useRef(onDone);
@@ -199,6 +204,9 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
     let settled = false;
     let raf = 0;
     let lastFinal = false;
+    let lastTick = 0;
+    let slow = 0;
+    let stride: 1 | 2 = 1;
 
     const layout = (): void => {
       const width = root.clientWidth || window.innerWidth;
@@ -256,9 +264,10 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
       if (p.flash) p.flash.style.opacity = frame.flash.toFixed(3);
       place(p.ring, `translate(150px,${px(SCENE_MARKS.anvil.y - 70)}px) scale(${frame.ring.scale.toFixed(3)})`, frame.ring.opacity);
       place(p.tchak, `translate(0px,318px) scale(${frame.tchak.scale.toFixed(3)})`, frame.tchak.opacity);
-      if (frame.tchak.final !== lastFinal) {
+      if (frame.tchak.final !== lastFinal && p.tchakFinal && p.tchakLight) {
         lastFinal = frame.tchak.final;
-        setFinal(lastFinal);
+        p.tchakFinal.style.display = lastFinal ? '' : 'none';
+        p.tchakLight.style.display = lastFinal ? 'none' : '';
       }
       place(p.rays, `translate(${px(c.x - 165)}px,${px(c.y - 165)}px) rotate(${px(frame.rays.rotate)}deg) scale(${frame.rays.scale.toFixed(3)})`, frame.rays.opacity);
       if (p.sign) p.sign.style.opacity = frame.sign.toFixed(3);
@@ -270,9 +279,12 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
     const tick = (): void => {
       if (live.done) return;
       const nowMs = clock.now() - t0;
+      slow = nowMs - lastTick > SLOW_FRAME_MS ? slow + 1 : Math.max(0, slow - 1);
+      lastTick = nowMs;
+      if (slow >= SLOW_FRAMES) stride = 2;
       const plan = planOf(edition, live, nowMs, modest);
       const t = nowMs / 1000;
-      if (ctx !== null && plan.mode !== 'reduced') drawCeremonyParticles(ctx, plan, particles, palette, t, view.k * dpr);
+      if (ctx !== null && plan.mode !== 'reduced') drawCeremonyParticles(ctx, plan, particles, palette, t, view.k * dpr, stride);
       apply(ceremonyFrame(plan, t, view.target));
       plan.strikes.forEach((strike, index) => {
         if (buzzed.has(index) || nowMs < strike.impactMs) return;
@@ -381,7 +393,10 @@ export function MintCeremony({ edition, number: shownNumber, gate, target, onDon
           </div>
           <div ref={bind('ring')} data-ceremony-ring="" />
           <div ref={bind('tchak')} data-ceremony-tchak="">
-            {text(() => translateGame(language, final ? 'game.frappe.tchak_final' : 'game.frappe.tchak'))}
+            <span ref={bind('tchakLight')}>{text(() => translateGame(language, 'game.frappe.tchak'))}</span>
+            <span ref={bind('tchakFinal')} style={{ display: 'none' }}>
+              {text(() => translateGame(language, 'game.frappe.tchak_final'))}
+            </span>
           </div>
           <div ref={bind('flash')} data-ceremony-flash="" />
           <div ref={bind('say')} data-ceremony-say="">

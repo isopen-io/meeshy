@@ -126,7 +126,7 @@ export function buildCeremonyParticles(plan: MintCeremonyPlan, seed: number): Ce
     const wrapped = dir > 0 ? ((raw % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) : -((((-raw) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI));
     const delta = wrapped + dir * Math.PI * (0.3 + r() * 0.5);
     return { s, d, phi0, delta, r0, dir, j: (r() - 0.5) * 3.2, tw: r() * 6.28, big: r() < 0.12, tone: Math.floor((th / (2 * Math.PI)) * 7) % 7 };
-  });
+  }).sort((a, b) => a.tone - b.tone);
   const sown = plan.phases.dust === null ? [] : plan.particles.dust;
   const grains = sown.flatMap((group) =>
     Array.from({ length: group.count }, (_, j): Grain => {
@@ -168,7 +168,8 @@ export function buildCeremonyParticles(plan: MintCeremonyPlan, seed: number): Ce
     const side = m % 2 === 1 ? 1 : -1;
     return { x: 180 + side * (30 + r() * 30), y: 541, vx: side * (40 + r() * 90), vy: -(10 + r() * 40), life: 0.4 + r() * 0.35 };
   });
-  return { weave, dust: grains, bursts, puff };
+  const byShade = (g: Grain): string => `${g.material}${g.material === 'diamond' ? (g.tone % 7 === 0 ? 'i' : g.tone % 2) : g.tone % 12}`;
+  return { weave, dust: [...grains].sort((a, b) => (byShade(a) < byShade(b) ? -1 : byShade(a) > byShade(b) ? 1 : 0)), bursts, puff };
 }
 
 /** Les couleurs du canevas, lues dans les jetons de la scène (`styles/game-ceremony.css`) : aucune n'est écrite ici. */
@@ -223,9 +224,18 @@ export const weaveRadius = (plan: MintCeremonyPlan, particles: CeremonyParticles
 
 /**
  * Peint les particules de l'instant `t` (en secondes) ; rend le nombre de particules peintes. `scale` est le facteur
- * qui porte la scène de 360 × 640 dans le canevas (échelle de l'écran × densité de pixels plafonnée à 2).
+ * qui porte la scène de 360 × 640 dans le canevas (échelle de l'écran × densité de pixels plafonnée à 2). `stride` 2
+ * ne peint qu'un fil et un grain sur deux : la scène y passe d'elle-même quand les images tardent.
  */
-export function drawCeremonyParticles(ctx: CeremonyCanvas, plan: MintCeremonyPlan, particles: CeremonyParticles, palette: CeremonyPalette, t: number, scale: number): number {
+export function drawCeremonyParticles(
+  ctx: CeremonyCanvas,
+  plan: MintCeremonyPlan,
+  particles: CeremonyParticles,
+  palette: CeremonyPalette,
+  t: number,
+  scale: number,
+  stride: 1 | 2 = 1,
+): number {
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, SCENE.width, SCENE.height);
   const tt = sceneTime(plan, t);
@@ -233,15 +243,23 @@ export function drawCeremonyParticles(ctx: CeremonyCanvas, plan: MintCeremonyPla
   const prism = plan.edition === 'prism';
   const shift = Math.floor(t * 2);
   let painted = 0;
+  let style = '';
+  const paint = (next: string): void => {
+    if (next === style) return;
+    style = next;
+    ctx.fillStyle = next;
+  };
   ctx.globalCompositeOperation = 'lighter';
   const fadeWeave = 1 - seg(tt, blank.from, blank.to + 0.15);
   if (fadeWeave > 0) {
-    for (const w of particles.weave) {
+    for (let i = 0; i < particles.weave.length; i += stride) {
+      const w = particles.weave[i];
+      if (w === undefined) continue;
       const pos = weavePos(plan, w, tt);
       if (pos === null) continue;
       const a = pos[2] * fadeWeave * (0.62 + 0.38 * Math.sin(t * 13 + w.tw));
       if (a < 0.02) continue;
-      ctx.fillStyle = prism ? pick(palette.iris, w.tone + shift) : pick(palette.weave, w.tone);
+      paint(prism ? pick(palette.iris, w.tone + shift) : pick(palette.weave, w.tone));
       ctx.globalAlpha = a * 0.2;
       ctx.fillRect(pos[0] - 2.4, pos[1] - 2.4, 4.8, 4.8);
       ctx.globalAlpha = a;
@@ -252,7 +270,9 @@ export function drawCeremonyParticles(ctx: CeremonyCanvas, plan: MintCeremonyPla
   }
   const fadeDust = 1 - seg(tt, blank.from + 0.1, blank.to);
   if (fadeDust > 0) {
-    for (const g of particles.dust) {
+    for (let i = 0; i < particles.dust.length; i += stride) {
+      const g = particles.dust[i];
+      if (g === undefined) continue;
       if (tt < g.s) continue;
       const a = seg(tt, g.s, g.s + 0.08) * fadeDust;
       if (a < 0.02) continue;
@@ -270,7 +290,7 @@ export function drawCeremonyParticles(ctx: CeremonyCanvas, plan: MintCeremonyPla
         py = C.y + g.rho * Math.sin(angle);
       }
       ctx.globalAlpha = g.material === 'diamond' ? a : a * 0.9;
-      ctx.fillStyle = g.material === 'diamond' ? (g.tone % 7 === 0 ? pick(palette.iris, g.tone + shift) : pick(palette.diamond, g.tone)) : pick(g.material === 'gold' ? palette.gold : palette.silver, g.tone);
+      paint(g.material === 'diamond' ? (g.tone % 7 === 0 ? pick(palette.iris, g.tone + shift) : pick(palette.diamond, g.tone)) : pick(g.material === 'gold' ? palette.gold : palette.silver, g.tone));
       ctx.fillRect(px - g.size / 2, py - g.size / 2, g.size, g.size);
       if (g.material === 'diamond' && g.tone % 9 === 0) {
         ctx.globalAlpha = a * (0.55 + 0.45 * Math.sin(t * 17 + g.tone));
@@ -287,7 +307,7 @@ export function drawCeremonyParticles(ctx: CeremonyCanvas, plan: MintCeremonyPla
     const a = 1 - dt / b.life;
     const x = b.x + b.vx * dt;
     const y = b.y + b.vy * dt + 300 * dt * dt;
-    ctx.fillStyle = prism ? pick(palette.iris, b.tone + shift) : pick(palette.spark, b.tone);
+    paint(prism ? pick(palette.iris, b.tone + shift) : pick(palette.spark, b.tone));
     ctx.globalAlpha = a;
     ctx.fillRect(x - b.size / 2, y - b.size / 2, b.size, b.size);
     ctx.globalAlpha = a * 0.25;
@@ -300,7 +320,7 @@ export function drawCeremonyParticles(ctx: CeremonyCanvas, plan: MintCeremonyPla
     const dp = tt - landed;
     if (dp < 0 || dp > p.life) continue;
     ctx.globalAlpha = 0.55 * (1 - dp / p.life);
-    ctx.fillStyle = palette.ash;
+    paint(palette.ash);
     ctx.beginPath();
     ctx.arc(p.x + p.vx * dp, p.y + p.vy * dp, 2 + dp * 9, 0, 6.283);
     ctx.fill();
@@ -370,186 +390,200 @@ function reducedFrame(plan: MintCeremonyPlan, t: number): CeremonyFrame {
   };
 }
 
-/**
- * L'IMAGE DE L'INSTANT `t` (en secondes depuis le toucher). `answered` dit si la passerelle a répondu : tant
- * qu'elle ne l'a pas fait, Meo garde le marteau levé (la loi place les coups après la réponse).
- */
-export function ceremonyFrame(plan: MintCeremonyPlan, t: number, target: CeremonyTarget): CeremonyFrame {
-  if (plan.mode === 'reduced') return reducedFrame(plan, t);
-  const tt = sceneTime(plan, t);
+type Strike = { readonly at: number; readonly impact: number; readonly mee: boolean };
+
+/** L'instant et ce que la loi en dit, lus une fois par image et partagés par les calques. */
+type Moment = {
+  readonly plan: MintCeremonyPlan;
+  readonly t: number;
+  /** Le temps de la scène : `t`, remonté après un refus (`sceneTime`). */
+  readonly tt: number;
+  readonly p: Readonly<Record<'open' | 'emit' | 'dust' | 'blank' | 'descent' | 'places' | 'die' | 'windup' | 'dieOff' | 'engrave' | 'reveal' | 'ancestors' | 'celebrate' | 'flight' | 'glory', Seconds>>;
+  readonly strikes: readonly Strike[];
+  readonly lastImpact: number;
+  readonly exitFade: number;
+};
+
+const momentOf = (plan: MintCeremonyPlan, t: number): Moment => {
+  const phases = plan.phases;
   const p = {
-    open: sec(plan.phases.open),
-    emit: sec(plan.phases.emit),
-    dust: sec(plan.phases.dust),
-    blank: sec(plan.phases.blank),
-    descent: sec(plan.phases.descent),
-    places: sec(plan.phases.places),
-    die: sec(plan.phases.die),
-    windup: sec(plan.phases.windup),
-    dieOff: sec(plan.phases.dieOff),
-    engrave: sec(plan.phases.engrave),
-    reveal: sec(plan.phases.reveal),
-    ancestors: sec(plan.phases.ancestors),
-    celebrate: sec(plan.phases.celebrate),
-    flight: sec(plan.phases.flight),
-    glory: sec(plan.phases.glory),
+    open: sec(phases.open),
+    emit: sec(phases.emit),
+    dust: sec(phases.dust),
+    blank: sec(phases.blank),
+    descent: sec(phases.descent),
+    places: sec(phases.places),
+    die: sec(phases.die),
+    windup: sec(phases.windup),
+    dieOff: sec(phases.dieOff),
+    engrave: sec(phases.engrave),
+    reveal: sec(phases.reveal),
+    ancestors: sec(phases.ancestors),
+    celebrate: sec(phases.celebrate),
+    flight: sec(phases.flight),
+    glory: sec(phases.glory),
   };
-  const end = plan.endMs / 1000;
-  const refusal = plan.refusal;
   const strikes = plan.strikes.map((s) => ({ at: s.atMs / 1000, impact: s.impactMs / 1000, mee: s.hitters.includes('mee') }));
-  const lastImpact = strikes.at(-1)?.impact ?? Infinity;
+  const end = plan.endMs / 1000;
+  const exitFade = plan.refusal === null ? 1 - seg(t, p.flight.from, p.flight.to) : 1 - seg(t, end - 0.45, end);
+  return { plan, t, tt: sceneTime(plan, t), p, strikes, lastImpact: strikes.at(-1)?.impact ?? Infinity, exitFade };
+};
 
-  const exitFade = refusal === null ? 1 - seg(t, p.flight.from, p.flight.to) : 1 - seg(t, end - 0.45, end);
-  const backdrop = seg(t, p.open.from, p.open.to) * exitFade;
-
-  let shx = 0;
-  let shy = 0;
-  strikes.forEach((s, index) => {
-    const x = t - s.impact;
-    if (x < 0 || x >= 0.26) return;
-    const power = strikePower(plan, index);
-    shx += power * 4.5 * (1 - x / 0.26) * Math.sin(x * 95);
-    shy += power * 2 * (1 - x / 0.26) * Math.cos(x * 80);
-  });
+/** Le tremblement : chaque coup, plus fort au dernier, et le flan qui se pose. */
+const shakeOf = ({ plan, t, tt, p, strikes }: Moment): { readonly x: number; readonly y: number } => {
+  const fromStrikes = strikes.reduce(
+    (acc, s, index) => {
+      const x = t - s.impact;
+      if (x < 0 || x >= 0.26) return acc;
+      const power = strikePower(plan, index);
+      return { x: acc.x + power * 4.5 * (1 - x / 0.26) * Math.sin(x * 95), y: acc.y + power * 2 * (1 - x / 0.26) * Math.cos(x * 80) };
+    },
+    { x: 0, y: 0 },
+  );
   const landed = tt - p.descent.to;
-  if (landed >= 0 && landed < 0.18) shy += 2.2 * (1 - landed / 0.18) * Math.sin(landed * 120);
+  return landed >= 0 && landed < 0.18 ? { x: fromStrikes.x, y: fromStrikes.y + 2.2 * (1 - landed / 0.18) * Math.sin(landed * 120) } : fromStrikes;
+};
 
-  const shining = t > p.emit.from && t < (refusal === null ? p.emit.to + 0.4 : end);
-  const orb = 1 + 0.18 * Math.sin(t * 9) * (shining ? 1 : 0);
-
+/** Mee et Meo : ils arrivent des côtés, sèment la poussière, prennent place à l'enclume, reculent pour la fête. */
+const actorsOf = ({ plan, t, tt, p }: Moment): { readonly mee: ActorFrame; readonly meo: ActorFrame } => {
   const enter = eOut(seg(t, 0.05, 0.6));
-  let meeX = lerp(-110, MEE_HOME.x, enter);
-  let meeY = MEE_HOME.y;
-  let meoX = lerp(380, MEO_HOME.x, enter);
-  let meoY = MEO_HOME.y;
   const move = eIO(seg(tt, p.places.from, p.places.to));
-  meeX = lerp(meeX, MEE_STRIKE.x, move);
-  meeY = lerp(meeY, MEE_STRIKE.y, move);
-  meoX = lerp(meoX, MEO_STRIKE.x, move);
-  meoY = lerp(meoY, MEO_STRIKE.y, move);
   const back = eIO(seg(t, p.dieOff.to, p.reveal.to));
-  meeX = lerp(meeX, MEE_END.x, back);
-  meeY = lerp(meeY, MEE_END.y, back);
-  meoX = lerp(meoX, MEO_END.x, back);
-  meoY = lerp(meoY, MEO_END.y, back);
-  meeY += Math.sin(t * 4.3) * 3;
-  meoY += Math.sin(t * 4.3 + 1.7) * 3;
+  const path = (from: number, home: { readonly x: number; readonly y: number }, strike: { readonly x: number; readonly y: number }, rest: { readonly x: number; readonly y: number }) => ({
+    x: lerp(lerp(lerp(from, home.x, enter), strike.x, move), rest.x, back),
+    y: lerp(lerp(home.y, strike.y, move), rest.y, back),
+  });
+  const mee = path(-110, MEE_HOME, MEE_STRIKE, MEE_END);
+  const meo = path(380, MEO_HOME, MEO_STRIKE, MEO_END);
+  const refusal = plan.refusal;
   const sowing = refusal === null && t > p.dust.from - 0.1 && t < p.dust.to + 0.3 ? Math.sin(t * 24) * 7 : 0;
   const party = t >= p.celebrate.from;
   const courage = refusal !== null && t >= refusal.sayMs / 1000;
-  const mee: ActorFrame = { x: meeX, y: meeY, rotate: sowing, scale: 1 + 0.14 * bump(t, p.celebrate.from, 0.38), pose: courage ? 'courage' : party ? 'party' : 'rest' };
-  const meo: ActorFrame = { x: meoX, y: meoY, rotate: -sowing, scale: 1 + 0.14 * bump(t, p.celebrate.from + 0.12, 0.38), pose: party ? 'party' : 'rest' };
+  return {
+    mee: { x: mee.x, y: mee.y + Math.sin(t * 4.3) * 3, rotate: sowing, scale: 1 + 0.14 * bump(t, p.celebrate.from, 0.38), pose: courage ? 'courage' : party ? 'party' : 'rest' },
+    meo: { x: meo.x, y: meo.y + Math.sin(t * 4.3 + 1.7) * 3, rotate: -sowing, scale: 1 + 0.14 * bump(t, p.celebrate.from + 0.12, 0.38), pose: party ? 'party' : 'rest' },
+  };
+};
 
-  const wingX = meeX + 72;
-  const wingY = meeY + 42;
+/** Le coin : Mee le tient sous l'aile, le pose sur le flan, il s'écrase un peu à chaque coup, puis Mee le retire. */
+const dieOf = ({ t, tt, p, strikes }: Moment, mee: ActorFrame): CeremonyFrame['die'] => {
+  const wing = { x: mee.x + 72, y: mee.y + 42 };
   const place = eIO(seg(tt, p.die.from, p.die.to));
   const lift = eIO(seg(t, p.dieOff.from, p.dieOff.to));
-  const dieX = lerp(lerp(wingX, DIE_ON.x, place), wingX, lift);
-  const dieY = lerp(lerp(wingY, DIE_ON.y, place), wingY, lift);
-  const dieSquash = strikes.reduce((sq, s) => sq - 0.1 * bump(t, s.impact, 0.1), 1);
-  const die = { x: dieX, y: dieY, squash: dieSquash, opacity: seg(tt, p.die.from - 0.2, p.die.from) * (1 - seg(t, p.dieOff.to, p.dieOff.to + 0.2)) };
+  return {
+    x: lerp(lerp(wing.x, DIE_ON.x, place), wing.x, lift),
+    y: lerp(lerp(wing.y, DIE_ON.y, place), wing.y, lift),
+    squash: strikes.reduce((sq, s) => sq - 0.1 * bump(t, s.impact, 0.1), 1),
+    opacity: seg(tt, p.die.from - 0.2, p.die.from) * (1 - seg(t, p.dieOff.to, p.dieOff.to + 0.2)),
+  };
+};
 
-  let angle = lerp(REST, WIND, eIO(seg(tt, p.windup.from, p.windup.to)));
+/** L'angle d'un marteau qui frappe à `at` : il tombe, rebondit, puis se relève (ou se repose au dernier coup). */
+const swing = (t: number, at: number, last: boolean, wind: number, hit: number, rest: number): number => {
+  if (t < at + 0.15) return lerp(wind, hit, eIn(seg(t, at, at + 0.09)));
+  return lerp(hit, last ? rest : wind, eIO(seg(t, at + 0.15, at + (last ? 0.55 : 0.42))));
+};
+
+/** Les marteaux : Meo lève le sien, le GARDE levé tant que la passerelle n'a pas répondu, frappe ; au prisme, Mee prend le sien pour le dernier coup. */
+const hammersOf = ({ plan, t, tt, p, strikes, lastImpact }: Moment, mee: ActorFrame, meo: ActorFrame): { readonly hammerMeo: HammerFrame; readonly hammerMee: HammerFrame } => {
   const firstStrike = strikes[0]?.at ?? Infinity;
-  if (t > p.windup.to && t < firstStrike && firstStrike - p.windup.to > 0.06 && refusal === null) angle = WIND + Math.sin(t * 30) * 2.5;
-  strikes.forEach((s, index) => {
-    if (t < s.at) return;
-    const last = index === strikes.length - 1;
-    angle = lerp(WIND, HIT, eIn(seg(t, s.at, s.at + 0.09)));
-    if (t >= s.at + 0.15) angle = lerp(HIT, last ? REST : WIND, eIO(seg(t, s.at + 0.15, s.at + (last ? 0.55 : 0.42))));
-  });
-  const hammerMeo: HammerFrame = { x: meoX + 8, y: meoY - 46, angle, opacity: seg(tt, p.places.from, p.places.to) * (1 - seg(t, lastImpact + 0.45, lastImpact + 0.75)) };
+  const waiting = plan.refusal === null && t > p.windup.to && t < firstStrike && firstStrike - p.windup.to > 0.06;
+  const raised = waiting ? WIND + Math.sin(t * 30) * 2.5 : lerp(REST, WIND, eIO(seg(tt, p.windup.from, p.windup.to)));
+  const angle = strikes.reduce((current, s, index) => (t < s.at ? current : swing(t, s.at, index === strikes.length - 1, WIND, HIT, REST)), raised);
+  const away = 1 - seg(t, lastImpact + 0.45, lastImpact + 0.75);
   const together = strikes.at(-1)?.mee === true ? strikes.at(-1) : undefined;
-  let angleM = REST_M;
-  let meeHammer = 0;
-  if (together !== undefined) {
-    angleM = lerp(REST_M, WIND_M, eIO(seg(t, together.at - 0.45, together.at - 0.1)));
-    if (t >= together.at) {
-      angleM = lerp(WIND_M, HIT_M, eIn(seg(t, together.at, together.at + 0.09)));
-      if (t >= together.at + 0.15) angleM = lerp(HIT_M, REST_M, eIO(seg(t, together.at + 0.15, together.at + 0.55)));
-    }
-    meeHammer = seg(t, together.at - 0.6, together.at - 0.4) * (1 - seg(t, lastImpact + 0.45, lastImpact + 0.75));
-  }
-  const hammerMee: HammerFrame = { x: meeX + 76, y: meeY - 46, angle: angleM, opacity: meeHammer };
+  const angleMee = together === undefined ? REST_M : t < together.at ? lerp(REST_M, WIND_M, eIO(seg(t, together.at - 0.45, together.at - 0.1))) : swing(t, together.at, true, WIND_M, HIT_M, REST_M);
+  return {
+    hammerMeo: { x: meo.x + 8, y: meo.y - 46, angle, opacity: seg(tt, p.places.from, p.places.to) * away },
+    hammerMee: { x: mee.x + 76, y: mee.y - 46, angle: angleMee, opacity: together === undefined ? 0 : seg(t, together.at - 0.6, together.at - 0.4) * away },
+  };
+};
 
-  let cx = C.x;
-  let cy = lerp(C.y, ANVIL_C.y, eIn(seg(tt, p.descent.from, p.descent.to)));
-  let scale = lerp(FORM / COIN_BOX, ANVIL / COIN_BOX, eIO(seg(tt, p.descent.from, p.descent.to)));
-  let rotateY = 0;
-  const squash = strikes.reduce((sq, s) => sq - 0.07 * bump(t, s.impact, 0.1), 1 - 0.05 * bump(tt, p.descent.to, 0.12));
+/** La pièce : le flan se fige dans le cercle, descend sur l'enclume, prend la gravure au coup, se lève en montrant son revers, puis file dans l'Héritage. */
+const coinOf = ({ t, tt, p, strikes }: Moment, target: CeremonyTarget): CeremonyFrame['coin'] => {
+  const descend = seg(tt, p.descent.from, p.descent.to);
   const rv = seg(t, p.reveal.from, p.reveal.to);
-  if (rv > 0) {
-    const e = eOut(rv);
-    cy = lerp(ANVIL_C.y, C.y, e);
-    scale = lerp(ANVIL / COIN_BOX, 1, e);
-    rotateY = 540 * eIO(rv);
-  }
   const ex = seg(t, p.flight.from, p.flight.to);
-  if (ex > 0) {
-    const e = eIO(ex);
-    cx = lerp(C.x, target.x, e);
-    cy = lerp(C.y, target.y, e) - 70 * Math.sin(Math.PI * e);
-    scale = lerp(1, target.scale, e);
-    rotateY = 540 + 180 * e;
-  }
-  const coin = {
-    x: cx,
-    y: cy,
-    scale,
-    squash,
-    rotateY,
+  const rising = eOut(rv);
+  const flying = eIO(ex);
+  const resting = { x: C.x, y: rv > 0 ? lerp(ANVIL_C.y, C.y, rising) : lerp(C.y, ANVIL_C.y, eIn(descend)), scale: rv > 0 ? lerp(ANVIL / COIN_BOX, 1, rising) : lerp(FORM / COIN_BOX, ANVIL / COIN_BOX, eIO(descend)) };
+  const at =
+    ex > 0
+      ? { x: lerp(C.x, target.x, flying), y: lerp(C.y, target.y, flying) - 70 * Math.sin(Math.PI * flying), scale: lerp(1, target.scale, flying), rotateY: 540 + 180 * flying }
+      : { ...resting, rotateY: 540 * eIO(rv) };
+  return {
+    ...at,
+    squash: strikes.reduce((sq, s) => sq - 0.07 * bump(t, s.impact, 0.1), 1 - 0.05 * bump(tt, p.descent.to, 0.12)),
     opacity: seg(tt, p.blank.from, p.blank.to) * (1 - seg(t, p.flight.to - 0.05, p.flight.to)),
     engraved: seg(t, p.engrave.from, p.engrave.to),
   };
-  const glow = {
-    x: cx,
-    y: cy,
-    scale: 0.6 + 0.5 * scale,
-    opacity: 0.35 * seg(tt, p.blank.from, p.blank.to) * (1 - seg(tt, p.descent.from, p.descent.to)) + 0.9 * seg(t, lastImpact, lastImpact + 0.3) * (1 - seg(t, p.flight.from, p.flight.from + 0.3)),
-  };
+};
 
-  let flash = 0;
-  let ring = { scale: 0.3, opacity: 0 };
-  let tchak = { opacity: 0, scale: 1, final: false };
-  strikes.forEach((s, index) => {
-    const x = t - s.impact;
-    const final = index === strikes.length - 1;
-    if (x >= 0 && x < 0.32) flash += (final ? (plan.grand ? 1 : 0.85) : 0.45) * (1 - x / 0.32);
-    if (x < 0 || x >= 0.7) return;
-    const power = strikePower(plan, index);
-    ring = { opacity: Math.max(0, 0.95 * (1 - x / 0.55)), scale: 0.3 + (2 + 1.6 * power) * eOut(Math.min(1, x / 0.55)) };
-    tchak = { opacity: x < 0.08 ? x / 0.08 : Math.max(0, 1 - (x - 0.08) / 0.6), scale: 0.8 + 0.35 * power * eOut(Math.min(1, x / 0.2)), final: final && plan.grand };
-  });
-  const rays = plan.grand ? { opacity: 0.95 * seg(t, lastImpact, lastImpact + 0.5) * exitFade, rotate: t * 16, scale: lerp(0.5, 1, seg(t, lastImpact, lastImpact + 0.8)) } : { opacity: 0, rotate: 0, scale: 1 };
-  const sign = seg(t, p.ancestors.from, p.ancestors.to) * exitFade;
-  const say = refusal === null ? seg(t, p.celebrate.from, p.celebrate.from + 0.3) * (1 - seg(t, p.flight.from, p.flight.to)) : seg(t, refusal.sayMs / 1000, refusal.sayMs / 1000 + 0.3) * exitFade;
-  const shadow =
-    refusal === null
-      ? { opacity: 0, scale: 1 }
-      : {
-          opacity: 0.95 * seg(t, refusal.shadowIn.fromMs / 1000, refusal.shadowIn.fromMs / 1000 + 0.3) * (1 - seg(t, refusal.shadowOut.fromMs / 1000, refusal.shadowOut.toMs / 1000)),
-          scale: lerp(0.3, 1.25, eOut(seg(t, refusal.shadowIn.fromMs / 1000, refusal.shadowIn.toMs / 1000))),
-        };
+/** Ce que chaque coup allume : l'éclair, l'onde, le « tchak » (le grand au dernier coup de l'or et du prisme). */
+const impactsOf = ({ plan, t, strikes }: Moment): Pick<CeremonyFrame, 'flash' | 'ring' | 'tchak'> =>
+  strikes.reduce<Pick<CeremonyFrame, 'flash' | 'ring' | 'tchak'>>(
+    (acc, s, index) => {
+      const x = t - s.impact;
+      const final = index === strikes.length - 1;
+      const flash = x >= 0 && x < 0.32 ? Math.min(0.95, acc.flash + (final ? (plan.grand ? 1 : 0.85) : 0.45) * (1 - x / 0.32)) : acc.flash;
+      if (x < 0 || x >= 0.7) return { ...acc, flash };
+      const power = strikePower(plan, index);
+      return {
+        flash,
+        ring: { opacity: Math.max(0, 0.95 * (1 - x / 0.55)), scale: 0.3 + (2 + 1.6 * power) * eOut(Math.min(1, x / 0.55)) },
+        tchak: { opacity: x < 0.08 ? x / 0.08 : Math.max(0, 1 - (x - 0.08) / 0.6), scale: 0.8 + 0.35 * power * eOut(Math.min(1, x / 0.2)), final: final && plan.grand },
+      };
+    },
+    { flash: 0, ring: { scale: 0.3, opacity: 0 }, tchak: { opacity: 0, scale: 1, final: false } },
+  );
+
+/** Les rayons et le signe des aïeux (or, prisme), la phrase de Mee, l'Ombre du refus, la gloire qui monte. */
+const voicesOf = ({ plan, t, p, lastImpact, exitFade }: Moment): Pick<CeremonyFrame, 'rays' | 'sign' | 'say' | 'shadow' | 'glory'> => {
+  const refusal = plan.refusal;
   const g = seg(t, p.glory.from, p.glory.to);
   return {
-    backdrop,
-    shake: { x: shx, y: shy },
-    orb,
+    rays: plan.grand ? { opacity: 0.95 * seg(t, lastImpact, lastImpact + 0.5) * exitFade, rotate: t * 16, scale: lerp(0.5, 1, seg(t, lastImpact, lastImpact + 0.8)) } : { opacity: 0, rotate: 0, scale: 1 },
+    sign: seg(t, p.ancestors.from, p.ancestors.to) * exitFade,
+    say: refusal === null ? seg(t, p.celebrate.from, p.celebrate.from + 0.3) * (1 - seg(t, p.flight.from, p.flight.to)) : seg(t, refusal.sayMs / 1000, refusal.sayMs / 1000 + 0.3) * exitFade,
+    shadow:
+      refusal === null
+        ? { opacity: 0, scale: 1 }
+        : {
+            opacity: 0.95 * seg(t, refusal.shadowIn.fromMs / 1000, refusal.shadowIn.fromMs / 1000 + 0.3) * (1 - seg(t, refusal.shadowOut.fromMs / 1000, refusal.shadowOut.toMs / 1000)),
+            scale: lerp(0.3, 1.25, eOut(seg(t, refusal.shadowIn.fromMs / 1000, refusal.shadowIn.toMs / 1000))),
+          },
+    glory: { opacity: g > 0 && g < 1 ? Math.sin(Math.PI * g) : 0, rise: eIO(g) },
+  };
+};
+
+/**
+ * L'IMAGE DE L'INSTANT `t` (en secondes depuis le toucher). Tant que la passerelle n'a pas répondu, l'hôte passe un
+ * plan dont les coups sont encore devant : Meo garde le marteau levé.
+ */
+export function ceremonyFrame(plan: MintCeremonyPlan, t: number, target: CeremonyTarget): CeremonyFrame {
+  if (plan.mode === 'reduced') return reducedFrame(plan, t);
+  const moment = momentOf(plan, t);
+  const { p, tt, lastImpact, exitFade } = moment;
+  const { mee, meo } = actorsOf(moment);
+  const coin = coinOf(moment, target);
+  const shining = t > p.emit.from && t < (plan.refusal === null ? p.emit.to + 0.4 : plan.endMs / 1000);
+  return {
+    backdrop: seg(t, p.open.from, p.open.to) * exitFade,
+    shake: shakeOf(moment),
+    orb: 1 + 0.18 * Math.sin(t * 9) * (shining ? 1 : 0),
     mee,
     meo,
-    die,
-    hammerMeo,
-    hammerMee,
+    die: dieOf(moment, mee),
+    ...hammersOf(moment, mee, meo),
     coin,
-    glow,
-    flash: Math.min(0.95, flash),
-    ring,
-    tchak,
-    rays,
-    sign,
-    say,
-    shadow,
-    glory: { opacity: g > 0 && g < 1 ? Math.sin(Math.PI * g) : 0, rise: eIO(g) },
+    glow: {
+      x: coin.x,
+      y: coin.y,
+      scale: 0.6 + 0.5 * coin.scale,
+      opacity: 0.35 * seg(tt, p.blank.from, p.blank.to) * (1 - seg(tt, p.descent.from, p.descent.to)) + 0.9 * seg(t, lastImpact, lastImpact + 0.3) * (1 - seg(t, p.flight.from, p.flight.from + 0.3)),
+    },
+    ...impactsOf(moment),
+    ...voicesOf(moment),
   };
 }
 

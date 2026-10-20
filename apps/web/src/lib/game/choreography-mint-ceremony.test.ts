@@ -84,6 +84,20 @@ describe('les étincelles tissent un cercle', () => {
     expect(Math.max(...spread)).toBeGreaterThan(5);
   });
 
+  test('quand les images tardent, la scène ne peint qu’un fil et un grain sur deux', () => {
+    const t = at(silver, 'dust', 'toMs');
+    const full = drawCeremonyParticles(recorder(), silver, particles, PALETTE, t, 1);
+    const half = drawCeremonyParticles(recorder(), silver, particles, PALETTE, t, 1, 2);
+    expect(Math.abs(half * 2 - full)).toBeLessThanOrEqual(2);
+  });
+
+  test('les couleurs sont groupées : le canevas change de couleur quelques fois par image, pas à chaque particule', () => {
+    let changes = 0;
+    const canvas = { ...recorder(), set fillStyle(_value: string) { changes += 1; }, get fillStyle(): string { return ''; } };
+    const painted = drawCeremonyParticles(canvas, silver, particles, PALETTE, at(silver, 'dust', 'toMs'), 1);
+    expect(changes).toBeLessThan(painted / 20);
+  });
+
   test('le flan figé, plus aucune étincelle ni poussière : seules les gerbes des coups jaillissent', () => {
     const canvas = recorder();
     expect(drawCeremonyParticles(canvas, silver, particles, PALETTE, at(silver, 'blank', 'toMs') + 0.3, 1)).toBe(0);
