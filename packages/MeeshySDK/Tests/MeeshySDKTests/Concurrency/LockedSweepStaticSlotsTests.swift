@@ -92,4 +92,56 @@ final class LockedSweepStaticSlotsTests: XCTestCase {
         let after = await source.current()
         XCTAssertNil(after)
     }
+
+    func test_readerLabel_concurrentConfigureAndRead_endsOnALabelThatWasSet() async {
+        let original = ConversationListAuthor.readerLabel
+        defer { ConversationListAuthor.configureReaderLabel(original) }
+        let labels = ["You", "Vous", "Tu", "Du"]
+
+        let seen = await withTaskGroup(of: String.self, returning: [String].self) { group in
+            for index in 0..<400 {
+                group.addTask {
+                    if index % 2 == 0 {
+                        ConversationListAuthor.configureReaderLabel(labels[index % labels.count])
+                        return ConversationListAuthor.readerLabel
+                    }
+                    return ConversationListAuthor.readerLabel
+                }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
+        }
+
+        XCTAssertTrue(seen.allSatisfy { labels.contains($0) || $0 == original })
+        XCTAssertTrue(labels.contains(ConversationListAuthor.readerLabel) || ConversationListAuthor.readerLabel == original)
+    }
+
+    func test_readerLabel_blankLabel_isIgnored() {
+        let original = ConversationListAuthor.readerLabel
+        defer { ConversationListAuthor.configureReaderLabel(original) }
+        ConversationListAuthor.configureReaderLabel("Moi")
+
+        ConversationListAuthor.configureReaderLabel("   ")
+
+        XCTAssertEqual(ConversationListAuthor.readerLabel, "Moi")
+    }
+
+    #if DEBUG
+    func test_debugOverrides_setThenCleared_roundTrip() {
+        defer {
+            MeeshyConfig.debugWebOriginOverride = nil
+            ShareLinkService.debugLinkInfoOverride = nil
+        }
+        MeeshyConfig.debugWebOriginOverride = "https://example.test"
+        ShareLinkService.debugLinkInfoOverride = { _ in nil }
+
+        XCTAssertEqual(MeeshyConfig.debugWebOriginOverride, "https://example.test")
+        XCTAssertNotNil(ShareLinkService.debugLinkInfoOverride)
+
+        MeeshyConfig.debugWebOriginOverride = nil
+        ShareLinkService.debugLinkInfoOverride = nil
+
+        XCTAssertNil(MeeshyConfig.debugWebOriginOverride)
+        XCTAssertNil(ShareLinkService.debugLinkInfoOverride)
+    }
+    #endif
 }

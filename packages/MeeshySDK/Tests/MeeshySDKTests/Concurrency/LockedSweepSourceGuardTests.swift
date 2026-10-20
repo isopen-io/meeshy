@@ -22,6 +22,10 @@ final class LockedSweepSourceGuardTests: XCTestCase {
         "Services/ContactResolveService.swift",
         "Notifications/PushDeliveryReceiptService.swift",
         "Services/EdgeTranscriptionService.swift",
+        "Networking/CertificatePinningDelegate.swift",
+        "Models/ConversationListAuthor.swift",
+        "Configuration/MeeshyConfig.swift",
+        "Services/ShareLinkService.swift",
     ]
 
     private static let keepsHistoricUncheckedSendable: Set<String> = [
