@@ -25,19 +25,17 @@ import SwiftUI
 /// traité le texte et laissé l'audio, qui bat pourtant vingt fois plus vite
 /// qu'on ne tape.
 ///
-/// ## Pourquoi il rend `AnyView`
+/// ## Pourquoi il est générique
 ///
-/// Un hôte GÉNÉRIQUE ajouterait une couche au type composite du composer, que
-/// `themedComposer` porte déjà sous garde anti-débordement (#6221 : une vue
-/// SwiftUI est un type valeur, et sa largeur se paie sur la pile). En rendant
-/// `AnyView`, cette frontière nominale BORNE le type au lieu de l'allonger :
-/// elle corrige la cadence et allège la pile du même geste.
-struct ComposerAudioHost: View {
+/// Il reçoit le contenu en closure `@ViewBuilder` : `ConversationComposerCore`,
+/// la vue NOMINALE qui l'héberge, borne le type composite du composer — cet
+/// hôte n'a donc plus à l'effacer.
+struct ComposerAudioHost<Content: View>: View {
 
     @ObservedObject var recorder: AudioRecorderManager
 
     /// Reçoit les trois seules valeurs réactives du vumètre.
-    let content: (Bool, TimeInterval, [CGFloat]) -> AnyView
+    @ViewBuilder let content: (Bool, TimeInterval, [CGFloat]) -> Content
 
     var body: some View {
         content(recorder.isRecording, recorder.duration, recorder.audioLevels)

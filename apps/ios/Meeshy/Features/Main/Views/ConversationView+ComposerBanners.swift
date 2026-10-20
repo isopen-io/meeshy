@@ -319,38 +319,38 @@ extension ConversationView {
             switch kind {
             case .image:
                 if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
-                    CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40), thumbHash: quotedThumbHash) {
-                        accent.opacity(MeeshyOpacity.medium)
-                    }
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
-                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
-                    .onTapGesture {
-                        if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
-                            composerState.previewMedia = PreviewMedia(url: url, type: "image")
-                        }
-                    }
-                }
-
-            case .video:
-                if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
-                    ZStack {
+                    ComposerQuotedMediaButton(
+                        target: ComposerQuotedMediaTarget.preview(thumbUrl: thumbUrl, type: "image"),
+                        onOpen: { composerState.previewMedia = $0 }
+                    ) {
                         CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40), thumbHash: quotedThumbHash) {
                             accent.opacity(MeeshyOpacity.medium)
                         }
                         .aspectRatio(contentMode: .fill)
                         .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
-
-                        Image(systemName: "play.circle.fill")
-                            // Doctrine 86i : overlay play décoratif borné par la vignette fixe 40×40 → figé + masqué.
-                            .font(.system(size: 18))
-                            .foregroundStyle(MeeshyColors.mediaChromeForeground, MeeshyColors.mediaChromeFill)
-                            .accessibilityHidden(true)
                     }
-                    .onTapGesture {
-                        if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
-                            composerState.previewMedia = PreviewMedia(url: url, type: "video")
+                }
+
+            case .video:
+                if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
+                    ComposerQuotedMediaButton(
+                        target: ComposerQuotedMediaTarget.preview(thumbUrl: thumbUrl, type: "video"),
+                        onOpen: { composerState.previewMedia = $0 }
+                    ) {
+                        ZStack {
+                            CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 40, height: 40), thumbHash: quotedThumbHash) {
+                                accent.opacity(MeeshyOpacity.medium)
+                            }
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
+                            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
+
+                            Image(systemName: "play.circle.fill")
+                                // Doctrine 86i : overlay play décoratif borné par la vignette fixe 40×40 → figé + masqué.
+                                .font(.system(size: 18))
+                                .foregroundStyle(MeeshyColors.mediaChromeForeground, MeeshyColors.mediaChromeFill)
+                                .accessibilityHidden(true)
                         }
                     }
                 } else {
@@ -358,37 +358,11 @@ extension ConversationView {
                 }
 
             case .audio:
-                HStack(spacing: MeeshySpacing.xs) {
-                    Image(systemName: "play.fill")
-                        // Doctrine 86i : glyphe décoratif du badge audio (waveform) → figé + masqué.
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(accent.opacity(0.6))
-                        .accessibilityHidden(true)
-
-                    HStack(spacing: 1.5) {
-                        ForEach(0..<8, id: \.self) { i in
-                            let h: CGFloat = [0.4, 0.7, 0.5, 1.0, 0.6, 0.9, 0.3, 0.5][i]
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(accent.opacity(MeeshyOpacity.medium))
-                                .frame(width: 2, height: 4 + 16 * h)
-                        }
-                    }
-                    .frame(height: 22)
-                }
-                .padding(.horizontal, MeeshySpacing.xsPlus)
-                .padding(.vertical, MeeshySpacing.xsPlus)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                        .fill(accent.opacity(MeeshyOpacity.subtle))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                                .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
-                        )
-                )
-                .onTapGesture {
-                    if let thumbUrl = reply.attachmentThumbnailUrl, let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
-                        composerState.previewMedia = PreviewMedia(url: url, type: "audio")
-                    }
+                ComposerQuotedMediaButton(
+                    target: ComposerQuotedMediaTarget.preview(thumbUrl: reply.attachmentThumbnailUrl, type: "audio"),
+                    onOpen: { composerState.previewMedia = $0 }
+                ) {
+                    replyAudioBadge(accent: accent)
                 }
 
             case .pdf, .spreadsheet, .document, .presentation,
@@ -404,6 +378,37 @@ extension ConversationView {
         } else {
             EmptyView()
         }
+    }
+
+    /// Le badge du son cité : une onde, jamais une vignette.
+    private func replyAudioBadge(accent: Color) -> some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "play.fill")
+                // Doctrine 86i : glyphe décoratif du badge audio (waveform) → figé + masqué.
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(accent.opacity(0.6))
+                .accessibilityHidden(true)
+
+            HStack(spacing: 1.5) {
+                ForEach(0..<8, id: \.self) { i in
+                    let h: CGFloat = [0.4, 0.7, 0.5, 1.0, 0.6, 0.9, 0.3, 0.5][i]
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(accent.opacity(MeeshyOpacity.medium))
+                        .frame(width: 2, height: 4 + 16 * h)
+                }
+            }
+            .frame(height: 22)
+        }
+        .padding(.horizontal, MeeshySpacing.xsPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                .fill(accent.opacity(MeeshyOpacity.subtle))
+                .overlay(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                        .stroke(accent.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
+                )
+        )
     }
 
     /// La tuile de LIEU cité. Hors du `switch` par genre : « location » n'est

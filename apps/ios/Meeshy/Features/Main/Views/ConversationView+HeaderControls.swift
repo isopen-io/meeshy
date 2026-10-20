@@ -16,7 +16,7 @@ import MeeshyUI
 /// montrant déjà les membres les plus actifs d'un groupe. Le tap du
 /// titre ouvre les détails ; en conversation DIRECTE, l'appui long
 /// propose détails OU profil de l'utilisateur.
-struct ConversationHeaderTitleBlock: View {
+struct ConversationHeaderTitleBlock<Tags: View>: View {
     /// F11 (revue adversariale 2026-08-25) : le TITRE et le libellé
     /// d'accessibilité lisent la conversation VIVANTE (`liveConversation`,
     /// depuis #9359) : un pair renommé ou un enregistrement des réglages s'y
@@ -27,7 +27,7 @@ struct ConversationHeaderTitleBlock: View {
     let isDark: Bool
     let isDirect: Bool
     let isRevalidating: Bool
-    let tags: AnyView
+    @ViewBuilder let tags: () -> Tags
     let onOpenInfo: () -> Void
     let onOpenProfile: () -> Void
 
@@ -39,7 +39,7 @@ struct ConversationHeaderTitleBlock: View {
             }
 
             // Tags row: aligned with title, scrolls under the search icon
-            tags
+            tags()
                 .mask(
                     HStack(spacing: 0) {
                         Color.black

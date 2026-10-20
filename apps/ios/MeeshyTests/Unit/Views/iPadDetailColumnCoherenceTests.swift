@@ -36,7 +36,8 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
 
     func test_accessRevoked_leavesThroughTheRouter_notADismissThatIsANoOpOnIPad() throws {
         let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
-        let handler = try XCTUnwrap(view.range(of: ".adaptiveOnChange(of: viewModel.accessRevoked)"))
+        XCTAssertTrue(view.contains("accessRevoked: viewModel.accessRevoked"), "le cycle de vie observe la révocation")
+        let handler = try XCTUnwrap(view.range(of: "private func conversationAccessWasRevoked() {"))
         let body = String(view[handler.upperBound...].prefix(500))
         XCTAssertTrue(body.contains("router.pop()"), "le même retour que le bouton de l'en-tête — il referme la colonne iPad")
         XCTAssertTrue(body.contains("if anonymousSession != nil { dismiss() }"), "l'invité, présenté, se ferme")
@@ -61,7 +62,8 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
     /// `.task` initial restait levé — la recherche s'ouvrait dans la suivante.
     func test_openSearch_isConsumedAlsoWhenTheConversationIsAlreadyOpen() throws {
         let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
-        XCTAssertTrue(view.contains(".adaptiveOnChange(of: router.pendingOpenSearch)"))
+        XCTAssertTrue(view.contains("pendingOpenSearch: router.pendingOpenSearch"))
+        XCTAssertTrue(view.contains(".adaptiveOnChange(of: signals.pendingOpenSearch)"))
         XCTAssertTrue(view.contains("await consumePendingOpenSearch()"))
     }
 
@@ -87,7 +89,7 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
     /// disparaissait en silence.
     func test_leavingTheConversation_savesTheTrayToTheDraft() throws {
         let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
-        let leave = try XCTUnwrap(view.range(of: ".onDisappear {\n                composerText.flushPendingChange()\n"))
+        let leave = try XCTUnwrap(view.range(of: "private func conversationDidDisappear() {\n        composerText.flushPendingChange()\n"))
         XCTAssertTrue(view[leave.upperBound...].prefix(200).contains("persistDraftAttachmentsForBackground()"))
     }
 

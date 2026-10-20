@@ -50,7 +50,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         // `AnyView` (not `some View`) since 2026-08-17 — erasure at the
         // DECLARATION was required to stop a Swift metadata-decoder stack
         // overflow at first render (see ConversationFirstRenderWarmup.swift).
-        guard let range = code.range(of: "var headerButtonsCluster: AnyView {") else {
+        guard let range = code.range(of: "var headerButtonsCluster: some View {") else {
             XCTFail("headerButtonsCluster introuvable dans ConversationView.swift.")
             return
         }
@@ -61,7 +61,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         let body = code[range.lowerBound..<end]
         // L'HÔTE remet les trois fentes ; il ne les ORDONNE plus lui-même.
         guard body.range(of: "headerCallButtons") != nil,
-              body.range(of: "expandedHeaderSearchButton") != nil,
+              body.range(of: "headerSearchSlot") != nil,
               body.range(of: "readingModeAffordanceCluster") != nil
         else {
             XCTFail("Un des trois éléments de la grappe (appel, recherche, mode) est introuvable dans les 450 premiers caractères de headerButtonsCluster.")
@@ -82,7 +82,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
          d'être vérifié.
         */
         let cluster = try headerActionsClusterSource()
-        guard let clusterRange = cluster.range(of: "struct ConversationHeaderActionsCluster: View {") else {
+        guard let clusterRange = cluster.range(of: "struct ConversationHeaderActionsCluster<Call: View, Search: View, ReadingMode: View>: View {") else {
             XCTFail("ConversationHeaderActionsCluster introuvable — c'est lui qui ordonne la grappe.")
             return
         }
@@ -135,7 +135,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         let host = normalize(try conversationViewSource())
         let chip = normalize(try chipAffordanceSource())
         XCTAssertTrue(
-            host.contains("private var readingModeAffordanceCluster: AnyView { AnyView(ConversationReadingModeAffordance( controller: readingModeController, capabilities: readingModeCapabilities,"),
+            host.contains("private var readingModeAffordanceCluster: ConversationReadingModeAffordance { ConversationReadingModeAffordance( controller: readingModeController, capabilities: readingModeCapabilities,"),
             "L'hôte remet au chip les CAPACITÉS stockées — la garde de présence s'y lit, pas dans le mode courant."
         )
         XCTAssertTrue(
