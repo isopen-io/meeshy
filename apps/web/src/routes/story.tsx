@@ -10,7 +10,7 @@ import { PlaybackStallIndicator } from '@/components/playback-stall-indicator';
 import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
 import { PublicationViewersSheetPortal } from '@/components/publication-viewers-sheet-lazy';
 import { StoryActionRail } from '@/components/story-action-rail';
-import { ViewerExitButton, type ViewerIdentityModel } from '@/components/viewer-chrome';
+import { ViewerExitButton } from '@/components/viewer-chrome';
 import { RefusedContentBackdrop, RefusedContentNotice, refusalViewOf } from '@/components/refused-content';
 import { isContentRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
 import { useViewerSwipe } from '@/components/viewer-chrome-gestures';
@@ -19,10 +19,8 @@ import { markStoryViewedAction, useStoryFeed, useStoryPost } from '@/lib/api/que
 import { attachmentSrc } from '@/lib/api/media-url';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
-import { backgroundCss } from '@/lib/canvas/background';
 import { documentAnnouncesSound } from '@/lib/canvas/document';
 import { useOnline } from '@/lib/net/online';
-import { shortRelativeTime } from '@/lib/relative-time';
 import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
 import { storyRailParticipated, usePublicationParticipation } from '@/lib/view/publication-participation';
 import { ADVANCED_STORY, entryAttribution } from '@/lib/view/content-open';
@@ -36,6 +34,8 @@ import { resolveStoryMediaCaption } from '@/lib/stories/media-caption';
 import { readerCardFraming } from '@/lib/stories/framing';
 
 import { StoryBottomBar, StoryTopBar } from './story-chrome';
+import { CUBE_FACE_STYLE, StoryCubeFace, StoryCubeShade, storyBackgroundCss, storyCubeNeighbours } from './story-cube-face';
+import { storyViewerIdentity } from './story-identity';
 import { ProgressBars, StoryMediaLayer } from './story-parts';
 import { useStoryRemoval } from './story-removal';
 import { useStoryScrub } from './use-story-scrub';
@@ -54,12 +54,9 @@ import {
   stableGroupOrder,
   storyEffectsBackgroundOf,
   storyMediaUrl,
-  storyRepostCredit,
-  type StoryPlaybackGroup,
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
 import { resolveStoryPlaybackHold } from '@/lib/stories/playback-hold';
-import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { useStoryMediaClaim } from '@/lib/view/story-media-claim';
 import { useProfilePeekOpen } from '@/lib/view/profile-peek';
@@ -71,6 +68,7 @@ import { useStoryLanguage } from '@/lib/view/use-story-language';
 import { useStoryKeyboardShortcuts } from '@/lib/view/use-story-keyboard-shortcuts';
 import { useStoryOwnerRail } from '@/lib/view/use-story-owner-rail';
 import { useStorySend } from '@/lib/view/use-story-send';
+import { useStoryGroupCube } from '@/lib/view/use-story-group-cube';
 import { chromeYields } from '@/lib/view/chrome-yields';
 import { sceneYieldOf, yieldingScene } from '@/lib/view/scene-yields';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
@@ -80,7 +78,6 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useParams, useSearch } from '@/lib/router';
 import { useMediaSystemBars } from '@/lib/use-media-system-bars';
 import { Link, href, navigate } from '@/routes/route-table';
-import { ringRefOf } from '@/lib/profile-decor/served-ring';
 
 /** L'hôte des scènes v3 (#6899) — chargé À LA DEMANDE, motif D-54 : une story
  * v1 ne paie ni ses lois (image seule, bandes, son de fond), ni le moteur. */
@@ -115,20 +112,9 @@ const StorySceneLayer = lazy(() => import('./story-scene-layer'));
 /** `StoryBackgroundValue` (`StoryBackgroundValue.swift:1-38`) — `"RRGGBB"` ou
  * `"gradient:RRGGBB:RRGGBB"`, validée par le SITE UNIQUE `backgroundCss`
  * (`lib/canvas/background.ts`, T6, #6899) que le moteur de scène partage
- * désormais avec ce fond v1. */
+ * désormais avec ce fond v1 — et la face voisine du cube (#11198). */
 function sceneBackground(background: string | null | undefined): CSSProperties {
-  return { background: backgroundCss(background, 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))') };
-}
-
-/** Le nom affiché — même repli qu'`storyAuthorLabel` (`lib/view/story-tray.ts`),
- * appliqué ici à `StoryPlaybackGroup` (forme distincte de `StoryTrayGroup`,
- * l'ordre de lecture n'étant pas l'ordre du plateau). */
-function authorLabel(group: StoryPlaybackGroup): string {
-  const a = group.author;
-  if (a === undefined) return '';
-  if (group.isMine) return 'Votre story';
-  const fullName = [a.firstName, a.lastName].filter((part) => part !== undefined && part !== '').join(' ');
-  return a.displayName ?? (fullName !== '' ? fullName : (a.username ?? ''));
+  return { background: storyBackgroundCss(background) };
 }
 
 export default function StoryScreen() {
@@ -236,9 +222,6 @@ export default function StoryScreen() {
   }, [playablePosition, rawPosition, scopedGroups, closeViewer]);
 
   const group = playablePosition !== null && playablePosition !== 'close' ? scopedGroups[playablePosition.groupIndex] : undefined;
-  /* LA PHOTO DE L'AUTEUR, DÉRIVÉE UNE FOIS (#6975) — `participantAvatarOf`
-     accepte un auteur ABSENT, donc pas de garde à écrire ici. */
-  const authorPhoto = participantAvatarOf(group?.author);
   const currentStory: StoryPlaybackStory | undefined =
     playablePosition !== null && playablePosition !== 'close' ? currentStoryAt(scopedGroups, playablePosition) : undefined;
 
@@ -526,16 +509,32 @@ export default function StoryScreen() {
   /* LES GESTES COMMUNS DES PLEIN ÉCRANS (#8879, `viewer-chrome-gestures.ts`) :
      glisser vers le BAS ferme — le geste de sortie d'iOS
      (`StoryViewerView+Canvas.swift`, `.dismissViewer`) et celui de la
-     visionneuse de médias —, glisser à l'HORIZONTALE change de story, comme le
-     tiers gauche/droit. Les zones de tap restent (divergence admise : une
-     story se REGARDE, le tap y avance). Une feuille ouverte réclame le doigt. */
-  const swipe = useViewerSwipe({
-    onDismiss: dismissByUser,
-    onNext: () => userAdvance('next'),
-    onPrevious: () => userAdvance('previous'),
-    enabled: !(sheetOpen || profilePeekOpen),
-    rtl: typeof document !== 'undefined' && document.documentElement.dir === 'rtl',
+     visionneuse de médias —, glisser à l'HORIZONTALE tourne le CUBE vers
+     l'auteur voisin (#11198, `use-story-group-cube.ts`), au doigt et
+     annulable ; les tiers gauche/droit tapés gardent la story précédente /
+     suivante. Une feuille ouverte réclame le doigt. */
+  const rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+  const neighbours = useMemo(
+    () => storyCubeNeighbours({ groups: scopedGroups, position: playablePosition === 'close' ? null : playablePosition, now: Date.now() }),
+    [scopedGroups, playablePosition],
+  );
+  const cube = useStoryGroupCube({
+    neighbours,
+    storyId: currentStory?.id,
+    rtl,
+    paused,
+    pause,
+    resume,
+    onLand: (storyId, direction) => {
+      storyTelemetry.noteTap(direction);
+      setCurrentId(storyId);
+    },
   });
+  const sceneRef = useCallback((element: HTMLDivElement | null) => {
+    observeScene(element);
+    cube.faceRef(element);
+  }, [observeScene, cube.faceRef]);
+  const swipe = useViewerSwipe({ onDismiss: dismissByUser, horizontal: cube.horizontal, enabled: !(sheetOpen || profilePeekOpen), rtl });
   /* LES GESTES (§ 1.3) — EXTRAITS dans `use-story-gestures.ts` (§ budget,
      #7114 ; rationale complète là-bas) : trois bandes, appui posé = pause, le
      relâchement ne reprend pas, le tap suivant reprend sans naviguer ; le
@@ -694,42 +693,8 @@ export default function StoryScreen() {
   const visitorRefused = refusalView === 'invitation';
   const invitation = useVisitorInvitation({ kind: 'story', state: currentStory !== undefined ? 'served' : visitorRefused ? 'refused' : 'pending' });
 
-  /* L'IDENTITÉ DE L'AUTEUR — la photo (#6975, même source et même loi que la
-     tuile du rail qui a ouvert ce lecteur : passer d'un visage à des initiales
-     en ouvrant la story serait un changement d'identité à mi-geste) et l'heure
-     SUR SA LIGNE (`StoryViewerView+Header.swift:156-256`, elle qualifie
-     l'auteur). L'identité MÈNE AU PROFIL (#7241) — mais PAS sur sa propre
-     story : la fiche de soi n'offre aucun geste relationnel. */
-  const authorName = group === undefined ? '' : authorLabel(group);
-  const authorUsername = group?.author?.username;
-  /* LE CRÉDIT D'UNE REPUBLICATION (#10524) — après la date, jamais dans le
-     canvas, comme `StoryViewerView+Header.swift`. */
-  const repostCredit = currentStory === undefined ? null : storyRepostCredit(currentStory);
-  const identity: ViewerIdentityModel | null =
-    group === undefined || currentStory === undefined
-      ? null
-      : {
-          name: authorName,
-          initials: initialsOf(authorName),
-          ...(authorPhoto === undefined ? {} : { avatarSrc: authorPhoto }),
-          ...(!group.isMine && typeof authorUsername === 'string' && authorUsername !== '' ? { profileUsername: authorUsername } : {}),
-          ...(group.isMine ? {} : { presenceKey: group.authorId }),
-          ...ringRefOf(group.author),
-          time: {
-            iso: new Date(currentStory.createdAt).toISOString(),
-            label: shortRelativeTime(new Date(currentStory.createdAt), new Date(), currentInterfaceLanguage()),
-          },
-          ...(repostCredit === null
-            ? {}
-            : {
-                repost: {
-                  handle: repostCredit.handle,
-                  label: repostCredit.handle === null
-                    ? translate(interfaceLanguage, 'story.viewer.repost')
-                    : translate(interfaceLanguage, 'story.viewer.repostOf', { handle: repostCredit.handle }),
-                },
-              }),
-        };
+  /* L'IDENTITÉ DE L'AUTEUR (photo, nom, heure, profil, crédit) — extraite dans `story-identity.ts`. */
+  const identity = storyViewerIdentity({ group, story: currentStory, language: interfaceLanguage });
 
   return (
     <div
@@ -803,8 +768,10 @@ export default function StoryScreen() {
         </div>
       ) : group !== undefined && identity !== null && currentStory !== undefined && playablePosition !== null && playablePosition !== 'close' ? (
         <div
-          ref={observeScene}
+          ref={sceneRef}
           className="relative flex flex-1 flex-col overflow-hidden select-none"
+          /* `pan-y` : l'horizontale appartient au cube, jamais au navigateur. */
+          style={{ ...CUBE_FACE_STYLE, touchAction: 'pan-y' }}
           data-story-scene={currentStory.id}
           data-story-paused={paused ? 'true' : undefined}
           data-story-hold={hold}
@@ -1000,8 +967,12 @@ export default function StoryScreen() {
 
           <CommentsSheetPortal host={commentsHost} risesWithComposer />
           <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} anonymousViewCount={currentStory?.anonymousViewCount} />
+          <StoryCubeShade />
         </div>
       ) : null}
+      {/* LES AUTEURS VOISINS (#11198) — masqués au repos, tournés image par image par `cube`. */}
+      <StoryCubeFace side="left" neighbour={cube.sides.left} faceRef={cube.sideRef('left')} />
+      <StoryCubeFace side="right" neighbour={cube.sides.right} faceRef={cube.sideRef('right')} />
       {invitation.dialog}
       {removal.sheet}
     </div>
