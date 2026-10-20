@@ -88,7 +88,8 @@ export type ContentRemovalNotice = {
   readonly conversationId?: string;
   readonly conversationTitle?: string | null;
   readonly postId?: string;
-  readonly reason: string;
+  /** Absent quand le rang souverain retire sans motif (console) : la notification n'a alors pas de ligne « Motif ». */
+  readonly reason?: string;
 };
 
 type Notifier = Pick<NotificationService, 'createNotification'>;
@@ -117,7 +118,7 @@ const metadataOf = (notice: ContentRemovalNotice): ContentRemovedNotificationMet
   ...(notice.conversationId ? { conversationId: notice.conversationId } : {}),
   ...(notice.conversationTitle ? { conversationTitle: notice.conversationTitle } : {}),
   ...(notice.postId ? { postId: notice.postId } : {}),
-  reason: notice.reason,
+  ...(notice.reason ? { reason: notice.reason } : {}),
 });
 
 export async function notifyContentRemoved(
@@ -136,7 +137,7 @@ export async function notifyContentRemoved(
       priority: 'normal',
       lang,
       title: titleOf(lang, notice),
-      content: notificationString(lang, 'moderation.reason', { preview: notice.reason }),
+      content: notice.reason ? notificationString(lang, 'moderation.reason', { preview: notice.reason }) : '',
       context: {
         ...(notice.conversationId ? { conversationId: notice.conversationId } : {}),
         ...(notice.conversationTitle ? { conversationTitle: notice.conversationTitle } : {}),

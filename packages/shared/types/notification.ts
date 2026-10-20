@@ -630,7 +630,7 @@ export interface ContentRemovedNotificationMetadata extends BaseNotificationMeta
   readonly conversationId?: string;
   readonly conversationTitle?: string;
   readonly postId?: string;
-  readonly reason: string;
+  readonly reason?: string;
 }
 
 /**

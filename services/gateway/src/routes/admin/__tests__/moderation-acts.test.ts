@@ -15,6 +15,12 @@ jest.mock('../../../services/reports/reportResolvedNotification', () => ({
   notifyReportResolved: jest.fn<any>().mockResolvedValue(undefined),
 }));
 
+const notifier = { createNotification: jest.fn<any>().mockResolvedValue({ id: 'n1' }) };
+jest.mock('../../../services/notifications/notification-service-registry', () => ({
+  getSharedNotificationService: () => notifier,
+  setSharedNotificationService: jest.fn(),
+}));
+
 import { adminModerationActRoutes } from '../moderation-acts';
 import { notifyReportResolved } from '../../../services/reports/reportResolvedNotification';
 
@@ -46,7 +52,7 @@ const prisma = {
   post: { findMany: postFindMany, updateMany: postUpdateMany, update: postUpdate, findUnique: postFindUnique },
   postComment: { findFirst: commentFindFirst, findMany: commentFindMany, updateMany: commentUpdateMany, update: commentUpdate },
   adminAuditLog: { createMany: auditCreateMany, create: auditCreate },
-  user: { findMany: userFindMany },
+  user: { findMany: userFindMany, findUnique: jest.fn<any>().mockResolvedValue({ systemLanguage: 'fr' }) },
   notification: { findMany: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
   userEngagement: { findUnique: jest.fn<any>().mockResolvedValue(null) },
   $transaction: transaction,
@@ -269,6 +275,62 @@ describe('POST /admin/comments/:commentId/remove', () => {
     const app = await buildApp('BIGBOSS');
     const res = await app.inject({ method: 'POST', url: `/admin/comments/${COMMENT}/remove`, payload: {} });
     expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+describe("un retrait de la console prévient l'auteur (#11158)", () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const removedFor = () => notifier.createNotification.mock.calls.map(([call]) => call as { userId: string; type: string; content: string; metadata: Record<string, unknown> });
+  const commentFixtures = () => {
+    commentFindFirst.mockResolvedValue({ id: COMMENT, authorId: AUTHOR, postId: POST, parentId: null });
+    commentFindMany.mockResolvedValue([]);
+    commentUpdateMany.mockResolvedValue({ count: 1 });
+    postUpdate.mockResolvedValue({});
+    postFindUnique.mockResolvedValue({ authorId: AUTHOR, commentCount: 0, visibility: 'PUBLIC', visibilityUserIds: [], isQuote: false, repostOfId: null });
+  };
+
+  it('signalement traité par « hors ligne » : content_removed à l’auteur, avec le motif', async () => {
+    reportFindUnique.mockResolvedValue(report());
+    const app = await buildApp('ADMIN');
+    expect((await act(app, { action: 'take-offline', reason: 'Spam avéré' })).statusCode).toBe(200);
+    await flush();
+    expect(removedFor()).toEqual([
+      expect.objectContaining({ userId: AUTHOR, type: 'content_removed', content: 'Motif : Spam avéré', metadata: { contentType: 'post', contentId: POST, postId: POST, reason: 'Spam avéré' } }),
+    ]);
+    await app.close();
+  });
+
+  it('signalement traité par « retirer le commentaire » : content_removed à l’auteur du commentaire', async () => {
+    reportFindUnique.mockResolvedValue(report({ reportedType: 'comment', reportedEntityId: COMMENT }));
+    commentFixtures();
+    const app = await buildApp('ADMIN');
+    expect((await act(app, { action: 'remove-comment', reason: 'Harcèlement' })).statusCode).toBe(200);
+    await flush();
+    expect(removedFor().map((call) => [call.userId, call.metadata])).toEqual([[AUTHOR, { contentType: 'comment', contentId: COMMENT, postId: POST, reason: 'Harcèlement' }]]);
+    await app.close();
+  });
+
+  it('retrait direct d’un commentaire par le rang souverain sans motif : la notification part sans ligne motif', async () => {
+    commentFixtures();
+    const app = await buildApp('BIGBOSS');
+    expect((await app.inject({ method: 'POST', url: `/admin/comments/${COMMENT}/remove`, payload: {} })).statusCode).toBe(200);
+    await flush();
+    const [call] = removedFor();
+    expect(call).toMatchObject({ userId: AUTHOR, type: 'content_removed', content: '' });
+    expect(call?.metadata).toEqual({ contentType: 'comment', contentId: COMMENT, postId: POST });
+    await app.close();
+  });
+
+  it('ni « mettre en privé », ni classer, ni un refus ne préviennent l’auteur', async () => {
+    reportFindUnique.mockResolvedValue(report());
+    const app = await buildApp('BIGBOSS');
+    await act(app, { action: 'make-private' });
+    await act(app, { action: 'dismiss' });
+    userFindMany.mockResolvedValue([{ id: AUTHOR, role: 'BIGBOSS' }]);
+    await act(app, { action: 'take-offline' });
+    await flush();
+    expect(removedFor()).toEqual([]);
     await app.close();
   });
 });
