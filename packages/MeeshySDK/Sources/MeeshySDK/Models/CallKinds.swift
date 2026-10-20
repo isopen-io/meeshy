@@ -82,6 +82,12 @@ public enum CallKind: String, Sendable, Hashable, Codable {
         self = CallKind(rawValue: raw) ?? .unknown
     }
 
+    public init(isVideo: Bool) {
+        self = isVideo ? .video : .audio
+    }
+
+    public var isVideo: Bool { self == .video }
+
     public init(from decoder: Decoder) throws {
         self.init(raw: try decoder.singleValueContainer().decode(String.self))
     }

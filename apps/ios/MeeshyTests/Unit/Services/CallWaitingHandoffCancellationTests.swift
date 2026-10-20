@@ -36,8 +36,8 @@ final class CallWaitingHandoffCancellationTests: XCTestCase {
 
     func test_beforeTheHandoff_theBannerStillClears() {
         let manager = CallManager.shared
-        manager.pendingIncomingCall = (callId: "call-waiting-2", fromUserId: "u", fromUsername: "Ada", isVideo: false,
-                                       iceServers: nil, conversationId: nil)
+        manager.pendingIncomingCall = IncomingCall(callId: "call-waiting-2", fromUserId: "u", fromUsername: "Ada",
+                                                   kind: .audio, iceServers: nil, conversationId: nil)
         manager.showCallWaitingBanner = true
 
         manager.clearPendingIncomingCall(ifMatching: "call-waiting-2")

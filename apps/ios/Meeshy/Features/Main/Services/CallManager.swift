@@ -108,6 +108,10 @@ final class CallManager: ObservableObject {
 
     @Published var callState: CallState = .idle {
         didSet {
+            if !CallStateMachine.isLegal(from: oldValue, to: callState) {
+                let status = String(describing: CallStateMachine.status(of: callState))
+                Logger.calls.fault("[CallFSM] transition illégale \(String(describing: oldValue)) -> \(String(describing: self.callState)) (status=\(status))")
+            }
             let active = callState.isActive
             CallManager.isCallActiveFlag = active
             // Étape B unification audio — point de propagation unique de l'état
@@ -176,30 +180,19 @@ final class CallManager: ObservableObject {
     @Published var isVideoEnabled: Bool = false {
         didSet { if isVideoEnabled != oldValue { updateProximityMonitoring() } }
     }
-    /// P0-3 — the REMOTE peer's camera state, driven by `call:media-toggled`.
-    /// Defaults to `true` (assume on) and flips to `false` when the peer turns
-    /// its camera off, so the UI can show an avatar placeholder instead of the
-    /// peer's frozen last frame. 1:1 only — the gateway routes the toggle to the
-    /// other participant via `socket.to(room)` so we never see our own echo.
-    @Published var isRemoteVideoEnabled: Bool = true
-    /// `false` when the remote peer has muted their microphone (call:media-toggled
-    /// audioType=="audio"). Drives the mute indicator in the call UI so the local
-    /// user knows why the remote peer sounds silent. Resets to `true` on call end.
-    @Published var isRemoteAudioEnabled: Bool = true
     /// #8063 — partage d'écran, local et distant (`CallManager+ScreenShare.swift`).
     private(set) lazy var screenShare: CallScreenShareController = makeScreenShareController()
     /// #8064 — l'enregistrement consenti de l'appel (`CallManager+Recording.swift`).
     private(set) lazy var recording: CallRecordingController = makeRecordingController()
-    /// `true` when the remote peer is actively screen-capturing this call
-    /// (call:screen-capture-alert with isCapturing==true). Drives a privacy warning
-    /// banner in CallView. Resets to `false` on call end to prevent leaking state
-    /// into subsequent calls.
-    @Published var isRemoteScreenCapturing: Bool = false
-    /// Set to `true` when the gateway reports the remote peer has high RTT or packet
-    /// loss (call:quality-alert). Auto-resets after 15 s of silence — sustained poor
-    /// conditions keep resetting the timer, so the indicator stays up as long as
-    /// alerts keep arriving.
-    @Published var isRemoteQualityDegraded: Bool = false
+    /// État des médias du pair distant (caméra, micro, capture d'écran, qualité),
+    /// piloté par `call:media-toggled`, `call:screen-capture-alert` et
+    /// `call:quality-alert`. Une seule valeur publiée ; remise à `.initial` à
+    /// chaque fin d'appel pour ne rien fuir vers l'appel suivant.
+    @Published var remoteMedia: RemoteMediaState = .initial
+    var isRemoteVideoEnabled: Bool { remoteMedia.isVideoEnabled }
+    var isRemoteAudioEnabled: Bool { remoteMedia.isAudioEnabled }
+    var isRemoteScreenCapturing: Bool { remoteMedia.isScreenCapturing }
+    var isRemoteQualityDegraded: Bool { remoteMedia.isQualityDegraded }
     /// EXIGENCE №1 — true while the signaling socket is down during an
     /// established call. The P2P media keeps flowing; CallView shows a
     /// discreet banner and signaling ops resync on the socket reconnect.
@@ -318,7 +311,7 @@ final class CallManager: ObservableObject {
     @Published var availableCameras: [CameraDeviceOption] = []
     /// §7.1 — uniqueID of the active capture camera (drives the picker's check).
     @Published var selectedCameraId: String?
-    @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?, conversationId: String?)?
+    @Published var pendingIncomingCall: IncomingCall?
 
     // MARK: - Audio Guard (DEBUG override for tests)
 
@@ -545,7 +538,7 @@ final class CallManager: ObservableObject {
     /// `retryCall()` (« Réessayer ») — `resetEndedStateForNewCall` clears the
     /// live identity fields, so the retry must re-dial from this snapshot rather
     /// than the (already-torn-down) call state. Parité web/Android retry.
-    var lastOutgoingContext: (conversationId: String, userId: String, displayName: String, isVideo: Bool)?
+    var lastOutgoingContext: OutgoingCallContext?
     /// `private(set)` (not `private`) so CallView can compute a "since call
     /// start" elapsed time for each live-caption row — the only other
     /// existing consumer of call timing is `callDuration`, which is a ticking
