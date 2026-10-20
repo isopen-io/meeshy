@@ -12,27 +12,29 @@ import os
 /// session que par le chemin synchrone.
 struct MediaSessionReleaseAfterPauseTests {
 
-    @Test func aDelayedRelease_runsOnceTheDelayHasPassed() async {
-        let coordinator = MediaSessionCoordinator.makeForTesting()
+    @Test func aDelayedRelease_runsOnceTheDelayHasPassed() {
+        let clock = ManualDelayedScheduler()
+        let coordinator = MediaSessionCoordinator.makeForTesting(scheduleAfter: clock.scheduler)
         let ran = OSAllocatedUnfairLock(initialState: 0)
 
         coordinator.deactivatePlaybackDeferred(on: .global(), after: 0.05) { ran.withLock { $0 += 1 } }
+        #expect(clock.delays == [0.05])
         #expect(ran.withLock { $0 } == 0)
-        let deadline = Date().addingTimeInterval(5)
-        while ran.withLock({ $0 }) == 0, Date() < deadline {
-            try? await Task.sleep(nanoseconds: 20_000_000)
-        }
+
+        clock.advance()
+        clock.advance()
 
         #expect(ran.withLock { $0 } == 1)
     }
 
-    @Test func aRelaunchWithinTheDelay_cancelsTheRelease() async {
-        let coordinator = MediaSessionCoordinator.makeForTesting()
+    @Test func aRelaunchWithinTheDelay_cancelsTheRelease() {
+        let clock = ManualDelayedScheduler()
+        let coordinator = MediaSessionCoordinator.makeForTesting(scheduleAfter: clock.scheduler)
         let ran = OSAllocatedUnfairLock(initialState: 0)
 
         coordinator.deactivatePlaybackDeferred(on: .global(), after: 0.05) { ran.withLock { $0 += 1 } }
         coordinator.noteActivationForTesting()
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        clock.advance()
 
         #expect(ran.withLock { $0 } == 0)
     }
