@@ -58,6 +58,8 @@ const pt = {
   'game.banner.link.missions': 'Missões do dia: {done} de {total}',
   'game.banner.link.season': 'Temporada: {stars} estrelas',
   'game.banner.link.meesh': '{count} Meeshes guardadas',
+  'game.banner.glory': '{glory} de Glória',
+  'game.banner.glory_missing': 'faltam {glory} rumo a {rank}',
   'game.banner.missing': 'faltam {points} rumo ao {level}',
   'game.banner.separator': ', ',
   'game.league.name.quartz': 'Quartzo',

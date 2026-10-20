@@ -63,6 +63,8 @@ const ar = {
   'game.banner.link.missions': 'مهام اليوم: {done} من {total}',
   'game.banner.link.season': 'الموسم: {stars} نجوم',
   'game.banner.link.meesh': '{count} Meesh محفوظة',
+  'game.banner.glory': '{glory} مجد',
+  'game.banner.glory_missing': 'باقٍ {glory} نحو {rank}',
   'game.banner.separator': '، ',
   'game.league.name.quartz': 'كوارتز',
   'game.league.name.ambre': 'عنبر',

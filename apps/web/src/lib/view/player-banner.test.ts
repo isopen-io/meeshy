@@ -129,29 +129,35 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
     expect(playerBannerLabel(model, 'fr')).toMatch(/^12 étincelles$/);
   });
 
-  test('fr : tout ce qui existe, dans l’ordre de la bannière', () => {
+  test('fr : tout ce qui existe, dans l’ordre de la rangée compacte — l’anneau, le milieu, le rang au bout (#11125)', () => {
     const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, 12 Meeshes, [\p{L} ]+, ligue Jade \d+(re|e), Flamme 23 jours, Trophées : \d+, Missions du jour : \d+ sur \d+, Saison : \d+ étoiles$/u);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, Flamme 23 jours, 12 Meeshes, Missions du jour : \d+ sur \d+, ligue Jade \d+(re|e), Murmure IV, 620 Gloire, encore [\d\s\u202f]+ vers Murmure III$/u);
+  });
+
+  test('fr : trophées et saison ne sont dits que dans la disposition grand texte, où ils restent (#11125)', () => {
+    const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
+    expect(playerBannerLabel(model, 'fr')).not.toMatch(/Trophées|Saison/);
+    expect(playerBannerLabel(model, 'fr', 'large')).toMatch(/Trophées : \d+, Saison : \d+ étoiles$/);
   });
 
   test('le rang : la division V..I et la place du Mythe, dites et dessinées (#9636)', () => {
     const model = shownExtras({ glory: 620 });
-    expect(model.rank).toEqual({ rank: 'murmure', division: 4, mythic: null });
+    expect(model.rank).toMatchObject({ rank: 'murmure', division: 4, mythic: null });
     expect(playerBannerLabel(model, 'fr')).toContain('Murmure IV');
     const mythe = shownExtras({ glory: 1_000_000, mythic: true, mythicSeat: { number: 18, edition: 22 } });
-    expect(mythe.rank).toEqual({ rank: 'mythe', division: null, mythic: { number: 18, edition: 22 } });
+    expect(mythe.rank).toMatchObject({ rank: 'mythe', division: null, mythic: { number: 18, edition: 22 } });
     expect(playerBannerLabel(mythe, 'fr')).toContain('Mythe n° 18');
   });
 
   test('en : l’ordinal anglais de la place', () => {
     const model = shownExtras({ balance: 12, streak: 23 });
-    expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Jade league \d+(st|nd|rd|th), Flame 23 days, Trophies: \d+, Daily missions: \d+ of \d+, Season: \d+ stars$/);
+    expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Flame 23 days, .*, Daily missions: \d+ of \d+, Jade league \d+(st|nd|rd|th), .*$/);
   });
 
   test('aucune langue ne laisse une clé nue, un paramètre en clair ou un « undefined »', () => {
     const model = shownExtras({ balance: 12, streak: 23 });
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
-      const label = playerBannerLabel(model, language);
+      const label = [playerBannerLabel(model, language, 'large'), playerBannerPieceLabels(model, language).rank ?? ''].join(' ');
       expect({ language, defect: /game\.|\{\w+\}|undefined|NaN/.test(label) }).toEqual({ language, defect: false });
     }
   });
@@ -243,7 +249,7 @@ describe('trophées, mission du jour et saison', () => {
     const game = gameBlockWithExtrasFixture({ ...NEWCOMER, levelRecord: 9 }, { trophies: [{ key: 'trophy.prestige.1', awardedAt: '2026-11-01T00:00:00.000Z' }], season: { stars: 25, claimedSteps: [], sealOwned: false } });
     const model = playerBannerModel(game);
     expect(model).not.toBeNull();
-    const label = playerBannerLabel(model!, 'fr');
+    const label = playerBannerLabel(model!, 'fr', 'large');
     expect(label).toContain('Trophées');
     expect(label).toContain('Saison');
   });
@@ -265,5 +271,50 @@ describe('un nom accessible par pièce', () => {
     expect(labels.level).toMatch(/^Niveau \d+, /);
     expect(labels.sparks).toContain('Étincelles');
     expect(labels.sparks).toMatch(/vers le/);
+  });
+});
+
+/**
+ * LE RANG ET SA GLOIRE (#11125, porteur 2026-10-20) — le rang se lit comme le niveau : sa jauge de Gloire (la marche dans la
+ * division) et ce qui manque pour le rang suivant. Tout est LU dans le bloc `glory` servi, rien n'est recalculé.
+ */
+describe('le rang porte sa Gloire, sa jauge et ce qui manque', () => {
+  test('lus tels quels dans le bloc servi : la Gloire, la marche, le manque et le rang suivant', () => {
+    const game = gameBlockWithExtrasFixture({ glory: 620 });
+    const { glory } = game;
+    expect(glory.next).not.toBeNull();
+    expect(playerBannerModel(game)?.rank).toEqual({
+      rank: 'murmure',
+      division: 4,
+      mythic: null,
+      glory: 620,
+      progress: glory.progress,
+      gloryMissing: glory.gloryMissing,
+      next: { rank: glory.next!.rank, division: glory.next!.division5 ?? glory.next!.division },
+    });
+  });
+
+  test('rien n’est recalculé : un manque servi différent du seuil est montré tel quel', () => {
+    const game = gameBlockWithExtrasFixture({ glory: 620 });
+    const served = { ...game, glory: { ...game.glory, gloryMissing: 7, progress: 0.25 } };
+    expect(playerBannerModel(served)?.rank).toMatchObject({ gloryMissing: 7, progress: 0.25 });
+  });
+
+  test('le Mythe n’a pas de suite : ni rang suivant ni manque', () => {
+    const mythe = shownExtras({ glory: 1_000_000, mythic: true, mythicSeat: { number: 18, edition: 22 } });
+    expect(mythe.rank).toMatchObject({ glory: 1_000_000, next: null, gloryMissing: null });
+  });
+
+  test('le nom accessible du rang : son nom, sa Gloire et ce qui manque vers le suivant', () => {
+    const game = gameBlockWithExtrasFixture({ glory: 620 });
+    const labels = playerBannerPieceLabels(playerBannerModel(game)!, 'fr');
+    expect(labels.rank).toMatch(/^Murmure IV, 620 Gloire, encore [\d\s\u202f]+ vers Murmure III$/u);
+  });
+
+  test('au Mythe : le nom et la Gloire seule, sans « encore »', () => {
+    const mythe = shownExtras({ glory: 1_000_000, mythic: true, mythicSeat: { number: 18, edition: 22 } });
+    const label = playerBannerPieceLabels(mythe, 'fr').rank ?? '';
+    expect(label).toMatch(/^Mythe n° 18, 1[\s\u202f]000[\s\u202f]000 Gloire$/u);
+    expect(label).not.toContain('encore');
   });
 });

@@ -60,6 +60,8 @@ const de = {
   'game.banner.link.missions': 'Tagesmissionen: {done} von {total}',
   'game.banner.link.season': 'Saison: {stars} Sterne',
   'game.banner.link.meesh': '{count} Meeshes behalten',
+  'game.banner.glory': '{glory} Ruhm',
+  'game.banner.glory_missing': 'noch {glory} bis {rank}',
   'game.league.name.quartz': 'Quarz',
   'game.league.name.ambre': 'Bernstein',
   'game.league.name.jade': 'Jade',

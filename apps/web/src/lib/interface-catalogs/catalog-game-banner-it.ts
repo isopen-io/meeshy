@@ -59,6 +59,8 @@ const it = {
   'game.banner.link.missions': 'Missioni del giorno: {done} su {total}',
   'game.banner.link.season': 'Stagione: {stars} stelle',
   'game.banner.link.meesh': '{count} Meesh conservate',
+  'game.banner.glory': '{glory} Gloria',
+  'game.banner.glory_missing': 'ancora {glory} verso {rank}',
   'game.banner.separator': ', ',
   'game.league.name.quartz': 'Quarzo',
   'game.league.name.ambre': 'Ambra',
