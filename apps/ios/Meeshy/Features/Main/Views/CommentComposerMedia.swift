@@ -52,11 +52,11 @@ enum CommentMediaUploader {
 }
 
 /// Les traces de recette du chemin d'envoi d'un commentaire (Debug) :
-/// `xcrun simctl spawn booted log stream --predicate 'eventMessage CONTAINS "CommentSend"'`.
+/// `xcrun simctl spawn booted log stream --level debug --predicate 'eventMessage CONTAINS "CommentSend"'`.
 enum CommentSendTrace {
     static func log(_ message: @autoclosure () -> String) {
         #if DEBUG
-        NSLog("[CommentSend] %@", message())
+        MeeshyLog.logger(.commentSend).debug("[CommentSend] \(message(), privacy: .public)")
         #endif
     }
 }
