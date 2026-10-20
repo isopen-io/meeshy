@@ -19,7 +19,8 @@ function withFakeRecorder(supported: (type: string) => boolean, run: () => void)
   const globals = globalThis as unknown as Globals;
   const previousRecorder = globals.MediaRecorder;
   const previousWindow = globals.window;
-  const hadWindow = 'window' in globalThis;
+  const hadWindowKey = 'window' in globalThis;
+  const lacksWindow = typeof previousWindow !== 'object' || previousWindow === null;
   const constructed: Constructed[] = [];
   class FakeRecorder {
     static isTypeSupported = supported;
@@ -34,27 +35,33 @@ function withFakeRecorder(supported: (type: string) => boolean, run: () => void)
     stop(): void {}
   }
   globals.MediaRecorder = FakeRecorder;
-  if (!hadWindow) globals.window = {};
+  if (lacksWindow) globals.window = {};
   try {
     run();
   } finally {
     globals.MediaRecorder = previousRecorder;
-    if (!hadWindow) delete globals.window;
-    else globals.window = previousWindow;
+    if (lacksWindow && hadWindowKey) globals.window = previousWindow;
+    if (lacksWindow && !hadWindowKey) delete globals.window;
   }
   return constructed;
 }
 
 const fakeStream = {} as MediaStream;
 
+const recordVoice = (): void => {
+  const engine = createBrowserRecorderEngine();
+  engine.start(fakeStream, () => undefined);
+  void engine.stop();
+};
+
 describe('le vocal enregistre à 32 kb/s dans le conteneur de la loi', () => {
   test('Chromium : webm opus, 32 000 b/s', () => {
-    const constructed = withFakeRecorder(() => true, () => createBrowserRecorderEngine().start(fakeStream, () => undefined));
+    const constructed = withFakeRecorder(() => true, recordVoice);
     expect(constructed.map((entry) => entry.options)).toEqual([{ audioBitsPerSecond: 32_000, mimeType: 'audio/webm;codecs=opus' }]);
   });
 
   test('WebKit : audio/mp4, 32 000 b/s', () => {
-    const constructed = withFakeRecorder((type) => type === 'audio/mp4', () => createBrowserRecorderEngine().start(fakeStream, () => undefined));
+    const constructed = withFakeRecorder((type) => type === 'audio/mp4', recordVoice);
     expect(constructed.map((entry) => entry.options)).toEqual([{ audioBitsPerSecond: 32_000, mimeType: 'audio/mp4' }]);
   });
 });
