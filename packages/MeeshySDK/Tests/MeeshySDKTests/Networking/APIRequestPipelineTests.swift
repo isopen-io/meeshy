@@ -6,7 +6,7 @@ import XCTest
 final class APIRequestPipelineTests: XCTestCase {
 
     private func serverParts(_ error: Error?) -> (status: Int, message: String)? {
-        guard case MeeshyError.server(let status, let message)? = error else { return nil }
+        guard let error, case MeeshyError.server(let status, let message) = error else { return nil }
         return (status, message)
     }
 
