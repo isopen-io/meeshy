@@ -60,7 +60,7 @@ describe('la page Réglages du jeu', () => {
   test('changer la visibilité de la vitrine envoie ce champ seul', async () => {
     const patches: Array<Record<string, string | undefined>> = [];
     const host = await mount(<ReglagesBody progress={progress} actions={actions({ visibility: gesture((patch) => patches.push(patch)) })} online hide={() => undefined} />);
-    const fieldset = [...host.querySelectorAll('[data-game-visibility]')].find((node) => node.textContent?.includes('Vitrine de trophées'));
+    const fieldset = [...host.querySelectorAll('[data-game-visibility]')].find((node) => node.textContent?.includes('Trophées'));
     await click(fieldset?.querySelector('input[value="everyone"]') ?? null);
     expect(patches).toEqual([{ showcase: 'everyone' }]);
   });

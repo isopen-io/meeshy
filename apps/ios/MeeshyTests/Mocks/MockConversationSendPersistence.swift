@@ -75,6 +75,7 @@ nonisolated final class SendErrorRecorderSpy: ErrorRecording, Sendable {
     }
 }
 
+@MainActor
 enum SendingRowFixture {
     static func record(localId: String, conversationId: String, content: String = "Bonjour") -> MessageRecord {
         OptimisticTextRecordBuilder.record(

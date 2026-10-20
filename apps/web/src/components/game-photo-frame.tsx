@@ -60,7 +60,7 @@ export function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem })
     case 'level-hundred':
       return <LevelRing level={100} tier="galaxie" progress={1} size={512} showTier />;
     case 'meesh':
-      return <MeeshCoin side="reverse" size={512} edition={emblem.edition} number={emblem.number} numberLabel={gameText('game.mint.number_label', { number: formatCount(emblem.number) })} />;
+      return <MeeshCoin side="reverse" size={512} edition={emblem.edition} number={emblem.number} />;
     case 'treasury':
       return <MeeshCoin side="obverse" size={512} edition="silver" />;
     case 'flame':
