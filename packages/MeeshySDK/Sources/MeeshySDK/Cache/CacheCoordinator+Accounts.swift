@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 import os
 
-private let accountCacheLogger = Logger(subsystem: "com.meeshy.sdk", category: "cache-accounts")
+private let accountCacheLogger = MeeshyLog.logger(.cacheAccounts, subsystem: .legacySDK)
 
 /// Le compte à qui appartient le cache VIVANT (`meeshy.sqlite`) (#8674).
 ///

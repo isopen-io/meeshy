@@ -145477,7 +145477,7 @@
         }
       }
     },
-    "profile.decor.photo": {
+    "profile.decor.image": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -145489,37 +145489,131 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Foto"
+            "value": "Bild"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photo"
+            "value": "Image"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Foto"
+            "value": "Imagen"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Photo"
+            "value": "Image"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Foto"
+            "value": "Immagine"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Foto"
+            "value": "Imagem"
+          }
+        }
+      }
+    },
+    "profile.decor.image.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اختر صورة للافتة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Bannerbild auswählen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a banner image"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elegir una imagen de portada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisir une image de bannière"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scegli un'immagine per il banner"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escolher uma imagem de capa"
+          }
+        }
+      }
+    },
+    "profile.decor.image.hidesDesigns": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "صورة اللافتة تظهر فوق الخلفيات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Bannerbild liegt über den Hintergründen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your banner image shows in front of the backgrounds."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu imagen de portada se muestra delante de los fondos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ton image de bannière passe devant les fonds."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua immagine del banner sta davanti agli sfondi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua imagem de capa aparece na frente dos fundos."
           }
         }
       }

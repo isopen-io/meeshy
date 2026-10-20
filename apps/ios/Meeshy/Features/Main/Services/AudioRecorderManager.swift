@@ -259,7 +259,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let audioRecorder = Logger(subsystem: "me.meeshy.app", category: "audio-recorder")
+    nonisolated static let audioRecorder = MeeshyLog.logger(.audioRecorder)
 }
 
 private nonisolated struct RecordingResources {

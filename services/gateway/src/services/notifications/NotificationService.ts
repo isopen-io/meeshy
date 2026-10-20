@@ -44,6 +44,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { notificationString, buildNotificationDisplay } from '@meeshy/shared/utils/notification-strings';
 import { pushMediaFields } from './push-media-fields';
+import { contentRemovedPushFields, pickMetadataString } from './push-metadata-fields';
 import { recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { sanitizeNotificationInputs, persistedNotificationTitle } from './sanitizeInputs';
@@ -127,18 +128,6 @@ import { guardedInterval } from '../../utils/guarded-timer';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
-
-/**
- * Lit une clé de metadata comme chaîne non vide pour le payload push (les
- * `data` APNs/FCM ne transportent que des chaînes). Retourne `''` quand la clé
- * est absente, nulle ou vide — ce que le client interprète comme « pas de
- * valeur » (`NotificationPayload` mappe la chaîne vide vers `nil`).
- */
-function pickMetadataString(metadata: unknown, key: string): string {
-  if (!metadata || typeof metadata !== 'object' || !(key in metadata)) return '';
-  const value = (metadata as Record<string, unknown>)[key];
-  return value == null ? '' : String(value);
-}
 
 /**
  * Ce qu'il faut pour remplacer une bannière réécrite : la ligne RELUE (seule
@@ -1081,6 +1070,7 @@ export class NotificationService {
                 // NSE que la bulle est éphémère sans qu'elle ait à le déduire.
                 ...ephemeralPushFields(params.context),
                 ...(await callBackPushFields({ type: params.type, metadata: params.metadata, language: recipientLang })),
+                ...contentRemovedPushFields({ type: params.type, metadata: params.metadata, showPreview }),
                 ...(await contentActionPushFields({ type: params.type, conversationId: params.context.conversationId, detail: params.context.contentDetail, detailTravels, language: recipientLang })),
                 // GW7 — showPreview:false : AUCUN champ porteur de contenu dans
                 // data. La NSE réécrit inconditionnellement le body depuis

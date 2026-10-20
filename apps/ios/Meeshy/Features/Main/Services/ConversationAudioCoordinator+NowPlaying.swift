@@ -285,5 +285,5 @@ extension ConversationAudioCoordinator {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let nowPlaying = Logger(subsystem: "me.meeshy.app", category: "now-playing")
+    nonisolated static let nowPlaying = MeeshyLog.logger(.nowPlaying)
 }

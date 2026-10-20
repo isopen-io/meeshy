@@ -45,8 +45,7 @@ final class CommunityListViewModel: ObservableObject, CommunityListModeling {
     private func scheduleSearch() {
         searchTask?.cancel()
         searchTask = Task {
-            try? await Task.sleep(for: .seconds(0.35))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(0.35)) else { return }
             currentOffset = 0
             await load()
         }

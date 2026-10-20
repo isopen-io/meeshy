@@ -3,7 +3,7 @@ import MeeshySDK
 import os
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }
 
 /// Starts a 1:1 call from anywhere that has a user but not necessarily a

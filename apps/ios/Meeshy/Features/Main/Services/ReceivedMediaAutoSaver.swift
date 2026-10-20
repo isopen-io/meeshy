@@ -4,7 +4,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let autoSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-autosave")
+private let autoSaveLog = MeeshyLog.logger(.mediaAutosave)
 
 // MARK: - La règle : quelles pièces reçues rejoignent l'album
 

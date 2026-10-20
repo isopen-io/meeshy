@@ -51,7 +51,7 @@ public enum StoryQueueMigrator {
 
     /// Logger category mirrors the existing `StoryOfflineQueueBootstrap`
     /// subsystem so migrator + bootstrap logs interleave cleanly.
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-queue-migrator")
+    private static let logger = MeeshyLog.logger(.storyQueueMigrator, subsystem: .legacySDK)
 
     /// Returns the legacy file URL when present on disk. Builds the path
     /// without creating the parent directory so the check stays side-effect

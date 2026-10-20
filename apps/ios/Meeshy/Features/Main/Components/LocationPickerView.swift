@@ -571,7 +571,7 @@ struct LocationPickerView: View {
 
             Button {
                 guard let place = displayedPlace else { return }
-                Logger(subsystem: "me.meeshy.app", category: "location")
+                MeeshyLog.logger(.location)
                     .info("breadcrumb.selection hasName=\(place.name != nil, privacy: .public) precision=\(self.precision.rawValue, privacy: .public)")
                 onSelect(place)
                 HapticFeedback.success()
@@ -719,7 +719,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     private let manager = CLLocationManager()
     private let geocoder = CLGeocoder()
     private var geocodeTask: Task<Void, Never>?
-    private let log = Logger(subsystem: "me.meeshy.app", category: "location")
+    private let log = MeeshyLog.logger(.location)
 
     /// Garde contre deux relevés concurrents. À l'ouverture d'un picker déjà
     /// autorisé, `requestPermission()` et le callback d'autorisation initial

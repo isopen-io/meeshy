@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 import os
 
-private let outboxFlusherLog = Logger(subsystem: "me.meeshy.sdk", category: "outbox-flusher")
+private let outboxFlusherLog = MeeshyLog.logger(.outboxFlusher, subsystem: .sdk)
 
 public protocol OutboxDispatching: Sendable {
     func dispatch(_ record: OutboxRecord) async throws

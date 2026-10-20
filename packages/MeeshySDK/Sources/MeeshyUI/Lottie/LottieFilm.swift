@@ -1,6 +1,8 @@
 import Foundation
 import QuartzCore
 import UIKit
+import os
+import MeeshySDK
 @preconcurrency import Lottie
 
 // MARK: - Un film Lottie, chargé et rasterisé (#10638)
@@ -94,7 +96,7 @@ nonisolated public enum LottieFilm {
         case .success(let file):
             return file.animations.first.map { LottieFilmSource($0.animation) }
         case .failure(let error):
-            NSLog("[LottieFilm] lecture de %@ impossible : %@", url.lastPathComponent, String(describing: error))
+            MeeshyLog.logger(.lottieFilm).error("[LottieFilm] lecture de \(url.lastPathComponent, privacy: .public) impossible : \(String(describing: error), privacy: .public)")
             return nil
         }
     }

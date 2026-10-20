@@ -24,7 +24,7 @@ final class NSEPendingPostConsumer {
 
     private nonisolated static let appGroupId = "group.me.meeshy.apps"
     private nonisolated static let pendingDirName = "nse_pending_posts"
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "nse-post-consumer")
+    private let logger = MeeshyLog.logger(.nsePostConsumer)
 
     /// Dossier de staging App Group — exposé pour le wipe de logout
     /// (appgroup-01), miroir de `SharePendingSendConsumer.directoryURL()`.
@@ -174,5 +174,5 @@ final class NSEPendingPostConsumer {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let nsePosts = Logger(subsystem: "me.meeshy.app", category: "nse-posts")
+    nonisolated static let nsePosts = MeeshyLog.logger(.nsePosts)
 }

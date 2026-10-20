@@ -159,8 +159,8 @@ final class ComposerReturnMediaTests: XCTestCase {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
         XCTAssertFalse(code.contains("MeeshyVideoEditorView("),
                        "La vidéo en attente et la vidéo récente s'éditent dans la scène (#9124).")
-        XCTAssertEqual(code.components(separatedBy: "ConversationVideoSceneEditor(").count - 1, 1,
-                       "La vidéo RÉCENTE ouvre la scène.")
+        XCTAssertFalse(code.contains("ConversationVideoSceneEditor("),
+                       "La vidéo RÉCENTE ouvre la retouche de la caméra, plus la scène (#11133).")
         XCTAssertFalse(code.contains("ConversationRetouchSeriesEditor("),
                        "La série de scènes n'est plus une porte de la conversation (porteur 2026-10-20, #11133).")
         XCTAssertTrue(code.contains("ConversationPieceRetouch("),

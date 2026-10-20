@@ -309,5 +309,5 @@ struct AppleTranslationHost: View {
 }
 
 private extension Logger {
-    nonisolated static let deviceTranslation = Logger(subsystem: "me.meeshy.app", category: "device-translation")
+    nonisolated static let deviceTranslation = MeeshyLog.logger(.deviceTranslation)
 }

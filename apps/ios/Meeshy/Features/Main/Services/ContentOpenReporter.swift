@@ -39,7 +39,7 @@ final class ContentOpenReporter: ContentOpenReporting {
     /// justifie pas une file sans borne hors ligne.
     static let pendingCap = 200
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "content-open")
+    private static let logger = MeeshyLog.logger(.contentOpen)
 
     private let entries: DetailOpenSourceProviding
     private let postService: PostServiceProviding

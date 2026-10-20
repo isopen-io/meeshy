@@ -427,10 +427,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         XCTAssertEqual(record?.state, .failed)
     }
 
-    /// Défaut CONNU, figé tel quel (dette : issue dédiée) : l'item de relance
-    /// d'un échec EN LIGNE ne porte ni le lien de story ni le transfert, alors
-    /// que l'item hors ligne les porte.
-    func test_onlineFailure_retryItem_dropsStoryReplyLink_knownDefect() async throws {
+    func test_onlineFailure_retryItem_carriesStoryReplyLink() async throws {
         let fx = try await makeFixture(
             isOnline: true,
             restSendFailure: NSError(domain: "ConversationViewModelOfflineQueueTests", code: 500)
@@ -440,7 +437,22 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
 
         let items = await fx.offlineQueue.enqueuedItems
         XCTAssertEqual(items.count, 1)
-        XCTAssertNil(items.first?.storyReplyToId)
+        XCTAssertEqual(items.first?.storyReplyToId, "s1")
+    }
+
+    func test_onlineFailure_retryItem_carriesForward_andNeverOffersItToTheSocket() async throws {
+        let fx = try await makeFixture(
+            isOnline: true,
+            restSendFailure: NSError(domain: "ConversationViewModelOfflineQueueTests", code: 500)
+        )
+
+        _ = await fx.sut.sendMessage(content: "transfert", forwardedFromId: "m9", forwardedFromConversationId: "c9")
+
+        let items = await fx.offlineQueue.enqueuedItems
+        let socketCalls = fx.messageSocket.sendViaSocketFallbackCallCount
+        XCTAssertEqual(items.first?.forwardedFromId, "m9")
+        XCTAssertEqual(items.first?.forwardedFromConversationId, "c9")
+        XCTAssertEqual(socketCalls, 0)
     }
 
     func test_editMessage_offline_enqueuesEditThroughOutbox() async throws {

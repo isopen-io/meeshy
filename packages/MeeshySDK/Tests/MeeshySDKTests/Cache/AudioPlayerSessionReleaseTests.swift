@@ -63,14 +63,14 @@ final class AudioPlayerSessionReleaseTests: XCTestCase {
         XCTAssertTrue(manager.isPlaying, "précondition : la lecture a démarré")
 
         let ended = expectation(description: "fin de piste constatée")
-        var poll: Timer?
-        poll = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
+        ended.assertForOverFulfill = false
+        let poll = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
             MainActor.assumeIsolated {
-                if !manager.isPlaying { poll?.invalidate(); ended.fulfill() }
+                if !manager.isPlaying { ended.fulfill() }
             }
         }
         wait(for: [ended], timeout: 3)
-        poll?.invalidate()
+        poll.invalidate()
 
         XCTAssertFalse(manager.isPlaying)
         XCTAssertEqual(releases, 1, "la session doit être rendue à la fin de la piste")

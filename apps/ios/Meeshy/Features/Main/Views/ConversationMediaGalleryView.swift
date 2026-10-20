@@ -194,6 +194,8 @@ struct ConversationMediaGalleryView: View {
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
     /// ET à chaque fermeture (`stopActiveVideoAudio`). `internal` : `+Consumption.swift` la lit.
     let indexByID: [String: Int]
+    /// #11163 — la forme du lot, lue une fois ici et non par chaque page.
+    let lotShape: GalleryLotShape
 
     @Environment(\.dismiss) private var dismiss
     /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
@@ -285,7 +287,8 @@ struct ConversationMediaGalleryView: View {
         sceneContext: GallerySceneContext? = nil,
         entryPresentation: StagePresentation? = nil
     ) {
-        self.allAttachments = allAttachments
+        let pages = GalleryPagePinning.distinct(allAttachments)
+        self.allAttachments = pages
         _stagePresentation = State(initialValue: entryPresentation
             ?? MediaStageVeil.entryPresentation(voiceOverRunning: UIAccessibility.isVoiceOverRunning))
         self.startAttachmentId = startAttachmentId
@@ -304,16 +307,14 @@ struct ConversationMediaGalleryView: View {
         self.composableMedia = composableMedia
         self.reactableMedia = reactableMedia
         self.sceneContext = sceneContext
-        let positions = Dictionary(
-            allAttachments.enumerated().map { ($0.element.id, $0.offset) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        let positions = Dictionary(uniqueKeysWithValues: pages.enumerated().map { ($0.element.id, $0.offset) })
         self.indexByID = positions
-        _lastPageIDs = State(initialValue: allAttachments.map(\.id))
+        self.lotShape = GalleryLotShape(pages)
+        _lastPageIDs = State(initialValue: pages.map(\.id))
         _currentPageID = State(
             initialValue: positions[startAttachmentId] != nil
                 ? startAttachmentId
-                : allAttachments.first?.id
+                : pages.first?.id
         )
     }
 
@@ -481,10 +482,14 @@ struct ConversationMediaGalleryView: View {
     /// deux retraits sont ceux que le solveur a réservés — lui et le plateau
     /// lisent la MÊME table (`stageCorridors`, `+Geometry.swift`).
     private var galleryPager: some View {
+        // #11162 — par SÉLECTION : la page se suit par son identité quand le
+        // catalogue insère des pièces avant elle, et ouvrir la 900e ne
+        // construit pas les 899 qui la précèdent.
         AdaptiveHorizontalPager(
             items: allAttachments,
             currentPageID: $currentPageID,
-            fillVertical: true
+            fillVertical: true,
+            paging: .selection
         ) { index, attachment in
             galleryPage(attachment, index: index)
         }
@@ -551,6 +556,15 @@ struct ConversationMediaGalleryView: View {
     private func galleryPage(_ attachment: MessageAttachment, index: Int) -> some View {
         let distance = abs(index - currentIndex)
 
+        if !GalleryRenderWindow.buildsPage(distance: distance) {
+            Color.black
+        } else {
+            builtGalleryPage(attachment, distance: distance)
+        }
+    }
+
+    @ViewBuilder
+    private func builtGalleryPage(_ attachment: MessageAttachment, distance: Int) -> some View {
         switch attachment.type {
         case .image:
             GalleryImagePage(
@@ -945,8 +959,7 @@ struct ConversationMediaGalleryView: View {
                                   info: senderInfoMap[att.id],
                                   isScene: sceneContext?.scenes[att.id] != nil,
                                   videoManager: videoManager,
-                                  currentAttachmentIsActiveTrack: currentAttachmentIsActiveTrack,
-                                  metadataAccessibilityLabel: mediaMetadataAccessibilityLabel(att))
+                                  currentAttachmentIsActiveTrack: currentAttachmentIsActiveTrack)
     }
 
     // MARK: - Actions

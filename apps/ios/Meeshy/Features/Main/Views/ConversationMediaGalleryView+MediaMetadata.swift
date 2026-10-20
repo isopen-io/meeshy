@@ -5,8 +5,8 @@ import MeeshyUI
 // MARK: - Le bloc auteur / date / format du bas du cadre
 
 // Extrait de `ConversationMediaGalleryView.swift` : le bloc ne lit que la pièce,
-// l'info d'expéditeur, le moteur de lecture et le libellé VoiceOver déjà composé
-// par la racine. Corps déplacé à l'identique.
+// l'info d'expéditeur et le moteur de lecture, et compose lui-même ce que sa
+// ligne dit à VoiceOver — qui ne lit que la pièce (#11163).
 
 struct GalleryMediaMetadataBlock: View {
     let att: MessageAttachment
@@ -15,7 +15,6 @@ struct GalleryMediaMetadataBlock: View {
     let isScene: Bool
     let videoManager: SharedAVPlayerManager
     let currentAttachmentIsActiveTrack: Bool
-    let metadataAccessibilityLabel: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
@@ -85,5 +84,26 @@ struct GalleryMediaMetadataBlock: View {
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, MeeshySpacing.md)
         .padding(.bottom, MeeshySpacing.sm)
+    }
+
+    /// Résumé VoiceOver de la rangée métadonnées (dimensions + poids), joint de
+    /// façon locale-aware. Chaîne vide si aucune métadonnée n'est disponible.
+    var metadataAccessibilityLabel: String {
+        var parts: [String] = []
+        if let w = att.width, let h = att.height, w > 0, h > 0 {
+            parts.append(String(
+                format: String(localized: "gallery.dimensions", defaultValue: "%1$d par %2$d", bundle: .main),
+                w, h
+            ))
+        }
+        if att.fileSize > 0 {
+            parts.append(att.fileSizeFormatted)
+        }
+        // #9577 — la durée fait partie de la ligne ; VoiceOver en lit le TOTAL,
+        // pas le décompte (un libellé qui change chaque seconde se relirait).
+        if MediaGalleryStage.carriesDuration([att]), let duree = att.durationFormatted {
+            parts.append(duree)
+        }
+        return ListFormatter.localizedString(byJoining: parts)
     }
 }

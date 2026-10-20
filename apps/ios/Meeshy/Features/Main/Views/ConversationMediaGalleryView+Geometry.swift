@@ -135,11 +135,17 @@ enum MediaGalleryStage {
     static func corridors(safeTop: CGFloat,
                           safeBottom: CGFloat,
                           attachments: [MessageAttachment]) -> MediaStageFraming.Corridors {
+        corridors(safeTop: safeTop, safeBottom: safeBottom, lot: GalleryLotShape(attachments))
+    }
+
+    static func corridors(safeTop: CGFloat,
+                          safeBottom: CGFloat,
+                          lot: GalleryLotShape) -> MediaStageFraming.Corridors {
         MediaStageFraming.Corridors(
             safeTop: safeTop,
             top: topCorridorHeight,
-            rail: attachments.count > 1 ? FilmstripMetrics.reservedHeight : 0,
-            transport: carriesDuration(attachments) ? transportBandHeight : 0,
+            rail: lot.isSeries ? FilmstripMetrics.reservedHeight : 0,
+            transport: lot.carriesDuration ? transportBandHeight : 0,
             safeBottom: safeBottom,
             gutter: gutter
         )
@@ -408,7 +414,7 @@ extension ConversationMediaGalleryView {
         MediaGalleryStage.corridors(
             safeTop: galleryInsets.top,
             safeBottom: galleryInsets.bottom,
-            attachments: allAttachments
+            lot: lotShape
         )
     }
 

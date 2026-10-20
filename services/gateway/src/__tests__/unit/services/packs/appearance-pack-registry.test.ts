@@ -44,6 +44,12 @@ describe('registres d’apparence générés', () => {
     expect(index.itemKeys(index.entries('wallpaper')[0])).toEqual(['monogramme', 'chevrons', 'aurore', 'maille']);
   });
 
+  it('deux cadres de bannière sont installés d’office, un fixe et un animé chacun (#11165) : le sélecteur n’est jamais vide', () => {
+    const preinstalled = index.entries('banner-frame').filter((pack) => pack.installedByDefault);
+    expect(preinstalled.map((pack) => pack.slug)).toEqual(['cadres-haussmannien', 'cadres-ancestral']);
+    expect(preinstalled.flatMap((pack) => index.itemKeys(pack))).toEqual(['haussmannien', 'haussmannien-anime', 'ancestral', 'ancestral-anime']);
+  });
+
   it('les contours déclarent l’usage libre sur la seule surface avatar', () => {
     expect(index.entries('avatar-ring')[0].usage).toEqual({ kind: 'free', surfaces: ['avatar'] });
   });
@@ -59,7 +65,7 @@ describe('registres d’apparence générés', () => {
       expect(index.itemKeys(rings[at]!)).toEqual([style, `${style}-anime`]);
       expect(index.itemKeys(frames[at]!)).toEqual([style, `${style}-anime`]);
     });
-    expect(frames.every((pack) => pack.usage?.kind === 'free' && pack.usage.surfaces.join() === 'banner' && !pack.installedByDefault && pack.removable)).toBe(true);
+    expect(frames.every((pack) => pack.usage?.kind === 'free' && pack.usage.surfaces.join() === 'banner' && pack.removable)).toBe(true);
     expect(rings.every((pack) => pack.usage?.kind === 'free' && pack.usage.surfaces.join() === 'avatar' && !pack.installedByDefault)).toBe(true);
     expect([...rings, ...frames].every((pack) => Object.keys(pack.names).length === 7)).toBe(true);
   });
@@ -87,11 +93,26 @@ describe('registres d’apparence générés', () => {
       return [...(contract.designs ?? []), ...(contract.rings ?? [])].flatMap((item) => (item.lottie ? [item.lottie] : []));
     });
 
-    expect(lottieRefs.map((ref) => ref.src).sort()).toEqual(['b19ebab0f4cfeed8.json', 'cad11fe66d4fc9ec.json', 'ec52a7f12af8a193.json']);
+    expect(lottieRefs.map((ref) => ref.src).sort()).toEqual(['5aff839c02a1cfcb.json', 'b19ebab0f4cfeed8.json', 'ec52a7f12af8a193.json']);
     lottieRefs.forEach((ref) => {
       const path = join(ASSETS, ref.src);
       expect(createHash('sha256').update(readFileSync(path)).digest('hex')).toBe(ref.sha256);
       expect(index.isServedAsset(ref.src)).toBe(true);
+    });
+  });
+
+  it('les bannières redessinées (#11165) gardent servis le contrat et la couche d’avant : un client qui les a embarqués les lit encore', () => {
+    ['d4f06b1f24165674.json', '8d457c88b17f07a9.json', 'cad11fe66d4fc9ec.json', 'c23615594f604150.webp'].forEach((src) => {
+      expect(existsSync(join(ASSETS, src))).toBe(true);
+      expect(index.isServedAsset(src)).toBe(true);
+    });
+  });
+
+  it('le contrat servi de chaque pack de bannières EST le pack du catalogue partagé, dessin pour dessin', () => {
+    const source = JSON.parse(readFileSync(join(DESIGN, 'appearance/banners/designs.json'), 'utf8')) as { packs: { slug: string; designs: unknown[] }[] };
+    index.entries('banner').forEach((entry) => {
+      const contract = JSON.parse(readFileSync(join(ASSETS, entry.contract.src), 'utf8')) as { designs: unknown[] };
+      expect(contract.designs).toEqual(source.packs.find((pack) => pack.slug === entry.slug)?.designs);
     });
   });
 

@@ -13,7 +13,7 @@ final class OutboxPendingIndicator: Sendable {
     private let countSubject = SendableCurrentValueSubject<Int>(0)
     private let nearCapacitySubject = SendableCurrentValueSubject<Bool>(false)
     private let uiItemsSubject = SendableCurrentValueSubject<[OutboxUIItem]>([])
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+    private let logger = MeeshyLog.logger(.offlinequeue, subsystem: .legacySDK)
 
     /// Cap on the number of `OutboxUIItem` snapshots surfaced through the
     /// publisher. The pill UI only renders the head of the queue; an unbounded

@@ -61,7 +61,7 @@ struct ConversationVideoSceneEditor: View {
 /// droite. « Terminé » rend la pièce retouchée ; « Abandonner » la retire.
 /// Le média choisi ne repart pas en galerie : il y est déjà.
 struct ConversationPieceRetouch: View {
-    let piece: ComposerRetouchPiece
+    let source: ConversationRetouchSource
     let onDone: (ComposerReturnedMedia) -> Void
     let onRemove: () -> Void
     let onCancel: () -> Void
@@ -72,7 +72,14 @@ struct ConversationPieceRetouch: View {
 
     init(piece: ComposerRetouchPiece, onDone: @escaping (ComposerReturnedMedia) -> Void,
          onRemove: @escaping () -> Void, onCancel: @escaping () -> Void) {
-        self.piece = piece
+        self.init(source: .piece(piece), onDone: onDone, onRemove: onRemove, onCancel: onCancel)
+    }
+
+    /// Un média de la bande des récents, retouché AVANT la pose : rien n'est
+    /// encore au message, « Abandonner » referme simplement.
+    init(source: ConversationRetouchSource, onDone: @escaping (ComposerReturnedMedia) -> Void,
+         onRemove: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        self.source = source
         self.onDone = onDone
         self.onRemove = onRemove
         self.onCancel = onCancel
@@ -92,7 +99,7 @@ struct ConversationPieceRetouch: View {
                 .anchorPreference(key: ComposerSceneCameraFrameKey.self, value: .bounds) { $0 }
         }
         .task {
-            guard await ConversationPieceRetouchOpening.open(piece, in: session) else { return close(removing: false) }
+            guard await ConversationPieceRetouchOpening.open(source, in: session) else { return close(removing: false) }
         }
         .adaptiveOnChange(of: session.phase.isEditing) { avant, apres in
             guard ConversationPieceRetouchOpening.abandoned(wasEditing: avant, isEditing: apres,
@@ -111,6 +118,14 @@ struct ConversationPieceRetouch: View {
         settled = true
         removing ? onRemove() : onCancel()
     }
+}
+
+/// Ce que la retouche ouvre (#11133, « un seul éditeur ») : une pièce déjà au
+/// message, ou un média des récents avant sa pose.
+enum ConversationRetouchSource {
+    case piece(ComposerRetouchPiece)
+    case image(UIImage)
+    case video(URL)
 }
 
 /// Les règles de la retouche d'une pièce (#11133), pures ou presque.
@@ -132,17 +147,30 @@ enum ConversationPieceRetouchOpening {
     /// La pièce entre en retouche. Une vidéo y entre par une COPIE : la retouche
     /// abandonnée efface son fichier, jamais celui de la pièce en attente.
     static func open(_ piece: ComposerRetouchPiece, in session: ComposerCaptureSession) async -> Bool {
-        switch piece.kind {
-        case .image:
+        await open(.piece(piece), in: session)
+    }
+
+    static func open(_ source: ConversationRetouchSource, in session: ComposerCaptureSession) async -> Bool {
+        switch source {
+        case .piece(let piece) where piece.kind == .image:
             guard let image = await ConversationImageRetouche.loadSource(fileURL: piece.fileURL) else { return false }
             session.beginEditing(photo: image)
-        case .video:
-            let copie = FileManager.default.temporaryDirectory
-                .appendingPathComponent("retouche-\(UUID().uuidString).\(piece.fileURL.pathExtension)")
-            guard (try? FileManager.default.copyItem(at: piece.fileURL, to: copie)) != nil else { return false }
+        case .piece(let piece):
+            guard let copie = copy(piece.fileURL) else { return false }
+            await session.beginEditing(video: copie)
+        case .image(let image):
+            session.beginEditing(photo: image)
+        case .video(let url):
+            guard let copie = copy(url) else { return false }
             await session.beginEditing(video: copie)
         }
         return session.phase.isEditing
+    }
+
+    private static func copy(_ url: URL) -> URL? {
+        let copie = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retouche-\(UUID().uuidString).\(url.pathExtension)")
+        return (try? FileManager.default.copyItem(at: url, to: copie)) != nil ? copie : nil
     }
 
     /// La retouche quittée sans rien remettre — « Abandonner » : la pièce part.
@@ -151,29 +179,6 @@ enum ConversationPieceRetouchOpening {
     }
 }
 
-/// **« Éditer » sur une pièce en attente** (#9126) : TOUTES les pièces du
-/// message, une scène chacune, ouvertes sur la pièce touchée ; « Terminé » rend
-/// chaque scène retouchée à sa pièce, les autres restent telles quelles.
-struct ConversationRetouchSeriesEditor: View {
-    let series: ConversationRetouchSeries
-    let onDone: ([ComposerRetouchedPiece]) -> Void
-    let onCancel: () -> Void
-
-    var body: some View {
-        MeeshyComposerHost(
-            intent: ComposerIntent(origin: .conversationDraftMedia(staged: true)),
-            initialVisibility: "PUBLIC",
-            onPublishAllInBackground: { _, _, _, _, _, _, _, _, _, _, _, _, _ in false },
-            onPublishDocument: { _ in false },
-            moodSeed: nil,
-            mediaSeed: nil,
-            onPreview: { _, _, _, _, _ in },
-            onDismiss: onCancel,
-            retouchSeries: series.seed,
-            onReturnSeries: onDone
-        )
-    }
-}
 
 /// Le meuble monté pour une porte du fil : il ne publie jamais.
 private struct ConversationSceneHost: View {
@@ -197,51 +202,6 @@ private struct ConversationSceneHost: View {
     }
 }
 
-/// **Les pièces du message, prêtes pour la scène** (#9126). Une image part de
-/// son fichier borné à 2 048 px (#8524), écrit en temporaire et PURGÉ quand la
-/// retouche se ferme ; une vidéo part de son fichier, que la pose copie déjà.
-final class ConversationRetouchSeries: Identifiable {
-    let id = UUID()
-    let seed: ComposerRetouchSeed
-    private let temporaires: [URL]
-
-    private init(seed: ComposerRetouchSeed, temporaires: [URL]) {
-        self.seed = seed
-        self.temporaires = temporaires
-    }
-
-    /// `nil` quand la pièce touchée ne peut pas s'ouvrir — on n'ouvre pas les
-    /// autres à sa place.
-    static func prepare(_ candidates: [ComposerRetouchPiece], focusId: String) async -> ConversationRetouchSeries? {
-        guard let focus = candidates.firstIndex(where: { $0.attachmentId == focusId }) else { return nil }
-        let fenetre = candidates[ComposerRetouchSeries.window(count: candidates.count, focus: focus)]
-        var pieces: [ComposerRetouchPiece] = []
-        var temporaires: [URL] = []
-        for piece in fenetre {
-            guard piece.kind == .image else { pieces.append(piece); continue }
-            guard let image = await ConversationImageRetouche.loadSource(fileURL: piece.fileURL),
-                  let data = image.jpegData(compressionQuality: 0.92) else { continue }
-            let url = FileManager.default.temporaryDirectory
-                .appendingPathComponent("retouche-\(UUID().uuidString).jpg")
-            guard (try? data.write(to: url)) != nil else { continue }
-            temporaires.append(url)
-            pieces.append(ComposerRetouchPiece(attachmentId: piece.attachmentId, fileURL: url,
-                                               mimeType: "image/jpeg", kind: .image))
-        }
-        guard pieces.contains(where: { $0.attachmentId == focusId }) else {
-            temporaires.forEach { try? FileManager.default.removeItem(at: $0) }
-            return nil
-        }
-        return ConversationRetouchSeries(seed: ComposerRetouchSeed(pieces: pieces, focusId: focusId),
-                                         temporaires: temporaires)
-    }
-
-    // Sous l'isolation MainActor par défaut, la deinit synthétisée est isolée
-    // et double-libère sur iOS 26.1 (`MainActorDeinitSourceGuardTests`).
-    nonisolated deinit {
-        for url in temporaires { try? FileManager.default.removeItem(at: url) }
-    }
-}
 
 /// **La graine d'une retouche VIDÉO** (#9124) : la copie sous la convention du
 /// composer (`StoryComposerSeed.video(copying:)`), PURGÉE à la fermeture — sauf

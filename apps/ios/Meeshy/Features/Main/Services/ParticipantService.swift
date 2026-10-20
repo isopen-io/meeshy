@@ -6,7 +6,7 @@ actor ParticipantService {
     static let shared = ParticipantService()
 
     private let apiClient: any APIClientProviding
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "participant-service")
+    private let logger = MeeshyLog.logger(.participantService)
     private let pageSize = 30
 
     private var paginationState: [String: PaginationState] = [:]
@@ -182,5 +182,5 @@ actor ParticipantService {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let participants = Logger(subsystem: "me.meeshy.app", category: "participants")
+    nonisolated static let participants = MeeshyLog.logger(.participants)
 }

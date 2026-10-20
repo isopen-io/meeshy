@@ -4,8 +4,9 @@ import Foundation
 import GRDB
 @_spi(AccountStore) import MeeshySDK
 import os
+import MeeshySDK
 
-private nonisolated let storeSessionLogger = Logger(subsystem: "me.meeshy.app", category: "message-store-session")
+private nonisolated let storeSessionLogger = MeeshyLog.logger(.messageStoreSession)
 
 /// La base locale d'UN compte, ouverte (#8656).
 ///

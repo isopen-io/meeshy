@@ -207,6 +207,49 @@ final class ComposerEditToolsTests: XCTestCase {
                       "une retouche se fait même sans accès à la caméra")
     }
 
+    /// **Un outil touché est CET outil, et il n'existe qu'une fois** (recette
+    /// iPhone 2026-10-20 : Couper et Son s'allumaient seuls, toucher Couper
+    /// éteignait Son, toucher Son allumait Recadrer). Le rail ne doit porter
+    /// qu'UNE instance de chaque outil — une copie fantôme décalée prend les
+    /// touchers de sa voisine.
+    func test_eachEditTool_isRenderedOnce_andActivatingItTogglesItAlone() async {
+        let (session, _) = await videoSession()
+        let ecran = RenderedScreen(ComposerCaptureBottomRow(session: session, context: session.gestureContext)
+                                    .frame(width: 440),
+                                   size: CGSize(width: 440, height: 400))
+        defer { ecran.dismount() }
+        XCTAssertEqual(session.activeEditTools, [], "aucun outil ouvert à l'entrée")
+        for outil in session.editTools {
+            let nom = ComposerCaptureCopy.editToolName(outil)
+            let noeuds = ecran.nodes.filter { $0.label == nom }
+            XCTAssertEqual(noeuds.count, 1, "« \(nom) » est rendu une seule fois : \(ecran.labels)")
+        }
+        XCTAssertEqual(session.activeEditTools, [], "monter le rail n'allume rien")
+    }
+
+    /// **« Un seul éditeur » vaut aussi pour la bande des récents** (porteur
+    /// 2026-10-20) : une image ou une vidéo récente se retouche avant sa pose,
+    /// dans la conversation comme dans un commentaire.
+    func test_11133_aRecentImage_opensInTheCaptureRetouch_beforeItIsStaged() async {
+        let session = ConversationPieceRetouchOpening.session(gallery: MockComposerGallery())
+        let image = UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400))
+        let ouverte = await ConversationPieceRetouchOpening.open(.image(image), in: session)
+        XCTAssertTrue(ouverte)
+        XCTAssertEqual(session.phase, .editing(.photo))
+        XCTAssertEqual(session.activeEditTools, [])
+    }
+
+    func test_11133_recentMediaEdits_openTheCaptureRetouch_inConversationAndComments() throws {
+        let couches = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
+        let commentaires = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/CommentSceneRetouch.swift")
+        for code in [couches, commentaires] {
+            XCTAssertFalse(code.contains("ConversationImageSceneEditor("), "plus de scène pour une image récente")
+            XCTAssertFalse(code.contains("ConversationVideoSceneEditor("), "plus de scène pour une vidéo récente")
+            XCTAssertTrue(code.contains("ConversationPieceRetouch(source: .image("))
+            XCTAssertTrue(code.contains("ConversationPieceRetouch(source: .video("))
+        }
+    }
+
     private static func settles(_ condition: () -> Bool) -> Bool {
         let fin = Date().addingTimeInterval(3)
         while Date() < fin {

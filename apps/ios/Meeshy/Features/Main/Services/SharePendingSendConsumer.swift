@@ -239,7 +239,7 @@ final class SharePendingSendConsumer {
     nonisolated static let orphanMediaGracePeriod: TimeInterval = 3_600
 
     private let queue: OfflineMessageQueueing
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "share-consumer")
+    private let logger = MeeshyLog.logger(.shareConsumer)
 
     init(queue: OfflineMessageQueueing = OfflineQueue.shared) {
         self.queue = queue

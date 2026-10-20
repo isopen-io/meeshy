@@ -4,8 +4,8 @@ import Combine
 import MeeshySDK
 import os
 
-nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "voip-push")
-nonisolated private let perfLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+nonisolated private let logger = MeeshyLog.logger(.voipPush)
+nonisolated private let perfLogger = MeeshyLog.logger(.calls)
 
 /// G4c — injectable seam around the `/users/register-device-token` POST so
 /// the failure→retry policy is unit-testable without `APIClient.shared`.
@@ -552,5 +552,5 @@ extension VoIPPushManager {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let voipPush = Logger(subsystem: "me.meeshy.app", category: "voip-push")
+    nonisolated static let voipPush = MeeshyLog.logger(.voipPush)
 }

@@ -4,7 +4,7 @@ import Combine
 import MeeshySDK
 import os
 
-private nonisolated let logger = Logger(subsystem: "me.meeshy.app", category: "push")
+private nonisolated let logger = MeeshyLog.logger(.push)
 
 // MARK: - Injection seams
 

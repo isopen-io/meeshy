@@ -13,7 +13,8 @@ describe('le catalogue embarqué du décor de profil', () => {
     const styles = ['haussmannien', 'arabe', 'grec', 'ancestral', 'technologique', 'rituel', 'celte'];
     expect(BUILTIN_BANNER_FRAME_PACKS.map((pack) => pack.slug)).toEqual(styles.map((style) => `cadres-${style}`));
     expect(BUILTIN_BANNER_FRAME_PACKS.map((pack) => pack.items.map((item) => item.key))).toEqual(styles.map((style) => [style, `${style}-anime`]));
-    expect(BUILTIN_BANNER_FRAME_PACKS.every((pack) => !pack.installedByDefault && pack.removable)).toBe(true);
+    expect(BUILTIN_BANNER_FRAME_PACKS.every((pack) => pack.removable)).toBe(true);
+    expect(BUILTIN_BANNER_FRAME_PACKS.filter((pack) => pack.installedByDefault).map((pack) => pack.slug)).toEqual(['cadres-haussmannien', 'cadres-ancestral']);
     expect(builtinBannerFrameDesign({ pack: 'cadres-celte', item: 'celte-anime' })?.motion?.length).toBeGreaterThan(0);
     expect(builtinBannerFrameDesign({ pack: 'cadres-celte', item: 'grec' })).toBeNull();
   });

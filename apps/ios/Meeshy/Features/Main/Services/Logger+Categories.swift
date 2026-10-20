@@ -1,13 +1,14 @@
 import os
+import MeeshySDK
 
 extension Logger {
-    nonisolated static let messages = Logger(subsystem: "me.meeshy.app", category: "messages")
-    nonisolated static let socket = Logger(subsystem: "me.meeshy.app", category: "socket")
-    nonisolated static let e2ee = Logger(subsystem: "me.meeshy.app", category: "e2ee")
-    nonisolated static let crash = Logger(subsystem: "me.meeshy.app", category: "crash")
-    nonisolated static let network = Logger(subsystem: "me.meeshy.app", category: "network")
-    nonisolated static let stories = Logger(subsystem: "me.meeshy.app", category: "stories")
-    nonisolated static let navigation = Logger(subsystem: "me.meeshy.app", category: "navigation")
-    nonisolated static let settings = Logger(subsystem: "me.meeshy.app", category: "settings")
-    nonisolated static let webrtc = Logger(subsystem: "me.meeshy.app", category: "webrtc")
+    nonisolated static let messages = MeeshyLog.logger(.messages)
+    nonisolated static let socket = MeeshyLog.logger(.socket)
+    nonisolated static let e2ee = MeeshyLog.logger(.e2ee)
+    nonisolated static let crash = MeeshyLog.logger(.crash)
+    nonisolated static let network = MeeshyLog.logger(.network)
+    nonisolated static let stories = MeeshyLog.logger(.stories)
+    nonisolated static let navigation = MeeshyLog.logger(.navigation)
+    nonisolated static let settings = MeeshyLog.logger(.settings)
+    nonisolated static let webrtc = MeeshyLog.logger(.webrtc)
 }

@@ -140,6 +140,21 @@ describe('notifyContentRemoved — la notification à l’auteur', () => {
     expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({ title }));
   });
 
+  it('sans motif (rang souverain), aucune ligne « Motif » ni clé reason', async () => {
+    const notifications = buildNotifier();
+
+    await notifyContentRemoved({ prisma: buildPrisma() as never, notifications }, {
+      authorUserId: AUTHOR,
+      contentType: 'post',
+      contentId: 'p1',
+      postId: 'p1',
+    });
+
+    const [call] = notifications.createNotification.mock.calls[0] as [{ content: string; metadata: Record<string, unknown> }];
+    expect(call.content).toBe('');
+    expect(call.metadata).toEqual({ contentType: 'post', contentId: 'p1', postId: 'p1' });
+  });
+
   it('ne part pas sans auteur inscrit (expéditeur anonyme)', async () => {
     const notifications = buildNotifier();
 
