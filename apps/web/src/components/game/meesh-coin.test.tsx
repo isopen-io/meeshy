@@ -176,6 +176,7 @@ describe('MeeshCoin — les matières', () => {
       expect(html).toContain('-p-coin-gold)');
       expect(html).toContain('-p-coin-gold-in)');
       expect(html).not.toContain('coin-silver');
+      expect(html).not.toContain('var(--game-rim)');
     }
   });
 

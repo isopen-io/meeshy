@@ -11,6 +11,7 @@ import {
   starPath,
   sunburstRays,
   type BeadRing,
+  type CoinFlute,
   type CoinSeparator,
 } from '@/lib/game/coin-geometry';
 import { paintUrl, tokenVar } from '@/lib/game/materials';
@@ -159,13 +160,10 @@ export function Sparkles() {
   );
 }
 
-/** La tranche cannelée : pointillé du métal, ou IRISÉE au prisme (le spectre à contre-sens). */
-export function Flute({ uid, iris }: { readonly uid: string; readonly iris: boolean }) {
+/** La tranche cannelée : pointillé gris (argent), à l'encre de l'or (or), IRISÉE au prisme (le spectre à contre-sens). */
+export function Flute({ uid, kind, ink }: { readonly uid: string; readonly kind: CoinFlute } & Ink) {
   const { radius, width, dash } = COIN.body.flute;
   const props = { cx: CX, cy: CX, r: radius, fill: 'none', strokeDasharray: dash.join(' ') };
-  return iris ? (
-    <circle data-game-decor="iris" {...props} stroke={`url(#${uid}-iris)`} strokeWidth={width * 1.6} />
-  ) : (
-    <circle {...props} stroke={tokenVar('rim')} strokeWidth={width} />
-  );
+  if (kind === 'iris') return <circle data-game-decor="iris" {...props} stroke={`url(#${uid}-iris)`} strokeWidth={width * 1.6} />;
+  return <circle {...props} stroke={kind === 'ink' ? ink : tokenVar('rim')} strokeWidth={width} opacity={kind === 'ink' ? 0.7 : 1} />;
 }

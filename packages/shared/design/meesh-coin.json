@@ -29,13 +29,14 @@
     "signSize": 12,
     "ordinalSize": 6.6,
     "ordinalRise": 4.6,
-    "valueSize": 8.6,
+    "valueSize": 8,
     "valueGap": 1.4
   },
   "editions": {
     "silver": {
       "$doc": "SOBRE. De l'argent veiné d'un peu d'or ; Mee au revers.",
       "metal": "coin-silver",
+      "flute": "rim",
       "field": "coin-silver-in",
       "separator": "dot",
       "birds": [{ "bird": "meeJoy", "x": 35, "y": 31, "scale": 0.36, "flip": false }],
@@ -44,6 +45,7 @@
     "gold": {
       "$doc": "RAFFINÉ. De l'or pur, centre compris ; Meo au revers.",
       "metal": "coin-gold",
+      "flute": "ink",
       "field": "coin-gold-in",
       "separator": "star",
       "birds": [{ "bird": "meoOpen", "x": 35, "y": 31, "scale": 0.36, "flip": false }],
@@ -52,6 +54,7 @@
     "prism": {
       "$doc": "ROYAL. De l'or mêlé de diamant, la tranche irisée ; Mee et Meo face à face au revers, Meo retourné.",
       "metal": "prism",
+      "flute": "iris",
       "field": "coin-diamond-in",
       "separator": "dot",
       "birds": [
@@ -66,14 +69,13 @@
   },
   "decor": {
     "veins": {
-      "$doc": "Les veines d'or de l'argent : des traits fins, découpés au disque.",
-      "width": 0.55,
-      "opacity": 0.55,
+      "$doc": "Les veines d'or de l'argent : quelques fils longs et souples, découpés au disque, à peine plus clairs que le métal.",
+      "width": 0.4,
+      "opacity": 0.42,
       "paths": [
-        "M6 48 C20 41 32 53 46 48 C58 44 68 35 84 40 C94 43 102 38 114 33",
-        "M14 92 C28 86 40 95 54 90 C68 85 78 92 92 86 C100 83 106 76 114 74",
-        "M84 8 C78 18 88 26 82 36",
-        "M30 18 C36 24 32 30 38 36"
+        "M4 52 C22 46 36 56 54 50 C72 44 88 40 116 46",
+        "M10 86 C30 80 48 88 66 82 C84 76 98 80 112 72",
+        "M44 6 C50 18 46 28 56 38"
       ]
     },
     "beads": {
@@ -118,33 +120,33 @@
     "laurels": {
       "$doc": "Deux rameaux encadrent le numéro de l'or : la branche GAUCHE est décrite, la droite est son miroir autour de x = mirrorX. Une feuille : de (x, y) vers `angle`, longue de `length`, large de `width`.",
       "mirrorX": 60,
-      "stem": "M48.2 98.4 Q39.2 97.4 36.2 84.4",
+      "stem": "M43.2 96.8 Q34 95 31.8 81.5",
       "stemWidth": 0.7,
       "leaves": [
-        {"x": 46.13, "y": 97.99, "angle": 156.4, "length": 4.4, "width": 1.5},
-        {"x": 46.13, "y": 97.99, "angle": 236.4, "length": 4.4, "width": 1.5},
-        {"x": 43.05, "y": 96.53, "angle": 174.4, "length": 4.2, "width": 1.46},
-        {"x": 43.05, "y": 96.53, "angle": 254.4, "length": 4.2, "width": 1.46},
-        {"x": 40.46, "y": 94.12, "angle": 190.9, "length": 4.0, "width": 1.42},
-        {"x": 40.46, "y": 94.12, "angle": 270.9, "length": 4.0, "width": 1.42},
-        {"x": 38.35, "y": 90.74, "angle": 204.1, "length": 3.8, "width": 1.38},
-        {"x": 38.35, "y": 90.74, "angle": 284.1, "length": 3.8, "width": 1.38},
-        {"x": 36.2, "y": 84.4, "angle": 257.0, "length": 3.6, "width": 1.25}
+        {"x": 41.43, "y": 96.32, "angle": 159.3, "length": 4.4, "width": 1.5},
+        {"x": 41.43, "y": 96.32, "angle": 239.3, "length": 4.4, "width": 1.5},
+        {"x": 38.31, "y": 94.67, "angle": 176.8, "length": 4.2, "width": 1.46},
+        {"x": 38.31, "y": 94.67, "angle": 256.8, "length": 4.2, "width": 1.46},
+        {"x": 35.75, "y": 92.08, "angle": 193.3, "length": 4.0, "width": 1.42},
+        {"x": 35.75, "y": 92.08, "angle": 273.3, "length": 4.0, "width": 1.42},
+        {"x": 33.75, "y": 88.55, "angle": 206.7, "length": 3.8, "width": 1.38},
+        {"x": 33.75, "y": 88.55, "angle": 286.7, "length": 3.8, "width": 1.38},
+        {"x": 31.8, "y": 81.5, "angle": 260.7, "length": 3.6, "width": 1.25}
       ]
     },
     "crown": {
       "$doc": "La couronne royale qui coiffe Mee et Meo au revers du prisme : un bandeau, cinq fleurons, des joyaux.",
-      "body": "M49 41 L48 31.5 L53.5 35.5 L56.5 29.5 L60 33.5 L63.5 29.5 L66.5 35.5 L72 31.5 L71 41 Z",
-      "band": "M48.6 41 L71.4 41 L71.4 43.6 L48.6 43.6 Z",
+      "body": "M49 42.5 L48 33.0 L53.5 37.0 L56.5 31.0 L60 35.0 L63.5 31.0 L66.5 37.0 L72 33.0 L71 42.5 Z",
+      "band": "M48.6 42.5 L71.4 42.5 L71.4 45.1 L48.6 45.1 Z",
       "width": 0.5,
       "jewels": [
-        { "x": 48, "y": 31.5, "r": 0.9 },
-        { "x": 56.5, "y": 29.5, "r": 0.9 },
-        { "x": 63.5, "y": 29.5, "r": 0.9 },
-        { "x": 72, "y": 31.5, "r": 0.9 },
-        { "x": 60, "y": 42.3, "r": 1.05 },
-        { "x": 54, "y": 42.3, "r": 0.7 },
-        { "x": 66, "y": 42.3, "r": 0.7 }
+        { "x": 48, "y": 33.0, "r": 0.9 },
+        { "x": 56.5, "y": 31.0, "r": 0.9 },
+        { "x": 63.5, "y": 31.0, "r": 0.9 },
+        { "x": 72, "y": 33.0, "r": 0.9 },
+        { "x": 60, "y": 43.8, "r": 1.05 },
+        { "x": 54, "y": 43.8, "r": 0.7 },
+        { "x": 66, "y": 43.8, "r": 0.7 }
       ]
     },
     "sparkles": {

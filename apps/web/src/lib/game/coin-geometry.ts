@@ -15,12 +15,15 @@ import type { GamePaint } from './materials';
 export type CoinSide = 'obverse' | 'reverse';
 export type CoinDecor = 'veins' | 'beads' | 'rosette' | 'stars' | 'laurels' | 'iris' | 'cabochons' | 'sunburst' | 'crown' | 'sparkles';
 export type CoinSeparator = 'dot' | 'star';
+/** La tranche cannelée : gris de tranche (argent), encre de l'or (or), spectre à contre-sens (prisme). */
+export type CoinFlute = 'rim' | 'ink' | 'iris';
 
 export type CoinBird = { readonly bird: GameBirdKey; readonly x: number; readonly y: number; readonly scale: number; readonly flip: boolean };
 
 export type CoinEdition = {
   readonly metal: GamePaint;
   readonly field: GamePaint;
+  readonly flute: CoinFlute;
   readonly separator: CoinSeparator;
   readonly birds: readonly CoinBird[];
   readonly decor: Readonly<Record<CoinSide, readonly CoinDecor[]>>;

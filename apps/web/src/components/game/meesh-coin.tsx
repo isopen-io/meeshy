@@ -108,7 +108,7 @@ export function MeeshCoin({ side, size, edition = 'silver', number, year }: Coin
         {side === 'reverse' ? <BirdEngraveDefs uid={uid} /> : null}
       </defs>
       <circle cx={C} cy={C} r={COIN.body.radius} fill={paintUrl(uid, spec.metal)} />
-      <Flute uid={uid} iris={has('iris')} />
+      <Flute uid={uid} kind={spec.flute} ink={ink} />
       {has('beads') ? <Beads rings={royal ? BEADS.prism : BEADS.gold} fill={royal ? tokenVar('glint') : ink} opacity={royal ? 0.9 : 0.55} /> : null}
       {has('cabochons') ? <Cabochons uid={uid} ink={ink} /> : null}
       <circle cx={C} cy={C} r={field.radius} fill={paintUrl(uid, spec.field)} stroke={tokenVar('glint')} strokeWidth={field.stroke} />
