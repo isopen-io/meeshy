@@ -43,9 +43,7 @@ struct StoryCommentThread: View {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(MeeshyFont.relative(9, weight: .bold))
                     let remaining = max(0, comment.replies - 2)
-                    Text(isExpanded
-                         ? "Masquer"
-                         : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
+                    Text(StoryCommentThread.toggleLabel(isExpanded: isExpanded, remaining: remaining))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 }
                 .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
@@ -91,5 +89,14 @@ struct StoryCommentThread: View {
                 .accessibilityLabel(String(localized: "a11y.story.comments.loadMoreReplies", defaultValue: "Charger plus de réponses", bundle: .main))
             }
         }
+    }
+}
+
+extension StoryCommentThread {
+    static func toggleLabel(isExpanded: Bool, remaining: Int, bundle: Bundle = .main, locale: Locale = .current) -> String {
+        guard !isExpanded else {
+            return String(localized: "common.dismiss", defaultValue: "Masquer", bundle: bundle, locale: locale)
+        }
+        return LoadMoreRepliesCell.labelText(remaining: remaining, bundle: bundle, locale: locale)
     }
 }
