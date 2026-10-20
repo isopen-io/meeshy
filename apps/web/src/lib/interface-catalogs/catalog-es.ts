@@ -40,6 +40,7 @@ import esDownload from './catalog-es-download';
 import esPhonePrompt from './catalog-es-phone-prompt';
 import esUserProfile from './catalog-es-user-profile';
 import esContentRefused from './catalog-es-content-refused';
+import esContentRemoval from './catalog-es-content-removal';
 import esPublicEntry from './catalog-es-public-entry';
 import esThreadSearch from './catalog-es-thread-search';
 
@@ -1072,6 +1073,7 @@ const es = {
   ...esContactDiscovery,
   ...esUserProfile,
   ...esContentRefused,
+  ...esContentRemoval,
   ...esPublicEntry,
   ...esThreadSearch,
 } satisfies InterfaceCatalog;

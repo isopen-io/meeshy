@@ -51,6 +51,7 @@ import frDownload from './catalog-fr-download';
 import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
 import frContentRefused from './catalog-fr-content-refused';
+import frContentRemoval from './catalog-fr-content-removal';
 import frPublicEntry from './catalog-fr-public-entry';
 import frThreadSearch from './catalog-fr-thread-search';
 
@@ -1092,6 +1093,7 @@ const fr = {
   ...frContactDiscovery,
   ...frUserProfile,
   ...frContentRefused,
+  ...frContentRemoval,
   ...frPublicEntry,
   ...frThreadSearch,
 } as const;

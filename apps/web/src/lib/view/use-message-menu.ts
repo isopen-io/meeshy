@@ -138,6 +138,8 @@ export function useMessageMenu(params: {
    * `use-live-announcer.ts`).
    */
   readonly announce: (message: string) => void;
+  /** LE LECTEUR MODÈRE CETTE CONVERSATION (#11150, `moderatesConversation`) : « Retirer » s'offre sur le message d'un autre. */
+  readonly moderates?: boolean;
   /** INJECTABLES pour les témoins — le cache et le transport de l'application par défaut. */
   readonly queryClient?: QueryClient;
   readonly transport?: PieceMenuTransport;
@@ -225,7 +227,8 @@ export function useMessageMenu(params: {
    * offerts à « Plus… » pour un message et à la barre pour la sélection. Le
    * geste parti, la sélection se termine.
    */
-  const deleteViewer = useMemo(() => ({ id: viewerId, hasAccount }), [viewerId, hasAccount]);
+  const moderates = params.moderates === true;
+  const deleteViewer = useMemo(() => ({ id: viewerId, hasAccount, moderates }), [viewerId, hasAccount, moderates]);
   const endSelection = useCallback(() => setSelection(null), []);
   const deletion = useMessageDelete({
     conversationId,

@@ -39,6 +39,7 @@ function buildPrisma(members: Record<string, { id: string; role: string; globalR
         where.id === CAPTURED ? { senderId: AUTHOR_PARTICIPANT } : null,
       ),
     },
+    conversation: { findUnique: jest.fn<any>(async () => ({ type: 'group' })) },
   };
 }
 

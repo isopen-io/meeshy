@@ -29,8 +29,10 @@ import type { PendingAttachment } from '@/lib/send/attachments';
 import type { CommentsComposerPresence } from '@/lib/view/comments-zone';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { CommentReplyTarget } from '@/lib/view/comment-reply-target';
+import { moderatesPlatformContent } from '@/lib/view/content-removal';
 import { useMentionSource } from '@/lib/view/mention-source';
 import { useMinute } from '@/lib/view/use-minute';
+import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useViewer } from '@/lib/view/use-viewer';
 import type { CommentImageRequest } from '@/routes/comment-image-sheet';
@@ -363,6 +365,7 @@ export function CommentThread({
   /* UN VISITEUR ANONYME N'A AUCUN GESTE — les trois routes exigent un
      `registeredUser` (`comments.ts`), exactement comme le composeur. */
   const canWrite = viewer.id !== null && !viewer.isAnonymous;
+  const moderates = moderatesPlatformContent(useServedGlobalRole());
   const viewerId = viewer.id ?? '';
   const [composerFolded, setComposerFolded] = useState(false);
   const presence: CommentsComposerPresence = !canWrite ? 'absent' : composerFolded ? 'folded' : 'open';
@@ -381,6 +384,12 @@ export function CommentThread({
               void runGesture({ kind: 'like', postId, commentId, on, ...(parentId === undefined ? {} : { parentId }) }),
             onDelete: (commentId, parentId) =>
               void runGesture({ kind: 'delete', postId, commentId, ...(parentId === undefined ? {} : { parentId }) }),
+            ...(moderates
+              ? {
+                  onRemove: (commentId: string, reason: string, parentId?: string) =>
+                    void runGesture({ kind: 'delete', postId, commentId, reason, ...(parentId === undefined ? {} : { parentId }) }),
+                }
+              : {}),
             onEdit: (commentId, content, parentId) =>
               void runGesture({
                 kind: 'edit',
@@ -417,7 +426,7 @@ export function CommentThread({
           }
         : undefined,
     /* `comments` et le prisme du lecteur : « Imager » cite la racine et lit ses réponses dans CE texte-là, jamais celui d’un rendu passé. */
-    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages, viewer.displayName, composingPost, waiting, replay],
+    [canWrite, moderates, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages, viewer.displayName, composingPost, waiting, replay],
   );
 
   const renderReplies = useCallback(
