@@ -1,6 +1,7 @@
 import XCTest
-@testable import MeeshySDK
-@testable import MeeshyUI
+import MeeshySDK
+import MeeshyUI
+@testable import Meeshy
 
 /// La vitrine (#8855) capture l'accueil d'un lien une fois son aperçu SERVI (#8921).
 final class JoinFlowViewModelVitrineTests: XCTestCase {
