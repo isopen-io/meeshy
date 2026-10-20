@@ -25,8 +25,13 @@ nonisolated final class DeviceRemoteTests: XCTestCase {
         // termine pas la session : l'échec se rapporte et la commande suivante
         // s'exécute.
         continueAfterFailure = true
-        let app = XCUIApplication()
-        app.launch()
+        // Une app qui s'anime sans cesse n'est jamais « au repos » et XCUITest
+        // attend alors sans fin avant chaque geste : `IPHONE_REMOTE_SPRINGBOARD=1`
+        // (passé en `TEST_RUNNER_IPHONE_REMOTE_SPRINGBOARD=1`) vise le tremplin,
+        // qui touche l'écran par coordonnées sans attendre Meeshy, déjà lancée.
+        let viaSpringboard = ProcessInfo.processInfo.environment["IPHONE_REMOTE_SPRINGBOARD"] == "1"
+        let app = viaSpringboard ? XCUIApplication(bundleIdentifier: "com.apple.springboard") : XCUIApplication()
+        if !viaSpringboard { app.launch() }
         let server = DeviceRemoteServer()
         try server.start(port: Self.port)
         var serving = true

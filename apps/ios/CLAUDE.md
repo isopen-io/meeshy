@@ -108,6 +108,8 @@ $R stop
 - `start` **remplace l'app de l'iPhone** par la build du dépôt (Debug), sur l'environnement que l'app avait déjà choisi (staging ou production). En production, n'écrire qu'aux comptes de test convenus avec le porteur.
 - Ce qui n'a pas d'identifiant d'accessibilité ne se touche que par coordonnées, et un décalage de mise en page fait tomber le toucher à côté. Poser un `accessibilityIdentifier` sur tout ce qu'une recette doit atteindre (#10683).
 - Un NSLog temporaire (préfixe `RECETTE`) lu par `$R log RECETTE` mesure ce que l'écran ne montre pas. Il ne se commite jamais.
+- **iPhone relié en Wi-Fi** (`devicectl device info details` → `Transport Type: localNetwork`) : `iproxy` ne passe que par USB. Viser le tunnel CoreDevice avec `IPHONE_REMOTE_HOST=<Tunnel IP Address>` (l'adresse change à chaque reconnexion).
+- **Meeshy s'anime sans cesse**, donc XCUITest attend en vain qu'elle soit « au repos » avant chaque geste. Lancer le serveur avec `TEST_RUNNER_IPHONE_REMOTE_SPRINGBOARD=1` : les touchers passent par le tremplin, par coordonnées (`xy`, `dxy`, `press`, `swipe`). Dans ce mode, `url` fait tomber le serveur : ouvrir les liens avec `xcrun devicectl device process launch --payload-url <lien> me.meeshy.app`, et capturer l'écran avec `xcrun devicectl device capture screenshot`.
 
 ## Naming Conventions
 
