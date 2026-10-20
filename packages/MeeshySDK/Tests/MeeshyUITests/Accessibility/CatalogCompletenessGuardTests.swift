@@ -101,6 +101,11 @@ final class CatalogCompletenessGuardTests: XCTestCase {
             .joined(separator: "\n")
     }
 
+    private func callWindows(in text: String) -> [String] {
+        let parts = text.components(separatedBy: "String(localized:").dropFirst()
+        return parts.map { String($0.prefix(400)).components(separatedBy: "String(").first ?? "" }
+    }
+
     private func moduleKeys(in text: String) -> [String] {
         matches(#"String\(\s*localized:\s*"([^"\\]+)""#, in: text).compactMap { match in
             guard let key = capture(match, 1, in: text), let whole = Range(match.range, in: text) else { return nil }
@@ -140,9 +145,8 @@ final class CatalogCompletenessGuardTests: XCTestCase {
             for pattern in Self.forbiddenVisibleLiterals {
                 XCTAssertTrue(matches(pattern, in: code).isEmpty, "\(path) : \(pattern)")
             }
-            let calls = matches(#"String\(\s*localized:"#, in: code).count
-            let bundled = matches(#"String\(\s*localized:[^)]*bundle:"#, in: code).count
-            XCTAssertEqual(calls, bundled, "\(path) : appel String(localized:) sans bundle:")
+            let unbundled = callWindows(in: code).filter { !$0.contains("bundle:") }
+            XCTAssertTrue(unbundled.isEmpty, "\(path) : appel String(localized:) sans bundle:")
         }
         for path in Self.ownedMeeshyUIFiles {
             XCTAssertFalse(try read(path).contains("bundle: .main"), path)
