@@ -45,7 +45,10 @@ import java.util.Map;
  * - une CORRECTION (message edite) n'est affichee que si elle remplace sa
  *   propre banniere ({@link NotificationCorrectionRules}, #10989) ;
  * - une banniere que le systeme ne montrera pas (notifications coupees, canal
- *   desactive) n'est notee que « recue » (#11054).
+ *   desactive) n'est notee que « recue » (#11054) ;
+ * - le total non lu que porte chaque push (`unreadCount`) redessine les
+ *   widgets, banniere retenue ou non, comme `poserBadge` (`sw-push.js`) et la
+ *   NSE iOS (#11080).
  *
  * Le plugin est atteint par reflexion, pas par heritage : `cap sync` ne
  * synchronise que `dependencies` et `devDependencies`, et le plugin est
@@ -90,6 +93,11 @@ public class MeeshyMessagingService extends FirebaseMessagingService {
             } catch (RuntimeException failure) {
                 Log.w(TAG, "action d'ecoute non posee", failure);
             }
+        }
+        try {
+            WidgetStore.notePushedUnread(this, WidgetSnapshotRules.unreadOf(data));
+        } catch (RuntimeException failure) {
+            Log.w(TAG, "total non lu des widgets non note", failure);
         }
         try {
             acknowledgeDelivery(PushDeliveryReceipt.ofDisplayedByFcm(data, inForeground, CallShellStore.apiBase(this)));

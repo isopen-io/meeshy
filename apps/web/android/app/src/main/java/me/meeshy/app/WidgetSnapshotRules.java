@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -177,6 +178,26 @@ final class WidgetSnapshotRules {
             }
         }
         return new Snapshot(true, Math.max(0, snapshot.unread - dimmed), rows, snapshot.favorites);
+    }
+
+    /**
+     * #11080 — le total non lu qu'un push porte (`data.unreadCount`, D-L1),
+     * ou null : seul un entier positif ou nul compte, comme `poserBadge`
+     * (`sw-push.js`) et `updateSharedUnreadCount` (NSE iOS).
+     */
+    static Integer unreadOf(Map<String, String> data) {
+        String raw = data == null ? null : data.get("unreadCount");
+        if (raw == null || !raw.matches("\\d{1,9}")) return null;
+        return Integer.valueOf(raw);
+    }
+
+    /**
+     * Le total d'un push est plus recent que la derniere publication de la
+     * page, qui l'efface en republiant. Rien n'apparait sans instantane publie.
+     */
+    static Snapshot withPushedUnread(Snapshot snapshot, Integer pushed) {
+        if (!snapshot.published || pushed == null) return snapshot;
+        return new Snapshot(true, pushed, snapshot.conversations, snapshot.favorites);
     }
 
     /** Miroir de `QuickReplyWidgetView` : la premiere non lue, sinon la plus recente. */
