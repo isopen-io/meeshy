@@ -56,7 +56,7 @@ const chipsOf = (host: HTMLElement): readonly string[] => [...host.querySelector
 
 const ACCELERATED: Readonly<Record<InterfaceLanguage, string>> = {
   fr: '3 familles actives sur 7 jours, plus ton assise. Tes prochains gestes rapportent 3 fois plus.',
-  en: '3 active families over 7 days, plus your standing. Your next actions earn 3 times more.',
+  en: '3 active families over 7 days, plus your standing. Your next moves bring 3 times more.',
   es: '3 familias activas en 7 días, más tu base. Tus próximas acciones valen 3 veces más.',
   pt: '3 famílias ativas em 7 dias, mais sua base. Suas próximas ações valem 3 vezes mais.',
   de: '3 aktive Familien über 7 Tage, plus dein Bestand. Deine nächsten Aktionen bringen 3-mal mehr.',
@@ -66,7 +66,7 @@ const ACCELERATED: Readonly<Record<InterfaceLanguage, string>> = {
 
 const ACCELERATED_ONE: Readonly<Record<InterfaceLanguage, string>> = {
   fr: '1 famille active sur 7 jours. Tes prochains gestes rapportent 2 fois plus.',
-  en: '1 active family over 7 days. Your next actions earn 2 times more.',
+  en: '1 active family over 7 days. Your next moves bring 2 times more.',
   es: '1 familia activa en 7 días. Tus próximas acciones valen 2 veces más.',
   pt: '1 família ativa em 7 dias. Suas próximas ações valem 2 vezes mais.',
   de: '1 aktive Familie über 7 Tage. Deine nächsten Aktionen bringen 2-mal mehr.',
@@ -86,7 +86,7 @@ const HINT: Readonly<Record<InterfaceLanguage, string>> = {
 
 const EMPTY: Readonly<Record<InterfaceLanguage, string>> = {
   fr: 'Publie une story, un post, un réel ou lance une conversation : chaque famille tenue en même temps multiplie tes étincelles.',
-  en: 'Post a story, a post, a reel or start a conversation: every family you keep going at once multiplies your sparks.',
+  en: 'Post a story, a post, a reel or start a conversation: each family you keep going at once multiplies your sparks.',
   es: 'Publica una historia, una publicación, un reel o inicia una conversación: cada familia que mantienes a la vez multiplica tus chispas.',
   pt: 'Publique um story, um post, um reel ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica as suas faíscas.',
   de: 'Poste eine Story, einen Beitrag, ein Reel oder starte eine Unterhaltung: Jede Familie, die du gleichzeitig hältst, vervielfacht deine Funken.',

@@ -55,7 +55,7 @@ const ACCELERATED: Readonly<Record<InterfaceLanguage, string>> = {
 
 const AT_REST: Readonly<Record<InterfaceLanguage, string>> = {
   fr: 'Tes élans',
-  en: 'Your streaks in motion',
+  en: 'Your momentum',
   de: 'Dein Schwung',
   es: 'Tus impulsos',
   it: 'I tuoi slanci',
