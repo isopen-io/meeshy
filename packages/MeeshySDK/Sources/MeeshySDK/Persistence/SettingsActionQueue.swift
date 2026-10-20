@@ -221,7 +221,7 @@ public actor SettingsActionQueue {
             .sink { [weak self] _ in
                 guard let self else { return }
                 Task {
-                    try? await Task.sleep(for: .seconds(2))
+                    guard await cancellableSleep(for: QueueTiming.reconnectSettle) else { return }
                     await self.flushIfPossible()
                 }
             }

@@ -243,6 +243,8 @@ public final class StoryTimelineEngine {
             let asset: AVURLAsset
             do {
                 asset = try await loadAssetWithRetry(source: source)
+            } catch is CancellationError {
+                return
             } catch {
                 logger.error("StoryTimelineEngine asset load failed for \(clip.id): \(error.localizedDescription)")
                 onError?(StoryTimelineEngineError.assetLoadFailed(clipId: clip.id, reason: error.localizedDescription))
@@ -259,6 +261,8 @@ public final class StoryTimelineEngine {
                 let duration = CMTime(seconds: clip.duration ?? Double(project.slideDuration), preferredTimescale: 600)
                 let assetRange = CMTimeRange(start: .zero, duration: duration)
                 try compositionTrack?.insertTimeRange(assetRange, of: assetTrack, at: start)
+            } catch is CancellationError {
+                return
             } catch {
                 logger.error("StoryTimelineEngine insertion failed for \(clip.id): \(error.localizedDescription)")
                 onError?(StoryTimelineEngineError.assetLoadFailed(clipId: clip.id, reason: error.localizedDescription))
@@ -270,7 +274,7 @@ public final class StoryTimelineEngine {
         do {
             return try await source.loadAsset()
         } catch {
-            try? await Task.sleep(for: .milliseconds(500))
+            try await Task.sleep(for: .milliseconds(500))
             return try await source.loadAsset()
         }
     }

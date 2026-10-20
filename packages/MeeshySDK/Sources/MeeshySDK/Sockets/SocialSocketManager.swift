@@ -137,8 +137,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         let attempt = backoff.attempt
         Logger.socket.info("SocialSocket: backoff reconnect attempt=\(attempt) delay=\(delay, format: .fixed(precision: 2))s")
         reconnectTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(delay)) else { return }
             await MainActor.run { [weak self] in
                 guard let self, !self.isConnected else { return }
                 self.forceReconnect()

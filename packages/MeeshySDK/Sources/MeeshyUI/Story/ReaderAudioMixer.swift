@@ -721,7 +721,7 @@ public final class ReaderAudioMixer {
                                                      duration: duration, elapsed: elapsed)
                 live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : volume
                 if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { return }
-                try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
             }
         }
         if var stored = entries[entry.audioId] {
@@ -745,7 +745,7 @@ public final class ReaderAudioMixer {
         let task = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard self?.applyLoopEnvelope(audioId: audioId, epoch: epoch, cycle: cycle) == true else { return }
-                try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
             }
         }
         if var stored = entries[audioId] {
@@ -915,7 +915,7 @@ extension ReaderAudioMixer {
             let elapsed = Self.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: startHost)
             applyFadeGain(ReaderVolumeRamp.volume(from: 1, to: 0, duration: duration, elapsed: elapsed))
             if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { break }
-            try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+            guard await cancellableSleep(for: ReaderVolumeRamp.step) else { break }
         }
         guard playbackEpoch == epoch else { return }
         stop()

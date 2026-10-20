@@ -180,7 +180,7 @@ extension ReaderAudioMixer {
         let task = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard self?.applyBackgroundLoopEnvelope(epoch: epoch, cycle: cycle) == true else { return }
-                try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
             }
         }
         if var bg = backgroundEntry {
@@ -293,7 +293,7 @@ extension ReaderAudioMixer {
                                                     duration: duration, elapsed: elapsed)
                 live.player.volume = self.isMuted ? 0 : value
                 if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { return }
-                try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
             }
         }
         if var bg = backgroundEntry {

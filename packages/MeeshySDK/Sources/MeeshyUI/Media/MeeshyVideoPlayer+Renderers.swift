@@ -310,8 +310,7 @@ internal struct _FullscreenRenderer: View {
             return
         }
         guard !surfaceReady else { return }
-        try? await Task.sleep(for: Self.surfaceReadyFailsafe)
-        guard !Task.isCancelled else { return }
+        guard await cancellableSleep(for: Self.surfaceReadyFailsafe) else { return }
         surfaceReady = true
     }
 
@@ -642,8 +641,7 @@ internal struct _FullscreenRenderer: View {
 
     private func fadePlayPauseAfterDelay() async {
         guard let delay = playPauseFade.fadeDelay else { return }
-        try? await Task.sleep(for: .seconds(delay))
-        guard !Task.isCancelled else { return }
+        guard await cancellableSleep(for: .seconds(delay)) else { return }
         withAnimation(fadeAnimation) { playPauseFade = playPauseFade.fading() }
     }
 

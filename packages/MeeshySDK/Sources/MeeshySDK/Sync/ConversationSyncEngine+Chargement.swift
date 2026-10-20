@@ -26,7 +26,7 @@ extension ConversationSyncEngine {
     /// functions. Previously a single network blip silently dropped an
     /// entire page — `succeeded` flipped false and the user landed on a
     /// partial list with no recovery path.
-    private static func fetchPageWithRetry(
+    static func fetchPageWithRetry(
         via service: ConversationServiceProviding,
         offset: Int,
         limit: Int
@@ -38,7 +38,7 @@ extension ConversationSyncEngine {
             } catch {
                 lastError = error
                 if attempt < 2 {
-                    try? await Task.sleep(for: .seconds(1 << attempt))
+                    try await Task.sleep(for: .seconds(1 << attempt))
                 }
             }
         }

@@ -464,8 +464,8 @@ public final class AudioEditorController: ObservableObject {
 
         // Watchdog: a recognizer that never finishes is forced to fail.
         let watchdog = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(transcriptionTimeout))
-            if !Task.isCancelled { EdgeTranscriptionService.shared.cancel() }
+            guard await cancellableSleep(for: .seconds(transcriptionTimeout)) else { return }
+            EdgeTranscriptionService.shared.cancel()
         }
         defer { watchdog.cancel() }
 

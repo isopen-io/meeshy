@@ -222,8 +222,7 @@ public struct ConversationScrollControlsView: View {
                 showsLoadingNewer = false
                 return
             }
-            try? await Task.sleep(for: Self.loadingNewerSignalDelay)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: Self.loadingNewerSignalDelay) else { return }
             showsLoadingNewer = true
         }
     }
