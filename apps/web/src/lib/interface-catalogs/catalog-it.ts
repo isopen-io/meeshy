@@ -40,6 +40,7 @@ import itDownload from './catalog-it-download';
 import itPhonePrompt from './catalog-it-phone-prompt';
 import itUserProfile from './catalog-it-user-profile';
 import itContentRefused from './catalog-it-content-refused';
+import itContentRemoval from './catalog-it-content-removal';
 import itPublicEntry from './catalog-it-public-entry';
 import itThreadSearch from './catalog-it-thread-search';
 
@@ -1072,6 +1073,7 @@ const it = {
   ...itContactDiscovery,
   ...itUserProfile,
   ...itContentRefused,
+  ...itContentRemoval,
   ...itPublicEntry,
   ...itThreadSearch,
 } satisfies InterfaceCatalog;

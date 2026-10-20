@@ -1380,9 +1380,38 @@ describe('registerMessagesAdvancedRoutes', () => {
     const getDeleteMsgHandler = (f: any) =>
       getHandler(f, 'DELETE', '/conversations/:id/messages/:messageId');
 
+    beforeEach(() => {
+      prisma.conversation.findUnique.mockResolvedValue({ type: 'group', title: 'Les Amis' });
+    });
+
+    it('#11149 — un tiers sans motif reçoit 400 MODERATION_REASON_REQUIRED', async () => {
+      prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), sender: { id: PART_ID, userId: OTHER_USER_ID }, attachments: [] });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-mod', role: 'moderator', user: { role: 'USER' } });
+      prisma.message.update.mockClear();
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'ok' } }), reply);
+
+      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, expect.any(String), { code: 'MODERATION_REASON_REQUIRED' });
+      expect(prisma.message.update).not.toHaveBeenCalled();
+    });
+
+    it('#11149 — un tiers est refusé en conversation directe', async () => {
+      prisma.conversation.findUnique.mockResolvedValue({ type: 'direct', title: null });
+      prisma.message.findFirst.mockResolvedValue({ ...makeExistingMessage(), sender: { id: PART_ID, userId: OTHER_USER_ID }, attachments: [] });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-adm', role: 'admin', user: { role: 'ADMIN' } });
+      prisma.message.update.mockClear();
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Hors charte' } }), reply);
+
+      expect(mockSendForbidden).toHaveBeenCalled();
+      expect(prisma.message.update).not.toHaveBeenCalled();
+    });
+
     it('returns 404 when conversation not found', async () => {
       mockResolveConversationId.mockResolvedValue(null);
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1392,7 +1421,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
     it('returns 404 when message not found', async () => {
       prisma.message.findFirst.mockResolvedValue(null);
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1408,7 +1437,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.participant.findFirst.mockResolvedValue(null);
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1427,7 +1456,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1456,7 +1485,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.message.update.mockResolvedValue({});
 
       await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } }),
         makeReply()
       );
 
@@ -1483,7 +1512,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.message.update.mockResolvedValue({});
 
       await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } }),
         makeReply()
       );
 
@@ -1501,7 +1530,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.message.update.mockResolvedValue({});
 
       await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } }),
         makeReply()
       );
 
@@ -1529,7 +1558,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.message.update.mockResolvedValue({});
 
       await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } }),
         makeReply()
       );
 
@@ -1552,7 +1581,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.participant.findFirst.mockResolvedValue({ role: 'admin', user: { role: 'USER' } });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1570,7 +1599,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.participant.findFirst.mockResolvedValue({ role: 'moderator', user: { role: 'USER' } });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1588,7 +1617,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.user.findUnique.mockResolvedValue({ role: 'BIGBOSS' });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1604,7 +1633,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.participant.findFirst.mockResolvedValue({ role: 'member', user: { role: 'USER' } });
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1620,7 +1649,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1639,7 +1668,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1669,7 +1698,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.message.update.mockClear();
 
       await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } }),
         makeReply()
       );
 
@@ -1694,7 +1723,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.message.update.mockClear();
 
       await getDeleteMsgHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } }),
         makeReply()
       );
 
@@ -1721,7 +1750,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1738,7 +1767,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1759,7 +1788,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1783,7 +1812,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1806,7 +1835,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.participant.findFirst.mockResolvedValue({ user: { role: 'ADMIN' } });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -1817,7 +1846,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
     it('calls sendInternalError on outer error', async () => {
       prisma.message.findFirst.mockRejectedValue(new Error('DB fail'));
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -3143,6 +3172,10 @@ describe('registerMessagesAdvancedRoutes', () => {
     const getDeleteMsgHandler = (f: any) =>
       getHandler(f, 'DELETE', '/conversations/:id/messages/:messageId');
 
+    beforeEach(() => {
+      prisma.conversation.findUnique.mockResolvedValue({ type: 'group', title: 'Les Amis' });
+    });
+
     it('allows delete by BIGBOSS role', async () => {
       prisma.message.findFirst.mockResolvedValue({
         ...makeExistingMessage(),
@@ -3154,7 +3187,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -3177,7 +3210,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.participant.findFirst.mockResolvedValue({ user: { role: 'BIGBOSS' } });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -3205,7 +3238,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -3233,7 +3266,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -3261,7 +3294,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -3289,7 +3322,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       });
       prisma.message.update.mockResolvedValue({});
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);
@@ -3310,7 +3343,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       prisma.message.update.mockResolvedValue({});
       fastify.socketIOHandler = { getManager: jest.fn().mockReturnValue(null) };
 
-      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { reason: 'Propos hors charte' } });
       const reply = makeReply();
 
       await getDeleteMsgHandler(fastify)(req, reply);

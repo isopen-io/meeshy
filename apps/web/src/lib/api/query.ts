@@ -211,8 +211,8 @@ export function repostAction(postId: string, intent?: RepostIntent): Promise<Rep
 /** LES GESTES DU MENU « ⋯ » (#7533) — mêmes références de module stables,
  * sur l'instance partagée du cache : la suppression retire la carte de
  * CHAQUE caisse qui la peint (`removeCardPost`). */
-export function deletePostAction(postId: string): Promise<PostActionOutcome> {
-  return deletePost({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
+export function deletePostAction(postId: string, reason?: string): Promise<PostActionOutcome> {
+  return deletePost({ postId, deps: { ...apiDeps, queryClient: appQueryClient }, ...(reason === undefined ? {} : { reason }) });
 }
 
 export function pinPostAction(postId: string): Promise<PostActionOutcome> {

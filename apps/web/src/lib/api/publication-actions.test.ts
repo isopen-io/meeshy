@@ -46,6 +46,18 @@ describe('deletePost', () => {
     expect(await deletePost({ postId: 'p1', deps: { source: 'gateway', transport, queryClient } })).toBe('failed');
     expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(true);
   });
+
+  test('RETIRER (#11150) : le motif voyage en corps `{ reason }` ; sans motif, aucun corps', async () => {
+    const queryClient = feedWith(['p1', 'p2']);
+    const { transport, calls } = scriptedTransport({
+      'DELETE /api/v1/posts/p1': { ok: true, data: null },
+      'DELETE /api/v1/posts/p2': { ok: true, data: null },
+    });
+
+    expect(await deletePost({ postId: 'p1', reason: 'Contenu violent', deps: { source: 'gateway', transport, queryClient } })).toBe('done');
+    expect(await deletePost({ postId: 'p2', deps: { source: 'gateway', transport, queryClient } })).toBe('done');
+    expect(calls().map((c) => c.body)).toEqual([{ reason: 'Contenu violent' }, undefined]);
+  });
 });
 
 /**

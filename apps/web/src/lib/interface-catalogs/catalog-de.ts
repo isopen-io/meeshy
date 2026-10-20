@@ -40,6 +40,7 @@ import deDownload from './catalog-de-download';
 import dePhonePrompt from './catalog-de-phone-prompt';
 import deUserProfile from './catalog-de-user-profile';
 import deContentRefused from './catalog-de-content-refused';
+import deContentRemoval from './catalog-de-content-removal';
 import dePublicEntry from './catalog-de-public-entry';
 import deThreadSearch from './catalog-de-thread-search';
 
@@ -1072,6 +1073,7 @@ const de = {
   ...deContactDiscovery,
   ...deUserProfile,
   ...deContentRefused,
+  ...deContentRemoval,
   ...dePublicEntry,
   ...deThreadSearch,
 } satisfies InterfaceCatalog;

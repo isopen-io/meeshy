@@ -337,6 +337,7 @@ export type SocketMessageEditData = z.infer<typeof SocketMessageEditSchema>;
 
 export const SocketMessageDeleteSchema = z.object({
   messageId: mongoId,
+  reason: z.unknown().optional(),
 });
 
 export type SocketMessageDeleteData = z.infer<typeof SocketMessageDeleteSchema>;

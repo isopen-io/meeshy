@@ -27,7 +27,7 @@ const viewer = { id: 'u-moi', hasAccount: true } as const;
 
 describe('deleteOfferOf — un message', () => {
   test('le mien ⇒ pour tous ET pour moi', () => {
-    expect(deleteOfferOf([row()], viewer)).toEqual({ forEveryone: true, forMe: true });
+    expect(deleteOfferOf([row()], viewer)).toEqual({ forEveryone: true, forMe: true, remove: false });
   });
 
   test('le mien, vieux de trois jours ⇒ toujours pour tous : le serveur n’impose aucune fenêtre', () => {
@@ -35,39 +35,65 @@ describe('deleteOfferOf — un message', () => {
   });
 
   test('celui d’un autre ⇒ pour moi seulement', () => {
-    expect(deleteOfferOf([row({ senderId: 'u-autre' })], viewer)).toEqual({ forEveryone: false, forMe: true });
+    expect(deleteOfferOf([row({ senderId: 'u-autre' })], viewer)).toEqual({ forEveryone: false, forMe: true, remove: false });
   });
 
   test('déjà supprimé pour tous ⇒ il ne reste qu’à le masquer chez moi', () => {
-    expect(deleteOfferOf([row({ deletedAt: new Date(), content: '' })], viewer)).toEqual({ forEveryone: false, forMe: true });
+    expect(deleteOfferOf([row({ deletedAt: new Date(), content: '' })], viewer)).toEqual({ forEveryone: false, forMe: true, remove: false });
   });
 
   test('un message système que j’ai émis (l’avis de capture, #9641) ne se retire pas pour tous', () => {
-    expect(deleteOfferOf([row({ messageType: 'system' })], viewer)).toEqual({ forEveryone: false, forMe: true });
+    expect(deleteOfferOf([row({ messageType: 'system' })], viewer)).toEqual({ forEveryone: false, forMe: true, remove: false });
   });
 
   test('un envoi encore optimiste n’existe pas côté serveur ⇒ rien', () => {
-    expect(deleteOfferOf([row({ id: 'cid_1' })], viewer)).toEqual({ forEveryone: false, forMe: false });
+    expect(deleteOfferOf([row({ id: 'cid_1' })], viewer)).toEqual({ forEveryone: false, forMe: false, remove: false });
   });
 
   test('un invité ⇒ rien : ni route « pour moi », ni auteur reconnu', () => {
-    expect(deleteOfferOf([row()], { id: 'u-moi', hasAccount: false })).toEqual({ forEveryone: false, forMe: false });
+    expect(deleteOfferOf([row()], { id: 'u-moi', hasAccount: false })).toEqual({ forEveryone: false, forMe: false, remove: false });
   });
 });
 
 describe('deleteOfferOf — plusieurs messages', () => {
   test('tous les miens ⇒ pour tous', () => {
-    expect(deleteOfferOf([row({ id: 'm-1' }), row({ id: 'm-2' })], viewer)).toEqual({ forEveryone: true, forMe: true });
+    expect(deleteOfferOf([row({ id: 'm-1' }), row({ id: 'm-2' })], viewer)).toEqual({ forEveryone: true, forMe: true, remove: false });
   });
 
   test('UN seul message d’un autre retire « pour tous » à toute la sélection', () => {
     expect(deleteOfferOf([row({ id: 'm-1' }), row({ id: 'm-2', senderId: 'u-autre' }), row({ id: 'm-3' })], viewer)).toEqual({
       forEveryone: false,
       forMe: true,
+      remove: false,
     });
   });
 
   test('aucun message ⇒ rien', () => {
-    expect(deleteOfferOf([], viewer)).toEqual({ forEveryone: false, forMe: false });
+    expect(deleteOfferOf([], viewer)).toEqual({ forEveryone: false, forMe: false, remove: false });
+  });
+});
+
+describe('deleteOfferOf — retirer le message d’un autre (#11150)', () => {
+  const moderator = { id: 'u-moi', hasAccount: true, moderates: true } as const;
+
+  test('celui d’un autre, quand je modère la conversation ⇒ « Retirer », en plus de « pour moi »', () => {
+    expect(deleteOfferOf([row({ senderId: 'u-autre' })], moderator)).toEqual({ forEveryone: false, forMe: true, remove: true });
+  });
+
+  test('le mien ⇒ « pour tous » suffit : rien à retirer, aucun motif à donner', () => {
+    expect(deleteOfferOf([row()], moderator)).toEqual({ forEveryone: true, forMe: true, remove: false });
+  });
+
+  test('une sélection mêlée ⇒ « Retirer » couvre le lot entier', () => {
+    expect(deleteOfferOf([row({ id: 'm-1' }), row({ id: 'm-2', senderId: 'u-autre' })], moderator).remove).toBe(true);
+  });
+
+  test('déjà supprimé, ou message système ⇒ rien à retirer', () => {
+    expect(deleteOfferOf([row({ senderId: 'u-autre', deletedAt: new Date(), content: '' })], moderator).remove).toBe(false);
+    expect(deleteOfferOf([row({ senderId: 'u-autre', messageType: 'system' })], moderator).remove).toBe(false);
+  });
+
+  test('sans modération de la conversation ⇒ jamais', () => {
+    expect(deleteOfferOf([row({ senderId: 'u-autre' })], viewer).remove).toBe(false);
   });
 });

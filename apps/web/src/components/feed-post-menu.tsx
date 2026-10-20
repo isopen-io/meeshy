@@ -39,6 +39,8 @@ export type PostMenuHost = {
   readonly viewerId: string | null;
   /** ADMIN/BIGBOSS (#9727) — absent ⇒ non : « Vues » ne s'offre pas. */
   readonly viewerIsAdministrator?: boolean;
+  /** MODERATOR/ADMIN/BIGBOSS (#11150) — absent ⇒ non : « Retirer » ne s'offre pas. */
+  readonly viewerModerates?: boolean;
   readonly onCopyText: (text: string) => void;
   readonly onPin: (postId: string) => void;
   /** MODIFIER LE TEXTE (#7534) — la SEULE entrée du menu qui rend son issue :
@@ -48,6 +50,8 @@ export type PostMenuHost = {
    * qui attend. */
   readonly onEdit: (postId: string, content: string) => Promise<EditPostOutcome>;
   readonly onDelete: (postId: string) => void;
+  /** RETIRER LA PUBLICATION D'UN AUTRE (#11150) — le motif nettoyé, saisi dans `ContentRemovalSheet`. Absent ⇒ aucune entrée. */
+  readonly onRemove?: (postId: string, reason: string) => void;
   readonly onReport: (postId: string, reason: ReportReason) => void;
   /** LA FEUILLE DE SIGNALEMENT S'OUVRE (#10503) — un signal négatif, même sans motif choisi. */
   readonly onReportOpen?: (postId: string) => void;
@@ -105,6 +109,7 @@ export function FeedPostMenu({
   const [reporting, setReporting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [viewing, setViewing] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const entries = postMenuEntries({
     viewerId: menu.viewerId,
     authorId,
@@ -113,6 +118,7 @@ export function FeedPostMenu({
     canShare: onShare !== undefined,
     canSave: onGesture !== undefined,
     viewerIsAdministrator: menu.viewerIsAdministrator === true,
+    viewerModerates: menu.viewerModerates === true && menu.onRemove !== undefined,
   });
 
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
@@ -176,7 +182,7 @@ export function FeedPostMenu({
         </span>
       </button>
 
-      {open || reporting || editing || viewing ? (
+      {open || reporting || editing || viewing || removing ? (
         <Suspense fallback={null}>
           <PostMenuPanel
             open={open}
@@ -204,6 +210,8 @@ export function FeedPostMenu({
             setEditing={setEditing}
             viewing={viewing}
             setViewing={setViewing}
+            removing={removing}
+            setRemoving={setRemoving}
           />
         </Suspense>
       ) : null}

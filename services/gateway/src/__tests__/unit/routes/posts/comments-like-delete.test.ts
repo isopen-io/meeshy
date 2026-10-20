@@ -28,6 +28,12 @@ jest.mock('../../../../services/PostCommentService', () => ({
   })),
 }));
 
+const mockCreateNotification = jest.fn<any>().mockResolvedValue({ id: 'notif-1' });
+
+jest.mock('../../../../services/notifications/notification-service-registry', () => ({
+  getSharedNotificationService: () => ({ createNotification: (...a: any[]) => mockCreateNotification(...a) }),
+}));
+
 jest.mock('../../../../services/posts/PostTranslationService', () => ({
   PostTranslationService: { shared: { translateComment: jest.fn().mockResolvedValue(undefined) } },
 }));
@@ -79,31 +85,41 @@ const LIKE_RESULT = { likeCount: 1, reactionSummary: { '❤️': 1 }, authorId: 
 
 // ─── App factory ──────────────────────────────────────────────────────────────
 
-function makeRequiredAuth(authenticated: boolean) {
+function makeRequiredAuth(authenticated: boolean, role = 'USER') {
   return async (req: FastifyRequest) => {
     (req as any).authContext = authenticated
-      ? { isAuthenticated: true, type: 'registered', userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } }
+      ? { isAuthenticated: true, type: 'registered', userId: USER_ID, registeredUser: { id: USER_ID, role } }
       : { isAuthenticated: false, type: 'anonymous', userId: null, registeredUser: null };
   };
 }
 
-async function buildApp(authenticated = true): Promise<FastifyInstance> {
+async function buildApp(
+  authenticated = true,
+  opts: { role?: string; commentAuthorId?: string; commentAuthorRole?: string } = {},
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   // Audience déclarée PUBLIC : ce harnais porte sur le like/unlike et la
   // suppression, pas sur le droit de voir (cf. `comments-audience.test.ts`).
   const publicAcl = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] };
+  const commentAuthorId = opts.commentAuthorId ?? USER_ID;
   const prisma = {
     postComment: {
       findUnique: jest.fn().mockResolvedValue({ content: 'hi' }),
-      findFirst: jest.fn().mockResolvedValue({ postId: POST_ID, post: publicAcl }),
+      // La cible d'un DELETE se relit par `select: { authorId, postId }` (#11149).
+      findFirst: jest.fn().mockImplementation(async (args: any) =>
+        args?.select?.authorId ? { authorId: commentAuthorId, postId: POST_ID } : { postId: POST_ID, post: publicAcl }),
     },
     post: {
       findUnique: jest.fn().mockResolvedValue(null),
       findFirst: jest.fn().mockResolvedValue(publicAcl),
     },
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ role: opts.commentAuthorRole ?? 'USER', systemLanguage: 'fr' }),
+    },
+    adminAuditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
   } as any;
   app.decorate('prisma', prisma);
-  registerCommentRoutes(app, prisma, makeRequiredAuth(authenticated));
+  registerCommentRoutes(app, prisma, makeRequiredAuth(authenticated, opts.role));
   await app.ready();
   return app;
 }
@@ -433,5 +449,79 @@ describe('DELETE /posts/:postId/comments/:commentId (authenticated)', () => {
       url: `/posts/${POST_ID}/comments/${COMMENT_ID}`,
     });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+describe('DELETE /posts/:postId/comments/:commentId — retrait par la modération (#11149)', () => {
+  const OTHER = '507f1f77bcf86cd799439044';
+
+  it("refuse 403 un simple utilisateur sur le commentaire d'un autre", async () => {
+    mockDeleteComment.mockReset().mockRejectedValueOnce(new Error('FORBIDDEN'));
+    const app = await buildApp(true, { commentAuthorId: OTHER });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}`, payload: { reason: 'Hors charte' } });
+    await app.close();
+
+    expect(res.statusCode).toBe(403);
+    expect(mockDeleteComment).not.toHaveBeenCalledWith(COMMENT_ID, USER_ID, undefined, { byModeration: true });
+  });
+
+  it('refuse 403 un MODERATOR sur le commentaire d’un ADMIN', async () => {
+    mockDeleteComment.mockReset().mockRejectedValueOnce(new Error('FORBIDDEN'));
+    const app = await buildApp(true, { role: 'MODERATOR', commentAuthorId: OTHER, commentAuthorRole: 'ADMIN' });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}`, payload: { reason: 'Hors charte' } });
+    await app.close();
+
+    expect(res.statusCode).toBe(403);
+    expect(mockDeleteComment).not.toHaveBeenCalledWith(COMMENT_ID, USER_ID, undefined, { byModeration: true });
+  });
+
+  it('exige un motif : 400 MODERATION_REASON_REQUIRED', async () => {
+    mockDeleteComment.mockReset().mockRejectedValueOnce(new Error('FORBIDDEN'));
+    const app = await buildApp(true, { role: 'MODERATOR', commentAuthorId: OTHER });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    await app.close();
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('MODERATION_REASON_REQUIRED');
+    expect(mockDeleteComment).not.toHaveBeenCalledWith(COMMENT_ID, USER_ID, undefined, { byModeration: true });
+  });
+
+  it("retire par la modération, journalise REMOVE_CONTENT et prévient l'auteur", async () => {
+    mockDeleteComment.mockReset()
+      .mockRejectedValueOnce(new Error('FORBIDDEN'))
+      .mockResolvedValueOnce({ postId: POST_ID, deletedCommentIds: [COMMENT_ID], parentId: null });
+    mockCreateNotification.mockClear();
+    const app = await buildApp(true, { role: 'ADMIN', commentAuthorId: OTHER });
+    const prisma = (app as any).prisma;
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}`, payload: { reason: ' Harcèlement ' } });
+    await new Promise((resolve) => setImmediate(resolve));
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(mockDeleteComment).toHaveBeenCalledWith(COMMENT_ID, USER_ID, undefined, { byModeration: true });
+    expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      action: 'REMOVE_CONTENT', entity: 'Comment', entityId: COMMENT_ID, adminId: USER_ID, userId: OTHER,
+      metadata: JSON.stringify({ reason: 'Harcèlement', via: 'app' }),
+    }) });
+    expect(mockCreateNotification).toHaveBeenCalledWith(expect.objectContaining({
+      userId: OTHER,
+      type: 'content_removed',
+      title: 'Votre commentaire a été retiré par un administrateur',
+      metadata: { contentType: 'comment', contentId: COMMENT_ID, postId: POST_ID, reason: 'Harcèlement' },
+    }));
+  });
+
+  it("l'auteur retire le sien sans corps : ni motif, ni audit, ni notification", async () => {
+    mockDeleteComment.mockReset().mockResolvedValueOnce({ postId: POST_ID });
+    mockCreateNotification.mockClear();
+    const app = await buildApp();
+    const prisma = (app as any).prisma;
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}` });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(mockDeleteComment).toHaveBeenCalledWith(COMMENT_ID, USER_ID);
+    expect(prisma.adminAuditLog.create).not.toHaveBeenCalled();
+    expect(mockCreateNotification).not.toHaveBeenCalled();
   });
 });

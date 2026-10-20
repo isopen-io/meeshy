@@ -482,6 +482,8 @@ export interface MessageEditData {
  */
 export interface MessageDeleteData {
   readonly messageId: string;
+  /** Motif d'un retrait par un TIERS (#11149) — exigé de lui, ignoré pour l'auteur. */
+  readonly reason?: string;
 }
 
 // ===== TYPES DE BASE =====

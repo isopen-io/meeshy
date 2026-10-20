@@ -18,6 +18,16 @@ extension ConversationView {
         }
     }
 
+    /// **Toucher une pièce en attente ouvre la retouche de la caméra** (#11133,
+    /// porteur 2026-10-20 : « brancher cette édition sur les images et vidéos
+    /// qu'on veut envoyer ») : mêmes outils, même chrome. Rien n'y oblige —
+    /// une pièce non touchée part telle quelle.
+    func openPieceRetouch(_ id: String) {
+        scrollState.pieceToRetouch = ComposerRetouchSeries.candidates(attachments: composerState.pendingAttachments,
+                                                                      files: composerState.pendingMediaFiles)
+            .first { $0.attachmentId == id }
+    }
+
     /// Chaque pièce retouchée est remplacée À SA PLACE ; les autres restent
     /// telles quelles — jamais une seconde tuile, jamais un ré-encodage.
     func replacePendingWithRetouchedPieces(_ rendues: [ComposerRetouchedPiece]) {

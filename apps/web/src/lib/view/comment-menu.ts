@@ -19,11 +19,14 @@ import { maskedByEffects } from '@/lib/export/message-card-subject';
  *   composition partagée dit seule s'il s'offre.
  * - **Modifier / Supprimer** : à l'AUTEUR seul, reflet de la passerelle
  *   (`PATCH`/`DELETE` gardés par le contrôle d'auteur).
+ * - **Retirer** (#11150) : aux AUTRES seuls, pour la modération de plateforme
+ *   (l'hôte n'en remet la capacité qu'à MODERATOR/ADMIN/BIGBOSS) — motif
+ *   demandé, l'auteur en est prévenu.
  * - **Signaler** : aux AUTRES seuls — se signaler soi-même n'a aucun sens.
  *
  * Une rangée EN VOL n'a pas d'adresse chez la passerelle : aucune entrée.
  */
-export type CommentMenuEntry = 'copy' | 'image' | 'imageWithReplies' | 'edit' | 'delete' | 'report';
+export type CommentMenuEntry = 'copy' | 'image' | 'imageWithReplies' | 'edit' | 'delete' | 'remove' | 'report';
 
 export function commentMenuEntries(params: {
   readonly comment: PostComment;
@@ -33,6 +36,8 @@ export function commentMenuEntries(params: {
   readonly canCopy: boolean;
   readonly canImage: boolean;
   readonly canReport: boolean;
+  /** La modération de plateforme peut retirer le commentaire d'un autre (#11150). Absent ⇒ non. */
+  readonly canRemove?: boolean;
   /** Le commentaire d'un POST (#9687) : la composition a-t-elle un mode ? Absent : story, la carte du commentaire. */
   readonly postComposition?: { readonly imageable: boolean };
 }): readonly CommentMenuEntry[] {
@@ -48,6 +53,7 @@ export function commentMenuEntries(params: {
     ...(imageable ? (['image'] as const) : []),
     ...(imageable && isRoot && hasReplies && postComposition === undefined ? (['imageWithReplies'] as const) : []),
     ...(isMine ? (['edit', 'delete'] as const) : []),
+    ...(!isMine && params.canRemove === true ? (['remove'] as const) : []),
     ...(!isMine && canReport ? (['report'] as const) : []),
   ];
 }
