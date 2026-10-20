@@ -10,6 +10,7 @@ import XCTest
 /// `ViewModifier` obtient son propre nœud d'attribut. Ces gardes lisent la
 /// SIGNATURE, parce que la grandeur qu'elles protègent en est une ; elles ne
 /// remplacent ni `ConversationViewBodyTypeDepthTests` ni la sonde sur appareil.
+@MainActor
 final class ConversationScreenTypeIdentityGuardTests: XCTestCase {
 
     private static let viewsDirectory = "Meeshy/Features/Main/Views/"
