@@ -34,9 +34,10 @@ nonisolated enum ShareItemLoader {
     static func start(
         _ providers: [NSItemProvider],
         shareId: String,
-        prepareMediaRoot: @escaping PrepareMediaRoot = { ShareMediaStaging.prepareMediaRoot(shareId: $0) }
+        prepareMediaRoot: @escaping PrepareMediaRoot = { ShareMediaStaging.prepareMediaRoot(shareId: $0) },
+        sourcePolicy: ShareSourcePolicy = .live
     ) -> ShareItemLoads {
-        let context = ShareStagingContext(shareId: shareId, prepareMediaRoot: prepareMediaRoot)
+        let context = ShareStagingContext(shareId: shareId, prepareMediaRoot: prepareMediaRoot, sourcePolicy: sourcePolicy)
         return ShareItemLoads(tasks: providers.enumerated().map { index, provider in
             awaiting { deliver in load(provider, index: index, context: context, deliver: deliver) }
         })
@@ -62,14 +63,11 @@ nonisolated enum ShareItemLoader {
                 completionHandler: fileHandler(typeIdentifier: typeIdentifier, index: index, context: context, deliver: deliver)
             )
         case .fileURL:
-            provider.loadItem(
-                forTypeIdentifier: ShareItemRepresentation.fileURLTypeIdentifier, options: nil,
-                completionHandler: urlHandler(expectsFile: true, index: index, context: context, deliver: deliver)
-            )
+            deliver(.staged(ShareStagingResult(index: index, outcome: .failure(.refusedSource))))
         case .link:
             provider.loadItem(
                 forTypeIdentifier: UTType.url.identifier, options: nil,
-                completionHandler: urlHandler(expectsFile: false, index: index, context: context, deliver: deliver)
+                completionHandler: linkHandler(index: index, deliver: deliver)
             )
         case .text:
             provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
@@ -91,21 +89,20 @@ nonisolated enum ShareItemLoader {
         }
     }
 
-    /// Une URL de FICHIER se copie, jamais ne part en texte : c'est son chemin
-    /// que le destinataire recevait (#11134).
-    private static func urlHandler(
-        expectsFile: Bool,
-        index: Int,
-        context: ShareStagingContext,
-        deliver: @escaping Deliver
-    ) -> ItemHandler {
-        { item, error in
+    /// Une URL de FICHIER n'est ni un lien ni une pièce : ni son chemin ne part
+    /// en texte (#11134), ni l'extension ne l'ouvre. Ce chemin est décodé des
+    /// données de l'élément, donc choisi par l'app hôte, et l'extension a des
+    /// droits qu'elle n'a pas (le conteneur App Group) : l'ouvrir ferait de
+    /// Meeshy le député d'une exfiltration. Seul ce que le système remet par
+    /// `loadFileRepresentation` se copie.
+    private static func linkHandler(index: Int, deliver: @escaping Deliver) -> ItemHandler {
+        { item, _ in
             let url = asURL(item)
-            if url?.isFileURL == true || (url == nil && expectsFile) {
-                deliver(.staged(context.stage(url, error: error, typeIdentifier: nil, index: index)))
+            guard url?.isFileURL == true else {
+                deliver(.payload(.url(url)))
                 return
             }
-            deliver(.payload(.url(url)))
+            deliver(.staged(ShareStagingResult(index: index, outcome: .failure(.refusedSource))))
         }
     }
 
@@ -137,6 +134,7 @@ nonisolated enum ShareItemLoader {
 nonisolated struct ShareStagingContext: Sendable {
     let shareId: String
     let prepareMediaRoot: ShareItemLoader.PrepareMediaRoot
+    let sourcePolicy: ShareSourcePolicy
 
     func stage(_ url: URL?, error: (any Error)?, typeIdentifier: String?, index: Int) -> ShareStagingResult {
         ShareStagingResult(index: index, outcome: copy(url, error: error, typeIdentifier: typeIdentifier, index: index))
@@ -149,6 +147,7 @@ nonisolated struct ShareStagingContext: Sendable {
         index: Int
     ) -> Result<ShareStagedMedia, ShareMediaStagingError> {
         guard let url else { return .failure(.copyFailed(error?.localizedDescription ?? "aucune URL fournie")) }
+        guard url.isFileURL, sourcePolicy.admits(url) else { return .failure(.refusedSource) }
         guard let mediaRoot = prepareMediaRoot(shareId) else { return .failure(.appGroupUnavailable) }
         // Une URL issue de Fichiers/iCloud est security-scoped : sans la paire
         // start/stop, la lecture échoue en silence.
@@ -168,5 +167,60 @@ nonisolated struct ShareStagingContext: Sendable {
         } catch {
             return .failure(.copyFailed(error.localizedDescription))
         }
+    }
+}
+
+/// Où une source peut vivre (#11134, défense en profondeur). Le fichier que
+/// `loadFileRepresentation` remet est une copie du système, dans le dossier
+/// temporaire de l'extension ; rien de ce que l'extension possède par ses
+/// propres droits ne doit pouvoir partir en pièce jointe.
+///
+/// - `sealed` : jamais — le conteneur App Group (session, carnet, fiches) et
+///   le bundle de l'app ;
+/// - `privateRoots` : jamais, sauf sous une `exemption` — le conteneur de
+///   l'extension, dont seuls `tmp` et `Library/Caches` reçoivent les copies
+///   du système.
+///
+/// Chaque chemin se juge symlinks résolus : un lien se juge sur sa cible.
+nonisolated struct ShareSourcePolicy: Sendable {
+    let sealed: [URL]
+    let privateRoots: [URL]
+    let exemptions: [URL]
+
+    static var live: ShareSourcePolicy {
+        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: ShareSession.appGroupIdentifier)
+        return ShareSourcePolicy(
+            sealed: [group, appBundleURL()].compactMap { $0 },
+            privateRoots: [home],
+            exemptions: [
+                URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true),
+                home.appendingPathComponent("Library/Caches", isDirectory: true),
+            ]
+        )
+    }
+
+    func admits(_ url: URL) -> Bool {
+        let path = Self.resolved(url)
+        if sealed.contains(where: { Self.isWithin(path, root: $0) }) { return false }
+        guard privateRoots.contains(where: { Self.isWithin(path, root: $0) }) else { return true }
+        return exemptions.contains { Self.isWithin(path, root: $0) }
+    }
+
+    /// L'extension vit dans `Meeshy.app/PlugIns/` : c'est l'app entière qui
+    /// est scellée.
+    private static func appBundleURL() -> URL {
+        let bundle = Bundle.main.bundleURL
+        guard bundle.pathExtension == "appex" else { return bundle }
+        return bundle.deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private static func resolved(_ url: URL) -> String {
+        url.resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
+    private static func isWithin(_ path: String, root: URL) -> Bool {
+        let rootPath = resolved(root)
+        return path == rootPath || path.hasPrefix(rootPath.hasSuffix("/") ? rootPath : rootPath + "/")
     }
 }

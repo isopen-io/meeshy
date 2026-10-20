@@ -27,6 +27,11 @@ nonisolated enum ShareMediaStagingError: Error, Equatable {
     case byteBudgetExceeded(total: Int, limit: Int)
     case fileCountExceeded(count: Int, limit: Int)
     case copyFailed(String)
+    /// La source n'est pas un fichier que le système a remis, ou elle vit là
+    /// où l'extension a des droits que l'app hôte n'a pas (App Group, bundle).
+    case refusedSource
+    /// La copie sortirait du dossier du partage.
+    case destinationOutsideShare
 }
 
 /// Copie des fichiers reçus vers le conteneur App Group.
@@ -101,11 +106,30 @@ nonisolated enum ShareMediaStaging {
     }
 
     /// L'extension garde le TYPE du fichier : celle de la source d'abord, celle
-    /// du MIME quand la source n'en porte pas (un fichier temporaire du
-    /// système peut n'en avoir aucune).
+    /// du MIME sinon, `bin` en dernier. Le nom de la source est choisi par
+    /// l'app hôte : seule une extension courte, minuscule et alphanumérique
+    /// entre dans un chemin (#11134).
     static func fileExtension(sourceExtension: String, mime: String) -> String {
-        if !sourceExtension.isEmpty { return sourceExtension.lowercased() }
-        return UTType(mimeType: mime)?.preferredFilenameExtension ?? "bin"
+        [sourceExtension.lowercased(), UTType(mimeType: mime)?.preferredFilenameExtension ?? ""]
+            .first(where: isSafeExtension) ?? "bin"
+    }
+
+    static func isSafeExtension(_ ext: String) -> Bool {
+        let scalars = ext.unicodeScalars
+        return (1...10).contains(scalars.count)
+            && scalars.allSatisfy { ("a"..."z").contains($0) || ("0"..."9").contains($0) }
+    }
+
+    /// La destination reste dans `<mediaRoot>/<shareId>/`. Avant la création
+    /// du dossier, la comparaison est LEXICALE (un `..` ne passe pas) : un
+    /// chemin qui n'existe pas encore ne se résout pas comme un chemin qui
+    /// existe (`/private` n'est retiré que du second). Après, symlinks résolus
+    /// des deux côtés : un dossier de partage qui serait un lien ne passe pas.
+    static func isInsideShare(_ destination: URL, mediaRoot: URL, shareId: String, resolvingSymlinks: Bool) -> Bool {
+        let normalize: (URL) -> String = { url in
+            (resolvingSymlinks ? url.resolvingSymlinksInPath() : url).standardizedFileURL.path
+        }
+        return normalize(destination.deletingLastPathComponent()) == normalize(mediaRoot) + "/" + shareId
     }
 
     // MARK: - Copie
@@ -167,14 +191,19 @@ nonisolated enum ShareMediaStaging {
 
         let ext = fileExtension(sourceExtension: source.pathExtension, mime: mime)
         let directory = mediaRoot.appendingPathComponent(shareId, isDirectory: true)
+        let relPath = "\(shareId)/\(index).\(ext)"
+        let destination = mediaRoot.appendingPathComponent(relPath)
+        guard isInsideShare(destination, mediaRoot: mediaRoot, shareId: shareId, resolvingSymlinks: false) else {
+            throw ShareMediaStagingError.destinationOutsideShare
+        }
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         } catch {
             throw ShareMediaStagingError.copyFailed(error.localizedDescription)
         }
-
-        let relPath = "\(shareId)/\(index).\(ext)"
-        let destination = mediaRoot.appendingPathComponent(relPath)
+        guard isInsideShare(destination, mediaRoot: mediaRoot, shareId: shareId, resolvingSymlinks: true) else {
+            throw ShareMediaStagingError.destinationOutsideShare
+        }
         let written: Int
         do {
             written = try streamCopy(from: source, to: destination, bufferSize: copyBufferSize)

@@ -59,19 +59,80 @@ final class ShareItemLoaderTests: XCTestCase {
         )
     }
 
-    func test_gather_aBareFileURL_copiesTheFile() async throws {
-        let source = try makeDirectory()
+    // MARK: - Député abusé (revue de sécurité #11134)
+
+    /// Une app hôte peut annoncer une URL de fichier qui pointe DANS le
+    /// conteneur App Group de Meeshy. L'extension, qui a ces droits, ne doit
+    /// jamais ouvrir un chemin décodé des données de l'élément : seul ce que le
+    /// système remet par `loadFileRepresentation` se copie.
+    func test_gather_aFileURLIntoTheAppGroup_isRefused_andNothingIsStaged() async throws {
+        let appGroup = try makeDirectory()
         let root = try makeDirectory()
-        let photo = try makeFile(named: "photo.heic", bytes: 512, in: source)
+        let secret = try makeFile(named: "share_directory.json", bytes: 256, in: appGroup)
         let provider = NSItemProvider()
-        provider.registerObject(photo as NSURL, visibility: .all)
+        provider.registerObject(secret as NSURL, visibility: .all)
+
+        let gathered = await load([provider], into: root)
+
+        XCTAssertNil(gathered.content, "aucun chemin ne part en texte")
+        XCTAssertEqual(gathered.media, [])
+        XCTAssertEqual(gathered.failure, .refusedSource)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [])
+    }
+
+    func test_gather_aLinkCarryingAFileURL_isRefused() async throws {
+        let appGroup = try makeDirectory()
+        let root = try makeDirectory()
+        let secret = try makeFile(named: "recent_conversations.json", bytes: 64, in: appGroup)
+        let provider = NSItemProvider()
+        provider.registerItem(forTypeIdentifier: UTType.url.identifier) { completion, _, _ in
+            completion?(secret as NSURL, nil)
+        }
 
         let gathered = await load([provider], into: root)
 
         XCTAssertNil(gathered.content)
-        XCTAssertEqual(gathered.media.count, 1)
-        XCTAssertEqual(gathered.media.first?.ext, "heic")
-        XCTAssertEqual(gathered.media.first?.bytes, 512)
+        XCTAssertEqual(gathered.media, [])
+        XCTAssertEqual(gathered.failure, .refusedSource)
+    }
+
+    func test_policy_refusesASealedRoot_aSymlinkIntoIt_andATraversal() throws {
+        let sealed = try makeDirectory()
+        let elsewhere = try makeDirectory()
+        let secret = try makeFile(named: "session.json", bytes: 8, in: sealed)
+        let link = elsewhere.appendingPathComponent("photo.jpg")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: secret)
+        let traversal = elsewhere.appendingPathComponent("../\(sealed.lastPathComponent)/session.json")
+        let policy = ShareSourcePolicy(sealed: [sealed], privateRoots: [], exemptions: [])
+
+        XCTAssertFalse(policy.admits(secret))
+        XCTAssertFalse(policy.admits(link), "un lien symbolique se juge sur sa cible")
+        XCTAssertFalse(policy.admits(traversal))
+        XCTAssertTrue(policy.admits(try makeFile(named: "ok.jpg", bytes: 8, in: elsewhere)))
+    }
+
+    func test_policy_refusesThePrivateArea_exceptItsExemptions_butNeverASealedRoot() throws {
+        let home = try makeDirectory()
+        let tmp = home.appendingPathComponent("tmp", isDirectory: true)
+        let preferences = home.appendingPathComponent("Library/Preferences", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: preferences, withIntermediateDirectories: true)
+        let sealedInsideTmp = tmp.appendingPathComponent("group", isDirectory: true)
+        try FileManager.default.createDirectory(at: sealedInsideTmp, withIntermediateDirectories: true)
+        let policy = ShareSourcePolicy(sealed: [sealedInsideTmp], privateRoots: [home], exemptions: [tmp])
+
+        XCTAssertTrue(policy.admits(try makeFile(named: "copie.jpg", bytes: 8, in: tmp)))
+        XCTAssertFalse(policy.admits(try makeFile(named: "me.meeshy.plist", bytes: 8, in: preferences)))
+        XCTAssertFalse(policy.admits(try makeFile(named: "x.jpg", bytes: 8, in: sealedInsideTmp)))
+    }
+
+    func test_livePolicy_sealsTheAppGroupAndTheAppBundle() {
+        let live = ShareSourcePolicy.live
+        if let group = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: ShareSession.appGroupIdentifier) {
+            XCTAssertFalse(live.admits(group.appendingPathComponent("share_directory.json")))
+        }
+        XCTAssertFalse(live.admits(Bundle.main.bundleURL.appendingPathComponent("Info.plist")))
+        XCTAssertTrue(live.admits(URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("copie.jpg")))
     }
 
     func test_gather_aWebLinkAndText_composeTheContentWithoutAnyFile() async throws {
