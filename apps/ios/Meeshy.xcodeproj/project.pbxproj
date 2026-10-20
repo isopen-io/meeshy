@@ -2893,6 +2893,7 @@
 		C489379ED06EEDDED9BD15CF /* ConversationVideoPoster.swift in Sources */ = {isa = PBXBuildFile; fileRef = 535FCD1928EE3612A7BC5E8B /* ConversationVideoPoster.swift */; };
 		C48DD789B0F69E7F5E0D4BED /* ConversationCommandHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 365DD99F60F37D510CF56375 /* ConversationCommandHandler.swift */; };
 		4F6A8BF48D7E3CB618213722 /* ConversationSendCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B0C4AE0FBE46490D0DDF811 /* ConversationSendCoordinator.swift */; };
+		12E840AE8195181695EE2893 /* QuotedAudioResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C575F87F13F7E7AC8B885BD8 /* QuotedAudioResolver.swift */; };
 		5A2FFFB1BF8528D742A2E099 /* MediaConsumptionSeeder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 870659D5E432D7C8F227F8E3 /* MediaConsumptionSeeder.swift */; };
 		D847C671BB6BF972B2B116DB /* ConversationViewModelTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F913ABBA91CF19728AEE328A /* ConversationViewModelTypes.swift */; };
 		48B124E2B379C26828C9FC00 /* MessageServerIdRekey.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5003CE334C69AC15A0B7DDB /* MessageServerIdRekey.swift */; };
@@ -4706,6 +4707,7 @@
 		365D252ED587CA8D290E1241 /* CallManager+ScreenShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+ScreenShare.swift"; sourceTree = "<group>"; };
 		365DD99F60F37D510CF56375 /* ConversationCommandHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationCommandHandler.swift; sourceTree = "<group>"; };
 		9B0C4AE0FBE46490D0DDF811 /* ConversationSendCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSendCoordinator.swift; sourceTree = "<group>"; };
+		C575F87F13F7E7AC8B885BD8 /* QuotedAudioResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotedAudioResolver.swift; sourceTree = "<group>"; };
 		870659D5E432D7C8F227F8E3 /* MediaConsumptionSeeder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaConsumptionSeeder.swift; sourceTree = "<group>"; };
 		F913ABBA91CF19728AEE328A /* ConversationViewModelTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelTypes.swift; sourceTree = "<group>"; };
 		D5003CE334C69AC15A0B7DDB /* MessageServerIdRekey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageServerIdRekey.swift; sourceTree = "<group>"; };
@@ -10148,6 +10150,7 @@
 				76373A9B59BEE210183C3D33 /* ConversationCatchUpLaw.swift */,
 				365DD99F60F37D510CF56375 /* ConversationCommandHandler.swift */,
 				9B0C4AE0FBE46490D0DDF811 /* ConversationSendCoordinator.swift */,
+				C575F87F13F7E7AC8B885BD8 /* QuotedAudioResolver.swift */,
 				870659D5E432D7C8F227F8E3 /* MediaConsumptionSeeder.swift */,
 				F913ABBA91CF19728AEE328A /* ConversationViewModelTypes.swift */,
 				D5003CE334C69AC15A0B7DDB /* MessageServerIdRekey.swift */,
@@ -13521,6 +13524,7 @@
 				D1B80CC60282158E7F04165F /* ConversationCatchUpLaw.swift in Sources */,
 				C48DD789B0F69E7F5E0D4BED /* ConversationCommandHandler.swift in Sources */,
 				4F6A8BF48D7E3CB618213722 /* ConversationSendCoordinator.swift in Sources */,
+				12E840AE8195181695EE2893 /* QuotedAudioResolver.swift in Sources */,
 				5A2FFFB1BF8528D742A2E099 /* MediaConsumptionSeeder.swift in Sources */,
 				D847C671BB6BF972B2B116DB /* ConversationViewModelTypes.swift in Sources */,
 				48B124E2B379C26828C9FC00 /* MessageServerIdRekey.swift in Sources */,
