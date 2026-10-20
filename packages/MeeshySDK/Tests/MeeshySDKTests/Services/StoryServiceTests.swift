@@ -83,6 +83,15 @@ final class StoryServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
+    func test_delete_withReason_sendsReasonInJSONBody() async throws {
+        mock.stub("/posts/\(storyId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+
+        try await service.delete(storyId: storyId, reason: "Nudité")
+
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reason"] as? String, "Nudité")
+    }
+
     // MARK: - react
 
     func testReactCallsCorrectEndpoint() async throws {

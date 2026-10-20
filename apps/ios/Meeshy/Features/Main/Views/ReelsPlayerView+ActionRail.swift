@@ -205,14 +205,14 @@ struct ReelMoreOptionsMenu: View {
             } label: {
                 Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
             }
-            Divider()
-            Button(role: .destructive) {
-                Task { await viewModel.deletePost(reel.id) }
-                HapticFeedback.medium()
-            } label: {
-                Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-            }
+            PublicationDestructiveMenuItems(postId: reel.id, onDelete: { [viewModel] in
+                let postId = $0
+                Task { await viewModel.deletePost(postId) }
+            }, onRemove: nil)
         } else {
+            PublicationDestructiveMenuItems(postId: reel.id, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: reel) { [viewModel] in
+                await viewModel.deletePost($0, reason: $1)
+            })
             Divider()
             Button(role: .destructive) {
                 Task { await viewModel.reportPost(reel.id) }

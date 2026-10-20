@@ -29,6 +29,8 @@ struct CommentMoreMenu: View {
     var story: PostCommentCardStory? = nil
     var onEdit: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
+    /// #11151 — retire le commentaire d'un autre ; reçoit le motif de la feuille.
+    var onRemove: ((String) -> Void)? = nil
     var glyphSize: CGFloat = 14
     var glyphColor: Color = .secondary
 
@@ -91,7 +93,8 @@ struct CommentMoreMenu: View {
             servedText: servedText,
             canImagine: canImagine,
             editable: onEdit != nil,
-            deletable: onDelete != nil
+            deletable: onDelete != nil,
+            removable: onRemove != nil
         )
     }
 
@@ -145,7 +148,7 @@ struct CommentMoreMenu: View {
             } label: {
                 Label(Self.title(of: action), systemImage: Self.symbol(of: action))
             }
-        case .delete:
+        case .delete, .remove:
             Button(role: .destructive) { perform(action) } label: {
                 Label(Self.title(of: action), systemImage: Self.symbol(of: action))
             }
@@ -174,6 +177,10 @@ struct CommentMoreMenu: View {
         case .delete:
             HapticFeedback.medium()
             onDelete?()
+        case .remove:
+            HapticFeedback.medium()
+            guard let onRemove else { return }
+            ContentRemovalPresenter.present(.comment, onConfirm: onRemove)
         }
     }
 
@@ -201,6 +208,7 @@ struct CommentMoreMenu: View {
         case .edit: return String(localized: "comment.action.edit", defaultValue: "Modifier", bundle: .main)
         case .report: return String(localized: "comment.action.report", defaultValue: "Signaler", bundle: .main)
         case .delete: return String(localized: "comment.action.delete", defaultValue: "Supprimer", bundle: .main)
+        case .remove: return String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main)
         }
     }
 
@@ -211,6 +219,7 @@ struct CommentMoreMenu: View {
         case .edit: return "pencil"
         case .report: return "flag"
         case .delete: return "trash"
+        case .remove: return ContentRemovalKind.symbol
         }
     }
 }

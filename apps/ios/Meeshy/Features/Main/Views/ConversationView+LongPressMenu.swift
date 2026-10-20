@@ -160,7 +160,7 @@ extension ConversationView {
                 accentHex: accentColor,
                 focusedPieceId: $overlayState.overlayPieceId,
                 isPresented: $overlayState.showOverlayMenu,
-                canDelete: message.isMe || isCurrentUserAdminOrMod,
+                canDelete: message.isMe || isCurrentUserAdminOrMod || canRemoveMessage(message),
                 onReact: { piece, emoji in
                     viewModel.toggleAttachmentReaction(attachmentId: piece.id, messageId: messageId, emoji: emoji)
                 },
@@ -218,6 +218,14 @@ extension ConversationView {
                     Button(String(localized: "conversation.view.delete_for_everyone", bundle: .main), role: .destructive) {
                         Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }
                         overlayState.deleteConfirmMessageId = nil
+                    }
+                }
+                if let idx = viewModel.messageIndex(for: msgId), canRemoveMessage(viewModel.messages[idx]) {
+                    Button(String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main), role: .destructive) {
+                        overlayState.deleteConfirmMessageId = nil
+                        ContentRemovalPresenter.present(.message) { reason in
+                            Task { await viewModel.removeMessage(messageId: msgId, reason: reason) }
+                        }
                     }
                 }
                 Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {

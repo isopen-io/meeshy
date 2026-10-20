@@ -27,6 +27,9 @@ struct ThreadedCommentSection: View {
     /// optimiste + l'appel API. Câblé sur chaque ligne uniquement quand
     /// l'utilisateur courant est l'auteur (`canDelete`).
     var onDeleteComment: ((FeedComment) -> Void)? = nil
+    /// #11151 — retire le commentaire d'un autre, avec le motif de la feuille.
+    /// Câblé sur chaque ligne seulement quand la modération le peut.
+    var onRemoveComment: ((FeedComment, String) -> Void)? = nil
     /// Édite un commentaire (contenu + effets visuels). Même règle
     /// d'éligibilité que la suppression : auteur uniquement.
     var onEditComment: ((FeedComment) -> Void)? = nil
@@ -59,6 +62,17 @@ struct ThreadedCommentSection: View {
         return { onDeleteComment(c) }
     }
 
+    /// « Retirer » s'offre sur le commentaire d'un AUTRE, à la modération de la
+    /// plateforme seulement (`ContentRemovalPolicy`, #11151).
+    private func removeHandler(for c: FeedComment) -> ((String) -> Void)? {
+        guard let onRemoveComment,
+              ContentRemovalPolicy.mayRemovePublication(
+                authoredByViewer: c.authorId == AuthManager.shared.currentUser?.id,
+                platformRole: AuthManager.shared.currentUser?.role
+              ) else { return nil }
+        return { onRemoveComment(c, $0) }
+    }
+
     /// Même éligibilité que `deleteHandler` : l'item « Modifier » n'apparaît
     /// que sur les commentaires de l'utilisateur courant.
     private func editHandler(for c: FeedComment) -> (() -> Void)? {
@@ -66,6 +80,31 @@ struct ThreadedCommentSection: View {
               let me = AuthManager.shared.currentUser?.id, !me.isEmpty,
               c.authorId == me else { return nil }
         return { onEditComment(c) }
+    }
+
+    /// Une réponse du fil — la même rangée dans l'aperçu et le fil déplié.
+    private func replyRow(_ reply: FeedComment) -> some View {
+        CommentRowView(
+            comment: reply,
+            accentColor: accentColor,
+            isReply: true,
+            isLiked: likedIds.contains(reply.id),
+            likeCount: max(0, reply.likes + (likeDelta[reply.id] ?? 0)),
+            isInFlight: heartInFlightIds.contains(reply.id),
+            onReply: { onReply(reply) },
+            onLikeComment: { onLikeComment(reply.id) },
+            onDeleteComment: deleteHandler(for: reply),
+            onRemoveComment: removeHandler(for: reply),
+            onEditComment: editHandler(for: reply),
+            onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
+            moodEmoji: replyMoodResolver?(reply.authorId),
+            storyState: replyStoryResolver?(reply.authorId) ?? .none,
+            presenceState: replyPresenceResolver?(reply.authorId) ?? nil,
+            threadRoot: comment,
+            threadReplies: replies,
+            post: post
+        )
+        .equatable()
     }
 
     /// Show first 2 replies by default without requiring toggle
@@ -97,6 +136,7 @@ struct ThreadedCommentSection: View {
                 onReply: { onReply(comment) },
                 onLikeComment: { onLikeComment(comment.id) },
                 onDeleteComment: deleteHandler(for: comment),
+                onRemoveComment: removeHandler(for: comment),
                 onEditComment: editHandler(for: comment),
                 onRequestTranslation: onRequestTranslation.map { handler in { handler(comment) } },
                 showSeeReplies: showSeeReplies,
@@ -112,26 +152,7 @@ struct ThreadedCommentSection: View {
             // Auto-show first 2 replies (no toggle needed)
             if !autoPreviewReplies.isEmpty && !isExpanded {
                 ForEach(autoPreviewReplies) { reply in
-                    CommentRowView(
-                        comment: reply,
-                        accentColor: accentColor,
-                        isReply: true,
-                        isLiked: likedIds.contains(reply.id),
-                        likeCount: max(0, reply.likes + (likeDelta[reply.id] ?? 0)),
-                        isInFlight: heartInFlightIds.contains(reply.id),
-                        onReply: { onReply(reply) },
-                        onLikeComment: { onLikeComment(reply.id) },
-                        onDeleteComment: deleteHandler(for: reply),
-                        onEditComment: editHandler(for: reply),
-                        onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
-                        moodEmoji: replyMoodResolver?(reply.authorId),
-                        storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil,
-                        threadRoot: comment,
-                        threadReplies: replies,
-                        post: post
-                    )
-                        .equatable()
+                    replyRow(reply)
                     .padding(.leading, 36)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
@@ -154,26 +175,7 @@ struct ThreadedCommentSection: View {
                 }
 
                 ForEach(replies) { reply in
-                    CommentRowView(
-                        comment: reply,
-                        accentColor: accentColor,
-                        isReply: true,
-                        isLiked: likedIds.contains(reply.id),
-                        likeCount: max(0, reply.likes + (likeDelta[reply.id] ?? 0)),
-                        isInFlight: heartInFlightIds.contains(reply.id),
-                        onReply: { onReply(reply) },
-                        onLikeComment: { onLikeComment(reply.id) },
-                        onDeleteComment: deleteHandler(for: reply),
-                        onEditComment: editHandler(for: reply),
-                        onRequestTranslation: onRequestTranslation.map { handler in { handler(reply) } },
-                        moodEmoji: replyMoodResolver?(reply.authorId),
-                        storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                        presenceState: replyPresenceResolver?(reply.authorId) ?? nil,
-                        threadRoot: comment,
-                        threadReplies: replies,
-                        post: post
-                    )
-                        .equatable()
+                    replyRow(reply)
                     .padding(.leading, 36)
                     // Même style que le tint de section (les deux appelants) —
                     // au niveau de la rangée pour cibler UNE réponse précise.

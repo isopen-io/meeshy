@@ -1,3 +1,5 @@
+import type { RemovedContentType } from '@meeshy/shared/types/notification';
+
 import { DISCOVER_TAB_PARAM, REQUEST_FILTER_PARAM } from '@/lib/discover/view';
 
 import type { NotificationRecord } from './record';
@@ -177,7 +179,7 @@ const MISSIONS_SECTION: NotificationTarget = { route: 'progression', search: { [
  * retiré ouvre sa conversation, un COMMENTAIRE la publication qui le portait.
  * Le push n'a pas `contentType` : la passerelle le recopie dans `postType`.
  */
-const REMOVED_PUBLICATIONS: ReadonlySet<string> = new Set(['post', 'reel', 'story']);
+const REMOVED_PUBLICATIONS: ReadonlySet<string> = new Set<RemovedContentType>(['post', 'reel', 'story']);
 
 const SECURITY_TYPES: ReadonlySet<string> = new Set([
   'security_alert',

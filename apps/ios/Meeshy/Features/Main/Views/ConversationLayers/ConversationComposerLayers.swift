@@ -140,11 +140,6 @@ struct ConversationComposerEditingCovers: ViewModifier {
                     onRemovePiece(piece.attachmentId)
                 }, onCancel: { scrollState.pieceToRetouch = nil })
             }
-            .conversationCover(item: $scrollState.retouchSeries) { serie in
-                ConversationRetouchSeriesEditor(series: serie, onDone: { rendues in
-                    onRetouched(rendues)
-                }, onCancel: { scrollState.retouchSeries = nil })
-            }
             .conversationCover(isPresented: Binding(
                 get: { scrollState.recentImageToEdit != nil },
                 set: { if !$0 { scrollState.recentImageToEdit = nil } }
