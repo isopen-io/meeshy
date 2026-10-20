@@ -137,9 +137,10 @@ class NotificationService: UNNotificationServiceExtension {
         )
         let isCommunicationType = Self.communicationTypes.contains(userInfo["type"] as? String ?? "")
         let identifier = request.identifier
+        let owned = NSEOwnedContent(content: working)
         enrichment = Task {
-            await Self.deliverEnriched(
-                working,
+            await NotificationService.deliverEnriched(
+                owned.content,
                 plan: plan,
                 incomingIdentifier: identifier,
                 budget: budget,
@@ -150,7 +151,7 @@ class NotificationService: UNNotificationServiceExtension {
     }
 
     private static func deliverEnriched(
-        _ working: sending UNMutableNotificationContent,
+        _ working: UNMutableNotificationContent,
         plan: NSEEnrichmentRequest,
         incomingIdentifier: String,
         budget: NSEBudget,
@@ -684,4 +685,11 @@ class NotificationService: UNNotificationServiceExtension {
         let ext = fallbackPathExtension.isEmpty ? "bin" : fallbackPathExtension
         return (ext, nil)
     }
+}
+
+// unchecked: le contenu est copié juste avant la tâche d'enrichissement et n'est plus touché que par elle ;
+// l'expiration livre bestAttemptContent, un autre objet. Le vérificateur par régions de Xcode 26.1.1 ne sait pas
+// analyser cette capture (« pattern that the region based isolation checker does not understand »).
+struct NSEOwnedContent: @unchecked Sendable {
+    let content: UNMutableNotificationContent
 }
