@@ -115,7 +115,8 @@ struct BubbleDragSourceModifier: ViewModifier {
 
     private static func cachedFile(remoteURL: String, kind: AttachmentDragKind) async -> URL? {
         guard let resolved = MeeshyConfig.resolveMediaURL(remoteURL) else { return nil }
-        let store = kind == .video ? await CacheCoordinator.shared.video : await CacheCoordinator.shared.images
+        let coordinator = CacheCoordinator.shared
+        let store = await (kind == .video ? coordinator.video : coordinator.images)
         return store.cachedFileURL(for: resolved.absoluteString)
     }
 }
