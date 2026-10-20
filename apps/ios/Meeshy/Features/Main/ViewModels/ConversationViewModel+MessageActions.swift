@@ -380,38 +380,6 @@ extension ConversationViewModel {
         }
     }
 
-    /// **Retirer une SÉLECTION** (#11159) : UN motif pour les messages des
-    /// autres, les siens partent pour tous sans motif. Toute la sélection
-    /// s'efface aussitôt ; chaque refus ne ramène que son message. En ligne
-    /// seulement, comme `removeMessage`.
-    func removeSelectedMessages(_ ids: Set<String>, reason: String) async {
-        guard networkMonitor.isOnline else {
-            self.error = String(localized: "moderation.removal.offline", defaultValue: "Connectez-vous pour retirer ce contenu.", bundle: .main)
-            return
-        }
-        let selected = messages.filter { ids.contains($0.id) }
-        let unsent = selected.filter { $0.isMe && $0.deliveryStatus == .failed }
-        let sent = selected.filter { !($0.isMe && $0.deliveryStatus == .failed) }
-        for message in unsent { await deleteMessage(messageId: message.id, mode: .everyone) }
-        let deletedAt = Date()
-        for message in sent {
-            try? await messagePersistence.markDeleted(localId: message.id, deletedAt: deletedAt)
-            StarredMessagesStore.shared.remove(messageId: serverId(for: message.id))
-        }
-        var refusal: Error?
-        for message in sent {
-            do {
-                try await messageService.delete(
-                    conversationId: conversationId, messageId: serverId(for: message.id), reason: message.isMe ? nil : reason
-                )
-            } catch {
-                try? await messagePersistence.markUndeleted(localId: message.id)
-                refusal = error
-            }
-        }
-        if let refusal { self.error = userFacingMessage(for: refusal) }
-    }
-
     // MARK: - Delete Attachment
 
     func deleteAttachment(messageId: String, attachmentId: String) async {
