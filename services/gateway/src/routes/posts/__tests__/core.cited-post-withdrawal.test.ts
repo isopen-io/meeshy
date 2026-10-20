@@ -87,7 +87,8 @@ async function buildApp(withSocket: boolean) {
   const requiredAuth = async (req: FastifyRequest) => {
     (req as any).authContext = { isAuthenticated: true, registeredUser: { id: AUTHOR_ID, role: 'USER' } };
   };
-  registerCoreRoutes(app, { message: { findMany } } as any, requiredAuth);
+  const post = { findFirst: jest.fn<any>().mockResolvedValue({ authorId: AUTHOR_ID, type: 'STORY' }) };
+  registerCoreRoutes(app, { message: { findMany }, post } as any, requiredAuth);
   await app.ready();
   return { app, emissions, findMany };
 }
