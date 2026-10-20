@@ -241,7 +241,7 @@ struct ComposerCaptureChrome: View {
             if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
                 GeometryReader { proxy in
                     let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
-                                                      framed: session.editFramesScene)
+                                                      framed: session.editFramesScene, playback: session.offersEditPlayback)
                     ComposerCropBrackets(scene: ComposerEditScene.rect(aspect: aspect, in: zone), area: zone) { cadre in
                         guard cadre.height > 0 else { return }
                         session.setEditAspect(cadre.width / cadre.height)
@@ -251,40 +251,13 @@ struct ComposerCaptureChrome: View {
                 .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)
                 .transition(.opacity)
             }
-            // **Lecture et son, en bas à droite de la vidéo** (#10356) : posés
-            // sur la scène, ils quittent la bande et ne lui prennent rien. Ils
-            // suivent le chrome (#10930).
-            if !finishing, session.editChromeShown, session.offersEditPlayback, let aspect = session.editAspect {
-                GeometryReader { proxy in
-                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
-                                                      framed: session.editFramesScene)
-                    let rangee = ComposerEditPlaybackLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone),
-                                                                   hasAudio: session.takeHasAudio,
-                                                                   clearsBrackets: session.showsCropBrackets)
-                    ComposerEditPlaybackControls(paused: session.editPaused,
-                                                 hasAudio: session.takeHasAudio,
-                                                 muted: session.takeSound.muted,
-                                                 onTogglePlayback: { session.toggleEditPlayback() },
-                                                 onToggleMute: { session.toggleTakeMute() })
-                        .frame(width: rangee.width, height: rangee.height)
-                        .position(x: rangee.midX, y: rangee.midY)
-                }
-                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
-                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)
-                .transition(.opacity)
-            }
-            // **Les formats, PAR-DESSUS le cadre** (#10930) : à gauche de la
-            // pause et du muet d'une vidéo, au bas d'une photo.
+            if !finishing, session.offersEditPlayback { editPlayback }
+            // **Les formats, PAR-DESSUS le cadre** (#10930), au bas de la scène.
             if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
                 GeometryReader { proxy in
                     let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
-                                                      framed: session.editFramesScene)
-                    let scene = ComposerEditScene.rect(aspect: aspect, in: zone)
-                    let lecture = session.offersEditPlayback
-                        ? ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: session.takeHasAudio,
-                                                           clearsBrackets: true)
-                        : nil
-                    let rangee = ComposerEditPresetsLayout.frame(scene: scene, playback: lecture)
+                                                      framed: session.editFramesScene, playback: session.offersEditPlayback)
+                    let rangee = ComposerEditPresetsLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone))
                     ScrollView(.horizontal, showsIndicators: false) {
                         ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
                     }
@@ -295,28 +268,7 @@ struct ComposerCaptureChrome: View {
                 .transition(.opacity)
             }
             VStack(spacing: 0) {
-                ComposerSceneCameraBar(
-                    stage: session.stage,
-                    flashMode: session.flash,
-                    onCycleFlash: { session.cycleFlash() },
-                    onFlipCamera: { session.flipCamera() },
-                    onDisarm: { requestDisarm() },
-                    size: size,
-                    onToggleSize: onToggleSize,
-                    offersSizeToggle: offersSizeToggle,
-                    segments: session.segments,
-                    onDropLastSegment: { session.dropLastSegment() },
-                    onValidateSegments: onValidateSegments,
-                    liveDuration: session.camera.recordingDuration,
-                    flashIntensity: session.barCapture.flashIntensity,
-                    onFlashIntensity: { session.setFlashIntensity($0) },
-                    flipping: session.barCapture.flipping,
-                    editing: session.phase.isEditing,
-                    rendering: session.isRenderingLook || session.takeSaveState == .saving,
-                    onDone: { session.finishEditing() },
-                    saveState: session.takeSaveState,
-                    onSave: { session.saveTakeToPhotos() })
-                .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeil))
+                if showsTopRow { topRow }
                 Spacer(minLength: 0)
                 // En retouche, le bas suit le chrome (#10930) : la prise garde
                 // tout l'écran, les outils se posent par-dessus.
@@ -339,6 +291,7 @@ struct ComposerCaptureChrome: View {
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsTopRow)
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editChromeShown)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
@@ -346,6 +299,56 @@ struct ComposerCaptureChrome: View {
             Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) { confirmDiscard() }
             Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) {}
         }
+    }
+
+    /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur
+    /// 2026-10-20) : une famille ouverte ou un outil montré les cache.
+    private var showsTopRow: Bool {
+        !session.phase.isEditing
+            || ComposerEditTools.showsTopRow(familyOpen: session.openFamily != nil, shownTools: session.shownEditTools)
+    }
+
+    private var topRow: some View {
+        ComposerSceneCameraBar(
+            stage: session.stage,
+            flashMode: session.flash,
+            onCycleFlash: { session.cycleFlash() },
+            onFlipCamera: { session.flipCamera() },
+            onDisarm: { requestDisarm() },
+            size: size,
+            onToggleSize: onToggleSize,
+            offersSizeToggle: offersSizeToggle,
+            segments: session.segments,
+            onDropLastSegment: { session.dropLastSegment() },
+            onValidateSegments: onValidateSegments,
+            liveDuration: session.camera.recordingDuration,
+            flashIntensity: session.barCapture.flashIntensity,
+            onFlashIntensity: { session.setFlashIntensity($0) },
+            flipping: session.barCapture.flipping,
+            editing: session.phase.isEditing,
+            rendering: session.isRenderingLook || session.takeSaveState == .saving,
+            onDone: { session.finishEditing() },
+            saveState: session.takeSaveState,
+            onSave: { session.saveTakeToPhotos() })
+        .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeil))
+        .transition(.opacity)
+    }
+
+    /// **Lecture et volume d'une vidéo, en haut à droite sous « Terminé »,
+    /// toujours visibles** (porteur 2026-10-20) — outil ouvert ou non, chrome
+    /// montré ou non.
+    private var editPlayback: some View {
+        GeometryReader { proxy in
+            let rangee = ComposerEditPlaybackLayout.frame(container: proxy.size, hasAudio: session.takeHasAudio)
+            ComposerEditPlaybackControls(paused: session.editPaused,
+                                         hasAudio: session.takeHasAudio,
+                                         muted: session.takeSound.muted,
+                                         onTogglePlayback: { session.toggleEditPlayback() },
+                                         onToggleMute: { session.toggleTakeMute() })
+                .frame(width: rangee.width, height: rangee.height)
+                .position(x: rangee.midX, y: rangee.midY)
+        }
+        .transition(.opacity)
     }
 
     /// La croix et le glissé de rangement passent par ici : un enregistrement

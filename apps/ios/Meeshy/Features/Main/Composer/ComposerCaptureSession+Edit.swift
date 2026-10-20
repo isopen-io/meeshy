@@ -408,8 +408,7 @@ extension ComposerCaptureSession {
     /// **Le glissé vers le haut pose le chrome par-dessus la prise** (#10930) :
     /// les outils comme on les a laissés.
     func revealEditChrome() {
-        guard phase.isEditing, !isRenderingLook, !editChromeShown, let take = editTake else { return }
-        if activeEditTools.isEmpty { activeEditTools = ComposerEditTools.revealed(take) }
+        guard phase.isEditing, !isRenderingLook, !editChromeShown else { return }
         editChromeShown = true
         HapticFeedback.light()
     }

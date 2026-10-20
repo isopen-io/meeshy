@@ -31,25 +31,32 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertEqual(ComposerEditTools.offered(.audio), [.trim, .sound], "un son ne se recadre pas")
     }
 
-    /// **#10930 — les outils sont là dès l'entrée** (retour porteur 2026-10-20 :
-    /// « les contrôleurs de l'édition ne fonctionnent pas — rien ne
-    /// fonctionne »). Cachés derrière un glissé que rien n'annonce, aucun
-    /// contrôle n'était atteignable : l'entrée allume ce que le glissé
-    /// allumait, par-dessus une prise qui garde le viewport entier.
-    func test_initial_theCutIsSelectedOnEntry_likeTheSwipeUpWould() {
-        XCTAssertEqual(ComposerEditTools.initial(.photo), ComposerEditTools.revealed(.photo))
-        XCTAssertEqual(ComposerEditTools.initial(.video(hasAudio: true)), [.trim, .sound])
-        XCTAssertEqual(ComposerEditTools.initial(.video(hasAudio: false)), [.trim])
-        XCTAssertEqual(ComposerEditTools.initial(.audio), [.trim, .sound])
+    /// **Le rail est là dès l'entrée, AUCUN outil ouvert** (porteur 2026-10-20 :
+    /// « afficher immédiatement les touches d'édition » ; en vidéo, « Couper »
+    /// n'est plus présélectionné).
+    func test_initial_noToolIsOpenOnEntry() {
+        XCTAssertEqual(ComposerEditTools.initial(.photo), [])
+        XCTAssertEqual(ComposerEditTools.initial(.video(hasAudio: true)), [])
+        XCTAssertEqual(ComposerEditTools.initial(.audio), [])
     }
 
-    /// **#10930 — le glissé vers le haut montre la barre de coupe, « Couper »
-    /// sélectionné** ; son spectre se peint dessus quand la prise a un son.
-    func test_revealed_aVideoShowsItsCut_aPhotoNothingYet() {
-        XCTAssertEqual(ComposerEditTools.revealed(.video(hasAudio: true)), [.trim, .sound])
-        XCTAssertEqual(ComposerEditTools.revealed(.video(hasAudio: false)), [.trim])
-        XCTAssertEqual(ComposerEditTools.revealed(.audio), [.trim, .sound])
-        XCTAssertEqual(ComposerEditTools.revealed(.photo), [], "une photo n'a que le recadrage, à choisir")
+    /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur
+    /// 2026-10-20) : une famille ouverte ou un outil montré les cache ; plus
+    /// rien d'ouvert, ils reviennent.
+    func test_showsTopRow_onlyWhileNoEditElementIsShown() {
+        XCTAssertTrue(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: []))
+        XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: true, shownTools: []))
+        XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: [.crop]))
+        XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: [.trim]))
+        XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: [.sound]))
+    }
+
+    func test_theTopRow_followsTheLaw_andThePlayback_isAlwaysMountedForAVideo() throws {
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("if showsTopRow { topRow }"), "(x) et « Terminé » suivent la loi")
+        XCTAssertTrue(chrome.contains("ComposerEditTools.showsTopRow(familyOpen: session.openFamily != nil, shownTools: session.shownEditTools)"))
+        XCTAssertTrue(chrome.contains("if !finishing, session.offersEditPlayback { editPlayback }"),
+                      "lecture et volume ne dépendent ni du chrome ni d'un outil")
     }
 
     /// **#10930 — seul le recadrage réduit le média**, et seulement quand le
@@ -142,12 +149,15 @@ final class ComposerEditToolsTests: XCTestCase {
 
     // MARK: - (3) Les outils d'une vidéo, ensemble et chacun pour soi
 
-    func test_aVideo_opensFullScreen_withTheCutSelected() async {
+    func test_aVideo_opensFullScreen_withTheRailAndNoToolOpen() async {
         let (session, _) = await videoSession()
-        XCTAssertTrue(session.editChromeShown, "#10930 : les outils sont atteignables dès l'entrée")
-        XCTAssertEqual(session.activeEditTools, [.trim, .sound], "« Couper » sélectionné, son spectre dessus")
-        XCTAssertEqual(session.editPanels, [.trim])
+        XCTAssertTrue(session.editChromeShown, "le rail est atteignable dès l'entrée")
+        XCTAssertEqual(session.activeEditTools, [], "porteur 2026-10-20 : aucun outil ouvert")
+        XCTAssertEqual(session.editPanels, [])
         XCTAssertFalse(session.showsCropBrackets)
+        session.toggleEditTool(.trim)
+        session.toggleEditTool(.sound)
+        XCTAssertEqual(session.editPanels, [.trim], "le spectre se peint sur la coupe")
         XCTAssertFalse(session.editFramesScene, "la coupe se pose par-dessus la vidéo, qui garde l'écran")
         session.toggleEditTool(.crop)
         XCTAssertTrue(session.editFramesScene)
@@ -174,7 +184,7 @@ final class ComposerEditToolsTests: XCTestCase {
 
     func test_tappingAFoldedTool_closesTheBand_andShowsIt() async {
         let (session, _) = await videoSession()
-        session.revealEditChrome()
+        session.toggleEditTool(.trim)
         session.toggleFamily(.frames)
         session.toggleEditTool(.sound)
         XCTAssertNil(session.openFamily, "le toucher d'un outil replie la bande")
@@ -217,25 +227,52 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(photo.editChromeShown, "le suivant rend les outils")
     }
 
+    /// **Lecture et volume, en haut à droite sous « Terminé »** (porteur
+    /// 2026-10-20 ; recette iPhone 18 Pro Max du même jour : posés au coin bas
+    /// de la scène plein écran, la pause tombait sur « Couper » et le volume sur
+    /// « Son »). Ni le rail, ni la coupe, ni une bande ouverte, ni les crochets
+    /// d'une scène recadrée ne les touchent, à 375 comme à 440 pt.
+    func test_playbackRow_sitsUnderTheDoneRow_clearOfRailCutAndBrackets_at375And440() {
+        let ecrans = [CGSize(width: 375, height: 812 - 47 - 34), CGSize(width: 440, height: 956 - 62 - 34)]
+        let panneaux: [[ComposerEditPanel]] = [[], [.trim], [.sound], [.band]]
+        for ecran in ecrans {
+            for son in [true, false] {
+                let rangee = ComposerEditPlaybackLayout.frame(container: ecran, hasAudio: son)
+                XCTAssertGreaterThanOrEqual(rangee.minY, ComposerEditScene.topBand, "\(ecran) : sous la ligne de « Terminé »")
+                XCTAssertEqual(rangee.maxX, ecran.width - ComposerEditScene.margin, accuracy: 0.001, "\(ecran) : à droite")
+                XCTAssertEqual(rangee.height, MeeshyControlSize.tapTarget, "cible de 44 pt")
+                for p in panneaux {
+                    let bas = ecran.height - ComposerEditScene.bottomReserve(p)
+                    XCTAssertLessThanOrEqual(rangee.maxY, bas, "\(ecran) \(p) : ni rail, ni coupe, ni bande")
+                    let zone = ComposerEditScene.area(container: ecran, top: 0, bottom: 0, panels: p,
+                                                      framed: true, playback: true)
+                    let scene = ComposerEditScene.rect(aspect: ComposerEditScene.clampedAspect(ecran.width / ecran.height),
+                                                       in: zone)
+                    XCTAssertGreaterThanOrEqual(scene.minY, rangee.maxY, "\(ecran) \(p) : la scène recadrée commence dessous")
+                }
+            }
+            let rail = CGRect(x: 0, y: ecran.height - ComposerEditScene.gap - ComposerEditScene.toolsRow,
+                              width: ecran.width, height: ComposerEditScene.toolsRow)
+            XCTAssertFalse(ComposerEditPlaybackLayout.frame(container: ecran, hasAudio: true).intersects(rail))
+        }
+    }
+
     func test_theSceneTap_isRoutedThroughTheTable_inEditing() throws {
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(chrome.contains("ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: context)"),
                       "le toucher de la nappe consulte la table avant de viser")
     }
 
-    /// **#10930 — les formats se posent sur la scène**, à gauche de la pause et
-    /// du muet d'une vidéo, sans couvrir le crochet du coin.
-    func test_thePresets_sitOnTheScene_leftOfThePlayback() {
+    /// **#10930 — les formats se posent sur la scène**, au bas du cadre, entre
+    /// les deux crochets du bas.
+    func test_thePresets_sitOnTheSceneBottom_betweenTheBottomBrackets() {
         let cible = MeeshyControlSize.tapTarget
         let scene = CGRect(x: 16, y: 100, width: 370, height: 600)
-        let lecture = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: true, clearsBrackets: true)
-        let formats = ComposerEditPresetsLayout.frame(scene: scene, playback: lecture)
-        XCTAssertLessThanOrEqual(formats.maxX, lecture.minX - ComposerEditPlaybackLayout.spacing + 0.001)
-        XCTAssertEqual(formats.midY, lecture.midY, accuracy: 0.001, "sur la même rangée")
-        XCTAssertGreaterThanOrEqual(formats.minX, scene.minX + cible, "le crochet du coin garde sa cible")
-        let photo = ComposerEditPresetsLayout.frame(scene: scene, playback: nil)
-        XCTAssertLessThanOrEqual(photo.maxX, scene.maxX - cible + 0.001)
-        XCTAssertTrue(scene.contains(photo), "posés SUR la photo")
+        let formats = ComposerEditPresetsLayout.frame(scene: scene)
+        XCTAssertGreaterThanOrEqual(formats.minX, scene.minX + cible, "le crochet de gauche garde sa cible")
+        XCTAssertLessThanOrEqual(formats.maxX, scene.maxX - cible + 0.001, "celui de droite aussi")
+        XCTAssertTrue(scene.contains(formats), "posés SUR le cadre")
+        XCTAssertGreaterThan(formats.midY, scene.midY, "au bas du cadre")
     }
 
     func test_theOverlayChrome_isWired() throws {
@@ -265,21 +302,13 @@ final class ComposerEditToolsTests: XCTestCase {
                        "allumer « Son » ne déplace pas la scène")
     }
 
-    /// **#10356 — lecture et muet, en bas à droite de la SCÈNE**, la pause à
-    /// gauche du muet ; la rangée s'écarte du crochet du coin.
-    func test_10356_playbackRow_sitsBottomRightOfTheScene_clearOfTheCornerBracket() {
+    func test_10356_playbackRow_hasOneTargetPerButton_andSaysItsAction() {
         let cible = MeeshyControlSize.tapTarget
-        let scene = CGRect(x: 16, y: 100, width: 300, height: 500)
-        let deux = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: true, clearsBrackets: false)
-        XCTAssertEqual(deux.height, cible, "cible de 44 pt")
+        let ecran = CGSize(width: 402, height: 790)
+        let deux = ComposerEditPlaybackLayout.frame(container: ecran, hasAudio: true)
         XCTAssertEqual(deux.width, cible * 2 + ComposerEditPlaybackLayout.spacing, accuracy: 0.001)
-        XCTAssertEqual(deux.maxX, scene.maxX - ComposerEditPlaybackLayout.margin, accuracy: 0.001)
-        XCTAssertEqual(deux.maxY, scene.maxY - ComposerEditPlaybackLayout.margin, accuracy: 0.001)
-        XCTAssertTrue(scene.contains(deux), "posée SUR la vidéo")
-        let crochets = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: true, clearsBrackets: true)
-        XCTAssertLessThanOrEqual(crochets.maxX, scene.maxX - cible, "le crochet du coin garde sa cible")
-        let seul = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: false, clearsBrackets: false)
-        XCTAssertEqual(seul.width, cible, accuracy: 0.001, "un clip muet n'a que la lecture")
+        XCTAssertEqual(ComposerEditPlaybackLayout.frame(container: ecran, hasAudio: false).width, cible, accuracy: 0.001,
+                       "un clip muet n'a que la lecture")
         XCTAssertNotEqual(ComposerCaptureCopy.playbackLabel(paused: true),
                           ComposerCaptureCopy.playbackLabel(paused: false), "« Lire » et « Pause »")
     }
@@ -292,15 +321,15 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(chrome.contains("ComposerEditPlaybackControls("), "lecture et muet sont montés sur la scène")
         XCTAssertTrue(chrome.contains("onTogglePlayback: { session.toggleEditPlayback() }"))
         XCTAssertTrue(chrome.contains("onToggleMute: { session.toggleTakeMute() }"))
-        XCTAssertTrue(chrome.contains("ComposerEditPlaybackLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone)"),
-                      "la rangée se pose sur la scène que les crochets cadrent")
+        XCTAssertTrue(chrome.contains("ComposerEditPlaybackLayout.frame(container: proxy.size, hasAudio: session.takeHasAudio)"),
+                      "la rangée se pose par la règle que le témoin de géométrie éprouve")
     }
 
     func test_aSilentClip_offersNoSoundTool() async {
         let (session, _) = await videoSession(hasAudio: false)
         XCTAssertEqual(session.editTools, [.crop, .trim])
-        session.revealEditChrome()
-        XCTAssertEqual(session.activeEditTools, [.trim], "« Couper » seul, sans spectre (#10930)")
+        session.toggleEditTool(.trim)
+        XCTAssertEqual(session.activeEditTools, [.trim], "« Couper » seul, sans spectre")
         session.toggleEditTool(.sound)
         XCTAssertEqual(session.activeEditTools, [.trim], "un outil que la prise n'offre pas ne s'active pas")
     }
