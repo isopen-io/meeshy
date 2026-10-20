@@ -523,7 +523,7 @@ final class MessageListViewController: UIViewController {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    deinit {
+    nonisolated deinit {
         // Ni vidange ni invalidation du timer ici : `deinit` n'est pas isolé au
         // MainActor et `Timer` n'est pas Sendable — y toucher ne compile pas
         // sous Swift 6. (`CADisplayLink` ci-dessous passe, lui, ce qui rend le

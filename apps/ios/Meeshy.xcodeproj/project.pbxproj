@@ -918,6 +918,12 @@
 		40C1E089BDE4D18C30B2A32E /* ConversationView+AttachmentHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2195714CB6B3FFDA0FF3D1F4 /* ConversationView+AttachmentHandlers.swift */; };
 		40C4A06CFD8242DA80FAB494 /* FeedScrollPublicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF18F6DB1B8A46296D7E856 /* FeedScrollPublicationTests.swift */; };
 		40D4F56A98B5443AE44D6509 /* MessageListViewController+UnreadSeparator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9948AF1B014E25075C98315D /* MessageListViewController+UnreadSeparator.swift */; };
+		F73D56F25F0705A7ECABB638 /* MessageListViewController+MessageCellHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88ED8C1911E8F888B9AC209E /* MessageListViewController+MessageCellHandlers.swift */; };
+		40DB34C823BF1DC32FE9708B /* MessageListViewController+MessageCellInputs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3586702B821C8BF9580FAB82 /* MessageListViewController+MessageCellInputs.swift */; };
+		6BB7177C97371B45CD6E7899 /* MessageListViewController+RowGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5468CFCE004B8BD7099C2A /* MessageListViewController+RowGrouping.swift */; };
+		DFBF733C0A71FD6B2B81B888 /* MessageListViewController+ConversationStartCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 737429B5409E3981757357DE /* MessageListViewController+ConversationStartCell.swift */; };
+		CEE5D88FFE3822A64DA8A34E /* MessageListViewController+DayHeaderCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB582095F5E85C5A3DEB47C2 /* MessageListViewController+DayHeaderCell.swift */; };
+		749CAB7A7157150773B70C37 /* MessageListViewController+TypingCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31604610366F1D949E8F44A7 /* MessageListViewController+TypingCell.swift */; };
 		40EC9FBED6891BD15F5D8AEE /* ComposerSoundDispositionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9CF2EDDAB39452F33712535 /* ComposerSoundDispositionTests.swift */; };
 		40F4E4F4E0ADEA9865C3A60D /* SkeletonColdStartGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49E2C1EAF126C1930923572A /* SkeletonColdStartGuardTests.swift */; };
 		41041994FA9BB1AF9C1BFDDC /* FocalFocusDetailsMotionLaw.swift in Sources */ = {isa = PBXBuildFile; fileRef = E047EF9A8A0CFF1BD2246123 /* FocalFocusDetailsMotionLaw.swift */; };
@@ -2742,6 +2748,7 @@
 		BE1BB3D2A8B8049049FADC07 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810844EBA54C9C8D2F1F4284 /* LoginView.swift */; };
 		BE2846B767C7481E404D0CA6 /* LentilleSkeletonRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 005826130DD0EA048C6BDD71 /* LentilleSkeletonRow.swift */; };
 		BE3899DA36A61482AD8D7E1C /* MessageListViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8A6A552D12BDFB84C955C92 /* MessageListViewControllerTests.swift */; };
+		22DDDA1CF01A461F965ACAB2 /* MessageListViewControllerCellRegistrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA390021F328D338DC237485 /* MessageListViewControllerCellRegistrationTests.swift */; };
 		BE57E586DD7BBE0E5FE45C4B /* ConversationAudioCallSuspensionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 246419010E6710FB77A38740 /* ConversationAudioCallSuspensionTests.swift */; };
 		BE5B8317F3AC84B127D22ED0 /* AudioTrimSectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4696777A0578030CCCED0FF9 /* AudioTrimSectionTests.swift */; };
 		BE6F4D54AB2E4AA6FC8FFF3D /* MyStoryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 629AF3A8631CE0794D4AA254 /* MyStoryCard.swift */; };
@@ -6032,6 +6039,12 @@
 		991CE9339D3C3878E90C0180 /* CallWaitingHandoffCancellationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallWaitingHandoffCancellationTests.swift; sourceTree = "<group>"; };
 		992BA1CAA5CF4A54AF1A1FF6 /* CallRecordingControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallRecordingControllerTests.swift; sourceTree = "<group>"; };
 		9948AF1B014E25075C98315D /* MessageListViewController+UnreadSeparator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+UnreadSeparator.swift"; sourceTree = "<group>"; };
+		88ED8C1911E8F888B9AC209E /* MessageListViewController+MessageCellHandlers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+MessageCellHandlers.swift"; sourceTree = "<group>"; };
+		3586702B821C8BF9580FAB82 /* MessageListViewController+MessageCellInputs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+MessageCellInputs.swift"; sourceTree = "<group>"; };
+		6E5468CFCE004B8BD7099C2A /* MessageListViewController+RowGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+RowGrouping.swift"; sourceTree = "<group>"; };
+		737429B5409E3981757357DE /* MessageListViewController+ConversationStartCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+ConversationStartCell.swift"; sourceTree = "<group>"; };
+		DB582095F5E85C5A3DEB47C2 /* MessageListViewController+DayHeaderCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+DayHeaderCell.swift"; sourceTree = "<group>"; };
+		31604610366F1D949E8F44A7 /* MessageListViewController+TypingCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+TypingCell.swift"; sourceTree = "<group>"; };
 		9956FEE0F05E66A50A16CB8C /* GameGuideCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGuideCopy.swift; sourceTree = "<group>"; };
 		995BD3CD40C7A98A0D123B24 /* FeedCacheSaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedCacheSaver.swift; sourceTree = "<group>"; };
 		99760977113E41B57CF4E8D6 /* RenderedPixels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderedPixels.swift; sourceTree = "<group>"; };
@@ -7324,6 +7337,7 @@
 		F8820C8F472CAB76063AF752 /* ProgressionViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionViewModelTests.swift; sourceTree = "<group>"; };
 		F887DBB934C6AD61491784AC /* AudioTapFormatReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioTapFormatReadiness.swift; sourceTree = "<group>"; };
 		F8A6A552D12BDFB84C955C92 /* MessageListViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListViewControllerTests.swift; sourceTree = "<group>"; };
+		AA390021F328D338DC237485 /* MessageListViewControllerCellRegistrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListViewControllerCellRegistrationTests.swift; sourceTree = "<group>"; };
 		F8B723EF88612B92F99EFC8C /* CallManager+Resume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Resume.swift"; sourceTree = "<group>"; };
 		F8BAA75F466A90C03031CB61 /* CommentSheetFit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentSheetFit.swift; sourceTree = "<group>"; };
 		F8C8FCB77D28C791EA11A786 /* StoryExportShareViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExportShareViewModelTests.swift; sourceTree = "<group>"; };
@@ -7941,6 +7955,7 @@
 				A6CF263640DAA4DEEBA0AAC6 /* MessageListStickyDayMemoGuardTests.swift */,
 				D6F12D1B860548F76F147B9E /* MessageListTimerQuiescenceGuardTests.swift */,
 				F8A6A552D12BDFB84C955C92 /* MessageListViewControllerTests.swift */,
+				AA390021F328D338DC237485 /* MessageListViewControllerCellRegistrationTests.swift */,
 				E9A2A5495CCA9C572690A248 /* MessageMenuKeyboardDismissTests.swift */,
 				D6A62093F245F367EA663F67 /* MessageMoreJumpsToViewsGuardTests.swift */,
 				02F8B384F4BC5AA88547A4BF /* MessageMoreSheetAccessibilityTests.swift */,
@@ -10628,6 +10643,12 @@
 				894FBB9F357FE901EA504623 /* MessageListViewController+Snapshot.swift */,
 				DF0E107C6D7F54373DFF86C9 /* MessageListViewController+ThreadQuiescence.swift */,
 				9948AF1B014E25075C98315D /* MessageListViewController+UnreadSeparator.swift */,
+				88ED8C1911E8F888B9AC209E /* MessageListViewController+MessageCellHandlers.swift */,
+				3586702B821C8BF9580FAB82 /* MessageListViewController+MessageCellInputs.swift */,
+				6E5468CFCE004B8BD7099C2A /* MessageListViewController+RowGrouping.swift */,
+				737429B5409E3981757357DE /* MessageListViewController+ConversationStartCell.swift */,
+				DB582095F5E85C5A3DEB47C2 /* MessageListViewController+DayHeaderCell.swift */,
+				31604610366F1D949E8F44A7 /* MessageListViewController+TypingCell.swift */,
 				61557EF39A541508FAB0764C /* MessageMenuKeyboard.swift */,
 				EDE8B7B94172D69FA4839F82 /* MessageRowEnvelope.swift */,
 				309B2B069403F10105456DF7 /* MyStoriesDeleteAlerts.swift */,
@@ -13888,6 +13909,12 @@
 				C32BBE9CCFFDAD44C07CD586 /* MessageListViewController+Snapshot.swift in Sources */,
 				8103F803BBBCC44726A79174 /* MessageListViewController+ThreadQuiescence.swift in Sources */,
 				40D4F56A98B5443AE44D6509 /* MessageListViewController+UnreadSeparator.swift in Sources */,
+				F73D56F25F0705A7ECABB638 /* MessageListViewController+MessageCellHandlers.swift in Sources */,
+				40DB34C823BF1DC32FE9708B /* MessageListViewController+MessageCellInputs.swift in Sources */,
+				6BB7177C97371B45CD6E7899 /* MessageListViewController+RowGrouping.swift in Sources */,
+				DFBF733C0A71FD6B2B81B888 /* MessageListViewController+ConversationStartCell.swift in Sources */,
+				CEE5D88FFE3822A64DA8A34E /* MessageListViewController+DayHeaderCell.swift in Sources */,
+				749CAB7A7157150773B70C37 /* MessageListViewController+TypingCell.swift in Sources */,
 				5C53ADDF6A2349B671C8B606 /* MessageListViewController.swift in Sources */,
 				72C9DDBD23E1DB10CE993654 /* MessageMenuKeyboard.swift in Sources */,
 				C1411EE6EB9B7C4CF2B00BA6 /* MessageModels.swift in Sources */,
@@ -15542,6 +15569,7 @@
 				AEB0C8DE6D395F7E235B55B3 /* MessageListStickyDayMemoGuardTests.swift in Sources */,
 				6EBBC8BFBA031BBA71F31FB5 /* MessageListTimerQuiescenceGuardTests.swift in Sources */,
 				BE3899DA36A61482AD8D7E1C /* MessageListViewControllerTests.swift in Sources */,
+				22DDDA1CF01A461F965ACAB2 /* MessageListViewControllerCellRegistrationTests.swift in Sources */,
 				8AB1D1E48017418B06F48621 /* MessageMenuKeyboardDismissTests.swift in Sources */,
 				ECDD75EDD1583EC2BCEDD6B5 /* MessageMoreJumpsToViewsGuardTests.swift in Sources */,
 				26C7BDDF7AD62DE4398E1E22 /* MessageMoreSheetAccessibilityTests.swift in Sources */,
