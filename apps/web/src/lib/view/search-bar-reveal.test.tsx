@@ -99,9 +99,9 @@ describe('useSearchBarScrolledAway — branché sur le scrollport', () => {
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
-  afterAll(() => {
+  afterAll(async () => {
     delete globals.IS_REACT_ACT_ENVIRONMENT;
-    releaseHappyDomIfRegistered();
+    await releaseHappyDomIfRegistered();
   });
 
   function Probe() {
