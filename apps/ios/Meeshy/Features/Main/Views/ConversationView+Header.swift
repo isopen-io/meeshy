@@ -208,15 +208,23 @@ extension ConversationView {
 
     // MARK: - Header Call Buttons (audio + video)
 
-    // AnyView : dernier maillon nu de la chaîne du header (voir les
-    // commentaires d'érasure sur `headerButtonsCluster`/
-    // `readingModeAffordanceCluster` dans ConversationView.swift, même
-    // débordement de pile au décodage de mangled name, 2026-08-17).
-    var headerCallButtons: AnyView {
-        AnyView(headerCallButtonsOnly
-        .task(id: liveConversation?.id) {
-            await ConversationEngagementStore.shared.revalidate(liveConversation?.id ?? "")
-        })
+    /// Frontière NOMINALE du bouton d'appel : l'emplacement lit un instantané
+    /// `Equatable` de l'état d'appel (`CallHeaderSnapshotStore`) et ne construit
+    /// pas la pile d'appel.
+    var headerCallButtons: ConversationHeaderCallSlot {
+        let entry = HeaderCallEntry.resolve(
+            conversation: conversation,
+            viewerPlatformRole: AuthManager.shared.currentUser?.role,
+            viewerIsGuest: anonymousSession != nil
+        )
+        return ConversationHeaderCallSlot(
+            entry: entry,
+            conversationId: conversation?.id ?? "",
+            calleeName: headerCalleeName(for: entry),
+            accentColor: accentColor,
+            secondaryColor: secondaryColor,
+            engagementConversationId: liveConversation?.id
+        )
     }
 
     // MARK: - « 🔥 série · total » (#8906, #9044)
@@ -232,39 +240,13 @@ extension ConversationView {
         )
     }
 
-    private var headerCallButtonsOnly: AnyView {
-        guard let entry = HeaderCallEntry.resolve(
-            conversation: conversation,
-            viewerPlatformRole: AuthManager.shared.currentUser?.role,
-            viewerIsGuest: anonymousSession != nil
-        ) else { return AnyView(EmptyView()) }
+    /// #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
+    /// poignée de l'appel est la conversation, son nom le titre du groupe.
+    private func headerCalleeName(for entry: HeaderCallEntry?) -> String {
+        guard let entry else { return "" }
         switch entry.callee {
-        case .conversation:
-            // #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
-            // poignée de l'appel est la conversation, son nom le titre du groupe.
-            let groupId = conversation?.id ?? ""
-            return AnyView(HeaderCallButtonsView(
-                conversationId: groupId,
-                userId: groupId,
-                calleeName: conversation?.displayName ?? "",
-                accentColor: accentColor,
-                secondaryColor: secondaryColor,
-                isGroup: true,
-                canStart: entry.canStart
-            ))
-        case .peer(let userId):
-            // §7.6 — the start-call buttons are owned by a dedicated subview that
-            // observes CallManager, so during an active call they swap to a
-            // "tap to return" indicator (preventing a 2nd call from the header)
-            // without forcing the whole ConversationView to observe the singleton.
-            return AnyView(HeaderCallButtonsView(
-                conversationId: conversation?.id ?? "",
-                userId: userId,
-                calleeName: resolvedCalleeName,
-                accentColor: accentColor,
-                secondaryColor: secondaryColor,
-                canStart: entry.canStart
-            ))
+        case .conversation: return conversation?.displayName ?? ""
+        case .peer: return resolvedCalleeName
         }
     }
 
@@ -435,241 +417,6 @@ struct HeaderCallEntry: Equatable {
         default:
             return nil
         }
-    }
-}
-
-// MARK: - Header Call Buttons (§7.6)
-// Owns the CallManager observation so the header reacts to call state without
-// the whole ConversationView subscribing. Idle → audio + video start buttons;
-// active call → a green "tap to return" indicator (blocks starting a 2nd call,
-// gives one-tap return to the in-progress call).
-
-private struct HeaderCallButtonsView: View {
-    let conversationId: String
-    let userId: String
-    let calleeName: String
-    let accentColor: String
-    let secondaryColor: String
-    /// #3585 — `userId` porte alors la conversation (poignée CallKit du groupe)
-    /// et `calleeName` son titre.
-    var isGroup = false
-    /// `false` : le lecteur ne LANCE pas d'appel ici (#10207 — une `public`
-    /// dont il n'est ni créateur ni administrateur) ; il rejoint seulement
-    /// celui qui est déjà en cours.
-    var canStart = true
-
-    @ObservedObject private var callManager = CallManager.shared
-    /// Set when the SERVER (not this device's own `CallManager`) reports an
-    /// active call for this conversation — the case `callManager.callState`
-    /// alone can't detect: this device's own session was lost (app relaunch,
-    /// crash) while the call is still ongoing. User-requested 2026-07-11 —
-    /// "il faut permettre... l'indicateur minuteur vert... doit être présent
-    /// avec la possibilité au touché de rejoindre l'appel". Reconciliation
-    /// itself (the REST call) is an SDK atom (`ActiveCallService`); deciding
-    /// WHEN to call it and how it changes this button is app orchestration.
-    @State private var reconciledActiveCall: ActiveCallSession?
-
-    var body: some View {
-        Group {
-            if callManager.callState.isActive {
-                // 2026-08-13 — un appel actif ne doit apparaître dans le header
-                // QUE de la conversation qui l'héberge, jamais dans toutes les
-                // conversations ouvertes pendant qu'un appel tourne ailleurs.
-                // `callManager.callState.isActive` seul (avant ce fix) ne
-                // distinguait pas — cette pastille "revenir à l'appel" sortait
-                // identique dans n'importe quelle conversation directe.
-                if isActiveCallForThisConversation {
-                    returnToCallIndicator
-                }
-            } else if let activeCall = reconciledActiveCall {
-                rejoinCallIndicator(activeCall)
-            } else if canStart {
-                startCallButtons
-            }
-        }
-        // Re-reconciles when the conversation changes OR when the local call
-        // starts/stops (#9111 — after leaving a group call that goes on, the
-        // pill must come back as « Rejoindre ») — never on every callState tick.
-        .task(id: HeaderCallReconcileKey(conversationId: conversationId, isLocalCallActive: callManager.callState.isActive)) {
-            await reconcileActiveCall()
-        }
-        // Invalidation temps réel : le gateway fanout `call:ended` jusqu'aux
-        // user-rooms de TOUS les membres de la conversation
-        // (resolveCallEndedRooms) — un viewer non-participant le reçoit donc
-        // aussi. Sans ça, la pill « Rejoindre » (posée une seule fois au
-        // .task ci-dessus) resterait pointée sur un appel mort jusqu'au
-        // prochain passage dans la conversation, et un tap déclencherait un
-        // call:join rejeté « This call has already ended ». Match par callId :
-        // un appel qui finit dans une AUTRE conversation ne doit pas effacer
-        // la pill de celle-ci. Hop main obligatoire : le publisher émet
-        // depuis la queue du socket (classe SIGTRAP connue des surfaces
-        // d'appel).
-        .onReceive(MessageSocketManager.shared.callEnded.receive(on: DispatchQueue.main)) { event in
-            if reconciledActiveCall?.id == event.callId {
-                reconciledActiveCall = nil
-            }
-        }
-    }
-
-    /// `true` quand l'appel actif localement (`CallManager.shared`) appartient
-    /// à CETTE conversation. `callManager.conversationId` peut être `nil` pour
-    /// un appel entrant réveillé par VoIP push sans ce champ dans le payload
-    /// (cf. doc sur `CallManager.conversationId`) — dans ce cas précis on
-    /// dégrade en affichant quand même la pastille plutôt que de la masquer
-    /// partout, pour ne jamais priver l'utilisateur d'un chemin de retour
-    /// vers son propre appel.
-    private var isActiveCallForThisConversation: Bool {
-        guard let activeConversationId = callManager.conversationId else { return true }
-        return activeConversationId == conversationId
-    }
-
-    private var returnToCallIndicator: some View {
-        Button {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                callManager.displayMode = .fullScreen
-            }
-            HapticFeedback.medium()
-        } label: {
-            HStack(spacing: MeeshySpacing.xs) {
-                Circle()
-                    .fill(MeeshyColors.success)
-                    .frame(width: 7, height: 7)
-                Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                CallDurationClock {
-                    Text(callManager.formattedDuration)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
-                }
-            }
-            .foregroundColor(MeeshyColors.success)
-            .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(
-                Capsule()
-                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.light))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
-            )
-        }
-        .accessibilityLabel(String(localized: "call.header.return", defaultValue: "Appel en cours, toucher pour revenir", bundle: .main))
-    }
-
-    /// Same visual family as `returnToCallIndicator` (green pill, same glyph)
-    /// but no live duration — this device hasn't rejoined the media session
-    /// yet, so there's nothing ticking to show. Tapping calls
-    /// `CallManager.rejoinActiveCall`, which resumes the WebRTC session
-    /// directly into `.connecting` — once that lands, `callManager.callState.isActive`
-    /// flips true and this view naturally swaps to `returnToCallIndicator`.
-    private func rejoinCallIndicator(_ activeCall: ActiveCallSession) -> some View {
-        Button {
-            // Rejoindre un groupe en cours : les membres présents offrent à
-            // l'arrivant, et le premier qui offre devient le pair principal.
-            if isGroup { GroupCallMeshCoordinator.shared.markGroupConversation(conversationId, title: calleeName) }
-            callManager.rejoinActiveCall(
-                callId: activeCall.id,
-                conversationId: conversationId,
-                remoteUserId: userId,
-                remoteUsername: calleeName,
-                isVideo: activeCall.isVideo
-            )
-            HapticFeedback.medium()
-        } label: {
-            HStack(spacing: MeeshySpacing.xs) {
-                Circle()
-                    .fill(MeeshyColors.success)
-                    .frame(width: 7, height: 7)
-                Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            }
-            .foregroundColor(MeeshyColors.success)
-            .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(
-                Capsule()
-                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.light))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
-            )
-        }
-        .accessibilityLabel(String(localized: "call.header.rejoin.a11y", defaultValue: "Appel en cours, toucher pour rejoindre", bundle: .main))
-    }
-
-    /// Reconciles with the server on every conversation open — this
-    /// device's own `callManager.callState` can't tell the difference
-    /// between "no call" and "a call is active but this session lost it".
-    /// Skipped when `callManager` already knows locally (no need to hit the
-    /// network, and avoids a race that could momentarily contradict local
-    /// state) or for non-direct conversations (no single peer to rejoin).
-    private func reconcileActiveCall() async {
-        guard !callManager.callState.isActive else { return }
-        // try? flattens the throws+Optional combination (SE-0230) — a
-        // network error and "no active call" both collapse to nil here,
-        // which is the right behavior: reconciliation is best-effort and
-        // silent, never surfaced as an error to the user.
-        let session = try? await ActiveCallService.shared.activeCall(conversationId: conversationId)
-        reconciledActiveCall = session?.conversationId == conversationId ? session : nil
-    }
-
-    /// Bouton d'appel unique : un `Menu` qui laisse choisir vocal ou vidéo via un
-    /// menu contextuel (au lieu de deux boutons séparés). Le glyphe adopte le verre
-    /// adaptatif (Liquid Glass iOS 26, repli `.ultraThinMaterial` en deçà) teinté à
-    /// la couleur d'accent de la conversation.
-    private var startCallButtons: some View {
-        Menu {
-            Button {
-                startCall(isVideo: false)
-            } label: {
-                Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
-            }
-            Button {
-                startCall(isVideo: true)
-            } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
-            }
-        } label: {
-            callGlyph("phone.fill")
-                .meeshyTapTarget()
-        }
-        .accessibilityLabel(isGroup
-            ? String(localized: "call.group.start.menu", defaultValue: "Appeler le groupe", bundle: .main)
-            : String(localized: "call.start.menu", defaultValue: "Appeler", bundle: .main))
-        .accessibilityHint(isGroup
-            ? String(localized: "call.group.start.menu.hint", defaultValue: "Appel vocal ou vidéo avec les membres du groupe, jusqu'à 6 personnes", bundle: .main)
-            : String(localized: "call.start.menu.hint", defaultValue: "Choisir un appel vocal ou vidéo", bundle: .main))
-    }
-
-    private func startCall(isVideo: Bool) {
-        let conversationId = conversationId
-        let userId = userId
-        let calleeName = calleeName
-        guard isGroup else {
-            Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: isVideo) }
-            return
-        }
-        Task { await CallManager.shared.startGroupCall(conversationId: conversationId, title: calleeName, isVideo: isVideo) }
-    }
-
-    private func callGlyph(_ systemName: String) -> some View {
-        Image(systemName: systemName)
-            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            )
-            // Matches expandedHeaderSearchButton's circle exactly (28×28,
-            // font 13) — user-requested 2026-07-11: the two header buttons
-            // must read as the same size. `.adaptiveGlass` MUST come before
-            // `.meeshyTapTarget()`, not after (bug found 2026-07-11): glass
-            // is a Circle sized to the CURRENT view bounds at that point in
-            // the chain — applying it after meeshyTapTarget's `.frame(minWidth:
-            // 44, minHeight: 44)` drew the visible circle at 44pt instead of
-            // 28pt, even though both buttons declared identical numbers.
-            // expandedHeaderSearchButton already has the correct order.
-            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
-            .meeshyTapTarget()
     }
 }
 

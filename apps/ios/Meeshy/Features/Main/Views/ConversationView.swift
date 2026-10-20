@@ -905,7 +905,7 @@ struct ConversationView: View {
     /// prend la place de la loupe.
     var headerButtonsCluster: AnyView {
         AnyView(ConversationHeaderActionsCluster(
-            callButtons: { headerCallButtons },
+            callButtons: { AnyView(headerCallButtons) },
             searchButton: { previewMode ? openFullConversationButton : expandedHeaderSearchButton },
             readingModeCluster: { readingModeAffordanceCluster }
         ))

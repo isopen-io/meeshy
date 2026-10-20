@@ -144,7 +144,19 @@ enum AppSourceGuard {
             .filter { $0.pathExtension == "swift"
                 && $0.deletingPathExtension().lastPathComponent.hasPrefix(base + "+") }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        return [principal] + parties
+        return [principal] + parties + layerURLs(of: base, in: dossier)
+    }
+
+    /// Les couches nominales de l'écran de conversation vivent dans
+    /// `ConversationLayers/` (LOT-10) : elles font partie de l'unité
+    /// `ConversationView`, comme ses extensions.
+    private static func layerURLs(of base: String, in dossier: URL) -> [URL] {
+        guard base == "ConversationView" else { return [] }
+        let couches = (try? FileManager.default.contentsOfDirectory(
+            at: dossier.appendingPathComponent("ConversationLayers"), includingPropertiesForKeys: nil)) ?? []
+        return couches
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
     /// Les types découpés par responsabilité qu'une garde lit comme leur unité :
