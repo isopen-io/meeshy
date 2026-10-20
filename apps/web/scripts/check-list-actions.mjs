@@ -80,6 +80,7 @@ import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { checkLensRowMetaRest } from './lib/check-lens-row-meta.mjs';
 import { checkRowMenuMore } from './lib/check-row-menu-more.mjs';
+import { reportFailures } from './lib/ci-annotation.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -1054,7 +1055,7 @@ served.close();
 
 if (failures.length > 0) {
   console.error(`\n  ${failures.length} constat(s) en défaut :`);
-  for (const e of failures) console.error(`    · ${e}`);
+  reportFailures({ gate: 'check-list-actions', failures, bullet: '·' });
   console.error("\n  Une action de rangée sans effet observable est une action ABSENTE.\n");
   process.exit(1);
 }
