@@ -2,18 +2,28 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
-public struct CommunityCreateView: View {
-    @StateObject private var viewModel = CommunityCreateViewModel()
+public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
+    @ObservedObject private var viewModel: ViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
     public var onCreated: ((MeeshyCommunity) -> Void)?
     public var onDismiss: (() -> Void)?
 
+    public static var popularEmojis: [String] {
+        [
+            "\u{1F680}", "\u{1F3AE}", "\u{1F3B5}", "\u{1F4DA}", "\u{1F4BB}",
+            "\u{1F3A8}", "\u{2764}\u{FE0F}", "\u{1F525}", "\u{2B50}", "\u{1F331}",
+            "\u{1F30D}", "\u{1F3C6}", "\u{1F4F8}", "\u{1F37F}", "\u{1F389}"
+        ]
+    }
+
     public init(
+        viewModel: ViewModel,
         onCreated: ((MeeshyCommunity) -> Void)? = nil,
         onDismiss: (() -> Void)? = nil
     ) {
+        self.viewModel = viewModel
         self.onCreated = onCreated
         self.onDismiss = onDismiss
     }
@@ -206,7 +216,7 @@ public struct CommunityCreateView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.smPlus) {
-                    ForEach(CommunityCreateViewModel.popularEmojis, id: \.self) { emoji in
+                    ForEach(Self.popularEmojis, id: \.self) { emoji in
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                                 viewModel.selectedEmoji = viewModel.selectedEmoji == emoji ? "" : emoji
@@ -456,98 +466,5 @@ public struct CommunityCreateView: View {
         }
         .disabled(!viewModel.isValid || viewModel.isCreating)
         .padding(.top, MeeshySpacing.sm)
-    }
-}
-
-// MARK: - ViewModel
-
-@MainActor
-final class CommunityCreateViewModel: ObservableObject {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    @Published var name = ""
-    @Published var identifier = ""
-    @Published var description = ""
-    @Published var selectedEmoji = ""
-    @Published var isPrivate = true
-    @Published var isCreating = false
-    @Published var showError = false
-    @Published var errorMessage: String?
-
-    // Member search
-    @Published var memberSearch = "" {
-        didSet { scheduleSearch() }
-    }
-    @Published var searchResults: [UserSearchResult] = []
-    @Published var selectedMembers: [UserSearchResult] = []
-    @Published var isSearchingMembers = false
-
-    private var searchTask: Task<Void, Never>?
-
-    static let popularEmojis = [
-        "\u{1F680}", "\u{1F3AE}", "\u{1F3B5}", "\u{1F4DA}", "\u{1F4BB}",
-        "\u{1F3A8}", "\u{2764}\u{FE0F}", "\u{1F525}", "\u{2B50}", "\u{1F331}",
-        "\u{1F30D}", "\u{1F3C6}", "\u{1F4F8}", "\u{1F37F}", "\u{1F389}"
-    ]
-
-    var accentColor: String {
-        DynamicColorGenerator.colorForName(name.isEmpty ? "New" : name)
-    }
-
-    var isValid: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
-
-    private func scheduleSearch() {
-        searchTask?.cancel()
-        guard memberSearch.count >= 2 else {
-            searchResults = []
-            isSearchingMembers = false
-            return
-        }
-        searchTask = Task {
-            isSearchingMembers = true
-            defer { isSearchingMembers = false }
-            do {
-                let results = try await UserService.shared.searchUsers(query: memberSearch, limit: 10)
-                guard !Task.isCancelled else { return }
-                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                searchResults = results.filter { $0.id != currentUserId }
-            } catch {
-                if !Task.isCancelled { searchResults = [] }
-            }
-        }
-    }
-
-    func createCommunity() async -> MeeshyCommunity? {
-        guard isValid else { return nil }
-        isCreating = true
-        defer { isCreating = false }
-
-        do {
-            let identifierParam = identifier.isEmpty ? nil : identifier
-            let descParam = description.isEmpty ? nil : description
-            let apiCommunity = try await CommunityService.shared.create(
-                name: name.trimmingCharacters(in: .whitespaces),
-                identifier: identifierParam,
-                description: descParam,
-                isPrivate: isPrivate
-            )
-
-            // Add selected members
-            for member in selectedMembers {
-                _ = try? await CommunityService.shared.addMember(
-                    communityId: apiCommunity.id,
-                    userId: member.id
-                )
-            }
-
-            return apiCommunity.toCommunity()
-        } catch {
-            errorMessage = error.localizedDescription
-            showError = true
-            return nil
-        }
     }
 }

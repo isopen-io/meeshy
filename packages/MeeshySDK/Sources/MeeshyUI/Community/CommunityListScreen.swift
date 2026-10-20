@@ -1,10 +1,9 @@
 import SwiftUI
 import Combine
-import os
 import MeeshySDK
 
-public struct CommunityListView: View {
-    @StateObject private var viewModel = CommunityListViewModel()
+public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
+    @ObservedObject private var viewModel: ViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -15,10 +14,12 @@ public struct CommunityListView: View {
     @State private var scrollRelay = ScrollOffsetRelay()
 
     public init(
+        viewModel: ViewModel,
         onSelectCommunity: ((MeeshyCommunity) -> Void)? = nil,
         onCreateCommunity: (() -> Void)? = nil,
         onDismiss: (() -> Void)? = nil
     ) {
+        self.viewModel = viewModel
         self.onSelectCommunity = onSelectCommunity
         self.onCreateCommunity = onCreateCommunity
         self.onDismiss = onDismiss
@@ -223,6 +224,39 @@ private struct VibrantCommunityCard: View, Equatable {
         community.color.isEmpty ? DynamicColorGenerator.colorForName(community.name) : community.color
     }
 
+    private var avatarBadge: some View {
+        // Community avatar — circular, top-trailing, ringed for
+        // separation from the banner.
+        CachedAvatarImage(
+            urlString: community.avatar,
+            name: community.name,
+            size: 44,
+            accentColor: accentColor
+        )
+        .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: MeeshyBorder.strong))
+        .shadow(color: Color.black.opacity(0.25), radius: 4, y: 2)
+        .rotationEffect(.degrees(isPressed ? -8 : 0))
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .padding(.trailing, MeeshySpacing.smPlus)
+        .padding(.top, MeeshySpacing.smPlus)
+    }
+
+    private var privacyChip: some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            Image(systemName: community.isPrivate ? "lock.fill" : "globe")
+                .font(.system(size: 8, weight: .semibold))
+    }
+    .foregroundColor(.white.opacity(0.85))
+    .padding(.horizontal, MeeshySpacing.xsPlus)
+    .padding(.vertical, MeeshySpacing.xxs)
+    .background(Color.black.opacity(0.25))
+    .clipShape(Capsule())
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .padding(.leading, MeeshySpacing.smPlus)
+    .padding(.top, MeeshySpacing.smPlus)
+    }
+
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             // Banner image — full-bleed. Falls back to the community's
@@ -233,34 +267,9 @@ private struct VibrantCommunityCard: View, Equatable {
                 height: 180
             )
 
-            // Community avatar — circular, top-trailing, ringed for
-            // separation from the banner.
-            CachedAvatarImage(
-                urlString: community.avatar,
-                name: community.name,
-                size: 44,
-                accentColor: accentColor
-            )
-            .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: MeeshyBorder.strong))
-            .shadow(color: Color.black.opacity(0.25), radius: 4, y: 2)
-            .rotationEffect(.degrees(isPressed ? -8 : 0))
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            .padding(.trailing, MeeshySpacing.smPlus)
-            .padding(.top, MeeshySpacing.smPlus)
+            avatarBadge
 
-            HStack(spacing: MeeshySpacing.xxs) {
-                Image(systemName: community.isPrivate ? "lock.fill" : "globe")
-                    .font(.system(size: 8, weight: .semibold))
-            }
-            .foregroundColor(.white.opacity(0.85))
-            .padding(.horizontal, MeeshySpacing.xsPlus)
-            .padding(.vertical, MeeshySpacing.xxs)
-            .background(Color.black.opacity(0.25))
-            .clipShape(Capsule())
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.leading, MeeshySpacing.smPlus)
-            .padding(.top, MeeshySpacing.smPlus)
+            privacyChip
 
             LinearGradient(
                 colors: [.clear, .clear, Color.black.opacity(0.65)],
@@ -312,86 +321,6 @@ private struct VibrantCommunityCard: View, Equatable {
                 withAnimation { isPressed = false }
             }
             onTap()
-        }
-    }
-}
-
-// MARK: - ViewModel
-
-@MainActor
-final class CommunityListViewModel: ObservableObject {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    @Published var communities: [MeeshyCommunity] = []
-    @Published var isLoading = false
-    @Published var hasMore = false
-    @Published var searchText = "" {
-        didSet { scheduleSearch() }
-    }
-
-    private var hasLoaded = false
-    private var currentOffset = 0
-    private let pageSize = 20
-    private var searchTask: Task<Void, Never>?
-
-    func loadIfNeeded() async {
-        guard !hasLoaded else { return }
-        await load()
-    }
-
-    func refresh() async {
-        currentOffset = 0
-        hasLoaded = false
-        await load()
-    }
-
-    func loadMore() async {
-        guard hasMore, !isLoading else { return }
-        await load(append: true)
-    }
-
-    private func scheduleSearch() {
-        searchTask?.cancel()
-        searchTask = Task {
-            try? await Task.sleep(for: .seconds(0.35))
-            guard !Task.isCancelled else { return }
-            currentOffset = 0
-            await load()
-        }
-    }
-
-    func load(append: Bool = false) async {
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            let searchQuery = searchText.count >= 2 ? searchText : nil
-            let response = try await CommunityService.shared.list(
-                search: searchQuery,
-                offset: append ? currentOffset : 0,
-                limit: pageSize
-            )
-            let mapped = response.data.map { $0.toCommunity() }
-
-            if append {
-                // Une page qui chevauche la précédente (liste modifiée entre deux requêtes) ne pose pas deux
-                // lignes du même id dans la grille.
-                let known = Set(communities.map(\.id))
-                communities.append(contentsOf: mapped.filter { !known.contains($0.id) })
-            } else {
-                communities = mapped
-            }
-
-            currentOffset = communities.count
-            hasMore = response.pagination?.hasMore ?? false
-            hasLoaded = true
-        } catch {
-            if !Task.isCancelled {
-                Logger.network.error("[CommunityListVM] Error loading: \(error.localizedDescription)")
-            }
         }
     }
 }

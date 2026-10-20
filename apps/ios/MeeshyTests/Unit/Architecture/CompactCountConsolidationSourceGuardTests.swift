@@ -67,7 +67,7 @@ final class CompactCountConsolidationSourceGuardTests: XCTestCase {
         // ConversationListHelpers.swift en est sorti (#10841) : la carte de communauté, réduite de moitié, n'affiche
         // plus aucun compteur abrégé — il ne vit plus que dans le libellé VoiceOver, en toutes lettres. La garde
         // « aucun abrégé fait main » continue de couvrir le fichier.
-        "CommunityListView.swift",
+        "CommunityListScreen.swift",
     ]
 
     private func repoRoot() -> URL {
