@@ -603,13 +603,8 @@ export default function ConversationsScreen() {
   return (
     /* `pt-safe` : l'encoche HAUTE est portee par le CADRE de l'ecran, dans ses
        100dvh (box-sizing: border-box) — jamais par `<body>`, qui l'AJOUTAIT
-       et poussait la barre de recherche hors du cadre (#5604, app.css).
-       `overflow-clip`, jamais `overflow-hidden` (#11090) : escamotée, la barre
-       de recherche déborde du bas par `transform` ; un cadre `hidden` reste un
-       scrollport, et un focus ou un `scrollIntoView` le faisait défiler de
-       toute la hauteur escamotée, puis le retour de la barre le ramenait à 0 —
-       l'écran entier glissait et refermait le menu de rangée ouvert. */
-    <div className="relative flex h-app flex-col overflow-clip pt-safe">
+       et poussait la barre de recherche hors du cadre (#5604, app.css). */
+    <div className="relative flex h-app flex-col overflow-hidden pt-safe">
       <ListHeader pinned={pinned} railProps={railProps} conversations={conversations} viewerId={viewer.id ?? ''} />
       <PullIndicator phase={pull.phase} offsetPx={pull.offsetPx} reducedMotion={pull.reducedMotion} />
 
@@ -926,12 +921,24 @@ export default function ConversationsScreen() {
         hauteur MESURÉE en `padding-block-end` (voir `searchBarRef` ci-dessus)
         : le contenu s'arrête toujours AU-DESSUS d'elle, jamais dessous.
       */}
+      {/*
+        LA BARRE ESCAMOTÉE NE DONNE AUCUNE COURSE AU CADRE (#11090). Escamotée,
+        elle déborde du bas par `transform` ; posée directement dans le cadre
+        (`overflow-hidden`, un scrollport), ce débordement le rendait défilable :
+        un focus ou un `scrollIntoView` le décalait jusqu'à 82 px, et le retour de
+        la barre le ramenait à 0 — l'écran entier glissait et refermait le menu de
+        rangée ouvert. Ce calque à la taille du cadre ROGNE le débordement
+        (`overflow-clip` ne crée pas de scrollport), et le cadre reste un
+        scrollport : le préchargement paresseux des avatars sous la ligne de
+        flottaison, qui en dépend, ne change pas.
+      */}
+      <div data-search-bar-layer className="pointer-events-none absolute inset-0 z-10 overflow-clip">
       <div
         ref={searchBarRef}
         data-search-bar
         data-search-bar-away={searchBarAway ? 'true' : 'false'}
         inert={searchBarAway}
-        className="absolute inset-x-0 bottom-0 z-10 px-4 pt-2 pb-safe"
+        className="pointer-events-auto absolute inset-x-0 bottom-0 px-4 pt-2 pb-safe"
         style={{
           transform: searchBarAway ? 'translateY(calc(100% + 16px))' : 'translateY(0)',
           opacity: searchBarAway ? 0 : 1,
@@ -967,6 +974,7 @@ export default function ConversationsScreen() {
             </button>
           ) : null}
         </div>
+      </div>
       </div>
       {renameConversation === undefined && blockConversation === undefined ? null : (
         <Suspense fallback={null}>

@@ -29,8 +29,9 @@ describe('Meeshy Chats — la barre de recherche et la bande des communautés', 
     expect(source).toContain('paddingBottom: searchBarHeight');
   });
 
-  test('le cadre de l’écran ROGNE sans défiler : la barre escamotée ne lui donne aucune course (#11090)', () => {
-    expect(source).toContain('<div className="relative flex h-app flex-col overflow-clip pt-safe">');
-    expect(source).not.toContain('<div className="relative flex h-app flex-col overflow-hidden pt-safe">');
+  test('la barre escamotée est rognée par son propre calque : elle ne donne aucune course au cadre (#11090)', () => {
+    expect(source).toContain('<div data-search-bar-layer className="pointer-events-none absolute inset-0 z-10 overflow-clip">');
+    expect(source.indexOf('data-search-bar-layer')).toBeLessThan(source.indexOf('ref={searchBarRef}'));
+    expect(source).toContain('className="pointer-events-auto absolute inset-x-0 bottom-0 px-4 pt-2 pb-safe"');
   });
 });
