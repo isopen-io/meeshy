@@ -104,6 +104,51 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
         XCTAssertEqual(sut.messageService.lastSendRequest?.encryptionMode, "E2EE")
         XCTAssertNotEqual(sut.messageService.lastSendRequest?.content, "Salut")
     }
+
+    // MARK: - prepareUpload
+
+    private func makeOutgoing() -> OutgoingMessage {
+        OutgoingMessage(
+            conversationId: ConversationID(conversationId),
+            content: "Salut",
+            relation: .none,
+            attachments: OutgoingAttachments(ids: nil, previews: nil)
+        )
+    }
+
+    private func makeContext() -> SendAttemptContext {
+        SendAttemptContext(
+            clientMessageId: MessageID("cid_prepare"),
+            startedAt: Date(),
+            intent: .none,
+            language: "fr",
+            reusesExistingRow: false
+        )
+    }
+
+    func test_prepareUpload_direct_sealsContent_setsE2EEMode() async throws {
+        let sut = try await makeSUT(encryptor: SucceedingEncryptor())
+
+        let payload = await sut.viewModel.prepareUpload(makeOutgoing(), context: makeContext())
+
+        XCTAssertTrue(payload.isEncrypted)
+        XCTAssertEqual(payload.request.isEncrypted, true)
+        XCTAssertEqual(payload.request.encryptionMode, "E2EE")
+        XCTAssertEqual(payload.request.content, payload.content)
+        XCTAssertNotEqual(payload.content, "Salut")
+        XCTAssertEqual(payload.request.clientMessageId, "cid_prepare")
+    }
+
+    func test_prepareUpload_encryptorThrows_keepsPlaintext_isEncryptedFalse() async throws {
+        let sut = try await makeSUT(encryptor: FailingEncryptor())
+
+        let payload = await sut.viewModel.prepareUpload(makeOutgoing(), context: makeContext())
+
+        XCTAssertFalse(payload.isEncrypted)
+        XCTAssertEqual(payload.content, "Salut")
+        XCTAssertNil(payload.request.isEncrypted)
+        XCTAssertNil(payload.request.encryptionMode)
+    }
 }
 
 private struct FailingEncryptor: DirectMessageEncrypting {

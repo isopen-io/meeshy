@@ -167,4 +167,119 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
         XCTAssertNil(fx.sut.writeRestriction(served: .unknown("future-rule")))
         XCTAssertNil(fx.sut.writeRestriction(served: nil))
     }
+
+    // MARK: - reconcile
+
+    private func makeOutgoing(protection: MessageProtectionIntent? = nil) -> OutgoingMessage {
+        OutgoingMessage(
+            conversationId: ConversationID(conversationId),
+            content: "Salut Global",
+            relation: .none,
+            attachments: OutgoingAttachments(ids: nil, previews: nil),
+            protection: protection
+        )
+    }
+
+    private func makeContext(_ clientMessageId: String, intent: MessageProtectionIntent = .none) -> SendAttemptContext {
+        SendAttemptContext(
+            clientMessageId: MessageID(clientMessageId),
+            startedAt: Date(),
+            intent: intent,
+            language: "fr",
+            reusesExistingRow: false
+        )
+    }
+
+    private func reconcileFailure(
+        _ error: any Error,
+        fixture fx: Fixture,
+        clientMessageId: String,
+        intent: MessageProtectionIntent = .none
+    ) async -> Result<SentMessageReceipt, SendFailure> {
+        let outgoing = makeOutgoing(protection: intent)
+        let context = makeContext(clientMessageId, intent: intent)
+        await fx.sut.stageOptimistic(outgoing, context: context)
+        let payload = await fx.sut.prepareUpload(outgoing, context: context)
+        return await fx.sut.reconcile(.failure(error), outgoing: outgoing, payload: payload, context: context)
+    }
+
+    private func state(of localId: String, in pool: DatabaseQueue) throws -> MessageState? {
+        try pool.read { db in try MessageRecord.fetchOne(db, key: localId)?.state }
+    }
+
+    func test_reconcile_closingRestriction_withdrawsRow_returnsWriteRestricted() async throws {
+        let fx = try await makeFixture()
+
+        let result = await reconcileFailure(globalAdultsOnly, fixture: fx, clientMessageId: "cid_rec_1")
+
+        guard case .failure(let failure) = result else { return XCTFail("un refus définitif est un échec") }
+        XCTAssertEqual(failure, SendFailure.writeRestricted(.minorGlobal))
+        XCTAssertEqual(try storedMessageCount(in: fx.pool), 0)
+    }
+
+    func test_reconcile_slowMode_returnsSlowMode() async throws {
+        let fx = try await makeFixture()
+
+        let result = await reconcileFailure(newcomerSlowMode, fixture: fx, clientMessageId: "cid_rec_2")
+
+        guard case .failure(.slowMode(let slowMode)) = result else { return XCTFail("mode lent attendu") }
+        XCTAssertTrue((20...21).contains(slowMode.retryAfterSeconds))
+        XCTAssertEqual(try state(of: "cid_rec_2", in: fx.pool), .failed)
+    }
+
+    func test_reconcile_restFailed_socketFallbackAck_setsPendingServerId_returnsAcknowledgedViaSocketFallback() async throws {
+        let fx = try await makeFixture()
+        fx.messageSocket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(messageId: "srv-fb", clientMessageId: nil)
+
+        let result = await reconcileFailure(NSError(domain: "reconcile", code: 500), fixture: fx, clientMessageId: "cid_rec_3")
+
+        guard case .success(let receipt) = result,
+              case .acknowledged(let serverId, _, let via) = receipt.delivery else { return XCTFail("repli socket attendu") }
+        XCTAssertEqual(serverId.rawValue, "srv-fb")
+        XCTAssertEqual(via, .socketFallback)
+        XCTAssertEqual(fx.sut.pendingServerIds["cid_rec_3"], "srv-fb")
+        XCTAssertEqual(try state(of: "cid_rec_3", in: fx.pool), .sent)
+    }
+
+    func test_reconcile_restFailed_noFallback_appliesSendFailed_enqueuesRetry_returnsQueuedForRetry() async throws {
+        let fx = try await makeFixture()
+
+        let result = await reconcileFailure(NSError(domain: "reconcile", code: 500), fixture: fx, clientMessageId: "cid_rec_4")
+
+        guard case .failure(let failure) = result, case .queuedForRetry = failure else { return XCTFail("mise en file attendue") }
+        XCTAssertEqual(try state(of: "cid_rec_4", in: fx.pool), .queued)
+        let items = await fx.offlineQueue.enqueuedItems
+        XCTAssertEqual(items.map(\.clientMessageId), ["cid_rec_4"])
+    }
+
+    func test_reconcile_retryEnqueueThrows_marksFailed_returnsRetryEnqueueFailed() async throws {
+        let fx = try await makeFixture()
+        await fx.offlineQueue.setShouldThrow(true)
+
+        let result = await reconcileFailure(NSError(domain: "reconcile", code: 500), fixture: fx, clientMessageId: "cid_rec_5")
+
+        guard case .failure(let failure) = result, case .retryEnqueueFailed = failure else { return XCTFail("échec d'outbox attendu") }
+        XCTAssertEqual(try state(of: "cid_rec_5", in: fx.pool), .failed)
+    }
+
+    func test_reconcile_specialProps_skipSocketFallback() async throws {
+        let fx = try await makeFixture()
+        fx.messageSocket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(messageId: "srv-no", clientMessageId: nil)
+
+        let result = await reconcileFailure(
+            NSError(domain: "reconcile", code: 500),
+            fixture: fx,
+            clientMessageId: "cid_rec_6",
+            intent: MessageProtectionIntent(isViewOnce: true)
+        )
+
+        guard case .failure = result else { return XCTFail("une vue unique ne passe pas par le repli socket") }
+        XCTAssertEqual(fx.messageSocket.sendViaSocketFallbackCalls.count, 0)
+    }
+}
+
+private extension FakeOfflineMessageQueue {
+    func setShouldThrow(_ value: Bool) {
+        shouldThrow = value
+    }
 }
