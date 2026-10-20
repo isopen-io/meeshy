@@ -2,6 +2,7 @@ import XCTest
 import CoreGraphics
 @testable import MeeshyUI
 
+@MainActor
 final class TapTargetSingleSourceGuardTests: XCTestCase {
 
     private static let files = [

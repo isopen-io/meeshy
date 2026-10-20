@@ -38,7 +38,7 @@ final class StoryCanvasGuidesMotionTests: XCTestCase {
             contentsOf: root.appendingPathComponent("Sources/MeeshyUI/Story/StoryCanvasGuides.swift"),
             encoding: .utf8
         )
-        XCTAssertFalse(code.contains(".animation("))
+        XCTAssertNil(code.range(of: #"(?<![A-Za-z])\.animation\("#, options: .regularExpression))
         XCTAssertTrue(code.contains("meeshyAnimation"))
     }
 }

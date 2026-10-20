@@ -6,7 +6,7 @@ import SwiftUI
 final class MeeshyIconButtonTests: XCTestCase {
 
     func test_init_requiresNonOptionalLabel_signature() {
-        let make: (String, String, @escaping () -> Void) -> MeeshyIconButton = MeeshyIconButton.init(systemName:label:action:)
+        let make: (String, String, @escaping () -> Void) -> MeeshyIconButton = { MeeshyIconButton(systemName: $0, label: $1, action: $2) }
         XCTAssertEqual(make("xmark", "Fermer", {}).label, "Fermer")
     }
 
