@@ -155495,49 +155495,49 @@
         }
       }
     },
-    "root.ipad.resizable_handle.hint": {
+    "root.ipad.resizable_handle.hint_width": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يضبط عرض العمود الأيمن بين 30% و50%"
+            "value": "يضبط عرض العمود الأيمن بين %d و%d نقطة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passt die Breite der linken Spalte zwischen 30 % und 50 % an"
+            "value": "Passt die Breite der linken Spalte zwischen %d und %d Punkten an"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Adjusts the width of the left column between 30% and 50%"
+            "value": "Adjusts the width of the left column between %d and %d points"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajusta el ancho de la columna izquierda entre 30% y 50%"
+            "value": "Ajusta el ancho de la columna izquierda entre %d y %d puntos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajuste la largeur de la colonne de gauche entre 30% et 50%"
+            "value": "Ajuste la largeur de la colonne de gauche entre %d et %d points"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Regola la larghezza della colonna di sinistra tra il 30% e il 50%"
+            "value": "Regola la larghezza della colonna di sinistra tra %d e %d punti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajusta a largura da coluna esquerda entre 30% e 50%"
+            "value": "Ajusta a largura da coluna esquerda entre %d e %d pontos"
           }
         }
       }
@@ -155589,49 +155589,49 @@
         }
       }
     },
-    "root.ipad.resizable_handle.value_format": {
+    "root.ipad.resizable_handle.value_points": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d بالمئة"
+            "value": "%d نقطة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d Prozent"
+            "value": "%d Punkte"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d percent"
+            "value": "%d points"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d por ciento"
+            "value": "%d puntos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d pour cent"
+            "value": "%d points"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d per cento"
+            "value": "%d punti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d por cento"
+            "value": "%d pontos"
           }
         }
       }

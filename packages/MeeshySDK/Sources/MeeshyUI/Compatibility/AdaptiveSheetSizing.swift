@@ -1,26 +1,30 @@
 import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#endif
 
-// MARK: - Adaptive wide sheet (iPad / macOS)
+// MARK: - Adaptive wide sheet
 
-/// On iPad / macOS the system presents `.sheet`s as a narrow form-sheet card,
-/// which leaves profile and comment modals feeling cramped. iOS 18 added
-/// `presentationSizing(.page)` to request the larger page-sized container; this
-/// wrapper applies it ONLY on iPad and ONLY on iOS 18+, leaving iPhone and older
-/// OSes byte-for-byte unchanged (their presentation detents still drive height).
-public extension View {
+/// iPadOS presents `.sheet`s as a narrow form-sheet card, which leaves profile and comment modals feeling cramped.
+/// iOS 18 added `presentationSizing(.page)` to request the larger page-sized container. The decision follows the
+/// size class of the window that PRESENTS the sheet (`meeshySheet` hands it down), never the device kind: an iPad
+/// in Slide Over is as narrow as an iPhone, and an iPhone Pro Max in landscape is as wide as a small iPad.
+/// Where the presenter is unknown (a plain `.sheet`), the page request is made and the system ignores it at compact
+/// width.
+struct AdaptiveWideSheetModifier: ViewModifier {
+    @Environment(\.meeshySheetHostSizeClass) private var hostSizeClass
+    let width: MeeshySheetWidth
+
     @ViewBuilder
-    func adaptiveWideSheet() -> some View {
-        #if canImport(UIKit)
-        if #available(iOS 18.0, *), UIDevice.current.userInterfaceIdiom == .pad {
-            self.presentationSizing(.page)
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *),
+           width.requestsPageSizing(hostSizeClass: hostSizeClass, inSheetSizeClass: nil, pageSizingAvailable: true) {
+            content.presentationSizing(.page)
         } else {
-            self
+            content
         }
-        #else
-        self
-        #endif
+    }
+}
+
+public extension View {
+    func adaptiveWideSheet() -> some View {
+        modifier(AdaptiveWideSheetModifier(width: .wide))
     }
 }

@@ -89,18 +89,15 @@ extension EnvironmentValues {
 }
 
 struct AdaptiveRootView: View {
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var navigationHandoff = RootNavigationHandoff()
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Group {
-            if sizeClass == .regular {
-                iPadRootView()
-            } else {
-                RootView()
-            }
-        }
+        RootScopeSwitch(
+            makeScope: { RootScopeModels() },
+            compact: { RootView(scope: $0) },
+            regular: { iPadRootView(scope: $0) }
+        )
         .environment(\.rootNavigationHandoff, navigationHandoff)
         // Le composer de story démonté avec sa racine (compact ↔ regular) : son brouillon est tenu ICI, au-dessus
         // des deux racines, jusqu'à ce que la suivante le rouvre (`RootIntentRoutingLayer`).
