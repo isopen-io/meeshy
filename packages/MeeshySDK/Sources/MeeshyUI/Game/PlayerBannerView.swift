@@ -22,7 +22,7 @@ import MeeshySDK
 //
 // Accessibilité : UN seul élément (`accessibilityLabel`, la phrase localisée de l'hôte — « Niveau 34, Éclat, 78 %
 // vers le 35, 12 Meeshes, Conteur III, ligue Jade 4e, Flamme 23 jours ») ; ses dessins sont ignorés. Hauteur
-// d'au moins 56 pt. Dynamic Type : au-delà de XXL, la jauge passe SOUS l'anneau et les pièces se rangent en grille.
+// d'au moins 48 pt (#11125). Dynamic Type : au-delà de XXL, la jauge passe SOUS l'anneau et les pièces se rangent en grille.
 
 public struct PlayerBannerView: View {
 
@@ -96,9 +96,16 @@ public struct PlayerBannerView: View {
     /// La cible tactile minimale d'une pièce.
     public static let pieceTarget: CGFloat = 44
 
+    /// L'ANGLE du bandeau (#11125, miroir du web `06a2061754`) : les Meeshes en haut, le rang et la mission dessous,
+    /// au bout de la jauge. Deux lignes de 24 pt — compromis demandé par le porteur pour que le bandeau tienne en
+    /// 48 pt, ces trois pièces sortent de la cible de 44.
+    public static let cornerPieces: [GamePlayerBanner.Piece] = [.meesh, .rank, .mission]
+    public static let cornerTarget: CGFloat = 24
+
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .body) private var ringSide: CGFloat = 52
+    @ScaledMetric(relativeTo: .body) private var compactRingSide: CGFloat = 40
 
     /// - Parameters:
     ///   - model: ce qui existe du joueur (`GamePlayerBanner`).
@@ -120,8 +127,8 @@ public struct PlayerBannerView: View {
         self.accessibilityLabel = accessibilityLabel
     }
 
-    /// La hauteur minimale : le plus grand des deux, 56 pt et l'anneau — jamais moins qu'une cible de 44 pt.
-    public static let minimumHeight: CGFloat = 56
+    /// La hauteur minimale : 48 pt (#11125, comme le web) — une pièce de 44 pt et sa marge.
+    public static let minimumHeight: CGFloat = 48
 
     /// La couleur du petit texte (« encore 70 ») : le ton discret sur l'aplat seul, l'ENCRE dès qu'une bannière de
     /// profil passe dessous — une image, même translucide, lui prend le contraste que l'aplat lui garantissait.
@@ -139,7 +146,9 @@ public struct PlayerBannerView: View {
         // disposition se choisit sur la taille du texte, et la ligne tient sur 320 pt en laissant ses textes
         // se réduire.
         Group {
-            if onSelect != nil {
+            if onSelect != nil && !stacked {
+                compactRow
+            } else if onSelect != nil {
                 selectableLayout
             } else if stacked {
                 stackedLayout
@@ -148,7 +157,7 @@ public struct PlayerBannerView: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, onSelect != nil && !stacked ? 2 : 6)
         .frame(maxWidth: .infinity, minHeight: Self.minimumHeight, alignment: .leading)
         .background(alignment: .topTrailing) {
             palette.surface
@@ -168,15 +177,60 @@ public struct PlayerBannerView: View {
         .modifier(BannerAccessibility(label: onSelect == nil ? accessibilityLabel : nil, contains: onSelect != nil))
     }
 
+    // MARK: Le bandeau compact (#11125)
+
+    /// UNE rangée : l'anneau, la jauge qui prend la place restante, la ligue, la Flamme, les trophées et la saison,
+    /// puis l'ANGLE — les Meeshes en haut, le rang et la mission dessous. Aucune pièce ne passe sous la jauge.
+    private var compactRow: some View {
+        HStack(spacing: 4) {
+            if model.showsLevel { select(.level) { ring(side: compactRingSide) } }
+            if model.showsScore {
+                select(.sparks) { model.showsLevel ? AnyView(gauge) : AnyView(scoreOnly) }
+                    .frame(minWidth: 56, maxWidth: .infinity, alignment: .leading)
+            } else {
+                Spacer(minLength: 0)
+            }
+            ForEach(model.pieces.filter { !Self.cornerPieces.contains($0) && $0 != .level && $0 != .sparks }, id: \.self) { kind in
+                select(kind, minWidth: Self.cornerTarget) { pieceContent(kind) }
+            }
+            corner
+        }
+    }
+
+    @ViewBuilder
+    private var corner: some View {
+        let shown = model.pieces.filter(Self.cornerPieces.contains)
+        if !shown.isEmpty {
+            VStack(alignment: .trailing, spacing: 0) {
+                if shown.contains(.meesh) {
+                    select(.meesh, target: Self.cornerTarget) {
+                        piece(text: texts.meeshes) { MeeshCoinView(face: .obverse, edition: .silver, figures: nil).frame(width: 20, height: 20) }
+                    }
+                }
+                HStack(spacing: 6) {
+                    if let rank = model.rank {
+                        select(.rank, target: Self.cornerTarget) {
+                            RankBlasonView(rank: rank.rank, division5: rank.division, mythic: rank.mythic, figures: nil).frame(height: 22)
+                        }
+                    }
+                    if shown.contains(.mission) {
+                        select(.mission, target: Self.cornerTarget) { piece(text: texts.mission) { symbol("target", side: 16) } }
+                    }
+                }
+            }
+            .fixedSize()
+        }
+    }
+
     // MARK: Les pièces-boutons (#10846)
 
-    /// L'anneau et la jauge en haut — chacun son bouton —, puis les autres pièces qui passent à la ligne : sur iPhone
-    /// comme sur iPad, aucune cible ne descend sous 44 pt, le bandeau prend la hauteur qu'il faut.
+    /// Au-delà de XXL : l'anneau et la jauge en haut — chacun son bouton —, puis les autres pièces qui passent à la
+    /// ligne ; aucune cible ne descend sous 44 pt, le bandeau prend la hauteur qu'il faut.
     private var selectableLayout: some View {
         VStack(alignment: .leading, spacing: 6) {
             if model.showsLevel || model.showsScore {
                 HStack(spacing: 10) {
-                    if model.showsLevel { select(.level) { ring } }
+                    if model.showsLevel { select(.level) { ring(side: ringWidth) } }
                     if model.showsScore {
                         select(.sparks) { model.showsLevel ? AnyView(gauge) : AnyView(scoreOnly) }
                     }
@@ -193,12 +247,14 @@ public struct PlayerBannerView: View {
         }
     }
 
-    private func select<Content: View>(_ piece: GamePlayerBanner.Piece, @ViewBuilder content: () -> Content) -> some View {
+    /// `minWidth` : une pièce de la rangée compacte garde 44 pt de haut mais peut s'étroitiser jusqu'à son dessin.
+    private func select<Content: View>(_ piece: GamePlayerBanner.Piece, target: CGFloat = PlayerBannerView.pieceTarget,
+                                       minWidth: CGFloat? = nil, @ViewBuilder content: () -> Content) -> some View {
         Button {
             onSelect?(piece)
         } label: {
             content()
-                .frame(minWidth: Self.pieceTarget, minHeight: Self.pieceTarget)
+                .frame(minWidth: minWidth ?? target, minHeight: target)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -236,11 +292,11 @@ public struct PlayerBannerView: View {
         }
     }
 
-    private func symbol(_ name: String) -> some View {
+    private func symbol(_ name: String, side: CGFloat = 22) -> some View {
         Image(systemName: name)
-            .font(.system(size: 16, weight: .semibold))
+            .font(.system(size: side * 16 / 22, weight: .semibold))
             .foregroundColor(palette.ink)
-            .frame(width: 22, height: 22)
+            .frame(width: side, height: side)
             .accessibilityHidden(true)
     }
 
@@ -265,7 +321,7 @@ public struct PlayerBannerView: View {
     private var singleRow: some View {
         HStack(spacing: 10) {
             if model.showsLevel {
-                ring
+                ring(side: ringWidth)
                 gauge
                 pieces
             } else if model.showsScore {
@@ -284,7 +340,7 @@ public struct PlayerBannerView: View {
         VStack(alignment: .leading, spacing: 6) {
             if model.showsLevel {
                 HStack(alignment: .center, spacing: 10) {
-                    ring
+                    ring(side: ringWidth)
                     Spacer(minLength: 0)
                 }
                 gauge
@@ -301,20 +357,20 @@ public struct PlayerBannerView: View {
 
     // MARK: L'anneau
 
-    private var ring: some View {
+    private func ring(side: CGFloat) -> some View {
         LevelRingView(
             level: model.level, progress: model.progress, tier: model.tier, prestige: model.prestige,
             trackColor: palette.ink.opacity(0.12), inkColor: palette.ink, mutedColor: palette.muted,
             discColor: palette.disc
         )
         .gameSpecularSheen(progress: reduceMotion ? 0 : sheen)
-        .frame(width: ringWidth, height: ringHeight)
+        .frame(width: side, height: ringHeight(side: side))
     }
 
     private var ringWidth: CGFloat { min(ringSide, 76) }
 
     /// Les étoiles de Prestige se posent SOUS l'anneau : la boîte de l'anneau grandit d'autant (56 × 66 au lieu de 56 × 56).
-    private var ringHeight: CGFloat { model.prestige > 0 ? ringWidth * 66 / 56 : ringWidth }
+    private func ringHeight(side: CGFloat) -> CGFloat { model.prestige > 0 ? side * 66 / 56 : side }
 
     // MARK: La jauge
 

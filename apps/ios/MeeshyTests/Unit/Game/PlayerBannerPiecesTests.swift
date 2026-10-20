@@ -57,10 +57,43 @@ final class PlayerBannerPiecesTests: XCTestCase {
             for piece in full.pieces {
                 let frame = try XCTUnwrap(screen.frame(of: "game.player_banner.\(piece.rawValue)", borne: 5),
                                           "\(Int(width)) pt : la pièce \(piece) est un élément à part")
-                XCTAssertGreaterThanOrEqual(frame.width, PlayerBannerView.pieceTarget - 0.5, "\(Int(width)) pt · \(piece)")
-                XCTAssertGreaterThanOrEqual(frame.height, PlayerBannerView.pieceTarget - 0.5, "\(Int(width)) pt · \(piece)")
+                let target = PlayerBannerView.cornerPieces.contains(piece) ? PlayerBannerView.cornerTarget : PlayerBannerView.pieceTarget
+                XCTAssertGreaterThanOrEqual(frame.height, target - 0.5, "\(Int(width)) pt · \(piece)")
+                XCTAssertGreaterThanOrEqual(frame.width, PlayerBannerView.cornerTarget - 0.5, "\(Int(width)) pt · \(piece)")
                 XCTAssertLessThanOrEqual(frame.maxX, width + 0.5, "\(Int(width)) pt · \(piece) tient dans la largeur")
             }
         }
+    }
+
+    // MARK: - Compact (#11125) : une seule rangée, l'angle encadre la fin de la jauge
+
+    func test_theBannerHoldsOnOneRow_noPieceFallsUnderTheGauge() throws {
+        for width: CGFloat in [375, 430, 1024] {
+            let screen = mounted(width: width)
+            let level = try XCTUnwrap(screen.frame(of: "game.player_banner.level", borne: 5))
+            for piece in full.pieces {
+                let frame = try XCTUnwrap(screen.frame(of: "game.player_banner.\(piece.rawValue)", borne: 5))
+                XCTAssertLessThanOrEqual(frame.maxY, level.minY + PlayerBannerView.minimumHeight + 0.5,
+                                         "\(Int(width)) pt · \(piece) reste dans la rangée de l'anneau, jamais dessous")
+            }
+        }
+    }
+
+    func test_theCorner_putsTheMeeshesAbove_andTheRankWithTheMissionBelow_afterTheGauge() throws {
+        let screen = mounted(width: 390)
+        let sparks = try XCTUnwrap(screen.frame(of: "game.player_banner.sparks", borne: 5))
+        let meesh = try XCTUnwrap(screen.frame(of: "game.player_banner.meesh", borne: 5))
+        let rank = try XCTUnwrap(screen.frame(of: "game.player_banner.rank", borne: 5))
+        let mission = try XCTUnwrap(screen.frame(of: "game.player_banner.mission", borne: 5))
+        XCTAssertLessThanOrEqual(meesh.maxY, rank.minY + 0.5, "les Meeshes en haut, le rang dessous")
+        XCTAssertEqual(rank.midY, mission.midY, accuracy: 1, "le rang et la mission sur la même ligne")
+        XCTAssertLessThanOrEqual(sparks.maxX, min(meesh.minX, rank.minX) + 0.5, "l'angle se pose au bout de la jauge")
+        XCTAssertEqual(meesh.maxX, mission.maxX, accuracy: 1, "l'angle s'aligne à droite")
+    }
+
+    func test_theBannerIs48ptTall_likeTheWeb() {
+        XCTAssertEqual(PlayerBannerView.minimumHeight, 48)
+        XCTAssertEqual(PlayerBannerView.cornerTarget, 24)
+        XCTAssertEqual(PlayerBannerView.cornerPieces, [.meesh, .rank, .mission])
     }
 }
