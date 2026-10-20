@@ -30,7 +30,12 @@ final class MessageListViewControllerCellRegistrationTests: XCTestCase {
 
         vc.readingMode = .focal
         vc.applySnapshot(reconfigure: .allItems)
-        vc.focalCollectionViewForTesting?.layoutIfNeeded()
+        for _ in 0..<40 {
+            vc.focalCollectionViewForTesting?.layoutIfNeeded()
+            let tag = cell(of: .message(localId: "m1"), in: vc)?.tag ?? 0
+            if FocalScrollPerspective.isGroupHead(cellTag: tag) { break }
+            try await Task.sleep(for: .milliseconds(25))
+        }
 
         let oldest = try XCTUnwrap(cell(of: .message(localId: "m1"), in: vc))
         let middle = try XCTUnwrap(cell(of: .message(localId: "m3"), in: vc))
