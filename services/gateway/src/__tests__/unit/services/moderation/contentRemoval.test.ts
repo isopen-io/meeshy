@@ -8,6 +8,8 @@
 import { describe, it, expect, jest } from '@jest/globals';
 
 import {
+  admitThirdPartyRemoval,
+  decideContentRemoval,
   completeModeratedMessageRemoval,
   moderationReasonOf,
   notifyContentRemoved,
@@ -18,6 +20,8 @@ import {
 
 const AUTHOR = '64b7f0c2a1b2c3d4e5f60001';
 const ACTOR = '64b7f0c2a1b2c3d4e5f60002';
+
+const flushDetached = () => new Promise((resolve) => setImmediate(resolve));
 
 const buildNotifier = () => ({ createNotification: jest.fn<any>(async () => ({ id: 'n1' })) });
 
@@ -226,6 +230,7 @@ describe('completeModeratedMessageRemoval — les trois transports de message', 
       conversationId: 'c1',
       reason: 'Insulte',
     });
+    await flushDetached();
 
     expect(prisma.adminAuditLog.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ action: 'REMOVE_CONTENT', entity: 'Message', entityId: 'm1', adminId: ACTOR, userId: AUTHOR }),
@@ -248,9 +253,75 @@ describe('completeModeratedMessageRemoval — les trois transports de message', 
     await completeModeratedMessageRemoval({ prisma: prisma as never, notifications }, {
       actorUserId: ACTOR, authorUserId: AUTHOR, messageId: 'm1', conversationId: 'c1', reason: 'Insulte',
     });
+    await flushDetached();
 
     expect(notifications.createNotification).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Votre message a été retiré par un administrateur',
     }));
+  });
+});
+
+describe('admitThirdPartyRemoval — rôle de plateforme et hiérarchie sur l’auteur', () => {
+  const readerOf = (role: string | null, throws = false) => ({
+    user: { findUnique: jest.fn<any>(async () => { if (throws) throw new Error('down'); return role === null ? null : { role }; }) },
+  });
+
+  it.each([
+    ['MODERATOR', 'USER', true],
+    ['ADMIN', 'MODERATOR', true],
+    ['BIGBOSS', 'ADMIN', true],
+    ['MODERATOR', 'MODERATOR', false],
+    ['MODERATOR', 'ADMIN', false],
+    ['ADMIN', 'BIGBOSS', false],
+    ['USER', 'USER', false],
+    ['AUDIT', 'USER', false],
+    ['ANALYST', 'USER', false],
+  ] as const)('%s sur un auteur %s ⇒ %s', async (actorRole, authorRole, expected) => {
+    await expect(admitThirdPartyRemoval(readerOf(authorRole) as never, { actorRole, authorId: AUTHOR })).resolves.toBe(expected);
+  });
+
+  it("refuse quand l'auteur est introuvable ou illisible", async () => {
+    await expect(admitThirdPartyRemoval(readerOf(null) as never, { actorRole: 'BIGBOSS', authorId: AUTHOR })).resolves.toBe(false);
+    await expect(admitThirdPartyRemoval(readerOf('USER', true) as never, { actorRole: 'BIGBOSS', authorId: AUTHOR })).resolves.toBe(false);
+  });
+
+  it("ne lit pas l'auteur pour un rôle sans droit de modération", async () => {
+    const reader = readerOf('USER');
+
+    await admitThirdPartyRemoval(reader as never, { actorRole: 'USER', authorId: AUTHOR });
+
+    expect(reader.user.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+describe('decideContentRemoval — publication et commentaire', () => {
+  const reader = (role: string) => ({ user: { findUnique: jest.fn<any>(async () => ({ role })) } });
+
+  it("l'auteur retire le sien, sans motif ni lecture", async () => {
+    const prisma = reader('USER');
+
+    await expect(decideContentRemoval(prisma as never, { actorId: AUTHOR, actorRole: 'USER', authorId: AUTHOR, body: undefined }))
+      .resolves.toEqual({ kind: 'author' });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('un tiers sans droit est refusé AVANT de parler du motif', async () => {
+    await expect(decideContentRemoval(reader('USER') as never, { actorId: ACTOR, actorRole: 'USER', authorId: AUTHOR, body: undefined }))
+      .resolves.toEqual({ kind: 'refused', status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('un modérateur qui ne domine pas l’auteur est refusé', async () => {
+    await expect(decideContentRemoval(reader('ADMIN') as never, { actorId: ACTOR, actorRole: 'MODERATOR', authorId: AUTHOR, body: { reason: 'Spam répété' } }))
+      .resolves.toEqual({ kind: 'refused', status: 403, code: 'FORBIDDEN' });
+  });
+
+  it('un modérateur admis sans motif reçoit 400 MODERATION_REASON_REQUIRED', async () => {
+    await expect(decideContentRemoval(reader('USER') as never, { actorId: ACTOR, actorRole: 'MODERATOR', authorId: AUTHOR, body: {} }))
+      .resolves.toEqual({ kind: 'refused', status: 400, code: 'MODERATION_REASON_REQUIRED' });
+  });
+
+  it('un modérateur admis avec motif retire par la modération, motif nettoyé', async () => {
+    await expect(decideContentRemoval(reader('USER') as never, { actorId: ACTOR, actorRole: 'ADMIN', authorId: AUTHOR, body: { reason: ' Spam ' } }))
+      .resolves.toEqual({ kind: 'moderation', reason: 'Spam' });
   });
 });

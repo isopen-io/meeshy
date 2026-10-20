@@ -160,6 +160,7 @@ async function buildApp(opts: {
   // (services/posts/postMentions.ts) : sans délégué, elle s'abstient de tout
   // écrire — ce qui est le comportement voulu, mais pas ce que ces cas testent.
   const prisma = {
+    post: { findFirst: async (args?: { select?: Record<string, boolean> }) => (Object.keys(args?.select ?? {}).join() === 'authorId,type' ? { authorId: USER_ID, type: 'POST' } : null) },
     postMention: {
       findMany: (...args: any[]) => mockPostMentionFindMany(...args),
       deleteMany: (...args: any[]) => mockPostMentionDeleteMany(...args),

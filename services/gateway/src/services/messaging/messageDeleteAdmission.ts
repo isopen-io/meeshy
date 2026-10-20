@@ -156,8 +156,10 @@ export interface MessageDeleteAdmissionParams {
  * - **L'auteur** supprime son message, sans limite de temps et sans aucune
  *   lecture — le chemin nominal ne touche pas la base.
  * - **Quelqu'un d'autre** supprime s'il porte un rôle privilégié, de
- *   CONVERSATION (`admin`/`moderator`, ce qui suppose une appartenance active)
- *   ou GLOBAL (`MODERATOR`/`ADMIN`/`BIGBOSS`, qui n'en suppose aucune).
+ *   CONVERSATION (`admin`/`moderator`/`creator`, ce qui suppose une appartenance
+ *   active) ou GLOBAL (`MODERATOR`/`ADMIN`/`BIGBOSS`, qui n'en suppose aucune),
+ *   ET que la conversation est de groupe ou plus ouverte — jamais `direct`
+ *   (#11149). L'admission le dit `byModeration` : le transport exige un motif.
  *
  * Coût : zéro lecture pour l'auteur, une pour un non-auteur membre, deux pour un
  * non-auteur non-membre. Les trois transports en faisaient au moins une, sur

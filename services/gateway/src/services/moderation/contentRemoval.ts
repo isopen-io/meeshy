@@ -16,9 +16,11 @@
 
 import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { UserRoleEnum } from '@meeshy/shared/types';
 import type { ContentRemovedNotificationMetadata, RemovedContentType } from '@meeshy/shared/types/notification';
 import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { permissionsService } from '../admin/permissions.service';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import type { NotificationService } from '../notifications/NotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
@@ -157,8 +159,9 @@ export type ModeratedMessageRemoval = {
 
 /**
  * Ce qu'un retrait de message par un tiers doit APRÈS l'écriture, une fois pour
- * les trois transports : la trace, puis la notification à l'auteur, nommant la
- * conversation (qu'il connaît — il en est membre). Ne lève jamais.
+ * les trois transports : la trace (attendue), puis la notification à l'auteur,
+ * nommant la conversation qu'il connaît — DÉTACHÉE, pour que l'envoi du push ne
+ * retarde pas la réponse du modérateur. Ne lève jamais.
  */
 export async function completeModeratedMessageRemoval(
   deps: { readonly prisma: Pick<PrismaClient, 'adminAuditLog' | 'user' | 'conversation'>; readonly notifications?: Notifier },
@@ -171,6 +174,15 @@ export async function completeModeratedMessageRemoval(
     entityId: removal.messageId,
     reason: removal.reason,
   });
+  notifyMessageAuthor(deps, removal).catch((error: unknown) =>
+    log.warn('content removal: message author notification failed', { messageId: removal.messageId, error }),
+  );
+}
+
+async function notifyMessageAuthor(
+  deps: { readonly prisma: Pick<PrismaClient, 'user' | 'conversation'>; readonly notifications?: Notifier },
+  removal: ModeratedMessageRemoval,
+): Promise<void> {
   const conversationTitle = await deps.prisma.conversation
     .findUnique({ where: { id: removal.conversationId }, select: { title: true } })
     .then((row) => row?.title ?? null)
@@ -183,4 +195,62 @@ export async function completeModeratedMessageRemoval(
     conversationTitle,
     reason: removal.reason,
   });
+}
+
+/**
+ * Un tiers retire une publication ou un commentaire s'il a `canModerateContent`
+ * (MODERATOR, ADMIN, BIGBOSS) ET qu'il domine l'auteur dans la hiérarchie — même
+ * règle que la console (`routes/admin/moderation-acts.ts`). L'auteur se lit en
+ * base ; introuvable ou illisible, il n'est pas retiré.
+ */
+export async function admitThirdPartyRemoval(
+  prisma: Pick<PrismaClient, 'user'>,
+  params: { readonly actorRole: string | null | undefined; readonly authorId: string },
+): Promise<boolean> {
+  const actorRole = params.actorRole as UserRoleEnum | null | undefined;
+  if (!actorRole || !permissionsService.hasPermission(actorRole, 'canModerateContent')) return false;
+  try {
+    const author = await prisma.user.findUnique({ where: { id: params.authorId }, select: { role: true } });
+    const authorRole = author?.role as UserRoleEnum | undefined;
+    return authorRole !== undefined
+      && permissionsService.getRoleLevel(authorRole) > 0
+      && permissionsService.canManageUser(actorRole, authorRole);
+  } catch (error) {
+    log.warn('content removal: author role unreadable', { authorId: params.authorId, error });
+    return false;
+  }
+}
+
+export type ContentRemovalDecision =
+  | { readonly kind: 'author' }
+  | { readonly kind: 'moderation'; readonly reason: string }
+  | { readonly kind: 'refused'; readonly status: 400 | 403; readonly code: 'FORBIDDEN' | typeof MODERATION_REASON_REQUIRED };
+
+/**
+ * Qui retire cette publication ou ce commentaire, et à quel titre — l'énoncé
+ * commun aux deux routes. L'auteur retire le sien sans motif ; un tiers doit
+ * être admis (`admitThirdPartyRemoval`) PUIS donner un motif : le refus de droit
+ * passe avant le refus de motif, pour qu'un simple lecteur n'apprenne pas qu'un
+ * motif l'aurait laissé passer.
+ */
+export async function decideContentRemoval(
+  prisma: Pick<PrismaClient, 'user'>,
+  params: { readonly actorId: string; readonly actorRole: string | null | undefined; readonly authorId: string; readonly body: unknown },
+): Promise<ContentRemovalDecision> {
+  if (params.authorId === params.actorId) return { kind: 'author' };
+  if (!(await admitThirdPartyRemoval(prisma, { actorRole: params.actorRole, authorId: params.authorId }))) {
+    return { kind: 'refused', status: 403, code: 'FORBIDDEN' };
+  }
+  const reason = moderationReasonOf(params.body);
+  return reason === null
+    ? { kind: 'refused', status: 400, code: MODERATION_REASON_REQUIRED }
+    : { kind: 'moderation', reason };
+}
+
+/** Le refus d'un retrait par un tiers, levé depuis une opération enveloppée (journal de mutation). */
+export class ContentRemovalRefused extends Error {
+  constructor(readonly decision: Extract<ContentRemovalDecision, { kind: 'refused' }>) {
+    super(decision.code);
+    this.name = 'ContentRemovalRefused';
+  }
 }
