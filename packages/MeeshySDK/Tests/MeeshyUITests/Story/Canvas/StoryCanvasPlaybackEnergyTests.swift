@@ -246,6 +246,45 @@ final class StoryCanvasPlaybackEnergyTests: XCTestCase {
         XCTAssertEqual(high.minimum, 60)
     }
 
+    // MARK: - Le tier média de l'appareil (#11281)
+
+    func test_highCadence_followsTheDeviceMediaTier() {
+        let low = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .low)
+        let mid = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .mid)
+        let high = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .high)
+        let pro = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .pro)
+        XCTAssertEqual([low.minimum, low.maximum, low.preferred], [30, 60, 30])
+        XCTAssertEqual([mid.minimum, mid.maximum, mid.preferred], [30, 60, 60])
+        XCTAssertEqual([high.minimum, high.maximum, high.preferred], [60, 120, 60])
+        XCTAssertEqual([pro.minimum, pro.maximum, pro.preferred], [60, 120, 60])
+    }
+
+    func test_highCadence_withoutATier_isTheHistoricalRange() {
+        let historical = StoryPlaybackCadence.frameRateRange(for: .high)
+        let high = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .high)
+        XCTAssertEqual([historical.minimum, historical.maximum, historical.preferred],
+                       [high.minimum, high.maximum, high.preferred])
+    }
+
+    func test_lowCadence_isTheSameOnEveryTier() {
+        let reference = StoryPlaybackCadence.frameRateRange(for: .low)
+        for tier in DeviceMediaTier.allCases {
+            let range = StoryPlaybackCadence.frameRateRange(for: .low, mediaTier: tier)
+            XCTAssertEqual([range.minimum, range.maximum, range.preferred],
+                           [reference.minimum, reference.maximum, reference.preferred], "\(tier)")
+        }
+    }
+
+    func test_highCadence_neverExceedsWhatAStrongerTierGets() {
+        let ranges = DeviceMediaTier.allCases.map {
+            StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: $0)
+        }
+        for (weaker, stronger) in zip(ranges, ranges.dropFirst()) {
+            XCTAssertLessThanOrEqual(weaker.maximum, stronger.maximum)
+            XCTAssertLessThanOrEqual(weaker.preferred, stronger.preferred)
+        }
+    }
+
     // MARK: - Lien d'édition d'un canvas préchargé
 
     func test_editClockArming_prefetchedCanvas_doesNotArm() {
