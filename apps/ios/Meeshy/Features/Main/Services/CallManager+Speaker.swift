@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 @preconcurrency import WebRTC
 import os
+import MeeshySDK
 
 // #8735 — « Sortie » répond au premier toucher. `toggleSpeaker()` attendait
 // `audioSessionQueue.sync` (verrou de la session + `overrideOutputAudioPort`)
@@ -64,5 +65,5 @@ extension CallManager {
 }
 
 fileprivate extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

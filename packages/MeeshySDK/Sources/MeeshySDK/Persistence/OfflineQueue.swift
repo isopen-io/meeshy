@@ -120,7 +120,7 @@ public actor OfflineQueue {
     func resetRecoveryForTesting() { hasRecoveredThisProcess = false }
     var isRetrying = false
     private let drainTriggers = OutboxDrainTriggers()
-    let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+    let logger = MeeshyLog.logger(.offlinequeue, subsystem: .legacySDK)
     /// Outbox pool — injected at boot via `configure(pool:)`. Nil until wired.
     /// `internal` (et non `private`) : les extensions de CE type vivant dans
     /// d'AUTRES fichiers (#5830) n'atteignent pas un `private`, qui reste borné
@@ -246,7 +246,7 @@ public actor OfflineQueue {
                     // user re-typed something for an already-deleted local
                     // message. Drop the new send (cannot resurrect a deleted
                     // optimistic) but log so this surfaces in instrumentation.
-                    Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                    MeeshyLog.logger(.offlinequeue, subsystem: .legacySDK)
                         .warning("sendMessage after deleteMessage on \(clientMessageId, privacy: .public), dropping")
 
                 case (.sendMessage?, _):
@@ -266,7 +266,7 @@ public actor OfflineQueue {
                 case (.editMessage?, _), (.sendReaction?, _):
                     // A pending edit/reaction precedes a fresh send for the
                     // same id — INSERT the send but log the unusual sequence.
-                    Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                    MeeshyLog.logger(.offlinequeue, subsystem: .legacySDK)
                         .warning("sendMessage for \(clientMessageId, privacy: .public) follows a pending \(String(describing: existing?.kind), privacy: .public) — inserting alongside")
                     try OutboxRecord(
                         id: outboxId,
@@ -285,7 +285,7 @@ public actor OfflineQueue {
                     // message row (different id-space: `cid_*` vs `cmid_*`), but
                     // if a collision happens, fall through to a clean INSERT and
                     // surface the anomaly in logs for diagnostics.
-                    Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                    MeeshyLog.logger(.offlinequeue, subsystem: .legacySDK)
                         .error("sendMessage collides with non-message outbox kind \(String(describing: existing?.kind), privacy: .public) on \(clientMessageId, privacy: .public) — inserting alongside")
                     try OutboxRecord(
                         id: outboxId,
@@ -513,7 +513,7 @@ public actor OfflineQueue {
                         // que le flush ne pourra jamais décoder : le message
                         // serait définitivement perdu. On saute l'item — il
                         // reste dans `items` et la migration est idempotente.
-                        Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                        MeeshyLog.logger(.offlinequeue, subsystem: .legacySDK)
                             .error("migrateToOutbox: skipping item \(item.id, privacy: .public) — payload encode failed: \(error.localizedDescription, privacy: .public)")
                         continue
                     }

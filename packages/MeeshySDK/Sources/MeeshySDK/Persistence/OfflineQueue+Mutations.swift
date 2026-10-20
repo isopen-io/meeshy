@@ -363,7 +363,7 @@ extension OfflineQueue {
                         // Sans la liste des fichiers, ils orphelinent sous
                         // Documents/pending-*/ — exactement ce que ce bloc
                         // existe pour éviter.
-                        Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                        MeeshyLog.logger(.offlinequeue, subsystem: .legacySDK)
                             .error("enqueueDelete: cancelled send payload undecodable, its media files will orphan: \(error.localizedDescription, privacy: .public)")
                         sweep = []
                     }
@@ -410,7 +410,7 @@ extension OfflineQueue {
                     // Wave 1 Task 3.2 — non-message outbox kinds. Should not
                     // share a message `clientMessageId` ; if collision happens,
                     // INSERT the delete alongside and log for diagnostics.
-                    Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                    MeeshyLog.logger(.offlinequeue, subsystem: .legacySDK)
                         .error("deleteMessage collides with non-message outbox kind \(String(describing: other), privacy: .public) on \(clientMessageId, privacy: .public) — inserting alongside")
                     try OutboxRecord(
                         id: recordId,

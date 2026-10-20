@@ -80,7 +80,7 @@ final class StoryPublishService: ObservableObject {
     /// queue) est consommé là-bas, et l'édition dans `runStoryUpdate`.
     var draftStore: StoryDraftStore = .shared
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "story-publish-service")
+    private let logger = MeeshyLog.logger(.storyPublishService)
     private var cancellables = Set<AnyCancellable>()
     private var configured = false
 

@@ -1,5 +1,6 @@
 import Foundation
 import os
+import MeeshySDK
 
 protocol ThermalStateMonitorDelegate: AnyObject {
     func thermalStateDidChange(to state: ProcessInfo.ThermalState)
@@ -100,5 +101,5 @@ final class ThermalStateMonitor: ThermalStateMonitorProviding {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

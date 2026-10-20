@@ -5,7 +5,7 @@ import Foundation
 import os
 import UIKit
 
-private let logger = Logger(subsystem: "com.meeshy.sdk", category: "audio-session")
+private let logger = MeeshyLog.logger(.audioSession, subsystem: .legacySDK)
 
 typealias DelayedScheduler = @Sendable (_ delay: TimeInterval, _ queue: DispatchQueue, _ work: @escaping @Sendable () -> Void) -> Void
 

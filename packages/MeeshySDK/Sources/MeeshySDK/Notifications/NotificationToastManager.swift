@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.sdk", category: "notifications")
+private let logger = MeeshyLog.logger(.notifications, subsystem: .sdk)
 
 /// High-level orchestrator for in-app notifications.
 ///
@@ -218,7 +218,7 @@ public final class NotificationToastManager: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var toastDismissTask: Task<Void, Never>?
-    private static let toastDuration: UInt64 = 7_000_000_000
+    private static let toastDuration: Duration = .seconds(7)
 
     // Dedup set: évite d'afficher 2x la même notification (APN foreground + socket simultanés)
     private var recentNotificationIds = Set<String>()
@@ -806,7 +806,7 @@ public final class NotificationToastManager: ObservableObject {
         }
         recentNotificationIds.insert(event.id)
         Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            _ = await cancellableSleep(for: .seconds(2))
             self?.recentNotificationIds.remove(event.id)
         }
 
@@ -947,8 +947,7 @@ public final class NotificationToastManager: ObservableObject {
         currentToast = event
 
         toastDismissTask = Task {
-            try? await Task.sleep(for: .nanoseconds(Self.toastDuration))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: Self.toastDuration) else { return }
             currentToastPresentation = nil
             currentToast = nil
         }

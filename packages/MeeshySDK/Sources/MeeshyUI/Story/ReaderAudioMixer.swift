@@ -29,7 +29,7 @@ public final class ReaderAudioMixer {
     /// Number of foreground audio clips currently configured.
     public var activeClipCount: Int { entries.count }
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    private let logger = MeeshyLog.logger(.media)
     /// `internal` : l'extension du FOND vit dans son propre fichier
     /// (`ReaderAudioMixer+Background.swift`) et y attache son node.
     let engine = AVAudioEngine()
@@ -525,7 +525,7 @@ public final class ReaderAudioMixer {
     // via le teardown de StoryCanvasUIView qui possède toujours un audioMixer.
     nonisolated deinit {
         if !didShutdown {
-            os.Logger(subsystem: "me.meeshy.app", category: "media").warning(
+            MeeshyLog.logger(.media).warning(
                 "ReaderAudioMixer deinit without shutdown() — owner should call shutdown() before drop to release AVAudioEngine + nodes deterministically."
             )
         }
@@ -721,7 +721,7 @@ public final class ReaderAudioMixer {
                                                      duration: duration, elapsed: elapsed)
                 live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : volume
                 if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { return }
-                try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
             }
         }
         if var stored = entries[entry.audioId] {
@@ -745,7 +745,7 @@ public final class ReaderAudioMixer {
         let task = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard self?.applyLoopEnvelope(audioId: audioId, epoch: epoch, cycle: cycle) == true else { return }
-                try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
             }
         }
         if var stored = entries[audioId] {
@@ -915,7 +915,7 @@ extension ReaderAudioMixer {
             let elapsed = Self.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: startHost)
             applyFadeGain(ReaderVolumeRamp.volume(from: 1, to: 0, duration: duration, elapsed: elapsed))
             if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { break }
-            try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+            guard await cancellableSleep(for: ReaderVolumeRamp.step) else { break }
         }
         guard playbackEpoch == epoch else { return }
         stop()

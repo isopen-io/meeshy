@@ -70,7 +70,7 @@ final class ConversationLinkCardViewModel: ObservableObject {
     /// relit — d'où un jeton par carte plutôt qu'une comparaison de cibles.
     private var ownAnnouncedChange: ConversationCardChange?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-card")
+    private static let logger = MeeshyLog.logger(.conversationCard)
 
     init(
         target: ConversationCardTarget,

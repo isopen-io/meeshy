@@ -293,7 +293,7 @@ final class Router: ObservableObject {
     /// iPad two-column mode: called when pop/popToRoot is requested.
     var onPopRequested: (() -> Void)?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "router")
+    private static let logger = MeeshyLog.logger(.router)
 
     var currentRoute: Route? { path.last }
 

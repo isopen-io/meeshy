@@ -239,18 +239,16 @@ extension ConversationView {
             let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
             await CacheCoordinator.shared.images.store(data, for: renderKey)
             DiskCacheStore.cacheImageForPreview(image, key: renderKey)
-            _ = await viewModel.sendMessage(
+            _ = await viewModel.send(OutgoingMessage(
+                conversationId: ConversationID(viewModel.conversationId),
                 content: "",
-                replyToId: replyId,
-                storyReplyToId: storyReplyId,
-                storyReplyReference: storyRef,
-                attachmentIds: [result.id],
-                localAttachments: [result.toMessageAttachment(uploadedBy: currentUserId)],
+                relation: MessageRelation.legacy(replyToId: replyId, storyReplyToId: storyReplyId, storyReference: storyRef, forwardedFromId: nil, forwardedFromConversationId: nil, attachmentReplyTo: nil),
+                attachments: OutgoingAttachments(ids: [result.id], previews: [result.toMessageAttachment(uploadedBy: currentUserId)]),
                 protection: protection,
                 originalLanguage: originalLanguage,
-                existingTempId: tempId,
+                reusedClientMessageId: MessageID(tempId),
                 sticker: sticker
-            )
+            ))
             // Le fichier a fini son travail : le serveur porte l'image, et un
             // échec d'envoi APRÈS l'upload est rejoué par `sendMessage` avec
             // l'id remonté, jamais depuis ce fichier.
@@ -259,7 +257,7 @@ extension ConversationView {
             Logger.messages.error("Sticker upload failed: \(error.localizedDescription, privacy: .public)")
             // Même contrat que le groupe visuel : la bulle passe `.sending` →
             // `.queued` (horloge conservée) et l'outbox rejoue l'upload.
-            _ = try? await viewModel.messagePersistence.applyEvent(localId: tempId, event: .sendFailed(error))
+            await viewModel.recordSendFailure(tempId: tempId, error: error)
             await enqueueStickerOffline(fileURL: fileURL, mimeType: mimeType, tempId: tempId, sticker: sticker,
                                         replyId: replyId, originalLanguage: originalLanguage)
         }

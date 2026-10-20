@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 import MeeshyUI
 import os
+import MeeshySDK
 
 /// Le magasin des brouillons du meuble (#8848).
 ///
@@ -31,7 +32,7 @@ nonisolated final class ComposerAutosaveStore: ComposerAutosaveProviding, @unche
     private let queue = DispatchQueue(label: "me.meeshy.composer.autosave", qos: .utility)
     private let fileManager = FileManager.default
     private var writtenBitmaps: [String: ObjectIdentifier] = [:]
-    private let logger = os.Logger(subsystem: "me.meeshy.app", category: "composer-autosave")
+    private let logger = MeeshyLog.logger(.composerAutosave)
 
     init(root: URL? = nil, sessionRoot: URL? = nil) {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

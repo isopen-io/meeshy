@@ -25,7 +25,7 @@ import MeeshySDK
 // depuis le composer timeline. Elle est désormais appliquée ici, avec le même
 // atome SDK, et INDÉPENDAMMENT de l'interlude.
 
-private let timelineExportLogger = Logger(subsystem: "me.meeshy.app", category: "story-timeline-export")
+private let timelineExportLogger = MeeshyLog.logger(.storyTimelineExport)
 
 // MARK: - Timeline story export seam (test injection)
 

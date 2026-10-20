@@ -7,7 +7,7 @@ import MeeshySDK
 import os
 import UIKit
 
-private nonisolated let containerLogger = Logger(subsystem: "me.meeshy.app", category: "dependency-container")
+private nonisolated let containerLogger = MeeshyLog.logger(.dependencyContainer)
 
 /// Diagnostic record produced by ``DependencyContainer`` boot.
 ///

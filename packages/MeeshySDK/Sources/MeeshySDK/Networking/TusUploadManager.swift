@@ -829,7 +829,7 @@ public actor TusUploadManager {
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "tus-upload")
+    private static let logger = MeeshyLog.logger(.tusUpload, subsystem: .legacySDK)
 
     /// Flip a queued/uploading file's progress row to `.error`, preserving its
     /// last bytes/percentage, and re-emit. Resolves the row by `fileName` (the

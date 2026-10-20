@@ -48,7 +48,7 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
     private let lock = NSLock()
     private var session: URLSession?
     private var transfers: [ObjectIdentifier: Transfer] = [:]
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "media-file-download")
+    private let logger = MeeshyLog.logger(.mediaFileDownload, subsystem: .legacySDK)
 
     private final class Transfer {
         let continuation: CheckedContinuation<Download, Error>

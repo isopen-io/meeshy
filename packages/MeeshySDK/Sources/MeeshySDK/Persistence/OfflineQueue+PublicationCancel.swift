@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 import os
 
-private let publicationCancelLog = Logger(subsystem: "me.meeshy.sdk", category: "publication-cancel")
+private let publicationCancelLog = MeeshyLog.logger(.publicationCancel, subsystem: .sdk)
 
 /// **Ce que « Supprimer » a fait d'une publication encore dans la file** (#10321).
 public enum PublicationCancellation: Sendable, Equatable {

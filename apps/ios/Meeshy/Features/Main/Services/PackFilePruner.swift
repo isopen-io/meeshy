@@ -102,7 +102,7 @@ final class PackFilePruner {
     private let referencedFrames: @concurrent @Sendable () async -> Set<String>?
     private var leases: [String: Int] = [:]
     private var deferred = false
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "packs")
+    private let logger = MeeshyLog.logger(.packs)
 
     init(index: PackFileIndex,
          store: any PackFilePruning,

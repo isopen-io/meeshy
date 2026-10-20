@@ -172,7 +172,7 @@ nonisolated struct ReelSwitchMeter: Equatable {
 @MainActor
 enum ReelSwitchSignpost {
     private static let signposter = OSSignposter(subsystem: "me.meeshy.app", category: "ReelSwitch")
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "reels-perf")
+    private static let log = MeeshyLog.logger(.reelsPerf)
     private static var meter = ReelSwitchMeter()
     private static var interval: OSSignpostIntervalState?
     private static let metricLog = MXMetricManager.makeLogHandle(category: "ReelSwitch")

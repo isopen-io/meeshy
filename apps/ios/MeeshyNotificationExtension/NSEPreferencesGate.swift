@@ -35,7 +35,7 @@ enum NSEPreferencesGate {
         do {
             return try JSONDecoder().decode(UserNotificationPreferences.self, from: data)
         } catch {
-            Logger(subsystem: "me.meeshy.app", category: "nse-prefs-gate")
+            MeeshyLog.logger(.nsePrefsGate)
                 .error("Notification preferences unreadable, delivering with defaults: \(error.localizedDescription, privacy: .public)")
             return nil
         }
