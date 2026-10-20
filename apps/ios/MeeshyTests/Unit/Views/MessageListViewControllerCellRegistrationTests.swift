@@ -54,6 +54,152 @@ final class MessageListViewControllerCellRegistrationTests: XCTestCase {
         XCTAssertEqual(Set(identifiers.compactMap { $0 }).count, 3)
     }
 
+    // MARK: - Une registration par fichier
+
+    func test_chaqueRegistration_vitDansSonFichier() throws {
+        let construction = "UICollectionView.CellRegistration<MessageListCell, MessageListItem> {"
+        let urls = AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let counts = try Dictionary(uniqueKeysWithValues: urls.map { url -> (String, Int) in
+            let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            return (url.lastPathComponent, source.components(separatedBy: construction).count - 1)
+        })
+        let owners = ["+Rows", "+TypingCell", "+DayHeaderCell", "+ConversationStartCell", "+UnreadSeparator"]
+            .map { "MessageListViewController\($0).swift" }
+
+        for owner in owners {
+            XCTAssertEqual(counts[owner], 1, "\(owner) construit exactement une registration")
+        }
+        let others = counts.filter { !owners.contains($0.key) && $0.value > 0 }
+        XCTAssertTrue(others.isEmpty, "aucune autre construction : \(others.keys.sorted())")
+    }
+
+    // MARK: - Registrations isolées
+
+    func test_registrationJour_poseLeLibelle_refuseUnAutreItem() throws {
+        let vc = makeSUT(store: try makeEmptyStore())
+        let (collectionView, dataSource, window) = makeHarness(registration: vc.makeDayHeaderRegistration())
+        defer { withExtendedLifetime(window) {} }
+
+        let day = try XCTUnwrap(dequeue(.dayHeader(dayStart: Date()), collectionView, dataSource))
+        let other = try XCTUnwrap(dequeue(.typingIndicator, collectionView, dataSource))
+
+        XCTAssertNotNil(day.contentConfiguration)
+        XCTAssertEqual(day.backgroundColor, .clear)
+        XCTAssertNil(other.contentConfiguration)
+    }
+
+    func test_registrationDebut_refuseUnAutreItem() throws {
+        let vc = makeSUT(store: try makeEmptyStore())
+        let (collectionView, dataSource, window) = makeHarness(registration: vc.makeConversationStartRegistration())
+        defer { withExtendedLifetime(window) {} }
+
+        let start = try XCTUnwrap(dequeue(.conversationStart, collectionView, dataSource))
+        let other = try XCTUnwrap(dequeue(.typingIndicator, collectionView, dataSource))
+
+        XCTAssertNotNil(start.contentConfiguration)
+        XCTAssertNil(other.contentConfiguration)
+    }
+
+    func test_registrationFrappe_configureToutItem() throws {
+        let vc = makeSUT(store: try makeEmptyStore())
+        let (collectionView, dataSource, window) = makeHarness(registration: vc.makeTypingRegistration())
+        defer { withExtendedLifetime(window) {} }
+
+        let typing = try XCTUnwrap(dequeue(.typingIndicator, collectionView, dataSource))
+        let anyCell = try XCTUnwrap(dequeue(.dayHeader(dayStart: Date()), collectionView, dataSource))
+
+        XCTAssertNotNil(typing.contentConfiguration)
+        XCTAssertNotNil(anyCell.contentConfiguration)
+    }
+
+    func test_registrationMessage_localIdInconnu_videLaCellule() throws {
+        let vc = makeSUT(store: try makeEmptyStore())
+        let (collectionView, dataSource, window) = makeHarness(registration: vc.makeMessageRegistration())
+        defer { withExtendedLifetime(window) {} }
+
+        let cell = try XCTUnwrap(dequeue(.message(localId: "absent"), collectionView, dataSource))
+
+        XCTAssertNil(cell.contentConfiguration)
+        XCTAssertEqual(cell.tag, 0)
+    }
+
+    // MARK: - Lois pures sorties du contrôleur
+
+    func test_relativeDayLabel_aujourdhui_et_ancien() throws {
+        let vc = makeSUT(store: try makeEmptyStore())
+        let now = Date(timeIntervalSince1970: 1_726_000_000)
+        let old = now.addingTimeInterval(-5 * 86_400)
+
+        XCTAssertEqual(
+            vc.relativeDayLabel(for: now, now: now),
+            String(localized: "date.today", defaultValue: "Aujourd'hui")
+        )
+        XCTAssertEqual(
+            vc.relativeDayLabel(for: old, now: now),
+            MessageDayLabel.label(
+                for: old,
+                now: now,
+                calendar: .current,
+                locale: .current,
+                today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+                yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+                dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
+            )
+        )
+    }
+
+    func test_messageRowGrouping_tetesEtQueues() {
+        let t0 = Date(timeIntervalSince1970: 1_726_000_000)
+        let records = [
+            record(localId: "a", senderId: "u1", createdAt: t0),
+            record(localId: "b", senderId: "u1", createdAt: t0.addingTimeInterval(5)),
+            record(localId: "c", senderId: "u2", createdAt: t0.addingTimeInterval(10)),
+            record(localId: "d", senderId: "u2", messageSource: "system", createdAt: t0.addingTimeInterval(15)),
+        ]
+        let candidate: (MessageRecord) -> MessageDayGrouping.GroupCandidate = { MessageRowGrouping.candidate(of: $0) }
+
+        XCTAssertTrue(MessageRowGrouping.isLastInGroup(candidate(records[3]), at: 3, in: records))
+        XCTAssertTrue(MessageRowGrouping.isFirstInGroup(candidate(records[0]), at: 0, in: records))
+        XCTAssertFalse(MessageRowGrouping.isLastInGroup(candidate(records[0]), at: 0, in: records))
+        XCTAssertFalse(MessageRowGrouping.isFirstInGroup(candidate(records[1]), at: 1, in: records))
+        XCTAssertTrue(MessageRowGrouping.isLastInGroup(candidate(records[1]), at: 1, in: records))
+        XCTAssertTrue(MessageRowGrouping.isLastInGroup(candidate(records[2]), at: 2, in: records))
+        XCTAssertTrue(MessageRowGrouping.isFirstInGroup(candidate(records[3]), at: 3, in: records))
+        XCTAssertTrue(MessageRowGrouping.isLastInGroup(candidate(records[0]), at: nil, in: records))
+        XCTAssertTrue(MessageRowGrouping.isFirstInGroup(candidate(records[1]), at: nil, in: records))
+    }
+
+    func test_recipientCount() {
+        XCTAssertEqual(MessageCellInputs.recipientCount(isDirect: true, serverRecipients: 4, memberCount: 9), 1)
+        XCTAssertEqual(MessageCellInputs.recipientCount(isDirect: false, serverRecipients: 4, memberCount: 9), 4)
+        XCTAssertEqual(MessageCellInputs.recipientCount(isDirect: false, serverRecipients: 0, memberCount: 5), 4)
+        XCTAssertEqual(MessageCellInputs.recipientCount(isDirect: false, serverRecipients: 0, memberCount: nil), 1)
+        XCTAssertEqual(MessageCellInputs.recipientCount(isDirect: false, serverRecipients: 0, memberCount: 1), 1)
+    }
+
+    // MARK: - Libération
+
+    func test_deinit_estNonIsolee_explicitement() throws {
+        let url = try XCTUnwrap(AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/MessageListViewController.swift").first)
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        XCTAssertNotNil(source.range(of: #"nonisolated\s+deinit\s*\{"#, options: .regularExpression))
+        XCTAssertNil(source.range(of: #"(?m)^\s*deinit\s*\{"#, options: .regularExpression))
+    }
+
+    func test_liberation_synchrone_sansTache_neCrashePas() throws {
+        weak var weakVC: MessageListViewController?
+        let store = try makeEmptyStore()
+
+        autoreleasepool {
+            let vc = makeSUT(store: store)
+            vc.loadViewIfNeeded()
+            weakVC = vc
+        }
+
+        XCTAssertNil(weakVC)
+    }
+
     // MARK: - Fabriques
 
     private func cell(of item: MessageListItem, in vc: MessageListViewController) -> UICollectionViewCell? {
@@ -79,6 +225,72 @@ final class MessageListViewControllerCellRegistrationTests: XCTestCase {
         }
         vc.focalCollectionViewForTesting?.layoutIfNeeded()
         return (vc, window)
+    }
+
+    private func makeHarness(
+        registration: UICollectionView.CellRegistration<MessageListCell, MessageListItem>
+    ) -> (UICollectionView, UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>, UIWindow) {
+        let layout = UICollectionViewFlowLayout()
+        let collectionView = UICollectionView(frame: CGRect(x: 0, y: 0, width: 390, height: 600), collectionViewLayout: layout)
+        let dataSource = UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>(
+            collectionView: collectionView
+        ) { collectionView, indexPath, item in
+            collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: item)
+        }
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 600))
+        window.addSubview(collectionView)
+        window.makeKeyAndVisible()
+        return (collectionView, dataSource, window)
+    }
+
+    private func dequeue(
+        _ item: MessageListItem,
+        _ collectionView: UICollectionView,
+        _ dataSource: UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>
+    ) -> UICollectionViewCell? {
+        var snapshot = NSDiffableDataSourceSnapshot<MessageListSection, MessageListItem>()
+        snapshot.appendSections([.main])
+        snapshot.appendItems([item])
+        dataSource.apply(snapshot, animatingDifferences: false)
+        collectionView.layoutIfNeeded()
+        return collectionView.cellForItem(at: IndexPath(item: 0, section: 0))
+    }
+
+    private func record(
+        localId: String,
+        senderId: String,
+        messageSource: String = "user",
+        createdAt: Date
+    ) -> MessageRecord {
+        MessageRecord(
+            localId: localId, serverId: "server_\(localId)",
+            conversationId: "c1", senderId: senderId,
+            content: "Bonjour", originalLanguage: "fr",
+            messageType: "text", messageSource: messageSource, contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 1, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: createdAt, sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: createdAt,
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil,
+            changeVersion: 0
+        )
     }
 
     private func makeEmptyStore() throws -> MessageStore {
