@@ -91,6 +91,26 @@ final class ShareIntentRules {
         return "." + subtype;
     }
 
+    /** Ce que {@code copyCapped} rend pour un contenu illisible (URI revoquee, fournisseur muet). */
+    static final long UNREADABLE = -1;
+    /** Ce que {@code copyCapped} rend pour un contenu qui ferait depasser le budget. */
+    static final long OVER_BUDGET = -2;
+
+    enum CopyVerdict { KEEP, SKIP, STOP }
+
+    /**
+     * Le sort d'une copie, la loi du service worker de la PWA
+     * ({@code sw-share-target.js}, {@code filesOf}) : un fichier vide ou
+     * illisible n'occupe pas de place, le premier qui ferait depasser le budget
+     * arrete le partage — les suivants ne sont pas copies (#11142).
+     */
+    static CopyVerdict verdictOf(long copied) {
+        if (copied == OVER_BUDGET) {
+            return CopyVerdict.STOP;
+        }
+        return copied > 0 ? CopyVerdict.KEEP : CopyVerdict.SKIP;
+    }
+
     /** Ce qu'il reste de budget apres {@code used} octets copies — jamais negatif. */
     static long remainingBytes(long used) {
         return Math.max(0L, MAX_TOTAL_BYTES - used);
