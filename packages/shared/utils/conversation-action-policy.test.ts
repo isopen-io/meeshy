@@ -63,6 +63,24 @@ describe('conversationActionsFor — rôles de plateforme et de conversation (#1
     expect(actionsOf({ conversation: { encryptionMode: 'e2ee' } }).e2eeBadge).toBe(true);
     expect(actionsOf({ conversation: { encryptionMode: 'server' } }).e2eeBadge).toBe(false);
   });
+
+  it.each(['E2EE', ' e2ee ', 'signal_v3'])('un régime %j porte le badge : la loi des messages y retire les services', (encryptionMode) => {
+    expect(actionsOf({ conversation: { encryptionMode } }).e2eeBadge).toBe(true);
+  });
+
+  it.each([null, 'SERVER', 'hybrid'])('un régime %j que le serveur lit ne porte pas le badge', (encryptionMode) => {
+    expect(actionsOf({ conversation: { encryptionMode } }).e2eeBadge).toBe(false);
+  });
+
+  it('une conversation close ne se supprime plus pour tous : la route écraserait closedAt', () => {
+    expect(actionsOf({ conversation: { closedAt: '2026-10-19T00:00:00Z' }, viewer: { conversationRole: 'admin' } }).deleteForAll).toBe(false);
+    expect(actionsOf({ viewer: { conversationRole: 'admin' } }).deleteForAll).toBe(true);
+  });
+
+  it('un lecteur à la fois inscrit et anonyme se lit comme un invité', () => {
+    const actions = actionsOf({ viewer: { isAnonymous: true } });
+    expect([actions.hide, actions.report, actions.call]).toEqual([false, false, false]);
+  });
 });
 
 type ConversationVector = { readonly _label: string; readonly input: ConversationActionInput; readonly expected: ConversationActions };

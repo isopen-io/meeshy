@@ -137,6 +137,85 @@ describe('messageActionsFor — les verdicts alignés sur la passerelle (#11205)
   });
 });
 
+describe('messageActionsFor — ce que la passerelle accorde sans le droit d’écrire, et ce qu’elle refuse en plus', () => {
+  it('un mineur déclaré réagit dans Global sans pouvoir y répondre (MINOR_GLOBAL_REFUSAL_MESSAGE)', () => {
+    const { verdicts } = actions({ conversation: { type: 'global' }, viewer: { isDeclaredMinor: true } });
+    expect([verdicts.canReact, verdicts.canReply]).toEqual([true, false]);
+  });
+
+  it('un membre d’un canal d’annonces réagit sans répondre', () => {
+    const { verdicts } = actions({ conversation: { type: 'broadcast', isAnnouncementChannel: true } });
+    expect([verdicts.canReact, verdicts.canReply]).toEqual([true, false]);
+  });
+
+  it('on ne réagit pas dans une conversation close, ni hors membre actif', () => {
+    expect(actions({ conversation: { closedAt: '2026-10-19T00:00:00Z' } }).verdicts.canReact).toBe(false);
+    expect(actions({ viewer: { isActiveMember: false } }).verdicts.canReact).toBe(false);
+  });
+
+  it('un mineur déclaré n’épingle ni ne désépingle dans Global (refusesMinorPin)', () => {
+    expect(actions({ conversation: { type: 'global' }, viewer: { isDeclaredMinor: true } }).verdicts.pin).toBeNull();
+    expect(actions({ message: { pinnedAt: '2026-10-20T10:00:00Z' }, conversation: { type: 'global' }, viewer: { isDeclaredMinor: true } }).verdicts.pin).toBeNull();
+    expect(actions({ conversation: { type: 'global' } }).verdicts.pin).toBe('pin');
+  });
+
+  it('un message épinglé propose « Désépingler », jamais « Épingler »', () => {
+    const { verdicts, groups } = actions({ message: { pinnedAt: '2026-10-20T10:00:00Z' } });
+    expect(verdicts.pin).toBe('unpin');
+    expect(groups.organize).toEqual(['unpin']);
+    expect(actions().groups.organize).toEqual(['pin']);
+  });
+
+  it.each(['E2EE', ' e2ee ', 'signal_v3'])('un régime de conversation %j se lit comme du bout en bout (fermé par défaut)', (encryptionMode) => {
+    const { verdicts, groups } = actions({ message: mine, conversation: { encryptionMode } });
+    expect(verdicts.forward).toBe(false);
+    expect(verdicts.edit).toBeNull();
+    expect(verdicts.translate).toBe('device');
+    expect(verdicts.sentiment).toBeNull();
+    expect(verdicts.serverFeatureAbsence).toBe('e2ee-server-feature-absent');
+    expect(groups.primary).not.toContain('forward');
+  });
+
+  it('un message au régime « E2EE » sans isEncrypted ne part pas vers le serveur', () => {
+    expect(actions({ message: { encryptionMode: 'E2EE' } }).verdicts.forward).toBe(false);
+  });
+
+  it('un régime que le serveur lit (server, hybrid) garde les services', () => {
+    expect(actions({ conversation: { encryptionMode: 'SERVER' } }).verdicts.translate).toBe('served-switch');
+    expect(actions({ conversation: { encryptionMode: 'hybrid' } }).verdicts.serverFeatureAbsence).toBeNull();
+  });
+
+  it('un rôle de plateforme en minuscules ne modère pas : la passerelle compare exactement', () => {
+    const lower = { platformRole: 'moderator' };
+    expect(actions({ viewer: lower }).verdicts.edit).toBeNull();
+    expect(actions({ viewer: lower }).verdicts.remove).toBeNull();
+    expect(actions({ conversation: { defaultWriteRole: 'moderator' }, viewer: lower }).verdicts.canReply).toBe(false);
+    expect(actions({ conversation: { defaultWriteRole: 'moderator' }, viewer: { platformRole: 'MODERATOR' } }).verdicts.canReply).toBe(true);
+  });
+
+  it('un avis système ni un résumé d’appel ne se suppriment pour tous ni ne se retirent', () => {
+    const notice = actions({ message: { ...mine, messageType: 'system', content: 'Zoé a rejoint' } });
+    expect(notice.verdicts.deleteForEveryone).toBe(false);
+    expect(notice.groups.destructive).toEqual(['deleteForMe']);
+    const call = actions({ message: { messageType: 'system', content: 'Appel manqué', metadata: { kind: 'call', callId: 'c1' } }, viewer: { conversationRole: 'moderator' } });
+    expect(call.verdicts.remove).toBeNull();
+  });
+
+  it.each<[string, Partial<MessageActionSubject>]>([
+    ['un lieu', { messageType: 'location', content: '12 rue des Lilas' }],
+    ['un lieu écrit en texte', { metadata: { location: { name: 'Gare' } }, content: 'Gare de Lyon' }],
+    ['un sondage', { content: 'Où dîner ?', metadata: { poll: { options: ['A', 'B'] } } }],
+    ['un sticker', { content: 'cœur', metadata: { sticker: { templateId: 'coeur' } } }],
+  ])('%s ne se modifie pas : son texte n’en porte pas la structure', (_label, shape) => {
+    expect(actions({ message: { ...mine, ...shape } }).verdicts.edit).toBeNull();
+  });
+
+  it('un lecteur à la fois inscrit et anonyme se lit comme un invité (fermé par défaut)', () => {
+    const { verdicts } = actions({ message: { senderId: 'part-other', authorUserId: 'user-viewer' }, viewer: { isAnonymous: true } });
+    expect([verdicts.edit, verdicts.deleteForEveryone, verdicts.deleteForMe, verdicts.report, verdicts.pin]).toEqual([null, false, false, false, null]);
+  });
+});
+
 type ActionVector = { readonly _label: string; readonly input: MessageActionInput; readonly expected: ReturnType<typeof messageActionsFor> };
 
 const vectors: readonly ActionVector[] = JSON.parse(

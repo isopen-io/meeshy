@@ -59,9 +59,14 @@ describe('messageContentKind — le TYPE de contenu, dérivé en un site (#11205
     expect(messageContentKind(message(overrides)).flags[flag]).toBe(true);
   });
 
+  it.each(['E2EE', ' e2ee ', 'signal_v3'])('un régime de message %j est chiffré, même sans isEncrypted (fermé par défaut)', (encryptionMode) => {
+    expect(messageContentKind(message({ encryptionMode })).flags.encrypted).toBe(true);
+  });
+
   it('un chiffrement que le serveur lit (server, hybrid) n’est pas du bout en bout', () => {
     expect(messageContentKind(message({ isEncrypted: true, encryptionMode: 'server' })).flags.encrypted).toBe(false);
     expect(messageContentKind(message({ isEncrypted: true, encryptionMode: 'hybrid' })).flags.encrypted).toBe(false);
+    expect(messageContentKind(message({ isEncrypted: true, encryptionMode: 'SERVER' })).flags.encrypted).toBe(false);
   });
 
   it('un avis de capture reste un message système', () => {
