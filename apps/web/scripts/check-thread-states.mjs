@@ -32,6 +32,7 @@ import {
   TRANSLATED_UNVEILED_WITNESS_ID,
   checkProtectionStates,
 } from './lib/check-protection-states.mjs';
+import { reportFailures } from './lib/ci-annotation.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -907,7 +908,7 @@ if (failures.length > 0) {
   // SEULE ligne qui reste visible quel que soit le bruit qui précède
   // (défaut #5676 revue 3, flake non identifiable dans check-thread-states.mjs).
   console.error(`\n  ${failures.length} état(s) du fil non tenus :\n`);
-  for (const what of failures) console.error(`    - ${what}`);
+  reportFailures({ gate: 'check-thread-states', failures, bullet: '-' });
   console.error('');
   process.exit(1);
 }
