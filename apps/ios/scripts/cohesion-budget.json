@@ -293,7 +293,7 @@
     "packages/MeeshySDK/Sources/MeeshySDK/Models/APINotification.swift::APINotification.formattedTitle": 171,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3Migration.swift::CanvasV3.migratedScene": 293,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3Migration.swift::StoryEffects.init": 152,
-    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationModels.swift::APIConversation.toConversation": 182,
+    "packages/MeeshySDK/Sources/MeeshySDK/Models/ConversationModels.swift::APIConversation.toConversation": 168,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/EngagementProgressResolver.swift::EngagementProgressResolver.resolve": 82,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshyConversation.swift::MeeshyConversation.encode": 89,
     "packages/MeeshySDK/Sources/MeeshySDK/Models/MeeshyConversation.swift::MeeshyConversation.init#2": 108,

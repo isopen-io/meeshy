@@ -618,10 +618,10 @@ extension ConversationSyncEngine {
     }
 
     private func deltaSansGarde() async -> DeltaOutcome {
-        // LE CHEMIN NOMINAL EST `/sync` (#4172 tranche 2b) : UN aller-retour au
-        // lieu du rejouage à la main, la requête Prisma rétrécie côté serveur.
-        // Le repli vers `GET /conversations?updatedSince=` est NOMMÉ (critère 2)
-        // — jamais un `try?` qui fondrait un refus dans une absence de réseau.
+        // LE CHEMIN NOMINAL EST `/sync` (#4172 tranche 2b) ; le repli vers `GET /conversations?updatedSince=`
+        // est NOMMÉ (critère 2) — jamais un `try?` qui fondrait un refus dans une absence de réseau.
+        // #11164 — un direct gravé sous le lecteur est resservi par `/sync`, qui rend son interlocuteur.
+        if let horizon = await ConversationDeltaRules.repareLesInterlocuteurs(dans: cache, lecteur: await currentUserId()) { lastSyncTimestamp = min(lastSyncTimestamp, horizon) }
         let sinceAvant = lastSyncTimestamp
         switch await deltaViaSync() {
         case let .traite(outcome, nil):
