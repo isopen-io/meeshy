@@ -22,7 +22,7 @@ struct IceCandidate: Codable, Sendable {
     let candidate: String
 }
 
-struct IceServer: Sendable {
+nonisolated struct IceServer: Sendable, Equatable {
     let urls: [String]
     let username: String?
     let credential: String?

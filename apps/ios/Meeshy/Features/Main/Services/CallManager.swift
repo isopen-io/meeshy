@@ -318,7 +318,7 @@ final class CallManager: ObservableObject {
     @Published var availableCameras: [CameraDeviceOption] = []
     /// §7.1 — uniqueID of the active capture camera (drives the picker's check).
     @Published var selectedCameraId: String?
-    @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?, conversationId: String?)?
+    @Published var pendingIncomingCall: IncomingCall?
 
     // MARK: - Audio Guard (DEBUG override for tests)
 
@@ -545,7 +545,7 @@ final class CallManager: ObservableObject {
     /// `retryCall()` (« Réessayer ») — `resetEndedStateForNewCall` clears the
     /// live identity fields, so the retry must re-dial from this snapshot rather
     /// than the (already-torn-down) call state. Parité web/Android retry.
-    var lastOutgoingContext: (conversationId: String, userId: String, displayName: String, isVideo: Bool)?
+    var lastOutgoingContext: OutgoingCallContext?
     /// `private(set)` (not `private`) so CallView can compute a "since call
     /// start" elapsed time for each live-caption row — the only other
     /// existing consumer of call timing is `callDuration`, which is a ticking

@@ -2732,7 +2732,7 @@ final class CallWaitingSupersedeTests: XCTestCase {
             XCTFail("reportIncomingVoIPCall not found"); return
         }
         guard let rejectRange = body.range(of: "rejectSupersededPendingCall(replacingWithCallId: callId)"),
-              let overwriteRange = body.range(of: "pendingIncomingCall = (callId: callId, fromUserId: callerUserId") else {
+              let overwriteRange = body.range(of: "pendingIncomingCall = IncomingCall(callId: callId, fromUserId: callerUserId") else {
             XCTFail("Expected rejectSupersededPendingCall before the busy-path pendingIncomingCall overwrite"); return
         }
         XCTAssertLessThan(
@@ -2748,7 +2748,7 @@ final class CallWaitingSupersedeTests: XCTestCase {
             XCTFail("handleIncomingCallNotification not found"); return
         }
         guard let rejectRange = body.range(of: "rejectSupersededPendingCall(replacingWithCallId: callId)"),
-              let overwriteRange = body.range(of: "pendingIncomingCall = (callId: callId, fromUserId: fromUserId") else {
+              let overwriteRange = body.range(of: "pendingIncomingCall = IncomingCall(callId: callId, fromUserId: fromUserId") else {
             XCTFail("Expected rejectSupersededPendingCall before the busy-path pendingIncomingCall overwrite"); return
         }
         XCTAssertLessThan(
@@ -4309,7 +4309,7 @@ final class RetryCallSourceGuardTests: XCTestCase {
         guard let body = functionBody(of: "func startCall(conversationId:", in: source) else {
             XCTFail("startCall not found"); return
         }
-        XCTAssertTrue(body.contains("lastOutgoingContext = (conversationId, userId, displayName, isVideo)"),
+        XCTAssertTrue(body.contains("lastOutgoingContext = OutgoingCallContext("),
             "startCall must snapshot the dial context so a transient failure is retryable.")
     }
 
@@ -5733,9 +5733,9 @@ final class CallWaitingAndFailureTeardownTests: XCTestCase {
     // MARK: Bug 2 — TURN credentials must survive the call-waiting hand-off
 
     func test_pendingIncomingCall_carriesIceServers() throws {
-        let source = try callManagerSource()
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/IncomingCall.swift")
         XCTAssertTrue(
-            source.contains("iceServers: [IceServer]?, conversationId: String?)?"),
+            source.contains("let iceServers: [IceServer]?"),
             "pendingIncomingCall must store the iceServers that arrived with the waiting call — " +
             "otherwise End & Answer configures the PeerConnection STUN-only and CGNAT/symmetric-NAT " +
             "callers get no media after the hand-off"

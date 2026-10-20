@@ -68,7 +68,7 @@ extension CallManager {
             // Date(); this synthesized busy-path report ends right now, so do the same.
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
             rejectSupersededPendingCall(replacingWithCallId: callId)
-            pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo, iceServers: iceServers, conversationId: conversationId)
+            pendingIncomingCall = IncomingCall(callId: callId, fromUserId: callerUserId, fromUsername: callerName, kind: CallKind(isVideo: isVideo), iceServers: iceServers, conversationId: conversationId)
             showCallWaitingBanner = true
             Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
             HapticFeedback.medium()
@@ -406,7 +406,7 @@ extension CallManager {
         guard callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
             rejectSupersededPendingCall(replacingWithCallId: callId)
-            pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo, iceServers: iceServers, conversationId: conversationId)
+            pendingIncomingCall = IncomingCall(callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, kind: CallKind(isVideo: isVideo), iceServers: iceServers, conversationId: conversationId)
             showCallWaitingBanner = true
             HapticFeedback.medium()
             return
