@@ -11,7 +11,7 @@ public final class AppDatabase: @unchecked Sendable {
     /// back to an in-memory queue. Callers that persist long-term data can
     /// decide to skip writes or surface a warning to the user.
     public let isEphemeral: Bool
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+    private let logger = MeeshyLog.logger(.grdb)
 
     private init() {
         // **UN HARNAIS DE TEST N'ÉCRIT PAS DANS LE MAGASIN DE L'APP** (#6857).
@@ -68,7 +68,7 @@ public final class AppDatabase: @unchecked Sendable {
     /// OS wakes us for a silent push or background task and disk access
     /// transiently fails.
     private static func makeWriter() -> (any DatabaseWriter, Bool) {
-        let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+        let logger = MeeshyLog.logger(.grdb)
         let databaseURL: URL
         do {
             databaseURL = try resolveDatabaseURL()
@@ -87,7 +87,7 @@ public final class AppDatabase: @unchecked Sendable {
     /// failure: drop the file (+ WAL/SHM sidecars) and retry once; then
     /// in-memory. Internal for tests.
     static func openOrRecover(at databaseURL: URL) -> (any DatabaseWriter, Bool) {
-        let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+        let logger = MeeshyLog.logger(.grdb)
         var phase = OpeningPhase.open
         do {
             let pool = try openPool(at: databaseURL)
@@ -250,31 +250,64 @@ public final class AppDatabase: @unchecked Sendable {
                 // `-wal`/`-shm` n'existent pas toujours — cas nominal.
             } catch {
                 // La base corrompue survit : la réouverture échouera à nouveau.
-                Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+                MeeshyLog.logger(.grdb)
                     .fault("Corrupt database file '\(suffix, privacy: .public)' could not be removed, recovery will fail again: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
 
+    typealias InMemoryOpener = @Sendable () throws -> DatabaseQueue
+
+    static let fallbackOpeners: [InMemoryOpener] = [
+        { try DatabaseQueue() },
+        { try DatabaseQueue(path: temporaryFallbackPath()) },
+    ]
+
+    private static func temporaryFallbackPath() -> String {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("meeshy-fallback-\(UUID().uuidString).sqlite")
+            .path
+    }
+
     /// `migrate` is injectable so tests can force the failure branch without
     /// depending on a real GRDB migration actually breaking.
     static func inMemoryWriter(
+        openers: [InMemoryOpener] = AppDatabase.fallbackOpeners,
+        recorder: any ErrorRecording = MeeshyLog.recorder,
         migrate: (any DatabaseWriter) throws -> Void = AppDatabase.runMigrations
     ) -> (any DatabaseWriter, Bool) {
-        // swiftlint:disable:next force_try
-        let queue = try! DatabaseQueue()
-        // The ephemeral DB still needs the schema so reads/writes don't throw.
-        // A migration failure here must not crash the host app — that's the
-        // whole point of the in-memory fallback — but swallowing it silently
-        // left zero diagnostic when the L2 cache degraded to a schemaless
-        // store for the rest of the session.
+        let queue = openFallbackQueue(openers: openers, recorder: recorder)
         do {
             try migrate(queue)
         } catch {
-            let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
-            logger.error("In-memory fallback DB migration failed, cache will be degraded for this session: \(error.localizedDescription, privacy: .public)")
+            MeeshyLog.record(
+                error,
+                context: "In-memory fallback DB migration failed, cache degraded for this session",
+                category: .grdb,
+                recorder: recorder
+            )
         }
         return (queue, true)
+    }
+
+    private static func openFallbackQueue(
+        openers: [InMemoryOpener],
+        recorder: any ErrorRecording
+    ) -> DatabaseQueue {
+        for opener in openers {
+            do {
+                return try opener()
+            } catch {
+                MeeshyLog.record(
+                    error,
+                    context: "In-memory fallback DB could not be opened",
+                    category: .grdb,
+                    recorder: recorder
+                )
+            }
+        }
+        MeeshyLog.logger(.grdb).fault("No SQLite store could be opened, not even an in-memory one")
+        preconditionFailure("SQLite is unavailable: no fallback store can be opened")
     }
 
     static func runMigrations(on writer: any DatabaseWriter) throws {
