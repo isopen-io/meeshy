@@ -336,6 +336,124 @@ struct FocalRowInput: Equatable {
     }
 }
 
+// MARK: - L'aperçu d'appui long (#11208)
+
+extension FocalRowInput {
+
+    /// Ce que l'aperçu reçoit du fil, au-delà du message et de ses traductions.
+    struct PreviewContext {
+        /// Le prisme du lecteur (`ConversationLanguagePreferences.resolved`),
+        /// descendu quand le fil n'a rien résolu pour ce message.
+        var readerPrism: [String] = []
+        /// La traduction que le fil sert DÉJÀ — `preferredTranslation(for:)`,
+        /// override manuel compris. `.some(nil)` : l'original, choisi ;
+        /// `nil` : rien de résolu, la fabrique descend `readerPrism`.
+        var chosenTranslation: MessageTranslation?? = nil
+        var selection: ConversationViewModel.BubbleLanguageSelection? = nil
+        var translatedAudios: [MessageTranslatedAudio] = []
+        var preferredAudioLangCode: String? = nil
+        var transcription: String? = nil
+        var userLanguages: (regional: String?, custom: String?) = (nil, nil)
+        var mentionDisplayNames: [String: String] = [:]
+        var currentUserId: String = ""
+        var senderPresence: PresenceState = .offline
+        var isDark: Bool = false
+        var isDirect: Bool = false
+        var isRightToLeft: Bool = false
+        var availableWidth: CGFloat? = nil
+    }
+
+    /// **La rangée que le fil montre pour `message`, prête pour l'aperçu
+    /// d'appui long** (#11208, décision #11204). Pure : aucune lecture d'état.
+    ///
+    /// La rangée est une tête ET une fin de groupe — l'identité (pastille, nom)
+    /// et la méta (drapeaux) sont DANS son cadre — et jamais l'élue Focal, dont
+    /// le chrome (carte, pastille soulevée) déborde : c'est ce débordement que
+    /// la capture de la cellule tranchait (directive 2026-08-23). Elle est
+    /// immobile : ni envoi en cours, ni bouton d'ajout de réaction, ni effet
+    /// d'apparition rejoué sous le doigt.
+    ///
+    /// Le texte est celui de la cellule : la même `BubbleContent`, avec la
+    /// traduction que le fil sert et le drapeau qu'il a basculé — la source que
+    /// `MessageOverlayMenu.previewServedText` lit aussi.
+    static func preview(
+        message: Message,
+        translations: [MessageTranslation],
+        accentHex: String,
+        density: Density,
+        context: PreviewContext = PreviewContext()
+    ) -> FocalRowInput {
+        let selection = context.selection
+        let content = BubbleContent(
+            message: message,
+            translations: translations,
+            preferredTranslation: servedTranslation(of: message, translations: translations, context: context),
+            translatedAudios: context.translatedAudios,
+            userLanguages: context.userLanguages,
+            secondaryLangCode: selection?.secondaryLangCode,
+            activeDisplayLangCode: selection?.activeDisplayLangCode,
+            preferredAudioLangCode: context.preferredAudioLangCode,
+            currentUserId: context.currentUserId
+        )
+        return FocalRowInput(
+            localId: message.id,
+            serverId: message.id,
+            content: content,
+            density: density,
+            isFirstInGroup: true,
+            isLastInGroup: true,
+            senderId: message.senderId,
+            senderDisplayName: message.senderName ?? message.senderUsername ?? "",
+            senderUsername: message.senderUsername,
+            senderAvatarURL: message.senderAvatarURL,
+            senderThumbHash: nil,
+            senderColorHex: message.senderColor ?? accentHex,
+            senderPresence: context.senderPresence,
+            senderStoryRing: .none,
+            senderMoodEmoji: nil,
+            senderIsAnonymous: message.senderIsAnonymous,
+            senderRing: message.isMe ? nil : message.senderRing,
+            accentHex: accentHex,
+            isDark: context.isDark,
+            isDirect: context.isDirect,
+            isRightToLeft: context.isRightToLeft,
+            isOptimistic: false,
+            isAgentAuthored: message.messageSource == .agent,
+            showsAgentGrammar: MeeshyFeatureFlags.isAgentGrammarEnabled,
+            highlightSearchTerm: nil,
+            mentionDisplayNames: context.mentionDisplayNames,
+            userLanguages: context.userLanguages,
+            activeDisplayLangCode: selection?.activeDisplayLangCode,
+            secondaryLangCode: selection?.secondaryLangCode,
+            voiceConsentMissing: false,
+            transcription: context.transcription,
+            translatedAudios: context.translatedAudios,
+            allAudioItems: [],
+            conversationName: "",
+            sentAt: message.createdAt,
+            availableWidth: context.availableWidth
+        )
+    }
+
+    /// Le choix du fil s'il en a fait un, sinon la descente du Prisme — la
+    /// même fonction que la bulle (`ConversationViewModel.prismTranslation`) :
+    /// la langue d'origine concourt à son rang, jamais `translations.first`.
+    private static func servedTranslation(
+        of message: Message, translations: [MessageTranslation], context: PreviewContext
+    ) -> MessageTranslation? {
+        switch context.chosenTranslation {
+        case .some(let chosen):
+            return chosen
+        case .none:
+            return ConversationViewModel.prismTranslation(
+                in: translations,
+                originalLanguage: message.originalLanguage.lowercased(),
+                preferredLanguages: context.readerPrism
+            )
+        }
+    }
+}
+
 /// Sac de callbacks — EXCLU de l'`Equatable` (patron `BubbleFooterActions`).
 struct FocalRowActions {
     var onToggleReaction: ((String) -> Void)?
