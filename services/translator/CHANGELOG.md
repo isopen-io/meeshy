@@ -1,5 +1,250 @@
 # @meeshy/translator
 
+## 1.86.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le bandeau du jeu dit « X vers Y » sans « encore » — « 8 745 vers le 62 », « 5 543 vers Passeur II » —, chiffre compact dès 10 000 (#11125)
+  - le bandeau dit le manque sans « encore » — « 8 700 vers le 62 », « 5 543 vers Passeur II », compact dès 10 000
+  - le bandeau du jeu montre le rang comme le niveau — sa jauge de Gloire et « encore N vers le rang suivant » au bout de la rangée
+  - le bandeau du jeu montre le rang et sa jauge de Gloire à droite — « encore N vers <rang suivant> » —, les étincelles à gauche, la Flamme, les Meeshes et la mission au milieu (#11125)
+  - après la prise, les outils de la retouche sont là d'emblée et un toucher sur la prise les montre ou les cache
+  - le bandeau du jeu tient en une rangée de 48 pt — l'anneau, la jauge, puis l'angle : les Meeshes en haut, le rang et la mission dessous (#11125)
+  - configure(pool:) attend sa lecture du compteur au lieu de la détacher
+  - dans la coque, un message reçu app ouverte n'envoie qu'un seul accusé de remise, comme sur le web (Closes #11122)
+  - sendMessage devient send(OutgoingMessage) en étapes validate, stage, prepareUpload, emit, reconcile
+  - constructeurs purs de l'envoi (requête REST, items de file, éligibilité des transports)
+  - OutgoingMessage, MessageRelation exclusive, SendFailure et reçu d'envoi dans le SDK
+  - renomme le témoin des actions VoiceOver du Plan2D pour lever la redéclaration
+  - refermer la visionneuse rend la page dans le commit qui la retire
+  - rogner la barre escamotée par son propre calque plutôt que le cadre
+  - les quatre écrans servent leurs chaînes dans les 7 langues depuis le catalogue de leur cible
+  - CallErrorDisposition pure et setupSocketListeners en douze observateurs
+  - CallStateMachine pure, consultée en observation par callState
+  - RemoteMediaState regroupe les quatre états distants en une seule valeur publiée
+  - un keyframe de la timeline est un bouton avec une action de modification
+  - le plan 2D se règle piste par piste avec VoiceOver et Switch Control
+  - IncomingCall et OutgoingCallContext remplacent les tuples d'appel
+  - la forme d'onde se parcourt et se coupe au pas de 1 % avec VoiceOver
+  - CallKind porte l'axe audio/vidéo des appels
+  - les barres de clip se rognent, se déplacent et se coupent au son avec VoiceOver
+  - le recadrage s'ajuste de 1 % par pas avec VoiceOver et Switch Control
+  - clés d'accessibilité du recadrage, du rognage et du muet en 7 langues
+  - un pas d'ajustement unique pour l'accessibilité
+  - le cadre de la liste des conversations rogne sans jamais défiler
+  - dans la coque, une publication ouverte depuis une notification compte sa vue en « notification », comme sur le web (Closes #11097)
+  - le picker plein des réactions appelle onReact non optionnel dans sa portée
+  - 45 services sans état passent en Sendable vérifié
+  - performRequestWithHeaders se décompose en buildRequest / perform / refreshAndRetry / decode
+  - empreinte de schéma en SQL pur et table App sans littéral hétérogène
+  - l'aperçu d'appui long suit la largeur de sa colonne
+  - les sélecteurs de langue, d'audience et de réaction s'ancrent à leur bouton
+  - anchoredPicker, popover en largeur régulière et feuille à crans en compacte
+  - meeshySheet et une largeur de feuille décidée par la fenêtre
+  - l'upsert des messages de l'API devient APIMessageUpsert, hors de l'acteur
+  - la vitrine décide de l'appareil par la taille de la scène
+  - les modèles de portée racine survivent au passage compact/regular
+  - le repli de AppDatabase n'abat plus le processus sur try!, chaque échec d'ouverture est consigné
+  - la colonne iPad se mesure en points et se souvient par scène
+  - les vingt-quatre migrations des messages deviennent une table ordonnée Refs #11092
+  - les migrations de AppDatabase deviennent une table ordonnée Refs #11092
+  - les neuf migrations du fil deviennent une table ordonnée Refs #11092
+  - DatabaseMigration, une migration est un type, première table : l'index de recherche Refs #11092
+  - MeeshyLog et bestEffort, une panne de persistance se consigne au lieu de disparaître
+  - libérer le DOM de test laisse d'abord React vider son travail planifié
+  - le témoin de taille des couches de conversation importe SwiftUI — EmptyView introuvable dans la cible de tests
+  - la libération différée de la session média se pilote par une horloge injectée — plus aucun témoin ne dépend du temps réel
+  - AdaptiveGlass importe UIKit — MemberImportVisibility exige l'import pour UIColor.secondarySystemBackground
+  - les gardes de l'écran de conversation lisent ConversationBodyStage et isolent leur classe de test sur MainActor
+  - les vignettes citées du bandeau de réponse sont des boutons annoncés par VoiceOver (A11Y-11)
+  - la chaîne du composeur est faite de frontières nominales, avec un seul effacement
+  - le tronc et l'en-tête de la conversation sont des frontières nominales
+  - dans la coque, un push reçu app fermée met à jour le total du widget « non lus », comme le badge du web et le widget iOS (Closes #11080)
+  - la tâche d'enrichissement de la NSE nomme NotificationService au lieu de Self — elle ne capture plus le métatype dynamique
+  - le bouton d'appel de l'en-tête lit un instantané Equatable et ne construit plus la pile d'appel
+  - trois tests du lot 18 compilent et passent (init du bouton icône, isolation MainActor, garde d'animation)
+  - l'extension de partage compile sous Xcode 27 — les fournisseurs quittent le MainActor déjà emballés, plus aucun tableau non Sendable n'est envoyé deux fois (#11064)
+  - les guides du canvas story respectent Reduce Motion
+  - le logo animé respecte Reduce Motion
+  - les cibles tactiles de MeeshyUI lisent MeeshyControlSize.tapTarget
+  - MeeshyIconButton, un bouton-icône qui ne peut pas être muet
+  - MeeshySurface rend les fonds de verre opaques sous Reduce Transparency
+  - meeshyWithAnimation et MeeshyMotion.animation coupent le mouvement sous Reduce Motion
+  - LanguageCode avec .fallback délégué au normaliseur du SDK (LOT-17)
+  - CallStatus/CallMode/CallKind et CallDirection.unknown, repli tolérant (LOT-17)
+  - ID<Tag> et ConversationID/UserID/MessageID/PostID/StoryID dans le SDK (LOT-17)
+  - un appel Meeshy entrant baisse le son Meeshy pendant qu'il sonne, l'arrête quand on décroche pour le reprendre au raccrochage, et rend le volume s'il est refusé (#11063)
+  - la NSE confie le contenu enrichi à sa tâche par une boîte Sendable — dev recompile sous Xcode 26.1.1
+  - tous les lecteurs reprennent après une interruption et Meeshy rend la main à l'app qu'il a coupée — en fin de lecture, après une pause, après une interruption sans reprise (#11040, #11039)
+  - la NSE sort le corps de sa tâche d'enrichissement dans une fonction qui reçoit le contenu en sending — le vérificateur d'isolation de Xcode 26.1.1 ne savait pas analyser la fermeture (#11064)
+  - la progression d'une story s'arrête quand sa lecture est interrompue et repart avec la reprise (#11040)
+  - les fenêtres détachées sortent du body de MeeshyApp, qui porte la barre de menus
+  - MeeshyShortcut et MeeshyCommands, résolus par la scène clé
+  - l'app lit l'écran par WindowMetrics et élit la variante plein écran en un seul site
+  - un budget de décodage unique dans MeeshyUI
+  - une carte du fil ne se redessine que si ce qu'elle affiche change
+  - les accusés de réaction sociale passent par SocketAck, et le cliquet de migration est armé
+  - les groupes visibles du tray sont dérivés une fois, hors du body
+  - les accusés d'envoi de message et de signalisation d'appel passent par SocketAck
+  - le rendu d'une cover reçue ne rafraîchit que les trays
+  - les accusés d'appel et de capture passent par SocketAck
+  - la progression d'une story ne republie plus StoryViewModel
+  - SocketAck et emitWithAck générique
+  - enum SocketEvent, un cas par nom d'événement du contrat
+  - un magasin de progression d'upload coalescé, séparé du ViewModel de stories
+  - la CI de dev repasse — l'extension de partage transmet chaque fournisseur à sa tâche sans course (Xcode 26.1.1), et les cliquets des règles maison verrouillent les baisses des lots fusionnés (#11064)
+  - la surface conversation retire mimeTypeForURL, que plus rien n'appelait (MimeTypeResolver fait foi) ; le témoin de la rangée Focal borne le bloc de texte sur la vraie propriété expansion, pas sur expansionAccessibilityValue (#11051)
+  - StorySessionInterruption et ses tests, enregistrés au projet (travail d'une session voisine, rapatrié pour ne rien laisser en local)
+  - la vignette PiP d'appel enfile ses images sans franchir l'isolation MainActor du layer sous Xcode 27 — récepteur résolu une fois sur le main (#11043)
+  - la feuille « Vues » lit les compteurs relus avec la liste, jamais moins de vues que de personnes listées (#11065)
+  - seule une vidéo en plein écran part en PiP quand on quitte l'app — bulle, fil, page de post, profil et commentaire inline n'en ouvrent plus (#11041)
+  - l'intention de commande des Live Activities déclare une conformité nonisolated — @MainActor faisait traverser AppIntent vers l'acteur principal dans la cible widgets
+  - la feuille « Vues » lit les compteurs relus avec la liste, et l'édition d'une story remet à zéro toutes ses vues (#11065)
+  - l'état de la story sortante tient en trois lignes, comme avant le passage à Xcode 27 — la cohésion de StoryViewerView ne monte plus de mon fait (#11064)
+  - la feuille de décor du profil anime ses cadres de bannière comme partout ailleurs (#10815) ; le témoin de la vitrine unique compte le domaine bannerFrame (#11051)
+  - meeshy.sh device retrouve l'iPhone sous Xcode 27 — identifiant CoreDevice lu dans le JSON de devicectl, appareil désigné par MEESHY_DEVICE_ID sans question (#11062)
+  - l'app et le SDK compilent sous Xcode 27 — formes non isolées, Indirect porté par la valeur de l'état (@State devenu macro), échantillon vidéo transmis en sending (#11064)
+  - deux témoins lisaient un état global qu'un autre fichier laisse derrière lui
+  - l'échelle ambiante du canvas est @usableFromInline — les init publics des calques peuvent la prendre par défaut
+  - l'intention de commande des Live Activities déclare @MainActor — isolation explicite exigée pour un fichier partagé app/widgets
+  - l'intention de commande des Live Activities garde son isolation par défaut — @Parameter refuse nonisolated
+  - les témoins des attentes annulables lisent la valeur de la tâche avant l'assertion — le bundle de tests du SDK compile
+  - les init des trois outbox acteurs ne sont plus marqués nonisolated — un init synchrone d'acteur l'est déjà
+  - les init délégants des trois outbox acteurs perdent « convenience » — le SDK compile
+  - la cession horizontale du lecteur reste isolée MainActor, comme la règle de la barre qu'elle consulte — la PR 0 compile
+  - aligne le pbxproj committé sur le lot 03 et le garde en CI
+  - dans la coque, une notification que le système ne montre pas n'est plus comptée « affichée », comme sur le web (Closes #11054)
+  - justifie le @unchecked Sendable de StoryMetalBackend (cliquet LOT-00)
+  - les sites hérités de dev repassent sous les cliquets (logger central, attente annulable)
+  - la cohésion du lecteur de story repasse sous sa référence — mesure du composeur, cession du glissé et suivi d'état extraits
+  - dans la coque, toucher une action de bannière compte la notification comme ouverte et retire la bannière, comme sur le web (Closes #11052)
+  - un vocal ou une vidéo filmée dans Meeshy baisse le son Meeshy en cours puis le remonte, les sons extérieurs s'arrêtent (#11042)
+  - les inits convenience des trois outbox restent nonisolated (SE-0327)
+  - une vidéo de réel, de commentaire ou de message plein écran part en PiP quand on quitte l'app (#11041)
+  - le registre de lecture et le moteur de synchro (passe A) tiennent leur état dans un Locked (LOT-05)
+  - BoundedAsyncResolution rend nil quand l'appelant est annulé, \_RaceBox disparaît (LOT-05)
+  - les attentes annulables rendent la main — porte d'e-mail, vignettes, sondage de transcription, drapeau de scroll (LOT-05)
+  - les trois CleanupHandle laissent place à TeardownBox, le deinit libère hors verrou (LOT-05)
+  - quatre verrous NSLock + nonisolated(unsafe) passent à Locked, la file TUS devient Sendable (LOT-05)
+  - les primitives de concurrence — Locked, TeardownBox, CancellableWaiters, cancellableSleep, LatestFirstGate, CoalescingDeadline (LOT-05)
+  - un intervalle signpost mesure la lecture et le décodage de l'image de story
+  - le canvas Story passe l'échelle d'affichage de sa trait collection et décode hors du fil principal
+  - le logout ferme aussi la file du moteur de synchro
+  - le pont de persistance du feed applique ses événements dans l'ordre d'arrivée
+  - le décodage de l'image de premier plan d'une story peut quitter le fil principal
+  - identité d'une demande d'image de story, valeur pure comparée après l'attente
+  - le contexte de rendu Story retombe en logiciel sans Metal au lieu de crasher
+  - le handler de conversation applique ses événements socket dans l'ordre d'arrivée
+  - les quatre files GRDB survivent à l'absence totale de stockage au lieu de crasher
+  - un ouvreur de base GRDB qui bascule disque, mémoire, indisponible sans jamais crasher
+  - le pont socket du store applique ses événements dans l'ordre d'arrivée
+  - les extensions NSE, diffusion et widgets passent en isolation nonisolated par défaut
+  - l'extension de partage extrait par withTaskGroup et réduit dans l'ordre des fournisseurs
+  - un son Meeshy met Spotify en pause et rend la main, une interruption le met en pause et il reprend (#11039 #11040)
+  - le moteur de synchro applique ses événements socket dans l'ordre d'arrivée
+  - la NSE délivre une seule fois et s'annule à l'expiration au lieu de courir sur un DispatchGroup
+  - OrderedEventLane, un consommateur sérialisé pour les événements socket
+  - la NSE gagne ses briques pures — livraison unique, échéance annulable, plan d'enrichissement
+  - l'app publie la photo de l'interlocuteur pour l'îlot d'appel et la retire à la fin
+  - l'îlot d'appel lit la miniature de l'interlocuteur dans le conteneur App Group
+  - la cible widgets perd la Live Activity sans producteur, foregroundColor et les gardes de disponibilité sous son plancher
+  - les widgets planifient une entrée unique et construisent leurs liens profonds sans force-unwrap
+  - la suite iOS de dev ne tombe plus sur deux défauts de garde — deinit non isolé de l'ancre de recherche (#11036), extension View rendue sous sa référence de cohésion (#11037)
+  - check_house_rules.sh, point d'entrée des cliquets maison
+  - cliquet des règles maison, référence initiale et --write-baseline qui refuse de relever
+  - bannière du joueur compacte — Meeshes en haut à droite, rang et missions dessous
+  - unchecked-sendable, plancher de #available, exclusions et périmètre des cliquets
+  - scanner de commentaires Swift et règles à motif des cliquets maison
+  - seule la scène pagine — un glissé né sur le composeur (émojis rapides, panneau d'émojis) ne change plus de story (#11045)
+  - une impression du rail ne compte qu'une fois par affichage, et l'auteur une fois sur son propre contenu (#11037)
+  - dev redevient vert — list.rail exclu en attendant son consommateur (#11038), mainContentZStack rendu sous sa référence de cohésion
+  - Meeshy Chats — remonter ramène la barre de recherche, taper replie les communautés (Closes #11036)
+  - Meeshy Chats — remonter ramène la barre de recherche, taper replie les communautés (#11036)
+  - la liste des conversations monte le rail de stories du fil — StoryTrayView partout, la jumelle StoriesVivantsRail est supprimée (#11033)
+  - dans la coque, un message reçu app fermée passe l'auteur à « reçu », comme sur le web et iOS (Closes #11034)
+  - la bannière du profil iOS empile chaque cadre — les étincelles sous le cercle, plus petites, et la Gloire au-dessus du blason du rang (#10951)
+  - la bannière du profil web empile chaque cadre — les étincelles sous le cercle, plus petites, et la Gloire au-dessus du blason du rang (#10951)
+  - le CLAUDE.md du SDK cite ses modèles par un chemin qui résout, et la leçon cohésion garde un seul titre `## `
+  - les trois collaborateurs extraits des modèles de conversation déclarent `nonisolated deinit {}` — leur deinit synthétisée isolée au MainActor tue xctest au démontage (iOS 18.4+/26, Swift #85663)
+  - ConversationTopChromeFadeTests lit la source de l'hôte avant l'assertion — un `try` à droite d'un `&&` ne compile pas (seule erreur de compilation de l'app et de ses cibles de test sur la PR)
+  - dans la coque, retirer une réaction efface sa bannière même affichée sous le fil de la conversation, comme sur le web (Closes #11032)
+  - trois lecteurs NON Swift suivent le code que le découpage a déplacé — le gate web du lecteur de story lit StoryReaderCanvasLayout, le contrat d'événements d'appel du gateway relit toute la famille MessageSocketManager, le cliquet des couleurs ne compte plus le parseur HexColor
+  - les doublons de la revue se consolident là où ils sont IDENTIQUES — format de durée, haptique, couleur hexadécimale, rangement du SDK ; les copies qui divergent restent, nommées
+  - sixième lot de cohésion — plus AUCUN fichier source iOS écrit à la main ne dépasse 1 000 lignes ; la NSE, les deux caches, le fil de messages et seize autres familles extraient leurs vrais types
+  - cinquième lot de cohésion — ConversationStore, les surfaces du composer, la galerie, les lecteurs et éditeurs audio extraient leurs vrais types
+  - quatrième lot de cohésion — AuthManager, le lecteur partagé, la caméra, la carte du fil et sept autres familles extraient leurs vrais types
+  - troisième lot de cohésion — la dette héritée de taille de fichier est VIDE ; FeedView, ConversationDashboardView, APIClient, StoryDraftStore et sept autres familles extraient leurs vrais types
+  - deuxième lot de cohésion — dix familles extraient de vrais types, et les deux sockets partagent enfin leur retrait de transport et leur règle JWT
+  - la cohésion remplace les tranches — dix familles extraient de vrais types (sous-vues, collaborateurs, règles pures) et le lot 0 rend leur `private` à ses collaborateurs
+  - la bannière du profil iOS pose le nom du palier au-dessus du cercle, les étincelles en grand à sa droite, et la Gloire à gauche du blason et du nom du rang (#10951)
+  - la bannière du profil web pose le nom du palier au-dessus du cercle, les étincelles en grand à sa droite, et la Gloire à gauche du blason et du nom du rang (#10951)
+  - dans la coque, modifier un message ne fait plus revenir une bannière balayée ni ne cache un message plus récent, comme sur le web (Closes #10989)
+  - cinq fichiers god se découpent par responsabilité — MessageSocketManager, OfflineQueue, MessagePersistenceActor, ConversationListViewModel et FeedViewModel repassent sous 900 lignes, sans changer une ligne de comportement
+  - la première peinture repasse sous son plafond (92,13 → 91,05 Ko) — une liste de préchargement ne répète plus les chunks que l'hôte a déjà chargés statiquement, et la file d'envoi et son toast partagent une seule frontière dynamique (Closes #10974)
+  - la copie faite sur l'appareil garde la durée d'une flamme et le flou de la source, en ligne comme hors ligne, refuse une vue unique ou une flamme après lecture, et sa légende emporte la même protection (Closes #10958)
+  - une fiche de studio venue de l'extension nomme son compte, ne s'ouvre que sous lui, et la déconnexion l'oublie (Closes #10986)
+  - un relais de l'extension gardé en mémoire ne s'ouvre que sous le compte pour lequel il a été servi, la déconnexion l'oublie, et le wipe de logout purge aussi les fiches de studio (Closes #10978)
+  - la feuille de décor du profil propose les cadres de bannière des packs installés et possédés, les équipe par PUT /me/profile-decor côté bannerFrame et ouvre la boutique sur les cadres (#10936)
+  - les contours à huit couleurs et sans trait de base se lisent, les frises se peignent sous les coins et le cartouche, les cadres de bannière embarqués se résolvent et le domaine banner-frame se vend en boutique (#10936)
+  - les cadres de bannière en boutique et au profil — la puce « Cadres de bannière » est démasquée (achat et installation par /packs/banner-frame), l'entrée « Cadre de la bannière » ouvre la feuille des cadres installés et possédés, l'équipement est optimiste et les 14 cadres et 21 contours embarqués se peignent sans réseau, nommés dans les sept langues (#10936)
+  - les 28 cadres de la planche entrent au catalogue — sept packs de contours et sept de cadres de bannière, fixe et animé, nommés et décrits en sept langues ; contraste haussmannien relevé, masque rituel lisible à 40 px, un contour sans trait de base (none) et l'extraction reproductible depuis la planche (#10936)
+  - l'écran de partage n'envoie plus rien en clair vers une conversation chiffrée — le chiffrement se lit sur la conversation RENDUE (directe retrouvée à l'envoi, récents du widget sans mode = chiffrés), la copie sur l'appareil n'emporte qu'un texte dont le déchiffrement est prouvé et refuse un message à pièces, la fiche de relais nomme son compte, survit jusqu'à la fermeture de l'écran et part au logout (#10947)
+  - le domaine banner-frame se vend en boutique (/packs/banner-frame, vitrine unique, usage banner annoncé, sans vitrine tierce), un contour porte huit couleurs, et les frises se peignent sous les coins et le cartouche (#10936)
+  - l'écran de partage unique du web ne publie plus la pièce d'un message retiré et ne perd ni n'expose plus un envoi de la file — revue du lot web (#10948)
+  - les plafonds du catalogue et de l'écran de partage unique suivent sa croissance (#10948)
+  - l'extension de partage monte l'écran de partage unique — même vue que l'app (V1, V9, fragment « Connectez-vous pour envoyer »), destinataires du cliché App Group déposé par l'app (conversations, amis, carnet apparié) puis serveur, une fiche durable pour tout le partage, plafonds communs D10 avec « Retirer les N derniers », légende, studio, relais à l'app sans session et vers une conversation chiffrée (D7) ; l'ancienne interface est retirée (#10947)
+  - les 5 crochets de sélection de l'écran de partage unique rejoignent les classes sans règle propre — dev rouge depuis 00:28 UTC sur 5 commits
+  - chaque avatar de personne de l'app et du SDK porte son contour servi (ring:) et sa présence servie — les enveloppes avatarRingWithin cèdent au paramètre, les dettes de présence de #10956 sont soldées (#10946, #10956)
+  - le fil, les stories et les fils de réponse portent le contour servi et la présence servie de chaque personne — auteur de post, de l'original republié, de commentaire, de réel, de story (plateau, visionneuse, carte d'identité), réponses d'un fil (photo, contour, présence, humeur lue par le compte), mon visage dans les composeurs et le plateau ; la carte d'identité de story et la page d'humeur peignent la bannière équipée (bannerPaint), la cellule du plateau se repeint quand un contour arrive (#10946, #10956)
+  - chaque avatar d'une personne porte son contour équipé servi et la présence servie se peint dans les appels — RingedAvatar/PeerAvatar résolvent la référence (ringRef) en un point, les projections la gardent (decodePerson, mentions, auteur du fil et de l'original, expéditeur d'un média), mon disque/tuile/réglages lisent /me ; D-60 levée : portrait, bulle, PiP, bannière d'un second appel, journal, fiche et pavé peignent la carte vivante (ActiveCall.peerKey, WaitingCall.callerKey, CallDetail.peerKey) ; point plancher 6 px ; garde de source avatar-ring-guard, exemptions comptées (#10946, #10956)
+  - l'auteur d'un post, dans son détail, porte sa présence servie et son contour équipé — la puce de l'en-tête flottant et l'avatar de la zone de texte reçoivent presenceState (PresenceManager.knownPresenceState, absente ⇒ aucun point) et ring (FeedPost.authorRing) ; l'exemption « dette consignée » de PostDetailView.swift sort de PresenceManagerTests.avatarsWithoutPresence, et la garde rougit si un avatar du détail repart sans présence (Refs #10956, #10946)
+  - une bannière balayée dans la coque compte « écartée » dans l'entonnoir, comme sur le web (Closes #10921)
+  - le cadre de bannière équipé se pose sur la bannière de mon profil, au-dessus de la photo ou du fond (#10935)
+  - le détail d'un post se découpe par responsabilité — PostDetailView.swift passe de 1 748 à 1 095 lignes sous le plafond dur, sans changer de comportement
+  - les cadres se jouent sur le GPU — mouvements des contours d'avatar et des cadres de bannière en couches Core Animation (rotation, pulsation, scintillement, inclinaison, reflet glissant sous masque), en pause hors écran et en arrière-plan, fixes sous Réduire les animations et en économie d'énergie ; BannerFrameView pose le cadre sur la photo, centre transparent garanti par la découpe ; le profil d'un autre porte son cadre (#10935)
+  - les cadres se jouent sur le compositeur — contour d'avatar et cadre de bannière en couches CSS (transform, opacity), figées hors écran et en arrière-plan, fixes sous « Réduire les animations » ; le cadre de bannière équipé se pose sur la photo ou le fond du profil (le mien, celui d'un autre), centre transparent (#10935)
+  - le poids des fichiers se dit dans la langue du lecteur (Intl, « 500 MB » en anglais), jamais « Mo » écrit en dur — relevé à la recette navigateur (#10948)
+  - le contour servi de l'auteur survit au passage domaine du fil — post, commentaire, original republié, groupe de stories — et aux deux caches (Codable, colonne feed_posts.authorRingJson, migration additive feed_v6) (#10946)
+  - « Envoyer le profil » sur la fiche d'une personne ouvre l'écran de partage unique — carte profil par l'adresse canonique /u/<pseudo>, lien copiable, absent d'un compte bloqué, 7 langues (D15, #10948)
+  - l'écran de partage unique du web — quatre zones, la loi partagée planShare décide (D6 retire le protégé, D7 rien de chiffré ne part du web, D8, D10 plafonds communs), pièce seule par forwardedAttachmentIds, groupe à créer, communautés dépliées, recherche serveur fusionnée, file d'envoi durable IndexedDB (FIFO, survit à la fermeture), toast « Ouvrir », Transférer ouvre l'écran (D1), cible PWA et coque Android acceptent tout fichier et le texte joint devient la légende (D9), 7 langues (#10948)
+  - MeeshyAvatar prend la référence du contour équipé et le résout lui-même (ring:, dans l'empreinte, point de présence par-dessus) ; la présence servie se peint dans tous les contextes — AvatarContext.showsOnlineDot retiré (décision #10955), plancher de 6 pt au point (#10946, #10956)
+  - un seul écran de partage remplace le sélecteur de transfert et « Partager avec… » — quatre zones dans l'ordre, plan du partage en miroir Swift, pièce seule transférée, flouté transférable (#10947)
+  - chaque avatar d'un pair montre la présence servie et le point « ici » de sa seule conversation — web + iOS, gardes de source (#10944)
+  - une pièce floutée parmi des pièces ouvertes ne ferme pas ses voisines, le plan d'envoi lit le flou pièce par pièce, et la garde web lit les codes partagés
+  - suites de l'audit du contour des personnes — cliquet des consommateurs des formes de post (un nouveau fichier qui charge un auteur rougit tant qu'il n'est pas relu), l'expéditeur d'aperçu part sans sa jointure user (la colonne ne dépend plus du sérialiseur), compte exact des lectures de la liste, l'égalité d'une partie de demande d'ami voit son contour (#10945)
+  - chaque résumé de personne décode son contour équipé — auteur de post/commentaire/story, résultat de recherche, demande d'ami, membre de communauté, suggestion de mention, contact rapproché, dernier expéditeur ; ProfileDecorWearer expose avatarRing (participants et auteurs de message compris), décodage additif et tolérant, aller-retour du cache (#10945)
+  - la bannière du profil iOS montre la Gloire en grand, un trait puis les étincelles en glyphes, sans texte de niveau, dans deux cadres de même taille (#10951)
+  - la passerelle ne recopie que la pièce choisie, ne recopie jamais une source chiffrée, et dit chaque refus par un code stable (#9914, #9598, #10949)
+  - la bannière du profil web montre la Gloire en grand, un trait puis les étincelles en glyphes, sans texte de niveau, dans deux cadres de même taille (#10951)
+  - le plan de l'écran de partage unique, les plafonds communs et les codes de refus de transfert vivent dans le paquet partagé ; un flouté se transfère et rien d'autre ne sort (#10949, #9598)
+  - le contour équipé voyage avec l'auteur d'un post, d'une story, d'un statut, d'un commentaire et de l'original republié — PersonProfileDecor (forme unique, celle des participants), déclaré au schéma minimal partagé, lu dans la jointure de l'auteur, résolu par withMentions et hoistCommentCarriers, colonne brute jamais servie (#10945)
+  - le point « ici » est deux fois plus petit et reste un peu plus gros que la pastille de présence — une seule taille, en-tête compris (#10943)
+  - les bornes du cadre de bannière tiennent aussi en Swift, et les témoins du décor gardent ses trois colonnes (#10932)
+  - un cadre de bannière se pose sur la photo, centre transparent, et un cadre déclare ses mouvements — format partagé, passerelle, SDK (#10932)
+  - la lecture de la liste part avant que le démarrage rende la main, et chevauche le premier rendu de la racine
+  - la liste se lit dès la session restaurée, et une liste en échec se répare seule quand le socket se connecte
+  - /sync part avec un jeton rafraîchi, une synchro sur cache vide attend celle en vol au lieu de se dire faite, et HTTP/3 n'est plus supposé
+  - une bannière affichée app fermée compte « reçue » et « affichée » dans l'entonnoir de la coque, comme sur le web (Closes #10938)
+  - la photo de bannière d'un profil gagne toujours sur le design équipé, qui ne se peint qu'en son absence
+  - sous VoiceOver la visionneuse entre avec son chrome ; les témoins de rendu mesurent le chrome posé par le toucher (#10930)
+  - la visionneuse d'image héritée s'ouvre sans chrome, tout toucher le pose par-dessus
+  - le média s'ouvre et s'édite en plein écran, ses contrôles se posent par-dessus — seul le recadrage le réduit
+  - les points d'entrée des stories en tête de la liste des conversations ont les mesures du plateau du fil
+  - la recherche de la liste montre SES communautés, ou rien, et ne répète plus les filtres de tête de liste
+  - une première connexion se dit « Connexion en cours », jamais « Reconnexion », et la liste en échec ne montre plus « Aucune conversation » sous son erreur
+  - run test — passer à l'auteur suivant dans le lecteur de stories ne plante plus quand la liste bouge pendant l'animation
+  - sur le web et dans la PWA, la barre du navigateur passe en sombre au-dessus de la visionneuse, d'une story et d'un appel, comme dans la coque (Closes #10922)
+  - run test — la pellicule se cale sur la colonne mesurée par la galerie, et ne naît qu'avec elle
+  - run test — l'observateur du clavier se mesure contre une seule hauteur de fenêtre, le témoin ne dépend plus de l'ordre
+  - un transfert depuis une source chiffrée qui porte des pièces est refusé (encrypted-source-not-server-copyable) dès que la requête n'apporte ni ses propres pièces ni son enveloppe chiffrée, même accompagné d'un texte — la photo ne disparaît plus en silence sous sa légende (Closes #10987)
+  - les contacts rapprochés, les suggestions de mention et les membres d'une communauté portent leur contour équipé — profileDecor résolu à leur site unique de sortie (toPublicProfile, suggestion(), liste des membres), lu dans le select déjà fait, déclaré aux schémas, colonne brute jamais servie (#10945)
+  - les résultats de recherche de personnes et les deux parties d'une demande d'ami portent leur contour équipé — GET /users/search, GET /directory/people, demandes d'ami (envoi, réponse, listes, alias /users/friend-requests sur la projection unique INCLUDE_PARTIES), profileDecor déclaré aux schémas, lu dans le select déjà fait, colonne brute jamais servie (#10945)
+  - le dernier expéditeur de la liste des conversations porte son contour équipé — lastMessage.sender.profileDecor, lu dans la jointure de l'aperçu, aucune lecture de plus (mesuré), colonne brute jamais servie (#10945)
+  - rendu de référence des cadres — contour d'avatar à dégradés et mouvements en couches composées, cadre de bannière découpé à sa région (centre transparent garanti par la découpe), bordure à la largeur réelle, pièces ancrées, frises répétées ou justifiées (#10935)
+  - squelette des briques communes des cadres — mouvements déclarés (#10932)
+
 ## 1.85.0
 
 ### Minor Changes
@@ -219,7 +464,7 @@
   - les décors animés s'animent partout, listes comprises — contour d'avatar des rangées de conversations, du fil (bulles, Focal, Script), des participants et de la fiche d'information, vignettes du sélecteur de décor et des fonds ; un plafond de 8 films Lottie vivants (LottieLiveBudget, miroir du budget web) : la couche la plus anciennement sortie de l'écran cède sa place, une couche sans place montre son image fixe, Réduire les animations n'occupe aucune place ; des demandes simultanées du même fichier lisent et décodent UNE fois. Témoins : budget (6), lecture partagée et lecture sans place (LottieLayerTests 15/15), garde « aucune surface ne fige son décor » (MessageAuthorRingTests) ; build-for-testing vert, FileSizeBudgetGuardTests vert (Closes #10815)
   - le cache mémoire des formes d'onde est borné — seul NSCache du SDK sans limite, une entrée par piste × palier (jusqu'à 2048 RMS) gardée pour toute la séance ; countLimit 48 comme ses voisins, le disque reste le second niveau ; test
   - le composer de story libère le bitmap d'une photo supprimée dès qu'aucune étape d'annulation ne peut la ramener — mis de côté pour l'undo, il restait jusqu'à la sortie du composer même évincé par le cap de 50 ou par une branche redo tronquée ; une longue séance gardait chaque photo retirée ; purge des bitmaps, fonds et octets animés non référencés par la trajectoire, URL de fichiers inchangées ; test
-  - les temps relatifs (« now », « 3d », « 2w », « 2mo »…), le titre des épisodes du Résumé (« 2 messages », « 2 Nachrichten »…) et les dates de progression (« Earned on September 3, 2026 ») suivent la langue d'interface, avec les valeurs d'iOS (time.short._, focal.summary.episode.messages\__), plus un français figé ni un « fr-FR » en dur. Témoins interface en + sept langues ; bun test apps/web 25463 verts, build vert. Suite (mot de passe oublié, choix du pays, chrome de la progression) : #10823 (Closes #10822)
+  - les temps relatifs (« now », « 3d », « 2w », « 2mo »…), le titre des épisodes du Résumé (« 2 messages », « 2 Nachrichten »…) et les dates de progression (« Earned on September 3, 2026 ») suivent la langue d'interface, avec les valeurs d'iOS (time.short.\_, focal.summary.episode.messages\_\_), plus un français figé ni un « fr-FR » en dur. Témoins interface en + sept langues ; bun test apps/web 25463 verts, build vert. Suite (mot de passe oublié, choix du pays, chrome de la progression) : #10823 (Closes #10822)
   - la proposition de photo pose une carte bornée (300 px, inclinée) qui nomme son auteur — emblème au métal de l'étape, moment, date et plaque gravée au pseudo avec la photo de profil, animation Lottie du fini par le moteur unique (rien sous « Réduire les animations ») ; l'auteur est le lecteur résolu au site unique (un invité n'a pas de plaque) ; la mission personnelle accomplie se photographie depuis la fiche des missions ; témoins : carte, plaque dans le cadre de la scène, bouton de fin de mission ; bun test apps/web 25458 verts (1 rouge hors lot, #10822 en cours), build Vite vert (Refs #10816)
   - une seule langue d'interface — les libellés du fil (séparateurs de jour « Hier », dates du résumé et du glissé, heure des bulles, date de la fiche du message, date des commentaires, d'une story, des messages favoris, du tampon Focal, du visionneur de médias) suivent la langue d'interface et plus le Prisme du lecteur ni un « fr-FR » figé ; le Prisme ne gouverne que le contenu. Interface en + prisme fr ⇒ « Yesterday » ; lecture admin : dates dans la langue de l'administrateur. Témoins : séparateur « Yesterday », heure de bulle, date de la fiche ; bun test apps/web 25400 verts (rouges restants hors lot, verts isolés), build vert (Closes #10817)
   - la page de l'humeur — encoche haute, nom complet de l'auteur, croissance douce de la pluie (Closes #10813)
