@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
 
+import { predictedEndOf, type DragSample } from '@/lib/view/drag-velocity';
 import { DISMISS_THRESHOLD } from '@/lib/view/media-stage';
 
 /**
@@ -49,6 +50,22 @@ export function resolveViewerSwipe(params: {
   return 'none';
 }
 
+/**
+ * **LE GLISSÉ HORIZONTAL SUIVI** (#11198) — l'hôte qui le fournit reçoit
+ * l'horizontale à CHAQUE déplacement, puis le relâcher avec sa fin projetée
+ * (`predictedEndOf`, `lib/view/drag-velocity.ts`) : la page ne tourne plus au
+ * seuil de {@link VIEWER_PAGE_PX}, l'hôte décide. L'axe se FIGE au premier
+ * déplacement au-delà du toucher — un glissé né vertical ne tourne rien, un
+ * glissé né horizontal ne ferme rien. Absent, rien ne change.
+ */
+export type ViewerHorizontalDrag = {
+  /** `dx` écran depuis l'appui — l'hôte écrit le DOM, jamais un état. */
+  readonly onMove: (dx: number) => void;
+  readonly onRelease: (release: { readonly dx: number; readonly predictedDx: number }) => void;
+  /** Le système a repris le doigt (`pointercancel`) : rien n'est décidé. */
+  readonly onCancel: () => void;
+};
+
 export type ViewerSwipeOptions = {
   readonly onDismiss: () => void;
   /** Absents tous deux ⇒ la visionneuse ne pagine pas au doigt. */
@@ -58,6 +75,7 @@ export type ViewerSwipeOptions = {
   readonly onUp?: () => void;
   /** L'élément qui DESCEND avec le doigt pendant un glissé de fermeture. */
   readonly follow?: RefObject<HTMLElement | null>;
+  readonly horizontal?: ViewerHorizontalDrag;
   /** `false` quand une feuille est ouverte par-dessus, ou qu'une image est zoomée. */
   readonly enabled?: boolean;
   readonly rtl?: boolean;
@@ -76,7 +94,15 @@ export type ViewerSwipeBinding = {
   readonly wasDrag: () => boolean;
 };
 
-type Track = { readonly startX: number; readonly startY: number; dx: number; dy: number };
+type Track = {
+  readonly startX: number;
+  readonly startY: number;
+  dx: number;
+  dy: number;
+  /** Figé au premier déplacement au-delà du toucher — lu seulement avec un glissé horizontal suivi. */
+  axis: 'pending' | 'horizontal' | 'vertical';
+  readonly samples: DragSample[];
+};
 
 export function useViewerSwipe(options: ViewerSwipeOptions): ViewerSwipeBinding {
   const optionsRef = useRef(options);
@@ -91,7 +117,7 @@ export function useViewerSwipe(options: ViewerSwipeOptions): ViewerSwipeBinding 
 
   const onPointerDown: PointerHandler = (event) => {
     if (optionsRef.current.enabled === false || !event.isPrimary) return;
-    track.current = { startX: event.clientX, startY: event.clientY, dx: 0, dy: 0 };
+    track.current = { startX: event.clientX, startY: event.clientY, dx: 0, dy: 0, axis: 'pending', samples: [{ t: event.timeStamp, x: 0 }] };
     moved.current = false;
   };
 
@@ -100,7 +126,14 @@ export function useViewerSwipe(options: ViewerSwipeOptions): ViewerSwipeBinding 
     if (current === null || !event.isPrimary) return;
     current.dx = event.clientX - current.startX;
     current.dy = event.clientY - current.startY;
+    current.samples.push({ t: event.timeStamp, x: current.dx });
     if (Math.hypot(current.dx, current.dy) > VIEWER_TAP_SLOP_PX) moved.current = true;
+    if (current.axis === 'pending' && moved.current) current.axis = Math.abs(current.dx) > Math.abs(current.dy) ? 'horizontal' : 'vertical';
+    const horizontal = optionsRef.current.horizontal;
+    if (horizontal !== undefined && current.axis === 'horizontal') {
+      horizontal.onMove(current.dx);
+      return;
+    }
     const follow = optionsRef.current.follow?.current;
     if (follow === null || follow === undefined) return;
     follow.style.transform = Math.abs(current.dy) > Math.abs(current.dx) && current.dy > 0 ? `translateY(${current.dy}px)` : '';
@@ -111,7 +144,12 @@ export function useViewerSwipe(options: ViewerSwipeOptions): ViewerSwipeBinding 
     track.current = null;
     if (current === null || !event.isPrimary) return;
     settle();
-    const { onDismiss, onNext, onPrevious, onUp, rtl } = optionsRef.current;
+    const { onDismiss, onNext, onPrevious, onUp, rtl, horizontal } = optionsRef.current;
+    if (horizontal !== undefined && current.axis === 'horizontal') {
+      const dx = event.clientX - current.startX;
+      horizontal.onRelease({ dx, predictedDx: predictedEndOf([...current.samples, { t: event.timeStamp, x: dx }], dx) });
+      return;
+    }
     const verdict = resolveViewerSwipe({
       dx: current.dx,
       dy: current.dy,
@@ -125,8 +163,10 @@ export function useViewerSwipe(options: ViewerSwipeOptions): ViewerSwipeBinding 
   };
 
   const onPointerCancel: PointerHandler = () => {
+    const current = track.current;
     track.current = null;
     settle();
+    if (current?.axis === 'horizontal') optionsRef.current.horizontal?.onCancel();
   };
 
   return { handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel }, wasDrag: () => moved.current };
