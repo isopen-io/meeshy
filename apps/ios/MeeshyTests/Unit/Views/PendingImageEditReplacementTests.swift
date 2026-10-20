@@ -47,17 +47,17 @@ final class PendingImageEditReplacementTests: XCTestCase {
         XCTAssertNil(rendu.staleURL)
     }
 
-    /// La citation ouvre la scène sur la SOURCE (le fichier à 2 048 px), écrit
-    /// la retouche AVANT de remplacer, et ne propose pas un GIF.
-    func test_citation_ouvreLaSceneSurLeFichierEtEcritAvantDeRemplacer() throws {
+    /// La citation ouvre la retouche de la caméra sur le FICHIER de la pièce
+    /// (#11170), écrit la retouche AVANT de remplacer, et ne propose pas un GIF
+    /// (`ComposerRetouchSeries.candidates`).
+    func test_citation_ouvreLaRetoucheSurLeFichierEtEcritAvantDeRemplacer() throws {
         let citation = try String(contentsOf: URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Meeshy/Features/Main/Views/FeedComposerSheet.swift"),
                                   encoding: .utf8)
-        XCTAssertTrue(citation.contains("ConversationImageSceneEditor(image: item.image, staged: true"))
-        XCTAssertTrue(citation.contains("ConversationImageRetouche.loadSource(fileURL:"))
+        XCTAssertTrue(citation.contains("ConversationPieceRetouch(piece: piece"))
+        XCTAssertTrue(citation.contains("ComposerRetouchSeries.candidates(attachments: pendingAttachments, files: pendingMediaFiles)"))
         XCTAssertTrue(citation.contains("ConversationImageRetouche.writeEdited("))
-        XCTAssertTrue(citation.contains("ConversationImageRetouche.offersRetouche(mimeType:"))
         XCTAssertTrue(citation.contains("PendingImageEditReplacement.apply("))
     }
 }

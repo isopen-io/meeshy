@@ -2869,7 +2869,7 @@
 		C6096E47F2D2710FF4AA1FB4 /* StoryPublishServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810493FD644618DE44BFFA9E /* StoryPublishServiceTests.swift */; };
 		C6225E223F58524AF7064DC7 /* SignInLinkDeviceConfirmationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A3F077279BF971961A6F2A /* SignInLinkDeviceConfirmationTests.swift */; };
 		C64BBE0C9C8A597D7F025684 /* StoryViewerContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7959E702950EAFB81F623CEC /* StoryViewerContentView.swift */; };
-		C66433088AB4CABAF9BFAAAB /* ConversationImageSceneDoor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64A5DB7DA23C324CE6BF4E69 /* ConversationImageSceneDoor.swift */; };
+		C66433088AB4CABAF9BFAAAB /* ConversationPieceRetouch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64A5DB7DA23C324CE6BF4E69 /* ConversationPieceRetouch.swift */; };
 		C6650CE5AD8301192812A94A /* TrackingLinkDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68025CDF57252AFD88899B60 /* TrackingLinkDetailView.swift */; };
 		C670D25BA23892220085B514 /* FocalQuoteRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DE48EBFBA10534922B06869 /* FocalQuoteRail.swift */; };
 		C680969C06FA2BB8ADFABE89 /* OutgoingMediaGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 834D19782F9C734850FEE588 /* OutgoingMediaGroup.swift */; };
@@ -5284,7 +5284,7 @@
 		644727EB90A725AD5DBB7D08 /* RiverRenderingMemoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiverRenderingMemoTests.swift; sourceTree = "<group>"; };
 		644C6C915B7A2EF4EB46E0D3 /* ProgressionLastAchievementHeroTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionLastAchievementHeroTests.swift; sourceTree = "<group>"; };
 		648963D0F686300D931B7275 /* CallView+CameraRail.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallView+CameraRail.swift"; sourceTree = "<group>"; };
-		64A5DB7DA23C324CE6BF4E69 /* ConversationImageSceneDoor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationImageSceneDoor.swift; sourceTree = "<group>"; };
+		64A5DB7DA23C324CE6BF4E69 /* ConversationPieceRetouch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationPieceRetouch.swift; sourceTree = "<group>"; };
 		64AA54017B30E0CEB2BF5C48 /* MeeshyComposerHost+ReelAutoSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+ReelAutoSwitch.swift"; sourceTree = "<group>"; };
 		64B0B8AF379864F058F20DB7 /* StickerSendPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickerSendPipeline.swift; sourceTree = "<group>"; };
 		64C61F7D3BC776ADDD751270 /* LentilleOpenMyStoriesLiteralGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleOpenMyStoriesLiteralGuardTests.swift; sourceTree = "<group>"; };
@@ -8269,7 +8269,7 @@
 				67FED454195CAD9C75908445 /* ComposerTrimTrack.swift */,
 				30176D6CD06B77100C42DE83 /* ComposerViewfinder.swift */,
 				9A06EEE8EA7A34E960FC6D02 /* ComposerViewfinder+Provider.swift */,
-				64A5DB7DA23C324CE6BF4E69 /* ConversationImageSceneDoor.swift */,
+				64A5DB7DA23C324CE6BF4E69 /* ConversationPieceRetouch.swift */,
 				AA4E73DEB70F0B1BCD8E8A2B /* DocumentComposerDoor.swift */,
 				344C11C3BE060BA24B869C2E /* MediaComposerDoor.swift */,
 				81D8289380C287C92B3AC246 /* MeeshyComposerHost.swift */,
@@ -13249,7 +13249,7 @@
 				CF67677C8801F53D6B00C598 /* ConversationHeaderFlame.swift in Sources */,
 				C2A3AD59110DE2D488003EF7 /* ConversationHelperViews.swift in Sources */,
 				5FC074E89A491273101963BB /* ConversationImageRetouche.swift in Sources */,
-				C66433088AB4CABAF9BFAAAB /* ConversationImageSceneDoor.swift in Sources */,
+				C66433088AB4CABAF9BFAAAB /* ConversationPieceRetouch.swift in Sources */,
 				E9BF1AACF763F06A313F5987 /* ConversationIncomingMessageReconciler.swift in Sources */,
 				949C13F70FAC9D4CED8A0EE3 /* ConversationInfoMemberRow.swift in Sources */,
 				4D96EC1EC1A0185EF59F20E8 /* ConversationInfoSecurityRow.swift in Sources */,
