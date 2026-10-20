@@ -28,38 +28,53 @@ struct ContentSessionReleaseTests {
         #expect(!ContentSessionReleaseLaw.mayRelease(activatedSinceRequest: false, meeshyStillPlays: true))
     }
 
-    @Test func aContentRelease_runsOnceItsDelayHasPassed() async {
-        let coordinator = MediaSessionCoordinator.makeForTesting()
+    @MainActor @Test func aContentRelease_runsOnceItsDelayHasPassed() {
+        let clock = ManualDelayedScheduler()
+        let coordinator = MediaSessionCoordinator.makeForTesting(scheduleAfter: clock.scheduler)
+        let queue = DispatchQueue(label: "test.content-release")
         let ran = OSAllocatedUnfairLock(initialState: 0)
 
-        coordinator.releaseContentSession(after: 0.05, on: .global(), meeshyStillPlays: { false }) {
+        coordinator.releaseContentSession(after: 0.05, on: queue, meeshyStillPlays: { false }) {
             ran.withLock { $0 += 1 }
         }
+        #expect(clock.delays == [0.05])
+        #expect(ran.withLock { $0 } == 0)
 
-        #expect(await Self.settle(ran) == 1)
+        clock.advance()
+        queue.sync {}
+
+        #expect(ran.withLock { $0 } == 1)
     }
 
-    @Test func aMeeshyPlayerStillPlaying_preventsTheRelease() async {
-        let coordinator = MediaSessionCoordinator.makeForTesting()
+    @MainActor @Test func aMeeshyPlayerStillPlaying_preventsTheRelease() {
+        let clock = ManualDelayedScheduler()
+        let coordinator = MediaSessionCoordinator.makeForTesting(scheduleAfter: clock.scheduler)
+        let queue = DispatchQueue(label: "test.content-release")
         let ran = OSAllocatedUnfairLock(initialState: 0)
 
-        coordinator.releaseContentSession(after: 0.05, on: .global(), meeshyStillPlays: { true }) {
+        coordinator.releaseContentSession(after: 0.05, on: queue, meeshyStillPlays: { true }) {
             ran.withLock { $0 += 1 }
         }
+        clock.advance()
+        queue.sync {}
 
-        #expect(await Self.settle(ran, atLeast: 0.4) == 0)
+        #expect(ran.withLock { $0 } == 0)
     }
 
-    @Test func aPlayerResumingWithinTheGrace_cancelsTheRelease() async {
-        let coordinator = MediaSessionCoordinator.makeForTesting()
+    @MainActor @Test func aPlayerResumingWithinTheGrace_cancelsTheRelease() {
+        let clock = ManualDelayedScheduler()
+        let coordinator = MediaSessionCoordinator.makeForTesting(scheduleAfter: clock.scheduler)
+        let queue = DispatchQueue(label: "test.content-release")
         let ran = OSAllocatedUnfairLock(initialState: 0)
 
-        coordinator.releaseContentSession(after: 0.05, on: .global(), meeshyStillPlays: { false }) {
+        coordinator.releaseContentSession(after: 0.05, on: queue, meeshyStillPlays: { false }) {
             ran.withLock { $0 += 1 }
         }
         coordinator.noteActivationForTesting()
+        clock.advance()
+        queue.sync {}
 
-        #expect(await Self.settle(ran, atLeast: 0.4) == 0)
+        #expect(ran.withLock { $0 } == 0)
     }
 
     /// La libération est CENTRALE : le coordinateur la demande lui-même à la
@@ -74,17 +89,6 @@ struct ContentSessionReleaseTests {
         #expect(callEdge.contains("releaseAfterUnresumedInterruption()"))
         let pause = try Self.body(of: "public nonisolated func releaseAfterUserPause(", in: code)
         #expect(pause.contains("releaseContentSession("))
-    }
-
-    private static func settle(_ counter: OSAllocatedUnfairLock<Int>, atLeast minimum: TimeInterval = 0) async -> Int {
-        let start = Date()
-        let deadline = start.addingTimeInterval(5)
-        while Date() < deadline {
-            let value = counter.withLock { $0 }
-            if value > 0 || (minimum > 0 && Date().timeIntervalSince(start) >= minimum) { return value }
-            try? await Task.sleep(nanoseconds: 20_000_000)
-        }
-        return counter.withLock { $0 }
     }
 
     private static func body(of signature: String, in code: String, length: Int = 700) throws -> String {
