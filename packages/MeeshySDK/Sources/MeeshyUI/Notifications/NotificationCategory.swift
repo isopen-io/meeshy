@@ -20,7 +20,7 @@ import MeeshySDK
 /// lignes lues (`hideReadTypes=`), et `accepts` rejoue la même règle sur une
 /// ligne lue pendant que l'écran est ouvert. Une demande d'ami, un appel
 /// manqué, une alerte de sécurité ou un palier restent : ils se relisent.
-enum NotificationCategory: String, CaseIterable {
+public enum NotificationCategory: String, CaseIterable, Sendable {
     case all
     case unread
     case messages
@@ -170,7 +170,7 @@ enum NotificationCategory: String, CaseIterable {
 
     /// La loi que la passerelle applique (`serverQuery`), rejouée sur une
     /// ligne reçue par le socket ou modifiée par un geste optimiste.
-    func accepts(_ notification: APINotification) -> Bool {
+    public func accepts(_ notification: APINotification) -> Bool {
         guard !Self.isConsumed(notification) else { return false }
         switch self {
         case .all: return true
@@ -182,7 +182,7 @@ enum NotificationCategory: String, CaseIterable {
     /// Les paramètres de `GET /notifications` qui rendent CETTE catégorie.
     /// Les types partent TRIÉS : une même catégorie formule toujours la même
     /// requête.
-    var serverQuery: NotificationListQuery {
+    public var serverQuery: NotificationListQuery {
         switch self {
         case .all:
             return NotificationListQuery(unreadOnly: false, types: [], hideReadTypes: Self.rawTypes(Self.consumedOnReadTypes))
@@ -203,8 +203,8 @@ enum NotificationCategory: String, CaseIterable {
 }
 
 /// Ce qu'une catégorie demande à la passerelle.
-struct NotificationListQuery: Equatable {
-    let unreadOnly: Bool
-    let types: [String]
-    let hideReadTypes: [String]
+public struct NotificationListQuery: Equatable, Sendable {
+    public let unreadOnly: Bool
+    public let types: [String]
+    public let hideReadTypes: [String]
 }

@@ -144,12 +144,7 @@ struct MeeshyApp: App {
                                 // mêmes contacts que celles de l'app, réchauffés
                                 // de la même façon.
                                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
-                                // #9481, #10093 — le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA
-                                // visibilité autorise, rien sinon. Une seule injection, toutes les feuilles de profil la reçoivent.
-                                .environment(\.profileGameSection, ProfileGameSection { userId, _ in
-                                    AnyView(GameBannerBadge(userId: userId))
-                                })
-                                .environment(\.profileLoading, LiveProfileLoading())
+                                .modifier(ProfileSheetEnvironment())
                         } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin && !authManager.isSwitchingAccount {
                             LoginView()
                                 .safeAreaInset(edge: .top, spacing: 0) {
@@ -977,5 +972,20 @@ struct SystemThemeDetector<Content: View>: View {
             .onAppear {
                 ThemeManager.shared.syncWithSystem(systemScheme)
             }
+    }
+}
+
+// MARK: - Profile sheet environment
+
+private struct ProfileSheetEnvironment: ViewModifier {
+    /// #9481, #10093 — le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA visibilité autorise,
+    /// rien sinon. Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
+    /// injection, toutes les feuilles de profil la reçoivent.
+    func body(content: Content) -> some View {
+        content
+            .environment(\.profileGameSection, ProfileGameSection { userId, _ in
+                AnyView(GameBannerBadge(userId: userId))
+            })
+            .environment(\.profileLoading, LiveProfileLoading())
     }
 }

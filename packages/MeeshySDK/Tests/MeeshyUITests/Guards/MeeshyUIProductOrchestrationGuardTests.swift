@@ -18,7 +18,8 @@ final class MeeshyUIProductOrchestrationGuardTests: XCTestCase {
     private static let governedFolders: [String: [String]] = [
         "Community": forbiddenPatterns,
         "JoinFlow": forbiddenPatterns,
-        "Profile": cachePatterns
+        "Profile": cachePatterns,
+        "Notifications": cachePatterns
     ]
 
     private var sourcesRoot: URL {

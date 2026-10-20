@@ -19,7 +19,7 @@ final class ProfileLoadingInjectionGuardTests: XCTestCase {
     func test_laRacineInjecteLeChargeurDeProfil() throws {
         let app = try source("apps/ios/Meeshy/MeeshyApp.swift")
 
-        let game = try XCTUnwrap(app.range(of: ".environment(\\.profileGameSection"))
+        let game = try XCTUnwrap(app.range(of: "environment(\\.profileGameSection"))
         let loading = try XCTUnwrap(app.range(of: ".environment(\\.profileLoading, LiveProfileLoading())"))
         XCTAssertLessThan(game.lowerBound, loading.lowerBound)
         let between = app[game.lowerBound..<loading.lowerBound]
