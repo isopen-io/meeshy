@@ -664,6 +664,9 @@ export function useMessageMenu(params: {
         readonly forwardItems: readonly MessageMenuItem[];
         readonly choices: readonly TranslationChoice[];
         readonly subjectLabel: string;
+        /** RÉAGIR EST-IL PERMIS (#11206) — la loi du double toucher, appliquée
+         * au rail du menu : ni supprimé, ni éphémère échu, ni envoi local. */
+        readonly canReact: boolean;
         readonly piece?: PieceMenuData;
       }
     | undefined = (() => {
@@ -690,6 +693,7 @@ export function useMessageMenu(params: {
       forwardItems: forwardMenuItems(ctx),
       choices: translationChoices({ message, preferredLanguages: readerLanguages, servedLanguage }),
       subjectLabel: translate(lang, 'a11y.message.menu.subject', { author, excerpt }),
+      canReact: doubleTapReactable(message, Date.now()),
       ...(pieceData === undefined ? {} : { piece: pieceData }),
     };
   })();

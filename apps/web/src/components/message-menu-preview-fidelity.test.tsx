@@ -52,14 +52,18 @@ type Played = {
   readonly finish: () => Promise<void>;
 };
 
-const animateProto = Element.prototype as unknown as { animate: Element['animate'] };
-const originalAnimate = animateProto.animate;
-const originalMatchMedia = window.matchMedia;
+type Animatable = { animate: Element['animate'] };
+/* happy-dom n'est enregistré qu'au `beforeAll` : `Element` et `window` se lisent
+   dans les témoins, jamais au chargement du module. */
+const animateProto = (): Animatable => Element.prototype as unknown as Animatable;
+let originalAnimate: Element['animate'] | null = null;
+let originalMatchMedia: typeof window.matchMedia | null = null;
 
 /** `animate` bouchonné : chaque animation est RETENUE, et finie à la main. */
 function recordAnimations(): Played[] {
   const played: Played[] = [];
-  animateProto.animate = function animate(this: Element, keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions) {
+  originalAnimate ??= animateProto().animate;
+  animateProto().animate = function animate(this: Element, keyframes: Keyframe[] | PropertyIndexedKeyframes | null, options?: number | KeyframeAnimationOptions) {
     let resolve: (value: Animation) => void = () => {};
     const finished = new Promise<Animation>((r) => {
       resolve = r;
@@ -83,6 +87,7 @@ function recordAnimations(): Played[] {
 }
 
 function reduceMotion(): void {
+  originalMatchMedia ??= window.matchMedia;
   window.matchMedia = ((query: string) =>
     ({ matches: query.includes('reduce'), media: query, addEventListener: () => {}, removeEventListener: () => {} }) as unknown as MediaQueryList) as typeof window.matchMedia;
 }
@@ -91,8 +96,10 @@ afterEach(() => {
   act(() => root?.unmount());
   root = null;
   document.body.replaceChildren();
-  animateProto.animate = originalAnimate;
-  window.matchMedia = originalMatchMedia;
+  if (originalAnimate !== null) animateProto().animate = originalAnimate;
+  if (originalMatchMedia !== null) window.matchMedia = originalMatchMedia;
+  originalAnimate = null;
+  originalMatchMedia = null;
   document.documentElement.lang = 'fr';
 });
 

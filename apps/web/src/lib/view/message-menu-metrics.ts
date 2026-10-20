@@ -29,8 +29,18 @@ export const MENU_PADDING_Y = MENU_CHROME / 2;
 export function menuListHeight(rows: number): number {
   return Math.max(1, rows) * MENU_ROW_HEIGHT + MENU_CHROME;
 }
-/** `MessageOverlayMenu.swift:274` — plancher de réduction de l'aperçu, jamais agrandi. */
-export const PREVIEW_SCALE_FLOOR = 0.4;
+/** Plancher de réduction de l'aperçu, jamais agrandi — relevé de 0,4
+ * (`MessageOverlayMenu.swift:274`) à 0,75 par #11206 : un texte réduit de
+ * plus d'un quart n'est plus celui de la rangée. Sous ce plancher, l'aperçu se
+ * TRONQUE avec un fondu (`placeMessageMenuCluster`). */
+export const PREVIEW_SCALE_FLOOR = 0.75;
+/** La hauteur du fondu qui termine un aperçu tronqué. */
+export const PREVIEW_CLIP_FADE = 48;
+/** L'élévation de l'aperçu depuis sa rangée, et son retour (#11206) — la
+ * durée des entrées du cluster (`thread-menu.css`, 260 ms). */
+export const PREVIEW_LIFT_MS = 260;
+/** Sous `prefers-reduced-motion`, l'élévation devient un fondu. */
+export const PREVIEW_FADE_MS = 150;
 /** Tuile du rail dessinée à 34 (débord tactile ±5 = cible réelle 44,
  * `tap-target-34`) — iOS dessine 26 (`EmojiReactionPicker.swift:143`), la
  * charte v3.1 impose ≥ 44 px de cible (§ 1.1 tableau, ligne « rail »). */

@@ -88,15 +88,23 @@ export function placePopoverVertical(input: VerticalPopoverPlacement): VerticalP
 }
 
 /**
- * LE CLUSTER DU MENU DU MESSAGE (#5814) — port ligne à ligne de
+ * LE CLUSTER DU MENU DU MESSAGE (#5814) — port de
  * `MessageOverlayMenu.swift:230-289` : rail de réactions AU-DESSUS, aperçu
  * du message au centre, liste d'actions AU-DESSOUS. Loi PURE, sans DOM —
  * même discipline que `placePopover`/`placePopoverVertical` ci-dessus.
  *
- * `previewScale` ne dépasse JAMAIS 1 — l'aperçu est réduit, jamais agrandi
- * (`PREVIEW_SCALE_FLOOR` est un PLANCHER) — et `anchorX` suit le bord de
- * l'ancre selon `isMine`, comme `MessageOverlayMenu.swift:255-257`
- * (`isMe ? maxX - w/2 : minX + w/2`).
+ * NETTETÉ ET MARGES PAR REFLOW (#11206). L'aperçu reste à `sidePadding` des
+ * deux bords : une ancre plus large que l'écran moins deux marges impose sa
+ * LARGEUR au clone, qui se reflue — jamais une réduction par `scale`, qui
+ * rapetissait le texte d'une rangée pleine largeur. `previewScale` ne sert
+ * plus qu'au dépassement de HAUTEUR, jamais sous `previewScaleFloor`, jamais
+ * au-dessus de 1 ; sous ce plancher, l'aperçu est TRONQUÉ (`previewClipHeight`,
+ * en pixels du clone avant réduction) pour tenir sous le rail. Toutes les
+ * positions sont des pixels ENTIERS : un bord à 16,4 px floute le texte.
+ *
+ * `anchorX` suit le bord de l'ancre selon `isMine`, comme
+ * `MessageOverlayMenu.swift:255-257` (`isMe ? maxX - w/2 : minX + w/2`). Un
+ * rail absent (réagir refusé) se déclare par `railHeight: 0, railGap: 0`.
  */
 export type MessageMenuClusterInput = {
   readonly anchor: {
@@ -124,7 +132,15 @@ export type MessageMenuClusterInput = {
 export type MessageMenuClusterPlacement = {
   readonly railTop: number;
   readonly previewTop: number;
+  /** Bord gauche de l'aperçu, dans [sidePadding, largeur − sidePadding − previewWidth]. */
+  readonly previewLeft: number;
+  /** Largeur IMPOSÉE au clone — celle de l'ancre, bornée à l'écran moins deux marges. */
+  readonly previewWidth: number;
+  /** Hauteur VISIBLE de l'aperçu, réduction et troncature comprises. */
+  readonly previewHeight: number;
   readonly previewScale: number;
+  /** Hauteur maximale du clone avant réduction quand il est tronqué ; `null` : entier. */
+  readonly previewClipHeight: number | null;
   readonly menuTop: number;
   readonly anchorX: number;
   readonly menuLeft: number;
@@ -133,6 +149,8 @@ export type MessageMenuClusterPlacement = {
    * mesure que `revealFloor` (#9043) dégage en réduisant l'aperçu. */
   readonly menuHiddenHeight: number;
 };
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
 
 export function placeMessageMenuCluster(input: MessageMenuClusterInput): MessageMenuClusterPlacement {
   const { anchor, viewport, safe, menuHeight, isMine } = input;
@@ -150,27 +168,44 @@ export function placeMessageMenuCluster(input: MessageMenuClusterInput): Message
       ? Math.max(previewScaleFloor, Math.min(1, (available - chrome) / Math.max(1, anchor.height)))
       : 1;
 
-  const previewWidth = anchor.width * previewScale;
-  const previewHeight = anchor.height * previewScale;
+  const previewWidth = Math.floor(Math.min(anchor.width, Math.max(0, viewport.width - 2 * sidePadding)));
+  const scaledHeight = anchor.height * previewScale;
+  const visibleCeiling = Math.max(0, available - railHeight - railGap);
+  const previewHeight = Math.min(scaledHeight, visibleCeiling);
+  const previewClipHeight = scaledHeight > visibleCeiling ? visibleCeiling / previewScale : null;
+  const previewLeft = Math.round(
+    clamp(isMine ? anchor.right - previewWidth : anchor.left, sidePadding, viewport.width - sidePadding - previewWidth),
+  );
+  const scaledWidth = previewWidth * previewScale;
   const clusterHeight = railHeight + railGap + previewHeight + menuGap + menuHeight;
 
   // `nlAnchorX` (:255-257).
-  const anchorX = isMine ? anchor.right - previewWidth / 2 : anchor.left + previewWidth / 2;
+  const anchorX = Math.round(isMine ? previewLeft + previewWidth - scaledWidth / 2 : previewLeft + scaledWidth / 2);
 
   // `nlDesiredTop` / `nlClusterTop` (:258-259).
   const desiredTop = anchor.top - railHeight - railGap;
-  const clusterTop = Math.max(availTop, Math.min(desiredTop, availBottom - clusterHeight));
+  const clusterTop = Math.round(Math.max(availTop, Math.min(desiredTop, availBottom - clusterHeight)));
 
   const railTop = clusterTop;
-  const previewTop = clusterTop + railHeight + railGap;
-  const menuTop = previewTop + previewHeight + menuGap;
+  const previewTop = clusterTop + Math.round(railHeight + railGap);
+  const menuTop = Math.round(previewTop + previewHeight + menuGap);
 
-  const menuLeft = Math.max(sidePadding, Math.min(viewport.width - sidePadding - menuWidth, anchorX - menuWidth / 2));
+  const menuLeft = Math.round(clamp(anchorX - menuWidth / 2, sidePadding, viewport.width - sidePadding - menuWidth));
   const clampedRailWidth = Math.min(railWidth, Math.max(0, viewport.width - 2 * sidePadding));
-  const railLeft = Math.max(
-    sidePadding,
-    Math.min(viewport.width - sidePadding - clampedRailWidth, anchorX - clampedRailWidth / 2),
-  );
+  const railLeft = Math.round(clamp(anchorX - clampedRailWidth / 2, sidePadding, viewport.width - sidePadding - clampedRailWidth));
 
-  return { railTop, previewTop, previewScale, menuTop, anchorX, menuLeft, railLeft, menuHiddenHeight: menuTop + menuHeight - availBottom };
+  return {
+    railTop,
+    previewTop,
+    previewLeft,
+    previewWidth,
+    previewHeight,
+    previewScale,
+    previewClipHeight,
+    menuTop,
+    anchorX,
+    menuLeft,
+    railLeft,
+    menuHiddenHeight: menuTop + menuHeight - availBottom,
+  };
 }
