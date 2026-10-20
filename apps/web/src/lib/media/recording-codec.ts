@@ -1,7 +1,12 @@
 /**
  * LA LOI DE CODECS DES ENREGISTREMENTS DU NAVIGATEUR (#11309) — une seule table
  * pour le vocal, la vidéo de la caméra, le clip d'appel et l'export. Les
- * conteneurs sont ceux que la passerelle accepte (`ACCEPTED_MIME_TYPES`).
+ * conteneurs sont ceux que la passerelle accepte (`ACCEPTED_MIME_TYPES`, qui
+ * ignore les paramètres `codecs=`).
+ *
+ * Repli WebKit (Safari, WKWebView) : il n'écrit pas le WebM, le vocal y tombe
+ * sur `audio/mp4` (AAC) et la vidéo sur `video/mp4`. Un navigateur qui
+ * n'annonce rien reçoit des options sans `mimeType` et choisit lui-même.
  */
 
 export type RecordingKind = 'audio' | 'video';
@@ -13,7 +18,7 @@ export const RECORDING_MIME_CANDIDATES: Readonly<Record<RecordingKind, readonly 
   video: ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'],
 };
 
-/** Débit de la parole (Opus, `QualityThresholds.swift`) : vocaux et enregistrements d'appel. */
+/** Débit de la parole, celui de la voix Opus d'iOS (`QualityThresholds.opusFmtpMaxAverageBitrate`) : vocaux et enregistrements d'appel. */
 export const SPEECH_AUDIO_BITS_PER_SECOND = 32_000;
 
 export function recordingMimeOf(kind: RecordingKind, isTypeSupported: IsTypeSupported): string | undefined {

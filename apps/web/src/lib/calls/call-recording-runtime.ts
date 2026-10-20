@@ -2,8 +2,8 @@ import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 import type { CallRecordingKind, CallRecordingLinkResult as LinkedRecording } from '@meeshy/shared/types/call-recording';
 
 import { uploadAttachments } from '@/lib/api/attachments';
-import { speechRecorderOptionsOf } from '@/lib/media/recording-codec';
 import { apiDeps } from '@/lib/api/deps';
+import { speechRecorderOptionsOf } from '@/lib/media/recording-codec';
 
 import type { CallRecorderHandle, CallRecorderStart, CallRecorderTarget, CallRecordingOutcome } from './call-recording';
 import { createBrowserCompositor } from './call-recording-compositor';
@@ -159,7 +159,7 @@ function createBrowserMixer(): AudioMixer {
   };
 }
 
-function createBrowserCapture(stream: MediaStream, kind: CallRecordingKind): AudioCapture {
+export function createBrowserCapture(stream: MediaStream, kind: CallRecordingKind): AudioCapture {
   const recorder = new MediaRecorder(stream, speechRecorderOptionsOf(kind, (candidate) => MediaRecorder.isTypeSupported(candidate)));
   const chunks: Blob[] = [];
   recorder.ondataavailable = (event) => {

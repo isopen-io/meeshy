@@ -46,7 +46,7 @@ describe('garde — les littéraux de codecs ne vivent qu’à un seul endroit d
       readdirSync(dir).flatMap((name) => {
         const path = join(dir, name);
         if (statSync(path).isDirectory()) return sources(path);
-        return name.endsWith('.ts') && !name.endsWith('.test.ts') ? [path] : [];
+        return /\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
       });
     const offenders = sources(root)
       .filter((path) => !relative(root, path).endsWith(join('lib', 'media', 'recording-codec.ts')))
