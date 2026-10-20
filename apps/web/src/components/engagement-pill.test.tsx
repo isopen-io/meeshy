@@ -88,7 +88,7 @@ describe('le modèle de la pastille', () => {
 
   test('la phrase suit la langue d’interface', () => {
     expect(engagementPillModel(snapshot(), '2026-09-30', 'en')?.label).toBe('4-day streak, 120 sparks, 12 today');
-    expect(engagementPillModel(snapshot(), '2026-09-30', 'ar')?.label).toBe('سلسلة 4 أيام، 120 شرارات، منها 12 اليوم');
+    expect(engagementPillModel(snapshot(), '2026-09-30', 'ar')?.label).toBe('لهب 4 أيام، 120 شرارات، منها 12 اليوم');
   });
 
   test('aucun instantané, ou zéro point depuis toujours ⇒ rien', () => {

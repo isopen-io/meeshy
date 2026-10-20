@@ -88,6 +88,6 @@ describe('la mascotte, interface en', () => {
 
   test('en arabe, le duel a sa forme', () => {
     document.documentElement.lang = 'ar';
-    expect(mascotSay({ kind: 'streak', days: 2 })).toBe('يومان متتاليان، واصل هكذا!');
+    expect(mascotSay({ kind: 'streak', days: 2 })).toBe('لهبك مشتعل منذ يومين، واصل هكذا!');
   });
 });

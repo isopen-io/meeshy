@@ -119,7 +119,7 @@ describe('la carte du fil et la fiche', () => {
 
   test('la phrase suit la langue d’interface', () => {
     expect(renderToStaticMarkup(<PostPointsMark points={99} language="en" />)).toContain('This post earned you 99 sparks');
-    expect(renderToStaticMarkup(<PostPointsMark points={99} language="ar" />)).toContain('منحك هذا المنشور 99 شرارات');
+    expect(renderToStaticMarkup(<PostPointsMark points={99} language="ar" />)).toContain('أطلق هذا المنشور 99 شرارات لك');
   });
 });
 

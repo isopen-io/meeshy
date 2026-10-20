@@ -60,6 +60,6 @@ describe('la langue d’interface (#10823)', () => {
 
   test('interface ar : la forme duelle du catalogue arabe', async () => {
     await loadGameCatalog('ar');
-    expect(meeshMissing(2, 0, 'ar')).toBe('لا يزال أمامك شرارتان قبل الحصول على Meesh.');
+    expect(meeshMissing(2, 0, 'ar')).toBe('شرارتان حتى Meesh التالية.');
   });
 });
