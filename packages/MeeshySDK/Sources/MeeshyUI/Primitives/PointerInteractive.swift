@@ -24,12 +24,8 @@ extension View {
 
     @ViewBuilder
     public func meeshyColumnResizePointer() -> some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            pointerStyle(.columnResize)
-        } else {
-            hoverEffect(.highlight)
-        }
+        #if os(visionOS) || os(macOS)
+        pointerStyle(.columnResize)
         #else
         hoverEffect(.highlight)
         #endif
