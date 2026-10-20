@@ -25,9 +25,19 @@ export const APPEARANCE_LIMITS = {
   maxScenePaths: 48,
   maxRingPaths: 48,
   maxPackDesigns: 32,
-  /** L'opacité maximale d'un trait de motif : un motif reste DISCRET (§ 6, lisibilité). */
+  /** L'opacité maximale d'un trait de motif de FOND : sous un fil de messages, un motif reste DISCRET (§ 6, lisibilité). */
   maxPatternOpacity: 0.12,
+  /** L'opacité maximale d'un trait de motif de BANNIÈRE (#11165) : aucun texte de fil ne la lit, elle doit se voir. */
+  maxBannerPatternOpacity: 0.32,
 } as const;
+
+/** Où un modèle se peint : sous un fil (`wallpaper`) ou en bannière de profil (`banner`). */
+export type AppearanceSurface = 'wallpaper' | 'banner';
+
+const PATTERN_CAP: Readonly<Record<AppearanceSurface, number>> = {
+  wallpaper: APPEARANCE_LIMITS.maxPatternOpacity,
+  banner: APPEARANCE_LIMITS.maxBannerPatternOpacity,
+};
 
 /**
  * Les rôles de couleur, résolus par la palette du schéma (clair/sombre).
@@ -97,7 +107,8 @@ const tileInkOpacity = (tile: { readonly paths: readonly DesignStroke[] } | unde
 
 /**
  * Un fond ou une bannière à motif trop dense est REFUSÉ à la lecture (la passerelle ne le sert pas, aucun client ne le peint) :
- * le plafond est une loi du contrat, pas une recommandation du catalogue intégré.
+ * le plafond est une loi du contrat, pas une recommandation du catalogue intégré. Le schéma porte le plafond le plus haut
+ * (bannière) ; la SURFACE resserre (`parseAppearanceDesign`, contrat de pack) — un fond reste à 12 %.
  */
 export const AppearanceDesignSchema = z
   .object({
@@ -113,21 +124,22 @@ export const AppearanceDesignSchema = z
   })
   .check(
     z.refine(shapeMatchesStyle),
-    z.refine((design) => tileInkOpacity(design.tile) <= APPEARANCE_LIMITS.maxPatternOpacity),
+    z.refine((design) => tileInkOpacity(design.tile) <= APPEARANCE_LIMITS.maxBannerPatternOpacity),
     z.refine((design) => strokesOf(design).reduce((total, stroke) => total + stroke.d.length, 0) <= APPEARANCE_LIMITS.maxTotalPathLength),
   );
 export type AppearanceDesign = z.infer<typeof AppearanceDesignSchema>;
 
-export const parseAppearanceDesign = (input: unknown): AppearanceDesign | null => {
+/** Sans surface, la plus stricte : un modèle lu sans savoir où il se peint est lu comme un fond. */
+export const parseAppearanceDesign = (input: unknown, surface: AppearanceSurface = 'wallpaper'): AppearanceDesign | null => {
   const parsed = AppearanceDesignSchema.safeParse(input);
-  return parsed.success ? parsed.data : null;
+  return parsed.success && isDiscreetPattern(parsed.data, surface) ? parsed.data : null;
 };
 
 /** L'opacité cumulée d'un motif, 0 hors motif. */
 export const patternInkOpacity = (design: AppearanceDesign): number => tileInkOpacity(design.tile);
 
-/** Un motif DISCRET : jamais plus de 12 % d'encre. Les illustrations et dégradés ne sont pas des motifs. */
-export const isDiscreetPattern = (design: AppearanceDesign): boolean => patternInkOpacity(design) <= APPEARANCE_LIMITS.maxPatternOpacity;
+/** Un motif sous le plafond de sa surface : 12 % d'encre pour un fond, 32 % pour une bannière. Les illustrations et dégradés ne sont pas des motifs. */
+export const isDiscreetPattern = (design: AppearanceDesign, surface: AppearanceSurface = 'wallpaper'): boolean => patternInkOpacity(design) <= PATTERN_CAP[surface];
 
 // ── Le contrat d'un pack de fonds ou de bannières ──────────────────────
 
@@ -138,7 +150,10 @@ export const AppearancePackContractSchema = z
     domain: z.enum(['wallpaper', 'banner']),
     designs: z.array(AppearanceDesignSchema).check(z.minLength(1), z.maxLength(APPEARANCE_LIMITS.maxPackDesigns)),
   })
-  .check(z.refine((contract) => new Set(contract.designs.map((design) => design.key)).size === contract.designs.length));
+  .check(
+    z.refine((contract) => new Set(contract.designs.map((design) => design.key)).size === contract.designs.length),
+    z.refine((contract) => contract.designs.every((design) => isDiscreetPattern(design, contract.domain))),
+  );
 export type AppearancePackContract = z.infer<typeof AppearancePackContractSchema>;
 
 export const parseAppearancePackContract = (input: unknown): AppearancePackContract | null => {
