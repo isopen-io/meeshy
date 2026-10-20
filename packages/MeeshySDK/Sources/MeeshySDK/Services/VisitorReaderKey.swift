@@ -16,42 +16,39 @@ public protocol VisitorReaderKeyProviding: Sendable {
     func purge()
 }
 
-public final class VisitorReaderKey: VisitorReaderKeyProviding, @unchecked Sendable {
+public final class VisitorReaderKey: VisitorReaderKeyProviding, Sendable {
     public static let shared = VisitorReaderKey()
 
     public static let prefix = "visitor_"
     static let storageKey = "meeshy.visitor.readerKey"
 
-    private let keychain: any KeychainStoring
-    private let lock = NSLock()
+    private let keychain: Locked<any KeychainStoring>
 
     public init(keychain: any KeychainStoring = KeychainManager.shared) {
-        self.keychain = keychain
+        self.keychain = Locked(keychain)
     }
 
     public func readerKey() -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        if let stored = keychain.load(forKey: Self.storageKey, account: nil), stored.hasPrefix(Self.prefix) {
-            return stored
+        keychain.read { store -> String in
+            if let stored = store.load(forKey: VisitorReaderKey.storageKey, account: nil),
+               stored.hasPrefix(VisitorReaderKey.prefix) {
+                return stored
+            }
+            let fresh = VisitorReaderKey.prefix + UUID().uuidString.lowercased()
+            try? store.save(fresh, forKey: VisitorReaderKey.storageKey, account: nil)
+            return fresh
         }
-        let fresh = Self.prefix + UUID().uuidString.lowercased()
-        try? keychain.save(fresh, forKey: Self.storageKey, account: nil)
-        return fresh
     }
 
     public func storedReaderKey() -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let stored = keychain.load(forKey: Self.storageKey, account: nil), stored.hasPrefix(Self.prefix) else {
-            return nil
+        keychain.read { store -> String? in
+            guard let stored = store.load(forKey: VisitorReaderKey.storageKey, account: nil),
+                  stored.hasPrefix(VisitorReaderKey.prefix) else { return nil }
+            return stored
         }
-        return stored
     }
 
     public func purge() {
-        lock.lock()
-        defer { lock.unlock() }
-        keychain.delete(forKey: Self.storageKey, account: nil)
+        keychain.read { $0.delete(forKey: VisitorReaderKey.storageKey, account: nil) }
     }
 }

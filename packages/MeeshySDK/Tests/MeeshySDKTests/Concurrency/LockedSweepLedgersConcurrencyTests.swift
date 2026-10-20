@@ -78,4 +78,41 @@ final class LockedSweepLedgersConcurrencyTests: XCTestCase {
 
         XCTAssertTrue(registered.isCancelled)
     }
+
+    func test_digest_concurrentSameFile_returnsOneDigest_andCountIsOne() async throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("locked-sweep-\(UUID().uuidString).bin")
+        try Data("payload".utf8).write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let memo = FileDigestMemo(capacity: 4)
+
+        let digests = await withTaskGroup(of: String.self, returning: [String].self) { group in
+            for _ in 0..<200 {
+                group.addTask { (try? memo.digest(of: file, computing: { _ in "digest" })) ?? "failed" }
+            }
+            return await group.reduce(into: []) { $0.append($1) }
+        }
+
+        XCTAssertEqual(Set(digests), ["digest"])
+        XCTAssertEqual(memo.count, 1)
+    }
+
+    func test_digest_distinctFilesPastCapacity_keepsAtMostCapacity() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("locked-sweep-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let files = try (0..<12).map { index -> URL in
+            let url = directory.appendingPathComponent("f\(index).bin")
+            try Data("p\(index)".utf8).write(to: url)
+            return url
+        }
+        let memo = FileDigestMemo(capacity: 4)
+
+        await withTaskGroup(of: Void.self) { group in
+            for file in files {
+                group.addTask { _ = try? memo.digest(of: file, computing: { $0.lastPathComponent }) }
+            }
+        }
+
+        XCTAssertEqual(memo.count, 4)
+    }
 }
