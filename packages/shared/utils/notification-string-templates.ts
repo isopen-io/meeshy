@@ -109,6 +109,9 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'moderation.removedStory': 'Votre story a été retirée par un administrateur',
     'moderation.removedComment': 'Votre commentaire a été retiré par un administrateur',
     'moderation.reason': 'Motif : {preview}',
+    'moderation.madePrivatePost': 'Votre publication a été rendue privée par un administrateur',
+    'moderation.madePrivateReel': 'Votre réel a été rendu privé par un administrateur',
+    'moderation.madePrivateStory': 'Votre story a été rendue privée par un administrateur',
   },
   en: {
     'reaction.message': 'reacted {emoji} to your message',
@@ -208,6 +211,9 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'moderation.removedStory': 'Your story was removed by an administrator',
     'moderation.removedComment': 'Your comment was removed by an administrator',
     'moderation.reason': 'Reason: {preview}',
+    'moderation.madePrivatePost': 'Your post was made private by an administrator',
+    'moderation.madePrivateReel': 'Your reel was made private by an administrator',
+    'moderation.madePrivateStory': 'Your story was made private by an administrator',
   },
   es: {
     'reaction.message': 'reaccionó {emoji} a tu mensaje',
@@ -307,6 +313,9 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'moderation.removedStory': 'Tu historia fue eliminada por un administrador',
     'moderation.removedComment': 'Tu comentario fue eliminado por un administrador',
     'moderation.reason': 'Motivo: {preview}',
+    'moderation.madePrivatePost': 'Tu publicación fue hecha privada por un administrador',
+    'moderation.madePrivateReel': 'Tu reel fue hecho privado por un administrador',
+    'moderation.madePrivateStory': 'Tu historia fue hecha privada por un administrador',
   },
   pt: {
     'reaction.message': 'reagiu {emoji} à sua mensagem',
@@ -406,6 +415,9 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'moderation.removedStory': 'Sua story foi removida por um administrador',
     'moderation.removedComment': 'Seu comentário foi removido por um administrador',
     'moderation.reason': 'Motivo: {preview}',
+    'moderation.madePrivatePost': 'Sua publicação foi tornada privada por um administrador',
+    'moderation.madePrivateReel': 'Seu reel foi tornado privado por um administrador',
+    'moderation.madePrivateStory': 'Sua story foi tornada privada por um administrador',
   },
   de: {
     'reaction.message': 'hat {emoji} auf deine Nachricht reagiert',
@@ -505,6 +517,9 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'moderation.removedStory': 'Deine Story wurde von einem Administrator entfernt',
     'moderation.removedComment': 'Dein Kommentar wurde von einem Administrator entfernt',
     'moderation.reason': 'Grund: {preview}',
+    'moderation.madePrivatePost': 'Dein Beitrag wurde von einem Administrator auf privat gestellt',
+    'moderation.madePrivateReel': 'Dein Reel wurde von einem Administrator auf privat gestellt',
+    'moderation.madePrivateStory': 'Deine Story wurde von einem Administrator auf privat gestellt',
   },
   it: {
     'reaction.message': 'ha reagito {emoji} al tuo messaggio',
@@ -604,6 +619,9 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'moderation.removedStory': 'La tua storia è stata rimossa da un amministratore',
     'moderation.removedComment': 'Il tuo commento è stato rimosso da un amministratore',
     'moderation.reason': 'Motivo: {preview}',
+    'moderation.madePrivatePost': 'Il tuo post è stato reso privato da un amministratore',
+    'moderation.madePrivateReel': 'Il tuo reel è stato reso privato da un amministratore',
+    'moderation.madePrivateStory': 'La tua storia è stata resa privata da un amministratore',
   },
   ar: {
     'reaction.message': 'تفاعل {emoji} مع رسالتك',
@@ -703,6 +721,9 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'moderation.removedStory': 'أزال أحد المشرفين قصتك',
     'moderation.removedComment': 'أزال أحد المشرفين تعليقك',
     'moderation.reason': 'السبب: {preview}',
+    'moderation.madePrivatePost': 'جعل أحد المشرفين منشورك خاصًا',
+    'moderation.madePrivateReel': 'جعل أحد المشرفين ريلك خاصًا',
+    'moderation.madePrivateStory': 'جعل أحد المشرفين قصتك خاصة',
   },
   'zh-Hans': {
     'reaction.message': '用 {emoji} 回应了你的消息',
@@ -802,5 +823,8 @@ export const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'moderation.removedStory': '你的快拍已被管理员删除',
     'moderation.removedComment': '你的评论已被管理员删除',
     'moderation.reason': '原因：{preview}',
+    'moderation.madePrivatePost': '你的帖子已被管理员设为私密',
+    'moderation.madePrivateReel': '你的短视频已被管理员设为私密',
+    'moderation.madePrivateStory': '你的快拍已被管理员设为私密',
   },
 };

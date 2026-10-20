@@ -304,5 +304,5 @@ extension View {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let statusBubble = Logger(subsystem: "me.meeshy.app", category: "status-bubble")
+    nonisolated static let statusBubble = MeeshyLog.logger(.statusBubble)
 }

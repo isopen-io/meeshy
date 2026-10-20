@@ -47,6 +47,26 @@ describe('deletePost', () => {
     expect(queryClient.getQueryState(FEED_QUERY_KEY)?.isInvalidated).toBe(true);
   });
 
+  test('RETIRER UN RÉEL (#11156) : refusé, il REVIENT à sa place dans le fil GELÉ des Réels, et sa fiche aussi', async () => {
+    const queryClient = new QueryClient();
+    const reel = (id: string): FeedPost => ({ id, type: 'POST', createdAt: '2026-09-13T11:55:00.000Z' });
+    queryClient.setQueryData(reelsQueryKey('graine'), {
+      pages: [{ posts: [reel('r1'), reel('r2'), reel('r3')], pagination: { limit: 20, hasMore: false, nextCursor: null } }],
+      pageParams: [undefined],
+    });
+    queryClient.setQueryData(postQueryKey('r2'), reel('r2'));
+    const reelIds = () =>
+      (queryClient.getQueryData(reelsQueryKey('graine')) as { pages: { posts: { id: string }[] }[] }).pages.flatMap((p) => p.posts.map((x) => x.id));
+    const { transport } = scriptedTransport({ 'DELETE /api/v1/posts/r2': { ok: false, status: 403, error: 'FORBIDDEN' } });
+
+    const pending = deletePost({ postId: 'r2', reason: 'Contenu violent', deps: { source: 'gateway', transport, queryClient } });
+    expect(reelIds()).toEqual(['r1', 'r3']);
+
+    expect(await pending).toBe('failed');
+    expect(reelIds()).toEqual(['r1', 'r2', 'r3']);
+    expect((queryClient.getQueryData(postQueryKey('r2')) as FeedPost | undefined)?.id).toBe('r2');
+  });
+
   test('RETIRER (#11150) : le motif voyage en corps `{ reason }` ; sans motif, aucun corps', async () => {
     const queryClient = feedWith(['p1', 'p2']);
     const { transport, calls } = scriptedTransport({

@@ -303,7 +303,12 @@ struct ComposerCaptureChrome: View {
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
         .alert(ComposerSceneCameraCopy.discardTitle(photo: session.discardPrompt.request?.photo ?? false),
                isPresented: Binding(get: { session.discardPrompt.isPresented },
-                                    set: { if !$0 { session.discardPrompt.dismiss() } })) {
+                                    set: { montree in
+                                        // Hors de la mise à jour de la vue (« Publishing changes from within
+                                        // view updates », mesuré au test d'interface #10930).
+                                        guard !montree else { return }
+                                        Task { @MainActor in session.discardPrompt.dismiss() }
+                                    })) {
             Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) {
                 if ComposerCaptureDiscardFlow.confirm(session) { onDisarm() }
             }

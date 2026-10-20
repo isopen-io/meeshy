@@ -630,7 +630,9 @@ export interface ContentRemovedNotificationMetadata extends BaseNotificationMeta
   readonly conversationId?: string;
   readonly conversationTitle?: string;
   readonly postId?: string;
-  readonly reason: string;
+  readonly reason?: string;
+  /** La publication n'est pas retirée mais passée en PRIVÉ par la modération (#11158) : seul l'auteur la voit encore. */
+  readonly madePrivate?: true;
 }
 
 /**

@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import os
 
-nonisolated private let engagementLogger = Logger(subsystem: "me.meeshy.app", category: "engagement")
+nonisolated private let engagementLogger = MeeshyLog.logger(.engagement)
 
 /// Sink the tracker pushes sessions into (durable outbox in production).
 public protocol EngagementSinking: Sendable {

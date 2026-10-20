@@ -284,7 +284,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// Logger dédié — `os.Logger` subsystem `me.meeshy.app`, catégorie
     /// `audio-playback`. Permet de filtrer rapidement dans Console.app
     /// quand un preview ne déclenche aucune lecture audible.
-    private static let log = os.Logger(subsystem: "me.meeshy.app", category: "audio-playback")
+    private static let log = MeeshyLog.logger(.audioPlayback)
 
     /// Décodage et préparation HORS du MainActor (#9702) ; une piste changée
     /// pendant ce temps (`resetState` annule `loadTask`) n'est pas jouée.

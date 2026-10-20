@@ -4,7 +4,7 @@ import Foundation
 import MeeshySDK
 import os
 
-private nonisolated let storeRouterLogger = Logger(subsystem: "me.meeshy.app", category: "message-store-router")
+private nonisolated let storeRouterLogger = MeeshyLog.logger(.messageStoreRouter)
 
 /// Aiguille chaque lecture et chaque écriture vers la base du compte ACTIF
 /// (#8656, #8657).

@@ -13,7 +13,7 @@ final class CallDeclineMessenger: CallDeclineMessengerProviding {
 
     static let shared = CallDeclineMessenger()
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-decline")
+    private let logger = MeeshyLog.logger(.callDecline)
     private let messageService: MessageServiceProviding
     private let replyQueue: NotificationReplyQueueing
     private let injectedPersistence: OptimisticMessagePersisting?

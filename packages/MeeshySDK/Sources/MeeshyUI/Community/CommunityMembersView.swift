@@ -305,5 +305,5 @@ final class CommunityMembersViewModel: ObservableObject {
 // MARK: - Logger
 
 private extension Logger {
-    static let community = Logger(subsystem: "me.meeshy.sdk", category: "community")
+    static let community = MeeshyLog.logger(.community, subsystem: .sdk)
 }

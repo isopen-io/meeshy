@@ -11,10 +11,11 @@ enum ConversationDeltaRules {
     /// (`ConversationSyncEngineTests`) rougit si une ligne maigre efface ce
     /// qu'elle ne portait pas.
     static func fusionneLigneDeSync(existante: MeeshyConversation?, recue: MeeshyConversation) -> MeeshyConversation {
-        guard var fusion = existante else { return recue }
+        guard let existante else { return recue }
         // Ce que `/sync` SERT avance — verbatim, y compris ses `nil` (un titre
-        // effacé côté serveur est une valeur, pas une absence).
-        fusion.title = recue.title
+        // effacé côté serveur est une valeur, pas une absence). Le titre d'un
+        // DIRECT avance avec l'interlocuteur dont il dérive, jamais seul (#11164).
+        var fusion = existante.adoptingServedIdentity(of: recue)
         fusion.description = recue.description
         fusion.avatar = recue.avatar
         fusion.banner = recue.banner
@@ -35,6 +36,29 @@ enum ConversationDeltaRules {
         // participants, le rôle courant, les vignettes — et la palette (`let`),
         // qui reste celle de la ligne existante par construction.
         return fusion
+    }
+
+    /// #11164 — les directs gravés sous le LECTEUR, rendus à un nom générique,
+    /// et l'horizon depuis lequel `/sync` doit les resservir pour que leur vrai
+    /// interlocuteur revienne. `nil` quand aucune ligne n'est gravée ainsi.
+    static func reparationDesInterlocuteurs(
+        _ conversations: [MeeshyConversation],
+        readerId: String
+    ) -> (liste: [MeeshyConversation], horizon: Date)? {
+        let gravees = conversations.filter { $0.isInterlocutorTheReader(readerId) }
+        guard let plusAncienne = gravees.map(\.updatedAt).min() else { return nil }
+        let liste = conversations.map { $0.isInterlocutorTheReader(readerId) ? $0.withoutInterlocutor() : $0 }
+        return (liste, plusAncienne.addingTimeInterval(-0.001))
+    }
+
+    /// Applique la réparation au cache de la liste et rend son horizon.
+    static func repareLesInterlocuteurs(dans cache: CacheCoordinator, lecteur readerId: String) async -> Date? {
+        let liste = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard let reparation = reparationDesInterlocuteurs(liste, readerId: readerId) else { return nil }
+        await cache.conversations.update(for: "list") { conversations in
+            reparationDesInterlocuteurs(conversations, readerId: readerId)?.liste ?? conversations
+        }
+        return reparation.horizon
     }
 
     /// Merge a batch of delta conversations into `existing` by id. Active deltas
@@ -68,7 +92,9 @@ enum ConversationDeltaRules {
         var alreadyRemoved = Set<String>()
         for delta in deltas {
             if delta.isActive {
-                byId[delta.id] = delta
+                // Une ligne qui n'a pas élu l'interlocuteur d'un direct n'efface
+                // pas celui que le cache connaît (#11164).
+                byId[delta.id] = byId[delta.id].map(delta.keepingInterlocutor(of:)) ?? delta
             } else {
                 byId.removeValue(forKey: delta.id)
                 if alreadyRemoved.insert(delta.id).inserted { removedIds.append(delta.id) }

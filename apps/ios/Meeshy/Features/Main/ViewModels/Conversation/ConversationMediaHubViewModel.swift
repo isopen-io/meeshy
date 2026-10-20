@@ -99,7 +99,7 @@ final class ConversationMediaHubViewModel: ObservableObject {
     private var loadTask: Task<Void, Never>?
     private var searchTask: Task<Void, Never>?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "media-hub")
+    private static let logger = MeeshyLog.logger(.mediaHub)
 
     private enum Cursor: Equatable {
         case head(before: String?)

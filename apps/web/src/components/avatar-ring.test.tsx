@@ -83,7 +83,7 @@ describe('la couche Lottie du contour et de la bannière (#10638)', () => {
   });
 
   test('une bannière animée superpose sa couche au dessin ; une bannière statique reste identique', () => {
-    expect(renderToStaticMarkup(<ProfileBannerDesign design={vive} accent="#6366F1" scheme="dark" />)).toContain('data-lottie-layer="cad11fe66d4fc9ec.json"');
+    expect(renderToStaticMarkup(<ProfileBannerDesign design={vive} accent="#6366F1" scheme="dark" />)).toContain('data-lottie-layer="5aff839c02a1cfcb.json"');
     const still = renderToStaticMarkup(<ProfileBannerDesign design={aurore} accent="#6366F1" scheme="dark" />);
     expect(still).not.toContain('data-lottie-layer');
     expect(still.startsWith('<span aria-hidden="true" data-banner-design="aurore"')).toBe(true);

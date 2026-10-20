@@ -16,7 +16,7 @@ public actor SearchIndex {
     public static let shared = SearchIndex(pool: AppDatabase.shared.databaseWriter)
 
     private let pool: any DatabaseWriter
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "searchindex")
+    private let logger = MeeshyLog.logger(.searchindex, subsystem: .legacySDK)
 
     public init(pool: any DatabaseWriter) {
         self.pool = pool

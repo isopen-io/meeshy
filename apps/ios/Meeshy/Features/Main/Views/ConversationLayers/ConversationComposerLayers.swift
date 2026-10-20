@@ -145,12 +145,11 @@ struct ConversationComposerEditingCovers: ViewModifier {
                 set: { if !$0 { scrollState.recentImageToEdit = nil } }
             )) {
                 if let image = scrollState.recentImageToEdit {
-                    ConversationImageSceneEditor(image: image, staged: false, onDone: { media in
+                    ConversationPieceRetouch(source: .image(image), onDone: { media in
                         scrollState.recentImageToEdit = nil
                         onSceneMedia(media)
-                    }, onCancel: {
-                        scrollState.recentImageToEdit = nil
-                    })
+                    }, onRemove: { scrollState.recentImageToEdit = nil },
+                       onCancel: { scrollState.recentImageToEdit = nil })
                 }
             }
             .conversationCover(isPresented: Binding(
@@ -158,10 +157,11 @@ struct ConversationComposerEditingCovers: ViewModifier {
                 set: { if !$0 { scrollState.recentVideoToEdit = nil } }
             )) {
                 if let url = scrollState.recentVideoToEdit {
-                    ConversationVideoSceneEditor(url: url, staged: false, onDone: { media in
+                    ConversationPieceRetouch(source: .video(url), onDone: { media in
                         scrollState.recentVideoToEdit = nil
                         onSceneMedia(media)
-                    }, onCancel: { scrollState.recentVideoToEdit = nil })
+                    }, onRemove: { scrollState.recentVideoToEdit = nil },
+                       onCancel: { scrollState.recentVideoToEdit = nil })
                 }
             }
             .conversationCover(item: $scrollState.audioToEdit) { target in

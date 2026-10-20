@@ -12,7 +12,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     nonisolated(unsafe) let memoryCache: NSCache<NSString, CacheBox>
     private let baseDirectory: URL
     let fileManager = FileManager.default
-    let logger = Logger(subsystem: "com.meeshy.sdk", category: "disk-cache")
+    let logger = MeeshyLog.logger(.diskCache, subsystem: .legacySDK)
     var inFlightTasks: [String: InFlightDownload] = [:]
     var fileTimestamps: [String: Date] = [:]
     private let urlSession: URLSession

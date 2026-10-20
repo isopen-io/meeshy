@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Meeshy Refreshable Scroll
 //
@@ -172,7 +173,7 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
         // Petite fenetre ou l'utilisateur voit que c'est fini avant
         // que l'indicator se replie. Aligne avec l'experience originale
         // de la liste de conversations (350ms).
-        try? await Task.sleep(for: .seconds(0.4))
+        _ = await cancellableSleep(for: .milliseconds(400))
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             pullPhase = .idle
         }

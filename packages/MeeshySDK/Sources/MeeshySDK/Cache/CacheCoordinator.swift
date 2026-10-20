@@ -306,7 +306,7 @@ public actor CacheCoordinator {
     nonisolated let db: any DatabaseWriter
     private var cancellables = Set<AnyCancellable>()
     private var lifecycleObservers: [NSObjectProtocol] = []
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "cache-coordinator")
+    private let logger = MeeshyLog.logger(.cacheCoordinator, subsystem: .legacySDK)
     private var isStarted = false
     private var currentUserId: String = ""
 

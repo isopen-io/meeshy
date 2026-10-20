@@ -55,7 +55,7 @@ final class ComposerPreUploadRegistry: ObservableObject {
     /// publication — laissaient partir une troisième montée.
     private var runIds: [URL: UUID] = [:]
     private var activeRuns: Set<UUID> = []
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    private let logger = MeeshyLog.logger(.media)
 
     /// **L'adoption est remise par l'hôte, pas cherchée par le registre.**
     ///

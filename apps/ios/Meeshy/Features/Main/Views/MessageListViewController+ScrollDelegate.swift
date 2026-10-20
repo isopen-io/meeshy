@@ -37,32 +37,17 @@ extension MessageListViewController: UICollectionViewDelegate {
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         let offset = scrollView.contentOffset.y
-        let contentHeight = scrollView.contentSize.height
-        let frameHeight = scrollView.frame.height
 
         setScrollingActive(scrollView.isDragging || scrollView.isDecelerating)
         keyboardFirst.noteScroll(offsetY: offset, isTracking: scrollView.isTracking)
-        // Chrome (boutons, composeur, bulle « retour en bas », pilule) :
-        // caché tant que le doigt est posé, puis tant que la décélération est
-        // LOIN de son offset d'arrivée ; il revient « quand on s'approche de
-        // la fin du scroll » (directive user 2026-08-21, `FocalChromeReturn`),
-        // plus à la levée du doigt.
+        // Chrome caché tant que le doigt est posé, puis tant que la décélération est LOIN de son offset d'arrivée (`FocalChromeReturn`, directive 2026-08-21).
         setChromeHiddenForScroll(FocalChromeReturn.isHidden(
             isTracking: scrollView.isTracking,
             isDecelerating: scrollView.isDecelerating,
             remainingDistance: decelerationTargetOffsetY.map { $0 - scrollView.contentOffset.y }
         ) && keyboardFirst.chromeMayCollapse)
 
-        // Verrou de scène (rouleau) : le doigt/momentum RE-CAPTURE l'ancre à
-        // chaque frame ; sans pilote et loin du bas, tout écart est annulé.
-        //
-        // UN SEUL inventaire de cellules visibles pour le tour de frame : le
-        // verrou et la pilule de jour le reconstruisaient chacun le sien
-        // (audit fluidité 2026-08-25), soit deux balayages UIKit par frame
-        // pour la même réponse. Il n'est PARTAGÉ que sur la branche qui laisse
-        // l'offset en place : `enforceSceneLock` appelle `setContentOffset`,
-        // donc l'inventaire d'AVANT n'y décrit plus l'écran — la pilule y
-        // reprend sa lecture interne (`nil`), comme avant.
+        // Verrou de scène : UN SEUL inventaire de cellules visibles par frame, partagé seulement sur la branche qui laisse l'offset en place (`enforceSceneLock` appelle `setContentOffset`, l'inventaire d'avant n'y décrit plus l'écran).
         let isUserDriven = scrollView.isDragging || scrollView.isTracking || scrollView.isDecelerating
         let keepsOffset = isUserDriven || isIntentionalProgrammaticScroll || isCurrentlyNearBottom
         let visibleIndexPaths: [IndexPath]? = keepsOffset ? collectionView.indexPathsForVisibleItems : nil
@@ -72,53 +57,38 @@ extension MessageListViewController: UICollectionViewDelegate {
             enforceSceneLock()
         }
 
-        // Focal : une pose par cellule visible et par frame — transform +
-        // opacity CALayer, rien qui invalide le layout — et SEULEMENT sur un
-        // geste utilisateur : la scène s'active au premier tick, s'aplatit
-        // `restDelay` après la pose (`FocalScrollPerspective`).
+        // Focal : une pose par cellule visible et par frame, SEULEMENT sur un geste utilisateur (`FocalScrollPerspective`).
         noteFocalScrollTick(scrollView)
-
-        // F-086bis (WS-2) : pilule « jour · heure », RÉUTILISE ce site — pas
-        // d'observateur neuf. Gardée par readingMode (`.bubbles` ⇒ no-op).
         noteScrollTimePillActivity()
-
-        // Met à jour le label de la pill flottante en fonction du message
-        // en haut visible. Léger : un lookup de l'item à l'index max + une
-        // string formatée. Aucune allocation inutile si le label ne change pas.
         updateStickyDayLabel(visibleIndexPaths: visibleIndexPaths)
+        noteNearBottomTransition(offset: offset)
+        loadOlderIfNeeded(scrollView)
+    }
 
-        // Near-bottom detection for the floating "scroll to latest" button.
-        // In the inverted layout, contentOffset.y ≈ 0 means the user is at
-        // the visual bottom (newest messages). The threshold gives a
-        // comfortable zone before the button appears.
+    /// Dans le layout inversé, `contentOffset.y` proche de 0 est le bas visuel (messages récents) ; le seuil laisse une zone de confort avant l'apparition du bouton « dernier message ».
+    func noteNearBottomTransition(offset: CGFloat) {
         let nearBottom = offset < Self.nearBottomFollowThreshold
-        if nearBottom != isCurrentlyNearBottom {
-            isCurrentlyNearBottom = nearBottom
-            onNearBottomChanged?(nearBottom)
-            // Reset unread badge when the user scrolls back to bottom
-            if nearBottom && pendingUnreadCount > 0 {
-                pendingUnreadCount = 0
-                onNewMessagesBadge?(0)
-            }
-            // Atteindre le bas est une déclaration : ce qui s'y trouve est sous
-            // les yeux du lecteur. L'accusé part maintenant, pas au repos d'une
-            // seconde du réveil périodique.
-            if nearBottom {
-                flushSeenNow()
-            }
+        guard nearBottom != isCurrentlyNearBottom else { return }
+        isCurrentlyNearBottom = nearBottom
+        onNearBottomChanged?(nearBottom)
+        if nearBottom && pendingUnreadCount > 0 {
+            pendingUnreadCount = 0
+            onNewMessagesBadge?(0)
         }
+        // Atteindre le bas est une déclaration : l'accusé part maintenant, pas au repos d'une seconde du réveil périodique.
+        if nearBottom {
+            flushSeenNow()
+        }
+    }
 
+    /// ROULEAU (2026-08-18) : 4 hauteurs d'ÉCRAN d'avance — on ne frappe jamais le bord chargé, sinon rebond élastique puis insertion.
+    func loadOlderIfNeeded(_ scrollView: UIScrollView) {
+        let contentHeight = scrollView.contentSize.height
+        let frameHeight = scrollView.frame.height
         guard contentHeight > frameHeight else { return }
-        let distanceFromBottom = contentHeight - offset - frameHeight
+        let distanceFromBottom = contentHeight - scrollView.contentOffset.y - frameHeight
 
         if distanceFromBottom < frameHeight * 4, !isLoadingOlder {
-            // ROULEAU (user 2026-08-18) : 4 hauteurs d'ÉCRAN d'avance — les
-            // rangées suivantes s'insèrent dans le flux bien AVANT d'être
-            // visibles, on ne frappe jamais le bord chargé (l'ancien seuil de
-            // 800 pt faisait MOINS d'un écran : au fling, le bord arrivait
-            // avant la page → rebond élastique puis insertion, l'effet
-            // « ressort » signalé). La fenêtre GRDB se sert en cache-first et
-            // le prefetch anticipatif du VM enchaîne les pages suivantes.
             guard !store.messages.isEmpty, let onLoadOlder else { return }
             isLoadingOlder = true
             Task { @MainActor [weak self] in

@@ -1,5 +1,6 @@
 import AVFoundation
 import Combine
+import MeeshySDK
 
 // MARK: - Picture-in-Picture — façade publique de `SharedPipEngine`
 
@@ -55,7 +56,7 @@ extension SharedAVPlayerManager {
         while Date() < deadline {
             if pip.startFailureCount > failuresBefore { return false }
             if isPipStartingOrEngaged { return true }
-            try? await Task.sleep(for: .milliseconds(50))
+            guard await cancellableSleep(for: .milliseconds(50)) else { return isPipStartingOrEngaged }
         }
         return isPipStartingOrEngaged
     }

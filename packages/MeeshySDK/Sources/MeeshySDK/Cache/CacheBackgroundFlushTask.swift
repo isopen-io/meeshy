@@ -33,7 +33,7 @@ public final class CacheBackgroundFlushTask: Sendable {
     private static let budget: TimeInterval = 25
 
     private let coordinator: CacheCoordinator
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "cache-bg-flush")
+    private let logger = MeeshyLog.logger(.cacheBgFlush)
 
     public init(coordinator: CacheCoordinator = .shared) {
         self.coordinator = coordinator
@@ -88,7 +88,7 @@ public final class CacheBackgroundFlushTask: Sendable {
         coordinator: CacheCoordinator
     ) {
         let deadline = Date().addingTimeInterval(Self.budget)
-        let logger = Logger(subsystem: "me.meeshy.app", category: "cache-bg-flush")
+        let logger = MeeshyLog.logger(.cacheBgFlush)
         processingTask.expirationHandler = {
             logger.warning("Background flush task expired before completion")
         }

@@ -53,7 +53,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
     private var session: URLSession { urlSession }
     let decoder: JSONDecoder
-    let logger = Logger(subsystem: "com.meeshy.sdk", category: "network")
+    let logger = MeeshyLog.logger(.network, subsystem: .legacySDK)
 
     // Responses are decoded OFF the main thread. APIClient lives in a module built
     // with SE-0461 (NonisolatedNonsendingByDefault), so a nonisolated async request

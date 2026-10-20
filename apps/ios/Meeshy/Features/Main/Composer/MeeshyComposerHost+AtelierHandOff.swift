@@ -31,7 +31,7 @@ extension MeeshyComposerHost {
                 slideImageIds: Set(viewModel.slideImages.keys),
                 bridgedObjectIds: Set(documentMediaObjectIdBySource.values))
         )
-        os.Logger(subsystem: "me.meeshy.app", category: "composer").info(
+        MeeshyLog.logger(.composer).info(
             "atelier hand-off: type=\(targetType.rawValue, privacy: .public) scenes=\(sceneCount) route=\(String(describing: route), privacy: .public)"
         )
         switch route {

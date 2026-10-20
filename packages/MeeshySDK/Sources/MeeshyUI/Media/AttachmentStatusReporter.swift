@@ -27,7 +27,7 @@ import os
 /// de perdre le rapport.
 public nonisolated enum AttachmentStatusReporter {
 
-    private static let logger = Logger(subsystem: "com.meeshy.app", category: "AttachmentStatus")
+    private static let logger = MeeshyLog.logger(.attachmentStatus, subsystem: .legacyApp)
 
     /// Point d'injection pour les tests. Le chemin réel rend le rapport durable.
     ///

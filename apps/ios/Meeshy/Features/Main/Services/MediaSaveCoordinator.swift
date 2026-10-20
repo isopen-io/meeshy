@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let mediaSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-save")
+private let mediaSaveLog = MeeshyLog.logger(.mediaSave)
 
 // MARK: - Request
 
@@ -319,7 +319,7 @@ final class MediaSaveCoordinator: ObservableObject {
         do {
             return try await PhotoLibraryMediaSignature.of(fileAt: file)
         } catch {
-            Logger(subsystem: "me.meeshy.app", category: "media-save").error("media-save signature unreadable: \(error.localizedDescription, privacy: .public)")
+            MeeshyLog.logger(.mediaSave).error("media-save signature unreadable: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }

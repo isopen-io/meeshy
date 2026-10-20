@@ -7,7 +7,7 @@ import os
 
 // `nonisolated` : `os.Logger` est un type valeur thread-safe (doc Apple) et ce
 // journal est écrit depuis `DirectoryPaging`, marqué `nonisolated`.
-private nonisolated let phonebookPagingLogger = Logger(subsystem: "me.meeshy.app", category: "phonebook")
+private nonisolated let phonebookPagingLogger = MeeshyLog.logger(.phonebook)
 
 /// Répertoire — le carnet d'adresses de l'appareil, synchronisé et CONSERVÉ
 /// côté serveur, consultable sans re-scanner les contacts.

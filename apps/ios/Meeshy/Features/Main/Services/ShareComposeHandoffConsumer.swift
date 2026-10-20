@@ -46,7 +46,7 @@ final class ShareComposeHandoffConsumer: ObservableObject {
 
     static let shared = ShareComposeHandoffConsumer()
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "share-compose")
+    private static let logger = MeeshyLog.logger(.shareCompose)
 
     // MARK: - Le contrat, dupliqué
 

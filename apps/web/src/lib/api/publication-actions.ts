@@ -4,7 +4,7 @@ import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
 import { POST_CONTENT_MAX_LENGTH } from '@/lib/feed/publication-edit';
 
 import type { DataSource } from './config';
-import { findCardPost, findLiveCardPost, mergeServedPost, removeCardPost, replaceCardContent } from './card-caches';
+import { findCardPost, findLiveCardPost, mergeServedPost, removeCardPost, replaceCardContent, snapshotCardPost } from './card-caches';
 import type { FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
@@ -75,6 +75,10 @@ const send = (
  *
  * **RETIRER** (#11150) — le même geste, le MOTIF de la modération en corps
  * (`{ reason }`) ; sans motif, aucun corps : l'auteur supprime comme avant.
+ *
+ * **UN REFUS REND LA CARTE À SA PLACE** (#11156) — avant toute relecture,
+ * chaque caisse qui la tenait la retrouve (`snapshotCardPost`) : le fil GELÉ
+ * des Réels, qui ne se relit jamais, compris.
  */
 const removeEverywhere = (queryClient: QueryClient, postId: string): void => {
   removeCardPost(queryClient, postId);
@@ -83,6 +87,7 @@ const removeEverywhere = (queryClient: QueryClient, postId: string): void => {
 
 export async function deletePost(params: { readonly postId: string; readonly deps: PostActionDeps; readonly reason?: string }): Promise<PostActionOutcome> {
   const { postId, deps, reason } = params;
+  const restore = snapshotCardPost(deps.queryClient, postId);
   removeEverywhere(deps.queryClient, postId);
 
   const result = outcome(await send(deps, 'DELETE', postsEndpoints.byPostId(postId), reason === undefined ? undefined : { body: { reason } }));
@@ -95,6 +100,7 @@ export async function deletePost(params: { readonly postId: string; readonly dep
     removeEverywhere(deps.queryClient, postId);
     return result;
   }
+  restore();
   void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY });
   void deps.queryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
   return result;

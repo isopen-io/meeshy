@@ -1,5 +1,6 @@
 import Foundation
 import os
+import MeeshySDK
 
 /// Lightweight data sync for the Notification Service Extension.
 ///
@@ -474,7 +475,7 @@ enum NSEDataSync {
 /// notification but never disappears silently — the NSE runs for ~30s with no
 /// debugger attached, so the log is the only forensic trail.
 extension Logger {
-    static let nse = Logger(subsystem: "me.meeshy.app", category: "nse-datasync")
+    static let nse = MeeshyLog.logger(.nseDatasync)
 }
 
 func nseDecodeOrLog<T: Decodable>(

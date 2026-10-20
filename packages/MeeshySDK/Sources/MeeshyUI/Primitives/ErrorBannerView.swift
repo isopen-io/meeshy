@@ -92,8 +92,7 @@ public struct ErrorBannerView: View {
         }
         HapticFeedback.error()
         dismissTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(4)) else { return }
             dismiss()
         }
     }

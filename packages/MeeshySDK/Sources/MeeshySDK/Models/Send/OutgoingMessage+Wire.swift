@@ -38,11 +38,24 @@ extension OutgoingMessage {
     /// L'item de la file hors ligne : langue d'origine BRUTE (nil possible),
     /// relation complète.
     public func offlineQueueItem(clientMessageId: MessageID, intent: MessageProtectionIntent) -> OfflineQueueItem {
+        queueItem(clientMessageId: clientMessageId, language: originalLanguage, intent: intent)
+    }
+
+    /// L'item de relance après un échec en ligne : langue RÉSOLUE.
+    public func retryQueueItem(context: SendAttemptContext) -> OfflineQueueItem {
+        queueItem(clientMessageId: context.clientMessageId, language: context.language, intent: context.intent)
+    }
+
+    private func queueItem(
+        clientMessageId: MessageID,
+        language: String?,
+        intent: MessageProtectionIntent
+    ) -> OfflineQueueItem {
         OfflineQueueItem(
             conversationId: conversationId.rawValue,
             content: text,
             clientMessageId: clientMessageId.rawValue,
-            originalLanguage: originalLanguage,
+            originalLanguage: language,
             replyToId: relation.replyToId,
             storyReplyToId: relation.storyReplyToId,
             forwardedFromId: relation.forwardedFromId,
@@ -53,25 +66,6 @@ extension OutgoingMessage {
             sticker: sticker,
             attachmentReplyTo: relation.attachmentReplyTo?.attachmentId,
             protection: intent
-        )
-    }
-
-    /// L'item de relance après un échec en ligne : langue RÉSOLUE. Il ne porte
-    /// ni le lien de story ni le transfert — défaut connu, reproduit tel quel
-    /// (dette : l'item hors ligne, lui, les porte).
-    public func retryQueueItem(context: SendAttemptContext) -> OfflineQueueItem {
-        OfflineQueueItem(
-            conversationId: conversationId.rawValue,
-            content: text,
-            clientMessageId: context.clientMessageId.rawValue,
-            originalLanguage: context.language,
-            replyToId: relation.replyToId,
-            attachmentIds: attachments.ids,
-            attachmentKinds: attachmentKinds,
-            location: location,
-            sticker: sticker,
-            attachmentReplyTo: relation.attachmentReplyTo?.attachmentId,
-            protection: context.intent
         )
     }
 
@@ -90,7 +84,8 @@ extension OutgoingMessage {
     }
 
     /// Le repli socket accepte le chiffrement et les pièces, mais refuse ce que
-    /// le canal perdrait en silence : protection, effets, ancre de pièce citée.
+    /// le canal perdrait en silence : protection, effets, ancre de pièce citée,
+    /// transfert.
     public func socketFallbackEligible(intent: MessageProtectionIntent, hasPendingEffects: Bool) -> Bool {
         intent.ephemeralDurationSeconds == nil
             && !intent.ephemeralAfterRead
@@ -98,6 +93,7 @@ extension OutgoingMessage {
             && intent.wireIsBlurred != true
             && !hasPendingEffects
             && relation.attachmentReplyTo == nil
+            && relation.forwardedFromId == nil
     }
 
     public var optimisticMessageType: MeeshyMessage.MessageType {

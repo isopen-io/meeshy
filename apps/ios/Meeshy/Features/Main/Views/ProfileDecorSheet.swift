@@ -1,4 +1,5 @@
 import Combine
+import PhotosUI
 import SwiftUI
 import UIKit
 import MeeshySDK
@@ -124,18 +125,45 @@ struct ProfileDecorSheet: View {
     let name: String
     /// La couleur du profil (#10754) : le sélecteur peint l'avatar et les bannières comme la fiche.
     let accentHex: String
+    /// La photo de bannière actuelle (#11165) : la tuile « Image » la montre, et les cadres se posent dessus.
+    let bannerURL: String?
+    let bannerThumbHash: String?
     let onOpenShop: (PackDomain) -> Void
+    /// L'image choisie par la tuile « Image » : le profil la retouche puis la téléverse, comme son bouton « Modifier ».
+    let onPickBanner: (PhotosPickerItem) -> Void
 
+    @State private var pickedBanner: PhotosPickerItem?
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
     private var language: String { AuthManager.shared.currentUser?.systemLanguage ?? "fr" }
 
-    init(decor: ServedProfileDecor?, avatarURL: String?, name: String, accentHex: String = MeeshyColors.brandPrimaryHex, onOpenShop: @escaping (PackDomain) -> Void) {
+    init(
+        decor: ServedProfileDecor?,
+        avatarURL: String?,
+        name: String,
+        accentHex: String = MeeshyColors.brandPrimaryHex,
+        bannerURL: String? = nil,
+        bannerThumbHash: String? = nil,
+        onOpenShop: @escaping (PackDomain) -> Void,
+        onPickBanner: @escaping (PhotosPickerItem) -> Void = { _ in }
+    ) {
         _model = StateObject(wrappedValue: ProfileDecorModel(decor: decor))
         self.avatarURL = avatarURL
         self.name = name
         self.accentHex = accentHex
+        self.bannerURL = bannerURL
+        self.bannerThumbHash = bannerThumbHash
         self.onOpenShop = onOpenShop
+        self.onPickBanner = onPickBanner
+    }
+
+    private var bannerChoice: ProfileBannerChoice {
+        ProfileBannerChoice(photo: bannerURL, design: model.current(.banner))
+    }
+
+    /// Ce que la bannière peint avec le choix en cours : les cadres se montrent posés DESSUS (#10932).
+    private var currentBannerPaint: ProfileBannerPaint {
+        ProfileDecorResolver.bannerPaint(photo: bannerURL, decor: model.state.decor.banner)
     }
 
     var body: some View {
@@ -163,6 +191,10 @@ struct ProfileDecorSheet: View {
             }
         }
         .task { await model.load() }
+        .adaptiveOnChange(of: pickedBanner) { _, item in
+            guard let item else { return }
+            onPickBanner(item)
+        }
         .adaptiveOnChange(of: model.failed) { _, failed in
             guard failed else { return }
             UIAccessibility.post(notification: .announcement, argument: errorMessage)
@@ -221,30 +253,48 @@ struct ProfileDecorSheet: View {
         return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             header(title)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
-                bannerTile(ref: nil, design: nil, label: photoLabel)
+                imageTile
                 ForEach(ProfileDecorOptions.flattened(model.banners)) { entry in
                     bannerTile(ref: entry.ref, design: entry.design, label: AppearanceCatalog.shared.designName(entry.design.key, language: language) ?? entry.design.key)
                 }
+            }
+            if bannerChoice.photoHidesDesigns {
+                Text(String(localized: "profile.decor.image.hidesDesigns", defaultValue: "Ton image de bannière passe devant les fonds.", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                    .foregroundColor(theme.textMuted)
             }
             shopLink(.banner)
         }
         .decorSection(title)
     }
 
-    private func bannerTile(ref: ProfileDecorRef?, design: AppearanceDesign?, label: String) -> some View {
-        let selected = model.current(.banner) == ref
+    /// « Image » (#11165) : la bannière actuelle si l'on en a une, sinon un glyphe ; le toucher ouvre la sélection d'image.
+    private var imageTile: some View {
+        let choice = bannerChoice
+        let label = imageLabel
+        let tile = ProfileBannerImageTile(
+            preview: choice.imagePreview,
+            thumbHash: bannerThumbHash,
+            accentHex: accentHex,
+            label: label,
+            selected: choice.imageSelected,
+            textColor: theme.textPrimary
+        )
+        return PhotosPicker(selection: $pickedBanner, matching: .images) { tile }
+            .buttonStyle(.plain)
+            .accessibilityLabel(label)
+            .accessibilityHint(String(localized: "profile.decor.image.hint", defaultValue: "Choisir une image de bannière", bundle: .main))
+            .accessibilityAddTraits(choice.imageSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func bannerTile(ref: ProfileDecorRef, design: AppearanceDesign, label: String) -> some View {
+        let selected = bannerChoice.isSelected(ref)
         return Button {
             HapticFeedback.light()
             Task { await model.equip(ref, side: .banner) }
         } label: {
             VStack(spacing: MeeshySpacing.xs) {
-                Group {
-                    if let design {
-                        BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: accentHex)
-                    } else {
-                        MeeshyColors.indigo500.opacity(0.12)
-                    }
-                }
+                BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: accentHex)
                 .aspectRatio(3, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 Text(label)
@@ -285,18 +335,17 @@ struct ProfileDecorSheet: View {
             Task { await model.equip(ref, side: .bannerFrame) }
         } label: {
             VStack(spacing: MeeshySpacing.xs) {
-                LinearGradient(
-                    colors: [Color(hex: accentHex).opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+                Color.clear
+                .aspectRatio(3, contentMode: .fit)
+                .overlay {
+                    ProfileBannerPaintView(paint: currentBannerPaint, thumbHash: bannerThumbHash, accentHex: accentHex, isDark: theme.mode.isDark, height: 64)
+                }
                 .overlay {
                     if let design {
                         BannerFrameView(design: design)
                             .equatable()
                     }
                 }
-                .aspectRatio(3, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
@@ -317,9 +366,9 @@ struct ProfileDecorSheet: View {
         String(localized: "profile.decor.none", defaultValue: "Aucun", bundle: .main)
     }
 
-    /// Sans bannière de design, c'est la PHOTO de bannière qui s'affiche : la tuile le dit (comme le web, #10715).
-    private var photoLabel: String {
-        String(localized: "profile.decor.photo", defaultValue: "Photo", bundle: .main)
+    /// La tuile qui choisit une IMAGE de bannière (#11165) — elle gagne toujours sur les fonds.
+    private var imageLabel: String {
+        String(localized: "profile.decor.image", defaultValue: "Image", bundle: .main)
     }
 
     private func header(_ title: String) -> some View {
@@ -366,8 +415,12 @@ struct ProfileDecorEntry: View {
     let user: MeeshyUser?
     /// « Plus dans la boutique » : le profil décide de la navigation.
     let onOpenShop: (PackDomain) -> Void
+    /// L'image choisie par la tuile « Image » (#11165), remise au profil une fois la feuille FERMÉE :
+    /// sa retouche plein écran ne peut pas se présenter par-dessus une feuille encore ouverte.
+    var onPickBanner: (PhotosPickerItem) -> Void = { _ in }
 
     @State private var showSheet = false
+    @State private var pendingBanner: PhotosPickerItem?
     private var theme: ThemeManager { ThemeManager.shared }
 
     /// `profile:decor-updated` venu d'un AUTRE de mes appareils : la règle vit au SDK
@@ -407,18 +460,30 @@ struct ProfileDecorEntry: View {
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surface(tint: MeeshyColors.indigo300Hex, intensity: 0.08)))
         }
         .buttonStyle(.plain)
-        .sheet(isPresented: $showSheet) {
+        .sheet(isPresented: $showSheet, onDismiss: handOverPickedBanner) {
             ProfileDecorSheet(
                 decor: user?.profileDecor,
                 avatarURL: user?.avatar,
                 name: user?.displayName ?? user?.username ?? "?",
                 accentHex: user?.profileAccentHex ?? MeeshyColors.brandPrimaryHex,
+                bannerURL: user?.banner,
+                bannerThumbHash: user?.bannerThumbHash,
                 onOpenShop: { domain in
                     showSheet = false
                     onOpenShop(domain)
+                },
+                onPickBanner: { item in
+                    pendingBanner = item
+                    showSheet = false
                 }
             )
         }
+    }
+
+    private func handOverPickedBanner() {
+        guard let item = pendingBanner else { return }
+        pendingBanner = nil
+        onPickBanner(item)
     }
 }
 
@@ -447,7 +512,7 @@ struct ProfileOwnBanner: View {
     }
 
     var body: some View {
-        painted
+        ProfileBannerPaintView(paint: Self.paint(of: user), thumbHash: user?.bannerThumbHash, accentHex: accentColor, isDark: isDark, height: 120)
             .overlay {
                 if let frame = Self.frame(of: user) {
                     BannerFrameView(design: frame)
@@ -455,20 +520,85 @@ struct ProfileOwnBanner: View {
                 }
             }
     }
+}
 
-    @ViewBuilder
-    private var painted: some View {
-        switch Self.paint(of: user) {
+/// Ce qu'une bannière peint — la photo, le design ou le dégradé du profil —, sans son cadre :
+/// la fiche et les tuiles de cadre du sélecteur montrent la même chose (#11165).
+struct ProfileBannerPaintView: View {
+    let paint: ProfileBannerPaint
+    let thumbHash: String?
+    let accentHex: String
+    let isDark: Bool
+    let height: CGFloat
+
+    var body: some View {
+        switch paint {
         case .design(let design):
-            BannerDesignView(design: design, isDark: isDark, accentHex: accentColor)
+            BannerDesignView(design: design, isDark: isDark, accentHex: accentHex)
         case .photo(let bannerURL):
-            CachedBannerImage(urlString: bannerURL, thumbHash: user?.bannerThumbHash, fallbackColor: accentColor, height: 120)
+            CachedBannerImage(urlString: bannerURL, thumbHash: thumbHash, fallbackColor: accentHex, height: height)
         case .plain:
             LinearGradient(
-                colors: [Color(hex: accentColor).opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
+                colors: [Color(hex: accentHex).opacity(0.3), MeeshyColors.indigo300.opacity(0.2)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         }
     }
+}
+
+/// La tuile « Image » (#11165) : des valeurs seules, pour vivre dans l'étiquette d'un `PhotosPicker`.
+struct ProfileBannerImageTile: View {
+    let preview: String?
+    let thumbHash: String?
+    let accentHex: String
+    let label: String
+    let selected: Bool
+    let textColor: Color
+
+    var body: some View {
+        VStack(spacing: MeeshySpacing.xs) {
+            Color.clear
+                .aspectRatio(3, contentMode: .fit)
+                .overlay {
+                    if let preview {
+                        CachedBannerImage(urlString: preview, thumbHash: thumbHash, fallbackColor: accentHex, height: 64)
+                    } else {
+                        ZStack {
+                            MeeshyColors.indigo500.opacity(0.12)
+                            Image(systemName: "photo.badge.plus")
+                                .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .medium))
+                                .foregroundColor(MeeshyColors.indigo500)
+                        }
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+            Text(label)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundColor(textColor)
+                .lineLimit(1)
+        }
+        .padding(MeeshySpacing.xs)
+        .background(
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .stroke(selected ? MeeshyColors.indigo500 : Color.clear, lineWidth: 2)
+        )
+        .contentShape(Rectangle())
+    }
+}
+
+/// La rangée « Bannière » du sélecteur (#11165) : la photo gagne toujours sur les fonds (#10933), donc
+/// la tuile « Image » est le choix visible dès qu'une photo existe, et aucun fond n'est montré choisi.
+struct ProfileBannerChoice: Equatable {
+    let photo: String?
+    let design: ProfileDecorRef?
+
+    private var hasPhoto: Bool { !(photo ?? "").isEmpty }
+
+    /// La bannière actuelle que la tuile « Image » montre ; `nil` ⇒ un glyphe.
+    var imagePreview: String? { hasPhoto ? photo : nil }
+    var imageSelected: Bool { hasPhoto || design == nil }
+    var photoHidesDesigns: Bool { hasPhoto }
+
+    func isSelected(_ ref: ProfileDecorRef) -> Bool { !hasPhoto && design == ref }
 }

@@ -224,7 +224,7 @@ public extension StoryComposerViewModel {
         // > Quand aucune des deux erreurs n'a de réparateur, il ne faut pas
         // > choisir — il faut CRÉER le réparateur. Ici il coûte quatre lignes,
         // > et il est le seul moyen d'attribuer un canvas resté noir.
-        let journal = os.Logger(subsystem: "me.meeshy.app", category: "media")
+        let journal = MeeshyLog.logger(.media)
         for item in items where !carriedContentSources.contains(item.sourceURL) {
             let objectId = UUID().uuidString
             switch item.kind {

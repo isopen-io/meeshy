@@ -88,7 +88,10 @@ export type ContentRemovalNotice = {
   readonly conversationId?: string;
   readonly conversationTitle?: string | null;
   readonly postId?: string;
-  readonly reason: string;
+  /** Absent quand le rang souverain retire sans motif (console) : la notification n'a alors pas de ligne « Motif ». */
+  readonly reason?: string;
+  /** Une publication passée en PRIVÉ par la modération, pas retirée : le libellé le dit. */
+  readonly madePrivate?: boolean;
 };
 
 type Notifier = Pick<NotificationService, 'createNotification'>;
@@ -106,7 +109,18 @@ const TITLE_KEY: Readonly<Record<RemovedContentType, NotificationStringKey>> = {
   comment: 'moderation.removedComment',
 };
 
-const titleOf = (lang: string, notice: ContentRemovalNotice): string =>
+const MADE_PRIVATE_KEY: Readonly<Partial<Record<RemovedContentType, NotificationStringKey>>> = {
+  post: 'moderation.madePrivatePost',
+  reel: 'moderation.madePrivateReel',
+  story: 'moderation.madePrivateStory',
+};
+
+const titleOf = (lang: string, notice: ContentRemovalNotice): string => {
+  const madePrivateKey = notice.madePrivate ? MADE_PRIVATE_KEY[notice.contentType] : undefined;
+  return madePrivateKey ? notificationString(lang, madePrivateKey) : removedTitleOf(lang, notice);
+};
+
+const removedTitleOf = (lang: string, notice: ContentRemovalNotice): string =>
   notice.contentType === 'message' && notice.conversationTitle
     ? notificationString(lang, 'moderation.removedMessageIn', { title: notice.conversationTitle })
     : notificationString(lang, TITLE_KEY[notice.contentType]);
@@ -117,7 +131,8 @@ const metadataOf = (notice: ContentRemovalNotice): ContentRemovedNotificationMet
   ...(notice.conversationId ? { conversationId: notice.conversationId } : {}),
   ...(notice.conversationTitle ? { conversationTitle: notice.conversationTitle } : {}),
   ...(notice.postId ? { postId: notice.postId } : {}),
-  reason: notice.reason,
+  ...(notice.reason ? { reason: notice.reason } : {}),
+  ...(notice.madePrivate && MADE_PRIVATE_KEY[notice.contentType] ? { madePrivate: true as const } : {}),
 });
 
 export async function notifyContentRemoved(
@@ -136,7 +151,7 @@ export async function notifyContentRemoved(
       priority: 'normal',
       lang,
       title: titleOf(lang, notice),
-      content: notificationString(lang, 'moderation.reason', { preview: notice.reason }),
+      content: notice.reason ? notificationString(lang, 'moderation.reason', { preview: notice.reason }) : '',
       context: {
         ...(notice.conversationId ? { conversationId: notice.conversationId } : {}),
         ...(notice.conversationTitle ? { conversationTitle: notice.conversationTitle } : {}),

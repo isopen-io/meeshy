@@ -14,7 +14,7 @@ struct ConversationEncryptionDetailSheet: View {
     @State private var selectedMode: E2EAPI.ConversationEncryptionMode = .server
     @State private var errorMessage: String?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-encryption")
+    private static let logger = MeeshyLog.logger(.conversationEncryption)
 
     var body: some View {
         NavigationStack {
