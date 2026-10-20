@@ -192,7 +192,7 @@ extension OfflineQueue {
                 // Brief jitter to avoid a thundering-herd on the gateway when
                 // draining a large backlog — kept short so the user sees their
                 // messages confirmed quickly (was 100–500 ms, now 50–150 ms).
-                try? await Task.sleep(for: .milliseconds(Int.random(in: 50...150)))
+                guard await cancellableSleep(for: .milliseconds(Int.random(in: 50...150))) else { break }
             }
             if let serverId = await retrySend(item) {
                 successIds.append(item.id)

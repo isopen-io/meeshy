@@ -164,15 +164,13 @@ public struct MeeshyMoodBadge: View {
                         // est absorbé par sa transition (mesuré au simulateur) :
                         // la respiration y échappe par son départ décalé, le
                         // pulse discret par ce battement.
-                        try? await Task.sleep(for: .milliseconds(80))
-                        guard !Task.isCancelled else { return }
+                        guard await cancellableSleep(for: .milliseconds(80)) else { return }
                         hushPulse()
                         return
                     case .breathe: break
                     }
                     startPulse()
-                    try? await Task.sleep(for: .seconds(Self.maximumStartDelay + Self.breathingDuration))
-                    guard !Task.isCancelled else { return }
+                    guard await cancellableSleep(for: .seconds(Self.maximumStartDelay + Self.breathingDuration)) else { return }
                     settlePulse()
                 }
                 .onDisappear {

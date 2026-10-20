@@ -100,8 +100,7 @@ struct TimelineBannerOverlay: View {
             // remplace le premier avant son expiration — sans ça le nouveau
             // message héritait du reliquat du précédent.
             .task(id: banner) {
-                try? await Task.sleep(for: .seconds(banner.displayDuration))
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .seconds(banner.displayDuration)) else { return }
                 acknowledge(banner)
             }
         }
