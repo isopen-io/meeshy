@@ -213,6 +213,53 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
         XCTAssertLessThanOrEqual(ConversationOverlayBackdrop.blurRadius, 8)
     }
 
+    // MARK: - #11208 — le cadre de fenêtre passe dans le repère de l'overlay
+
+    /// Le cadre de la cellule arrive en coordonnées de FENÊTRE ; l'overlay pose
+    /// l'aperçu dans le repère de son `GeometryReader`. Sur iPad, la
+    /// conversation vit à droite de la colonne de gauche : lire le cadre brut
+    /// décalait la bulle de toute la largeur de cette colonne. Le corps ne le
+    /// lit qu'une fois, pour le convertir (la loi est éprouvée par
+    /// `MessageOverlayPreviewKindTests.test_sourceFrame_*`).
+    func test_overlayBody_convertsTheWindowFrame_beforeAnyGeometry() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        guard let body = body(of: "var body: some View", in: menu) else {
+            return XCTFail("Le corps de `MessageOverlayMenu` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            body.contains("Self.sourceFrame(windowFrame: messageBubbleFrame, containerOrigin: geometry.frame(in: .global).origin)"),
+            "Le cadre de fenêtre est ramené au repère de l'overlay avant toute géométrie.")
+        XCTAssertEqual(body.components(separatedBy: "messageBubbleFrame").count - 1, 1,
+                       "Le cadre brut n'est lu qu'une fois : pour sa conversion.")
+    }
+
+    /// La cellule n'a aucune marge verticale (`.margins(.all, 0)`) : son cadre
+    /// commence au haut de la bulle. Un retrait de 8 pt supposé y ajoutait un
+    /// saut de la bulle à l'ouverture.
+    func test_overlay_assumesNoRowInsetAboveTheBubble() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertFalse(menu.contains("bubbleRowInset"), "Aucun retrait vertical supposé entre la cellule et sa bulle.")
+        XCTAssertFalse(menu.contains("rowInset"), "Aucun retrait vertical supposé entre la cellule et sa bulle.")
+        let rows = try source("Features/Main/Views/MessageListViewController+Rows.swift")
+        XCTAssertTrue(rows.contains(".margins(.all, 0)"), "La cellule de message est configurée sans marge.")
+    }
+
+    // MARK: - #11208 — la rangée plate ne se reconstruit pas à chaque image
+
+    /// Le corps se réévalue à chaque image du glissement ; la rangée plate (et
+    /// sa `BubbleContent`, balayage des liens compris) se construit une fois
+    /// par jeu d'entrées, par sa mémoire.
+    func test_flatRowFace_isBuiltThroughItsMemo() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        guard let face = body(of: "private func previewFace(", in: menu) else {
+            return XCTFail("`previewFace` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(face.contains("flatRowMemo.row(for: flatRowKey(availableWidth: width))"),
+                      "La rangée plate passe par sa mémoire.")
+        XCTAssertEqual(menu.components(separatedBy: "previewRow(availableWidth:").count - 1, 2,
+                       "`previewRow` n'est appelée que par la mémoire (une déclaration, un appel).")
+    }
+
     // MARK: - Le frame voyage AVEC l'appel, résolu côté UIKit (même patron qu'`onAddReaction`)
 
     func test_cellFrameInWindow_isTheSourceOfTruth_forTheStandardListMode() throws {

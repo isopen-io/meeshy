@@ -61,4 +61,38 @@ final class MessageOverlayPreviewKindTests: XCTestCase {
     func test_reducedMotionEntrance_isAShortFade() {
         XCTAssertEqual(MessageOverlayMenu.reducedMotionFadeDuration, 0.18, accuracy: 0.0001)
     }
+
+    // MARK: - Le cadre de la cellule passe dans le repère de l'overlay
+
+    /// iPad, paysage : la conversation vit dans la colonne de droite, à 400 pt
+    /// du bord de la fenêtre. Le cadre de la cellule arrive en coordonnées de
+    /// FENÊTRE (`cellFrameInWindow`) ; l'overlay place l'aperçu dans SON repère.
+    /// Sans conversion, la bulle s'ouvrait 400 pt à droite de sa cellule.
+    func test_sourceFrame_conversationInTheRightColumn_isShiftedIntoTheOverlay() {
+        let local = MessageOverlayMenu.sourceFrame(
+            windowFrame: CGRect(x: 450, y: 300, width: 320, height: 60),
+            containerOrigin: CGPoint(x: 400, y: 0))
+
+        XCTAssertEqual(local, CGRect(x: 50, y: 300, width: 320, height: 60))
+    }
+
+    func test_sourceFrame_overlayAtTheWindowOrigin_isUnchanged() {
+        let frame = CGRect(x: 16, y: 420, width: 343, height: 72)
+
+        XCTAssertEqual(MessageOverlayMenu.sourceFrame(windowFrame: frame, containerOrigin: .zero), frame)
+    }
+
+    func test_sourceFrame_overlayBelowTheWindowTop_isShiftedUp() {
+        let local = MessageOverlayMenu.sourceFrame(
+            windowFrame: CGRect(x: 16, y: 420, width: 343, height: 72),
+            containerOrigin: CGPoint(x: 0, y: 24))
+
+        XCTAssertEqual(local, CGRect(x: 16, y: 396, width: 343, height: 72))
+    }
+
+    /// Sans cellule matérialisée, aucun cadre : l'aperçu se pose au centre, et
+    /// la conversion ne fabrique pas un cadre là où il n'y en a pas.
+    func test_sourceFrame_noCellFrame_staysZero() {
+        XCTAssertEqual(MessageOverlayMenu.sourceFrame(windowFrame: .zero, containerOrigin: CGPoint(x: 400, y: 0)), .zero)
+    }
 }
