@@ -6,23 +6,23 @@ import XCTest
 @MainActor
 final class RootScopeSwitchTests: XCTestCase {
 
-    private final class Scope: ObservableObject {
+    final class Scope: ObservableObject {
         nonisolated deinit {}
     }
 
-    private final class Recorder {
+    final class Recorder {
         var factoryCalls = 0
         var compactIdentifiers: [ObjectIdentifier] = []
         var regularIdentifiers: [ObjectIdentifier] = []
     }
 
-    private final class SizeDriver: ObservableObject {
+    final class SizeDriver: ObservableObject {
         nonisolated deinit {}
         @Published var value: UserInterfaceSizeClass?
         init(_ value: UserInterfaceSizeClass?) { self.value = value }
     }
 
-    private struct Harness: View {
+    struct Harness: View {
         @ObservedObject var driver: SizeDriver
         let recorder: Recorder
 
