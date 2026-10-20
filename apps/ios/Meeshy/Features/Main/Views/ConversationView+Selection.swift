@@ -48,7 +48,7 @@ extension ConversationView {
     /// Les messages sélectionnés, dans l'ORDRE du fil (pas l'ordre de tap) —
     /// un transfert groupé qui inverserait l'ordre de lecture serait un
     /// défaut, pas un détail.
-    private var selectedMessagesInThreadOrder: [Message] {
+    var selectedMessagesInThreadOrder: [Message] {
         viewModel.messages.filter { overlayState.selectedMessageIds.contains($0.id) }
     }
 
@@ -67,26 +67,6 @@ extension ConversationView {
         let selected = selectedMessagesInThreadOrder
         guard !selected.isEmpty else { return false }
         return selected.allSatisfy { viewModel.canDeleteForEveryone($0) }
-    }
-
-    /// #11159 — « Retirer » sur la sélection : des messages d'autres, que ce
-    /// lecteur peut modérer ici (`ContentRemovalPolicy`), les siens partant
-    /// pour tous. Une seule feuille de motif pour toute la sélection.
-    var selectionOffersRemoval: Bool {
-        ContentRemovalOffer.selectionOffersRemoval(
-            selectedMessagesInThreadOrder,
-            mayRemove: { canRemoveMessage($0) },
-            mayDeleteForEveryone: { viewModel.canDeleteForEveryone($0) }
-        )
-    }
-
-    /// Le motif d'abord ; la sélection ne se quitte qu'une fois le retrait confirmé.
-    func removeSelectedMessages() {
-        let ids = overlayState.selectedMessageIds
-        ContentRemovalPresenter.present(.message) { reason in
-            endSelectionMode()
-            Task { await viewModel.removeSelectedMessages(ids, reason: reason) }
-        }
     }
 
     /// #4024 — supprime toute la sélection dans le mode demandé, puis quitte
