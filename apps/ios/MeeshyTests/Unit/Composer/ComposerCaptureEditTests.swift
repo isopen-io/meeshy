@@ -242,9 +242,8 @@ final class ComposerCaptureEditTests: XCTestCase {
         // sans confirmation à demander comme après elle, c'est la RETOUCHE qu'elle abandonne.
         XCTAssertTrue(chrome.contains("return retouche ? session.cancelEditing() : onDisarm()"),
                       "la croix abandonne la retouche au lieu de fermer le viseur")
-        XCTAssertTrue(chrome.contains("guard discardsTake else { return onDisarm() }")
-                      && chrome.contains("guard session.phase.isEditing else { return }"),
-                      "l'abandon confirmé d'une prise en retouche revient viser, il ne ferme pas le viseur")
+        XCTAssertTrue(chrome.contains("if ComposerCaptureDiscardFlow.confirm(session) { onDisarm() }"),
+                      "l'abandon confirmé passe par la réponse de la session (ComposerCaptureDiscardFlow)")
     }
 
     func test_editScreen_paintsTheEditedSource_reframesWithTheFingers_andOffersDone() throws {

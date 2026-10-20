@@ -100,8 +100,46 @@ final class ComposerEditToolsTests: XCTestCase {
                                                                now: maintenant), "un toucher d'après en est un vrai")
         XCTAssertFalse(ComposerCaptureTapRule.belongsToAnAlert(presented: false, closedAt: nil, now: maintenant))
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("ComposerCaptureTapRule.belongsToAnAlert(presented: confirmsDiscard"),
-                      "le toucher de la nappe consulte la règle")
+        XCTAssertTrue(chrome.contains("!session.discardPrompt.swallowsTap(now: Date())"),
+                      "le toucher de la nappe consulte la question en cours")
+    }
+
+    /// **« Abandonner » abandonne la photo** (recette iPhone 2026-10-20 : la
+    /// photo restait en retouche). La question vit dans la session ; SwiftUI
+    /// peut refermer l'alerte AVANT d'appeler l'action, et l'action trouve
+    /// encore ce qu'elle abandonne.
+    func test_theDiscardAnswer_abandonsTheTake_evenWhenTheAlertClosedFirst() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        session.discardPrompt.ask(take: true, photo: true)
+        XCTAssertTrue(session.discardPrompt.isPresented)
+        session.discardPrompt.dismiss()
+        XCTAssertFalse(ComposerCaptureDiscardFlow.confirm(session), "la retouche revient viser, le viseur reste")
+        XCTAssertFalse(session.phase.isEditing, "la photo est abandonnée")
+        XCTAssertNil(session.discardPrompt.request, "la réponse consomme la question")
+    }
+
+    func test_continuing_keepsTheTake_andAViewfinderQuestion_closesTheViewfinder() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        session.discardPrompt.ask(take: true, photo: true)
+        ComposerCaptureDiscardFlow.keep(session)
+        XCTAssertTrue(session.phase.isEditing, "« Continuer » garde la photo")
+        XCTAssertFalse(ComposerCaptureDiscardFlow.confirm(session), "une réponse sans question ne fait rien")
+        XCTAssertTrue(session.phase.isEditing)
+        let viseur = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        viseur.discardPrompt.ask(take: false, photo: false)
+        XCTAssertTrue(ComposerCaptureDiscardFlow.confirm(viseur), "une question posée au viseur le range")
+    }
+
+    func test_theTapThatClosesTheAlert_isSwallowed() {
+        var question = ComposerCaptureDiscardPrompt()
+        let maintenant = Date(timeIntervalSinceReferenceDate: 1_000)
+        question.ask(take: true, photo: true)
+        XCTAssertTrue(question.swallowsTap(now: maintenant), "pendant l'alerte")
+        _ = question.answer(now: maintenant)
+        XCTAssertTrue(question.swallowsTap(now: maintenant.addingTimeInterval(0.1)), "la levée qui la ferme")
+        XCTAssertFalse(question.swallowsTap(now: maintenant.addingTimeInterval(1)), "un toucher d'après")
     }
 
     private static func settles(_ condition: () -> Bool) -> Bool {

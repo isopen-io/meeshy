@@ -69,6 +69,7 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var framing = ComposerFraming.identity
     /// On vise, ou on retouche (#9352).
     @Published var phase = ComposerCapturePhase.capturing
+    @Published var discardPrompt = ComposerCaptureDiscardPrompt()
     /// Les proportions de la scène de retouche (#9567) — ce qui partira ;
     /// `nil` hors retouche.
     @Published var editAspect: CGFloat?

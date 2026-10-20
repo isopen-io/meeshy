@@ -158,9 +158,9 @@ final class ComposerCaptureStageWiringTests: XCTestCase {
         XCTAssertTrue(chrome.contains("onDisarm: { requestDisarm() }"), "la croix demande d'abord")
         XCTAssertTrue(chrome.contains("HapticFeedback.light()\n                requestDisarm()"), "le glissé aussi")
         XCTAssertTrue(chrome.contains("ComposerCaptureDiscardRule.asksBeforeClosing("))
-        XCTAssertTrue(chrome.contains(".alert(ComposerSceneCameraCopy.discardTitle(photo: discardsPhoto), isPresented: $confirmsDiscard)"))
-        XCTAssertTrue(chrome.contains("Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) { confirmDiscard() }"))
-        XCTAssertTrue(chrome.contains("Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) {}"))
+        XCTAssertTrue(chrome.contains(".alert(ComposerSceneCameraCopy.discardTitle(photo: session.discardPrompt.request?.photo"))
+        XCTAssertTrue(chrome.contains("if ComposerCaptureDiscardFlow.confirm(session) { onDisarm() }"))
+        XCTAssertTrue(chrome.contains("Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) { ComposerCaptureDiscardFlow.keep(session) }"))
     }
 
     // MARK: - VoiceOver

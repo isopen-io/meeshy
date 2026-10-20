@@ -164,13 +164,6 @@ struct ComposerCaptureChrome: View {
 
     /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
     @State private var focusMark: ComposerCaptureFocusMark?
-    @State private var confirmsDiscard = false
-    /// L'instant où l'alerte s'est fermée — sa levée ne touche pas la prise.
-    @State private var alertClosedAt: Date?
-    /// Ce que la confirmation abandonne, fixé à la question : la prise en
-    /// retouche, ou le viseur (#9781).
-    @State private var discardsTake = false
-    @State private var discardsPhoto = false
     /// Retombe tout seul quand le pincement finit — y compris annulé par le
     /// système, qui n'appelle pas `onEnded`.
     @GestureState private var pinchActive = false
@@ -302,12 +295,13 @@ struct ComposerCaptureChrome: View {
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editChromeShown)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
-        .adaptiveOnChange(of: confirmsDiscard) { _, montree in
-            if !montree { alertClosedAt = Date() }
-        }
-        .alert(ComposerSceneCameraCopy.discardTitle(photo: discardsPhoto), isPresented: $confirmsDiscard) {
-            Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) { confirmDiscard() }
-            Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) {}
+        .alert(ComposerSceneCameraCopy.discardTitle(photo: session.discardPrompt.request?.photo ?? false),
+               isPresented: Binding(get: { session.discardPrompt.isPresented },
+                                    set: { if !$0 { session.discardPrompt.dismiss() } })) {
+            Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) {
+                if ComposerCaptureDiscardFlow.confirm(session) { onDisarm() }
+            }
+            Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) { ComposerCaptureDiscardFlow.keep(session) }
         }
     }
 
@@ -372,18 +366,7 @@ struct ComposerCaptureChrome: View {
             return retouche ? session.cancelEditing() : onDisarm()
         }
         HapticFeedback.warning()
-        discardsTake = session.phase.isEditing
-        discardsPhoto = session.phase == .editing(.photo)
-        confirmsDiscard = true
-    }
-
-    /// L'abandon confirmé : la retouche, si c'est elle qu'on a demandé de
-    /// quitter et qu'elle est encore là — une remise survenue entre-temps ne
-    /// ferme pas le viseur ; sinon le viseur.
-    private func confirmDiscard() {
-        guard discardsTake else { return onDisarm() }
-        guard session.phase.isEditing else { return }
-        session.cancelEditing()
+        session.discardPrompt.ask(take: retouche, photo: session.phase == .editing(.photo))
     }
 
     /// Un geste sur la scène, décidé par la table.
@@ -518,8 +501,7 @@ struct ComposerCaptureChrome: View {
         SpatialTapGesture(count: 1, coordinateSpace: .global).onEnded { toucher in
             guard !session.pinchSpoilsGestures, session.holdStartedAt == nil,
                   !ComposerCaptureTapRule.followsAHold(holdEndedAt, now: Date()),
-                  !ComposerCaptureTapRule.belongsToAnAlert(presented: confirmsDiscard, closedAt: alertClosedAt,
-                                                           now: Date()) else { return }
+                  !session.discardPrompt.swallowsTap(now: Date()) else { return }
             let geste = ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: context)
             guard geste != .toggleEditChrome else { return session.perform(geste, item: nil) }
             switch session.tapAction(context: context) {
