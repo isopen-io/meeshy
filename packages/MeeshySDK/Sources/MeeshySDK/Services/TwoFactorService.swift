@@ -53,7 +53,7 @@ public protocol TwoFactorServiceProviding: Sendable {
 
 // MARK: - Implementation
 
-public final class TwoFactorService: TwoFactorServiceProviding, @unchecked Sendable {
+public final class TwoFactorService: TwoFactorServiceProviding, Sendable {
     public static let shared = TwoFactorService()
     private let api: APIClientProviding
 

@@ -202,7 +202,7 @@ final class CallScreenTickTests: XCTestCase {
         let sites = [
             "Meeshy/Features/Main/Views/CallView+Header.swift",
             "Meeshy/Features/Main/Views/FloatingCallPillView.swift",
-            "Meeshy/Features/Main/Views/ConversationView+Header.swift",
+            "Meeshy/Features/Main/Views/ConversationLayers/ConversationHeaderCallButton.swift",
         ]
         for site in sites {
             let source = try AppSourceGuard.unit(site)

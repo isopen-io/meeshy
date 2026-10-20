@@ -29,7 +29,7 @@ public extension ContactDirectoryServiceProviding {
 
 // MARK: - Service
 
-public final class ContactDirectoryService: ContactDirectoryServiceProviding, @unchecked Sendable {
+public final class ContactDirectoryService: ContactDirectoryServiceProviding, Sendable {
     public static let shared = ContactDirectoryService()
     private let api: APIClientProviding
 

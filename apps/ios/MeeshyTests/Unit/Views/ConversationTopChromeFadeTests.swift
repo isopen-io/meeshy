@@ -240,7 +240,7 @@ final class ConversationTopChromeFadeTests: XCTestCase {
         let viewSource = try conversationViewSource()
         let controls = try headerControlsSource()
         guard let start = viewSource.range(of: "var expandedHeaderTitleAndTags"),
-              let end = viewSource.range(of: "private var expandedHeaderSearchButton")
+              let end = viewSource.range(of: "private var expandedHeaderBackground")
         else { return XCTFail("bornes de la bande dépliée introuvables") }
         let band = viewSource[start.lowerBound..<end.lowerBound]
         XCTAssertFalse(

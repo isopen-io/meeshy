@@ -33,9 +33,7 @@ extension CallManager {
             conversationId = nil
             callDuration = 0
             isVideoEnabled = false
-            isRemoteVideoEnabled = true
-            isRemoteAudioEnabled = true
-            isRemoteScreenCapturing = false
+            remoteMedia = .initial
             isMuted = false
             isSpeaker = false
             bubbleEdge = .trailing
@@ -128,7 +126,7 @@ extension CallManager {
         callState = .ringing(isOutgoing: true)
         lastCallWasOutgoing = true
         // Snapshot the dial context so a transient failure can be « Réessayer »-ed.
-        lastOutgoingContext = (conversationId, userId, displayName, isVideo)
+        lastOutgoingContext = OutgoingCallContext(conversationId: conversationId, userId: userId, displayName: displayName, kind: CallKind(isVideo: isVideo))
 
         // Phase 1.5 — Ringback tone démarré dans `provider:didActivate:audioSession`
         // (PAS ici). Démarrer AVAudioPlayer AVANT que CallKit ait posé sa
@@ -302,7 +300,7 @@ extension CallManager {
             conversationId: ctx.conversationId,
             userId: ctx.userId,
             displayName: ctx.displayName,
-            isVideo: ctx.isVideo
+            isVideo: ctx.kind.isVideo
         )
     }
 

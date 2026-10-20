@@ -8,7 +8,7 @@ public protocol CallModerationRemoteServiceProviding: Sendable {
 
 /// `DELETE /api/v1/calls/:callId/participants/:participantId`. Atome réseau :
 /// la confirmation et l'affichage sont app-side.
-public final class CallModerationRemoteService: CallModerationRemoteServiceProviding, @unchecked Sendable {
+public final class CallModerationRemoteService: CallModerationRemoteServiceProviding, Sendable {
     public static let shared = CallModerationRemoteService()
     private let api: APIClientProviding
 

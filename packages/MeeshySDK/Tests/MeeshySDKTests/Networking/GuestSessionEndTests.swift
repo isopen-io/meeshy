@@ -196,7 +196,7 @@ final class GuestSessionEndTests: XCTestCase {
     }
 
     func test_transport_signalsOnlyARequestThatCarriedAGuestToken() throws {
-        let api = try source("Sources/MeeshySDK/Networking/APIClient.swift")
+        let api = try source("Sources/MeeshySDK/Networking/APIClient+Perform.swift")
         XCTAssertTrue(api.contains(#"if let guestToken = urlRequest.value(forHTTPHeaderField: "X-Session-Token") { GuestSessionEnd.signal(statusCode: statusCode, body: data, refusedSessionToken: guestToken) }"#))
     }
 

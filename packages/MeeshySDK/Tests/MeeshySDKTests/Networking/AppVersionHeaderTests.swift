@@ -315,15 +315,17 @@ final class AppVersionHeaderTests: XCTestCase {
         guard let branche = source.range(of: "if statusCode == 426 {") else {
             return XCTFail("Aucune branche 426 dans le funnel d'APIClient — la porte n'a plus de sonnette.")
         }
-        let corps = String(source[branche.upperBound...].prefix(600))
-
-        guard let signal = corps.range(of: "UpgradeGateSignal.signal("),
-              let jet = corps.range(of: "throw MeeshyError") else {
-            return XCTFail("La branche 426 doit signaler ET jeter. Trouvé : \(corps.prefix(300))")
+        XCTAssertTrue(
+            String(source[branche.upperBound...].prefix(200)).contains("UpgradeGateSignal.signal("),
+            "La branche 426 doit appeler le signal."
+        )
+        guard let emission = source.range(of: "emitRefusalSignals(urlRequest:"),
+              let verdict = source.range(of: "APIFailureVerdict.classify(") else {
+            return XCTFail("Le funnel doit émettre les signaux puis classer le refus.")
         }
         XCTAssertLessThan(
-            signal.lowerBound, jet.lowerBound,
-            "Le signal doit partir AVANT le throw : un appelant qui avale son erreur ne doit pas avaler la rupture."
+            emission.lowerBound, verdict.lowerBound,
+            "Le signal doit partir AVANT que le verdict ne soit levé : un appelant qui avale son erreur ne doit pas avaler la rupture."
         )
     }
 
@@ -345,7 +347,7 @@ final class AppVersionHeaderTests: XCTestCase {
             .deletingLastPathComponent()   // .../Tests/MeeshySDKTests
             .deletingLastPathComponent()   // .../Tests
             .deletingLastPathComponent()   // .../MeeshySDK
-            .appendingPathComponent("Sources/MeeshySDK/Networking/APIClient.swift")
+            .appendingPathComponent("Sources/MeeshySDK/Networking/APIClient+Perform.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 }

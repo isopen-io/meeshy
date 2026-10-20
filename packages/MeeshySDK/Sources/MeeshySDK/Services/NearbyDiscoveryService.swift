@@ -334,7 +334,7 @@ public protocol NearbyDiscoveryServiceProviding: Sendable {
 /// produit. Quel rayon, quel mode d'affichage, quoi dire quand c'est vide —
 /// tout cela vit côté app, avec les singletons Meeshy. Ici, des paramètres
 /// opaques et rien d'autre.
-public final class NearbyDiscoveryService: NearbyDiscoveryServiceProviding, @unchecked Sendable {
+public final class NearbyDiscoveryService: NearbyDiscoveryServiceProviding, Sendable {
     public static let shared = NearbyDiscoveryService()
 
     private let api: APIClientProviding

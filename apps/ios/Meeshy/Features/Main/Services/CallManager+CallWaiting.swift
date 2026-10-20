@@ -94,7 +94,7 @@ extension CallManager {
                 callId: pending.callId,
                 fromUserId: pending.fromUserId,
                 fromUsername: pending.fromUsername,
-                isVideo: pending.isVideo,
+                isVideo: pending.kind.isVideo,
                 iceServers: pending.iceServers,
                 conversationId: pending.conversationId
             )

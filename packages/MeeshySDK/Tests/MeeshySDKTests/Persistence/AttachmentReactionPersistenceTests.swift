@@ -133,7 +133,7 @@ final class AttachmentReactionPersistenceTests: XCTestCase {
         let projections = [
             "Models/APIMessage+MeeshyMessage.swift", // APIMessage.toMessage — socket et REST direct
             "Models/ConversationModels.swift",   // dernier message de la liste de conversations
-            "Persistence/MessagePersistenceActor+Migration.swift", // REST → GRDB, ce que la bulle relit
+            "Persistence/APIMessageUpsert+Attachments.swift", // REST → GRDB, ce que la bulle relit
         ]
 
         for chemin in projections {

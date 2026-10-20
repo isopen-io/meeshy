@@ -37,14 +37,30 @@ struct AudioEditorWaveform: View {
                             }
                             .onEnded { _ in onScrubEnded() }
                     )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Self.playheadLabel)
+                    .accessibilityValue(MeeshyAccessibleValue.percent(progress))
+                    .accessibilityAdjustableAction { direction in
+                        guard let target = scrubAdjustment(direction) else { return }
+                        onScrub(target)
+                        onScrubEnded()
+                    }
 
                 if let selection {
-                    handle(at: selection.start, width: geo.size.width, height: geo.size.height,
-                           isRemoval: selection.isRemoval) { x in
+                    handle(at: selection.start, edge: .start, width: geo.size.width, height: geo.size.height,
+                           isRemoval: selection.isRemoval,
+                           onAdjust: { direction in
+                               guard let target = selectionStartAdjustment(direction) else { return }
+                               onSelectionStart(target)
+                           }) { x in
                         onSelectionStart(fraction(of: x, width: geo.size.width))
                     }
-                    handle(at: selection.end, width: geo.size.width, height: geo.size.height,
-                           isRemoval: selection.isRemoval) { x in
+                    handle(at: selection.end, edge: .end, width: geo.size.width, height: geo.size.height,
+                           isRemoval: selection.isRemoval,
+                           onAdjust: { direction in
+                               guard let target = selectionEndAdjustment(direction) else { return }
+                               onSelectionEnd(target)
+                           }) { x in
                         onSelectionEnd(fraction(of: x, width: geo.size.width))
                     }
                 }
@@ -92,13 +108,15 @@ struct AudioEditorWaveform: View {
 
     // MARK: Handle
 
-    private func handle(at fraction: Double, width: CGFloat, height: CGFloat,
-                        isRemoval: Bool, onMove: @escaping (CGFloat) -> Void) -> some View {
+    private func handle(at fraction: Double, edge: HandleEdge, width: CGFloat, height: CGFloat,
+                        isRemoval: Bool,
+                        onAdjust: @escaping (AccessibilityAdjustmentDirection) -> Void,
+                        onMove: @escaping (CGFloat) -> Void) -> some View {
         let clamped = max(0, min(1, fraction))
         let x = clamped * width
         let tint = isRemoval ? MeeshyColors.error : accent
         return ZStack {
-            Color.clear.frame(width: 44, height: max(44, height))
+            Color.clear.frame(width: MeeshyControlSize.tapTarget, height: max(MeeshyControlSize.tapTarget, height))
             RoundedRectangle(cornerRadius: 2)
                 .fill(tint)
                 .frame(width: 3, height: height)
@@ -107,6 +125,10 @@ struct AudioEditorWaveform: View {
                 .frame(width: 14, height: 14)
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.handleLabel(edge: edge, isRemoval: isRemoval))
+        .accessibilityValue(MeeshyAccessibleValue.percent(clamped))
+        .accessibilityAdjustableAction(onAdjust)
         .position(x: x, y: height / 2)
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .named(spaceName))
@@ -123,6 +145,7 @@ struct AudioEditorWaveform: View {
             .frame(width: 2, height: size.height)
             .shadow(color: .black.opacity(0.3), radius: 2)
             .offset(x: x - 1)
+            .accessibilityHidden(true)
     }
 
     private func fraction(of x: CGFloat, width: CGFloat) -> Double {
