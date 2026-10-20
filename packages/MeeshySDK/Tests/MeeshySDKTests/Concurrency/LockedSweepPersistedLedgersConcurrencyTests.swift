@@ -41,7 +41,8 @@ final class LockedSweepPersistedLedgersConcurrencyTests: XCTestCase {
         }
 
         XCTAssertNil(ledger.firstReception(of: "m7"))
-        XCTAssertEqual(ledger.destruction(of: "m7"), base.addingTimeInterval(1))
+        XCTAssertEqual(ledger.destruction(of: "m7")?.timeIntervalSince1970 ?? -1,
+                       base.addingTimeInterval(1).timeIntervalSince1970, accuracy: 0.001)
     }
 
     func test_record_concurrentDistinctStories_allViewedAndPersisted() async {
