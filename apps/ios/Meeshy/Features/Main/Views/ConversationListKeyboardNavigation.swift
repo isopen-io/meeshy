@@ -69,13 +69,13 @@ struct ConversationListKeyboardNavigation: ViewModifier {
 
 struct KeyboardCursorRing: View {
     let isActive: Bool
-    let accentHex: String
+    let accentColor: String
 
     @ViewBuilder
     var body: some View {
         if isActive {
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                .strokeBorder(Color(hex: accentHex), lineWidth: MeeshyBorder.strong)
+                .strokeBorder(Color(hex: accentColor), lineWidth: MeeshyBorder.strong)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
                 .background(CursorRevealAnchor())

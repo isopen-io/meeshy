@@ -501,7 +501,7 @@ struct ConversationListView: View {
         return row
         .equatable()
         .meeshyPointerInteractive(shape: .roundedRect(cornerRadius: MeeshyRadius.lg))
-        .overlay { KeyboardCursorRing(isActive: keyboardCursor == conversation.id, accentHex: conversation.accentColor) }
+        .overlay { KeyboardCursorRing(isActive: keyboardCursor == conversation.id, accentColor: conversation.accentColor) }
     }
 
     private func openConversation(_ conversation: Conversation) {
