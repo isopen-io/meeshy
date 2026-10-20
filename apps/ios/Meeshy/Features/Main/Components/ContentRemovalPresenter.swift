@@ -57,6 +57,33 @@ enum ContentRemovalOffer {
             ContentRemovalPresenter.present(kind) { reason in Task { await remove(postId, reason) } }
         }
     }
+
+    /// **« Retirer » sur un commentaire** — de post ou de story (#11159) : la
+    /// modération de la plateforme, jamais sur le sien. La fermeture rendue
+    /// reçoit le motif de la feuille, que `CommentMoreMenu` présente.
+    static func comment(
+        _ comment: FeedComment,
+        viewerId: String? = AuthManager.shared.currentUser?.id,
+        viewerRole: String? = AuthManager.shared.currentUser?.role,
+        remove: @escaping (_ reason: String) -> Void
+    ) -> ((String) -> Void)? {
+        let mine = viewerId.map { !$0.isEmpty && $0 == comment.authorId } ?? false
+        guard ContentRemovalPolicy.mayRemovePublication(authoredByViewer: mine, platformRole: viewerRole) else { return nil }
+        return remove
+    }
+
+    /// **« Retirer » s'offre-t-il sur une SÉLECTION de messages ?** (#11159) Au
+    /// moins un message d'un autre, tous retirables par ce lecteur, et les siens
+    /// supprimables pour tous — ils partent avec, sans motif.
+    static func selectionOffersRemoval(
+        _ selected: [Message],
+        mayRemove: (Message) -> Bool,
+        mayDeleteForEveryone: (Message) -> Bool
+    ) -> Bool {
+        let others = selected.filter { !$0.isMe }
+        guard !others.isEmpty, others.allSatisfy(mayRemove) else { return false }
+        return selected.filter(\.isMe).allSatisfy(mayDeleteForEveryone)
+    }
 }
 
 /// Le contrôleur présenté, tenu FAIBLEMENT : la feuille le ferme sans le retenir.

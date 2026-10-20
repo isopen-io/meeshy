@@ -250,6 +250,11 @@ extension ConversationView {
                         deleteSelectedMessages(mode: .everyone)
                     }
                 }
+                if selectionOffersRemoval {
+                    Button(String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main), role: .destructive) {
+                        removeSelectedMessages()
+                    }
+                }
                 Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
                     deleteSelectedMessages(mode: .local)
                 }

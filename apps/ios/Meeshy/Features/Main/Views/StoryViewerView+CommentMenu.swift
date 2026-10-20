@@ -28,6 +28,98 @@ enum StoryCommentEditing {
         guard !text.isEmpty, text != original.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
         return text
     }
+
+    /// **Retirer un commentaire du fil** (#11159) — une racine part avec ses
+    /// réponses (le serveur les emporte), une réponse décompte son parent.
+    /// `removedCount` : ce que le compteur de la story perd.
+    static func removing(
+        _ target: FeedComment,
+        comments: [FeedComment],
+        replies: [String: [FeedComment]]
+    ) -> (comments: [FeedComment], replies: [String: [FeedComment]], removedCount: Int) {
+        guard let parentId = target.parentId else {
+            var remaining = replies
+            remaining[target.id] = nil
+            return (comments.filter { $0.id != target.id }, remaining, 1 + target.replies)
+        }
+        var remaining = replies
+        remaining[parentId] = replies[parentId]?.filter { $0.id != target.id }
+        let parents = comments.map { parent -> FeedComment in
+            guard parent.id == parentId, parent.replies > 0 else { return parent }
+            var decremented = parent
+            decremented.replies -= 1
+            return decremented
+        }
+        return (parents, remaining, 1)
+    }
+}
+
+/// **Les écritures sur le fil d'une story** — l'auteur édite (#8709), la
+/// modération retire avec un motif (#11159). Optimistes : le fil change
+/// aussitôt, revient tel quel si la passerelle refuse. Tenu par des liaisons
+/// sur l'état du lecteur, qui n'en porte ainsi que la déclaration.
+@MainActor
+struct StoryCommentThreadWriter {
+    let postId: String
+    @Binding var comments: [FeedComment]
+    @Binding var replies: [String: [FeedComment]]
+    @Binding var count: Int
+    var service: PostServiceProviding = PostService.shared
+
+    /// Les effets et la langue d'origine restent ceux du commentaire : l'édition
+    /// ne touche que le texte. L'écho `comment:updated` reconfirme la ligne.
+    func edit(_ target: FeedComment, content: String) async {
+        let applied = StoryCommentEditing.replacing(
+            target.withEditedContent(content, effectFlags: target.effectFlags), comments: comments, replies: replies
+        )
+        let saved = await commit(comments: applied.comments, replies: applied.replies, countDelta: 0) {
+            _ = try await service.updateComment(
+                postId: postId, commentId: target.id, content: content,
+                effectFlags: target.effectFlags, originalLanguage: target.originalLanguage
+            )
+        }
+        guard !saved else { return }
+        HapticFeedback.error()
+        FeedbackToastManager.shared.showError(
+            String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
+    }
+
+    func remove(_ target: FeedComment, reason: String) async {
+        let removal = StoryCommentEditing.removing(target, comments: comments, replies: replies)
+        let removed = await commit(comments: removal.comments, replies: removal.replies, countDelta: -removal.removedCount) {
+            try await service.deleteComment(postId: postId, commentId: target.id, reason: reason)
+        }
+        guard removed else {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(
+                String(localized: "feed.comments.delete_error", defaultValue: "Impossible de supprimer le commentaire", bundle: .main))
+            return
+        }
+        FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(
+            reason: reason, deleted: String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main)))
+    }
+
+    private func commit(
+        comments next: [FeedComment],
+        replies nextReplies: [String: [FeedComment]],
+        countDelta: Int,
+        request: () async throws -> Void
+    ) async -> Bool {
+        let snapshot = (comments: comments, replies: replies, count: count)
+        comments = next
+        replies = nextReplies
+        count = max(0, count + countDelta)
+        do {
+            try await request()
+            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(postId)")
+            return true
+        } catch {
+            comments = snapshot.comments
+            replies = snapshot.replies
+            count = snapshot.count
+            return false
+        }
+    }
 }
 
 // MARK: - La ligne d'un commentaire de story et son menu « … » (#8709)
@@ -73,9 +165,18 @@ extension StoryViewerView {
             loadedReplies: comment.parentId == nil ? (storyCommentRepliesMap[comment.id] ?? []) : [],
             story: commentCardStory,
             onCommitEdit: { text in
-                Task { await editStoryComment(comment, content: text) }
+                Task { await storyCommentWriter?.edit(comment, content: text) }
+            },
+            onRemove: ContentRemovalOffer.comment(comment) { reason in
+                Task { await storyCommentWriter?.remove(comment, reason: reason) }
             }
         )
+    }
+
+    var storyCommentWriter: StoryCommentThreadWriter? {
+        currentStory.map {
+            StoryCommentThreadWriter(postId: $0.id, comments: $storyComments, replies: $storyCommentRepliesMap, count: $storyCommentCount)
+        }
     }
 
     /// **Le support d'« Imager »** (#10915) : la story ouverte, son auteur, son visuel — la
@@ -85,36 +186,5 @@ extension StoryViewerView {
         guard let story = currentStory else { return nil }
         let group = currentGroup
         return PostCommentCardStory(story: story, author: group?.username ?? "", authorId: group?.id ?? "", authorUsername: group?.username)
-    }
-
-    /// **L'auteur édite son commentaire de story** — remplacement optimiste EN
-    /// PLACE, PATCH, rollback complet si le serveur refuse. L'écho
-    /// `comment:updated` reconfirme ensuite la ligne (idempotent). Les effets
-    /// et la langue d'origine sont ceux du commentaire : l'édition ne touche
-    /// que le texte.
-    func editStoryComment(_ target: FeedComment, content: String) async {
-        guard let story = currentStory else { return }
-        let snapshotComments = storyComments
-        let snapshotReplies = storyCommentRepliesMap
-        let applied = StoryCommentEditing.replacing(
-            target.withEditedContent(content, effectFlags: target.effectFlags),
-            comments: storyComments,
-            replies: storyCommentRepliesMap
-        )
-        storyComments = applied.comments
-        storyCommentRepliesMap = applied.replies
-        do {
-            _ = try await PostService.shared.updateComment(
-                postId: story.id, commentId: target.id, content: content,
-                effectFlags: target.effectFlags, originalLanguage: target.originalLanguage
-            )
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(storyComments, for: "post-\(story.id)")
-        } catch {
-            storyComments = snapshotComments
-            storyCommentRepliesMap = snapshotReplies
-            HapticFeedback.error()
-            FeedbackToastManager.shared.showError(
-                String(localized: "feed.comments.edit_error", defaultValue: "Erreur lors de la modification du commentaire", bundle: .main))
-        }
     }
 }

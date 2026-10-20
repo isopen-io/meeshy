@@ -69,6 +69,26 @@ extension ConversationView {
         return selected.allSatisfy { viewModel.canDeleteForEveryone($0) }
     }
 
+    /// #11159 — « Retirer » sur la sélection : des messages d'autres, que ce
+    /// lecteur peut modérer ici (`ContentRemovalPolicy`), les siens partant
+    /// pour tous. Une seule feuille de motif pour toute la sélection.
+    var selectionOffersRemoval: Bool {
+        ContentRemovalOffer.selectionOffersRemoval(
+            selectedMessagesInThreadOrder,
+            mayRemove: { canRemoveMessage($0) },
+            mayDeleteForEveryone: { viewModel.canDeleteForEveryone($0) }
+        )
+    }
+
+    /// Le motif d'abord ; la sélection ne se quitte qu'une fois le retrait confirmé.
+    func removeSelectedMessages() {
+        let ids = overlayState.selectedMessageIds
+        ContentRemovalPresenter.present(.message) { reason in
+            endSelectionMode()
+            Task { await viewModel.removeSelectedMessages(ids, reason: reason) }
+        }
+    }
+
     /// #4024 — supprime toute la sélection dans le mode demandé, puis quitte
     /// le mode sélection. Réutilise `deleteMessage(messageId:mode:)`, le même
     /// chemin que la suppression d'un seul message.
