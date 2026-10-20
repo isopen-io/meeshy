@@ -53,4 +53,43 @@ final class LockedSweepStaticSlotsTests: XCTestCase {
         CryptoSignposts.beginDecrypt(messageId: "last")
         XCTAssertEqual(recorder.count, before + 1)
     }
+
+    func test_v2Hub_installedThenEmitted_deliversTheEvent_andConcurrentUseNeverCrashes() async throws {
+        let hub = SocialEventsV2Hub()
+        let recorder = Recorder()
+        let event = try XCTUnwrap(SocialNotificationEvents.event(.received, userInfo: ["notificationId": "a"], at: Date()))
+        hub.install { _ in recorder.hit() }
+
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<400 {
+                group.addTask {
+                    if index % 4 == 0 {
+                        hub.install { _ in recorder.hit() }
+                    } else {
+                        hub.emit(event)
+                    }
+                }
+            }
+        }
+
+        XCTAssertEqual(recorder.count, 300)
+    }
+
+    func test_consentSource_withoutInstall_isNil_thenServesTheInstalledRule() async {
+        let source = SocialEventsConsentSource()
+        let before = await source.current()
+        XCTAssertNil(before)
+
+        source.install { nil }
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<200 {
+                group.addTask {
+                    source.install { nil }
+                    _ = await source.current()
+                }
+            }
+        }
+        let after = await source.current()
+        XCTAssertNil(after)
+    }
 }
