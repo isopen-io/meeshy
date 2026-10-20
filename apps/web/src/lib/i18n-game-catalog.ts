@@ -21,6 +21,7 @@
 import type FrenchBanner from './interface-catalogs/catalog-game-banner-fr';
 import type FrenchConcept from './interface-catalogs/catalog-game-concept-fr';
 import type FrenchCore from './interface-catalogs/catalog-game-fr';
+import type FrenchFrappe from './interface-catalogs/catalog-game-frappe-fr';
 import type FrenchRules from './interface-catalogs/catalog-game-rules-fr';
 import type { InterfaceLanguage } from './interface-language';
 
@@ -32,7 +33,9 @@ import type { InterfaceLanguage } from './interface-language';
  *   · `banner`  — ce que le bandeau du joueur dit sur tous les hubs ;
  *   · `core`    — le jeu lui-même (missions, frappe, Flamme, ligue, saison…) ;
  *   · `concept` — la première page de Progression, les fiches, le tableau de bord ;
- *   · `rules`   — le carnet des règles et son atlas.
+ *   · `rules`   — le carnet des règles et son atlas ;
+ *   · `frappe`  — la cérémonie de la frappe (#11177), que la scène charge
+ *                 elle-même au toucher : aucun écran ne la paie d'avance.
  *
  * Le bandeau s'affiche sur CHAQUE hub : il ne télécharge que sa partie (une
  * cinquantaine de clés), plus les huit cents du jeu entier.
@@ -42,13 +45,14 @@ type FrenchParts = {
   readonly core: typeof FrenchCore;
   readonly concept: typeof FrenchConcept;
   readonly rules: typeof FrenchRules;
+  readonly frappe: typeof FrenchFrappe;
 };
 
 export type GameCatalogPart = keyof FrenchParts;
 
-export const GAME_CATALOG_PARTS = ['banner', 'core', 'concept', 'rules'] as const satisfies readonly GameCatalogPart[];
+export const GAME_CATALOG_PARTS = ['banner', 'core', 'concept', 'rules', 'frappe'] as const satisfies readonly GameCatalogPart[];
 
-type FrenchGameCatalog = FrenchParts['banner'] & FrenchParts['core'] & FrenchParts['concept'] & FrenchParts['rules'];
+type FrenchGameCatalog = FrenchParts['banner'] & FrenchParts['core'] & FrenchParts['concept'] & FrenchParts['rules'] & FrenchParts['frappe'];
 
 export type GameCatalogKey = keyof FrenchGameCatalog;
 
@@ -70,6 +74,7 @@ export type GameBannerCatalog = PartCatalog<FrenchParts['banner']>;
 export type GameCoreCatalog = PartCatalog<FrenchParts['core']>;
 export type GameConceptCatalog = PartCatalog<FrenchParts['concept']>;
 export type GameRulesCatalog = PartCatalog<FrenchParts['rules']>;
+export type GameFrappeCatalog = PartCatalog<FrenchParts['frappe']>;
 
 /** Le catalogue ENTIER, les quatre parties réunies. */
 export type GameCatalog = Readonly<Record<GameCatalogKey, string>> & Readonly<Partial<Record<GamePluralForm, string>>>;
@@ -120,6 +125,15 @@ const LOADERS: Readonly<Record<GameCatalogPart, PartLoaders>> = {
     de: () => import('./interface-catalogs/catalog-game-rules-de'),
     it: () => import('./interface-catalogs/catalog-game-rules-it'),
     ar: () => import('./interface-catalogs/catalog-game-rules-ar'),
+  },
+  frappe: {
+    fr: () => import('./interface-catalogs/catalog-game-frappe-fr'),
+    en: () => import('./interface-catalogs/catalog-game-frappe-en'),
+    es: () => import('./interface-catalogs/catalog-game-frappe-es'),
+    pt: () => import('./interface-catalogs/catalog-game-frappe-pt'),
+    de: () => import('./interface-catalogs/catalog-game-frappe-de'),
+    it: () => import('./interface-catalogs/catalog-game-frappe-it'),
+    ar: () => import('./interface-catalogs/catalog-game-frappe-ar'),
   },
 };
 
