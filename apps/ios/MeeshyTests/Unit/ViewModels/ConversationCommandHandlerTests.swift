@@ -440,7 +440,8 @@ final class ConversationCommandHandlerTests: XCTestCase {
         let failure = await rig.sut.removeAttachment(messageId: "m1", attachmentId: "a2", original: [keep, drop])
 
         let calls = await rig.persistence.calls
-        let restored = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: try XCTUnwrap(await rig.persistence.lastAttachmentsJson))
+        let storedJson = await rig.persistence.lastAttachmentsJson
+        let restored = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: try XCTUnwrap(storedJson))
         XCTAssertEqual(failure?.userMessage, "nope")
         XCTAssertEqual(calls.count, 2)
         XCTAssertEqual(restored.map(\.id), ["a1", "a2"])
@@ -453,8 +454,8 @@ final class ConversationCommandHandlerTests: XCTestCase {
             messageId: "m1", attachmentId: "a2", original: [MeeshyMessageAttachment(id: "a1"), MeeshyMessageAttachment(id: "a2")]
         )
 
-        let json = try XCTUnwrap(await rig.persistence.lastAttachmentsJson)
-        let remaining = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: json)
+        let storedJson = await rig.persistence.lastAttachmentsJson
+        let remaining = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: try XCTUnwrap(storedJson))
         XCTAssertNil(failure)
         XCTAssertEqual(remaining.map(\.id), ["a1"])
         XCTAssertEqual(rig.attachments.deleted, ["a2"])
