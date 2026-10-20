@@ -545,21 +545,7 @@ struct BubbleStandardLayout: View {
         )) { attachment in
             switch attachment.type {
             case .image:
-                let original = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
-                // 5.2 — cible plein écran = largeur écran × scale. La variante la
-                // plus petite `>=` cette cible évite de charger l'original 4000px
-                // quand une 1920 suffit ; sans variante → original.
-                // L'ÉCRAN et non la fenêtre, délibérément : c'est un budget de
-                // décodage, pas une métrique de layout. Sur-décoder est invisible,
-                // sous-décoder ne l'est pas — et la fenêtre peut grandir jusqu'à
-                // l'écran (Stage Manager) après le choix de la variante.
-                let targetPx = Int((UIScreen.main.bounds.width * UIScreen.main.scale).rounded())
-                let chosen = original.isEmpty ? "" : ImageVariantSelector.bestImageURL(
-                    variants: attachment.imageVariants ?? [],
-                    originalURL: original,
-                    originalWidth: attachment.width,
-                    targetWidthPx: targetPx
-                )
+                let chosen = GalleryImageSource.fullscreenURL(for: attachment)
                 let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
                 // Composant UNIFIÉ « Enregistrer » : le flow vit DANS le cover
                 // pour que la sheet de destinations se présente par-dessus.

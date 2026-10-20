@@ -24,13 +24,13 @@ import MeeshyUI
 
 struct iPadRootView: View {
     @StateObject var theme = ThemeManager.shared
-    @StateObject var storyViewModel = StoryViewModel()
-    @StateObject var statusViewModel = StatusViewModel()
+    @ObservedObject var storyViewModel: StoryViewModel
+    @ObservedObject var statusViewModel: StatusViewModel
     // Possédé sans être observé (cf. ConversationListVMOwner, RootView.swift) :
     // évite le re-render de iPadRootView à chaque churn du VM (presence,
     // reloadFromCache). Exposé via la propriété calculée `conversationViewModel`,
     // consommée telle quelle par les extensions (+Sheets, +Navigation).
-    @StateObject var conversationVMOwner = ConversationListVMOwner()
+    let conversationVMOwner: ConversationListVMOwner
     var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
     @StateObject var router = Router()
     /// Hoisted at the iPad root so deep-stack screens (e.g.
@@ -67,7 +67,7 @@ struct iPadRootView: View {
     /// sur quatre (`+Navigation`, `+Overlays`, `+Panels`). `RootView` tient en
     /// un seul, d'où sa déclaration plus fermée — recopier son modificateur
     /// ici ne compile pas.
-    @StateObject var notifications = RootNotificationSource()
+    @ObservedObject var notifications: RootNotificationSource
     /// Ne publie que `launch` — une ouverture/fermeture de lecteur de réels,
     /// pas un flux. L'observer ne rejoue donc pas le churn que `CallManager`
     /// imposait ici (cf. watchdog 0x8BADF00D juste au-dessus).
@@ -88,7 +88,7 @@ struct iPadRootView: View {
     @State var showNewConversation = false
     @State private var isScrollingDown = false
     @State private var feedIsVisible = true
-    @State private var leftColumnRatio: CGFloat = 0.38
+    @SceneStorage("meeshy.ipad.leftColumnRatio") private var leftColumnRatio: Double = ColumnWidthLaw.defaultRatio
 
     /// Choix d'identité en attente sur un lien de partage — jumeau de
     /// `RootView`. Les deux vues partagent la RÉSOLUTION
@@ -111,7 +111,15 @@ struct iPadRootView: View {
     /// G6 : l'iPad a sa racine PROPRE. Sans cette observation-là, un iPad prend
     /// des 426 bruts en pleine publication et ne voit JAMAIS l'écran de mise à
     /// jour — les deux racines ne partagent pas une ligne.
-    @StateObject var upgradeGate = UpgradeGateController()
+    @ObservedObject var upgradeGate: UpgradeGateController
+
+    init(scope: RootScopeModels) {
+        _storyViewModel = ObservedObject(wrappedValue: scope.story)
+        _statusViewModel = ObservedObject(wrappedValue: scope.status)
+        conversationVMOwner = scope.conversations
+        _notifications = ObservedObject(wrappedValue: scope.notifications)
+        _upgradeGate = ObservedObject(wrappedValue: scope.upgradeGate)
+    }
 
     private var isConversationOpen: Bool {
         activeConversation != nil
@@ -128,9 +136,9 @@ struct iPadRootView: View {
             GeometryReader { geometry in
                 HStack(spacing: 0) {
                     leftColumn
-                        .frame(width: geometry.size.width * leftColumnRatio)
+                        .frame(width: ColumnWidthLaw.width(ratio: leftColumnRatio, windowWidth: geometry.size.width))
 
-                    iPadResizableHandle(ratio: $leftColumnRatio, screenWidth: geometry.size.width)
+                    iPadResizableHandle(ratio: $leftColumnRatio, windowWidth: geometry.size.width)
 
                     rightColumn
                         .frame(maxWidth: .infinity)

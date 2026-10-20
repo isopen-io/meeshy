@@ -60,9 +60,6 @@ extension AudioPostComposerView {
         // trompé de langue, et la relance ci-dessous s'en charge.
         .disabled(phase == .recording)
         .opacity(phase == .recording ? 0.5 : 1)
-        .sheet(isPresented: $showLanguagePicker) {
-            AudioLanguagePickerView(selectedLocale: $selectedLocale)
-        }
         // **Changer la langue RELANCE la transcription** (directive porteur
         // 2026-09-01). Sans cela le sélecteur était un contrôle à moitié
         // inerte : il agissait avant la transcription et plus après, alors que
@@ -125,6 +122,9 @@ extension AudioPostComposerView {
         }
         // « Plus » seul est ambigu en VoiceOver → intention explicite.
         .accessibilityLabel(String(localized: "composer.audio.languages.more", defaultValue: "Plus de langues"))
+        .anchoredPicker(isPresented: $showLanguagePicker) {
+            AudioLanguagePickerView(selectedLocale: $selectedLocale)
+        }
     }
 
     var suggestedLocales: [Locale] {

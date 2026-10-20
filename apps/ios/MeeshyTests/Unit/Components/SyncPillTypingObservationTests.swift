@@ -104,12 +104,17 @@ final class SyncPillTypingObservationTests: XCTestCase {
     }
 
     func test_hosts_stillOwnTheViewModelWithoutObservingIt() throws {
+        XCTAssertTrue(
+            try source("Features/Main/Views/RootScopeModels.swift").contains("ConversationListVMOwner()"),
+            "La portée racine POSSÈDE le VM sans l'observer — le correctif #4049 confine la re-render à la bannière, il ne la rend pas à `RootView.body` (« Zero Unnecessary Re-render »)."
+        )
         for host in ["Features/Main/Views/RootView.swift", "Features/Main/Views/iPadRootView.swift"] {
             let code = try source(host)
             XCTAssertTrue(
-                code.contains("ConversationListVMOwner()"),
-                "\(host) : l'hôte POSSÈDE le VM sans l'observer — le correctif #4049 confine la re-render à la bannière, il ne la rend pas à `RootView.body` (« Zero Unnecessary Re-render »)."
+                code.contains("let conversationVMOwner"),
+                "\(host) : l'hôte tient le possesseur en `let`, jamais en `@ObservedObject`."
             )
+            XCTAssertFalse(code.contains("@ObservedObject private var conversationVMOwner") || code.contains("@ObservedObject var conversationVMOwner"), host)
         }
     }
 }
