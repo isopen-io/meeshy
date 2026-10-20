@@ -61,6 +61,14 @@ describe('la coque Android reçoit un partage (#8884)', () => {
     expect(plugin).toContain('ShareIntentRules.fileNameFor(');
   });
 
+  test('un fichier vide n’occupe pas de place et le premier qui dépasse arrête le partage, comme la PWA (#11142)', () => {
+    const copie = plugin.slice(plugin.indexOf('private JSObject copied('), plugin.indexOf('private static String displayNameOf('));
+    expect(copie).toContain('ShareIntentRules.verdictOf(size)');
+    expect(copie).toMatch(/CopyVerdict\.STOP\)\s*\{\s*break;/);
+    expect(copie).toMatch(/CopyVerdict\.SKIP\)\s*\{\s*continue;/);
+    expect(readFileSync(join(APP, 'public', 'sw-share-target.js'), 'utf8')).toContain('total + value.size > SHARE_MAX_TOTAL_BYTES) break;');
+  });
+
   test('le partage en attente est publié AVANT que la copie ne réveille le web', () => {
     expect(plugin.indexOf('pending = copy;')).toBeGreaterThan(-1);
     expect(plugin.indexOf('pending = copy;')).toBeLessThan(plugin.indexOf('executor.execute(copy)'));
