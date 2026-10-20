@@ -61,7 +61,7 @@ struct ConversationVideoSceneEditor: View {
 /// droite. « Terminé » rend la pièce retouchée ; « Abandonner » la retire.
 /// Le média choisi ne repart pas en galerie : il y est déjà.
 struct ConversationPieceRetouch: View {
-    let piece: ComposerRetouchPiece
+    let source: ConversationRetouchSource
     let onDone: (ComposerReturnedMedia) -> Void
     let onRemove: () -> Void
     let onCancel: () -> Void
@@ -72,7 +72,14 @@ struct ConversationPieceRetouch: View {
 
     init(piece: ComposerRetouchPiece, onDone: @escaping (ComposerReturnedMedia) -> Void,
          onRemove: @escaping () -> Void, onCancel: @escaping () -> Void) {
-        self.piece = piece
+        self.init(source: .piece(piece), onDone: onDone, onRemove: onRemove, onCancel: onCancel)
+    }
+
+    /// Un média de la bande des récents, retouché AVANT la pose : rien n'est
+    /// encore au message, « Abandonner » referme simplement.
+    init(source: ConversationRetouchSource, onDone: @escaping (ComposerReturnedMedia) -> Void,
+         onRemove: @escaping () -> Void, onCancel: @escaping () -> Void) {
+        self.source = source
         self.onDone = onDone
         self.onRemove = onRemove
         self.onCancel = onCancel
@@ -92,7 +99,7 @@ struct ConversationPieceRetouch: View {
                 .anchorPreference(key: ComposerSceneCameraFrameKey.self, value: .bounds) { $0 }
         }
         .task {
-            guard await ConversationPieceRetouchOpening.open(piece, in: session) else { return close(removing: false) }
+            guard await ConversationPieceRetouchOpening.open(source, in: session) else { return close(removing: false) }
         }
         .adaptiveOnChange(of: session.phase.isEditing) { avant, apres in
             guard ConversationPieceRetouchOpening.abandoned(wasEditing: avant, isEditing: apres,
@@ -111,6 +118,14 @@ struct ConversationPieceRetouch: View {
         settled = true
         removing ? onRemove() : onCancel()
     }
+}
+
+/// Ce que la retouche ouvre (#11133, « un seul éditeur ») : une pièce déjà au
+/// message, ou un média des récents avant sa pose.
+enum ConversationRetouchSource {
+    case piece(ComposerRetouchPiece)
+    case image(UIImage)
+    case video(URL)
 }
 
 /// Les règles de la retouche d'une pièce (#11133), pures ou presque.
@@ -132,17 +147,30 @@ enum ConversationPieceRetouchOpening {
     /// La pièce entre en retouche. Une vidéo y entre par une COPIE : la retouche
     /// abandonnée efface son fichier, jamais celui de la pièce en attente.
     static func open(_ piece: ComposerRetouchPiece, in session: ComposerCaptureSession) async -> Bool {
-        switch piece.kind {
-        case .image:
+        await open(.piece(piece), in: session)
+    }
+
+    static func open(_ source: ConversationRetouchSource, in session: ComposerCaptureSession) async -> Bool {
+        switch source {
+        case .piece(let piece) where piece.kind == .image:
             guard let image = await ConversationImageRetouche.loadSource(fileURL: piece.fileURL) else { return false }
             session.beginEditing(photo: image)
-        case .video:
-            let copie = FileManager.default.temporaryDirectory
-                .appendingPathComponent("retouche-\(UUID().uuidString).\(piece.fileURL.pathExtension)")
-            guard (try? FileManager.default.copyItem(at: piece.fileURL, to: copie)) != nil else { return false }
+        case .piece(let piece):
+            guard let copie = copy(piece.fileURL) else { return false }
+            await session.beginEditing(video: copie)
+        case .image(let image):
+            session.beginEditing(photo: image)
+        case .video(let url):
+            guard let copie = copy(url) else { return false }
             await session.beginEditing(video: copie)
         }
         return session.phase.isEditing
+    }
+
+    private static func copy(_ url: URL) -> URL? {
+        let copie = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retouche-\(UUID().uuidString).\(url.pathExtension)")
+        return (try? FileManager.default.copyItem(at: url, to: copie)) != nil ? copie : nil
     }
 
     /// La retouche quittée sans rien remettre — « Abandonner » : la pièce part.

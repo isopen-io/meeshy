@@ -162,18 +162,18 @@ private struct CommentRecentMediaSceneModifier: ViewModifier {
         content
             .fullScreenCover(isPresented: Binding(get: { image != nil }, set: { if !$0 { image = nil } })) {
                 if let image {
-                    ConversationImageSceneEditor(image: image, staged: false, onDone: { media in
+                    ConversationPieceRetouch(source: .image(image), onDone: { media in
                         self.image = nil
                         onDone(Self.pick(media))
-                    }, onCancel: { self.image = nil })
+                    }, onRemove: { self.image = nil }, onCancel: { self.image = nil })
                 }
             }
             .fullScreenCover(isPresented: Binding(get: { video != nil }, set: { if !$0 { video = nil } })) {
                 if let video {
-                    ConversationVideoSceneEditor(url: video, staged: false, onDone: { media in
+                    ConversationPieceRetouch(source: .video(video), onDone: { media in
                         self.video = nil
                         onDone(Self.pick(media))
-                    }, onCancel: { self.video = nil })
+                    }, onRemove: { self.video = nil }, onCancel: { self.video = nil })
                 }
             }
     }

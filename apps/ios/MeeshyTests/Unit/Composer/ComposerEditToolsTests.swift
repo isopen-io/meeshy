@@ -227,6 +227,29 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertEqual(session.activeEditTools, [], "monter le rail n'allume rien")
     }
 
+    /// **« Un seul éditeur » vaut aussi pour la bande des récents** (porteur
+    /// 2026-10-20) : une image ou une vidéo récente se retouche avant sa pose,
+    /// dans la conversation comme dans un commentaire.
+    func test_11133_aRecentImage_opensInTheCaptureRetouch_beforeItIsStaged() async {
+        let session = ConversationPieceRetouchOpening.session(gallery: MockComposerGallery())
+        let image = UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400))
+        let ouverte = await ConversationPieceRetouchOpening.open(.image(image), in: session)
+        XCTAssertTrue(ouverte)
+        XCTAssertEqual(session.phase, .editing(.photo))
+        XCTAssertEqual(session.activeEditTools, [])
+    }
+
+    func test_11133_recentMediaEdits_openTheCaptureRetouch_inConversationAndComments() throws {
+        let couches = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
+        let commentaires = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/CommentSceneRetouch.swift")
+        for code in [couches, commentaires] {
+            XCTAssertFalse(code.contains("ConversationImageSceneEditor("), "plus de scène pour une image récente")
+            XCTAssertFalse(code.contains("ConversationVideoSceneEditor("), "plus de scène pour une vidéo récente")
+            XCTAssertTrue(code.contains("ConversationPieceRetouch(source: .image("))
+            XCTAssertTrue(code.contains("ConversationPieceRetouch(source: .video("))
+        }
+    }
+
     private static func settles(_ condition: () -> Bool) -> Bool {
         let fin = Date().addingTimeInterval(3)
         while Date() < fin {
