@@ -64,7 +64,7 @@ describe('« Jeu masqué »', () => {
   test('le texte dit tout ce que le geste fait : appareil, visibilités, ligue — et ce qui est gardé', () => {
     const t = text(renderToStaticMarkup(<GameSettings {...props()} />));
     expect(t).toContain('Masque le jeu partout sur cet appareil');
-    expect(t).toContain('te retire de la ligue publique');
+    expect(t).toContain('te retire de la joute publique');
     expect(t).toContain('Tes étincelles et tes trophées sont gardés');
   });
 
@@ -137,13 +137,13 @@ describe('qui voit quoi', () => {
   test('quatre sélecteurs : rang et niveau, trésor et Flamme, vitrine, Atlas', () => {
     const html = renderToStaticMarkup(<GameSettings {...props()} />);
     expect((html.match(/data-game-visibility/g) ?? []).length).toBe(4);
-    for (const legend of ['Rang et niveau', 'Trésor et Flamme', 'Vitrine de trophées', 'Atlas des langues']) expect(text(html)).toContain(legend);
+    for (const legend of ['Rang et niveau', 'Héritage et Flamme', 'Trophées', 'Atlas des langues']) expect(text(html)).toContain(legend);
   });
 
   test('un changement n’envoie QUE le champ touché', async () => {
     const patches: Array<Partial<GameVisibility>> = [];
     const host = await mount(<GameSettings {...props({ onVisibility: (patch) => patches.push(patch) })} />);
-    const fieldset = [...host.querySelectorAll('[data-game-visibility]')].find((node) => node.textContent?.includes('Trésor et Flamme'));
+    const fieldset = [...host.querySelectorAll('[data-game-visibility]')].find((node) => node.textContent?.includes('Héritage et Flamme'));
     await click(fieldset?.querySelector('input[value="me"]') ?? null);
     expect(patches).toEqual([{ treasury: 'me' }]);
   });
@@ -172,7 +172,7 @@ describe('la ligue publique', () => {
   test('dehors : on le dit, il n’y a rien à quitter', () => {
     const closed = game.league === undefined ? undefined : { ...game.league, access: 'consent-required' as const, current: null };
     const html = renderToStaticMarkup(<GameSettings {...props({ league: closed })} />);
-    expect(text(html)).toContain('Tu n’es pas dans la ligue publique');
+    expect(text(html)).toContain('Tu n’es pas dans la joute publique');
     expect(html).not.toContain('data-game-setting-league-leave');
   });
 });

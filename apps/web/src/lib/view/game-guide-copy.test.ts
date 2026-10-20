@@ -70,8 +70,8 @@ describe('les chiffres du moment se disent', () => {
   test('première frappe possible : le prix, la baisse du niveau, la Gloire (#10892)', () => {
     const copy = copyOf('first-mint-possible');
     expect(copy.means).toContain('1 221 étincelles');
-    expect(copy.means).toContain('fait baisser ton niveau');
-    expect(copy.means).toContain('+100 de Gloire');
+    expect(copy.means).toContain('ton niveau baisse d’autant');
+    expect(copy.means).toContain('+100 de gloire');
   });
   test('la phrase ne promet plus que le niveau tient : la frappe le fait baisser', () => {
     const moment = guideMoment({ kind: 'first-mint-possible', price: 1221, levelsLost: 1, gloryGain: 100 }, []);
@@ -79,7 +79,7 @@ describe('les chiffres du moment se disent', () => {
   });
   test('première frappe : la poche paie, le niveau baisse d’autant, le rang non, plus de Vent arrière', () => {
     const copy = copyOf('first-mint');
-    expect(copy.means).toContain('ton niveau a baissé d’autant, ton rang non');
+    expect(copy.means).toContain('ton niveau a baissé d’autant, ton rang jamais');
     expect(copy.means).not.toContain('Vent arrière');
     expect(copy.means).not.toContain('de 14 à 9');
   });
@@ -101,7 +101,7 @@ describe('les chiffres du moment se disent', () => {
     expect(copyOf('return-after-absence').means).toContain('9 jours');
   });
   test('niveau 100 : Prestige ou sommet', () => {
-    expect(copyOf('level-100').next).toContain('Prestige');
+    expect(copyOf('level-100').next).toContain('Renais');
   });
 });
 
@@ -146,13 +146,13 @@ describe('l’étape qui attend son geste nomme le geste', () => {
   };
 
   test('missions et Flamme remplacent « l’étape d’après » par le geste attendu', () => {
-    expect(stepCopy(stepOf('missions'), { awaiting: true, language: 'fr' }).next).toContain('mission la plus facile');
+    expect(stepCopy(stepOf('missions'), { awaiting: true, language: 'fr' }).next).toContain('premier acte du rêve');
     expect(stepCopy(stepOf('flame'), { awaiting: true, language: 'fr' }).next).toContain('Reviens demain');
     expect(stepCopy(stepOf('missions'), { language: 'fr' }).next).toBe('Une Flamme grandit tant que tu reviens.');
   });
 
   test('le bouton suit l’action qu’on lui donne', () => {
-    expect(stepCopy(stepOf('missions'), { awaiting: true, action: 'see-missions', language: 'fr' }).action).toBe('Voir les missions');
+    expect(stepCopy(stepOf('missions'), { awaiting: true, action: 'see-missions', language: 'fr' }).action).toBe('Voir mon rêve');
   });
 });
 

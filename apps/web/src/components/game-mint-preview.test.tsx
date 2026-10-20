@@ -54,7 +54,7 @@ describe('une frappe possible', () => {
   const page = text(html);
 
   test('une ligne de titre : le numéro de la prochaine pièce', () => {
-    expect(page).toContain('Prochaine Meesh · n° 4');
+    expect(page).toContain('La Meesh n° 4');
   });
 
   test('un chiffre fort : le prix en étincelles', () => {
@@ -72,7 +72,7 @@ describe('une frappe possible', () => {
     const levels = mintLevels(gameBlockFixture({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks }).mint);
     expect(levels.levelsLost).toBeGreaterThan(0);
     expect(impactLines(spending)).toEqual([
-      `+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`,
+      `+${formatCount(GLORY_POINTS.mint, 'fr')} de gloire`,
       `Niveau ${formatCount(levels.levelBefore, 'fr')} → ${formatCount(levels.levelAfter, 'fr')}`,
     ]);
     expect(text(spending)).not.toMatch(/badge/i);
@@ -82,7 +82,7 @@ describe('une frappe possible', () => {
     const sparks = { pocket: 90_000, cycle: 90_000, lifetime: 90_000, debt: 0 };
     const game = gameBlockFixture({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks });
     const steady = renderToStaticMarkup(<GameMintPreview {...props({}, { mint: { ...game.mint, levelsLost: 0, levelAfter: game.mint.levelBefore, ladder: undefined } })} />);
-    expect(impactLines(steady)).toEqual([`+${formatCount(GLORY_POINTS.mint, 'fr')} Gloire`]);
+    expect(impactLines(steady)).toEqual([`+${formatCount(GLORY_POINTS.mint, 'fr')} de gloire`]);
   });
 
   test('aucun paragraphe : ni tableau de lignes, ni phrase d’explication', () => {
@@ -126,16 +126,16 @@ describe('une frappe possible', () => {
 describe('avant le geste, ce que la frappe dépense (#9705)', () => {
   test('les points en poche, le prix, et ce qui restera', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview {...props({ score: 5000, debitablePoints: 5000 })} />));
-    expect(page).toContain('En poche 5 000 étincelles');
-    expect(page).toContain('Coûte 1 221 étincelles');
-    expect(page).toContain('Restera 3 779 étincelles');
+    expect(page).toContain('Tu as 5 000 étincelles');
+    expect(page).toContain('Il faut 1 221 étincelles');
+    expect(page).toContain('Après 3 779 étincelles');
   });
 
   test('TOUT est dépensable (porteur 2026-10-16) : plus de « points à convertir », une seule poche — le manque se dit en étincelles, pour SA Meesh', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview {...props({ score: 600, debitablePoints: 600 })} />));
-    expect(page).toContain('En poche 600 étincelles');
+    expect(page).toContain('Tu as 600 étincelles');
     expect(page).not.toMatch(/convertir/i);
-    expect(page).toContain('Il manque 621 étincelles pour la Meesh n° 4.');
+    expect(page).toContain('Il manque 621 étincelles à ta lumière pour frapper la Meesh n° 4.');
   });
 });
 
@@ -147,7 +147,7 @@ describe('une frappe pas encore possible : pas de bouton grisé', () => {
   });
 
   test('ce qu’il manque, en une ligne, et le prix de la prochaine', () => {
-    expect(text(html)).toContain('Il manque 621 étincelles pour la Meesh n° 4.');
+    expect(text(html)).toContain('Il manque 621 étincelles à ta lumière pour frapper la Meesh n° 4.');
     expect(text(html)).not.toContain('Restera');
     expect(html).toMatch(/data-game-mint-price=""[^>]*>1\s221\sétincelles</);
   });
@@ -189,13 +189,13 @@ describe('après la frappe', () => {
     }
     const CONFIRMED: Readonly<Record<number, { number: number; edition: 'silver'; key: number }>> = { 4: { number: 4, edition: 'silver', key: 1 } };
     const host = await mount(<Bench />);
-    const scene = (): string => host.querySelector('[data-game-mint-scene]')?.textContent ?? '';
+    const scene = (): string => host.querySelector('[data-game-mint-scene] [data-game-number]')?.getAttribute('data-game-number') ?? '';
     await act(async () => set({ strikeKey: 1, next: 4, confirmed: null }));
-    expect(scene()).toContain('N° 4');
+    expect(scene()).toBe('4');
     await act(async () => set({ strikeKey: 1, next: 5, confirmed: 4 }));
-    expect(scene()).toContain('N° 4');
+    expect(scene()).toBe('4');
     await act(async () => set({ strikeKey: 2, next: 5, confirmed: 4 }));
-    expect(scene()).toContain('N° 5');
+    expect(scene()).toBe('5');
   });
 });
 
@@ -213,7 +213,7 @@ describe('une frappe fermée par une dette ou par un rang', () => {
     const html = renderToStaticMarkup(<GameMintPreview {...closed({ blockedBy: 'debt', sparksDebt: 120 })} />);
     expect(html).toContain('data-game-mint-blocked="debt"');
     expect(text(html)).toContain('120 étincelles');
-    expect(text(html)).toMatch(/remboursent/);
+    expect(text(html)).toMatch(/dissiperont/);
     expect(html).not.toContain('data-game-mint-action');
   });
 

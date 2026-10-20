@@ -26,7 +26,7 @@ afterEach(() => {
 
 const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
-const forAFreeze = { fact: 'spend_missing', line: (missing: string): string => `Il manque ${missing} pour acheter un gel.` } as const;
+const forAFreeze = { fact: 'spend_missing', line: (missing: string): string => `Il manque ${missing} pour prendre une Veilleuse.` } as const;
 
 /**
  * CE QU'UN GESTE DÉPENSE, AVANT LE GESTE (#9705) — ce qu'on a, ce que ça coûte,
@@ -35,17 +35,17 @@ const forAFreeze = { fact: 'spend_missing', line: (missing: string): string => `
 describe('la ligne de dépense', () => {
   test('dit le solde, le prix et ce qui restera quand le geste est possible', () => {
     const page = text(renderToStaticMarkup(<GameSpendLine concept="flame" held={5} cost={3} format={meeshCount} missing={forAFreeze} />));
-    expect(page).toContain('En poche 5 Meeshes');
-    expect(page).toContain('Coûte 3 Meeshes');
-    expect(page).toContain('Restera 2 Meeshes');
+    expect(page).toContain('Tu as 5 Meeshes');
+    expect(page).toContain('Il faut 3 Meeshes');
+    expect(page).toContain('Après 2 Meeshes');
     expect(page).not.toContain('Il manque');
   });
 
   test('dit combien il manque ET pour quoi, au lieu de ce qui restera, quand le solde ne suffit pas (#10540)', () => {
     const page = text(renderToStaticMarkup(<GameSpendLine concept="flame" held={4} cost={10} format={meeshCount} missing={forAFreeze} />));
-    expect(page).toContain('En poche 4 Meeshes');
-    expect(page).toContain('Coûte 10 Meeshes');
-    expect(page).toContain('Il manque 6 Meeshes pour acheter un gel.');
+    expect(page).toContain('Tu as 4 Meeshes');
+    expect(page).toContain('Il faut 10 Meeshes');
+    expect(page).toContain('Il manque 6 Meeshes pour prendre une Veilleuse.');
     expect(page).not.toContain('Restera');
   });
 
@@ -60,19 +60,19 @@ describe('la ligne de dépense', () => {
           format={(n) => `${n} pts`}
           formatMissing={(n) => `${n} à convertir`}
           between={{ fact: 'convertible', label: 'À convertir', value: '900 pts' }}
-          missing={{ fact: 'mint_missing', line: (missing) => `Il manque ${missing} pour la Meesh n° 4.` }}
+          missing={{ fact: 'mint_missing', line: (missing) => `Il manque ${missing} à ta lumière pour frapper la Meesh n° 4.` }}
         />,
       ),
     );
-    expect(page).toContain('En poche 5000 pts');
+    expect(page).toContain('Tu as 5000 pts');
     expect(page).toContain('À convertir 900 pts');
-    expect(page).toContain('Il manque 321 à convertir pour la Meesh n° 4.');
+    expect(page).toContain('Il manque 321 à convertir à ta lumière pour frapper la Meesh n° 4.');
   });
 
   test('ce qu’il manque se touche et ouvre SES précisions', async () => {
     const host = await mount(<GameSpendLine concept="flame" held={0} cost={1} format={meeshCount} missing={forAFreeze} />);
     await click(host.querySelector<HTMLElement>('[data-game-missing="spend_missing"]'));
-    expect(detailStore.get()?.detail.name).toBe('Il manque 1 Meesh pour acheter un gel.');
+    expect(detailStore.get()?.detail.name).toBe('Il manque 1 Meesh pour prendre une Veilleuse.');
     expect(detailStore.get()?.detail.what).toBe('C’est ce qu’il te manque pour faire ce geste.');
   });
 
@@ -81,8 +81,8 @@ describe('la ligne de dépense', () => {
     const chips = Array.from(host.querySelectorAll<HTMLElement>('[data-game-spend] [data-detail]'));
     expect(chips).toHaveLength(3);
     await click(chips[2] ?? null);
-    expect(detailStore.get()?.detail.name).toBe('Restera');
-    expect(detailStore.get()?.detail.what).toBe('C’est ce qu’il te restera après ce geste.');
+    expect(detailStore.get()?.detail.name).toBe('Après');
+    expect(detailStore.get()?.detail.what).toBe('C’est ce que tu garderas après ce geste.');
   });
 });
 
@@ -101,6 +101,6 @@ describe('la ligne d’exigence', () => {
 
   test('le niveau compté peut être le RECORD (la ligue, le duo)', () => {
     const page = text(renderToStaticMarkup(<GameRequirementLine concept="league" current={8} required={10} record />));
-    expect(page).toContain('Record 8');
+    expect(page).toContain('Au plus haut 8');
   });
 });

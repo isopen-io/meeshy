@@ -121,7 +121,7 @@ describe('seulement ce qui a du sens (#9536)', () => {
 describe('ce que lit le lecteur d’écran — une phrase complète', () => {
   test('fr : le nouveau joueur, son niveau, son palier et sa marche vers le suivant', () => {
     const model = shown(NEWCOMER);
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, Braise, \d+ % vers le \d+$/);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, Étincelle, \d+ % vers le \d+$/);
   });
 
   test('fr : au niveau 1, le total de points est dit — il n’y a pas de niveau à lire', () => {
@@ -131,13 +131,13 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
 
   test('fr : tout ce qui existe, dans l’ordre de la rangée compacte — l’anneau, le milieu, le rang au bout (#11125)', () => {
     const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, Flamme 23 jours, 12 Meeshes, Missions du jour : \d+ sur \d+, ligue Jade \d+(re|e), Murmure IV, 620 Gloire, encore [\d\s\u202f]+ vers Murmure III$/u);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, Flamme 23 jours, 12 Meeshes, Rêve : \d+ sur \d+, joute de Jade · \d+(re|e), Murmure IV, gloire 620, [\d\s\u202f]+ de gloire jusqu’à Murmure III$/u);
   });
 
   test('fr : trophées et saison ne sont dits que dans la disposition grand texte, où ils restent (#11125)', () => {
     const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
-    expect(playerBannerLabel(model, 'fr')).not.toMatch(/Trophées|Saison/);
-    expect(playerBannerLabel(model, 'fr', 'large')).toMatch(/Trophées : \d+, Saison : \d+ étoiles$/);
+    expect(playerBannerLabel(model, 'fr')).not.toMatch(/Trophées|Voyage/);
+    expect(playerBannerLabel(model, 'fr', 'large')).toMatch(/Trophées : \d+, Voyage : \d+ pas$/);
   });
 
   test('le rang : la division V..I et la place du Mythe, dites et dessinées (#9636)', () => {
@@ -251,7 +251,7 @@ describe('trophées, mission du jour et saison', () => {
     expect(model).not.toBeNull();
     const label = playerBannerLabel(model!, 'fr', 'large');
     expect(label).toContain('Trophées');
-    expect(label).toContain('Saison');
+    expect(label).toContain('Voyage');
   });
 });
 
@@ -308,13 +308,13 @@ describe('le rang porte sa Gloire, sa jauge et ce qui manque', () => {
   test('le nom accessible du rang : son nom, sa Gloire et ce qui manque vers le suivant', () => {
     const game = gameBlockWithExtrasFixture({ glory: 620 });
     const labels = playerBannerPieceLabels(playerBannerModel(game)!, 'fr');
-    expect(labels.rank).toMatch(/^Murmure IV, 620 Gloire, encore [\d\s\u202f]+ vers Murmure III$/u);
+    expect(labels.rank).toMatch(/^Murmure IV, gloire 620, [\d\s\u202f]+ de gloire jusqu’à Murmure III$/u);
   });
 
   test('au Mythe : le nom et la Gloire seule, sans « encore »', () => {
     const mythe = shownExtras({ glory: 1_000_000, mythic: true, mythicSeat: { number: 18, edition: 22 } });
     const label = playerBannerPieceLabels(mythe, 'fr').rank ?? '';
-    expect(label).toMatch(/^Mythe n° 18, 1[\s\u202f]000[\s\u202f]000 Gloire$/u);
+    expect(label).toMatch(/^Mythe n° 18, gloire 1[\s\u202f]000[\s\u202f]000$/u);
     expect(label).not.toContain('encore');
   });
 });
