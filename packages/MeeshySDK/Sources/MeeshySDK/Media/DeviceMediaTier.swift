@@ -87,6 +87,32 @@ public struct DeviceMediaSignals: Sendable, Equatable {
         if let simulated = environment["SIMULATOR_MODEL_IDENTIFIER"], !simulated.isEmpty { return simulated }
         return raw.isEmpty ? "unknown" : raw
     }
+
+    /// Les signaux d'un appareil SIMULÉ. VideoToolbox y répond pour la machine
+    /// hôte — une VM de CI n'a aucun décodeur matériel, et chaque simulateur
+    /// tomberait en `low` —, donc les décodeurs se déduisent de la puce simulée :
+    /// HEVC sur tout appareil qu'iOS 16 accepte, AV1 depuis la classe A17 Pro / M3.
+    /// La mémoire reste celle de l'hôte : un vieil iPhone simulé peut monter d'un
+    /// tier, aucun appareil récent n'en descend.
+    public static func simulated(machine: String, physicalMemory: UInt64, maximumFramesPerSecond: Int) -> DeviceMediaSignals {
+        DeviceMediaSignals(
+            machine: machine,
+            physicalMemory: physicalMemory,
+            maximumFramesPerSecond: maximumFramesPerSecond,
+            hardwareDecodesHEVC: true,
+            hardwareDecodesAV1: AppleChip(machine: machine).performanceClass >= DeviceMediaTier.proChipClass
+        )
+    }
+
+    func withFramesPerSecond(_ framesPerSecond: Int) -> DeviceMediaSignals {
+        DeviceMediaSignals(
+            machine: machine,
+            physicalMemory: physicalMemory,
+            maximumFramesPerSecond: framesPerSecond,
+            hardwareDecodesHEVC: hardwareDecodesHEVC,
+            hardwareDecodesAV1: hardwareDecodesAV1
+        )
+    }
 }
 
 /// **La famille de puce d'un identifiant matériel.** Les puces Mac de la série M

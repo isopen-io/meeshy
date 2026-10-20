@@ -28,24 +28,31 @@ enum DeviceMediaProbe {
 
     private static let av1CodecType: CMVideoCodecType = 0x6176_3031 // 'av01'
 
-    static func tier() -> DeviceMediaTier {
-        if let known = resolved.withLock({ $0 }) { return known }
-        guard Thread.isMainThread else {
-            return DeviceMediaTier.classify(signals(framesPerSecond: 60))
-        }
-        let tier = DeviceMediaTier.classify(signals(framesPerSecond: mainScreenFramesPerSecond()))
-        resolved.withLock { $0 = tier }
-        return tier
-    }
-
-    static func signals(framesPerSecond: Int) -> DeviceMediaSignals {
-        DeviceMediaSignals(
-            machine: DeviceMediaSignals.machine(raw: rawMachine(), environment: ProcessInfo.processInfo.environment),
-            physicalMemory: ProcessInfo.processInfo.physicalMemory,
-            maximumFramesPerSecond: framesPerSecond,
+    /// Ce que l'appareil déclare hors de l'écran, lu UNE fois (initialisation
+    /// paresseuse et sûre d'un `static let`) : un appel hors du fil principal ne
+    /// rejoue ni `uname`, ni l'environnement, ni VideoToolbox à chaque décodage.
+    private static let baseSignals: DeviceMediaSignals = {
+        let info = ProcessInfo.processInfo
+        let machine = DeviceMediaSignals.machine(raw: rawMachine(), environment: info.environment)
+        #if targetEnvironment(simulator)
+        return DeviceMediaSignals.simulated(machine: machine, physicalMemory: info.physicalMemory, maximumFramesPerSecond: 60)
+        #else
+        return DeviceMediaSignals(
+            machine: machine,
+            physicalMemory: info.physicalMemory,
+            maximumFramesPerSecond: 60,
             hardwareDecodesHEVC: VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC),
             hardwareDecodesAV1: VTIsHardwareDecodeSupported(av1CodecType)
         )
+        #endif
+    }()
+
+    static func tier() -> DeviceMediaTier {
+        if let known = resolved.withLock({ $0 }) { return known }
+        guard Thread.isMainThread else { return DeviceMediaTier.classify(baseSignals) }
+        let tier = DeviceMediaTier.classify(baseSignals.withFramesPerSecond(mainScreenFramesPerSecond()))
+        resolved.withLock { $0 = tier }
+        return tier
     }
 
     private static func rawMachine() -> String {

@@ -166,6 +166,30 @@ struct DeviceMediaTierTests {
         #expect(DeviceMediaSignals.machine(raw: "", environment: [:]) == "unknown")
     }
 
+    /// Sur simulateur, VideoToolbox répond pour la machine HÔTE (une VM de CI
+    /// n'a aucun décodeur matériel) : le simulateur rangerait chaque appareil
+    /// simulé en « bas ». Les décodeurs se déduisent alors de la puce SIMULÉE.
+    @Test("sur simulateur, les décodeurs se déduisent de la puce simulée, jamais de l'hôte")
+    func simulatorDecodersFollowTheSimulatedChip() {
+        let iPhone16Pro = DeviceMediaSignals.simulated(machine: "iPhone17,1", physicalMemory: 16 * 1_073_741_824, maximumFramesPerSecond: 120)
+        #expect(iPhone16Pro.hardwareDecodesHEVC)
+        #expect(iPhone16Pro.hardwareDecodesAV1)
+        #expect(DeviceMediaTier.classify(iPhone16Pro) == .pro)
+
+        let iPhone15 = DeviceMediaSignals.simulated(machine: "iPhone15,4", physicalMemory: 16 * 1_073_741_824, maximumFramesPerSecond: 60)
+        #expect(iPhone15.hardwareDecodesHEVC)
+        #expect(!iPhone15.hardwareDecodesAV1)
+        #expect(DeviceMediaTier.classify(iPhone15) == .high)
+
+        let iPadAirM2 = DeviceMediaSignals.simulated(machine: "iPad14,8", physicalMemory: 16 * 1_073_741_824, maximumFramesPerSecond: 60)
+        #expect(!iPadAirM2.hardwareDecodesAV1)
+        #expect(DeviceMediaSignals.simulated(machine: "iPad16,3", physicalMemory: 0, maximumFramesPerSecond: 60).hardwareDecodesAV1)
+
+        let unnamed = DeviceMediaSignals.simulated(machine: "arm64", physicalMemory: 16 * 1_073_741_824, maximumFramesPerSecond: 60)
+        #expect(unnamed.hardwareDecodesHEVC)
+        #expect(!unnamed.hardwareDecodesAV1)
+    }
+
     @Test("les tiers s'ordonnent du plus faible au plus fort")
     func tiersAreOrdered() {
         #expect(DeviceMediaTier.low < .mid)
