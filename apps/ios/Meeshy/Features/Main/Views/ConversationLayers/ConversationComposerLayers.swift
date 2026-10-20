@@ -69,7 +69,7 @@ struct ConversationComposerPickers: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: ConversationComposerState.maxMediaSelection, matching: .any(of: [.images, .videos]), photoLibrary: .shared())
+            .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: ConversationComposerState.maxMediaSelection, matching: .any(of: [.images, .videos]), preferredItemEncoding: .current, photoLibrary: .shared())
             .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
                 onFileImport(result)
             }

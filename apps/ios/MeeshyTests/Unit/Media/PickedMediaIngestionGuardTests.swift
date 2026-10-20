@@ -31,10 +31,11 @@ final class PickedMediaIngestionGuardTests: XCTestCase {
         }
         return try files.map { file in
             let text = try String(contentsOf: file, encoding: .utf8)
-            let code = text.split(separator: "\n", omittingEmptySubsequences: false)
-                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
-                .joined(separator: "\n")
-            return (file.lastPathComponent, code)
+            // Le retrait des commentaires est coûteux : seuls les fichiers qui nomment un
+            // des motifs gardés le subissent.
+            let concerned = text.contains("loadTransferable") || text.contains("hotosPicker(")
+                || text.contains("FileRepresentation")
+            return (file.lastPathComponent, concerned ? AppSourceGuard.stripComments(text) : "")
         }
     }
 
@@ -58,7 +59,7 @@ final class PickedMediaIngestionGuardTests: XCTestCase {
 
     func test_noPickedItemIsLoadedAsData() throws {
         let all = try sources()
-        XCTAssertGreaterThan(all.count, 500, "le balayage ne voit presque rien : un dossier a bougé")
+        XCTAssertGreaterThan(all.count, 1000, "le balayage ne voit presque rien : un dossier a bougé")
         let offenders = all.filter { $0.code.contains("loadTransferable(type: Data.self)") }.map(\.name)
         XCTAssertTrue(offenders.isEmpty,
                       "un élément du sélecteur se charge par PickedMedia (fichier pour une vidéo), jamais par Data : \(offenders.sorted())")

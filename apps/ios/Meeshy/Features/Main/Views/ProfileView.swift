@@ -790,7 +790,7 @@ struct ProfileView: View {
 
     private func loadImageForEditor(from item: PhotosPickerItem, completion: @escaping (UIImage?) -> Void) {
         Task {
-            guard let data = try? await item.loadTransferable(type: Data.self),
+            guard let data = try? await PickedMedia.loadImageData(item),
                   let image = UIImage(data: data) else {
                 completion(nil)
                 return

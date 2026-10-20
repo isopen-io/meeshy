@@ -366,7 +366,7 @@ struct ComposerToolPanelHost: View {
             // Add buttons
             HStack(spacing: MeeshySpacing.sm) {
                 if viewModel.canAddMedia {
-                    PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
+                    PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos]), preferredItemEncoding: .current) {
                         MediaPillLabel(icon: "photo.on.rectangle.angled", text: addMediaLabel, destructive: false)
                     }
                 }
@@ -447,7 +447,7 @@ struct ComposerToolPanelHost: View {
         .photosPicker(
             isPresented: $autoOpenMediaPicker,
             selection: $fgMediaItem,
-            matching: .any(of: [.images, .videos])
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
         )
         .onAppear {
             let isEmpty = (viewModel.currentEffects.mediaObjects?.isEmpty ?? true)

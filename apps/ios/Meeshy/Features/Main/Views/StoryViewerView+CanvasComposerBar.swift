@@ -279,7 +279,8 @@ struct StoryComposerBarView: View {
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
             maxSelectionCount: 1,
-            matching: .any(of: [.images, .videos])
+            matching: .any(of: [.images, .videos]),
+            preferredItemEncoding: .current
         )
         .fileImporter(
             isPresented: $showCommentFilePicker,

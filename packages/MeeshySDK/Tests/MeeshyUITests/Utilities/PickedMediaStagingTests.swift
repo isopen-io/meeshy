@@ -67,14 +67,17 @@ final class PickedMediaStagingTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: second.path))
     }
 
-    func test_stage_withAStem_namesTheFileAfterIt() throws {
+    func test_rename_namesTheFileAfterTheStem_withoutCopyingIt() throws {
         let sandbox = try makeSandbox()
-        let source = try makeSource(in: sandbox, name: "clip.mov")
+        let source = try makeSource(in: sandbox, name: "clip.mov", bytes: Data("hevc-bytes".utf8))
+        let staged = try PickedMediaStaging.stage(source, directory: sandbox)
 
-        let staged = try PickedMediaStaging.stage(source, stem: "obj-42", directory: sandbox)
+        let renamed = try PickedMediaStaging.rename(staged, toStem: "obj-42")
 
-        XCTAssertEqual(staged.lastPathComponent, "obj-42.mov",
+        XCTAssertEqual(renamed.lastPathComponent, "obj-42.mov",
                        "le composer de story aligne l'identifiant de l'objet sur le nom du fichier")
+        XCTAssertEqual(try Data(contentsOf: renamed), Data("hevc-bytes".utf8))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staged.path), "un déplacement : aucune seconde copie")
     }
 
     func test_stage_missingSource_throwsAndLeavesNothingBehind() throws {
