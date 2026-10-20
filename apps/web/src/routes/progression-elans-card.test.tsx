@@ -60,7 +60,7 @@ const ACCELERATED: Readonly<Record<InterfaceLanguage, string>> = {
   es: '3 familias activas en 7 días, más tu base. Tus próximas acciones valen 3 veces más.',
   pt: '3 famílias ativas em 7 dias, mais sua base. Suas próximas ações valem 3 vezes mais.',
   de: '3 aktive Familien über 7 Tage, plus dein Bestand. Deine nächsten Aktionen bringen 3-mal mehr.',
-  it: '3 famiglie attive su 7 giorni, più la tua base. Le tue prossime azioni valgono 3 volte di più.',
+  it: '3 famiglie attive su 7 giorni, più la tua base. I tuoi prossimi gesti rendono 3 volte di più.',
   ar: '3 فئات نشطة خلال 7 يومًا، بالإضافة إلى رصيدك الثابت. أفعالك القادمة تُكسبك 3 أضعاف أكثر.',
 };
 
@@ -70,7 +70,7 @@ const ACCELERATED_ONE: Readonly<Record<InterfaceLanguage, string>> = {
   es: '1 familia activa en 7 días. Tus próximas acciones valen 2 veces más.',
   pt: '1 família ativa em 7 dias. Suas próximas ações valem 2 vezes mais.',
   de: '1 aktive Familie über 7 Tage. Deine nächsten Aktionen bringen 2-mal mehr.',
-  it: '1 famiglia attiva su 7 giorni. Le tue prossime azioni valgono 2 volte di più.',
+  it: '1 famiglia attiva su 7 giorni. I tuoi prossimi gesti rendono 2 volte di più.',
   ar: 'فئة نشطة واحدة خلال 7 يومًا. أفعالك القادمة تُكسبك 2 أضعاف أكثر.',
 };
 
@@ -80,7 +80,7 @@ const HINT: Readonly<Record<InterfaceLanguage, string>> = {
   es: 'Mantén una familia más a la vez para activar el multiplicador.',
   pt: 'Mantenha mais uma família ao mesmo tempo para ativar o multiplicador.',
   de: 'Halte eine weitere Familie gleichzeitig am Laufen, um den Multiplikator auszulösen.',
-  it: 'Porta avanti un’altra famiglia allo stesso tempo per attivare il moltiplicatore.',
+  it: 'Porta avanti un’altra famiglia allo stesso tempo per far scattare il moltiplicatore.',
   ar: 'حافظ على عائلة إضافية في الوقت نفسه لتفعيل المضاعف.',
 };
 

@@ -133,7 +133,7 @@ describe('Progression, interface en', () => {
 describe('Progression, interface it', () => {
   test('le héros vide et les sections viennent du catalogue italien', () => {
     document.documentElement.lang = 'it';
-    expect(rendered(<LastAchievementHero progress={empty} />)).toContain('Primo successo');
+    expect(rendered(<LastAchievementHero progress={empty} />)).toContain('Prima impresa');
     expect(rendered(<GeneratedAchievements sections={fixture.achievementSections ?? []} />)).toContain('Cerchi');
   });
 });
