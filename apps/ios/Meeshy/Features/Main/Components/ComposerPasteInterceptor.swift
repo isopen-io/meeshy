@@ -85,7 +85,7 @@ struct ComposerPasteInterceptor: UIViewRepresentable {
         var limit: Int
         var onIngest: ([ComposerIngest]) -> Void
         weak var textView: UITextView?
-        private static let logger = Logger(subsystem: "me.meeshy.app", category: "composer-paste")
+        private static let logger = MeeshyLog.logger(.composerPaste)
 
         /// Ce que le champ accepte EN PLUS du texte : ce qu'on joint.
         static let attachableTypes: [String] = [UTType.image, .movie, .audio, .fileURL, .data].map(\.identifier)

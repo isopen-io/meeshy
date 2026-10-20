@@ -2,6 +2,7 @@ import CoreImage
 import CoreVideo
 import Foundation
 import os
+import MeeshySDK
 
 // #8063 — l'app en appel, côté réception de la diffusion ReplayKit :
 // le socket Unix où l'extension écrit ses trames, et les notifications
@@ -62,7 +63,7 @@ nonisolated final class ScreenShareFrameServer: @unchecked Sendable {
     private static let readChunk = 256 * 1024
 
     private let queue = DispatchQueue(label: "me.meeshy.app.screen-share.server")
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "screen-share")
+    private let logger = MeeshyLog.logger(.screenShare)
     private var listenSource: DispatchSourceRead?
     private var clientSource: DispatchSourceRead?
     private var path: String?

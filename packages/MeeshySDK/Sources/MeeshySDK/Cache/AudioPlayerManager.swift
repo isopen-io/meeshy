@@ -18,7 +18,7 @@ public class AudioPlayerManager: ObservableObject {
     /// Called when stop() is invoked — hook this to allow external stop coordination.
     public var onDidStop: (() -> Void)?
 
-    private static let log = os.Logger(subsystem: "me.meeshy.app", category: "audio-playback")
+    private static let log = MeeshyLog.logger(.audioPlayback)
 
     private var localPlayer: AVAudioPlayer? {
         didSet { teardown.update { $0.localPlayer = localPlayer } }

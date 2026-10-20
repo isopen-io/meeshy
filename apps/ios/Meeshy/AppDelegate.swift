@@ -6,7 +6,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
+private let logger = MeeshyLog.logger(.push)
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par

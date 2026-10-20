@@ -233,5 +233,5 @@ extension StarredMessagesStore {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let starred = Logger(subsystem: "me.meeshy.app", category: "starred-store")
+    nonisolated static let starred = MeeshyLog.logger(.starredStore)
 }

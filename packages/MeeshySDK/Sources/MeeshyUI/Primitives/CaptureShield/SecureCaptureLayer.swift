@@ -1,5 +1,6 @@
 import UIKit
 import OSLog
+import MeeshySDK
 
 // MARK: - La toile sécurisée
 
@@ -136,7 +137,7 @@ public enum CaptureShieldDiagnostics {
     public static var reporter: (@MainActor (String) -> Void)?
 
     private static var hasReported = false
-    private static let logger = Logger(subsystem: "me.meeshy.sdk", category: "capture-shield")
+    private static let logger = MeeshyLog.logger(.captureShield, subsystem: .sdk)
 
     static let unavailableMessage = "capture-shield: la couche sécurisée du système est introuvable — contenu protégé remplacé par son placeholder"
 

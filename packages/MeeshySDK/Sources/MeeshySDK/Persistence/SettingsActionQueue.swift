@@ -56,7 +56,7 @@ public actor SettingsActionQueue {
     private var items: [SettingsAction] = []
     private var isFlushing = false
     private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+    private let logger = MeeshyLog.logger(.settingsactionqueue, subsystem: .legacySDK)
 
     /// In-memory failure counter per `SettingsAction.id`. Deliberately not
     /// persisted alongside `items` (unlike `OutboxRecord.attempts`): a fresh
@@ -138,7 +138,7 @@ public actor SettingsActionQueue {
         } catch {
             // Le merge est perdu : la mutation précédente est écrasée par la
             // nouvelle au lieu d'être fusionnée.
-            Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+            MeeshyLog.logger(.settingsactionqueue, subsystem: .legacySDK)
                 .error("Merged settings payload could not be serialized, previous mutation dropped: \(error.localizedDescription, privacy: .public)")
             return incoming
         }
@@ -237,7 +237,7 @@ public actor SettingsActionQueue {
             do {
                 try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
             } catch {
-                Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+                MeeshyLog.logger(.settingsactionqueue, subsystem: .legacySDK)
                     .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
             }
         }

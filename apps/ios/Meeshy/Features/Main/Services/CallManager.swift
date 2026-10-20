@@ -908,5 +908,5 @@ final class CallManager: ObservableObject {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

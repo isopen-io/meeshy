@@ -77,7 +77,7 @@ public final class AuthService: AuthServiceProviding, PasswordResetProviding, @u
     let pinned: any PinnedRequesting
     /// Le secret qui lie un lien de connexion à cet appareil (#10872).
     let linkDevice: any LinkDeviceBindingProviding
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "auth")
+    private let logger = MeeshyLog.logger(.auth, subsystem: .legacySDK)
 
     init(
         api: APIClientProviding = APIClient.shared,

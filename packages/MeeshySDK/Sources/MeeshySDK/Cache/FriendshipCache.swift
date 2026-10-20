@@ -12,7 +12,7 @@ public enum FriendshipStatus: Sendable, Equatable {
 public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     public static let shared = FriendshipCache()
 
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "friendship-cache")
+    private let logger = MeeshyLog.logger(.friendshipCache, subsystem: .legacySDK)
     private let lock = NSLock()
 
     /// Monotonic version bumped on every mutation. Use `@ObservedObject` on

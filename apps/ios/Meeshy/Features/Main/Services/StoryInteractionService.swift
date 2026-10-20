@@ -34,7 +34,7 @@ final class StoryInteractionService {
     /// Le rail de la story pose l'anneau du cœur sur « Commentaires » quand le lecteur
     /// a commenté (directive porteur 2026-10-01) ; la passerelle ne le sert pas.
     private let participation: StoryViewerParticipationRecording
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "story.interaction")
+    private static let logger = MeeshyLog.logger(.storyInteraction)
 
     init(api: APIClientProviding = APIClient.shared,
          participation: StoryViewerParticipationRecording? = nil) {

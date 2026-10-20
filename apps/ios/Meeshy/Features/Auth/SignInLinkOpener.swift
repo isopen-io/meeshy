@@ -87,7 +87,7 @@ extension AuthManager: SignInLinkAuthorizing {}
 /// connexion présente une porte d'accès et lui demande de la refermer (#8076).
 @MainActor
 enum SignInLinkOpener {
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "sign-in-link")
+    private static let logger = MeeshyLog.logger(.signInLink)
 
     static func open(
         _ link: SignInLink,

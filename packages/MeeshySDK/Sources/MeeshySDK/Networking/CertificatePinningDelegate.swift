@@ -4,7 +4,7 @@ import os
 
 // MARK: - Certificate Pinning
 
-private let pinLogger = Logger(subsystem: "me.meeshy.sdk", category: "tls-pinning")
+private let pinLogger = MeeshyLog.logger(.tlsPinning, subsystem: .sdk)
 
 final class CertificatePinningDelegate: NSObject, URLSessionDelegate, Sendable {
 

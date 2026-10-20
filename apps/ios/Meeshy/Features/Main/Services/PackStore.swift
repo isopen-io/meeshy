@@ -207,7 +207,7 @@ final class PackStore<Pack: InstallablePack>: ObservableObject {
     private var syncedAccount = false
     private var readCache = false
     private var refreshingInstalled = false
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "packs")
+    private let logger = MeeshyLog.logger(.packs)
 
     init(service: any PackServiceProviding<Pack>,
          cache: (any PackCaching<Pack>)? = nil,

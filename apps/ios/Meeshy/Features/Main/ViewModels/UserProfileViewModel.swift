@@ -33,7 +33,7 @@ final class UserProfileViewModel: ObservableObject {
     /// aucun lecteur — c'est un suivi, pas une correction livrée.
     @Published private(set) var profileError: String?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
+    private static let logger = MeeshyLog.logger(.profile)
 
     // MARK: - Dependencies
 

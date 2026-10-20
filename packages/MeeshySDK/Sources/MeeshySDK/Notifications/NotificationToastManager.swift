@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.sdk", category: "notifications")
+private let logger = MeeshyLog.logger(.notifications, subsystem: .sdk)
 
 /// High-level orchestrator for in-app notifications.
 ///

@@ -100,7 +100,7 @@ public final class AudioEditorController: ObservableObject {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-editor")
+    private static let log = MeeshyLog.logger(.audioEditor)
     private let transcriptionTimeout: TimeInterval = 90
 
     // MARK: Session

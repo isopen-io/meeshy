@@ -2,6 +2,7 @@ import Foundation
 import os
 #if canImport(ActivityKit)
 @preconcurrency import ActivityKit
+import MeeshySDK
 #endif
 
 /// Ce qu'un coordinateur de Live Activity demande à ActivityKit : ouvrir,
@@ -32,7 +33,7 @@ final class LiveActivityHost<Attributes: ActivityAttributes & Sendable>: LiveAct
 where Attributes.ContentState: Sendable {
     nonisolated deinit {}
 
-    private static var logger: Logger { Logger(subsystem: "me.meeshy.app", category: "live-activity") }
+    private static var logger: Logger { MeeshyLog.logger(.liveActivity) }
 
     private let attributes: () -> Attributes
     private(set) var activityID: String?

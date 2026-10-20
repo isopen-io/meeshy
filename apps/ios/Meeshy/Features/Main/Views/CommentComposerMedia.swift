@@ -52,11 +52,12 @@ enum CommentMediaUploader {
 }
 
 /// Les traces de recette du chemin d'envoi d'un commentaire (Debug) :
-/// `xcrun simctl spawn booted log stream --predicate 'eventMessage CONTAINS "CommentSend"'`.
+/// `xcrun simctl spawn booted log stream --level debug --predicate 'eventMessage CONTAINS "CommentSend"'`.
 enum CommentSendTrace {
     static func log(_ message: @autoclosure () -> String) {
         #if DEBUG
-        NSLog("[CommentSend] %@", message())
+        let text = message()
+        MeeshyLog.logger(.commentSend).debug("[CommentSend] \(text, privacy: .public)")
         #endif
     }
 }
@@ -268,7 +269,7 @@ enum CommentComposerStaging {
 /// compression, l'affichage optimiste et le nettoyage des temporaires.
 enum CommentComposerIngestion {
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "comment-ingest")
+    private static let log = MeeshyLog.logger(.commentIngest)
 
     /// Fusionne les `.text` d'un dépôt en un seul bloc — concaténés par un saut
     /// de ligne, dans l'ordre du dépôt — pour UNE insertion : N insertions

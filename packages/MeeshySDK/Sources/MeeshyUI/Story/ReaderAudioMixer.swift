@@ -29,7 +29,7 @@ public final class ReaderAudioMixer {
     /// Number of foreground audio clips currently configured.
     public var activeClipCount: Int { entries.count }
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    private let logger = MeeshyLog.logger(.media)
     /// `internal` : l'extension du FOND vit dans son propre fichier
     /// (`ReaderAudioMixer+Background.swift`) et y attache son node.
     let engine = AVAudioEngine()
@@ -525,7 +525,7 @@ public final class ReaderAudioMixer {
     // via le teardown de StoryCanvasUIView qui possède toujours un audioMixer.
     nonisolated deinit {
         if !didShutdown {
-            os.Logger(subsystem: "me.meeshy.app", category: "media").warning(
+            MeeshyLog.logger(.media).warning(
                 "ReaderAudioMixer deinit without shutdown() — owner should call shutdown() before drop to release AVAudioEngine + nodes deterministically."
             )
         }

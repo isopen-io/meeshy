@@ -702,5 +702,5 @@ final class DeviceTranslationCoordinator: ObservableObject {
 }
 
 private extension Logger {
-    nonisolated static let deviceTranslation = Logger(subsystem: "me.meeshy.app", category: "device-translation")
+    nonisolated static let deviceTranslation = MeeshyLog.logger(.deviceTranslation)
 }

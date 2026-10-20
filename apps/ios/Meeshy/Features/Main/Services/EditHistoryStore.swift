@@ -153,5 +153,5 @@ private extension JSONDecoder {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let editHistory = Logger(subsystem: "me.meeshy.app", category: "edit-history")
+    nonisolated static let editHistory = MeeshyLog.logger(.editHistory)
 }

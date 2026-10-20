@@ -267,5 +267,5 @@ extension MessageTranscription {
 }
 
 private extension Logger {
-    nonisolated static let voiceNoteTranscriber = Logger(subsystem: "me.meeshy.app", category: "voice-note-transcriber")
+    nonisolated static let voiceNoteTranscriber = MeeshyLog.logger(.voiceNoteTranscriber)
 }
