@@ -27,7 +27,11 @@ import UniformTypeIdentifiers
 
 /// La loi PURE de la copie : où le fichier reçu est posé, sous quel nom, avec
 /// quelle extension. Testable sans photothèque.
-public enum PickedMediaStaging {
+///
+/// `nonisolated` : MeeshyUI hérite du MainActor par défaut (SE-0466). La copie
+/// d'un film de plusieurs centaines de Mo tourne dans la fermeture d'import du
+/// système, hors du fil principal — l'y ramener gèlerait l'interface.
+public nonisolated enum PickedMediaStaging {
 
     /// Le préfixe des fichiers posés : l'app le balaie du `tmp` au lancement
     /// (`TemporaryMediaSweeper`) — un import sans propriétaire ne s'y accumule pas.
@@ -79,7 +83,7 @@ public enum PickedMediaStaging {
 }
 
 /// Une vidéo de la photothèque, déjà copiée dans le `tmp` de l'app.
-public struct PickedMediaFile: Transferable, Sendable {
+public nonisolated struct PickedMediaFile: Transferable, Sendable {
     public let url: URL
 
     public static var transferRepresentation: some TransferRepresentation {
@@ -90,7 +94,7 @@ public struct PickedMediaFile: Transferable, Sendable {
 }
 
 /// Les octets d'une image de la photothèque.
-public struct PickedImageData: Transferable, Sendable {
+public nonisolated struct PickedImageData: Transferable, Sendable {
     public let data: Data
 
     public static var transferRepresentation: some TransferRepresentation {
@@ -100,7 +104,7 @@ public struct PickedImageData: Transferable, Sendable {
     }
 }
 
-public enum PickedMedia {
+public nonisolated enum PickedMedia {
 
     /// Le fichier de la vidéo choisie, copié dans le `tmp` de l'app — l'appelant
     /// en devient propriétaire et le supprime quand il n'en a plus besoin.
@@ -110,7 +114,12 @@ public enum PickedMedia {
     public static func loadVideoFile(_ item: PhotosPickerItem, stem: String? = nil) async throws -> URL? {
         guard let picked = try await item.loadTransferable(type: PickedMediaFile.self) else { return nil }
         guard let stem else { return picked.url }
-        return try PickedMediaStaging.rename(picked.url, toStem: stem)
+        do {
+            return try PickedMediaStaging.rename(picked.url, toStem: stem)
+        } catch {
+            PickedMediaStaging.discard(picked.url)
+            throw error
+        }
     }
 
     /// Les octets de l'image choisie.
