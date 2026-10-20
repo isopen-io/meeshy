@@ -168,7 +168,7 @@ nonisolated enum FileURLPasteDetector {
 /// Aucun plafond de taille : consigné hors périmètre par la spec.
 nonisolated enum ComposerDropResolver {
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "composer-drop")
+    private static let logger = MeeshyLog.logger(.composerDrop)
 
     static func resolve(_ provider: NSItemProvider) async -> ComposerIngest? {
         let registeredTypes = provider.registeredTypeIdentifiers.compactMap(UTType.init)

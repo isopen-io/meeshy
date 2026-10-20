@@ -133,7 +133,7 @@ final class AttachmentPreparationService {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
     static let shared = AttachmentPreparationService()
-    private let log = Logger(subsystem: "me.meeshy.app", category: "attachment-prep")
+    private let log = MeeshyLog.logger(.attachmentPrep)
 
     init() {}
 

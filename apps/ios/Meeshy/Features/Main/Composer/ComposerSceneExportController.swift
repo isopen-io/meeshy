@@ -71,7 +71,7 @@ final class ComposerSceneExportController: ObservableObject {
     private let toasts: FeedbackToastSurfacing
     private let brandIntro: @MainActor @Sendable () async -> StoryExportIntroContent?
     private let introTimeout: Duration
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "composer-scene-export")
+    private let logger = MeeshyLog.logger(.composerSceneExport)
     private var task: Task<Void, Never>?
 
     init(exporter: StoryVideoExportServiceProviding? = nil,

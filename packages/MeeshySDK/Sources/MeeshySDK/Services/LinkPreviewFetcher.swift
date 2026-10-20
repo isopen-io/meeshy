@@ -50,7 +50,7 @@ public actor LinkPreviewFetcher {
     private static let userAgent = "Meeshy/1.0 (Link preview; +https://meeshy.me)"
 
     private var inFlight: [String: Task<LinkMetadata?, Never>] = [:]
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "link-preview")
+    private let logger = MeeshyLog.logger(.linkPreview, subsystem: .legacySDK)
     private let session: URLSession
 
     private init(session: URLSession? = nil) {

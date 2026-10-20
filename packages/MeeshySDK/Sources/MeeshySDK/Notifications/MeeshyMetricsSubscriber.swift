@@ -106,7 +106,7 @@ public final class MeeshyMetricsSubscriber: NSObject, @unchecked Sendable {
     /// `dynamic_tracing`, etc.) out of our analytics surface.
     public var trackedCategories: Set<String>
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "metrics-subscriber")
+    private let logger = MeeshyLog.logger(.metricsSubscriber)
 
     /// Lock-protected aggregate store. Reads from app code, writes from the
     /// MetricKit background queue. Using `OSAllocatedUnfairLock` keeps the

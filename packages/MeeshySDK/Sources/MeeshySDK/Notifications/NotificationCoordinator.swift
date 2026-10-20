@@ -3,7 +3,7 @@ import Combine
 import UserNotifications
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.sdk", category: "notification-coordinator")
+private let logger = MeeshyLog.logger(.notificationCoordinator, subsystem: .sdk)
 
 /// Sink that receives notification data for home/lock-screen widgets.
 ///

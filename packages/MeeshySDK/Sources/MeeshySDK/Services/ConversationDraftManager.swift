@@ -18,7 +18,7 @@ public actor ConversationDraftManager {
     private let cache: CacheCoordinator
     private let debounce: TimeInterval
     private var pendingTasks: [String: Task<Void, Never>] = [:]
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "drafts")
+    private let logger = MeeshyLog.logger(.drafts)
 
     public init(
         cache: CacheCoordinator = .shared,

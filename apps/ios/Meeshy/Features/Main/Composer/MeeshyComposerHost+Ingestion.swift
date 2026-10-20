@@ -30,7 +30,7 @@ extension MeeshyComposerHost {
             // TOUT en aval — `ComposerIngestRouter` en tire la famille, et une
             // famille `.document` fait qu'un média n'atteint jamais la scène,
             // sans qu'aucune ligne ne le signale.
-            os.Logger(subsystem: "me.meeshy.app", category: "media").info(
+            MeeshyLog.logger(.media).info(
                 "ingest photothèque: \(url.lastPathComponent, privacy: .public) type=\(declaredType?.identifier ?? "nil", privacy: .public) mime=\(mime, privacy: .public) durée=\(duration ?? -1, privacy: .public)"
             )
             medias.append(ComposerDocumentMediaFactory.media(

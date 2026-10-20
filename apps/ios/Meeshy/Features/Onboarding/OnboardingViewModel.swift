@@ -24,7 +24,7 @@ import os
 final class OnboardingViewModel: ObservableObject {
     nonisolated deinit {}
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "onboarding")
+    private static let logger = MeeshyLog.logger(.onboarding)
 
     @Published private(set) var isPresented = false
     @Published private(set) var card: OnboardingCard?

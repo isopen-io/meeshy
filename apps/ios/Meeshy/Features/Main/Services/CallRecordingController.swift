@@ -98,7 +98,7 @@ final class CallRecordingController: ObservableObject {
     private var changeForwarding: AnyCancellable?
     private(set) var pendingSave: Task<Void, Never>?
     private(set) var pendingStopEmission: Task<Void, Never>?
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-recording")
+    private let logger = MeeshyLog.logger(.callRecording)
 
     static let linkAttempts = 3
     static let linkRetryDelayNs: UInt64 = 2_000_000_000

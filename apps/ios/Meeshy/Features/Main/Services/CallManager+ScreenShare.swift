@@ -1,5 +1,6 @@
 import Foundation
 import os
+import MeeshySDK
 
 // #8063 — `CallManager` vu du partage d'écran. Dans son propre fichier :
 // `CallManager.swift` est hors budget de taille, il n'y porte que la
@@ -29,7 +30,7 @@ extension CallManager: CallScreenShareHosting {
               let offer = await webRTCService.createOffer(),
               currentCallId == callId else { return }
         emitCallOffer(callId: callId, toUserId: userId, isVideo: true, sdp: offer)
-        Logger(subsystem: "me.meeshy.app", category: "screen-share")
+        MeeshyLog.logger(.screenShare)
             .info("screen share renegotiation offer sent (callId=\(callId))")
     }
 

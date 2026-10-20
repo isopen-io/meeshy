@@ -125,7 +125,7 @@ extension MeeshyComposerHost {
             // resté noir n'est attribuable à rien — porte, rôle, slide cible et
             // format sont les quatre termes qui, ensemble, expliquent où le
             // média est parti.
-            os.Logger(subsystem: "me.meeshy.app", category: "media").info(
+            MeeshyLog.logger(.media).info(
                 "placement: \(media.sourceURL.lastPathComponent, privacy: .public) porte=\(String(describing: porte), privacy: .public) role=\(String(describing: role), privacy: .public) slide=\(viewModel.currentSlide.id, privacy: .public) fond=\(dejaUnFond, privacy: .public) format=\(String(describing: selectedFormat), privacy: .public)"
             )
 

@@ -47,7 +47,7 @@ public final class NetworkMonitor: ObservableObject, @unchecked Sendable, Networ
         case unknown
     }
 
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "network")
+    private let logger = MeeshyLog.logger(.network, subsystem: .legacySDK)
     private var pathCancellable: AnyCancellable?
 
     fileprivate let isOfflineSubject = SendableCurrentValueSubject<Bool>(false)

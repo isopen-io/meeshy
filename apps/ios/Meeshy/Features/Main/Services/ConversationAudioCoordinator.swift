@@ -136,7 +136,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// n'écrase `isPlaying`. Décide si la fin d'appel relance la lecture.
     private var _wasPlayingBeforeSystemCall = false
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-coordinator")
+    private static let log = MeeshyLog.logger(.audioCoordinator)
 
     /// Beyond this elapsed time, `playPrevious()` restarts the CURRENT track
     /// (standard media-player convention) instead of jumping to the prior one.

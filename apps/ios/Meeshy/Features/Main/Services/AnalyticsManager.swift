@@ -11,7 +11,7 @@ final class AnalyticsManager {
     nonisolated deinit {}
     static let shared = AnalyticsManager()
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "analytics")
+    private let logger = MeeshyLog.logger(.analytics)
 
     private init() {
         syncCollectionState()

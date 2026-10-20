@@ -4,6 +4,7 @@ import CoreMedia
 import CoreVideo
 import Foundation
 import os
+import MeeshySDK
 
 // #8625 — filmer le montage rendu en direct. Les images viennent du rendu du
 // gabarit (`CallMontageRenderer`, le même que la photo), le son du micro.
@@ -50,7 +51,7 @@ final class CallMontageRecorder: CallMontageRecordingProviding {
     private let clock: @Sendable () -> CMTime
     private var writer: CallMontageMovieWriter?
     private var listensToAudio = false
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-montage-recording")
+    private let logger = MeeshyLog.logger(.callMontageRecording)
 
     nonisolated deinit {}
 

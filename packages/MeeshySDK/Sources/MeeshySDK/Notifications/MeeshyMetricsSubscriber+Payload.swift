@@ -89,7 +89,7 @@ extension MeeshyMetricsSubscriber {
         }
         let terminations = payloadSummaries.reduce(0) { $0 + $1.backgroundExits.terminations }
         let hitch = payloadSummaries.last?.scrollHitchTimeRatio.map { String(format: "%.4f", $0) } ?? "n/a"
-        Logger(subsystem: "me.meeshy.app", category: "metrics-subscriber")
+        MeeshyLog.logger(.metricsSubscriber)
             .info("Stored \(payloadSummaries.count, privacy: .public) metric payload(s) — scrollHitch=\(hitch, privacy: .public) backgroundTerminations=\(terminations, privacy: .public)")
         return payloadSummaries.count
     }

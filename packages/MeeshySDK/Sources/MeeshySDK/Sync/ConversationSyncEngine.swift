@@ -153,7 +153,7 @@ public extension ConversationSyncEngineProviding {
 public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unchecked Sendable {
     public static let shared = ConversationSyncEngine()
 
-    /* partagé entre les fichiers du moteur (#4172) */ static let logger = Logger(subsystem: "me.meeshy.sdk", category: "sync")
+    /* partagé entre les fichiers du moteur (#4172) */ static let logger = MeeshyLog.logger(.sync, subsystem: .sdk)
 
     // Internal subjects (send-capable)
     /* partagé entre les fichiers du moteur (#4172) */ let _conversationsDidChange = PassthroughSubject<Void, Never>()

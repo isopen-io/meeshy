@@ -45,7 +45,7 @@ public final class StoryMediaLayer: CALayer {
     public private(set) nonisolated(unsafe) weak var avPlayer: AVPlayer?
     public private(set) nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    private static let logger = MeeshyLog.logger(.media)
 
     /// Fenêtre de rognage NON destructive du média foreground courant — `nil`
     /// tant que la durée réelle de la source n'a pas été chargée (le fichier

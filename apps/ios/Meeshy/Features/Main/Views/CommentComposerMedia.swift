@@ -268,7 +268,7 @@ enum CommentComposerStaging {
 /// compression, l'affichage optimiste et le nettoyage des temporaires.
 enum CommentComposerIngestion {
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "comment-ingest")
+    private static let log = MeeshyLog.logger(.commentIngest)
 
     /// Fusionne les `.text` d'un dépôt en un seul bloc — concaténés par un saut
     /// de ligne, dans l'ordre du dépôt — pour UNE insertion : N insertions

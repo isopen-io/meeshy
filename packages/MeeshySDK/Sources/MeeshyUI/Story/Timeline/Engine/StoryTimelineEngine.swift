@@ -39,7 +39,7 @@ public final class StoryTimelineEngine {
     public var currentProjectSnapshot: TimelineProject? { currentProject }
 
     // MARK: Internals
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    private let logger = MeeshyLog.logger(.media)
     private let audioMixer: AudioMixerProviding
     private var player: AVPlayer?
     private var playerItem: AVPlayerItem?
@@ -101,7 +101,7 @@ public final class StoryTimelineEngine {
         // tear down test owners off the main thread; a hard precondition there
         // would mask the real assertion failures we care about).
         if !didShutdown {
-            os.Logger(subsystem: "me.meeshy.app", category: "media").warning(
+            MeeshyLog.logger(.media).warning(
                 "StoryTimelineEngine deinit without shutdown() — owner should call shutdown() before drop to release AVPlayer + observers. Falling back to ARC-driven cleanup of AVPlayer / AVAudioEngine; observer leaks are possible."
             )
         }

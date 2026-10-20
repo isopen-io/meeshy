@@ -350,7 +350,7 @@ public actor StoryPublishQueue {
     private var failedItems: [StoryPublishQueueItem] = []
     private var isProcessing = false
     private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+    private let logger = MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -789,7 +789,7 @@ public actor StoryPublishQueue {
             do {
                 try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
             } catch {
-                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+                MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
                     .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
             }
         }
@@ -803,7 +803,7 @@ public actor StoryPublishQueue {
             do {
                 try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
             } catch {
-                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+                MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
                     .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
             }
         }

@@ -39,5 +39,5 @@ nonisolated enum TestHarnessNetworkSeal {
     }
 
     /// `log stream --predicate 'category == "test-network-seal"'`
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "test-network-seal")
+    private static let logger = MeeshyLog.logger(.testNetworkSeal)
 }

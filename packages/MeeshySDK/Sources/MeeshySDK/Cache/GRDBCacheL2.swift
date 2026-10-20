@@ -13,7 +13,7 @@ struct GRDBCacheL2<Value>: Sendable where Value: CacheIdentifiable & Codable {
     private let namespace: String
     private let encrypted: Bool
     private let encryption: any DatabaseEncryptionProviding
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb-cache-store")
+    private let logger = MeeshyLog.logger(.grdbCacheStore, subsystem: .legacySDK)
 
     init(
         db: any DatabaseWriter,
