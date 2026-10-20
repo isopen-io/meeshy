@@ -41,7 +41,7 @@ struct MessageReactionsDetailView: View {
                 .anchoredPicker(isPresented: $showFullEmojiPicker) {
                     EmojiFullPickerSheet(
                         style: isDark ? .dark : .light,
-                        onReact: { emoji in onReact?(emoji); showFullEmojiPicker = false }
+                        onReact: { emoji in onReact(emoji); showFullEmojiPicker = false }
                     )
                 }
                 .frame(maxWidth: .infinity)
