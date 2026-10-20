@@ -32,6 +32,12 @@ struct ComposerCapturePreview: View {
                                                       metalHasFrame: metalHasFrame)
     }
 
+    /// Une retouche n'a pas besoin de l'objectif (#11133).
+    private var surface: ComposerSceneCameraSurface.Shown {
+        guard !session.phase.isEditing else { return .viewfinder }
+        return ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)
+    }
+
     /// Ce que le peintre lit en édition : la photo figée, ou la boucle.
     private var editedSource: (any ComposerFrameSourcing)? {
         session.phase.isEditing ? session.editSource : nil
@@ -40,7 +46,7 @@ struct ComposerCapturePreview: View {
     var body: some View {
         ZStack {
             Color.black
-            switch ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission) {
+            switch surface {
             case .scene:
                 EmptyView()
             case .viewfinder:

@@ -142,6 +142,71 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertFalse(question.swallowsTap(now: maintenant.addingTimeInterval(1)), "un toucher d'après")
     }
 
+    // MARK: - #11133 — la même retouche pour une pièce à envoyer
+
+    private static func piece(_ kind: ComposerRetouchPiece.Kind) throws -> ComposerRetouchPiece {
+        let dossier = FileManager.default.temporaryDirectory
+        switch kind {
+        case .image:
+            let url = dossier.appendingPathComponent("piece-\(UUID().uuidString).png")
+            let image = UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400))
+            try XCTUnwrap(image.pngData()).write(to: url)
+            return ComposerRetouchPiece(attachmentId: "img", fileURL: url, mimeType: "image/png", kind: .image)
+        case .video:
+            let url = dossier.appendingPathComponent("piece-\(UUID().uuidString).mov")
+            try Data([0, 1, 2, 3]).write(to: url)
+            return ComposerRetouchPiece(attachmentId: "vid", fileURL: url, mimeType: "video/quicktime", kind: .video)
+        }
+    }
+
+    /// **Une image choisie s'ouvre dans la retouche de la caméra** : rail
+    /// visible, aucun outil ouvert — les mêmes règles que pour une prise.
+    func test_11133_anImagePiece_opensInTheCaptureRetouch() async throws {
+        let session = ConversationPieceRetouchOpening.session(gallery: MockComposerGallery())
+        let ouverte = await ConversationPieceRetouchOpening.open(try Self.piece(.image), in: session)
+        XCTAssertTrue(ouverte)
+        XCTAssertEqual(session.phase, .editing(.photo))
+        XCTAssertTrue(session.editChromeShown, "les outils sont là d'emblée")
+        XCTAssertEqual(session.activeEditTools, [], "aucun outil ouvert")
+        XCTAssertFalse(session.savePolicy().savesRenderOnFinish(alreadySaved: false),
+                       "« Terminé » ne réenregistre pas en galerie un média qui en vient")
+    }
+
+    /// **Une vidéo choisie s'ouvre par une COPIE** : « Abandonner » efface le
+    /// fichier de la retouche, jamais celui de la pièce en attente.
+    func test_11133_aVideoPiece_opensOnACopy_andAbandoningKeepsThePieceFile() async throws {
+        let piece = try Self.piece(.video)
+        let session = ConversationPieceRetouchOpening.session(
+            gallery: MockComposerGallery(),
+            loopPlayerFactory: { _ in MockComposerLoopPlayer(duration: 6, hasAudio: true) })
+        let ouverte = await ConversationPieceRetouchOpening.open(piece, in: session)
+        XCTAssertTrue(ouverte)
+        guard case .editing(.video(let url)) = session.phase else { return XCTFail("la vidéo est en retouche") }
+        XCTAssertNotEqual(url, piece.fileURL, "la retouche lit une copie")
+        session.cancelEditing()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: piece.fileURL.path), "le fichier de la pièce reste")
+    }
+
+    func test_11133_onlyAnAbandonedRetouch_removesThePiece() {
+        XCTAssertTrue(ConversationPieceRetouchOpening.abandoned(wasEditing: true, isEditing: false, settled: false),
+                      "« Abandonner » : la pièce part")
+        XCTAssertFalse(ConversationPieceRetouchOpening.abandoned(wasEditing: true, isEditing: false, settled: true),
+                       "« Terminé » a déjà remis la pièce : rien ne part")
+        XCTAssertFalse(ConversationPieceRetouchOpening.abandoned(wasEditing: false, isEditing: true, settled: false))
+    }
+
+    func test_11133_tappingAPendingPiece_opensTheCaptureRetouch_withoutTheCamera() throws {
+        let toucher = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationView+ComposerAttachments.swift")
+        XCTAssertTrue(toucher.contains("openPieceRetouch(attachment.id)"), "toucher une pièce ouvre la retouche de la caméra")
+        let couches = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
+        XCTAssertTrue(couches.contains("ConversationPieceRetouch(piece: piece"), "la retouche est montée")
+        let porte = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ConversationImageSceneDoor.swift")
+        XCTAssertTrue(porte.contains("ComposerCaptureMount(session: session"), "le même montage que la caméra")
+        let scene = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureStage.swift")
+        XCTAssertTrue(scene.contains("!session.phase.isEditing\n            && ComposerSceneCameraSurface.shown("),
+                      "une retouche se fait même sans accès à la caméra")
+    }
+
     private static func settles(_ condition: () -> Bool) -> Bool {
         let fin = Date().addingTimeInterval(3)
         while Date() < fin {

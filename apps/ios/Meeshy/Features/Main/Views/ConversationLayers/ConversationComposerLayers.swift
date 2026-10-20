@@ -127,9 +127,19 @@ struct ConversationComposerEditingCovers: ViewModifier {
     let accentColor: String
     let onRetouched: ([ComposerRetouchedPiece]) -> Void
     let onSceneMedia: (ComposerReturnedMedia) -> Void
+    let onRemovePiece: (String) -> Void
 
     func body(content: Content) -> some View {
         content
+            .conversationCover(item: $scrollState.pieceToRetouch) { piece in
+                ConversationPieceRetouch(piece: piece, onDone: { media in
+                    scrollState.pieceToRetouch = nil
+                    onRetouched([ComposerRetouchedPiece(attachmentId: piece.attachmentId, media: media)])
+                }, onRemove: {
+                    scrollState.pieceToRetouch = nil
+                    onRemovePiece(piece.attachmentId)
+                }, onCancel: { scrollState.pieceToRetouch = nil })
+            }
             .conversationCover(item: $scrollState.retouchSeries) { serie in
                 ConversationRetouchSeriesEditor(series: serie, onDone: { rendues in
                     onRetouched(rendues)

@@ -111,7 +111,7 @@ extension ConversationView {
     func handleAttachmentPreviewTap(_ attachment: MessageAttachment) {
         switch attachment.type {
         case .image, .video:
-            openRetouchSeries(focusId: attachment.id)
+            openPieceRetouch(attachment.id)
         case .audio:
             if let url = composerState.pendingMediaFiles[attachment.id] {
                 scrollState.audioToEdit = PendingAudioEdit(id: attachment.id, url: url)
