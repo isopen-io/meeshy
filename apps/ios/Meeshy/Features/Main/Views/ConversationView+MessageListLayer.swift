@@ -30,31 +30,23 @@ struct ConversationMessageListActions {
     let focalPlace: (SharedPlace, String) -> FocalFullscreenPlace
 }
 
-/// **La couche de la liste de messages, SORTIE du cadre de `bodyContent`** (#6213 bis).
+/// **La couche de la liste de messages, SORTIE du cadre de la scène** (#6213 bis).
 ///
-/// Mesuré sur appareil (`CrashStackDumper`, palmarès des cadres apparié
-/// PAR ADRESSE de retour) : `bodyContent` occupait **552 Ko** d'un seul
-/// cadre, sur une pile principale de 1008 Ko — et le tronc entier
-/// (`body → bodyWithSheets → bodyWithCovers → bodyWithLifecycle →
-/// bodyContent`) en occupait **847**. L'adresse fautive tombait 88 octets
-/// sous le plancher de pile : page de garde, débordement franc.
+/// Mesuré sur appareil (`CrashStackDumper`, palmarès des cadres apparié PAR
+/// ADRESSE de retour) : le cadre qui portait cette branche occupait **552 Ko**
+/// sur une pile principale de 1008 Ko, et le tronc entier en occupait **847**.
+/// L'adresse fautive tombait 88 octets sous le plancher : page de garde.
 ///
-/// ## Pourquoi les six `AnyView` posés ici depuis 2026-08-17 n'ont rien changé
+/// Un effacement de type posé EN LIGNE sur la branche n'y change rien : il a
+/// lieu APRÈS que le cadre a réservé la place du type concret, et en `-Onone`
+/// un `ZStack` de quatorze branches réserve la place de TOUTES. Déplacer la
+/// branche dans SA struct nominale change le mécanisme : la construction se
+/// fait dans un cadre à elle, entré puis quitté, et la scène
+/// (`ConversationBodyStage`) ne voit plus passer que seize octets. Les branches
+/// se SUCCÈDENT au lieu de s'ADDITIONNER.
 ///
-/// Ils étaient posés EN LIGNE, sur la branche : `AnyView(uneBranche)`.
-/// L'érasure a lieu APRÈS que le cadre a réservé la place du type
-/// concret — elle borne ce qui SORT de l'expression, jamais ce qui a été
-/// réservé pour la construire. En `-Onone`, un `ZStack` de quatorze
-/// branches réserve la place de TOUTES, y compris celles qu'il
-/// n'exécutera pas.
-///
-/// Déplacer la branche dans SA struct nominale change le mécanisme, pas le
-/// style : la construction se fait dans un cadre à elle, entré puis
-/// quitté, et `bodyContent` ne voit plus passer que seize octets. Les
-/// branches se SUCCÈDENT au lieu de s'ADDITIONNER.
-///
-/// Cette branche-ci est la plus lourde du lot : ~340 lignes d'arguments
-/// et de closures pour un représentable UIKit.
+/// Cette branche-ci est la plus lourde du lot : ~340 lignes d'arguments et de
+/// closures pour un représentable UIKit.
 struct ConversationMessageListLayer: View {
     let viewModel: ConversationViewModel
     @Binding var scrollState: ConversationScrollState

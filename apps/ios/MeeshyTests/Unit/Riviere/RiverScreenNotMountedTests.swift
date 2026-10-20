@@ -152,16 +152,21 @@ final class RiverScreenNotMountedTests: XCTestCase {
         // l'emballage aurait fait rougir une garde qui n'avait rien à
         // reprocher. On exige donc les deux ancres, dans l'ordre, à courte
         // distance l'une de l'autre.
+        let stageRaw = try String(
+            contentsOf: Self.meeshyRoot.appendingPathComponent("Features/Main/Views/ConversationLayers/ConversationBodyStage.swift"),
+            encoding: .utf8)
+        let stageCode = AppSourceGuard.stripComments(stageRaw)
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
         let riverBranch = try XCTUnwrap(
-            code.range(of: "if readingModeController.mode == .river {"),
-            "La branche de montage `mode == .river` a disparu de `ConversationView` — Rivière " +
+            stageCode.range(of: "if mode == .river {"),
+            "La branche de montage `mode == .river` a disparu de la scène de la conversation — Rivière " +
             "redeviendrait une promesse rompue (choisie au menu, jamais rendue)."
         )
-        let windowEnd = code.index(riverBranch.upperBound, offsetBy: 220, limitedBy: code.endIndex) ?? code.endIndex
+        let windowEnd = stageCode.index(riverBranch.upperBound, offsetBy: 220, limitedBy: stageCode.endIndex) ?? stageCode.endIndex
         // Le montage de l'hôte vit dans `ConversationRiverLayer` (`ConversationView+ReaderLayers.swift`),
         // que la branche `mode == .river` de l'hôte instancie — les deux ancres, à courte distance.
         XCTAssertTrue(
-            code[riverBranch.upperBound..<windowEnd].contains("ConversationRiverLayer("),
+            stageCode[riverBranch.upperBound..<windowEnd].contains("ConversationRiverLayer("),
             "La branche `mode == .river` ne monte plus d'hôte de rendu — jamais une sélection " +
             "sans écran."
         )

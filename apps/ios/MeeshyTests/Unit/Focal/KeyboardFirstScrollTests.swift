@@ -111,7 +111,7 @@ final class KeyboardFirstScrollTests: XCTestCase {
 
     func test_scrollToBottomButton_doesNotFollowTheScrollCollapse() throws {
         let code = try normalized("Meeshy/Features/Main/Views/ConversationView.swift")
-        XCTAssertEqual(code.components(separatedBy: ".hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)").count - 1, 1,
+        XCTAssertEqual(code.components(separatedBy: ".hiddenTowardsEdge(hidesComposerChrome, .bottom)").count - 1, 1,
                        "seul le composeur glisse vers le bas ; la bulle « retour en bas » reste (#8002)")
     }
 }

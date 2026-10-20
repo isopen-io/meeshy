@@ -20,7 +20,7 @@ import XCTest
 /// stack (see the file's own doc comment). Touching it would change what gets warmed and risk
 /// resurrecting that crash for a refactor with zero user-facing benefit.
 ///
-/// Source-only: `bodyContent` is a `@ViewBuilder private var` computed property on a SwiftUI
+/// Source-only: `bodyStage` (ex-`bodyContent`) is a `private var` computed property on a SwiftUI
 /// View — not exerciseable behaviourally via XCTest without a live render harness. Body isolated
 /// via `DeclarationBodyScanner` (balanced braces, not a fixed character window — see `d60973459`)
 /// so an unrelated comment/property added above this property can never desync the guard.
@@ -38,30 +38,19 @@ final class ConversationViewLoadingPhaseSourceGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_bodyContent_coldStartSkeleton_readsPaginationPhase_notRawLoadingInitialBoolean() throws {
+    func test_bodyStage_coldStartSkeleton_readsPaginationPhase_notRawLoadingInitialBoolean() throws {
         let stripped = AppSourceGuard.stripComments(try source())
-        guard let body = DeclarationBodyScanner.body(containing: "private var bodyContent", in: stripped) else {
-            XCTFail("bodyContent not found in ConversationView.swift — file changed shape.")
+        guard let body = DeclarationBodyScanner.body(containing: "private var bodyStage", in: stripped) else {
+            XCTFail("bodyStage not found in ConversationView.swift — file changed shape.")
             return
         }
         XCTAssertTrue(
-            body.contains("viewModel.paginationPhase.isBlockingSpinnerNeeded"),
-            "bodyContent's cold-start skeleton overlay must gate on paginationPhase.isBlockingSpinnerNeeded."
+            body.contains("showsSkeleton: viewModel.paginationPhase.isBlockingSpinnerNeeded && viewModel.messages.isEmpty"),
+            "bodyStage's cold-start skeleton must gate on paginationPhase.isBlockingSpinnerNeeded."
         )
-        // Scoped to the skeleton's own `if` block (not all of `bodyContent`):
-        // WS-7 (F-086) added an unrelated, legitimate `viewModel.isLoadingInitial`
-        // read elsewhere in this same @ViewBuilder for `hasReachedOldest` pagination
-        // boundary detection — a whole-body scan would flag that too.
-        guard let skeletonBlock = DeclarationBodyScanner.body(
-            containing: "if viewModel.paginationPhase.isBlockingSpinnerNeeded && viewModel.messages.isEmpty",
-            in: stripped
-        ) else {
-            XCTFail("cold-start skeleton if-block not found in ConversationView.swift — file changed shape.")
-            return
-        }
         XCTAssertFalse(
-            skeletonBlock.contains("viewModel.isLoadingInitial"),
-            "bodyContent's cold-start skeleton overlay must stop reading the raw isLoadingInitial " +
+            body.contains("viewModel.isLoadingInitial"),
+            "bodyStage's cold-start skeleton must stop reading the raw isLoadingInitial " +
             "boolean — use the canonical ConversationLoadingPhase projection instead."
         )
     }

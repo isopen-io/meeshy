@@ -9,8 +9,9 @@ import os
 extension ConversationView {
 
     // MARK: - Conversation Background
-    var conversationBackground: some View {
-        ConversationBackgroundView(
+    var conversationBackground: ConversationBackgroundLayer {
+        let model = viewModel
+        return ConversationBackgroundLayer(
             conversationId: conversation?.id ?? "",
             initialAppearance: liveConversation?.userState.appearance,
             signature: ConversationBackgroundConfig(
@@ -22,25 +23,12 @@ extension ConversationView {
                 secondaryHex: secondaryColor,
                 isDarkMode: isDark
             ),
-            knownAttachment: { id in viewModel.messages.lazy.flatMap(\.attachments).first { $0.id == id } }
-        )
-        // Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair
-        // d'un direct (#9359). Seule une annonce qui CHANGE le pair affiché
-        // écrit l'état — les autres ne redessinent rien.
-        .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
-            admitPeerUpdate(event)
-        }
-        // L'accent personnel choisi (ou rétabli) repeint le fil, ses bulles, son
-        // composeur et son en-tête aussitôt, sans relecture réseau (#10631).
-        .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
-            admitAppearance(note)
-        }
-        // Traduction sur l'appareil (#9899) : le fond vit aussi longtemps que
-        // l'écran, et la couche n'y peint rien.
-        .deviceTranslationLayer(
-            viewModel: viewModel,
-            isEnabled: !previewMode && anonymousSession == nil,
-            encryptionMode: liveConversation?.encryptionMode
+            knownAttachment: { id in model.messages.lazy.flatMap(\.attachments).first { $0.id == id } },
+            viewModel: model,
+            deviceTranslationEnabled: !previewMode && anonymousSession == nil,
+            encryptionMode: liveConversation?.encryptionMode,
+            onPeerUpdate: { admitPeerUpdate($0) },
+            onAppearanceChange: { admitAppearance($0) }
         )
     }
 
@@ -53,8 +41,8 @@ extension ConversationView {
     }
 
     // MARK: - Header Avatar (thin wrapper → extracted struct to avoid PAC crashes)
-    var headerAvatarView: AnyView {
-        AnyView(ConversationHeaderAvatarView(
+    var headerAvatarView: ConversationHeaderAvatarView {
+        ConversationHeaderAvatarView(
             composerState: $composerState,
             headerState: $headerState,
             // La bande d'avatars est le SEUL endroit de l'en-tête que les
@@ -88,7 +76,7 @@ extension ConversationView {
             onViewMemberProfile: { user in
                 router.openProfile(user, inConversation: conversation?.id)
             }
-        ))
+        )
     }
 
     /// Ce que le toucher de l'avatar de l'en-tête ouvre (#10300) — lu sur la
@@ -107,15 +95,15 @@ extension ConversationView {
     /// getter de ce maillon que la trace du crash désignait, sous
     /// `__swift_instantiateConcreteTypeFromMangledNameV2`. Quand l'avatar ouvre
     /// une fiche (#10300), la bascule de l'en-tête passe à la zone libre de la bande.
-    var expandedHeaderMidContent: AnyView {
-        AnyView(ConversationHeaderMidContent(
+    var expandedHeaderMidContent: some View {
+        ConversationHeaderMidContent(
             layout: headerLayout,
-            titleAndTags: { AnyView(expandedHeaderTitleAndTags) },
+            titleAndTags: { expandedHeaderTitleAndTags },
             actionButtons: { headerButtonsCluster },
             onToggleBand: headerAvatarDoor.bandToggles(isPreview: previewMode)
                 ? { setHeaderExpanded(!composerState.showOptions) }
                 : nil
-        ))
+        )
     }
 
     // MARK: - L'aperçu tiré de la bannière (#8822)
@@ -126,18 +114,21 @@ extension ConversationView {
         ConversationHeaderLayout.resolve(previewMode: previewMode, showOptions: composerState.showOptions)
     }
 
-    /// LA PORTE VERS LA CONVERSATION COMPLÈTE, dans l'aperçu. Elle remplace le
-    /// calque transparent posé sur tout le fil, qui l'ouvrait au toucher — et
-    /// volait ainsi le DÉFILEMENT à la liste.
-    var openFullConversationButton: AnyView {
-        AnyView(Button {
-            HapticFeedback.light()
-            onOpenFullConversation?()
-        } label: {
-            HeaderOpenFullGlyph(accentColor: accentColor)
-        }
-        .accessibilityLabel(String(localized: "conversation.preview.openFull", defaultValue: "Ouvrir la conversation", bundle: .main))
-        .accessibilityIdentifier("conversation.preview.openFull"))
+    /// L'emplacement de la recherche : la loupe, ou — dans l'aperçu — la porte
+    /// vers la conversation complète.
+    var headerSearchSlot: ConversationHeaderSearchSlot {
+        ConversationHeaderSearchSlot(
+            previewMode: previewMode,
+            accentColor: accentColor,
+            secondaryColor: secondaryColor,
+            onOpenFull: { onOpenFullConversation?() },
+            onSearch: { openHeaderSearch() }
+        )
+    }
+
+    func openHeaderSearch() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { headerState.showSearch = true }
+        isSearchFocused = true
     }
 
     /// La barre qui remplace l'en-tête pendant la frappe (extraite de `ConversationView.swift`,
@@ -227,19 +218,6 @@ extension ConversationView {
         )
     }
 
-    // MARK: - « 🔥 série · total » (#8906, #9044)
-
-    /// Ce que le lecteur a gagné dans CETTE conversation. Elle ne se lit que
-    /// sous le titre de l'en-tête DÉPLIÉ : replié ou en aperçu, c'est la flamme
-    /// du jour sous l'avatar qui parle.
-    var headerEngagementBadge: some View {
-        ConversationEngagementBadge(
-            conversationId: liveConversation?.id ?? "",
-            seed: liveConversation?.viewerEngagement,
-            accentColor: accentColor
-        )
-    }
-
     /// #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
     /// poignée de l'appel est la conversation, son nom le titre du groupe.
     private func headerCalleeName(for entry: HeaderCallEntry?) -> String {
@@ -274,75 +252,14 @@ extension ConversationView {
     }
 
     // MARK: - Header Tags Row (category first, then colored tags, horizontally scrollable)
-    @ViewBuilder
-    var headerTagsRow: some View {
-        // F11 (revue adversariale 2026-08-25) : `encryptionMode`/`tags`
-        // lisent la conversation VIVANTE — un réglage (changement de mode de
-        // chiffrement, ajout/retrait d'un tag) doit se refléter sur CETTE
-        // bande sans réouverture, exactement comme la bande d'avatars juste
-        // au-dessus dans le même en-tête.
-        let isEncrypted = liveConversation?.encryptionMode != nil
-        let hasTags = conversationSection != nil || !(liveConversation?.tags.isEmpty ?? true) || isEncrypted
-        let showsEngagement = !headerLayout.showsActions
-        if hasTags {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.xs) {
-                    if showsEngagement {
-                        headerEngagementBadge
-                    }
-
-                    // Lock icon (encryption only, no text)
-                    if isEncrypted {
-                        Image(systemName: "lock.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                            .foregroundColor(theme.success)
-                            .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Conversation chiffrée", bundle: .main))
-                    }
-
-                    // Category tag
-                    if let section = conversationSection {
-                        HStack(spacing: MeeshySpacing.xxs) {
-                            Image(systemName: section.icon)
-                                .font(MeeshyFont.relative(7, weight: .bold))
-                                .accessibilityHidden(true)
-                            Text(section.name)
-                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                        }
-                        .foregroundColor(Color(hex: section.color))
-                        .padding(.horizontal, MeeshySpacing.xs)
-                        .padding(.vertical, MeeshySpacing.xxs)
-                        .background(
-                            Capsule()
-                                .fill(Color(hex: section.color).opacity(MeeshyOpacity.light))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color(hex: section.color).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
-                                )
-                        )
-                    }
-
-                    if let conv = liveConversation {
-                        ForEach(conv.tags) { tag in
-                            Text(tag.name)
-                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
-                                .foregroundColor(Color(hex: tag.color))
-                                .padding(.horizontal, MeeshySpacing.xs)
-                                .padding(.vertical, MeeshySpacing.xxs)
-                                .background(
-                                    Capsule()
-                                        .fill(Color(hex: tag.color).opacity(MeeshyOpacity.light))
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(Color(hex: tag.color).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
-                                        )
-                                )
-                        }
-                    }
-                }
-            }
-        } else if showsEngagement {
-            headerEngagementBadge
-        }
+    var headerTagsRow: ConversationHeaderTagsRow {
+        ConversationHeaderTagsRow(
+            conversation: liveConversation,
+            section: conversationSection,
+            showsEngagement: !headerLayout.showsActions,
+            accentColor: accentColor,
+            successColor: theme.success
+        )
     }
 
     // MARK: - Navigate to DM
@@ -425,7 +342,7 @@ struct HeaderCallEntry: Equatable {
 // @ViewBuilder computed properties capturing @EnvironmentObject + @State in @escaping closures
 // cause EXC_BAD_ACCESS in swift_retain. Using a dedicated struct gives SwiftUI proper ownership.
 
-private struct ConversationHeaderAvatarView: View {
+struct ConversationHeaderAvatarView: View {
     @Binding var composerState: ConversationComposerState
     @Binding var headerState: ConversationHeaderState
 
@@ -701,7 +618,7 @@ private struct ConversationHeaderAvatarView: View {
 
 /// Le disque de verre de la porte de l'aperçu — la forme de la loupe
 /// (`HeaderSearchGlyph`), type NOMINAL pour borner la chaîne de types de l'en-tête.
-private struct HeaderOpenFullGlyph: View {
+struct HeaderOpenFullGlyph: View {
     let accentColor: String
 
     var body: some View {
@@ -711,5 +628,44 @@ private struct HeaderOpenFullGlyph: View {
             .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
             .meeshyTapTarget()
+    }
+}
+
+// MARK: - Le fond de la conversation, en type NOMINAL
+
+/// Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair d'un
+/// direct (#9359) — seule une annonce qui CHANGE le pair affiché écrit l'état —
+/// et l'accent personnel choisi ou rétabli (#10631), qui repeint le fil, ses
+/// bulles, son composeur et son en-tête sans relecture réseau. La traduction
+/// sur l'appareil (#9899) y vit aussi : la couche n'y peint rien.
+struct ConversationBackgroundLayer: View {
+    let conversationId: String
+    let initialAppearance: ConversationAppearance?
+    let signature: ConversationBackgroundConfig
+    let knownAttachment: (String) -> MeeshyMessageAttachment?
+    let viewModel: ConversationViewModel
+    let deviceTranslationEnabled: Bool
+    let encryptionMode: String?
+    let onPeerUpdate: (UserUpdatedEvent) -> Void
+    let onAppearanceChange: (Notification) -> Void
+
+    var body: some View {
+        ConversationBackgroundView(
+            conversationId: conversationId,
+            initialAppearance: initialAppearance,
+            signature: signature,
+            knownAttachment: knownAttachment
+        )
+        .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
+            onPeerUpdate(event)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
+            onAppearanceChange(note)
+        }
+        .deviceTranslationLayer(
+            viewModel: viewModel,
+            isEnabled: deviceTranslationEnabled,
+            encryptionMode: encryptionMode
+        )
     }
 }

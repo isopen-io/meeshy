@@ -164,7 +164,7 @@ final class AudioRecorderManagerTests: XCTestCase {
     /// le plateau AVANT que le brouillon ne soit persisté.
     func test_conversationDisappearing_keepsTheRecordingInTheTray() throws {
         let source = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift")
-        let start = try XCTUnwrap(source.range(of: ".onDisappear {\n                composerText.flushPendingChange()"))
+        let start = try XCTUnwrap(source.range(of: "private func conversationDidDisappear() {\n        composerText.flushPendingChange()"))
         let block = String(source[start.upperBound...].prefix(2_500))
         let keep = try XCTUnwrap(block.range(of: "if audioRecorder.isRecording { _ = stopRecordingToAttachment() }"))
         let persist = try XCTUnwrap(block.range(of: "persistDraftAttachmentsForBackground()"))

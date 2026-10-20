@@ -26,8 +26,16 @@ final class LivingSummaryCatchUpWiringTests: XCTestCase {
     }
 
     private func conversationViewCode() throws -> String {
+        try normalizedCode("Meeshy/Features/Main/Views/ConversationView.swift")
+    }
+
+    private func stageCode() throws -> String {
+        try normalizedCode("Meeshy/Features/Main/Views/ConversationLayers/ConversationBodyStage.swift")
+    }
+
+    private func normalizedCode(_ relativePath: String) throws -> String {
         let raw = try String(
-            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ConversationView.swift"),
+            contentsOf: Self.iosRoot.appendingPathComponent(relativePath),
             encoding: .utf8
         )
         return AppSourceGuard.stripComments(raw)
@@ -41,14 +49,14 @@ final class LivingSummaryCatchUpWiringTests: XCTestCase {
     /// `messageListLayer` depuis #6213 (`9546b56da9`), qui a sorti
     /// `MessageListView(` du `ZStack` (#5599).
     private func summaryBranch() throws -> String {
-        let code = try conversationViewCode()
+        let code = try stageCode()
         let start = try XCTUnwrap(
-            code.range(of: "if readingModeController.mode == .summary {"),
-            "La branche de montage `mode == .summary` a disparu de `ConversationView`."
+            code.range(of: "if mode == .summary {"),
+            "La branche de montage `mode == .summary` a disparu de la scène de la conversation."
         )
         let end = try XCTUnwrap(
-            code.range(of: "messageListLayer", options: [], range: start.upperBound ..< code.endIndex),
-            "Le pont UIKit qui borne la branche `.summary` est introuvable."
+            code.range(of: "struct ConversationScrollToBottomBranch", options: [], range: start.upperBound ..< code.endIndex),
+            "La struct qui suit la branche `.summary` est introuvable."
         )
         return String(code[start.upperBound ..< end.lowerBound])
     }
@@ -58,12 +66,20 @@ final class LivingSummaryCatchUpWiringTests: XCTestCase {
     /// `markCaughtUpFromSummaryOrRiver()` — jamais `markAsRead()` seul, qui
     /// laisserait le gateway sur son repli par fenêtre temporelle.
     private static let catchUpOnLeavingSummary =
-        ".adaptiveOnChange(of: readingModeController.mode) { old, new in " +
+        ".adaptiveOnChange(of: readingMode) { old, new in " +
         "guard old == .summary, new != .summary else { return } " +
-        "viewModel.markCaughtUpFromSummaryOrRiver() }"
+        "onLeaveSummary() }"
+
+    private static let hostHandsTheCatchUp =
+        "onLeaveSummary: { viewModel.markCaughtUpFromSummaryOrRiver() }"
 
     func test_conversationView_marksCaughtUpFromSummaryOrRiver_whenLeavingSummaryMode() throws {
-        let code = try conversationViewCode()
+        let code = try stageCode()
+        XCTAssertTrue(
+            try conversationViewCode().contains(Self.hostHandsTheCatchUp),
+            "`ConversationView` doit remettre à la scène `viewModel.markCaughtUpFromSummaryOrRiver()` " +
+            "comme geste de sortie du Résumé."
+        )
         XCTAssertTrue(
             code.contains(Self.catchUpOnLeavingSummary),
             "`ConversationView` doit appeler `viewModel.markCaughtUpFromSummaryOrRiver()` dès que " +
@@ -86,7 +102,7 @@ final class LivingSummaryCatchUpWiringTests: XCTestCase {
             "moment même où `mode` change, un `onChange` qui y vivrait ne se déclencherait jamais " +
             "à la sortie."
         )
-        let code = try conversationViewCode()
+        let code = try stageCode()
         XCTAssertTrue(
             code.contains(Self.catchUpOnLeavingSummary),
             "combiné au test ci-dessus : le câblage doit exister QUELQUE PART dans le fichier, " +

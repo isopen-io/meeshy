@@ -38,7 +38,7 @@ final class LivingSummaryMountIdentityTests: XCTestCase {
 
     private func conversationViewCode() throws -> String {
         let raw = try String(
-            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ConversationView.swift"),
+            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ConversationLayers/ConversationBodyStage.swift"),
             encoding: .utf8
         )
         return AppSourceGuard.stripComments(raw)
@@ -58,13 +58,13 @@ final class LivingSummaryMountIdentityTests: XCTestCase {
     private func summaryBranch() throws -> String {
         let code = try conversationViewCode()
         let start = try XCTUnwrap(
-            code.range(of: "if readingModeController.mode == .summary {"),
-            "La branche de montage `mode == .summary` a disparu de `ConversationView` — cette " +
+            code.range(of: "if mode == .summary {"),
+            "La branche de montage `mode == .summary` a disparu de la scène de la conversation — cette " +
             "garde doit être re-pointée avant tout le reste."
         )
         let end = try XCTUnwrap(
-            code.range(of: "messageListLayer", options: [], range: start.upperBound ..< code.endIndex),
-            "Le pont UIKit qui borne la branche `.summary` est introuvable — la garde ne sait plus " +
+            code.range(of: "struct ConversationScrollToBottomBranch", options: [], range: start.upperBound ..< code.endIndex),
+            "La struct qui suit la branche `.summary` est introuvable — la garde ne sait plus " +
             "où s'arrête le mode Résumé."
         )
         return String(code[start.upperBound ..< end.lowerBound])
