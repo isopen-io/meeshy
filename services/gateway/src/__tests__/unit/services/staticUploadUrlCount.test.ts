@@ -22,6 +22,8 @@ describe('isStaticUploadUrl — #11256', () => {
     'https://static.meeshy.me/uploads/2026/09/68f33afa/photo%20x.jpg?v=2',
     'HTTPS://STATIC.MEESHY.ME/uploads/2026/09/68f33afa/photo.jpg',
     '//static.meeshy.me/uploads/2026/09/68f33afa/photo.jpg',
+    'static:uploads/2026/09/68f33afa/photo.jpg',
+    'static:/uploads/2026/09/68f33afa/photo.jpg',
   ])('%s est une adresse du domaine statique', (value) => {
     expect(isStaticUploadUrl(value)).toBe(true);
   });
@@ -32,7 +34,8 @@ describe('isStaticUploadUrl — #11256', () => {
     ['un chemin relatif /uploads, résolu sur la passerelle', '/uploads/2026/09/a/photo.jpg'],
     ['la clé de stockage nue', '2026/09/68f33afa/photo.jpg'],
     ['le magasin legacy /u/, qui reste servi', 'https://static.meeshy.me/u/i/2025/11/avatar.jpg'],
-    ['la référence déclarée du magasin statique', 'static:u/i/2025/11/avatar.jpg'],
+    ['la référence déclarée du magasin legacy', 'static:u/i/2025/11/avatar.jpg'],
+    ['une référence statique dont le chemin ne COMMENCE pas par uploads/', 'static:u/uploads/2026/09/a/photo.jpg'],
     ['un hôte qui n’est pas static.*', 'https://cdn.example.com/uploads/2026/09/a/photo.jpg'],
     ['un hôte qui contient "static" sans en être le sous-domaine', 'https://notstatic.meeshy.me/uploads/2026/09/a/photo.jpg'],
     ['/uploads en milieu de chemin', 'https://static.meeshy.me/u/uploads/2026/09/a/photo.jpg'],

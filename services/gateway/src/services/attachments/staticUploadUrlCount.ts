@@ -10,6 +10,7 @@
  * `staticUploadUrlStores.ts`) et il ne peut pas écrire, son port n'a pas de
  * `write`.
  */
+import { parseMediaRef } from '@meeshy/shared/api/media-ref';
 
 export type StaticUploadUrlRow = {
   readonly id: string;
@@ -35,19 +36,28 @@ export type StaticUploadUrlReport = {
 
 const STATIC_HOST_PREFIX = 'static.';
 const UPLOADS_PATH_PREFIX = '/uploads/';
+const UPLOADS_KEY_PREFIX = 'uploads/';
 const WEB_PROTOCOLS: ReadonlySet<string> = new Set(['http:', 'https:']);
 
 /** Combien d'exemples le compte montre — assez pour juger, jamais la table entière. */
 const EXEMPLES_MAX = 12;
 
 /**
- * Une adresse ABSOLUE (ou relative au protocole, `//hôte/…`) dont l'hôte est un
- * sous-domaine `static.*` et dont le chemin COMMENCE par `/uploads/`. Le
- * magasin legacy (`/u/…`, ou sa référence déclarée `static:u/…`) n'en est pas,
- * il reste servi ; une clé nue, un chemin relatif ou la route de la passerelle
- * non plus.
+ * Une référence qui se résout sur `static.<domaine>/uploads/…` :
+ *
+ *  - une adresse ABSOLUE (ou relative au protocole, `//hôte/…`) dont l'hôte est
+ *    un sous-domaine `static.*` et dont le chemin COMMENCE par `/uploads/` ;
+ *  - une référence DÉCLARÉE du magasin statique (`static:uploads/…`), que la
+ *    migration 017 écrit à partir d'une adresse absolue `static.*` QUELLE QUE
+ *    SOIT sa clé — un avatar `…/uploads/…` y est devenu `static:uploads/…`, et
+ *    les clients le résolvent sur le domaine statique.
+ *
+ * Le magasin legacy (`/u/…`, `static:u/…`) n'en est pas, il reste servi ; une
+ * clé nue, un chemin relatif ou la route de la passerelle non plus.
  */
 export function isStaticUploadUrl(value: string): boolean {
+  const ref = parseMediaRef(value);
+  if (ref?.kind === 'key' && ref.store === 'static') return ref.key.startsWith(UPLOADS_KEY_PREFIX);
   const absolue = value.startsWith('//') ? `https:${value}` : value;
   try {
     const { protocol, hostname, pathname } = new URL(absolue);
