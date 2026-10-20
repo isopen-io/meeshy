@@ -104,6 +104,24 @@ public struct VideoClipBar: View, Equatable {
         )
     }
 
+    var accessibilityModel: ClipBarAccessibility {
+        ClipBarAccessibility(
+            geometry: geometry,
+            isLocked: isLocked,
+            muteLabels: onToggleMute == nil ? nil : (
+                mute: String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module),
+                unmute: String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
+            ),
+            isMuted: isMuted
+        )
+    }
+
+    var accessibilityCallbacks: ClipBarCallbacks {
+        ClipBarCallbacks(onTap: onTap, onDoubleTap: onDoubleTap, onMoveDelta: onMoveDelta,
+                         onMoveEnded: onMoveEnded, onTrimStartDelta: onTrimStartDelta,
+                         onTrimEndDelta: onTrimEndDelta, onToggleMute: onToggleMute)
+    }
+
     public init(
         clipId: String,
         title: String,
@@ -168,7 +186,8 @@ public struct VideoClipBar: View, Equatable {
             if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
                 ClipTrimHandles(laneHeight: laneHeight,
                                 onTrimStartDelta: onTrimStartDelta,
-                                onTrimEndDelta: onTrimEndDelta)
+                                onTrimEndDelta: onTrimEndDelta,
+                                adjustStepPoints: accessibilityModel.stepPoints)
             }
         }
         .frame(width: width, height: laneHeight - 4)
@@ -195,6 +214,7 @@ public struct VideoClipBar: View, Equatable {
             startTime, duration
         ))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .clipBarAccessibility(accessibilityModel, callbacks: accessibilityCallbacks)
         .task(id: videoURL ?? imageURL) {
             guard frames.isEmpty else { return }
             if let videoURL {
