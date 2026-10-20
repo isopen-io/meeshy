@@ -34,6 +34,11 @@ export function menuListHeight(rows: number): number {
  * plus d'un quart n'est plus celui de la rangée. Sous ce plancher, l'aperçu se
  * TRONQUE avec un fondu (`placeMessageMenuCluster`). */
 export const PREVIEW_SCALE_FLOOR = 0.75;
+/** La hauteur VISIBLE minimale d'un aperçu tronqué. La troncature fait tenir
+ * TOUT le cluster — rail, aperçu ET liste — à l'écran au repos ; seul un écran
+ * trop court pour garder ce minimum laisse la liste déborder, et c'est alors le
+ * glisser vers le haut (#9043, `revealFloor`) qui la dégage. */
+export const PREVIEW_MIN_VISIBLE = 120;
 /** La hauteur du fondu qui termine un aperçu tronqué. */
 export const PREVIEW_CLIP_FADE = 48;
 /** L'élévation de l'aperçu depuis sa rangée, et son retour (#11206) — la

@@ -8,8 +8,8 @@ import { PREVIEW_SURFACE_PADDING, previewSurfaceOf, readingModeOfRow } from './m
 /**
  * L'APERÇU SUIT LE MODE DE LECTURE (décision #11204, lot #11206) — chaque mode
  * du menu (`MENU_ORDER`) a SA surface : la rangée plate de Focal se décolle du
- * voile sur une carte opaque, celle de Script garde sa transparence mais gagne
- * des marges, une bulle porte déjà la sienne.
+ * voile sur une carte opaque, celle de Script sur du verre à marges, une bulle
+ * porte déjà la sienne.
  */
 beforeAll(() => ensureHappyDomRegistered());
 afterAll(async () => releaseHappyDomIfRegistered());
@@ -22,18 +22,21 @@ describe('previewSurfaceOf — une surface par mode de lecture', () => {
   test('Focal : une carte OPAQUE, à marges', () => {
     const surface = previewSurfaceOf('focal');
     expect(surface.background).not.toBe(null);
+    expect(surface.glass).toBe(false);
     expect(surface.padding).toBe(PREVIEW_SURFACE_PADDING);
     expect(surface.radius).toBeGreaterThan(0);
   });
 
-  test('Script : transparente, mais à marges', () => {
+  test('Script : du VERRE à marges — jamais transparent sur le voile (revue #5814, majeur 11)', () => {
     const surface = previewSurfaceOf('script');
+    expect(surface.glass).toBe(true);
     expect(surface.background).toBe(null);
     expect(surface.padding).toBe(PREVIEW_SURFACE_PADDING);
+    expect(surface.radius).toBeGreaterThan(0);
   });
 
   test('Bulles : aucune surface ajoutée, la bulle porte la sienne', () => {
-    expect(previewSurfaceOf('bubbles')).toEqual({ kind: 'none', padding: 0, background: null, radius: 0 });
+    expect(previewSurfaceOf('bubbles')).toEqual({ kind: 'none', padding: 0, background: null, glass: false, radius: 0 });
   });
 
   test('Résumé se présente comme Focal, Rivière comme Bulles', () => {

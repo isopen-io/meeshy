@@ -99,7 +99,8 @@ export function placePopoverVertical(input: VerticalPopoverPlacement): VerticalP
  * rapetissait le texte d'une rangée pleine largeur. `previewScale` ne sert
  * plus qu'au dépassement de HAUTEUR, jamais sous `previewScaleFloor`, jamais
  * au-dessus de 1 ; sous ce plancher, l'aperçu est TRONQUÉ (`previewClipHeight`,
- * en pixels du clone avant réduction) pour tenir sous le rail. Toutes les
+ * en pixels du clone avant réduction) pour que le cluster ENTIER — rail,
+ * aperçu, liste — tienne à l'écran, jamais sous `previewMinHeight`. Toutes les
  * positions sont des pixels ENTIERS : un bord à 16,4 px floute le texte.
  *
  * `anchorX` suit le bord de l'ancre selon `isMine`, comme
@@ -127,6 +128,8 @@ export type MessageMenuClusterInput = {
   readonly menuWidth: number;
   readonly railWidth: number;
   readonly previewScaleFloor: number;
+  /** Hauteur visible minimale d'un aperçu tronqué (`PREVIEW_MIN_VISIBLE`). */
+  readonly previewMinHeight: number;
 };
 
 export type MessageMenuClusterPlacement = {
@@ -154,7 +157,7 @@ const clamp = (value: number, min: number, max: number): number => Math.max(min,
 
 export function placeMessageMenuCluster(input: MessageMenuClusterInput): MessageMenuClusterPlacement {
   const { anchor, viewport, safe, menuHeight, isMine } = input;
-  const { railHeight, railGap, menuGap, sidePadding, menuWidth, railWidth, previewScaleFloor } = input;
+  const { railHeight, railGap, menuGap, sidePadding, menuWidth, railWidth, previewScaleFloor, previewMinHeight } = input;
 
   // `nlAvailTop` / `nlAvailBottom` / `nlAvailable` (:242-244).
   const availTop = safe.top + 12;
@@ -170,7 +173,11 @@ export function placeMessageMenuCluster(input: MessageMenuClusterInput): Message
 
   const previewWidth = Math.floor(Math.min(anchor.width, Math.max(0, viewport.width - 2 * sidePadding)));
   const scaledHeight = anchor.height * previewScale;
-  const visibleCeiling = Math.max(0, available - railHeight - railGap);
+  /* LA TRONCATURE FAIT TENIR TOUT LE CLUSTER (#11206) — rail, aperçu ET
+     liste : un aperçu tronqué sous le seul rail poussait la liste entière
+     sous le bas de l'écran au repos. Seul un écran trop court pour garder
+     `previewMinHeight` laisse la liste déborder ; le glisser (#9043) la dégage. */
+  const visibleCeiling = Math.max(previewMinHeight, available - chrome);
   const previewHeight = Math.min(scaledHeight, visibleCeiling);
   const previewClipHeight = scaledHeight > visibleCeiling ? visibleCeiling / previewScale : null;
   const previewLeft = Math.round(

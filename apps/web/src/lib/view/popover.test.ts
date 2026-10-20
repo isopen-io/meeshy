@@ -4,6 +4,8 @@ import { placeMessageMenuCluster, placePopover, placePopoverVertical, type Messa
 import {
   MENU_GAP,
   MENU_WIDTH,
+  menuListHeight,
+  PREVIEW_MIN_VISIBLE,
   PREVIEW_SCALE_FLOOR,
   RAIL_GAP,
   RAIL_HEIGHT,
@@ -143,6 +145,7 @@ const clusterInput = (overrides: Partial<MessageMenuClusterInput> = {}): Message
   menuWidth: MENU_WIDTH,
   railWidth: RAIL_WIDTH,
   previewScaleFloor: PREVIEW_SCALE_FLOOR,
+  previewMinHeight: PREVIEW_MIN_VISIBLE,
   ...overrides,
 });
 
@@ -201,13 +204,13 @@ describe('placeMessageMenuCluster — rail au-dessus, liste au-dessous, jamais h
     expect(placement.menuHiddenHeight).toBeLessThanOrEqual(0);
   });
 
-  test('#9043 — un aperçu ÉNORME au plancher dit EXACTEMENT ce que la liste perd sous le bas utile', () => {
+  test('#9043 — sur un écran trop court même tronqué, le cluster dit EXACTEMENT ce que la liste perd sous le bas utile', () => {
     const input = clusterInput({
-      anchor: { top: 400, bottom: 5400, left: 20, right: 370, width: 350, height: 5000 },
-      viewport: { width: 390, height: 800 },
+      anchor: { top: 100, bottom: 5100, left: 20, right: 370, width: 350, height: 5000 },
+      viewport: { width: 640, height: 390 },
     });
     const placement = placeMessageMenuCluster(input);
-    expect(placement.menuHiddenHeight).toBeCloseTo(placement.menuTop + input.menuHeight - (800 - 12), 6);
+    expect(placement.menuHiddenHeight).toBeCloseTo(placement.menuTop + input.menuHeight - (390 - 12), 6);
     expect(placement.menuHiddenHeight).toBeGreaterThan(0);
   });
 });
@@ -253,12 +256,36 @@ describe('placeMessageMenuCluster — marges par reflow, positions au pixel enti
     expect(placement.previewScale).toBeLessThan(1);
   });
 
-  test('sous le plancher, l’aperçu est TRONQUÉ : sa hauteur visible tient sous le rail', () => {
-    const placement = placeMessageMenuCluster(
-      clusterInput({ anchor: { top: 400, bottom: 5400, left: 20, right: 370, width: 350, height: 5000 } }),
-    );
-    expect(placement.previewHeight).toBe(800 - 24 - RAIL_HEIGHT - RAIL_GAP);
+  test('sous le plancher, l’aperçu est TRONQUÉ pour que TOUT le cluster tienne — rail, aperçu ET liste', () => {
+    const input = clusterInput({ anchor: { top: 400, bottom: 5400, left: 20, right: 370, width: 350, height: 5000 } });
+    const placement = placeMessageMenuCluster(input);
+    expect(placement.previewHeight).toBe(800 - 24 - RAIL_HEIGHT - RAIL_GAP - MENU_GAP - input.menuHeight);
     expect(placement.previewClipHeight).toBeCloseTo(placement.previewHeight / placement.previewScale, 6);
+    expect(placement.menuHiddenHeight).toBeLessThanOrEqual(0);
+  });
+
+  test('iPhone 390×844, deux photos portrait dépliées (954 px) : toute la liste est visible au repos', () => {
+    const placement = placeMessageMenuCluster(
+      clusterInput({
+        anchor: { top: 300, bottom: 1254, left: 20, right: 370, width: 350, height: 954 },
+        viewport: { width: 390, height: 844 },
+        safe: { top: 47, bottom: 34 },
+        menuHeight: menuListHeight(7),
+      }),
+    );
+    expect(placement.previewClipHeight).not.toBe(null);
+    expect(placement.menuHiddenHeight).toBeLessThanOrEqual(0);
+  });
+
+  test('un écran trop court garde un aperçu d’au moins PREVIEW_MIN_VISIBLE — le glisser dégage le reste', () => {
+    const input = clusterInput({
+      anchor: { top: 100, bottom: 1100, left: 20, right: 370, width: 350, height: 1000 },
+      viewport: { width: 640, height: 390 },
+      menuHeight: menuListHeight(7),
+    });
+    const placement = placeMessageMenuCluster(input);
+    expect(placement.previewHeight).toBe(PREVIEW_MIN_VISIBLE);
+    expect(placement.menuHiddenHeight).toBeGreaterThan(0);
   });
 
   test('un aperçu qui tient n’est pas tronqué', () => {

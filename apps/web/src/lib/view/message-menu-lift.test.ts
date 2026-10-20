@@ -18,6 +18,11 @@ describe('liftOffset', () => {
     expect(liftOffset({ anchor: { left: 0, right: 390, top: 300 }, placement, isMine: true })).toEqual({ dx: 16, dy: 60 });
   });
 
+  test('le rembourrage de la surface est retranché : le CONTENU de l’aperçu part du contenu de la rangée', () => {
+    expect(liftOffset({ anchor: { left: 0, right: 390, top: 300 }, placement, isMine: false, inset: 12 })).toEqual({ dx: -28, dy: 48 });
+    expect(liftOffset({ anchor: { left: 0, right: 390, top: 300 }, placement, isMine: true, inset: 12 })).toEqual({ dx: 28, dy: 48 });
+  });
+
   test('le décalage tombe au pixel entier', () => {
     const offset = liftOffset({ anchor: { left: 0.4, right: 390.6, top: 300.7 }, placement, isMine: false });
     expect(Number.isInteger(offset.dx) && Number.isInteger(offset.dy)).toBe(true);

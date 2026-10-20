@@ -10,8 +10,12 @@ import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes
  * - `card` — une carte OPAQUE à marges : la rangée plate de Focal n'a ni fond
  *   ni rayon, et se confondait avec le voile flouté (iOS pose
  *   `ThemedMessageBubble` opaque même en Focal). Le Résumé se présente pareil.
- * - `margins` — Script garde sa transparence de script, mais gagne des marges
- *   pour que son texte ne colle plus au bord de l'aperçu.
+ * - `margins` — Script garde la LÉGÈRETÉ du script : du VERRE (`.glass`, le
+ *   site unique de la matière translucide, `styles/glass.css` — pas la carte
+ *   opaque de Focal) et des marges pour que son texte ne colle plus au bord de
+ *   l'aperçu. Jamais transparent : un texte nu sur le voile flouté s'y
+ *   confondait (revue #5814, défaut majeur 11), l'ombre seule ne le décollait
+ *   pas.
  * - `none` — une bulle porte déjà sa surface ; une seconde, carrée, déborderait
  *   de ses coins. La Rivière rend des bulles.
  */
@@ -22,17 +26,20 @@ export type PreviewSurface = {
   readonly kind: PreviewSurfaceKind;
   /** Marge interne de l'hôte, en px. */
   readonly padding: number;
-  /** Fond de l'hôte (jeton de couleur) ; `null` : transparent. */
+  /** Fond OPAQUE de l'hôte (jeton de couleur) ; `null` : aucun. */
   readonly background: string | null;
+  /** L'hôte porte la matière de verre (`.glass`) — jamais un ton translucide
+   * écrit ici (`scripts/lib/glass-site.mjs`). */
+  readonly glass: boolean;
   readonly radius: number;
 };
 
 /** La marge interne d'une rangée plate dans l'aperçu. */
 export const PREVIEW_SURFACE_PADDING = 12;
 
-const CARD: PreviewSurface = { kind: 'card', padding: PREVIEW_SURFACE_PADDING, background: 'var(--color-ios-surface)', radius: 14 };
-const MARGINS: PreviewSurface = { kind: 'margins', padding: PREVIEW_SURFACE_PADDING, background: null, radius: 0 };
-const NONE: PreviewSurface = { kind: 'none', padding: 0, background: null, radius: 0 };
+const CARD: PreviewSurface = { kind: 'card', padding: PREVIEW_SURFACE_PADDING, background: 'var(--color-ios-surface)', glass: false, radius: 14 };
+const MARGINS: PreviewSurface = { kind: 'margins', padding: PREVIEW_SURFACE_PADDING, background: null, glass: true, radius: 14 };
+const NONE: PreviewSurface = { kind: 'none', padding: 0, background: null, glass: false, radius: 0 };
 
 const SURFACES = {
   focal: CARD,

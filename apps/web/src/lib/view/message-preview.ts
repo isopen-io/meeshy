@@ -21,10 +21,19 @@ import type { Attachment } from '@/lib/api/types';
  *    `height`, repli carré), sans rognage ni étirement ; une grille se déplie
  *    en colonne pour que chaque case puisse avoir le sien.
  * 3. LE MÉDIA TEL QU'IL EST À L'ÉCRAN (#11206). `cloneNode` remet une vidéo à
- *    zéro (et la recharge) et rend un canvas VIDE. Chaque vidéo devient une
- *    image de la frame que le lecteur voit (repli sur le poster), sans source
- *    vidéo ni préchargement ; chaque canvas est recopié depuis le vivant. Les
- *    deux se lisent sur la rangée SOURCE, passée par l'appelant.
+ *    zéro (et la recharge) et rend un canvas VIDE. Chaque vidéo devient un
+ *    canvas où la frame que le lecteur voit est PEINTE (repli sur une image du
+ *    poster tant qu'aucune frame n'est décodée), sans source vidéo ni
+ *    préchargement ; chaque canvas est recopié depuis le vivant. Les deux se
+ *    lisent sur la rangée SOURCE, passée par l'appelant.
+ *
+ *    PEINTE, JAMAIS ENCODÉE : les médias viennent de la passerelle, une autre
+ *    origine que l'application, et `<video>` n'y porte pas `crossOrigin` — un
+ *    canvas qui les dessine est « souillé » et `toDataURL` lève. Mais un canvas
+ *    souillé AFFICHE ses pixels : il suffit de ne jamais les relire. Et il est
+ *    dessiné à la taille AFFICHÉE (bornée), pas à la résolution native : aucun
+ *    encodage JPEG d'une frame 4K sur le fil principal avant la première
+ *    peinture du menu.
  * 4. CE QUI N'EST PAS LE MESSAGE. Un nœud `[data-preview-omit]` (une commande
  *    de la rangée, un débord de geste) est retiré ; un hôte d'effets
  *    (`[data-effects]`, `[data-effects-host]`) ne rejoue aucune animation —
@@ -44,6 +53,11 @@ const SQUARE = '1 / 1';
 const EFFECTS_SELECTOR = '[data-effects], [data-effects-host]';
 const FRAME_ATTRIBUTES = ['class', 'style', 'width', 'height', PIECE_RATIO_ATTRIBUTE] as const;
 const HAVE_CURRENT_DATA = 2;
+/** Densité maximale d'une frame figée — au-delà, l'œil ne gagne rien et le
+ * canvas pèse. */
+const FRAME_MAX_DENSITY = 2;
+/** Côté maximal, en pixels du canvas, d'une frame figée. */
+const FRAME_MAX_SIDE = 1280;
 
 export function pieceAspectRatio(attachment: Pick<Attachment, 'width' | 'height'>): string {
   const { width, height } = attachment;
@@ -51,39 +65,57 @@ export function pieceAspectRatio(attachment: Pick<Attachment, 'width' | 'height'
   return `${width} / ${height}`;
 }
 
-/** La frame affichée par la vidéo VIVANTE — `null` sans image décodée, ou
- * quand la source est d'une autre origine (canvas « souillé »). */
-function currentFrameOf(video: HTMLVideoElement | undefined): string | null {
-  if (video === undefined || video.readyState < HAVE_CURRENT_DATA || video.videoWidth <= 0 || video.videoHeight <= 0) return null;
+const copyFrameAttributes = (from: Element, to: Element, names: readonly string[]): void => {
+  names.forEach((name) => {
+    const value = from.getAttribute(name);
+    if (value !== null) to.setAttribute(name, value);
+  });
+};
+
+/** La taille du canvas d'une frame figée : le rapport de la vidéo, au plus la
+ * taille AFFICHÉE × densité (bornée), jamais plus que la résolution native. */
+function frameSize(live: HTMLVideoElement): { readonly width: number; readonly height: number } {
+  const shown = live.getBoundingClientRect();
+  const density = Math.min(FRAME_MAX_DENSITY, typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
+  const shownSide = Math.max(shown.width, shown.height) * density;
+  const budget = Math.min(FRAME_MAX_SIDE, shownSide > 0 ? shownSide : FRAME_MAX_SIDE);
+  const scale = Math.min(1, budget / Math.max(live.videoWidth, live.videoHeight));
+  return { width: Math.max(1, Math.round(live.videoWidth * scale)), height: Math.max(1, Math.round(live.videoHeight * scale)) };
+}
+
+/** La frame que la vidéo VIVANTE affiche, PEINTE sur un canvas — `null` sans
+ * image décodée. */
+function paintedFrame(video: HTMLVideoElement, live: HTMLVideoElement | undefined): HTMLCanvasElement | null {
+  if (live === undefined || live.readyState < HAVE_CURRENT_DATA || live.videoWidth <= 0 || live.videoHeight <= 0) return null;
   const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  const { width, height } = frameSize(live);
+  canvas.width = width;
+  canvas.height = height;
   const context = canvas.getContext('2d');
   if (context === null) return null;
   try {
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.85);
+    context.drawImage(live, 0, 0, width, height);
   } catch {
     return null;
   }
+  copyFrameAttributes(video, canvas, ['class', 'style', PIECE_RATIO_ATTRIBUTE]);
+  canvas.setAttribute('data-preview-frame', '');
+  return canvas;
 }
 
-function frozenFrame(video: HTMLVideoElement, live: HTMLVideoElement | undefined): HTMLImageElement {
+function posterFrame(video: HTMLVideoElement): HTMLImageElement {
   const frame = document.createElement('img');
-  FRAME_ATTRIBUTES.forEach((name) => {
-    const value = video.getAttribute(name);
-    if (value !== null) frame.setAttribute(name, value);
-  });
+  copyFrameAttributes(video, frame, FRAME_ATTRIBUTES);
   frame.setAttribute('alt', '');
   frame.setAttribute('data-preview-frame', '');
-  const src = currentFrameOf(live) ?? video.getAttribute('poster');
-  if (src !== null && src !== '') frame.setAttribute('src', src);
+  const poster = video.getAttribute('poster');
+  if (poster !== null && poster !== '') frame.setAttribute('src', poster);
   return frame;
 }
 
 function freezeVideos(root: HTMLElement, source: HTMLElement | undefined): void {
   const live = source === undefined ? [] : Array.from(source.querySelectorAll('video'));
-  Array.from(root.querySelectorAll('video')).forEach((video, index) => video.replaceWith(frozenFrame(video, live[index])));
+  Array.from(root.querySelectorAll('video')).forEach((video, index) => video.replaceWith(paintedFrame(video, live[index]) ?? posterFrame(video)));
 }
 
 function copyCanvas(canvas: HTMLCanvasElement, original: HTMLCanvasElement | undefined): void {
@@ -159,9 +191,11 @@ function fitSoloPieces(root: HTMLElement): void {
 export function projectMessagePreview(root: HTMLElement, options: MessagePreviewOptions = {}): void {
   /* AVANT la forme protégée : les index du clone et de la source ne
      s'apparient que tant que rien n'est retiré — et une fenêtre ouverte,
-     retirée juste après, emporte sa frame avec elle (fail-closed). */
-  freezeVideos(root, options.source);
+     retirée juste après, emporte sa frame avec elle (fail-closed). Les canvas
+     AVANT les vidéos : une frame figée est un canvas de plus, qui décalerait
+     l'appariement des canvas du message. */
   copyCanvases(root, options.source);
+  freezeVideos(root, options.source);
   restoreProtectedRest(root);
   root.querySelectorAll('[data-preview-omit]').forEach((node) => node.remove());
   stillEffects(root);

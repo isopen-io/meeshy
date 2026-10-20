@@ -106,16 +106,21 @@ afterEach(() => {
 const rectOf = (box: { top: number; left: number; width: number; height: number }): DOMRect =>
   ({ ...box, right: box.left + box.width, bottom: box.top + box.height, x: box.left, y: box.top, toJSON: () => box }) as DOMRect;
 
-function mountMenu({ laidOut = true, canReact = true }: { readonly laidOut?: boolean; readonly canReact?: boolean } = {}) {
+function mountMenu({
+  laidOut = true,
+  canReact = true,
+  height = 80,
+}: { readonly laidOut?: boolean; readonly canReact?: boolean; readonly height?: number } = {}) {
   const row = document.createElement('div');
   row.setAttribute('data-row', 'm1');
   row.innerHTML = '<p>Le texte du message</p>';
-  if (laidOut) row.getBoundingClientRect = () => rectOf({ top: 300, left: 0, width: 390, height: 80 });
+  if (laidOut) row.getBoundingClientRect = () => rectOf({ top: 300, left: 0, width: 390, height });
   document.body.append(row);
   const container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
   const closed: string[] = [];
+  const controls = { reopen: () => {} };
   const choices = translationChoices({
     message: {
       originalLanguage: 'fr',
@@ -126,6 +131,7 @@ function mountMenu({ laidOut = true, canReact = true }: { readonly laidOut?: boo
   });
   function Harness() {
     const [open, setOpen] = useState(true);
+    controls.reopen = () => setOpen(true);
     return open ? (
       <MessageMenu
         target={{ messageId: 'm1', element: row, isMine: false }}
@@ -147,7 +153,14 @@ function mountMenu({ laidOut = true, canReact = true }: { readonly laidOut?: boo
   act(() => {
     root!.render(<Harness />);
   });
-  return { row, closed };
+  return {
+    row,
+    closed,
+    reopen: () =>
+      act(() => {
+        controls.reopen();
+      }),
+  };
 }
 
 const host = (): HTMLElement => document.querySelector<HTMLElement>('[data-message-menu-preview-host]')!;
@@ -178,7 +191,7 @@ describe('le rail suit la loi de réaction (#11206)', () => {
   });
 });
 
-describe('l’appui long sur un message SUPPRIMÉ ne monte aucun rail (#11206)', () => {
+describe('l’appui long sur un message que la passerelle refuse de réactions ne monte aucun rail (#11206)', () => {
   const deleted = (): Message =>
     message({
       id: 'm-supprime',
@@ -190,9 +203,27 @@ describe('l’appui long sur un message SUPPRIMÉ ne monte aucun rail (#11206)',
       translations: [],
       deletedAt: minutesAgo(1),
     });
+  /* `ReactionService.addReaction` refuse un message système : le rail ne le
+     promet pas. */
+  const system = (): Message => ({
+    ...message({
+      id: 'm-supprime',
+      conversationId: 'c-a',
+      senderId: 'u-other',
+      content: 'Awa a rejoint la conversation',
+      originalLanguage: 'fr',
+      createdAt: minutesAgo(5),
+      translations: [],
+    }),
+    messageType: 'system',
+  });
 
-  test('le geste ouvre le menu, sans rail de réactions', async () => {
-    const lot = deleted();
+  const cases: readonly (readonly [string, () => Message])[] = [
+    ['supprimé', deleted],
+    ['système', system],
+  ];
+  cases.forEach(([kind, build]) => test(`message ${kind} : le geste ouvre le menu, sans rail de réactions`, async () => {
+    const lot = build();
     const queryClient = new QueryClient();
     queryClient.setQueryData(messagesQueryKey('c-a'), { pages: [{ messages: [lot], hasOlder: false, nextCursor: null }], pageParams: [undefined] });
     const transport = { request: async <T,>(_request: HttpRequest): Promise<ApiResult<T>> => ({ ok: true, data: null as T }) };
@@ -250,7 +281,7 @@ describe('l’appui long sur un message SUPPRIMÉ ne monte aucun rail (#11206)',
     });
     expect(document.querySelector('[role="menu"]')).not.toBe(null);
     expect(document.querySelector('[data-message-menu-rail]')).toBe(null);
-  });
+  }));
 });
 
 describe('l’aperçu se soulève depuis sa rangée et y retourne (#11206)', () => {
@@ -287,6 +318,26 @@ describe('l’aperçu se soulève depuis sa rangée et y retourne (#11206)', () 
     expect(row.style.opacity).toBe('');
   });
 
+  test('rouvrir la MÊME rangée avant l’arrivée du fantôme ne la laisse ni visible sous le menu, ni effacée pour de bon', async () => {
+    const played = recordAnimations();
+    const { row, reopen } = mountMenu();
+    await played[0]!.finish();
+    pressEscape();
+    const firstReturn = played.at(-1)!;
+    reopen();
+    expect(document.querySelector('[role="menu"]')).not.toBe(null);
+    expect(document.querySelector<HTMLElement>('[data-message-preview]')!.style.opacity).toBe('');
+    expect(firstReturn.target.isConnected).toBe(false);
+    await firstReturn.finish();
+    expect(row.style.opacity).toBe('0');
+    pressEscape();
+    const secondReturn = played.at(-1)!;
+    expect(secondReturn).not.toBe(firstReturn);
+    expect(row.style.opacity).toBe('0');
+    await secondReturn.finish();
+    expect(row.style.opacity).toBe('');
+  });
+
   test('le fantôme du retour ne se fait jamais passer pour un aperçu', async () => {
     const played = recordAnimations();
     mountMenu();
@@ -313,6 +364,29 @@ describe('l’aperçu se soulève depuis sa rangée et y retourne (#11206)', () 
     pressEscape();
     expect(played).toEqual([]);
     expect(row.style.opacity).toBe('');
+  });
+});
+
+describe('un aperçu tronqué garde son élévation (#11206)', () => {
+  test('le fondu de troncature vit sur une enveloppe INTÉRIEURE : l’hôte garde halo et ombre', () => {
+    mountMenu({ height: 4000 });
+    const hostStyle = host().getAttribute('style') ?? '';
+    expect(hostStyle).toContain('drop-shadow');
+    expect(hostStyle).not.toContain('mask-image');
+    expect(hostStyle).not.toContain('max-height');
+    const clip = host().querySelector<HTMLElement>(':scope > [data-message-menu-preview-clip]')!;
+    expect(clip).not.toBe(null);
+    const clipStyle = clip.getAttribute('style') ?? '';
+    expect(clipStyle).toContain('mask-image');
+    expect(clipStyle).toContain('max-height');
+    expect(clip.querySelector('[data-message-preview]')).not.toBe(null);
+  });
+
+  test('un aperçu entier n’a ni fondu ni hauteur bornée', () => {
+    mountMenu();
+    const clip = host().querySelector<HTMLElement>(':scope > [data-message-menu-preview-clip]')!;
+    expect(clip.getAttribute('style') ?? '').not.toContain('mask-image');
+    expect(clip.querySelector('[data-message-preview]')).not.toBe(null);
   });
 });
 

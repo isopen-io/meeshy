@@ -8,7 +8,8 @@ import { translate } from '@/lib/i18n-catalog';
 import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { projectMessagePreview } from '@/lib/view/message-preview';
 import { previewSurfaceOf, readingModeOfRow } from '@/lib/view/message-preview-surface';
-import { liftMotion, liftOffset, playLift, playReturn } from '@/lib/view/message-menu-lift';
+import { liftMotion, liftOffset, playLift, playReturn, type ReturnFlight } from '@/lib/view/message-menu-lift';
+import { veilRow } from '@/lib/view/row-veil';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { piecePreviewBox, type PieceActionId, type PieceMenuItem } from '@/lib/view/message-piece';
 import type { PieceMenuData } from '@/lib/view/use-piece-menu';
@@ -26,6 +27,7 @@ import {
   MENU_WIDTH,
   menuListHeight,
   PREVIEW_CLIP_FADE,
+  PREVIEW_MIN_VISIBLE,
   PREVIEW_SCALE_FLOOR,
   RAIL_GAP,
   RAIL_HEIGHT,
@@ -190,6 +192,10 @@ export function MessageMenu({
      (`currentInterfaceLanguage()`), jamais une seconde résolution. */
   const language = currentInterfaceLanguage();
   const previewHostRef = useRef<HTMLDivElement | null>(null);
+  /* L'ENVELOPPE DU CLONE (#11206) — c'est elle qui se tronque et porte le
+     fondu : un `mask-image` posé sur l'hôte s'appliquerait APRÈS son `filter`
+     et emporterait le halo et l'ombre de l'aperçu. */
+  const previewClipRef = useRef<HTMLDivElement | null>(null);
   const listItems: readonly ListItem[] = piece !== undefined ? piece.data.items : panel === 'forward' ? forwardItems : items;
   const listRows = panel === 'translate' && piece === undefined ? choices.length : listItems.length;
   /* LA BOÎTE D'UNE PIÈCE (#9907) — stable pour tout le défilement, centrée. */
@@ -239,6 +245,7 @@ export function MessageMenu({
       menuWidth: MENU_WIDTH,
       railWidth: railBandWidth(window.innerWidth - 2 * SIDE_PADDING),
       previewScaleFloor: PREVIEW_SCALE_FLOOR,
+      previewMinHeight: PREVIEW_MIN_VISIBLE,
     });
   };
 
@@ -304,15 +311,18 @@ export function MessageMenu({
    * `close` est STABLE — `useRovingMenu` capture ses rappels à l'ouverture —
    * et lit la géométrie COURANTE par `latest`.
    */
-  const returning = useRef<Promise<void> | null>(null);
-  const returnPreview = (): Promise<void> | null => {
+  /* Le rembourrage de la surface de l'aperçu — retranché du FLIP pour que le
+     contenu parte du contenu de la rangée (pas en mode pièce : aucune surface). */
+  const previewInset = (): number => (pieceMode ? 0 : previewSurfaceOf(readingModeOfRow(target.element)).padding);
+  const returning = useRef<ReturnFlight | null>(null);
+  const returnPreview = (): ReturnFlight | null => {
     const host = previewHostRef.current;
     const anchor = target.element.getBoundingClientRect();
     if (host === null || anchor.width <= 0 || anchor.height <= 0) return null;
     return playReturn(host, {
       motion: liftMotion({
         direction: 'out',
-        offset: liftOffset({ anchor, placement, isMine: target.isMine }),
+        offset: liftOffset({ anchor, placement, isMine: target.isMine, inset: previewInset() }),
         rest: host.style.transform === '' ? 'none' : host.style.transform,
         reduced: prefersReducedMotion(),
       }),
@@ -340,7 +350,7 @@ export function MessageMenu({
       host,
       liftMotion({
         direction: 'in',
-        offset: liftOffset({ anchor, placement: final, isMine: target.isMine }),
+        offset: liftOffset({ anchor, placement: final, isMine: target.isMine, inset: previewInset() }),
         rest: restTransform(final.previewScale) ?? 'none',
         reduced: prefersReducedMotion(),
       }),
@@ -404,26 +414,25 @@ export function MessageMenu({
    */
   useLayoutEffect(() => {
     const source = target.element;
-    const previousOpacity = source.style.opacity;
     const host = previewHostRef.current;
+    /* LA RANGÉE NE RÉAPPARAÎT QU'À L'ARRIVÉE DU FANTÔME (#11206) quand la
+       fermeture a lancé un retour ; sinon, tout de suite. L'effacement est
+       tenu par l'ÉLÉMENT (`row-veil.ts`) : un menu rouvert sur la même rangée
+       avant l'arrivée ne prend jamais `'0'` pour l'opacité d'origine. */
+    const veil = veilRow(source);
+    const settle = () => veil.release(returning.current);
     /* EN MODE PIÈCE (#9907), l'aperçu est le défilement des pièces, rendu par
        React : aucun clone, et la rangée reste effacée. */
-    /* LA RANGÉE NE RÉAPPARAÎT QU'À L'ARRIVÉE DU FANTÔME (#11206) quand la
-       fermeture a lancé un retour ; sinon, tout de suite. */
-    const settle = () => {
-      const restore = () => {
-        source.style.opacity = previousOpacity;
-      };
-      if (returning.current === null) restore();
-      else void returning.current.then(restore);
-    };
     if (host === null || pieceMode) {
-      source.style.opacity = '0';
       if (host !== null) liftOnce(host, null);
       return settle;
     }
+    const clip = previewClipRef.current;
+    if (clip === null) return settle;
     const clone = source.cloneNode(true) as HTMLElement;
-    source.style.opacity = '0';
+    /* LE CLONE NE RECOPIE PAS L'EFFACEMENT (#10733) — il porte l'opacité
+       d'ORIGINE, même quand un retour encore en vol tient la rangée à `'0'`. */
+    clone.style.opacity = veil.original;
     stripPreviewIdentity(clone);
     /* LA FORME PROTÉGÉE, LA PROPORTION D'ORIGINE (#8008) ET LE MÉDIA TEL QU'IL
        EST À L'ÉCRAN (#11206) : le clone ne recopie jamais une fenêtre de
@@ -431,16 +440,18 @@ export function MessageMenu({
        y montre sa frame visible — `lib/view/message-preview.ts`. */
     projectMessagePreview(clone, { source });
     clone.setAttribute('data-message-preview', '');
-    host.replaceChildren(clone);
-    /* `scrollHeight` ignore la mise à l'échelle ET la troncature de l'hôte :
-       c'est la hauteur du clone REFLUÉ à la largeur imposée, celle que la loi
-       de placement doit faire tenir. Une mesure nulle (aucune mise en page)
-       garde la rangée. */
-    const measured = host.scrollHeight > 0 ? host.scrollHeight : null;
+    clip.replaceChildren(clone);
+    /* `scrollHeight` de l'enveloppe ignore la mise à l'échelle ET la
+       troncature : c'est la hauteur du clone REFLUÉ à la largeur imposée, à
+       laquelle s'ajoute le rembourrage de la surface — celle que la loi de
+       placement doit faire tenir. Une mesure nulle (aucune mise en page) garde
+       la rangée. */
+    const padding = previewSurfaceOf(readingModeOfRow(source)).padding;
+    const measured = clip.scrollHeight > 0 ? clip.scrollHeight + 2 * padding : null;
     setCloneHeight(measured);
     liftOnce(host, measured);
     return () => {
-      host.replaceChildren();
+      clip.replaceChildren();
       settle();
     };
   }, [target.element, pieceMode]);
@@ -706,6 +717,7 @@ export function MessageMenu({
              seulement les deux boutons trouvés en revue. */
           inert
           data-message-menu-preview-host
+          className={surface.glass ? 'glass' : undefined}
           style={{
             position: 'fixed',
             top: placement.previewTop,
@@ -732,22 +744,31 @@ export function MessageMenu({
                ainsi du voile flouté sur les DEUX peaux et les DEUX schémas. */
             filter: `drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 28%, transparent)) drop-shadow(0 16px 16px color-mix(in srgb, var(--color-scrim-soft) 65%, transparent))`,
             /* LA SURFACE DU MODE (`message-preview-surface.ts`) : carte opaque
-               en Focal, marges transparentes en Script, rien sur une bulle,
-               qui porte déjà la sienne. */
+               en Focal, verre à marges en Script, rien sur une bulle, qui
+               porte déjà la sienne. */
             ...(surface.padding > 0 ? { padding: surface.padding } : {}),
-            ...(surface.background !== null ? { backgroundColor: surface.background, borderRadius: surface.radius } : {}),
-            /* SOUS LE PLANCHER, TRONQUÉ AVEC UN FONDU (#11206) — jamais un
-               texte réduit au-delà de 0,75 pour tout faire tenir. */
-            ...(placement.previewClipHeight !== null
-              ? {
-                  maxHeight: placement.previewClipHeight,
-                  overflow: 'hidden',
-                  maskImage: `linear-gradient(to bottom, black calc(100% - ${PREVIEW_CLIP_FADE}px), transparent)`,
-                  WebkitMaskImage: `linear-gradient(to bottom, black calc(100% - ${PREVIEW_CLIP_FADE}px), transparent)`,
-                }
-              : {}),
+            ...(surface.background !== null ? { backgroundColor: surface.background } : {}),
+            ...(surface.radius > 0 ? { borderRadius: surface.radius } : {}),
           }}
-        />
+        >
+          {/* SOUS LE PLANCHER, TRONQUÉ AVEC UN FONDU (#11206) — jamais un texte
+              réduit au-delà de 0,75 pour tout faire tenir. Sur l'ENVELOPPE, pas
+              sur l'hôte : l'hôte garde son élévation. */}
+          <div
+            ref={previewClipRef}
+            data-message-menu-preview-clip
+            style={
+              placement.previewClipHeight !== null
+                ? {
+                    maxHeight: Math.max(0, placement.previewClipHeight - 2 * surface.padding),
+                    overflow: 'hidden',
+                    maskImage: `linear-gradient(to bottom, black calc(100% - ${PREVIEW_CLIP_FADE}px), transparent)`,
+                    WebkitMaskImage: `linear-gradient(to bottom, black calc(100% - ${PREVIEW_CLIP_FADE}px), transparent)`,
+                  }
+                : undefined
+            }
+          />
+        </div>
         )}
 
         {panel !== 'translate' ? (

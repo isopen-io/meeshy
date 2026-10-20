@@ -665,7 +665,7 @@ export function useMessageMenu(params: {
         readonly choices: readonly TranslationChoice[];
         readonly subjectLabel: string;
         /** RÉAGIR EST-IL PERMIS (#11206) — la loi du double toucher, appliquée
-         * au rail du menu : ni supprimé, ni éphémère échu, ni envoi local. */
+         * au rail du menu : ni supprimé, ni éphémère échu, ni envoi local, ni système. */
         readonly canReact: boolean;
         readonly piece?: PieceMenuData;
       }
