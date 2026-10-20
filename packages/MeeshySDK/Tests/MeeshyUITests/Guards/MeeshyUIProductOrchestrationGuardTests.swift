@@ -3,13 +3,22 @@ import Foundation
 
 final class MeeshyUIProductOrchestrationGuardTests: XCTestCase {
 
-    private static let governedFolders = ["Community", "JoinFlow"]
-
-    private static let forbiddenPatterns = [
+    private static let cachePatterns = [
         #"CacheCoordinator\.shared"#,
-        #"class\s+\w*ViewModel\b"#,
+        #"class\s+\w*ViewModel\b"#
+    ]
+
+    private static let servicePatterns = [
         #"\b(CommunityService|ShareLinkService|ConversationService|NotificationService)\.shared"#,
         #"AuthManager\.shared"#
+    ]
+
+    private static let forbiddenPatterns = cachePatterns + servicePatterns
+
+    private static let governedFolders: [String: [String]] = [
+        "Community": forbiddenPatterns,
+        "JoinFlow": forbiddenPatterns,
+        "Profile": cachePatterns
     ]
 
     private var sourcesRoot: URL {
@@ -35,12 +44,12 @@ final class MeeshyUIProductOrchestrationGuardTests: XCTestCase {
     }
 
     func test_leDossierNeContientAucunCacheCoordinatorNiViewModel() throws {
-        for folder in Self.governedFolders {
+        for (folder, patterns) in Self.governedFolders {
             let files = swiftFiles(in: folder)
             XCTAssertGreaterThan(files.count, 0, "\(folder) : le balayage ne voit aucun fichier")
             for url in files {
                 let text = try code(of: url)
-                for pattern in Self.forbiddenPatterns {
+                for pattern in patterns {
                     let range = NSRange(text.startIndex..., in: text)
                     let regex = try NSRegularExpression(pattern: pattern)
                     XCTAssertNil(

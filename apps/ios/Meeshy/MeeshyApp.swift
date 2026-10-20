@@ -149,6 +149,7 @@ struct MeeshyApp: App {
                                 .environment(\.profileGameSection, ProfileGameSection { userId, _ in
                                     AnyView(GameBannerBadge(userId: userId))
                                 })
+                                .environment(\.profileLoading, LiveProfileLoading())
                         } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin && !authManager.isSwitchingAccount {
                             LoginView()
                                 .safeAreaInset(edge: .top, spacing: 0) {
