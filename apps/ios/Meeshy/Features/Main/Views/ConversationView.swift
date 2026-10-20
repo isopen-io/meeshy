@@ -491,22 +491,12 @@ struct ConversationView: View {
         pendingAudioPlayer.stop()
     }
 
-    /// Revenir au premier plan ne marque plus la conversation lue : l'observateur
-    /// de visibilité reprend. Passer en arrière-plan : ce qui était à l'écran a
-    /// bien été lu (accusé AVANT que l'app ne s'endorme), les pièces jointes du
-    /// brouillon se copient durablement (les fichiers du tray vivent dans tmp/,
-    /// purgeable par iOS), et #7500 — « quitter, c'est quitter » : l'arrière-plan
-    /// et le verrouillage sont des sorties au même titre que le retour, par le
-    /// MÊME geste idempotent.
     private func conversationDidEnterBackground() {
         scrollState.flushSeenTrigger += 1
         persistDraftAttachmentsForBackground()
         consumeOpenedViewOnceOnExit()
     }
 
-    /// Le serveur a signalé que l'utilisateur n'a plus accès (expulsé, groupe
-    /// supprimé, bloqué…). Le ViewModel a déjà purgé le cache et l'état local :
-    /// l'écran se ferme, et un toast dit pourquoi.
     private func conversationAccessWasRevoked() {
         FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", bundle: .main))
         if anonymousSession != nil { dismiss() } else { router.pop() } // iPad : `dismiss()` y est un no-op
@@ -540,6 +530,16 @@ struct ConversationView: View {
             dock: { composerDock },
             searchOverlay: { searchResultsBlurOverlay }
         )
+        .modifier(ComposerDropTargetModifier(
+            accentColor: accentColor,
+            isEnabled: ComposerDropTargetModifier.acceptsDrops(
+                isSelecting: overlayState.isSelectionModeActive,
+                isBlockedDirect: blockedDirectParticipantId != nil,
+                isClosed: viewModel.isConversationClosed,
+                isWriteRestricted: viewModel.writeRestriction(served: liveConversation?.viewerWriteRestriction) != nil
+            ),
+            onIngest: { ingestRespectingGuestAllowance($0) }
+        ))
     }
 
     private var readerModeBranch: ConversationReaderModeBranch {
