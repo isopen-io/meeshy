@@ -44,6 +44,9 @@ struct PostDetailCommentThread: View {
             onDeleteComment: { target in
                 Task { await viewModel.deleteComment(target) }
             },
+            onRemoveComment: { target, reason in
+                Task { await viewModel.deleteComment(target, reason: reason) }
+            },
             onEditComment: { target in onEditComment(target) },
             onRequestTranslation: { target in
                 let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"

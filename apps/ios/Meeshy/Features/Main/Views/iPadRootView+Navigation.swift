@@ -389,7 +389,7 @@ extension iPadRootView {
         // ===== SOCIAL CONTENT — la surface vient de `NotificationContentRouter` (`routeSocialNotification`) =====
         case .postLike, .legacyPostLike, .postRepost, .friendNewPost,
              .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
-             .storyReaction, .statusReaction,
+             .storyReaction, .statusReaction, .contentRemoved,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
              .friendNewStory, .friendNewMood:
             guard let postId = ctx.postId, !postId.isEmpty else {

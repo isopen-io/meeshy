@@ -8,6 +8,8 @@ public protocol StoryServiceProviding: Sendable {
     /// timestamp. `nil` = tray complet (comportement historique).
     func list(cursor: String?, limit: Int, updatedSince: Date?) async throws -> PaginatedAPIResponse<[APIPost]>
     func delete(storyId: String) async throws
+    /// #11151 — le retrait de la story d'un AUTRE porte son motif.
+    func delete(storyId: String, reason: String?) async throws
     func react(storyId: String, emoji: String) async throws
     func repost(storyId: String) async throws
     func cachedPost(id: String) -> APIPost?
@@ -33,6 +35,11 @@ public protocol StoryServiceProviding: Sendable {
 }
 
 public extension StoryServiceProviding {
+    func delete(storyId: String, reason: String?) async throws {
+        guard reason == nil else { throw APIError.serverError(501, "delete(reason:) not implemented by \(Self.self)") }
+        try await delete(storyId: storyId)
+    }
+
     /// Compat : les call sites historiques (tray complet) restent binaires —
     /// seule l'exigence 3-params est à implémenter par les conformers.
     func list(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -76,7 +83,11 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     }
 
     public func delete(storyId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostId(postId: storyId))
+        try await delete(storyId: storyId, reason: nil)
+    }
+
+    public func delete(storyId: String, reason: String?) async throws {
+        try await api.deleteRemovingContent(PostsEndpoint.byPostId(postId: storyId), reason: reason)
     }
 
     public func react(storyId: String, emoji: String) async throws {

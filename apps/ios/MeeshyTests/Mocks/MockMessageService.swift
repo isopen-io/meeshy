@@ -97,6 +97,7 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     var deleteCallCount = 0
     var lastDeleteConversationId: String?
     var lastDeleteMessageId: String?
+    var lastDeleteReason: String?
 
     var pinCallCount = 0
     var lastPinConversationId: String?
@@ -240,10 +241,15 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     }
 
     nonisolated func delete(conversationId: String, messageId: String) async throws {
+        try await delete(conversationId: conversationId, messageId: messageId, reason: nil)
+    }
+
+    nonisolated func delete(conversationId: String, messageId: String, reason: String?) async throws {
         await MainActor.run {
             deleteCallCount += 1
             lastDeleteConversationId = conversationId
             lastDeleteMessageId = messageId
+            lastDeleteReason = reason
         }
         try deleteResult.get()
     }
@@ -328,6 +334,7 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         deleteCallCount = 0
         lastDeleteConversationId = nil
         lastDeleteMessageId = nil
+        lastDeleteReason = nil
         pinCallCount = 0
         lastPinConversationId = nil
         lastPinMessageId = nil

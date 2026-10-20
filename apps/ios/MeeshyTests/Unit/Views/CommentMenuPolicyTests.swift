@@ -32,11 +32,12 @@ final class CommentMenuPolicyTests: XCTestCase {
         viewerId: String? = me,
         canImagine: Bool = true,
         editable: Bool = true,
-        deletable: Bool = false
+        deletable: Bool = false,
+        removable: Bool = false
     ) -> [CommentMenuAction] {
         CommentMenuPolicy.actions(
             for: comment, viewerId: viewerId, servedText: comment.displayContent,
-            canImagine: canImagine, editable: editable, deletable: deletable
+            canImagine: canImagine, editable: editable, deletable: deletable, removable: removable
         )
     }
 
@@ -60,6 +61,26 @@ final class CommentMenuPolicyTests: XCTestCase {
     func test_actions_forAnUnknownReader_offerNeitherEditNorReport() {
         XCTAssertEqual(Self.actions(Self.comment(authorId: ""), viewerId: ""), [.copy, .imagine])
         XCTAssertEqual(Self.actions(Self.comment(authorId: Self.me), viewerId: nil), [.copy, .imagine])
+    }
+
+    // MARK: - Retrait par la modération (#11151)
+
+    func test_actions_whenTheHostCanRemove_anotherReadersCommentOffersRemoveAfterReport() {
+        let theirs = Self.comment(authorId: "u-other")
+        XCTAssertEqual(Self.actions(theirs, removable: true), [.copy, .imagine, .report, .remove])
+    }
+
+    func test_actions_removeIsNeverOfferedOnItsOwnComment() {
+        let mine = Self.comment(authorId: Self.me)
+        XCTAssertFalse(Self.actions(mine, deletable: true, removable: true).contains(.remove))
+    }
+
+    func test_actions_removeIsNeverOfferedToAnUnknownReader() {
+        XCTAssertFalse(Self.actions(Self.comment(authorId: "u-other"), viewerId: nil, removable: true).contains(.remove))
+    }
+
+    func test_actions_withoutTheRemovalRight_noRemove() {
+        XCTAssertFalse(Self.actions(Self.comment(authorId: "u-other")).contains(.remove))
     }
 
     // MARK: - Protections
