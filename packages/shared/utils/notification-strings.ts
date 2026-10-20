@@ -48,6 +48,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'member.joinedAction', 'member.joinedConversationAction',
   'moderation.removedMessageIn', 'moderation.removedMessage', 'moderation.removedPost',
   'moderation.removedReel', 'moderation.removedStory', 'moderation.removedComment', 'moderation.reason',
+  'moderation.madePrivatePost', 'moderation.madePrivateReel', 'moderation.madePrivateStory',
 ] as const;
 export type NotificationStringKey = typeof NOTIFICATION_STRING_KEYS[number];
 

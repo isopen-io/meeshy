@@ -281,7 +281,7 @@ describe('POST /admin/comments/:commentId/remove', () => {
 
 describe("un retrait de la console prévient l'auteur (#11158)", () => {
   const flush = () => new Promise((resolve) => setImmediate(resolve));
-  const removedFor = () => notifier.createNotification.mock.calls.map(([call]) => call as { userId: string; type: string; content: string; metadata: Record<string, unknown> });
+  const removedFor = () => notifier.createNotification.mock.calls.map(([call]) => call as { userId: string; type: string; title: string; content: string; metadata: Record<string, unknown> });
   const commentFixtures = () => {
     commentFindFirst.mockResolvedValue({ id: COMMENT, authorId: AUTHOR, postId: POST, parentId: null });
     commentFindMany.mockResolvedValue([]);
@@ -322,10 +322,21 @@ describe("un retrait de la console prévient l'auteur (#11158)", () => {
     await app.close();
   });
 
-  it('ni « mettre en privé », ni classer, ni un refus ne préviennent l’auteur', async () => {
+  it('signalement traité par « mettre en privé » : l’auteur est prévenu que sa publication est privée', async () => {
+    reportFindUnique.mockResolvedValue(report({ reportedType: 'story' }));
+    postFindMany.mockImplementation(async (args: any) => ('updatedAt' in (args.select ?? {}) ? [viewRow({ moderationHiddenAt: null })] : [postRow({ type: 'STORY' })]));
+    const app = await buildApp('BIGBOSS');
+    expect((await act(app, { action: 'make-private' })).statusCode).toBe(200);
+    await flush();
+    expect(removedFor()).toEqual([
+      expect.objectContaining({ userId: AUTHOR, title: 'Votre story a été rendue privée par un administrateur', content: '', metadata: { contentType: 'story', contentId: POST, postId: POST, madePrivate: true } }),
+    ]);
+    await app.close();
+  });
+
+  it('ni classer, ni un refus ne préviennent l’auteur', async () => {
     reportFindUnique.mockResolvedValue(report());
     const app = await buildApp('BIGBOSS');
-    await act(app, { action: 'make-private' });
     await act(app, { action: 'dismiss' });
     userFindMany.mockResolvedValue([{ id: AUTHOR, role: 'BIGBOSS' }]);
     await act(app, { action: 'take-offline' });

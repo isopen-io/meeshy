@@ -13,7 +13,7 @@ import {
   publicationStateOf,
   type PostModerationState,
 } from '../../services/admin/publication-moderation';
-import { noticeTakenOffline } from '../../services/moderation/adminRemovalNotices';
+import { noticeWithdrawals } from '../../services/moderation/adminRemovalNotices';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendForbidden, sendInternalError, sendPaginatedSuccess, sendSuccess } from '../../utils/response';
@@ -267,7 +267,7 @@ export function registerUserPublicationRoutes(fastify: FastifyInstance): void {
           metadataOf: () => ({ action, reason: verdict.reason ?? null }),
         });
         announceWithdrawals(fastify, action !== 'restore', applied);
-        noticeTakenOffline({ prisma: fastify.prisma }, applied, { actorUserId: actor.id, reason: verdict.reason ?? null });
+        noticeWithdrawals({ prisma: fastify.prisma }, applied, { actorUserId: actor.id, reason: verdict.reason ?? null });
 
         const appliedIds = new Set(applied.filter((plan) => plan.copyOf === undefined).map((plan) => plan.row.id));
         const byId = new Map(plans.map((plan) => [plan.row.id, plan]));

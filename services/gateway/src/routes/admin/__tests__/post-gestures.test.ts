@@ -346,7 +346,18 @@ describe("une mise hors ligne depuis la liste prévient l'auteur (#11158)", () =
     await app.close();
   });
 
-  it('remettre en ligne ou resserrer l’audience ne prévient personne', async () => {
+  it("passer en PRIVÉ prévient l'auteur que sa publication est privée", async () => {
+    reads([row()], [viewRow({ visibility: 'PRIVATE' })]);
+    const app = await buildApp('ADMIN');
+    expect((await one(app, P1, { gesture: 'set-visibility', visibility: 'PRIVATE', reason: 'Hors sujet' })).statusCode).toBe(200);
+    await flush();
+    expect(notified()).toEqual([
+      expect.objectContaining({ userId: AUTHOR, type: 'content_removed', metadata: { contentType: 'post', contentId: P1, postId: P1, reason: 'Hors sujet', madePrivate: true } }),
+    ]);
+    await app.close();
+  });
+
+  it('remettre en ligne ou resserrer l’audience à FRIENDS ne prévient personne', async () => {
     const app = await buildApp('ADMIN');
     reads([row({ visibility: 'PRIVATE', moderationHiddenAt: UPDATED, moderationHiddenById: ACTOR, moderationPriorVisibility: 'PUBLIC' })], [viewRow()]);
     expect((await one(app, P1, { gesture: 'restore', reason: 'Erreur de modération' })).statusCode).toBe(200);

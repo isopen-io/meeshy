@@ -512,14 +512,21 @@ describe("une mise hors ligne depuis la fiche d'un membre le prévient (#11158)"
     await app.close();
   });
 
-  it('mettre en privé ou remettre en ligne ne prévient personne', async () => {
-    const app = await buildApp('ADMIN');
+  it("mettre en privé prévient l'auteur que sa publication est privée", async () => {
     postFindMany.mockResolvedValue([row()]);
-    await moderate(app, { action: 'make-private', postIds: [P1], reason: 'Resserrer' });
+    const app = await buildApp('ADMIN');
+    expect((await moderate(app, { action: 'make-private', postIds: [P1], reason: 'Resserrer' })).statusCode).toBe(200);
+    await flush();
+    expect(notified().map((call) => call.metadata)).toEqual([{ contentType: 'post', contentId: P1, postId: P1, reason: 'Resserrer', madePrivate: true }]);
+    await app.close();
+  });
+
+  it('remettre en ligne ne prévient personne', async () => {
+    const app = await buildApp('ADMIN');
     postFindMany.mockResolvedValue([row({ visibility: 'PRIVATE', moderationHiddenAt: new Date('2026-10-11T00:00:00Z'), moderationHiddenById: ACTOR, moderationPriorVisibility: 'PUBLIC' })]);
     await moderate(app, { action: 'restore', postIds: [P1], reason: 'Erreur de modération' });
     await flush();
-    expect(postUpdateMany).toHaveBeenCalledTimes(2);
+    expect(postUpdateMany).toHaveBeenCalledTimes(1);
     expect(notified()).toEqual([]);
     await app.close();
   });

@@ -7,7 +7,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 
-import { noticeAdminRemoval, noticeTakenOffline } from '../../../../services/moderation/adminRemovalNotices';
+import { noticeAdminRemoval, noticeWithdrawals } from '../../../../services/moderation/adminRemovalNotices';
 
 const AUTHOR = '64b7f0c2a1b2c3d4e5f60001';
 const ACTOR = '64b7f0c2a1b2c3d4e5f60002';
@@ -25,8 +25,8 @@ const callsOf = (deps: ReturnType<typeof buildDeps>) =>
 
 const plan = (over: Record<string, unknown> = {}) => ({
   row: { id: 'p1', authorId: AUTHOR, type: 'REEL' },
-  before: { moderationHiddenAt: null },
-  after: { moderationHiddenAt: HIDDEN_AT },
+  before: { visibility: 'PUBLIC', moderationHiddenAt: null },
+  after: { visibility: 'PRIVATE', moderationHiddenAt: HIDDEN_AT },
   ...over,
 });
 
@@ -65,11 +65,11 @@ describe('noticeAdminRemoval — un retrait de la console', () => {
   });
 });
 
-describe('noticeTakenOffline — les publications mises hors ligne', () => {
+describe('noticeWithdrawals — les publications mises hors ligne ou en privé', () => {
   it("prévient l'auteur de chaque publication NOUVELLEMENT mise hors ligne, avec son type", async () => {
     const deps = buildDeps();
 
-    noticeTakenOffline(deps, [plan(), plan({ row: { id: 'p2', authorId: AUTHOR, type: 'STORY' } })], { actorUserId: ACTOR, reason: 'Nudité' });
+    noticeWithdrawals(deps, [plan(), plan({ row: { id: 'p2', authorId: AUTHOR, type: 'STORY' } })], { actorUserId: ACTOR, reason: 'Nudité' });
     await flushDetached();
 
     expect(callsOf(deps).map((call) => call.metadata)).toEqual([
@@ -78,14 +78,27 @@ describe('noticeTakenOffline — les publications mises hors ligne', () => {
     ]);
   });
 
-  it("ne prévient ni d'une copie, ni d'une remise en ligne, ni d'un simple changement d'audience, ni d'une publication déjà hors ligne", async () => {
+  it("une publication passée en PRIVÉ prévient son auteur, avec le libellé « rendu privé » et madePrivate", async () => {
     const deps = buildDeps();
 
-    noticeTakenOffline(deps, [
+    noticeWithdrawals(deps, [plan({ row: { id: 'p3', authorId: AUTHOR, type: 'POST' }, after: { visibility: 'PRIVATE', moderationHiddenAt: null } })], { actorUserId: ACTOR, reason: 'Hors sujet' });
+    await flushDetached();
+
+    const [call] = callsOf(deps) as unknown as [{ title: string; content: string; metadata: Record<string, unknown> }];
+    expect(call.title).toBe('Votre publication a été rendue privée par un administrateur');
+    expect(call.content).toBe('Motif : Hors sujet');
+    expect(call.metadata).toEqual({ contentType: 'post', contentId: 'p3', postId: 'p3', reason: 'Hors sujet', madePrivate: true });
+  });
+
+  it("ne prévient ni d'une copie, ni d'une remise en ligne, ni d'un resserrement à FRIENDS, ni d'une publication déjà hors ligne ou déjà privée", async () => {
+    const deps = buildDeps();
+
+    noticeWithdrawals(deps, [
       plan({ copyOf: 'p0' }),
-      plan({ before: { moderationHiddenAt: HIDDEN_AT }, after: { moderationHiddenAt: null } }),
-      plan({ after: { moderationHiddenAt: null } }),
-      plan({ before: { moderationHiddenAt: HIDDEN_AT } }),
+      plan({ before: { visibility: 'PRIVATE', moderationHiddenAt: HIDDEN_AT }, after: { visibility: 'PUBLIC', moderationHiddenAt: null } }),
+      plan({ after: { visibility: 'FRIENDS', moderationHiddenAt: null } }),
+      plan({ before: { visibility: 'PRIVATE', moderationHiddenAt: HIDDEN_AT } }),
+      plan({ before: { visibility: 'PRIVATE', moderationHiddenAt: null }, after: { visibility: 'PRIVATE', moderationHiddenAt: null } }),
       plan({ after: null }),
     ], { actorUserId: ACTOR, reason: 'Nudité' });
     await flushDetached();

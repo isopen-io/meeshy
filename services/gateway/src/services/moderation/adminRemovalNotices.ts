@@ -20,6 +20,7 @@ export type AdminRemoval = {
   readonly contentId: string;
   readonly postId?: string;
   readonly reason: string | null | undefined;
+  readonly madePrivate?: boolean;
 };
 
 export function noticeAdminRemoval(deps: ContentRemovalNotifyDeps, removal: AdminRemoval): void {
@@ -31,31 +32,41 @@ export function noticeAdminRemoval(deps: ContentRemovalNotifyDeps, removal: Admi
     contentId: removal.contentId,
     ...(removal.postId ? { postId: removal.postId } : {}),
     ...(reason ? { reason } : {}),
+    ...(removal.madePrivate ? { madePrivate: true } : {}),
   }).catch((error: unknown) => log.warn('admin removal: author notification failed', { contentId: removal.contentId, error }));
 }
 
 /** La forme d'un geste de publication appliqué que ce site lit (`ModerationPlan` des routes admin). */
 export type AppliedPostModeration = {
   readonly row: { readonly id: string; readonly authorId: string; readonly type: string | null };
-  readonly before: { readonly moderationHiddenAt: Date | null };
-  readonly after: { readonly moderationHiddenAt: Date | null } | null;
+  readonly before: { readonly visibility: string; readonly moderationHiddenAt: Date | null };
+  readonly after: { readonly visibility: string; readonly moderationHiddenAt: Date | null } | null;
   readonly copyOf?: string;
 };
 
-const takenOffline = (plan: AppliedPostModeration): boolean =>
-  plan.copyOf === undefined && plan.before.moderationHiddenAt === null && plan.after !== null && plan.after.moderationHiddenAt !== null;
+type Withdrawal = 'taken-offline' | 'made-private' | null;
 
 /**
- * Chaque publication NOUVELLEMENT mise hors ligne prévient son auteur. Ni la copie
- * d'une republication (son auteur n'a rien publié de retiré), ni une remise en
- * ligne, ni un changement d'audience.
+ * Ce que le geste a retiré à l'audience de l'auteur : la publication mise HORS
+ * LIGNE, ou passée en PRIVÉ (décision porteur, #11158) depuis une audience plus
+ * large. Ni la copie d'une republication (son auteur n'a rien publié de retiré),
+ * ni une remise en ligne, ni un resserrement à FRIENDS / COMMUNITY.
  */
-export function noticeTakenOffline(
+function withdrawalOf(plan: AppliedPostModeration): Withdrawal {
+  if (plan.copyOf !== undefined || plan.after === null) return null;
+  if (plan.before.moderationHiddenAt === null && plan.after.moderationHiddenAt !== null) return 'taken-offline';
+  if (plan.after.moderationHiddenAt === null && plan.after.visibility === 'PRIVATE' && plan.before.visibility !== 'PRIVATE') return 'made-private';
+  return null;
+}
+
+export function noticeWithdrawals(
   deps: ContentRemovalNotifyDeps,
   applied: readonly AppliedPostModeration[],
   context: { readonly actorUserId: string; readonly reason: string | null | undefined },
 ): void {
-  applied.filter(takenOffline).forEach((plan) =>
+  applied.forEach((plan) => {
+    const withdrawal = withdrawalOf(plan);
+    if (withdrawal === null) return;
     noticeAdminRemoval(deps, {
       actorUserId: context.actorUserId,
       authorUserId: plan.row.authorId,
@@ -63,6 +74,7 @@ export function noticeTakenOffline(
       contentId: plan.row.id,
       postId: plan.row.id,
       reason: context.reason,
-    }),
-  );
+      madePrivate: withdrawal === 'made-private',
+    });
+  });
 }

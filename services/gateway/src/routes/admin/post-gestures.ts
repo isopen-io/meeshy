@@ -15,7 +15,7 @@ import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { requirePermission } from '../../middleware/authorize';
 import { judgeReason, sendReasonRefusal } from '../../middleware/sovereign-reason';
 import { nextModerationState, nextVisibilityState, POST_MODERATION_BATCH_MAX, widensAuthorAudience, type PostModerationState } from '../../services/admin/publication-moderation';
-import { noticeTakenOffline } from '../../services/moderation/adminRemovalNotices';
+import { noticeWithdrawals } from '../../services/moderation/adminRemovalNotices';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { logError } from '../../utils/logger';
 import { sendBadRequest, sendConflict, sendForbidden, sendInternalError, sendNotFound, sendSuccess } from '../../utils/response';
@@ -178,7 +178,7 @@ export async function applyPostGesture(
     throw error;
   });
   announceWithdrawals(fastify, withdraws(gesture), applied);
-  noticeTakenOffline({ prisma: fastify.prisma }, applied, { actorUserId: actor.id, reason: input.reason });
+  noticeWithdrawals({ prisma: fastify.prisma }, applied, { actorUserId: actor.id, reason: input.reason });
 
   const found = new Set(rows.map((row) => row.id));
   const views: readonly ViewRow[] = found.size === 0 ? [] : await fastify.prisma.post.findMany({ where: { id: { in: [...found] } }, select: viewSelect, take: found.size });
