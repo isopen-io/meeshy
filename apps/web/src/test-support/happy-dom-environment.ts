@@ -59,7 +59,10 @@ const withoutChildPageNavigation = (options?: RegisterOptions): RegisterOptions 
   },
 });
 
+let claims = 0;
+
 export const ensureHappyDomRegistered = (options?: RegisterOptions): void => {
+  claims += 1;
   if (!GlobalRegistrator.isRegistered) {
     GlobalRegistrator.register(withoutChildPageNavigation(options));
   }
@@ -108,8 +111,10 @@ const letSchedulerRun = async (): Promise<void> => {
 };
 
 export const releaseHappyDomIfRegistered = async (): Promise<void> => {
-  if (GlobalRegistrator.isRegistered) {
-    await letSchedulerRun();
+  if (!GlobalRegistrator.isRegistered) return;
+  const claimed = claims;
+  await letSchedulerRun();
+  if (claims === claimed && GlobalRegistrator.isRegistered) {
     await GlobalRegistrator.unregister();
   }
 };
