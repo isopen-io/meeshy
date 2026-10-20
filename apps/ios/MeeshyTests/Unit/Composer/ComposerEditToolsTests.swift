@@ -158,11 +158,11 @@ final class ComposerEditToolsTests: XCTestCase {
 
     func test_panels_stackEveryActiveTool_fromTheProportionsDownToTheCut() {
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.trim, .sound, .crop]),
-                       [.trim],
-                       "les proportions se posent sur la scène (#10930) ; le son se peint sur la coupe (#10356)")
-        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.sound, .crop]), [.sound],
+                       [.presets, .trim],
+                       "les proportions sous la scène (porteur 2026-10-20) ; le son se peint sur la coupe (#10356)")
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.sound, .crop]), [.presets, .sound],
                        "Couper retiré : le spectre garde sa propre piste")
-        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.crop]), [])
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.crop]), [.presets])
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: []), [])
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: true, active: [.crop, .trim, .sound]), [.band],
                        "une bande ouverte replie les panneaux, sans désactiver leurs outils")
@@ -199,7 +199,7 @@ final class ComposerEditToolsTests: XCTestCase {
         photo.toggleEditTool(.crop)
         XCTAssertTrue(photo.showsCropBrackets)
         XCTAssertTrue(photo.editFramesScene, "recadrer réduit la photo pour libérer ses bords")
-        XCTAssertEqual(photo.editPanels, [], "les proportions se posent sur la scène")
+        XCTAssertEqual(photo.editPanels, [.presets], "les proportions retiennent leur bande sous la scène")
         photo.hideEditChrome()
         XCTAssertFalse(photo.showsCropBrackets)
         XCTAssertFalse(photo.editFramesScene, "le chrome caché, la photo reprend l'écran")
@@ -223,16 +223,16 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertFalse(session.editFramesScene, "la coupe se pose par-dessus la vidéo, qui garde l'écran")
         session.toggleEditTool(.crop)
         XCTAssertTrue(session.editFramesScene)
-        XCTAssertEqual(session.editPanels, [.trim])
+        XCTAssertEqual(session.editPanels, [.presets, .trim])
         session.toggleEditTool(.trim)
-        XCTAssertEqual(session.editPanels, [.sound], "Couper se retire seul")
+        XCTAssertEqual(session.editPanels, [.presets, .sound], "Couper se retire seul")
         XCTAssertTrue(session.showsCropBrackets, "les équerres restent")
         session.toggleEditTool(.trim)
         session.toggleFamily(.filters)
         XCTAssertEqual(session.editPanels, [.band])
         XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound], "la bande replie les panneaux, rien ne s'éteint")
         session.toggleFamily(.filters)
-        XCTAssertEqual(session.editPanels, [.trim], "la bande repliée, ils reviennent")
+        XCTAssertEqual(session.editPanels, [.presets, .trim], "la bande repliée, ils reviennent")
         session.hideEditChrome()
         XCTAssertEqual(session.editPanels, [], "le glissé vers le bas rend tout l'écran à la vidéo")
         XCTAssertFalse(session.editFramesScene)
@@ -325,16 +325,55 @@ final class ComposerEditToolsTests: XCTestCase {
                       "le toucher de la nappe consulte la table avant de viser")
     }
 
-    /// **#10930 — les formats se posent sur la scène**, au bas du cadre, entre
-    /// les deux crochets du bas.
-    func test_thePresets_sitOnTheSceneBottom_betweenTheBottomBrackets() {
+    /// **Les formats : une bande pleine largeur SOUS la scène** (porteur
+    /// 2026-10-20 : « le moins coupés possible […] hors viewport ou hors cadre
+    /// de la scène »). D'un bord de l'écran à l'autre, sous le cadre — aucun
+    /// crochet ne la coupe —, au-dessus du rail des outils, à 375 et 440 pt.
+    func test_thePresetsBand_spansTheScreen_underTheScene_clearOfBracketsAndRail() {
+        let ecrans = [CGSize(width: 375, height: 812 - 47 - 34), CGSize(width: 440, height: 956 - 62 - 34)]
         let cible = MeeshyControlSize.tapTarget
-        let scene = CGRect(x: 16, y: 100, width: 370, height: 600)
-        let formats = ComposerEditPresetsLayout.frame(scene: scene)
-        XCTAssertGreaterThanOrEqual(formats.minX, scene.minX + cible, "le crochet de gauche garde sa cible")
-        XCTAssertLessThanOrEqual(formats.maxX, scene.maxX - cible + 0.001, "celui de droite aussi")
-        XCTAssertTrue(scene.contains(formats), "posés SUR le cadre")
-        XCTAssertGreaterThan(formats.midY, scene.midY, "au bas du cadre")
+        for ecran in ecrans {
+            for (panneaux, lecture) in [([ComposerEditPanel.presets], false), ([.presets, .trim], true)] {
+                for aspect in [ComposerEditScene.clampedAspect(ecran.width / ecran.height), 1, 16.0 / 9.0] {
+                    let zone = ComposerEditScene.area(container: ecran, top: 0, bottom: 0, panels: panneaux,
+                                                      framed: true, playback: lecture)
+                    let scene = ComposerEditScene.rect(aspect: aspect, in: zone)
+                    let bande = ComposerEditPresetsLayout.frame(scene: scene)
+                    XCTAssertEqual(bande.minX, 0, accuracy: 0.001, "\(ecran) : la bande part du bord gauche de l'écran")
+                    XCTAssertEqual(bande.maxX, ecran.width, accuracy: 0.001, "\(ecran) : jusqu'au bord droit")
+                    XCTAssertGreaterThanOrEqual(bande.minY, scene.maxY, "\(ecran) \(aspect) : sous le cadre")
+                    let crochetsBas = [CGRect(x: scene.minX, y: scene.maxY - cible, width: cible, height: cible),
+                                       CGRect(x: scene.maxX - cible, y: scene.maxY - cible, width: cible, height: cible)]
+                    XCTAssertFalse(crochetsBas.contains { $0.intersects(bande) }, "\(ecran) \(aspect) : aucun crochet ne la coupe")
+                    let haut = ecran.height - ComposerEditScene.bottomReserve(panneaux.filter { $0 != .presets })
+                    XCTAssertLessThanOrEqual(bande.maxY, haut + 0.001,
+                                             "\(ecran) \(panneaux) \(aspect) : au-dessus de la coupe et du rail")
+                }
+            }
+        }
+    }
+
+    /// **Aucun libellé du rail n'est coupé** (porteur 2026-10-20) : à 375 comme
+    /// à 440 pt, chaque entrée du rail d'une vidéo (six outils) garde au moins
+    /// la largeur entière de son nom — le rail défile plutôt que de rogner.
+    func test_theEditRail_neverTruncatesALabel_at375And440() async {
+        let (session, _) = await videoSession()
+        let noms = ComposerLookFamily.allCases.map(ComposerCaptureCopy.familyName)
+            + session.editTools.map(ComposerCaptureCopy.editToolName)
+        for largeur in [CGFloat(375), 440] {
+            let ecran = RenderedScreen(ComposerCaptureBottomRow(session: session, context: session.gestureContext)
+                                        .frame(width: largeur),
+                                       size: CGSize(width: largeur, height: 400))
+            for nom in noms {
+                let ideal = UIHostingController(rootView: Text(nom)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold)))
+                    .sizeThatFits(in: CGSize(width: 1_000, height: 100)).width
+                let cadre = ecran.nodes.first { $0.label == nom }?.frame
+                XCTAssertNotNil(cadre, "\(largeur) : « \(nom) » est rendu")
+                XCTAssertGreaterThanOrEqual(cadre?.width ?? 0, ideal - 0.5, "\(largeur) : « \(nom) » est coupé")
+            }
+            ecran.dismount()
+        }
     }
 
     func test_theOverlayChrome_isWired() throws {
