@@ -223,31 +223,13 @@ final class WindowMetricsSSOTTests: XCTestCase {
         }
     }
 
-    /// `UIScreen.main` survives in exactly three places, all deliberate:
-    /// `DeviceLayout`'s own last resort, and two image-decode sites that want
-    /// the largest width an image could ever need (sizing those to the current
-    /// window would under-decode and blur the moment the window grows).
-    ///
-    /// Asserted as an equality, not an inclusion: an inclusion would stay green
-    /// if a new screen-derived measurement appeared, which is the only thing
-    /// this is here to catch.
-    func test_displayMeasurements_areConfinedToTheDeliberateSites() throws {
+    func test_appSources_neverReadTheMainScreen() throws {
         let appRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy")
-
-        let deliberate: Set<String> = [
-            "DeviceLayout.swift",              // the last resort when no scene exists
-            "BubbleStandardLayout.swift",      // decode target: widest the image may need
-            // Relocalisation PURE (98e96de97d) : la mesure n'a pas bougé, son
-            // fichier si — `ConversationMediaGalleryView` a été découpé pour rentrer
-            // dans son budget, et cette garde nommait l'ANCIEN fichier. Le nom
-            // change, la population des sites délibérés reste de trois.
-            "ConversationMediaGalleryView+Rules.swift" // decode target: widest the image may need
-        ]
 
         var found: Set<String> = []
         let walker = try XCTUnwrap(FileManager.default.enumerator(atPath: appRoot.path))
@@ -256,15 +238,15 @@ final class WindowMetricsSSOTTests: XCTestCase {
             let code = codeLines(
                 try AppSourceGuard.text(at: appRoot.appendingPathComponent(relativePath))
             )
-            if code.contains("UIScreen.main.bounds") {
+            if code.contains("UIScreen.main") {
                 found.insert((relativePath as NSString).lastPathComponent)
             }
         }
 
         XCTAssertEqual(
-            found, deliberate,
-            "New display-derived measurement, or a deliberate site removed without updating this " +
-            "guard. Layout reads DeviceLayout.windowSize; only image-decode targets read the screen."
+            found, [],
+            "Lecture de l'écran principal dans l'app : le layout lit DeviceLayout.windowSize, le " +
+            "décodage DecodeBudget, et WindowMetrics tient la seule lecture."
         )
     }
 

@@ -1,11 +1,8 @@
 import SwiftUI
 import UIKit
+import MeeshyUI
 
 enum DeviceLayout {
-    static var isPad: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
-    }
-
     /// The scene the app is actually on screen in.
     ///
     /// Resolved by `activationState`, never by `connectedScenes.first`:
@@ -120,7 +117,7 @@ enum DeviceLayout {
     /// Prefer a `GeometryReader`'s own `size` wherever one is already in scope:
     /// this is the answer for views that have no container measurement to read.
     static var windowSize: CGSize {
-        measurementWindow?.bounds.size ?? UIScreen.main.bounds.size
+        measurementWindow?.bounds.size ?? WindowMetrics.physicalDisplay.points
     }
 
     /// Bottom safe-area inset of the window the app is actually rendered in.
