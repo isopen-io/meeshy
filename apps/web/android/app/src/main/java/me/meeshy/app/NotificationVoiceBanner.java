@@ -60,6 +60,8 @@ final class NotificationVoiceBanner {
         "replyActionLabel", "contentActionLabel", "locationLat", "locationLon", "locationName", "inviteUrl",
         // #10908 — « Rappeler » sur la banniere d'un appel manque.
         "callBackLabel", "callType", "conversationType",
+        // #10921 — l'intention de balayage porte la notification et son post.
+        "notificationId", "postId",
     };
 
     private NotificationVoiceBanner() {}
@@ -147,11 +149,14 @@ final class NotificationVoiceBanner {
             Bundle extras = new Bundle();
             extras.putString(EXTRA_MESSAGE_ID, voice.messageId);
             builder.addExtras(extras);
+            builder.addExtras(NotificationBannerActions.marked(data.get("notificationId")));
             List<Notification.Action> actions = new ArrayList<>();
             actions.add(action(context, data, playing));
             actions.addAll(NotificationBannerActions.of(context, data));
             builder.setActions(actions.toArray(new Notification.Action[0]));
             builder.setOnlyAlertOnce(true);
+            PendingIntent dismissal = NotificationDismissReceiver.intentFor(context, data);
+            if (dismissal != null) builder.setDeleteIntent(dismissal);
             String sub = note != null ? note : NotificationVoiceRules.duration(voice.durationMs);
             if (!sub.isEmpty()) builder.setSubText(sub);
             manager.notify(voice.tag, 0, builder.build());

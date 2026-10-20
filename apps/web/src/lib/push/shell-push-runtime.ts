@@ -42,7 +42,8 @@ export function shellPushUrl(target: PushTapTarget): string {
     case 'story':
       return href('story', target.params);
     case 'post':
-      return href('post', target.params);
+      /* `?from=notification` (#10483, #11097) — la vue du détail compte en `notification`, comme `sw-push.js`. */
+      return href('post', target.params, { from: 'notification' });
     case 'mood':
       return href('mood', target.params);
     case 'discover':

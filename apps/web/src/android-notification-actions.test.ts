@@ -46,11 +46,20 @@ describe('« Répondre » sur la bannière d’un message (#10891)', () => {
 
   test('l’action ouvre MainActivity par le lien du widget, et ne vole jamais les actions d’une autre bannière', () => {
     const action = lire('NotificationBannerActions.java');
-    expect(action).toContain('MainActivity.class');
+    expect(action).toContain('NotificationActionActivity.intentFor(');
+    expect(lire('NotificationActionActivity.java')).toContain('MainActivity.class');
     expect(action).toContain('PendingIntent.getActivity(');
     expect(action).toContain('recoverBuilder(');
     expect(action).toContain('setOnlyAlertOnce(true)');
     expect(action).toMatch(/\.actions\b/);
+  });
+
+  test('toucher une action note « ouverte » et retire la bannière, carte comprise, comme `notificationclick` (#11052)', () => {
+    const relais = corpsDe(lire('NotificationActionActivity.java'), 'private void relay(');
+    expect(relais).toContain('NotificationFunnelStore.noteOpened(');
+    expect(relais).toContain('manager.cancel(tag, 0)');
+    expect(relais.indexOf('manager.cancel(tag, 0)')).toBeLessThan(relais.indexOf('startActivity('));
+    expect(lire('../../../../AndroidManifest.xml')).toContain('android:name=".NotificationActionActivity"');
   });
 
   test('le toucher retire la bannière, à froid comme à chaud', () => {
