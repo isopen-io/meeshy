@@ -12,6 +12,52 @@ struct FeedPostRowActions {
     let onQuote: (String) -> Void
     let onEdit: (FeedPost) -> Void
     let onOpenReelComments: (FeedPost) -> Void
+    let onAuthorMoodTap: (String, CGPoint) -> Void
+    let moodLookup: (String) -> (emoji: String?, tapHandler: ((CGPoint) -> Void)?)
+    let onViewAuthorStory: (String) -> Void
+}
+
+nonisolated struct FeedPostRowRenderInputs: Equatable {
+    let postId: String
+    let likes: Int
+    let isLiked: Bool
+    let content: String
+    let mentions: [PostReference]?
+    let translatedContent: String?
+    let translatableSignature: FeedPostCard.TranslatableSignature
+    let repostCount: Int
+    let bookmarkCount: Int
+    let shareCount: Int
+    let commentCount: Int
+    let authorRing: ServedProfileDecorItem?
+    let trackedLinkMap: [String: String]
+    let engagement: FeedPostEngagementSnapshot
+    let authorStoryRing: StoryRingState
+    let authorMoodEmoji: String?
+
+    init(
+        post: FeedPost,
+        engagement: FeedPostEngagementSnapshot,
+        authorStoryRing: StoryRingState,
+        authorMoodEmoji: String?
+    ) {
+        postId = post.id
+        likes = post.likes
+        isLiked = post.isLiked
+        content = post.content
+        mentions = post.mentions
+        translatedContent = post.translatedContent
+        translatableSignature = FeedPostCard.translatableSignature(of: post)
+        repostCount = post.repostCount
+        bookmarkCount = post.bookmarkCount
+        shareCount = post.shareCount
+        commentCount = post.commentCount
+        authorRing = post.authorRing
+        trackedLinkMap = post.trackedLinkMap
+        self.engagement = engagement
+        self.authorStoryRing = authorStoryRing
+        self.authorMoodEmoji = authorMoodEmoji
+    }
 }
 
 /// Une ligne du fil : la carte Réel plein-cadre ou la carte standard.
@@ -20,15 +66,14 @@ struct FeedPostRow: View {
     let viewModel: FeedViewModel
     let reelAutoplay: ReelFeedAutoplayCoordinator
     let engagement: FeedPostEngagementSnapshot
+    let authorStoryRing: StoryRingState
+    let authorMoodEmoji: String?
     let actions: FeedPostRowActions
 
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @Environment(\.horizontalSizeClass) private var sizeClass
     @EnvironmentObject private var router: Router
-    @EnvironmentObject private var statusViewModel: StatusViewModel
-    @EnvironmentObject private var storyViewModel: StoryViewModel
-    @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
 
     var body: some View {
         // On iPad/Mac (regular width) the feed lives in a narrow column where a
@@ -185,26 +230,32 @@ struct FeedPostRow: View {
             onEdit: isOwnPost ? { post in
                 actions.onEdit(post)
             } : nil,
-            authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
-            onAuthorMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
-            moodLookup: { userId in
-                (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
-                 tapHandler: statusViewModel.moodTapHandler(for: userId))
-            },
-            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
-            onViewAuthorStory: {
-                // Parité iPhone (`ThemedFeedOverlay`) : toucher l'avatar d'un auteur
-                // qui a une story ouvre SA story via le coordinator unique. Sans ce
-                // câblage, l'anneau de story et le tap étaient inertes sur iPad.
-                storyViewerCoordinator.present(
-                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
-                )
-            },
+            authorMoodEmoji: authorMoodEmoji,
+            onAuthorMoodTap: authorMoodEmoji == nil ? nil : { actions.onAuthorMoodTap(post.authorId, $0) },
+            moodLookup: actions.moodLookup,
+            authorStoryRing: authorStoryRing,
+            onViewAuthorStory: { actions.onViewAuthorStory(post.authorId) },
             // RF2: a POST that reposts a REEL renders inside FeedPostCard (not the
             // immersive reel card) — hand it the shared autoplay coordinator so the
             // embedded reel plays muted/inline, elected against the native reels.
             reelAutoplay: reelAutoplay
         )
         .equatable()
+    }
+}
+
+extension FeedPostRow: Equatable {
+    nonisolated static func == (lhs: FeedPostRow, rhs: FeedPostRow) -> Bool {
+        FeedPostRowRenderInputs(
+            post: lhs.post,
+            engagement: lhs.engagement,
+            authorStoryRing: lhs.authorStoryRing,
+            authorMoodEmoji: lhs.authorMoodEmoji
+        ) == FeedPostRowRenderInputs(
+            post: rhs.post,
+            engagement: rhs.engagement,
+            authorStoryRing: rhs.authorStoryRing,
+            authorMoodEmoji: rhs.authorMoodEmoji
+        )
     }
 }

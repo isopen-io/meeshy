@@ -405,6 +405,7 @@ struct MyStoriesView: View {
                 ForEach(viewModel.activeUploads) { upload in
                     ActiveUploadRow(
                         upload: upload,
+                        progress: viewModel.uploadProgress,
                         onRetry: { viewModel.retryUpload(id: upload.id) },
                         onCancel: { viewModel.cancelUpload(id: upload.id) }
                     )

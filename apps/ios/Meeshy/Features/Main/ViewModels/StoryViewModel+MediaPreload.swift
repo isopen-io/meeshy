@@ -186,13 +186,7 @@ extension StoryViewModel {
             }
 
             if storedAny {
-                // #4002 — le MÊME signal invalide la mémoire de couverture :
-                // `StoryCoverURLMemo` a pu mémoïser un `nil` que cette
-                // écriture vient de rendre faux. Posé ici, et pas ailleurs,
-                // parce que c'est le seul site qui SAIT qu'un fichier de
-                // couverture vient d'atterrir.
-                StoryCoverURLMemo.bumpGeneration()
-                self?.receiverCoverRenderTick += 1
+                self?.coverRenders.bump()
             }
         }
     }

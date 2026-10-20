@@ -34,7 +34,6 @@ extension StoryViewModel {
         /// refuserait sa PROPRE revendication et la ligne resterait en
         /// `.queued`, hors de portée du drain comme du geste « Réessayer ».
         var ownsQueueClaim: Bool = false
-        var progress: Double
         var phase: UploadPhase
 
         let authorId: String

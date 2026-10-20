@@ -55,44 +55,26 @@ extension MessageSocketManager {
             "conversationId": conversationId,
             "type": isVideo ? "video" : "audio"
         ]
-        return try await withCheckedThrowingContinuation { continuation in
-            var resumed = false
-            socket.emitWithAck("call:initiate", payload).timingOut(after: 10) { items in
-                guard !resumed else { return }
-                resumed = true
+        let ack = await socket.emitWithAck(.callInitiate, payload, as: CallInitiateAckBody.self, payloadAt: .data, timingOutAfter: 10)
+        return try Self.callInitiateResult(from: ack).get()
+    }
 
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: CallInitiateError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any],
-                      let callId = data["callId"] as? String else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: CallInitiateError.serverError(message))
-                    return
-                }
-
-                let mode = data["mode"] as? String
-                let rawServers = data["iceServers"] as? [[String: Any]] ?? []
-
-                let servers: [SocketIceServer]
-                do {
-                    let serversData = try JSONSerialization.data(withJSONObject: rawServers)
-                    servers = try JSONDecoder().decode([SocketIceServer].self, from: serversData)
-                } catch {
-                    // Sans serveurs ICE, l'appel ne peut pas s'établir : la
-                    // cause exacte doit être exploitable.
-                    Logger.socket.error("call ICE servers undecodable, call cannot be established: \(error.localizedDescription, privacy: .public)")
-                    continuation.resume(throwing: CallInitiateError.malformedResponse)
-                    return
-                }
-
-                let ttl = data["ttl"] as? Int
-                continuation.resume(returning: CallInitiateAck(callId: callId, mode: mode, iceServers: servers, ttl: ttl))
-            }
+    static func callInitiateResult(from ack: SocketAck<CallInitiateAckBody>) -> Result<CallInitiateAck, CallInitiateError> {
+        switch ack {
+        case .timedOut:
+            return .failure(.timeout)
+        case .refused(let refusal):
+            return .failure(.serverError(refusal.message ?? "unknown error"))
+        case .acceptedWithoutPayload:
+            return .failure(.serverError("unknown error"))
+        case .undecodable(let reason):
+            // Sans serveurs ICE, l'appel ne peut pas s'établir : la
+            // cause exacte doit être exploitable.
+            Logger.socket.error("call ICE servers undecodable, call cannot be established: \(reason, privacy: .public)")
+            return .failure(.malformedResponse)
+        case .accepted(let body):
+            guard let callId = body.callId else { return .failure(.serverError("unknown error")) }
+            return .success(CallInitiateAck(callId: callId, mode: body.mode, iceServers: body.iceServers ?? [], ttl: body.ttl))
         }
     }
 
@@ -131,29 +113,32 @@ extension MessageSocketManager {
     public func emitCallJoinWithAckDetailed(callId: String) async -> CallJoinAckResult {
         guard let socket else { return CallJoinAckResult(joined: false) }
         let payload: [String: Any] = ["callId": callId]
-        return await withCheckedContinuation { continuation in
-            var resumed = false
-            // 6s (was 3s): the gateway only sends the success ACK AFTER
-            // `joinCall` (Prisma transaction → 'connecting', TURN credential
-            // generation, participant enrichment, C8 same-user socket eviction
-            // via fetchSockets). Under load that work can exceed 3s, so a
-            // slow-but-successful join was falsely reported `NOT ACKed`, firing
-            // a redundant retry that burned the caller's ring budget → `missed`.
-            // Still well under the 45s ring / 30s connect budget, even with the
-            // one retry in joinCallRoomReliably.
-            socket.emitWithAck("call:join", payload).timingOut(after: 6) { items in
-                guard !resumed else { return }
-                resumed = true
-                let response = items.first as? [String: Any]
-                let success = response?["success"] as? Bool ?? false
-                let error = response?["error"] as? [String: Any]
-                let errorCode = error?["code"] as? String
-                let endReason = error?["endReason"] as? String
-                continuation.resume(returning: CallJoinAckResult(
-                    joined: success, errorCode: errorCode, endReason: endReason
-                ))
-            }
+        // 6s (was 3s): the gateway only sends the success ACK AFTER
+        // `joinCall` (Prisma transaction → 'connecting', TURN credential
+        // generation, participant enrichment, C8 same-user socket eviction
+        // via fetchSockets). Under load that work can exceed 3s, so a
+        // slow-but-successful join was falsely reported `NOT ACKed`, firing
+        // a redundant retry that burned the caller's ring budget → `missed`.
+        // Still well under the 45s ring / 30s connect budget, even with the
+        // one retry in joinCallRoomReliably.
+        let ack = await socket.emitWithAck(.callJoin, payload, as: SocketAckNoPayload.self, payloadAt: .none, timingOutAfter: 6)
+        return Self.callJoinResult(from: ack)
+    }
+
+    static func callJoinResult(from ack: SocketAck<SocketAckNoPayload>) -> CallJoinAckResult {
+        switch ack {
+        case .accepted:
+            return CallJoinAckResult(joined: true)
+        case .refused(let refusal):
+            return CallJoinAckResult(joined: false, errorCode: refusal.errorCode, endReason: refusal.endReason)
+        case .acceptedWithoutPayload, .undecodable, .timedOut:
+            return CallJoinAckResult(joined: false)
         }
+    }
+
+    static func ackSucceeded(_ ack: SocketAck<SocketAckNoPayload>) -> Bool {
+        guard case .accepted = ack else { return false }
+        return true
     }
 
     /// Boolean-only convenience over `emitCallJoinWithAckDetailed` — kept for
@@ -231,21 +216,11 @@ extension MessageSocketManager {
         guard let socket else { return false }
         var signal: [String: Any] = ["type": type]
         for (key, value) in payload { signal[key] = value }
-        return await withCheckedContinuation { continuation in
-            var resumed = false
-            socket.emitWithAck("call:signal", ["callId": callId, "signal": signal]).timingOut(after: 3) { items in
-                guard !resumed else { return }
-                resumed = true
-                if let response = items.first as? [String: Any],
-                   let success = response["success"] as? Bool {
-                    continuation.resume(returning: success)
-                } else if items.isEmpty {
-                    continuation.resume(returning: false)
-                } else {
-                    continuation.resume(returning: false)
-                }
-            }
-        }
+        let ack = await socket.emitWithAck(
+            .callSignal, ["callId": callId, "signal": signal] as [String: Any],
+            as: SocketAckNoPayload.self, payloadAt: .none, timingOutAfter: 3
+        )
+        return Self.ackSucceeded(ack)
     }
 
     public func emitCallToggleAudio(callId: String, enabled: Bool) {
@@ -279,19 +254,11 @@ extension MessageSocketManager {
     /// déjà sur tous les autres chemins de refus).
     public func emitCallRejectWithAck(callId: String) async -> Bool {
         guard let socket else { return false }
-        return await withCheckedContinuation { continuation in
-            var resumed = false
-            socket.emitWithAck("call:end", ["callId": callId, "reason": "rejected"]).timingOut(after: 3) { items in
-                guard !resumed else { return }
-                resumed = true
-                if let response = items.first as? [String: Any],
-                   let success = response["success"] as? Bool {
-                    continuation.resume(returning: success)
-                } else {
-                    continuation.resume(returning: false)
-                }
-            }
-        }
+        let ack = await socket.emitWithAck(
+            .callEnd, ["callId": callId, "reason": "rejected"] as [String: Any],
+            as: SocketAckNoPayload.self, payloadAt: .none, timingOutAfter: 3
+        )
+        return Self.ackSucceeded(ack)
     }
 
     /// Variante avec ACK : émet `call:end` et attend confirmation du gateway
@@ -303,19 +270,11 @@ extension MessageSocketManager {
     /// avant de fermer le socket / quitter l'écran).
     public func emitCallEndWithAck(callId: String) async -> Bool {
         guard let socket else { return false }
-        return await withCheckedContinuation { continuation in
-            var resumed = false
-            socket.emitWithAck("call:end", ["callId": callId]).timingOut(after: 3) { items in
-                guard !resumed else { return }
-                resumed = true
-                if let response = items.first as? [String: Any],
-                   let success = response["success"] as? Bool {
-                    continuation.resume(returning: success)
-                } else {
-                    continuation.resume(returning: false)
-                }
-            }
-        }
+        let ack = await socket.emitWithAck(
+            .callEnd, ["callId": callId] as [String: Any],
+            as: SocketAckNoPayload.self, payloadAt: .none, timingOutAfter: 3
+        )
+        return Self.ackSucceeded(ack)
     }
 
     public func emitCallHeartbeat(callId: String) {
@@ -397,5 +356,24 @@ extension MessageSocketManager {
             "callId": callId,
             "participantId": participantId
         ])
+    }
+}
+
+struct CallInitiateAckBody: Decodable, Sendable {
+    let callId: String?
+    let mode: String?
+    let ttl: Int?
+    let iceServers: [SocketIceServer]?
+
+    private enum CodingKeys: String, CodingKey {
+        case callId, mode, ttl, iceServers
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        callId = try? container.decodeIfPresent(String.self, forKey: .callId)
+        mode = try? container.decodeIfPresent(String.self, forKey: .mode)
+        ttl = try? container.decodeIfPresent(Int.self, forKey: .ttl)
+        iceServers = try container.decodeIfPresent([SocketIceServer].self, forKey: .iceServers)
     }
 }

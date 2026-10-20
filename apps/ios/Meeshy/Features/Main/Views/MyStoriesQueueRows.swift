@@ -11,6 +11,7 @@ import MeeshyUI
 /// failed upload attempt.
 struct ActiveUploadRow: View {
     let upload: StoryViewModel.StoryUploadState
+    @ObservedObject var progress: StoryUploadProgressStore
     let onRetry: () -> Void
     let onCancel: () -> Void
 
@@ -34,7 +35,7 @@ struct ActiveUploadRow: View {
                 Text(StoryUploadPresentation.statusTitle(for: upload.phase))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 if !isFailed, !isWaiting {
-                    Text("\(Int(upload.progress * 100))%")
+                    Text("\(Int(progress.fraction(for: upload.id) * 100))%")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(.secondary)
                 }

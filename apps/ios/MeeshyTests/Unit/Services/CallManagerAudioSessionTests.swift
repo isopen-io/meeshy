@@ -2782,7 +2782,7 @@ final class CallManagerJoinRaceTests: XCTestCase {
             "— the ACK-aware join that awaits the gateway confirmation before returning, " +
             "eliminating the race with room-scoped events on socket reconnect")
         XCTAssertTrue(
-            source.contains("timingOut(after:"),
+            source.contains("timingOutAfter:"),
             "emitCallJoinWithAck must use socket.emitWithAck with timingOut to prevent " +
             "hanging indefinitely if the gateway is slow or the call has already ended")
     }

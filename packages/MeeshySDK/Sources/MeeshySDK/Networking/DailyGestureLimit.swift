@@ -77,11 +77,13 @@ extension SocialSocketManager {
     /// L'erreur d'un accusé de réaction refusé : la limite du jour quand l'accusé
     /// la porte (`DAILY_REACTION_LIMIT`), la phrase du serveur sinon.
     nonisolated static func postReactionAckFailure(_ response: [String: Any]) -> Error {
-        if let limit = DailyGestureLimit.fromAck(response) { return limit }
-        let message = (response["error"] as? [String: Any])?["message"] as? String
-            ?? (response["error"] as? String)
-            ?? "unknown error"
-        return PostReactionError.serverError(message)
+        postReactionAckFailure(SocketAckRefusal(response: response))
+    }
+
+    nonisolated static func postReactionAckFailure(_ refusal: SocketAckRefusal) -> Error {
+        let limit = DailyGestureLimit(code: refusal.code, resetAt: DailyGestureLimit.parseInstant(refusal.resetAt), limit: refusal.limit)
+        if let limit { return limit }
+        return PostReactionError.serverError(refusal.message ?? "unknown error")
     }
 }
 
