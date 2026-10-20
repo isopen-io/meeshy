@@ -161,8 +161,10 @@ final class ComposerReturnMediaTests: XCTestCase {
                        "La vidéo en attente et la vidéo récente s'éditent dans la scène (#9124).")
         XCTAssertEqual(code.components(separatedBy: "ConversationVideoSceneEditor(").count - 1, 1,
                        "La vidéo RÉCENTE ouvre la scène.")
-        XCTAssertTrue(code.contains("ConversationRetouchSeriesEditor("),
-                      "La vidéo EN ATTENTE ouvre toutes les pièces du message en scènes (#9126).")
+        XCTAssertFalse(code.contains("ConversationRetouchSeriesEditor("),
+                       "La série de scènes n'est plus une porte de la conversation (porteur 2026-10-20, #11133).")
+        XCTAssertTrue(code.contains("ConversationPieceRetouch("),
+                      "La pièce EN ATTENTE ouvre la retouche de la caméra (#11133).")
     }
 }
 

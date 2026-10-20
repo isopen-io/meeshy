@@ -39,8 +39,6 @@ struct ConversationScrollState {
     // Media editor queues
     var photosToEdit: [UIImage] = []
     var videosToPreview: [URL] = []
-    /// « Éditer » sur une pièce en attente : toutes les pièces en scènes (#9126).
-    var retouchSeries: ConversationRetouchSeries? = nil
     /// « Éditer » sur une pièce en attente : la retouche de la caméra (#11133).
     var pieceToRetouch: ComposerRetouchPiece? = nil
     var audioToEdit: PendingAudioEdit? = nil
