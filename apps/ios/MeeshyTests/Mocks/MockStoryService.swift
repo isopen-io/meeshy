@@ -41,6 +41,7 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
 
     var deleteCallCount = 0
     var lastDeleteStoryId: String?
+    var lastDeleteReason: String?
 
     var reactCallCount = 0
     var lastReactStoryId: String?
@@ -86,8 +87,13 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
     var deleteResumesOnBackgroundQueue = false
 
     func delete(storyId: String) async throws {
+        try await delete(storyId: storyId, reason: nil)
+    }
+
+    func delete(storyId: String, reason: String?) async throws {
         deleteCallCount += 1
         lastDeleteStoryId = storyId
+        lastDeleteReason = reason
         if deleteResumesOnBackgroundQueue {
             await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                 DispatchQueue.global(qos: .userInitiated).async { continuation.resume() }
@@ -176,6 +182,7 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         deleteResult = .success(())
         deleteCallCount = 0
         lastDeleteStoryId = nil
+        lastDeleteReason = nil
 
         reactResult = .success(())
         reactCallCount = 0

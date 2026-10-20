@@ -234,8 +234,8 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return "Message epingle"
         case .messageForwarded:
             return "Message transfere"
-        case .reportResolved:
-            return "Signalement traité"
+        case .reportResolved: return "Signalement traité"
+        case .contentRemoved: return String(localized: "notification.contentRemoved.fallbackTitle", defaultValue: "Votre contenu a été retiré par un administrateur", bundle: .main)
         case .system, .maintenance, .updateAvailable:
             return content ?? "Notification systeme"
         }
@@ -272,6 +272,8 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
             return loginDeviceBody
         case .reportResolved:
             return content
+        case .contentRemoved:
+            return removalBody
         // Le jeu : la phrase est SERVIE, dans la langue du lecteur — il n'y a ni extrait ni aperçu à lui préférer.
         case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
             return Self.firstNonEmpty(content)
@@ -341,6 +343,20 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
     private var contentPublishedLabel: String? {
         guard let iso = context?.postCreatedAt, let date = Self.parseISODate(iso) else { return nil }
         return NotificationDateFormatter.string(for: date)
+    }
+
+    /// **Le motif d'un retrait se lit TOUJOURS** (#11151) : le corps servi le
+    /// porte déjà (« Motif : … ») ; sinon il y est ajouté, une seule fois.
+    private var removalBody: String? {
+        let served = Self.firstNonEmpty(content)
+        guard let reason = Self.firstNonEmpty(metadata?.reason) else { return served }
+        if let served, served.contains(reason) { return served }
+        let reasonLine = String(
+            format: String(localized: "notification.contentRemoved.reason", defaultValue: "Motif : %@", bundle: .main),
+            reason
+        )
+        guard let served else { return reasonLine }
+        return "\(served)\n\(reasonLine)"
     }
 
     private var loginDeviceBody: String? {

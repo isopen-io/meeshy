@@ -130,7 +130,7 @@ extension FeedViewModel {
         }
     }
 
-    func deletePost(_ postId: String) async {
+    func deletePost(_ postId: String, reason: String? = nil) async {
         guard !ClientMutationId.isValid(postId) else { return await withdrawPendingPublication(postId) }
         // Un post absent du fil chargé (ouvert par un lien, depuis un profil, ou sorti de la fenêtre paginée) se
         // supprime quand même : seul le retrait optimiste — et donc son retour en arrière — n'a rien à faire.
@@ -138,7 +138,7 @@ extension FeedViewModel {
         let removedPost = removedIndex.map { posts.remove(at: $0) }
 
         do {
-            try await postService.delete(postId: postId)
+            try await postService.delete(postId: postId, reason: reason)
             debouncedCacheSave()
 
             // Remove from GRDB
@@ -148,7 +148,7 @@ extension FeedViewModel {
                 }
             }
 
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
         } catch {
             // Remet CE post à sa place — ce qui a été chargé pendant l'appel reste (`OptimisticRollback`).
             if let removedPost, let removedIndex {

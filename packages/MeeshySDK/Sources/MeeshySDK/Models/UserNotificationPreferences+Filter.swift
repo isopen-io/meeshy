@@ -178,6 +178,8 @@ public extension UserNotificationPreferences {
             return true
         case .reportResolved:
             return true  // art. 16 DSA : le déclarant apprend TOUJOURS l'issue de son signalement
+        case .contentRemoved:
+            return true  // art. 17 DSA : l'auteur reçoit TOUJOURS l'exposé des motifs d'un retrait
         }
     }
 
