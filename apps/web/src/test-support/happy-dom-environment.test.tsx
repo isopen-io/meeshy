@@ -27,4 +27,15 @@ describe('l’environnement happy-dom des tests', () => {
 
     expect(effects).toEqual(['effet']);
   });
+
+  test('une libération non attendue ne démonte pas le DOM que le fichier suivant vient de réclamer', async () => {
+    ensureHappyDomRegistered();
+    const pending = releaseHappyDomIfRegistered();
+    ensureHappyDomRegistered();
+
+    await pending;
+
+    expect(typeof globalThis.document?.createElement).toBe('function');
+    await releaseHappyDomIfRegistered();
+  });
 });
