@@ -325,7 +325,7 @@ private struct CallJournalRow: View, Equatable {
     private var directionIcon: String {
         switch record.directionKind {
         case .outgoing: return "arrow.up.right"
-        case .incoming, .missed: return "arrow.down.left"
+        case .incoming, .missed, .unknown: return "arrow.down.left"
         }
     }
 

@@ -11,7 +11,7 @@ public final class AppDatabase: @unchecked Sendable {
     /// back to an in-memory queue. Callers that persist long-term data can
     /// decide to skip writes or surface a warning to the user.
     public let isEphemeral: Bool
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+    private let logger = MeeshyLog.logger(.grdb)
 
     private init() {
         // **UN HARNAIS DE TEST N'ÉCRIT PAS DANS LE MAGASIN DE L'APP** (#6857).
@@ -68,7 +68,7 @@ public final class AppDatabase: @unchecked Sendable {
     /// OS wakes us for a silent push or background task and disk access
     /// transiently fails.
     private static func makeWriter() -> (any DatabaseWriter, Bool) {
-        let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+        let logger = MeeshyLog.logger(.grdb)
         let databaseURL: URL
         do {
             databaseURL = try resolveDatabaseURL()
@@ -87,7 +87,7 @@ public final class AppDatabase: @unchecked Sendable {
     /// failure: drop the file (+ WAL/SHM sidecars) and retry once; then
     /// in-memory. Internal for tests.
     static func openOrRecover(at databaseURL: URL) -> (any DatabaseWriter, Bool) {
-        let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+        let logger = MeeshyLog.logger(.grdb)
         var phase = OpeningPhase.open
         do {
             let pool = try openPool(at: databaseURL)
@@ -250,31 +250,64 @@ public final class AppDatabase: @unchecked Sendable {
                 // `-wal`/`-shm` n'existent pas toujours — cas nominal.
             } catch {
                 // La base corrompue survit : la réouverture échouera à nouveau.
-                Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+                MeeshyLog.logger(.grdb)
                     .fault("Corrupt database file '\(suffix, privacy: .public)' could not be removed, recovery will fail again: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
 
+    typealias InMemoryOpener = @Sendable () throws -> DatabaseQueue
+
+    static let fallbackOpeners: [InMemoryOpener] = [
+        { try DatabaseQueue() },
+        { try DatabaseQueue(path: AppDatabase.temporaryFallbackPath()) },
+    ]
+
+    private static func temporaryFallbackPath() -> String {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("meeshy-fallback-\(UUID().uuidString).sqlite")
+            .path
+    }
+
     /// `migrate` is injectable so tests can force the failure branch without
     /// depending on a real GRDB migration actually breaking.
     static func inMemoryWriter(
+        openers: [InMemoryOpener] = AppDatabase.fallbackOpeners,
+        recorder: any ErrorRecording = MeeshyLog.recorder,
         migrate: (any DatabaseWriter) throws -> Void = AppDatabase.runMigrations
     ) -> (any DatabaseWriter, Bool) {
-        // swiftlint:disable:next force_try
-        let queue = try! DatabaseQueue()
-        // The ephemeral DB still needs the schema so reads/writes don't throw.
-        // A migration failure here must not crash the host app — that's the
-        // whole point of the in-memory fallback — but swallowing it silently
-        // left zero diagnostic when the L2 cache degraded to a schemaless
-        // store for the rest of the session.
+        let queue = openFallbackQueue(openers: openers, recorder: recorder)
         do {
             try migrate(queue)
         } catch {
-            let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
-            logger.error("In-memory fallback DB migration failed, cache will be degraded for this session: \(error.localizedDescription, privacy: .public)")
+            MeeshyLog.record(
+                error,
+                context: "In-memory fallback DB migration failed, cache degraded for this session",
+                category: .grdb,
+                recorder: recorder
+            )
         }
         return (queue, true)
+    }
+
+    private static func openFallbackQueue(
+        openers: [InMemoryOpener],
+        recorder: any ErrorRecording
+    ) -> DatabaseQueue {
+        for opener in openers {
+            do {
+                return try opener()
+            } catch {
+                MeeshyLog.record(
+                    error,
+                    context: "In-memory fallback DB could not be opened",
+                    category: .grdb,
+                    recorder: recorder
+                )
+            }
+        }
+        MeeshyLog.logger(.grdb).fault("No SQLite store could be opened, not even an in-memory one")
+        preconditionFailure("SQLite is unavailable: no fallback store can be opened")
     }
 
     static func runMigrations(on writer: any DatabaseWriter) throws {
@@ -288,168 +321,7 @@ public final class AppDatabase: @unchecked Sendable {
         try migrator().migrate(writer, upTo: identifier)
     }
 
-    private static func migrator() -> DatabaseMigrator {
-        var migrator = DatabaseMigrator()
-
-        migrator.registerMigration("v1_create_tables") { db in
-            try db.create(table: "conversations") { t in
-                t.column("id", .text).primaryKey()
-                t.column("name", .text).notNull()
-                t.column("encodedData", .blob).notNull() // Temporary fallback column
-                t.column("updatedAt", .datetime).notNull()
-            }
-
-            try db.create(table: "messages") { t in
-                t.column("id", .text).primaryKey()
-                t.column("conversationId", .text).notNull().references("conversations", onDelete: .cascade)
-                t.column("createdAt", .datetime).notNull()
-                t.column("encodedData", .blob).notNull() // Temporary fallback column
-            }
-
-            try db.create(index: "index_messages_on_conversationId_createdAt", on: "messages", columns: ["conversationId", "createdAt"])
-        }
-
-        migrator.registerMigration("v2_participant_cache") { db in
-            try db.create(table: "cached_participants") { t in
-                t.column("id", .text).primaryKey()
-                t.column("conversationId", .text).notNull()
-                t.column("userId", .text)
-                t.column("username", .text)
-                t.column("firstName", .text)
-                t.column("lastName", .text)
-                t.column("displayName", .text)
-                t.column("avatar", .text)
-                t.column("conversationRole", .text)
-                t.column("isOnline", .boolean)
-                t.column("lastActiveAt", .datetime)
-                t.column("joinedAt", .datetime)
-                t.column("isActive", .boolean)
-                t.column("cachedAt", .datetime).notNull()
-            }
-
-            try db.create(
-                index: "idx_cached_participants_conversationId",
-                on: "cached_participants",
-                columns: ["conversationId"]
-            )
-
-            try db.create(table: "cache_metadata") { t in
-                t.column("key", .text).primaryKey()
-                t.column("nextCursor", .text)
-                t.column("hasMore", .boolean).notNull().defaults(to: true)
-                t.column("totalCount", .integer)
-                t.column("lastFetchedAt", .datetime).notNull()
-            }
-        }
-
-        migrator.registerMigration("v3_unified_cache") { db in
-            try db.drop(table: "cached_participants")
-            try db.create(table: "cache_entries") { t in
-                t.column("key", .text).notNull()
-                t.column("itemId", .text).notNull()
-                t.column("encodedData", .blob).notNull()
-                t.column("updatedAt", .datetime).notNull()
-                t.primaryKey(["key", "itemId"])
-            }
-            try db.create(index: "idx_cache_entries_key", on: "cache_entries", columns: ["key"])
-        }
-
-        migrator.registerMigration("v4_drop_legacy_tables") { db in
-            try db.drop(table: "conversations")
-            try db.drop(table: "messages")
-        }
-
-        migrator.registerMigration("v5_translation_cache") { db in
-            try db.create(table: "translation_cache") { t in
-                t.column("messageId", .text).notNull()
-                t.column("targetLanguage", .text).notNull()
-                t.column("encodedData", .blob).notNull()
-                t.column("cachedAt", .datetime).notNull()
-                t.primaryKey(["messageId", "targetLanguage"])
-            }
-            try db.create(index: "idx_translation_cache_messageId", on: "translation_cache", columns: ["messageId"])
-        }
-
-        migrator.registerMigration("v6_tus_upload_checkpoint") { db in
-            // Per-file TUS upload checkpoints persisted across app kills so
-            // a retry can PATCH from the last known offset instead of
-            // re-uploading the slide from byte 0. Keyed on the SHA256 of
-            // the file content (computed bytewise by `TusUploadManager`)
-            // — stable across re-encodes that produce the same bytes,
-            // collision-free across distinct files.
-            try db.create(table: "tus_upload_checkpoint") { t in
-                t.column("checkpointKey", .text).primaryKey()
-                t.column("uploadURL", .text).notNull()
-                t.column("byteOffset", .integer).notNull()
-                t.column("fileSize", .integer).notNull()
-                t.column("fileName", .text).notNull()
-                t.column("mimeType", .text).notNull()
-                t.column("uploadContext", .text)
-                t.column("thumbHash", .text)
-                t.column("createdAt", .datetime).notNull()
-                t.column("updatedAt", .datetime).notNull()
-            }
-            try db.create(
-                index: "idx_tus_upload_checkpoint_updatedAt",
-                on: "tus_upload_checkpoint",
-                columns: ["updatedAt"]
-            )
-        }
-
-        // FTS5 indexes for conversations + users — sit alongside cache_entries
-        // so the search index lives in the same database as the data the
-        // GRDBCacheStore persists. Defined in `SearchIndexMigrations`.
-        SearchIndexMigrations.registerAll(in: &migrator)
-
-        migrator.registerMigration("v7_cache_entries_itemId_index") { db in
-            try db.create(index: "idx_cache_entries_itemId", on: "cache_entries", columns: ["itemId"])
-        }
-
-        // P2-2a — empreinte du plaintext par entrée : permet au flush dirty de
-        // SAUTER le re-chiffrement + la réécriture des items inchangés (le blob
-        // chiffré est non déterministe, seul un hash du plaintext est
-        // comparable). Nullable : les rangées existantes convergent au premier
-        // flush qui les réécrit.
-        migrator.registerMigration("v8_cache_entries_content_hash") { db in
-            try db.alter(table: "cache_entries") { t in
-                t.add(column: "contentHash", .text)
-            }
-        }
-
-        // Migration SÉPARÉE de la v8 (GRDB identifie par NOM : étendre une
-        // migration déjà exécutée quelque part la rendrait silencieusement
-        // incomplète sur ces stores). L'ordre de la liste persistée : l'ancien
-        // delete-all + réécriture le garantissait par rowid ; l'écriture-diff
-        // conserve les rowids des rangées inchangées, l'ordre doit donc être
-        // explicite. NULL (pré-v9) ⇒ repli rowid en lecture.
-        migrator.registerMigration("v9_cache_entries_position") { db in
-            try db.alter(table: "cache_entries") { t in
-                t.add(column: "position", .integer)
-            }
-        }
-
-        // #6893 — jusqu'à ce lot, `StoryEffects.encode` réencodait tout
-        // document v3 par le runtime v1, et la première scène perdait ce que
-        // v1 ne modélise pas (fond référencé par `mediaId`, kinds réservés,
-        // mentions, plan). Le correctif n'empêche que les écritures NEUVES de
-        // mutiler ; une ligne déjà mutilée resterait servie À FROID — route
-        // IMAGE sans texte — jusqu'au prochain rafraîchissement, que rien ne
-        // garantit avant l'ouverture d'un post (lien profond, notification).
-        // Purge UNIQUE des deux stores qui portent un canvas, et d'eux seuls :
-        // un démarrage à froid après mise à jour relit le réseau une fois.
-        migrator.registerMigration("v10_purge_canvas_reencoded_by_v1") { db in
-            for prefix in ["feed:", "stories:"] {
-                try db.execute(
-                    sql: "DELETE FROM cache_entries WHERE substr(key, 1, ?) = ?",
-                    arguments: [prefix.count, prefix]
-                )
-                try db.execute(
-                    sql: "DELETE FROM cache_metadata WHERE substr(key, 1, ?) = ?",
-                    arguments: [prefix.count, prefix]
-                )
-            }
-        }
-
-        return migrator
+    static func migrator() -> DatabaseMigrator {
+        DatabaseMigrator(table: AppDatabaseMigrations.all)
     }
 }

@@ -31,9 +31,12 @@ final class ConversationHeaderFlameTests: XCTestCase {
 
     func test_headerButtonsCluster_previewPutsOpenFullInTheSearchSlot() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
-        XCTAssertTrue(source.contains("searchButton: { previewMode ? openFullConversationButton : expandedHeaderSearchButton }"))
-        XCTAssertFalse(source.contains("cluster; openFullConversationButton"),
-                       "« agrandir » remplace la loupe, il ne s'ajoute plus après elle")
+        XCTAssertTrue(source.contains("searchButton: { headerSearchSlot }"))
+        let slot = try XCTUnwrap(source.range(of: "struct ConversationHeaderSearchSlot: View {"))
+        let body = String(source[slot.upperBound...].prefix(600))
+        XCTAssertTrue(body.contains("if previewMode {") && body.contains("ConversationHeaderOpenFullButton(")
+                        && body.contains("} else {") && body.contains("ConversationHeaderSearchButton("),
+                      "« agrandir » remplace la loupe, il ne s'ajoute plus après elle")
     }
 
     // MARK: - La visibilité de la flamme
@@ -137,8 +140,8 @@ final class ConversationHeaderFlameTests: XCTestCase {
 
     func test_headerCallButtons_doNotCarryTheEngagementPill() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
-        let cluster = try XCTUnwrap(source.range(of: "var headerCallButtons: AnyView {"))
-        let end = try XCTUnwrap(source.range(of: "var headerEngagementBadge", range: cluster.upperBound..<source.endIndex))
+        let cluster = try XCTUnwrap(source.range(of: "var headerCallButtons: ConversationHeaderCallSlot {"))
+        let end = try XCTUnwrap(source.range(of: "private func headerCalleeName", range: cluster.upperBound..<source.endIndex))
         XCTAssertFalse(source[cluster.upperBound..<end.lowerBound].contains("headerEngagementBadge"),
                        "repliée ou en aperçu, la pastille ne s'affiche pas")
     }

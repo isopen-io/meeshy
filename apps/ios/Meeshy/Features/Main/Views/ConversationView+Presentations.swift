@@ -44,9 +44,9 @@ struct ConversationVoiceConsentAlert: ViewModifier {
 /// Le transfert d'un message. La feuille se referme AVEC le groupe (#4005) ; une
 /// fois DÉMONTÉE, le plein écran du composeur peut prendre sa place — promouvoir
 /// plus tôt présenterait deux modaux à la fois.
-struct ConversationForwardSheet: ViewModifier {
+struct ConversationForwardSheet<Picker: View>: ViewModifier {
     @Binding var composerState: ConversationComposerState
-    let picker: (Message) -> AnyView
+    @ViewBuilder let picker: (Message) -> Picker
 
     func body(content: Content) -> some View {
         content.sheet(item: $composerState.forwardMessage, onDismiss: {

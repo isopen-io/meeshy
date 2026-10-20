@@ -39,7 +39,7 @@ final class RiverCatchUpWiringTests: XCTestCase {
     }
 
     private func conversationViewCode() throws -> String {
-        try normalized("Meeshy/Features/Main/Views/ConversationView.swift")
+        try normalized("Meeshy/Features/Main/Views/ConversationLayers/ConversationBodyStage.swift")
     }
 
     /// La branche `.river` seule, bornée par la branche `.summary` qui la
@@ -53,8 +53,8 @@ final class RiverCatchUpWiringTests: XCTestCase {
     /// l'hôte monte ; la couche est bornée par `ConversationSummaryLayer`, qui la suit.
     private func riverBranch() throws -> String {
         let host = try conversationViewCode()
-        XCTAssertTrue(host.contains("if readingModeController.mode == .river {"),
-                      "La branche de montage `mode == .river` a disparu de `ConversationView`.")
+        XCTAssertTrue(host.contains("if mode == .river {"),
+                      "La branche de montage `mode == .river` a disparu de la scène de la conversation.")
         let code = try normalized("Meeshy/Features/Main/Views/ConversationView+ReaderLayers.swift")
         let start = try XCTUnwrap(
             code.range(of: "struct ConversationRiverLayer: View {"),

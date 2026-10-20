@@ -59,7 +59,8 @@ final class ConversationStickerSendGuardTests: XCTestCase {
         // **La palette est la feuille unique du produit** (#9189) : ses
         // injecteurs vivent dans `MeeshyStickerSheet`, une fois, et
         // `StickerSheetHasOneMountSiteTests` les compte.
-        XCTAssertTrue(composer.contains("MeeshyStickerSheet("),
+        let layers = try appSource("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
+        XCTAssertTrue(layers.contains("MeeshyStickerSheet("),
                       "la porte n'a d'effet que si la palette est PRÉSENTÉE")
         let feuille = try appSource("Meeshy/Features/Main/Components/MeeshyStickerSheet.swift")
         for injecteur in [".storyPasteProvided()", ".storyStickerLibraryProvided()", ".stickerNearbyPlacesProvided()"] {

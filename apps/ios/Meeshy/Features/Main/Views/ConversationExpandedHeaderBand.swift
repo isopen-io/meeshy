@@ -2,52 +2,21 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// **La bande d'en-tête de conversation, en type NOMINAL** (#6194).
+/// **La bande d'en-tête de conversation, en type NOMINAL** (#6194, LOT-10).
 ///
-/// ## Ce qu'elle ferme
+/// Une struct `View` obtient son propre nœud dans l'AttributeGraph, et le graphe
+/// DÉROULE la pile avant d'évaluer son `body` ; une propriété calculée n'en
+/// obtient aucun, elle s'empile (#5837). Les cinq fentes (retour, contenu
+/// médian, avatar, verre, partage) sont des closures `() -> T` dont `T` est une
+/// struct nominale PETITE : la construction se fait dans le cadre de la
+/// closure, entré puis quitté, jamais dans celui de l'appelant — qui, sinon,
+/// réserve la place de TOUTES les branches de type opaque en `-Onone`.
 ///
-/// `ConversationView` déborde la pile du thread principal en résolvant les
-/// métadonnées de son propre en-tête. Trace relevée sur `Services CEO i16pm`
-/// (iOS 26.6.1) le 2026-09-12, en Debug ET en Release :
-///
-///     EXC_BAD_ACCESS / SIGSEGV
-///     « Could not determine thread index for stack guard region »
-///     swift_getTypeByMangledName → … (≈50 frames de démangleur récursif)
-///       ← __swift_instantiateConcreteTypeFromMangledNameV2
-///       ← ConversationView.expandedHeaderMidContent.getter
-///       ← ConversationView.expandedHeaderBandBody.getter
-///
-/// La chaîne fautive — `body → bodyWithSheets → bodyWithCovers →
-/// bodyWithLifecycle → bodyContent → floatingHeaderSection →
-/// expandedHeaderBand → expandedHeaderBandBody → expandedHeaderMidContent` —
-/// est faite de PROPRIÉTÉS CALCULÉES, et c'est tout le problème.
-///
-/// ## Pourquoi les six `AnyView` déjà posés là n'ont rien changé
-///
-/// `AnyView` plafonne le type vu par l'APPELANT, mais le getter matérialise
-/// quand même le type de son contenu **à sa propre profondeur de pile**. Six
-/// érasures successives (2026-08-17, 2026-08-21) ont donc fait migrer le crash
-/// de maillon en maillon sans jamais le supprimer — le fichier en porte encore
-/// les commentaires, chacun juste et chacun insuffisant.
-///
-/// **Seule une frontière NOMINALE coupe** : une struct `View` obtient son
-/// propre nœud dans l'AttributeGraph, et le graphe DÉROULE la pile avant
-/// d'évaluer son `body` (visible dans la trace : `AGGraphGetValue` réentre
-/// entre deux `body`). Une propriété calculée n'obtient aucun nœud — elle
-/// s'empile. C'est la leçon de #5837, qui a ramené `RootView` de 66 à 21
-/// niveaux : le tronc a été traité, cette branche ne l'avait pas été.
-///
-/// ## Pourquoi des closures plutôt que les vues elles-mêmes
-///
-/// Les maillons de l'en-tête dépendent d'une douzaine d'états de
-/// `ConversationView` (`composerState`, `headerState`, `viewModel`, `router`,
-/// le mode de lecture, deux couleurs d'accent…). Les recâbler un par un serait
-/// le vrai coût du découpage, et le risque. Une closure diffère la
-/// CONSTRUCTION : elle ne s'exécute plus dans le getter de l'appelant, mais
-/// dans le `body` de cette struct — c'est-à-dire après que le graphe a déroulé
-/// la pile. Le bénéfice recherché est là ; le câblage fin des dépendances
-/// reste à faire, et c'est le suivi de cette issue.
-struct ConversationExpandedHeaderBand: View {
+/// Une fente ne porte jamais une chaîne de modificateurs ni une valeur de vue
+/// stockée : ce qui doit être modifié l'est dans le `body` du type qui
+/// l'accueille. Gardes : `ConversationScreenTypeIdentityGuardTests`,
+/// `ConversationViewBodyTypeDepthTests`.
+struct ConversationExpandedHeaderBand<Back: View, Mid: View, Avatar: View, Background: View, Share: View>: View {
 
     /// Ce que la bande montre, résolu par `ConversationHeaderLayout` — passé en
     /// VALEUR, jamais en observant `composerState` : une feuille qui observe un
@@ -55,13 +24,13 @@ struct ConversationExpandedHeaderBand: View {
     /// (« Zero Unnecessary Re-render »).
     let layout: ConversationHeaderLayout
 
-    let backButton: () -> AnyView
-    let midContent: () -> AnyView
-    let avatar: () -> AnyView
-    let background: () -> AnyView
+    @ViewBuilder let backButton: () -> Back
+    @ViewBuilder let midContent: () -> Mid
+    @ViewBuilder let avatar: () -> Avatar
+    @ViewBuilder let background: () -> Background
     /// « Partager » à côté de l'avatar (#10206) — vide quand la conversation
     /// n'a pas d'adresse publique.
-    var share: () -> AnyView = { AnyView(EmptyView()) }
+    @ViewBuilder let share: () -> Share
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -212,21 +181,15 @@ struct ConversationHeaderLayout: Equatable {
 
 /// **Le contenu médian de la bande, en type NOMINAL** (#6194).
 ///
-/// C'est le getter de ce maillon que la trace désigne, juste sous
-/// `__swift_instantiateConcreteTypeFromMangledNameV2`. Il portait déjà un
-/// `AnyView` — insuffisant, pour la raison dite plus haut : l'érasure borne le
-/// type de l'appelant, pas la pile du getter.
-///
-/// Le gain de la forme nominale est ici DOUBLE : elle crée un nœud d'attribut
-/// (le graphe déroule la pile), **et** son nom remplace tout le sous-arbre
-/// structurel dans les mangled names de ses hôtes — c'est ce dernier point qui
-/// raccourcit la récursion du démangleur, laquelle occupait ~50 des 211 frames
-/// relevées.
-struct ConversationHeaderMidContent: View {
+/// Le gain de la forme nominale est double : elle crée un nœud d'attribut (le
+/// graphe déroule la pile), et son nom remplace tout le sous-arbre structurel
+/// dans les mangled names de ses hôtes — ce qui raccourcit la récursion du
+/// démangleur.
+struct ConversationHeaderMidContent<TitleAndTags: View, Actions: View>: View {
 
     let layout: ConversationHeaderLayout
-    let titleAndTags: () -> AnyView
-    let actionButtons: () -> AnyView
+    @ViewBuilder let titleAndTags: () -> TitleAndTags
+    @ViewBuilder let actionButtons: () -> Actions
     /// La bascule de l'en-tête quand l'avatar ouvre une fiche (#10300) : la zone
     /// libre — l'espace avant les actions replié, la colonne du titre dépliée.
     var onToggleBand: (() -> Void)? = nil
@@ -267,11 +230,11 @@ struct ConversationHeaderMidContent: View {
 /// défilement et revient à l'arrêt. Le retour, l'avatar et le titre ne la
 /// suivent pas — on doit pouvoir quitter la conversation et savoir où l'on est,
 /// même en plein défilement.
-struct ConversationHeaderActionsCluster: View {
+struct ConversationHeaderActionsCluster<Call: View, Search: View, ReadingMode: View>: View {
 
-    let callButtons: () -> AnyView
-    let searchButton: () -> AnyView
-    let readingModeCluster: () -> AnyView
+    @ViewBuilder let callButtons: () -> Call
+    @ViewBuilder let searchButton: () -> Search
+    @ViewBuilder let readingModeCluster: () -> ReadingMode
 
     var body: some View {
         HStack(spacing: 0) {
@@ -285,47 +248,16 @@ struct ConversationHeaderActionsCluster: View {
 
 /// **La section d'en-tête flottante, en type NOMINAL** (#6213 bis).
 ///
-/// ## Ce qu'elle ferme, et pourquoi #6194 ne suffisait pas
-///
-/// #6194 a supprimé la récursion du démangleur : la trace du 2026-09-12 22:50
-/// ne contient plus une seule frame `swift_getTypeByMangledName`, et la pile
-/// est passée de 211 à 149 cadres. L'app plantait pourtant toujours à
-/// l'ouverture d'une conversation, du même `signal 11`.
-///
-/// **Parce que la cause n'a jamais été le démangleur — c'était la TAILLE des
-/// cadres, et le démangleur n'en était qu'un symptôme.** Mesuré sur
-/// `Services CEO i16pm` (pile principale de 1008 Ko) par `CrashStackDumper`,
-/// qui écrit désormais l'adresse fautive et le palmarès des cadres :
-///
-///     signal 0xb  si_addr=0x16b4579e0  stack_low=0x16b458000
-///     → l'adresse fautive est 1 568 octets SOUS le plancher : page de garde.
-///
-///     565 712 o   floatingHeaderSectionBody   ← 55 % de la pile, UN cadre
-///     116 752 o   bodyWithLifecycle
-///      81 872 o   bodyContent
-///      64 656 o   copie de State<ConversationComposerState>
-///         176 o   expandedHeaderBand          ← la struct nominale de #6194
-///
-/// La dernière ligne est la démonstration : le maillon converti en type
-/// nominal ne pèse plus **176 octets**, quand son parent resté propriété
-/// calculée en pèse **565 712**. Le remède de #6194 était le bon ; il n'avait
-/// simplement pas été appliqué assez haut dans la chaîne.
-///
-/// ## Le mécanisme, en une phrase
+/// Mesuré sur `Services CEO i16pm` (pile principale de 1008 Ko) par
+/// `CrashStackDumper` : le cadre de la propriété calculée qui portait ces
+/// branches pesait **565 712 octets** (55 % de la pile), quand la struct
+/// nominale de #6194 ne pèse plus que 176 octets.
 ///
 /// En `-Onone`, une propriété qui rend `some View` est retournée
-/// INDIRECTEMENT : l'APPELANT réserve la place du type concret. Quand cet
-/// appelant porte trois branches (`if/else if/else`) plus une conditionnelle,
-/// il réserve la place de TOUTES — celles qui ne s'exécuteront pas comprises.
-/// Une closure `() -> AnyView` renverse cela : la construction se fait dans le
-/// cadre de la CLOSURE, entré puis quitté, et l'appelant ne voit passer que
-/// seize octets. Les branches ne s'additionnent plus, elles se succèdent.
-///
-/// C'est pourquoi `AnyView` posé sur la branche (`AnyView(anonymousHeaderBar)`)
-/// ne servait à rien ici : l'érasure a lieu APRÈS que l'appelant a réservé la
-/// place du type opaque. Elle borne ce qui SORT, jamais ce qui a été réservé
-/// pour entrer.
-struct ConversationFloatingHeaderSection: View {
+/// INDIRECTEMENT : l'APPELANT réserve la place du type concret, et avec trois
+/// branches plus une conditionnelle, il réserve celle de TOUTES. Une closure
+/// `() -> T` renverse cela : les branches se succèdent au lieu de s'additionner.
+struct ConversationFloatingHeaderSection<Anonymous: View, Typing: View, Band: View, SearchBarView: View>: View {
 
     let isAnonymous: Bool
     let isTyping: Bool
@@ -334,13 +266,18 @@ struct ConversationFloatingHeaderSection: View {
     /// n'observe aucun objet, elle reçoit ce dont ses transitions dépendent.
     let showOptions: Bool
     let hidesHeaderActions: Bool
+    /// Focal/Script + défilement : le header entier glisse vers le bord HAUT en
+    /// fondant (loi `hidesEntireHeader`, `EdgeHiddenChrome`), sans démontage ;
+    /// les touches passent au fil. Appliqué DANS le corps : une fente ne porte
+    /// jamais une chaîne de modificateurs.
+    let hidesBandForScroll: Bool
     /// La bande réserve-t-elle le haut de la liste ? `ConversationHeaderLayout.measuresBandHeight`.
     let measuresBandHeight: Bool
 
-    let anonymousBar: () -> AnyView
-    let typingBar: () -> AnyView
-    let expandedBand: () -> AnyView
-    let searchBar: () -> AnyView
+    @ViewBuilder let anonymousBar: () -> Anonymous
+    @ViewBuilder let typingBar: () -> Typing
+    @ViewBuilder let expandedBand: () -> Band
+    @ViewBuilder let searchBar: () -> SearchBarView
     /// Hauteur de la bande REPLIÉE (#7998) : elle grandit avec Dynamic Type,
     /// et la pill de jour doit démarrer sous elle. Dépliée, la pill se retire
     /// — sa hauteur n'est pas publiée, pour ne pas faire sauter le fil.
@@ -354,6 +291,7 @@ struct ConversationFloatingHeaderSection: View {
                 typingBar()
             } else {
                 expandedBand()
+                    .hiddenTowardsEdge(hidesBandForScroll, .top)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
                         if measuresBandHeight { onBandHeightChange(height) }
                     }
@@ -361,6 +299,7 @@ struct ConversationFloatingHeaderSection: View {
 
             if showSearch {
                 searchBar()
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             Spacer()
@@ -372,6 +311,128 @@ struct ConversationFloatingHeaderSection: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSearch)
+        .animation(.easeOut(duration: FocalMetrics.HiddenChrome.easeOut), value: hidesBandForScroll)
+    }
+}
+
+/// **La rangée catégorie, puis étiquettes colorées, défilable** (ex-`headerTagsRow`).
+///
+/// F11 (revue adversariale 2026-08-25) : elle reçoit la conversation VIVANTE —
+/// un changement de mode de chiffrement ou un tag ajouté ou retiré se reflète
+/// sur CETTE bande sans réouverture, comme la bande d'avatars voisine.
+struct ConversationHeaderTagsRow: View {
+    let conversation: Conversation?
+    let section: ConversationSection?
+    /// La pastille d'engagement ne se lit que sous le titre de l'en-tête DÉPLIÉ.
+    let showsEngagement: Bool
+    let accentColor: String
+    let successColor: Color
+
+    private var isEncrypted: Bool { conversation?.encryptionMode != nil }
+
+    private var hasTags: Bool {
+        section != nil || !(conversation?.tags.isEmpty ?? true) || isEncrypted
+    }
+
+    var body: some View {
+        if hasTags {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: MeeshySpacing.xs) {
+                    if showsEngagement { engagementBadge }
+                    if isEncrypted { lockIcon }
+                    if let section { sectionChip(section) }
+                    if let conversation {
+                        ForEach(conversation.tags) { tag in tagChip(name: tag.name, hex: tag.color) }
+                    }
+                }
+            }
+        } else if showsEngagement {
+            engagementBadge
+        }
+    }
+
+    private var engagementBadge: some View {
+        ConversationEngagementBadge(
+            conversationId: conversation?.id ?? "",
+            seed: conversation?.viewerEngagement,
+            accentColor: accentColor
+        )
+    }
+
+    private var lockIcon: some View {
+        Image(systemName: "lock.fill")
+            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+            .foregroundColor(successColor)
+            .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Conversation chiffrée", bundle: .main))
+    }
+
+    private func sectionChip(_ section: ConversationSection) -> some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            Image(systemName: section.icon)
+                .font(MeeshyFont.relative(7, weight: .bold))
+                .accessibilityHidden(true)
+            Text(section.name)
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
+        }
+        .foregroundColor(Color(hex: section.color))
+        .padding(.horizontal, MeeshySpacing.xs)
+        .padding(.vertical, MeeshySpacing.xxs)
+        .background(chipBackground(hex: section.color))
+    }
+
+    private func tagChip(name: String, hex: String) -> some View {
+        Text(name)
+            .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
+            .foregroundColor(Color(hex: hex))
+            .padding(.horizontal, MeeshySpacing.xs)
+            .padding(.vertical, MeeshySpacing.xxs)
+            .background(chipBackground(hex: hex))
+    }
+
+    private func chipBackground(hex: String) -> some View {
+        Capsule()
+            .fill(Color(hex: hex).opacity(MeeshyOpacity.light))
+            .overlay(
+                Capsule()
+                    .stroke(Color(hex: hex).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
+            )
+    }
+}
+
+/// L'emplacement de la recherche dans la grappe d'actions : la loupe, ou — dans
+/// l'aperçu (#9031) — la porte vers la conversation complète qui prend sa place.
+struct ConversationHeaderSearchSlot: View {
+    let previewMode: Bool
+    let accentColor: String
+    let secondaryColor: String
+    let onOpenFull: () -> Void
+    let onSearch: () -> Void
+
+    var body: some View {
+        if previewMode {
+            ConversationHeaderOpenFullButton(accentColor: accentColor, onOpen: onOpenFull)
+        } else {
+            ConversationHeaderSearchButton(accentColor: accentColor, secondaryColor: secondaryColor, action: onSearch)
+        }
+    }
+}
+
+/// LA PORTE VERS LA CONVERSATION COMPLÈTE, dans l'aperçu (#8822). Elle remplace
+/// le calque transparent posé sur tout le fil, qui l'ouvrait au toucher — et
+/// volait ainsi le DÉFILEMENT à la liste.
+struct ConversationHeaderOpenFullButton: View {
+    let accentColor: String
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button {
+            HapticFeedback.light()
+            onOpen()
+        } label: {
+            HeaderOpenFullGlyph(accentColor: accentColor)
+        }
+        .accessibilityLabel(String(localized: "conversation.preview.openFull", defaultValue: "Ouvrir la conversation", bundle: .main))
+        .accessibilityIdentifier("conversation.preview.openFull")
     }
 }
 
