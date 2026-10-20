@@ -4,7 +4,7 @@ import SwiftUI
 @testable import MeeshySDK
 
 @MainActor
-final class Plan2DTrackAccessibilityTests: XCTestCase {
+final class Plan2DTrackAccessibilityActionsTests: XCTestCase {
 
     private final class Recorder {
         var events: [String] = []
