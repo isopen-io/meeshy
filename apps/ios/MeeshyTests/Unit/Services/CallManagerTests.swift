@@ -5863,7 +5863,7 @@ final class SignalingDegradedIndicatorTests: XCTestCase {
     }
 }
 
-// MARK: - call:error non-fatal whitelist (chaos-test prod 2026-07-02)
+// MARK: - call:error disposition wiring (chaos-test prod 2026-07-02)
 
 @MainActor
 final class CallErrorNonFatalWhitelistTests: XCTestCase {
@@ -5872,56 +5872,41 @@ final class CallErrorNonFatalWhitelistTests: XCTestCase {
         return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
-    func test_targetNotFound_isNonFatal() throws {
-        // Chaos-test prod (callId 6a466e05a081f94fac47159e): after a gateway
-        // restart, the peer's socket churned and a relayed signal drew
-        // call:error TARGET_NOT_FOUND — the callee tore down a call whose P2P
-        // media was perfectly healthy, then the peer's ICE-restart offers hit
-        // "Signal offer for unknown call" and the caller died on its watchdog.
-        // A transient relay failure must NEVER end an established call.
+    func test_callErrorSink_appliesThePureDisposition_beforeAnyTeardown() throws {
         let source = try callManagerSource()
-        XCTAssertTrue(
-            source.contains("event.code == \"TARGET_NOT_FOUND\""),
-            "call:error TARGET_NOT_FOUND (peer momentarily has no socket in the room — churn or " +
-            "reconnect in flight) must be whitelisted as non-fatal like INVALID_SIGNAL and " +
-            "RATE_LIMIT_EXCEEDED; ICE is redundant by design and the answer path retries"
-        )
-        guard let checkRange = source.range(of: "event.code == \"TARGET_NOT_FOUND\""),
+        guard let resolveRange = source.range(of: "CallErrorDisposition.resolve("),
               let teardownRange = source.range(of: "self.failCall(message)") else {
-            XCTFail("expected the whitelist check and the call:error teardown to coexist"); return
+            XCTFail("expected the disposition call and the call:error teardown to coexist"); return
         }
         XCTAssertLessThan(
-            checkRange.lowerBound, teardownRange.lowerBound,
-            "the TARGET_NOT_FOUND early-return must guard BEFORE the call:error teardown"
+            resolveRange.lowerBound, teardownRange.lowerBound,
+            "the call:error disposition must be decided BEFORE the teardown — relay codes " +
+            "(TARGET_NOT_FOUND, RATE_LIMIT_EXCEEDED, INVALID_SIGNAL) and errors naming another call never end a healthy call"
         )
     }
 
-    func test_callErrorForADifferentCall_isIgnored_beforeAnyCodeSpecificHandling() throws {
-        // Root-cause fix for the class of bug behind test_targetNotFound_isNonFatal
-        // above: TARGET_NOT_FOUND/RATE_LIMIT_EXCEEDED/INVALID_SIGNAL were each
-        // whitelisted one prod incident at a time because `CallError` carried no
-        // callId — every code had to be manually proven safe. Any error naming a
-        // DIFFERENT call than the one currently active must be ignored regardless
-        // of its code, and this guard must run before the per-code whitelist so a
-        // future/unlisted code can't still tear down an unrelated healthy call.
+    func test_callErrorSink_endsTheCallOnlyThroughTheSurfaceDisposition() throws {
         let source = try callManagerSource()
-        XCTAssertTrue(
-            source.contains("errorCallId != self.currentCallId"),
-            "call:error must guard on event.callId vs currentCallId — an error for a different " +
-            "call must never affect this device's active, healthy call"
-        )
-        guard let callIdGuardRange = source.range(of: "errorCallId != self.currentCallId"),
-              let targetNotFoundRange = source.range(of: "event.code == \"TARGET_NOT_FOUND\""),
+        guard let surfaceRange = source.range(of: "case .surface(let endsCall):"),
               let teardownRange = source.range(of: "self.failCall(message)") else {
-            XCTFail("expected the callId guard, the per-code whitelist, and the teardown to coexist"); return
+            XCTFail("expected the surface disposition and the call:error teardown to coexist"); return
         }
-        XCTAssertLessThan(
-            callIdGuardRange.lowerBound, targetNotFoundRange.lowerBound,
-            "the callId scoping guard must run BEFORE the per-code whitelist checks"
+        XCTAssertLessThan(surfaceRange.lowerBound, teardownRange.lowerBound)
+        XCTAssertTrue(
+            source.contains("if endsCall { self.failCall(message) }"),
+            "failCall must only run when the disposition says the error ends the call"
         )
-        XCTAssertLessThan(
-            callIdGuardRange.lowerBound, teardownRange.lowerBound,
-            "the callId scoping guard must run BEFORE the call:error teardown"
+    }
+
+    func test_callErrorSink_reconcilesCallEndedThroughTheCanonicalRemoteEndPath() throws {
+        let source = try callManagerSource()
+        guard let reconcileRange = source.range(of: "case .reconcileEnd(let callId):") else {
+            XCTFail("reconcileEnd disposition not handled"); return
+        }
+        let tail = String(source[reconcileRange.upperBound...].prefix(400))
+        XCTAssertTrue(
+            tail.contains("self.handleRemoteEnd(callId: callId)"),
+            "CALL_ENDED is a terminal-state reconciliation, not a failure — it must route through handleRemoteEnd"
         )
     }
 }
