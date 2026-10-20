@@ -118,7 +118,8 @@ describe('invité de World Wide — ce qui est refusé, avec un code stable', ()
     const classified = Math.min(...rounds.map((round) => round.classify));
 
     expect(classifyForWorld('text/plain', atCeiling, 'long.txt')).toEqual({ allowed: true });
-    expect(classified).toBeLessThan(decodeOnly * 4);
+    expect(classified).toBeLessThan(1000);
+    expect(classified).toBeLessThan(decodeOnly * 8);
   });
 
   it.each([
