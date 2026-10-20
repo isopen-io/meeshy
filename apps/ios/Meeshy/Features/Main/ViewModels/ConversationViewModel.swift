@@ -537,6 +537,7 @@ class ConversationViewModel: ObservableObject {
     let messageSocket: MessageSocketProviding
     let networkMonitor: NetworkMonitorProviding
     let offlineQueue: OfflineMessageQueueing
+    let sendCoordinator: any ConversationSendCoordinatorProviding
     /// #8303 — les flammes-œil vues pendant la visite, et ce que la sortie en fait.
     var afterReadVisit = AfterReadVisit()
     let afterReadConsumer: AfterReadConsumptionProviding
@@ -630,7 +631,8 @@ class ConversationViewModel: ObservableObject {
         messageEncryptor: DirectMessageEncrypting = SessionManager.shared,
         afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared,
         protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared,
-        receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared
+        receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared,
+        sendCoordinator: (any ConversationSendCoordinatorProviding)? = nil
     ) {
         self.receivedMediaAutoSaver = receivedMediaAutoSaver
         self.afterReadConsumer = afterReadConsumer
@@ -659,17 +661,12 @@ class ConversationViewModel: ObservableObject {
         self.messageSocket = messageSocket
         self.networkMonitor = networkMonitor
         self.offlineQueue = offlineQueue
+        self.sendCoordinator = sendCoordinator ?? ConversationSendCoordinator(conversationId: conversationId, messageService: messageService, messageSocket: messageSocket, offlineQueue: offlineQueue, persistence: dependencies.persistence)
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
         self.startupDependencies = dependencies
         self.anonymousSession = anonymousSession
 
-        // Split-handler scaffolding — see ConversationStateStore et al.
-        // Built before MessageStore/socket so subsequent delegations always
-        // have a non-nil handler to call. The handlers don't drive any state
-        // yet; they mirror the legacy @Published values via the messages
-        // sink below so `searchHandler` / `mediaHandler` can read off
-        // `stateStore.messages` without forking the source of truth.
         let stateStore = ConversationStateStore()
         self.stateStore = stateStore
         self.commandHandler = ConversationCommandHandler(
