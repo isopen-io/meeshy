@@ -61,24 +61,6 @@ final class DatabaseMigrationTableTests: XCTestCase {
         "search_idx_v1_conversations_users_fts5",
     ]
 
-    private func registeredMessage() -> [String] {
-        var migrator = DatabaseMigrator()
-        MessageDatabaseMigrations.registerAll(in: &migrator)
-        return migrator.migrations
-    }
-
-    private func registeredFeed() -> [String] {
-        var migrator = DatabaseMigrator()
-        FeedDatabaseMigrations.registerAll(in: &migrator)
-        return migrator.migrations
-    }
-
-    private func registeredSearch() -> [String] {
-        var migrator = DatabaseMigrator()
-        SearchIndexMigrations.registerAll(in: &migrator)
-        return migrator.migrations
-    }
-
     private func appliedIdentifiers(_ queue: DatabaseQueue) throws -> [String] {
         try queue.read { db in
             try String.fetchAll(db, sql: "SELECT identifier FROM grdb_migrations ORDER BY rowid")
@@ -96,16 +78,34 @@ final class DatabaseMigrationTableTests: XCTestCase {
         }
     }
 
-    func test_messageRegistration_identifiers_areExactlyTheHistoricalOrder() {
-        XCTAssertEqual(registeredMessage(), Self.messageIdentifiers)
+    func test_messageTable_identifiers_areExactlyTheHistoricalOrder() {
+        XCTAssertEqual(MessageDatabaseMigrations.all.map(\.identifier), Self.messageIdentifiers)
     }
 
-    func test_feedRegistration_identifiers_areExactlyTheHistoricalOrder() {
-        XCTAssertEqual(registeredFeed(), Self.feedIdentifiers)
+    func test_feedTable_identifiers_areExactlyTheHistoricalOrder() {
+        XCTAssertEqual(FeedDatabaseMigrations.all.map(\.identifier), Self.feedIdentifiers)
     }
 
-    func test_searchRegistration_identifiers_areExactlyTheHistoricalOrder() {
-        XCTAssertEqual(registeredSearch(), Self.searchIdentifiers)
+    func test_searchIndexTable_identifiers_areExactlyTheHistoricalOrder() {
+        XCTAssertEqual(SearchIndexMigrations.all.map(\.identifier), Self.searchIdentifiers)
+    }
+
+    func test_appTable_identifiers_areExactlyTheHistoricalOrder() {
+        XCTAssertEqual(AppDatabaseMigrations.all.map(\.identifier), Self.appIdentifiers)
+    }
+
+    func test_registerAll_registersExactlyTheTable() {
+        var message = DatabaseMigrator()
+        MessageDatabaseMigrations.registerAll(in: &message)
+        var feed = DatabaseMigrator()
+        FeedDatabaseMigrations.registerAll(in: &feed)
+        var search = DatabaseMigrator()
+        SearchIndexMigrations.registerAll(in: &search)
+
+        XCTAssertEqual(message.migrations, MessageDatabaseMigrations.all.map(\.identifier))
+        XCTAssertEqual(feed.migrations, FeedDatabaseMigrations.all.map(\.identifier))
+        XCTAssertEqual(search.migrations, SearchIndexMigrations.all.map(\.identifier))
+        XCTAssertEqual(AppDatabase.migrator().migrations, AppDatabaseMigrations.all.map(\.identifier))
     }
 
     func test_appDatabase_appliedIdentifiers_areExactlyTheHistoricalOrder() throws {
