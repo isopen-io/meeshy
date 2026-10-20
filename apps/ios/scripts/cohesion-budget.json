@@ -267,7 +267,7 @@
     "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Panels.swift::iPadPanelDestination.body": 162,
     "apps/ios/Meeshy/Features/Main/Views/iPadRootView.swift::iPadRootView.body": 135,
     "apps/ios/Meeshy/MeeshyApp+Lifecycle.swift::MeeshyApp.sessionChanged": 148,
-    "apps/ios/Meeshy/MeeshyApp.swift::MeeshyApp.body": 653,
+    "apps/ios/Meeshy/MeeshyApp.swift::MeeshyApp.body": 649,
     "apps/ios/MeeshyNotificationExtension/NSEMessagePrePersister.swift::NSEMessagePrePersister.prePersist": 108,
     "apps/ios/MeeshyNotificationExtension/NotificationService.swift::NotificationService.applyCommunicationIntent": 143,
     "packages/MeeshySDK/Sources/MeeshySDK/Audio/AudioEditEngine.swift::AudioEditEngine.render": 99,
@@ -321,9 +321,6 @@
     "packages/MeeshySDK/Sources/MeeshySDK/Utils/ThumbHash.swift::rgbaToThumbHash": 169,
     "packages/MeeshySDK/Sources/MeeshySDK/Utils/ThumbHash.swift::thumbHashToRGBA": 156,
     "packages/MeeshySDK/Sources/MeeshyUI/Auth/MeeshyForgotPasswordView.swift::MeeshyForgotPasswordView.phoneFlow": 89,
-    "packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityDetailView.swift::CommunityDetailView.body": 103,
-    "packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityListView.swift::VibrantCommunityCard.body": 91,
-    "packages/MeeshySDK/Sources/MeeshyUI/Community/CommunitySettingsView.swift::CommunitySettingsView.visualSection": 99,
     "packages/MeeshySDK/Sources/MeeshyUI/Conversation/ConversationScrollControlsView.swift::ConversationScrollControlsView.unreadPreviewContent": 89,
     "packages/MeeshySDK/Sources/MeeshyUI/Location/LocationFullscreenView.swift::LocationFullscreenView.bottomCard": 82,
     "packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlayerView+Transcription.swift::AudioPlayerView.transcriptionBlock": 90,
@@ -337,8 +334,6 @@
     "packages/MeeshySDK/Sources/MeeshyUI/Media/SyntaxHighlighter.swift::LanguageDefinition.definition": 361,
     "packages/MeeshySDK/Sources/MeeshyUI/Media/SyntaxHighlighter.swift::SyntaxHighlighter.tokenize": 206,
     "packages/MeeshySDK/Sources/MeeshyUI/Navigation/CollapsibleHeader.swift::CollapsibleHeader.body": 146,
-    "packages/MeeshySDK/Sources/MeeshyUI/Notifications/NotificationListView.swift::NotificationListView.notificationList": 95,
-    "packages/MeeshySDK/Sources/MeeshyUI/Notifications/NotificationListView.swift::NotificationListViewModel.subscribeToRealTimeEvents": 88,
     "packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyAvatar.swift::MeeshyAvatar.body": 93,
     "packages/MeeshySDK/Sources/MeeshyUI/Primitives/UserIdentityBar.swift::UserIdentityBar.messageBubble": 101,
     "packages/MeeshySDK/Sources/MeeshyUI/Primitives/UserIdentityBar.swift::UserIdentityBar.renderElement": 117,
@@ -443,6 +438,6 @@
     "MeeshyUI::StoryComposerView": 4181,
     "MeeshyUI::StoryComposerViewModel": 4510,
     "MeeshyUI::TimelineViewModel": 1617,
-    "MeeshyUI::UserProfileSheet": 1623
+    "MeeshyUI::UserProfileSheet": 1617
   }
 }

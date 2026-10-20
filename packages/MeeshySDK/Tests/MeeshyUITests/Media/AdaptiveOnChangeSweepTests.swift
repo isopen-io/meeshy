@@ -66,12 +66,12 @@ final class AdaptiveOnChangeSweepTests: XCTestCase {
                       "ErrorBannerView must react to error changes through adaptiveOnChange")
     }
 
-    func test_communitySettingsView_usesAdaptiveOnChange_notRawOnChange() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Community/CommunitySettingsView.swift")
+    func test_communitySettingsScreen_usesAdaptiveOnChange_notRawOnChange() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Community/CommunitySettingsScreen.swift")
         XCTAssertFalse(source.contains(".onChange(of: viewModel.localEmoji) { newValue in"),
-                        "CommunitySettingsView must not use the deprecated single-param .onChange")
+                        "CommunitySettingsScreen must not use the deprecated single-param .onChange")
         XCTAssertTrue(source.contains(".adaptiveOnChange(of: viewModel.localEmoji) { _, newValue in"),
-                      "CommunitySettingsView must clamp emoji input through adaptiveOnChange")
+                      "CommunitySettingsScreen must clamp emoji input through adaptiveOnChange")
     }
 
     func test_unifiedAudioRecorderSheet_usesAdaptiveOnChange_notRawOnChange() throws {

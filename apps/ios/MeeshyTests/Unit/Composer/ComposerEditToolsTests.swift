@@ -200,7 +200,7 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(toucher.contains("openPieceRetouch(attachment.id)"), "toucher une pièce ouvre la retouche de la caméra")
         let couches = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
         XCTAssertTrue(couches.contains("ConversationPieceRetouch(piece: piece"), "la retouche est montée")
-        let porte = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ConversationImageSceneDoor.swift")
+        let porte = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ConversationPieceRetouch.swift")
         XCTAssertTrue(porte.contains("ComposerCaptureMount(session: session"), "le même montage que la caméra")
         let scene = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureStage.swift")
         XCTAssertTrue(scene.contains("!session.phase.isEditing\n            && ComposerSceneCameraSurface.shown("),
@@ -248,6 +248,66 @@ final class ComposerEditToolsTests: XCTestCase {
             XCTAssertTrue(code.contains("ConversationPieceRetouch(source: .image("))
             XCTAssertTrue(code.contains("ConversationPieceRetouch(source: .video("))
         }
+    }
+
+    // MARK: - #11170 — la feuille du fil retouche dans la même retouche
+
+    /// **La feuille de création d'un post retouche ses images et ses vidéos
+    /// dans la retouche de la caméra** (#11170, « un seul éditeur ») : une
+    /// pièce en attente, et une vidéo juste choisie avant qu'elle rejoigne la
+    /// publication. Plus aucune scène du composer n'y est montée.
+    func test_11170_theFeedSheet_retouchesItsMedia_inTheCaptureRetouch() throws {
+        let feuille = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
+        XCTAssertFalse(feuille.contains("ConversationImageSceneEditor("), "plus de scène pour une image en attente")
+        XCTAssertFalse(feuille.contains("ConversationVideoSceneEditor("), "plus de scène pour une vidéo")
+        XCTAssertTrue(feuille.contains("ConversationPieceRetouch(piece: piece"), "une pièce en attente se retouche")
+        XCTAssertTrue(feuille.contains("ConversationPieceRetouch(source: .video(url)"),
+                      "une vidéo juste choisie se retouche avant de rejoindre la publication")
+        XCTAssertTrue(feuille.contains("ComposerRetouchSeries.candidates(attachments: pendingAttachments"),
+                      "les mêmes pièces que la conversation : une image fixe ou une vidéo, jamais un GIF")
+        XCTAssertTrue(feuille.contains("removeSheetAttachment(id: piece.attachmentId)"),
+                      "« Abandonner » retire la pièce en attente")
+    }
+
+    /// **« Terminé » rend la pièce À SA PLACE** : une image retouchée remplace
+    /// la pièce, une vidéo retouchée remplace la vidéo ; seule une image
+    /// devenue vidéo repasse par la préparation d'une vidéo.
+    func test_11170_aRetouchedPiece_landsInItsPlace() throws {
+        let image = UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 30, height: 40))
+        let rendu = URL(fileURLWithPath: "/tmp/rendu.mp4")
+        XCTAssertEqual(FeedSheetRetouchLanding(.image(image), from: .image), .replaceImage(image))
+        XCTAssertEqual(FeedSheetRetouchLanding(.image(image), from: .video), .replaceImage(image))
+        XCTAssertEqual(FeedSheetRetouchLanding(.video(rendu), from: .video), .replaceVideo(rendu))
+        XCTAssertEqual(FeedSheetRetouchLanding(.video(rendu), from: .image), .swapForVideo(rendu))
+    }
+
+    /// **Une vidéo juste choisie s'ouvre par une COPIE** : « Abandonner »
+    /// efface la copie, jamais le fichier choisi, et rien n'est ajouté.
+    func test_11170_aChosenVideo_opensOnACopy_andAbandoningKeepsTheChosenFile() async throws {
+        let choisie = try Self.piece(.video).fileURL
+        let session = ConversationPieceRetouchOpening.session(
+            gallery: MockComposerGallery(),
+            loopPlayerFactory: { _ in MockComposerLoopPlayer(duration: 6, hasAudio: true) })
+        let ouverte = await ConversationPieceRetouchOpening.open(.video(choisie), in: session)
+        XCTAssertTrue(ouverte)
+        guard case .editing(.video(let url)) = session.phase else { return XCTFail("la vidéo est en retouche") }
+        XCTAssertNotEqual(url, choisie, "la retouche lit une copie")
+        XCTAssertFalse(session.savePolicy().savesRenderOnFinish(alreadySaved: false),
+                       "aucun enregistrement automatique en galerie")
+        session.cancelEditing()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: choisie.path), "le fichier choisi reste")
+    }
+
+    /// **Les portes de scène de la conversation ont quitté le dépôt** : la
+    /// retouche de la caméra est l'éditeur UNIQUE d'une image ou d'une vidéo.
+    func test_11170_theConversationSceneDoors_areGone() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: racine.appendingPathComponent("Meeshy/Features/Main/Composer/ConversationImageSceneDoor.swift").path))
+        let retouche = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ConversationPieceRetouch.swift")
+        XCTAssertFalse(retouche.contains("MeeshyComposerHost("), "la retouche ne monte pas le meuble")
     }
 
     private static func settles(_ condition: () -> Bool) -> Bool {

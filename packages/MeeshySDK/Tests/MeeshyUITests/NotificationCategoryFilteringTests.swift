@@ -11,49 +11,12 @@ import XCTest
 @MainActor
 final class NotificationCategoryFilteringTests: XCTestCase {
 
-    private final class MockNotificationService: NotificationServiceProviding, @unchecked Sendable {
-        struct Appel: Equatable {
-            let unreadOnly: Bool
-            let types: [String]
-            let hideReadTypes: [String]
-            let cursor: String?
-        }
-
-        var pages: [NotificationListResponse] = []
-        private(set) var appels: [Appel] = []
-
-        func list(
-            offset: Int?,
-            cursor: String?,
-            limit: Int,
-            unreadOnly: Bool,
-            types: [String],
-            hideReadTypes: [String]
-        ) async throws -> NotificationListResponse {
-            appels.append(Appel(unreadOnly: unreadOnly, types: types, hideReadTypes: hideReadTypes, cursor: cursor))
-            guard !pages.isEmpty else { throw URLError(.badServerResponse) }
-            return pages.removeFirst()
-        }
-
-        func unreadCount() async throws -> Int { 0 }
-        func markAsRead(notificationId: String) async throws {}
-    }
-
     private func notification(_ id: String, type: MeeshyNotificationType, isRead: Bool = false) -> APINotification {
         APINotification(
             id: id, userId: "u1", type: type.rawValue, priority: nil,
             content: "n", actor: nil, context: nil, metadata: nil,
             state: NotificationState(isRead: isRead, readAt: nil, createdAt: "2026-09-30T00:00:00.000Z", expiresAt: nil),
             delivery: nil
-        )
-    }
-
-    private func page(_ rows: [APINotification], hasMore: Bool = false, nextCursor: String? = nil) -> NotificationListResponse {
-        NotificationListResponse(
-            success: true,
-            data: rows,
-            pagination: NotificationPagination(total: nil, offset: nil, limit: 30, hasMore: hasMore, nextCursor: nextCursor),
-            unreadCount: nil
         )
     }
 
@@ -140,48 +103,5 @@ final class NotificationCategoryFilteringTests: XCTestCase {
 
     func test_nonLues_demandeUnreadOnly() {
         XCTAssertTrue(NotificationCategory.unread.serverQuery.unreadOnly)
-    }
-
-    // MARK: - Le ViewModel demande la catégorie à la passerelle
-
-    @MainActor
-    func test_select_chargeLaPageServeurDeLaCategorie() async {
-        let mock = MockNotificationService()
-        mock.pages = [page([notification("men", type: .userMentioned)], hasMore: true, nextCursor: "ancre")]
-        let vm = NotificationListViewModel(service: mock)
-
-        await vm.select(.mentions)
-
-        XCTAssertEqual(mock.appels.last?.types, NotificationCategory.mentions.serverQuery.types)
-        XCTAssertEqual(vm.filteredNotifications.map(\.id), ["men"])
-        XCTAssertTrue(vm.hasMore)
-    }
-
-    @MainActor
-    func test_loadMore_sousUneCategorie_garderSesTypes_etSonAncre() async {
-        let mock = MockNotificationService()
-        mock.pages = [
-            page([notification("m1", type: .newMessage)], hasMore: true, nextCursor: "ancre-m1"),
-            page([notification("m2", type: .newMessage)]),
-        ]
-        let vm = NotificationListViewModel(service: mock)
-
-        await vm.select(.messages)
-        await vm.loadMore()
-
-        XCTAssertEqual(mock.appels.count, 2)
-        XCTAssertEqual(mock.appels[1].types, NotificationCategory.messages.serverQuery.types)
-        XCTAssertEqual(mock.appels[1].cursor, "ancre-m1")
-        XCTAssertEqual(vm.filteredNotifications.map(\.id), ["m1", "m2"])
-    }
-
-    @MainActor
-    func test_select_laMemeCategorie_neRechargePas() async {
-        let mock = MockNotificationService()
-        let vm = NotificationListViewModel(service: mock)
-
-        await vm.select(.all)
-
-        XCTAssertTrue(mock.appels.isEmpty)
     }
 }

@@ -18,7 +18,8 @@ import MeeshyUI
 // **Le retrait de la feuille, lui, reste INTERDIT** tant que trois capacités
 // n'ont pas rejoint le meuble — progression, dépôt, son emprunté.
 // `FeedComposerSheetRetirementInventoryTests` les tient nommément. Ses
-// images et ses vidéos s'éditent déjà dans la scène du meuble (#9166, #9170).
+// images et ses vidéos se retouchent dans la retouche de la caméra, l'éditeur
+// unique (#11170).
 
 // MARK: - Feed Composer Sheet (Fullscreen from ThemedFeedOverlay)
 struct FeedComposerSheet: View {
@@ -34,9 +35,9 @@ struct FeedComposerSheet: View {
     @ObservedObject private var authManager = AuthManager.shared
     @State private var composerText = ""
     @FocusState private var isFocused: Bool
-    @State private var editingImage: EditingAttachmentItem?
+    /// Une pièce en attente, ouverte dans la retouche de la caméra (#11170).
+    @State private var pieceToRetouch: ComposerRetouchPiece?
     @State private var videosToPreview: [URL] = []
-    @State private var editingVideo: PendingVideoEdit?
 
     @State private var pendingAttachments: [MessageAttachment] = []
     /// Lieu choisi via le picker, en attente d'envoi (Task 11/12,
@@ -456,55 +457,35 @@ struct FeedComposerSheet: View {
                 handleLocationSelection(place)
             }
         }
-        .fullScreenCover(item: $editingImage) { item in
-            // L'image en attente s'édite dans la SCÈNE, comme ses vidéos et
-            // les pièces d'un commentaire (#9170).
-            ConversationImageSceneEditor(image: item.image, staged: true, onDone: { media in
-                editingImage = nil
-                switch media {
-                case .image(let rendue): replaceSheetImage(id: item.id, with: rendue)
-                case .video(let rendue):
-                    removeSheetAttachment(id: item.id)
-                    handleCameraVideo(rendue)
-                }
-            }, onCancel: { editingImage = nil })
+        // Une pièce en attente se retouche dans la retouche de la caméra, comme
+        // dans la conversation et les commentaires (#11170) : « Terminé » la
+        // remplace à sa place, « Abandonner » la retire.
+        .fullScreenCover(item: $pieceToRetouch) { piece in
+            ConversationPieceRetouch(piece: piece, onDone: { media in
+                pieceToRetouch = nil
+                landRetouchedPiece(piece, FeedSheetRetouchLanding(media, from: piece.kind))
+            }, onRemove: {
+                pieceToRetouch = nil
+                removeSheetAttachment(id: piece.attachmentId)
+            }, onCancel: { pieceToRetouch = nil })
         }
-        // Une vidéo choisie s'ouvre dans la SCÈNE avant de rejoindre la
-        // citation, et la vignette d'une vidéo en attente aussi (#9166) — la
-        // même porte que la conversation et les commentaires.
+        // Une vidéo choisie se retouche avant de rejoindre la publication
+        // (#11170) : « Terminé » l'ajoute, « Abandonner » ne l'ajoute pas.
         .fullScreenCover(isPresented: Binding(
             get: { !videosToPreview.isEmpty },
             set: { if !$0 { videosToPreview.removeAll() } }
         )) {
             if let url = videosToPreview.first {
-                // La scène se retire elle-même : sa fermeture a pu vider la
+                // La retouche se retire elle-même : sa fermeture a pu vider la
                 // file avant ce rappel — on n'enlève qu'une tête qui existe.
-                ConversationVideoSceneEditor(url: url, staged: false, onDone: { media in
+                ConversationPieceRetouch(source: .video(url), onDone: { media in
                     videosToPreview = Array(videosToPreview.dropFirst())
                     switch media {
                     case .video(let rendue): handleCameraVideo(rendue)
                     case .image(let image): handleCameraCapture(image)
                     }
-                }, onCancel: { videosToPreview = Array(videosToPreview.dropFirst()) })
-            }
-        }
-        .fullScreenCover(isPresented: Binding(
-            get: { editingVideo != nil },
-            set: { if !$0 { editingVideo = nil } }
-        )) {
-            if let target = editingVideo {
-                ConversationVideoSceneEditor(url: target.url, staged: true, onDone: { media in
-                    editingVideo = nil
-                    guard case .video(let rendue) = media else { return }
-                    let result = VideoEditResult(url: rendue, didEdit: true, duration: 0, transcriptionText: nil,
-                                                 captions: [], captionLanguageCode: nil)
-                    let issue = PendingVideoEditReplacement.apply(result, to: target.id,
-                                                                  files: pendingMediaFiles,
-                                                                  attachments: pendingAttachments)
-                    pendingMediaFiles = issue.files
-                    pendingAttachments = issue.attachments
-                    if let stale = issue.staleURL { try? FileManager.default.removeItem(at: stale) }
-                }, onCancel: { editingVideo = nil })
+                }, onRemove: { videosToPreview = Array(videosToPreview.dropFirst()) },
+                   onCancel: { videosToPreview = Array(videosToPreview.dropFirst()) })
             }
         }
         .adaptiveOnChange(of: selectedPhotoItems) { _, items in
@@ -532,14 +513,11 @@ struct FeedComposerSheet: View {
     }
 
     // MARK: - Attachment thumbnail tap
+    /// Les mêmes pièces que la conversation : une image fixe ou une vidéo dont
+    /// le fichier est là — un GIF ne se retouche pas, un son garde son éditeur.
     private func openSheetAttachmentEditor(_ attachment: MessageAttachment) {
-        if attachment.type == .image {
-            openSheetImageScene(attachment)
-        } else if attachment.type == .video {
-            if let url = pendingMediaFiles[attachment.id] {
-                editingVideo = PendingVideoEdit(id: attachment.id, url: url)
-            }
-        }
+        pieceToRetouch = ComposerRetouchSeries.candidates(attachments: pendingAttachments, files: pendingMediaFiles)
+            .first { $0.attachmentId == attachment.id }
     }
 
     // MARK: - Handlers (delegated to AttachmentPreparationService)
@@ -574,17 +552,25 @@ struct FeedComposerSheet: View {
         }
     }
 
-    /// La scène part du FICHIER borné à 2 048 px (#8524) — la vignette du
-    /// plateau ne sert qu'à défaut ; un GIF ne s'y ouvre pas.
-    private func openSheetImageScene(_ attachment: MessageAttachment) {
-        guard ConversationImageRetouche.offersRetouche(mimeType: attachment.mimeType) else { return }
-        let id = attachment.id
-        Task {
-            var source: UIImage?
-            if let url = pendingMediaFiles[id] { source = await ConversationImageRetouche.loadSource(fileURL: url) }
-            guard let image = source ?? pendingThumbnails[id] else { return }
-            editingImage = EditingAttachmentItem(id: id, image: image)
+    /// « Terminé » rend la pièce retouchée À SA PLACE (#11170).
+    private func landRetouchedPiece(_ piece: ComposerRetouchPiece, _ landing: FeedSheetRetouchLanding) {
+        switch landing {
+        case .replaceImage(let rendue): replaceSheetImage(id: piece.attachmentId, with: rendue)
+        case .replaceVideo(let rendue): replaceSheetVideo(id: piece.attachmentId, with: rendue)
+        case .swapForVideo(let rendue):
+            removeSheetAttachment(id: piece.attachmentId)
+            handleCameraVideo(rendue)
         }
+    }
+
+    private func replaceSheetVideo(id: String, with url: URL) {
+        let result = VideoEditResult(url: url, didEdit: true, duration: 0, transcriptionText: nil,
+                                     captions: [], captionLanguageCode: nil)
+        let issue = PendingVideoEditReplacement.apply(result, to: id, files: pendingMediaFiles,
+                                                      attachments: pendingAttachments)
+        pendingMediaFiles = issue.files
+        pendingAttachments = issue.attachments
+        if let stale = issue.staleURL { try? FileManager.default.removeItem(at: stale) }
     }
 
     /// **Écriture SÛRE** : la retouche n'entre au plateau qu'écrite et
@@ -958,7 +944,19 @@ struct FeedComposerSheet: View {
 
 }
 
-private struct EditingAttachmentItem: Identifiable {
-    let id: String
-    let image: UIImage
+/// **Ce que « Terminé » fait d'une pièce retouchée de la feuille** (#11170) :
+/// une image ou une vidéo retouchée remplace la pièce À SA PLACE ; seule une
+/// image devenue vidéo repasse par la préparation d'une vidéo.
+enum FeedSheetRetouchLanding: Equatable {
+    case replaceImage(UIImage)
+    case replaceVideo(URL)
+    case swapForVideo(URL)
+
+    init(_ media: ComposerReturnedMedia, from kind: ComposerRetouchPiece.Kind) {
+        switch (media, kind) {
+        case (.image(let rendue), _): self = .replaceImage(rendue)
+        case (.video(let rendue), .video): self = .replaceVideo(rendue)
+        case (.video(let rendue), .image): self = .swapForVideo(rendue)
+        }
+    }
 }

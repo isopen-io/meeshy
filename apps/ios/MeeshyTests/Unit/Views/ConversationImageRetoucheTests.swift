@@ -55,17 +55,6 @@ final class ConversationImageRetoucheTests: XCTestCase {
         XCTAssertNil(ecrit)
     }
 
-    /// Le temporaire de la graine est purgé quand la retouche se ferme.
-    func test_graine_liberee_purgeSonTemporaire() {
-        var graine: ConversationImageSeed? = ConversationImageSeed(image: image(width: 16, height: 16))
-        let url = graine!.fileURL
-        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
-
-        graine = nil
-
-        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
-    }
-
     /// « Terminé » sur une scène intacte ne rend aucun rendu, et l'écriture
     /// sûre précède la suppression de l'ancien fichier.
     func test_sources_rienNaChange_etEcritureSure() throws {
