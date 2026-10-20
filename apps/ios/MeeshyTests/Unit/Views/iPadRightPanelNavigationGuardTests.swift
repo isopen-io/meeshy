@@ -221,7 +221,7 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
                             "ConversationListView+MoveToSectionMenuItems.swift"]
             .map { try source(of: $0) }.joined(separator: "\n")
         XCTAssertFalse((overlays + header + movedOut).contains(".frame(width: 340)"))
-        XCTAssertTrue(overlays.contains(".frame(maxWidth: .infinity).frame(maxWidth: 340)"))
+        XCTAssertTrue(overlays.contains(".frame(maxWidth: .infinity).frame(maxWidth: ConversationPreviewWidthLaw.maximum)"))
         XCTAssertTrue(header.contains("ViewThatFits(in: .horizontal) {"))
         XCTAssertTrue(header.contains("headerActions(spacing: MeeshySpacing.xs)"))
     }
