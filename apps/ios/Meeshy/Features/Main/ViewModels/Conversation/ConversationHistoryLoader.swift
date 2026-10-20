@@ -21,7 +21,7 @@ nonisolated enum CachePlacement {
 }
 
 @MainActor
-protocol ConversationHistoryLoading: AnyObject {
+protocol ConversationHistoryLoading: AnyObject, Sendable {
     func reconcileBeforeOpening() async
     func refreshLatest(warmCache: Bool, readerPrism: [String]) async -> HistoryRefresh
     func fetchOlder(before cursor: String) async throws -> HistoryPage
