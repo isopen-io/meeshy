@@ -45,8 +45,12 @@ final class RootRerenderSourceGuardTests: XCTestCase {
             "`RootView` ne doit plus s'abonner à `NotificationToastManager` : elle ne lit que `unreadCount`, et le toast a sa propre feuille (#7010)."
         )
         XCTAssertTrue(
-            code.contains("RootNotificationSource()"),
-            "`RootView` doit passer par `RootNotificationSource`, qui republie le COMPTEUR seul et porte le gestionnaire en `let` non observé (#7010)."
+            code.contains("scope.notifications"),
+            "`RootView` doit lire `RootNotificationSource` depuis `RootScopeModels`, qui republie le COMPTEUR seul et porte le gestionnaire en `let` non observé (#7010)."
+        )
+        XCTAssertTrue(
+            try strippedSource("RootScopeModels.swift").contains("RootNotificationSource()"),
+            "`RootScopeModels` construit la source de notifications, une fois pour les deux racines."
         )
     }
 
@@ -66,8 +70,8 @@ final class RootRerenderSourceGuardTests: XCTestCase {
             "Ajouter `private` ne rend pas l'abonnement acceptable (#7166)."
         )
         XCTAssertTrue(
-            code.contains("RootNotificationSource()"),
-            "`iPadRootView` doit passer par `RootNotificationSource`, comme `RootView` (#7166)."
+            code.contains("scope.notifications"),
+            "`iPadRootView` doit lire `RootNotificationSource` depuis `RootScopeModels`, comme `RootView` (#7166)."
         )
     }
 
