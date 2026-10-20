@@ -92,6 +92,63 @@ final class ConversationViewModelContentRemovalTests: XCTestCase {
         XCTAssertNil(row?.deletedAt)
         XCTAssertNotNil(fx.sut.error)
     }
+
+    // MARK: - Sélection multiple (#11159)
+
+    private static let viewerId = "00000000000000000000fd99"
+
+    private func seed(_ fx: Fixture, localId: String, senderId: String) async throws {
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: localId, conversationId: fx.conversationId, senderId: senderId, content: "Propos \(localId)"
+        )
+        try await MessagePersistenceActor(dbWriter: fx.pool).insertOptimistic(record)
+        _ = await MessageStoreObservationHelper.awaitMessage(in: fx.sut) { $0.id == localId }
+    }
+
+    func test_removeSelectedMessages_mixedSelection_onlyOthersCarryTheReason() async throws {
+        let fx = try await makeFixture()
+        try await seed(fx, localId: "msg-a", senderId: "someone-else")
+        try await seed(fx, localId: "msg-b", senderId: "another-one")
+        try await seed(fx, localId: "msg-mine", senderId: Self.viewerId)
+
+        await fx.sut.removeSelectedMessages(["msg-a", "msg-b", "msg-mine"], reason: "Propos haineux")
+
+        XCTAssertEqual(fx.messageService.deleteCallCount, 3)
+        XCTAssertEqual(fx.messageService.deleteReasonsByMessageId["msg-a"], .some("Propos haineux"))
+        XCTAssertEqual(fx.messageService.deleteReasonsByMessageId["msg-b"], .some("Propos haineux"))
+        XCTAssertEqual(fx.messageService.deleteReasonsByMessageId["msg-mine"], .some(nil), "ses propres messages partent sans motif")
+        for id in ["msg-a", "msg-b", "msg-mine"] {
+            let row = try await fx.record(id)
+            XCTAssertNotNil(row?.deletedAt, id)
+        }
+    }
+
+    func test_removeSelectedMessages_oneRefused_restoresOnlyThatMessage() async throws {
+        let fx = try await makeFixture()
+        try await seed(fx, localId: "msg-a", senderId: "someone-else")
+        try await seed(fx, localId: "msg-b", senderId: "another-one")
+        fx.messageService.deleteFailingMessageIds = ["msg-b"]
+
+        await fx.sut.removeSelectedMessages(["msg-a", "msg-b"], reason: "Propos haineux")
+
+        let kept = try await fx.record("msg-b")
+        XCTAssertNil(kept?.deletedAt, "le message refusé revient")
+        let removed = try await fx.record("msg-a")
+        XCTAssertNotNil(removed?.deletedAt, "l'autre reste retiré")
+        XCTAssertNotNil(fx.sut.error)
+    }
+
+    func test_removeSelectedMessages_offline_sendsNothing() async throws {
+        let fx = try await makeFixture(isOnline: false)
+        try await seed(fx, localId: "msg-a", senderId: "someone-else")
+
+        await fx.sut.removeSelectedMessages(["msg-a"], reason: "Propos haineux")
+
+        XCTAssertEqual(fx.messageService.deleteCallCount, 0)
+        let row = try await fx.record("msg-a")
+        XCTAssertNil(row?.deletedAt)
+        XCTAssertNotNil(fx.sut.error)
+    }
 }
 
 /// **« Retirer » s'offre-t-il sur une publication ?** (#11151) — la modération
@@ -133,5 +190,38 @@ final class ContentRemovalOfferTests: XCTestCase {
     func test_successText_aRemovalSaysTheAuthorIsNotified_aDeletionKeepsItsWord() {
         XCTAssertEqual(ContentRemovalKind.successText(reason: nil, deleted: "Publication supprimée"), "Publication supprimée")
         XCTAssertNotEqual(ContentRemovalKind.successText(reason: "Spam", deleted: "Publication supprimée"), "Publication supprimée")
+    }
+}
+
+/// **« Retirer » s'offre-t-il sur une SÉLECTION de messages ?** (#11159) — au
+/// moins un message d'un autre, tous retirables, et les siens supprimables pour tous.
+@MainActor
+final class ContentRemovalSelectionOfferTests: XCTestCase {
+
+    private static func message(_ id: String, isMe: Bool) -> MeeshyMessage {
+        MeeshyMessage(id: id, conversationId: "c", content: "Bonjour", isMe: isMe)
+    }
+
+    private static func offers(_ selected: [MeeshyMessage], removable: Bool = true, ownForEveryone: Bool = true) -> Bool {
+        ContentRemovalOffer.selectionOffersRemoval(
+            selected, mayRemove: { _ in removable }, mayDeleteForEveryone: { _ in ownForEveryone }
+        )
+    }
+
+    func test_selectionOffersRemoval_othersMessagesAndModerator_isOffered() {
+        XCTAssertTrue(Self.offers([Self.message("a", isMe: false), Self.message("m", isMe: true)]))
+    }
+
+    func test_selectionOffersRemoval_onlyOwnMessages_isNotOffered() {
+        XCTAssertFalse(Self.offers([Self.message("m", isMe: true)]))
+        XCTAssertFalse(Self.offers([]))
+    }
+
+    func test_selectionOffersRemoval_viewerCannotModerate_isNotOffered() {
+        XCTAssertFalse(Self.offers([Self.message("a", isMe: false)], removable: false))
+    }
+
+    func test_selectionOffersRemoval_ownMessageNoLongerDeletableForEveryone_isNotOffered() {
+        XCTAssertFalse(Self.offers([Self.message("a", isMe: false), Self.message("m", isMe: true)], ownForEveryone: false))
     }
 }

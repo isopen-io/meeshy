@@ -98,6 +98,9 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
     var lastDeleteConversationId: String?
     var lastDeleteMessageId: String?
     var lastDeleteReason: String?
+    /// #11159 — un refus PAR message (sélection) : ces ids échouent, les autres passent.
+    var deleteFailingMessageIds: Set<String> = []
+    var deleteReasonsByMessageId: [String: String?] = [:]
 
     var pinCallCount = 0
     var lastPinConversationId: String?
@@ -250,7 +253,9 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
             lastDeleteConversationId = conversationId
             lastDeleteMessageId = messageId
             lastDeleteReason = reason
+            deleteReasonsByMessageId[messageId] = reason
         }
+        if deleteFailingMessageIds.contains(messageId) { throw APIError.serverError(403, "forbidden") }
         try deleteResult.get()
     }
 
@@ -335,6 +340,8 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         lastDeleteConversationId = nil
         lastDeleteMessageId = nil
         lastDeleteReason = nil
+        deleteFailingMessageIds = []
+        deleteReasonsByMessageId = [:]
         pinCallCount = 0
         lastPinConversationId = nil
         lastPinMessageId = nil
