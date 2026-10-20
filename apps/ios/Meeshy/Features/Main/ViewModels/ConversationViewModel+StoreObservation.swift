@@ -301,55 +301,11 @@ extension ConversationViewModel {
     /// awaitable in tests.
     func handleRetryExhausted(_ payload: OfflineRetryExhausted) async {
         guard payload.conversationId == self.conversationId else { return }
-        switch payload.kind {
-        case .sendMessage:
-            _ = try? await messagePersistence.applyEvent(
-                localId: payload.tempId, event: .retryExhausted
-            )
-        case .sendReaction:
-            guard let reaction = payload.reaction else { return }
-            // Same canonical sentinel the optimistic add used (see toggleReaction):
-            // the rollback must match the key that was actually written.
-            let participantId = currentUserId
-            let localId = reaction.messageId
-            let emoji = reaction.emoji
-            switch reaction.action {
-            case .add:
-                // Optimistic add failed permanently — remove the reaction we wrote.
-                try? await messagePersistence.removeReaction(
-                    localId: localId, emoji: emoji, participantId: participantId
-                )
-            case .remove:
-                // Optimistic remove failed permanently — restore the reaction we erased.
-                let remoteId = serverId(for: localId)
-                try? await messagePersistence.appendReaction(
-                    localId: localId, reactionId: UUID().uuidString,
-                    messageId: remoteId, participantId: participantId, emoji: emoji
-                )
-            }
-        case .editMessage:
-            // S3 — an offline edit that exhausted its retries never reached the
-            // server; restore the pre-edit content (captured in EditHistoryStore
-            // when the edit was applied) and drop the phantom revision. Mirrors
-            // the online edit rollback in `editMessage`.
-            let localId = payload.tempId
-            let canonicalId = serverId(for: localId)
-            if let original = EditHistoryStore.shared.revisions(for: canonicalId).last?.content {
-                _ = try? await messagePersistence.markEditedLocally(
-                    localId: localId, newContent: original
-                )
-                EditHistoryStore.shared.removeHistory(for: canonicalId)
-            }
-        case .deleteMessage:
-            // S3 — an offline delete that exhausted never reached the server;
-            // un-delete locally so the message stops showing as deleted on this
-            // device only. Mirrors the online delete rollback (`markUndeleted`).
-            try? await messagePersistence.markUndeleted(localId: payload.tempId)
-        default:
-            // Other outbox kinds (blockUser, friendRequest, etc.) reconcile
-            // through their own dedicated ViewModels.
-            break
+        guard payload.kind != .sendMessage else {
+            _ = try? await messagePersistence.applyEvent(localId: payload.tempId, event: .retryExhausted)
+            return
         }
+        await commands.compensate(payload, currentUserId: currentUserId, serverId: { self.serverId(for: $0) })
     }
 
     // MARK: - Message Processing Pipeline

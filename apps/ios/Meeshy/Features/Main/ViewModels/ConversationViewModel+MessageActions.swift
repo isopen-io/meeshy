@@ -96,75 +96,21 @@ extension ConversationViewModel {
     // MARK: - Toggle Reaction
 
     func toggleReaction(messageId: String, emoji: String) {
-        guard consumeReactionToken() else { return }
-        guard let idx = messageIndex(for: messageId) else { return }
-        // Un message systeme n'est pas reactable : l'overlay menu gate deja
-        // l'affordance, l'action gate aussi pour couvrir tout autre call site
-        // (le gateway rejette en 400 en derniere barriere).
-        guard messages[idx].messageSource != .system else { return }
+        guard commands.consumeReactionToken() else { return }
+        // Un message système n'est pas réactable (le gateway rejette aussi en 400).
+        guard let idx = messageIndex(for: messageId), messages[idx].messageSource != .system else { return }
 
-        // Own reactions are ALWAYS keyed by the `currentUserId` sentinel — the
-        // canonical "my reaction" marker that `summarizeReactions` and
-        // `reconstructFromSummary` agree on. Keying the optimistic row by the
-        // resolved `Participant.id` instead (the old `_resolvedParticipantId`
-        // path) broke the "I reacted" highlight for the 2nd+ reaction in a
-        // conversation, because the badge ownership check is `== currentUserId`.
+        // Mes réactions sont TOUJOURS clées par la sentinelle `currentUserId` : c'est ce que
+        // `summarizeReactions` et `reconstructFromSummary` comparent pour le « j'ai réagi ».
         let participantId = currentUserId
-        let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == participantId }
-        let convId = conversationId
-        // Resolve the canonical server id so the queue replays against the
-        // real backend message, not the optimistic in-memory placeholder.
+        // L'id serveur canonique, pour que la file rejoue contre le vrai message.
         let remoteId = serverId(for: messageId)
-
-        if alreadyReacted {
-            Task { [weak self] in
-                try? await self?.messagePersistence.removeReaction(
-                    localId: messageId, emoji: emoji, participantId: participantId
-                )
-            }
-            // Wave 1 Task 3.6 — unified outbox replaces the legacy
-            // ReactionQueue. `enqueueReaction` preserves the coalescing state
-            // machine (add+remove cancels, idempotent dedup) and the
-            // `OutboxFlusher` drives retry on the next reconnect tick.
-            Task {
-                try? await OfflineQueue.shared.enqueueReaction(
-                    messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
-                )
-                // Draine l'outbox tout de suite : sans ca la reaction reste
-                // `pending` jusqu'au prochain lancement / retour avant-plan de
-                // l'app (seuls moments ou le flusher tourne) et n'atteint
-                // jamais le serveur.
-                await OutboxFlushTrigger.flushNow()
-            }
-        } else {
-            // Multi-reactions (2026-08-18) : poser un emoji different S'EMPILE
-            // avec mes reactions precedentes — plus jamais de swap (la cle
-            // unique serveur porte le triplet message/participant/emoji). Le
-            // retrait reste PAR emoji, via la branche alreadyReacted.
-            // Marque la reaction comme "nouvelle" AVANT l'ecriture async : quand
-            // le store observe l'ajout et re-rend la bulle, la nouvelle pill
-            // verra `shouldAnimate == true` et jouera la comete. Un scroll
-            // ulterieur (hors fenetre) ne la re-animera pas.
-            ReactionAnimationGate.markAdded(messageId: messageId, emoji: emoji)
-            let reactionId = UUID().uuidString
-            Task { [weak self] in
-                try? await self?.messagePersistence.appendReaction(
-                    localId: messageId, reactionId: reactionId,
-                    messageId: remoteId, participantId: participantId, emoji: emoji
-                )
-            }
-            Task {
-                try? await OfflineQueue.shared.enqueueReaction(
-                    messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
-                )
-                // Draine l'outbox tout de suite : sans ca la reaction reste
-                // `pending` jusqu'au prochain lancement / retour avant-plan de
-                // l'app (seuls moments ou le flusher tourne) et n'atteint
-                // jamais le serveur.
-                await OutboxFlushTrigger.flushNow()
-            }
+        let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == participantId }
+        guard alreadyReacted else {
+            commands.addReaction(localId: messageId, remoteId: remoteId, participantId: participantId, emoji: emoji)
+            return
         }
-
+        commands.removeReaction(localId: messageId, remoteId: remoteId, participantId: participantId, emoji: emoji)
     }
 
     // MARK: - Attachment Reactions (BUG2 A')
@@ -280,104 +226,40 @@ extension ConversationViewModel {
 
     // MARK: - Delete Message
 
-    /// Matches the WhatsApp semantics: `local` hides the message for this
-    /// device only (no server round-trip), `everyone` soft-deletes on the
-    /// backend and broadcasts `message:deleted` to all recipients. The UI
-    /// gates the `everyone` option on sender+time-window rules via
-    /// `canDeleteForEveryone(_:)`.
-    enum DeleteMode {
-        case local
-        case everyone
-    }
+    /// `local` masque le message sur cet appareil seulement ; `everyone` le supprime côté
+    /// serveur et diffuse `message:deleted`. L'UI conditionne `everyone` à `canDeleteForEveryone(_:)`.
+    typealias DeleteMode = MessageDeleteMode
 
-    /// Pure predicate — delegated to `commandHandler` so the policy
-    /// (own message + within the 2h window) lives in one place.
     func canDeleteForEveryone(_ message: Message, window: TimeInterval = 2 * 3600) -> Bool {
-        commandHandler.canDeleteForEveryone(message, window: window)
+        commands.canDeleteForEveryone(message, window: window)
     }
 
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
         switch mode {
         case .local:
-            // Optimistic: hide locally. LocallyHiddenMessagesStore persists the hidden id and governs display.
-            // Reversible — an "Undo" affordance can call .unhide(messageId)
-            // without any network round-trip.
-            LocallyHiddenMessagesStore.shared.hide(messageId)
+            commands.deleteLocally(messageId: messageId)
         case .everyone:
-            // A `.failed` message never reached the server — it has no real
-            // serverId (`serverId(for:)` falls back to the local optimistic
-            // id). A REST delete below would target that bogus id, get
-            // rejected, and the catch's `markUndeleted` rollback would
-            // resurrect the very message the user just tried to remove.
-            // Route straight to the local-only purge instead.
-            if let idx = messageIndex(for: messageId), messages[idx].deliveryStatus == .failed {
-                // `retryMessage`'s media-retry path resets the message's
-                // outbox row back to `.pending` while it (re)uploads, so a
-                // `.failed` bubble can have a live pending send in flight at
-                // the moment the user taps delete. Cancel it FIRST — a purely
-                // local purge with no cancellation would let that pending row
-                // dispatch and reach the server/other participants after the
-                // sender believes the message is gone. No-op when there is no
-                // pending row (the common case).
-                await offlineQueue.cancelPendingSend(clientMessageId: messageId)
-                // #4043 — `cancelPendingSend` only ever touches a `.pending`
-                // row (the narrow in-flight-reset case above). The COMMON
-                // case is a row already `.failed`/`.exhausted` (the original
-                // send never succeeded, e.g. a location-only message,
-                // #4039) — `cancelPendingSend` is a no-op for it, leaving it
-                // to linger in the SyncPill forever even after the bubble
-                // itself is gone. `clearSendMessageRow` reaches it too.
-                await offlineQueue.clearSendMessageRow(clientMessageId: messageId)
+            // Un message `.failed` n'a pas d'id serveur : un DELETE REST viserait un id bidon et son
+            // rollback ressusciterait le message. Retrait local seulement, outbox annulée d'abord.
+            guard outgoingState(of: messageId)?.isFailed != true else {
+                await commands.withdrawUnsent(messageId: messageId)
                 removeFailedMessage(messageId: messageId)
                 return
             }
-            // Optimistic: mark as deleted locally + blank content
-            try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
-            // Drop the starred snapshot so the Starred Messages list doesn't keep
-            // surfacing a message that was deleted for everyone. Keyed by the
-            // server id (StarredMessageSnapshot.id is the canonical message id).
-            StarredMessagesStore.shared.remove(messageId: serverId(for: messageId))
-            // Offline: route the delete through the durable outbox (flushed on
-            // reconnect, T10) instead of losing it. `clientMessageId` is the
-            // message's local id so deleting a still-unsent offline message
-            // cancels its pending send (no wasted roundtrip). The delete sticks
-            // locally and reconciles when online — no rollback on the offline path.
-            if !networkMonitor.isOnline {
-                try? await offlineQueue.enqueueDelete(OfflineDeletePayload(
-                    messageId: serverId(for: messageId),
-                    clientMessageId: messageId,
-                    conversationId: conversationId
-                ))
-                return
-            }
-            do {
-                try await messageService.delete(conversationId: conversationId, messageId: serverId(for: messageId))
-            } catch {
-                // Rollback: restore the message to a non-deleted state
-                try? await messagePersistence.markUndeleted(localId: messageId)
-                self.error = userFacingMessage(for: error)
-            }
+            report(await commands.deleteForEveryone(messageId: messageId, serverId: serverId(for: messageId)))
         }
     }
 
-    /// **Retirer le message d'un AUTRE, avec son motif** (#11151). Optimiste comme
-    /// « supprimer pour tous » : le message s'efface, la passerelle confirme, le
-    /// message revient si elle refuse. Jamais par la file hors ligne : elle ne
-    /// porte pas de motif, et un retrait rejoué sans lui serait refusé.
+    /// **Retirer le message d'un AUTRE, avec son motif** (#11151).
     func removeMessage(messageId: String, reason: String) async {
-        guard networkMonitor.isOnline else {
-            self.error = String(localized: "moderation.removal.offline", defaultValue: "Connectez-vous pour retirer ce contenu.", bundle: .main)
-            return
-        }
-        let target = serverId(for: messageId)
-        try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
-        StarredMessagesStore.shared.remove(messageId: target)
-        do {
-            try await messageService.delete(conversationId: conversationId, messageId: target, reason: reason)
-        } catch {
-            try? await messagePersistence.markUndeleted(localId: messageId)
-            self.error = userFacingMessage(for: error)
-        }
+        report(await commands.removeForModeration(
+            messageId: messageId, serverId: serverId(for: messageId), reason: reason
+        ))
+    }
+
+    private func report(_ failure: ConversationCommandFailure?) {
+        guard let failure else { return }
+        error = failure.userMessage
     }
 
     // MARK: - Delete Attachment
@@ -385,69 +267,30 @@ extension ConversationViewModel {
     func deleteAttachment(messageId: String, attachmentId: String) async {
         guard let msgIdx = messageIndex(for: messageId) else { return }
         let message = messages[msgIdx]
-        let isLastAttachment = message.attachments.count <= 1
         let hasTextContent = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-        // If it's the only attachment AND no text content → delete the whole message
-        if isLastAttachment && !hasTextContent {
+        guard message.attachments.count > 1 || hasTextContent else {
             await deleteMessage(messageId: messageId)
             return
         }
-
-        // Optimistic: remove attachment from local message via persistence
-        let originalAttachments = message.attachments
-        let updatedAttachments = originalAttachments.filter { $0.id != attachmentId }
-        let updatedJson = try? JSONEncoder().encode(updatedAttachments)
-        try? await messagePersistence.updateAttachmentsJson(localId: messageId, attachmentsJson: updatedJson)
-
-        do {
-            try await AttachmentService.shared.delete(attachmentId: attachmentId)
-        } catch {
-            // Revert on failure
-            let originalJson = try? JSONEncoder().encode(originalAttachments)
-            try? await messagePersistence.updateAttachmentsJson(localId: messageId, attachmentsJson: originalJson)
-            self.error = userFacingMessage(for: error)
-        }
+        report(await commands.removeAttachment(
+            messageId: messageId, attachmentId: attachmentId, original: message.attachments
+        ))
     }
 
     // MARK: - Pin / Unpin Message
 
     func togglePin(messageId: String) async {
         guard let idx = messageIndex(for: messageId) else { return }
-        let wasPinned = messages[idx].pinnedAt != nil
-        let previousPinnedAt = messages[idx].pinnedAt
-        let previousPinnedBy = messages[idx].pinnedBy
-
-        if wasPinned {
-            // Optimistic unpin
-            try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: nil, pinnedBy: nil)
-
-            do {
-                try await messageService.unpin(conversationId: conversationId, messageId: serverId(for: messageId))
-            } catch {
-                // Revert
-                try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: previousPinnedAt, pinnedBy: previousPinnedBy)
-                self.error = userFacingMessage(for: error)
-            }
-        } else {
-            // Optimistic pin
-            let now = Date()
-            let pinnedById = authManager.currentUser?.id
-            try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: now, pinnedBy: pinnedById)
-
-            do {
-                try await messageService.pin(conversationId: conversationId, messageId: serverId(for: messageId))
-            } catch {
-                // Revert
-                try? await messagePersistence.updatePinned(localId: messageId, pinnedAt: nil, pinnedBy: nil)
-                self.error = userFacingMessage(for: error)
-            }
-        }
+        let previous = MessagePinState(pinnedAt: messages[idx].pinnedAt, pinnedBy: messages[idx].pinnedBy)
+        report(await commands.togglePin(
+            messageId: messageId, serverId: serverId(for: messageId),
+            previous: previous, currentUserId: authManager.currentUser?.id
+        ))
     }
 
     // MARK: - Consume View-Once Message
 
-    /// View-once consumption. Delegates to `commandHandler` with the
+    /// View-once consumption. Delegates to `commands` with the
     /// resolved server id — the handler runs the network call and the
     /// persistence write under one optimistic transaction. Returns `true`
     /// on success so the view can advance its UI (reveal + auto-dismiss
@@ -458,7 +301,7 @@ extension ConversationViewModel {
     /// ici, que le serveur réponde ou non.
     func consumeViewOnce(messageId: String) async -> Bool {
         await markViewOnceOpenedLocally(messageId: messageId)
-        return await commandHandler.consumeViewOnce(messageId: messageId, serverId: serverId(for: messageId))
+        return await commands.consumeViewOnce(messageId: messageId, serverId: serverId(for: messageId))
     }
 
     func evictViewOnceMedia(message: Message) {
@@ -479,60 +322,12 @@ extension ConversationViewModel {
     // MARK: - Edit Message
 
     func editMessage(messageId: String, newContent: String) async {
-        let trimmed = newContent.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-
-        // Snapshot original content for rollback and edit history before
-        // writing the optimistic update through persistence.
-        let originalContent: String? = messageIndex(for: messageId).map { messages[$0].content }
-
-        // Record history entry before overwriting (the backend does not
-        // expose edit history, so we maintain it locally).
-        if let original = originalContent, original != trimmed {
-            EditHistoryStore.shared.recordRevision(
-                messageId: serverId(for: messageId),
-                previousContent: original
-            )
-        }
-
-        // Le contenu change : ses traductions décrivent un texte qui n'existe
-        // plus. Évincées AVANT l'optimiste pour que la bulle ne se re-rende
-        // jamais avec le nouveau texte SOUS l'ancienne traduction.
-        invalidateTranslations(for: messageId)
-
-        // Optimistic update: write through persistence so the store
-        // observation surfaces the change without a direct messages mutation.
-        // Dated past the stored (server) edit date when the device clock lags
-        // behind it, so the ordering guard never drops the user's own edit (#9997).
-        let editedAt = try? await messagePersistence.markEditedLocally(localId: messageId, newContent: trimmed)
-
-        // Offline: route the edit through the durable outbox (flushed on
-        // reconnect, T10) instead of losing it on the failed REST call.
-        // `clientMessageId` is the message's local id so an edit of a
-        // still-unsent offline message merges into its pending send. The
-        // optimistic content + recorded history stay applied (no rollback).
-        if !networkMonitor.isOnline {
-            try? await offlineQueue.enqueueEdit(OfflineEditPayload(
-                messageId: serverId(for: messageId),
-                clientMessageId: messageId,
-                content: trimmed,
-                conversationId: conversationId
-            ))
-            return
-        }
-
-        do {
-            _ = try await messageService.edit(messageId: serverId(for: messageId), content: trimmed)
-        } catch {
-            // Revert on failure — both the persisted content AND the history
-            // entry we just wrote (so the user doesn't see a phantom
-            // revision that never actually reached the server).
-            if let original = originalContent, let editedAt {
-                try? await messagePersistence.markEdited(localId: messageId, newContent: original, editedAt: editedAt)
-                EditHistoryStore.shared.removeHistory(for: serverId(for: messageId))
-            }
-            self.error = userFacingMessage(for: error)
-        }
+        let originalContent = messageIndex(for: messageId).map { messages[$0].content }
+        report(await commands.editMessage(
+            messageId: messageId, serverId: serverId(for: messageId), content: newContent,
+            originalContent: originalContent,
+            beforeOptimisticWrite: { self.invalidateTranslations(for: messageId) }
+        ))
     }
 
     /// History of prior revisions for a message, for the MessageDetailSheet
@@ -549,7 +344,7 @@ extension ConversationViewModel {
             try await reportService.reportMessage(messageId: serverId(for: messageId), reportType: reportType, reason: reason)
             return true
         } catch {
-            self.error = userFacingMessage(for: error)
+            self.error = ConversationErrorText.message(for: error)
             return false
         }
     }

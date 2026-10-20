@@ -345,8 +345,11 @@ final class ConversationCommandHandlerTests: XCTestCase {
         let rig = makeRig()
 
         rig.sut.addReaction(localId: "m1", remoteId: "s1", participantId: "u1", emoji: "🔥")
-        for _ in 0..<200 where rig.outbox.enqueued.isEmpty { await Task.yield() }
-        let calls = await rig.persistence.calls
+        var calls = await rig.persistence.calls
+        for _ in 0..<500 where calls.isEmpty || rig.outbox.enqueued.isEmpty {
+            await Task.yield()
+            calls = await rig.persistence.calls
+        }
 
         XCTAssertEqual(rig.outbox.enqueued, [
             MockReactionOutbox.Enqueued(messageId: "s1", emoji: "🔥", action: .add, conversationId: conversationId)
@@ -358,8 +361,11 @@ final class ConversationCommandHandlerTests: XCTestCase {
         let rig = makeRig()
 
         rig.sut.removeReaction(localId: "m1", remoteId: "s1", participantId: "u1", emoji: "🔥")
-        for _ in 0..<200 where rig.outbox.enqueued.isEmpty { await Task.yield() }
-        let calls = await rig.persistence.calls
+        var calls = await rig.persistence.calls
+        for _ in 0..<500 where calls.isEmpty || rig.outbox.enqueued.isEmpty {
+            await Task.yield()
+            calls = await rig.persistence.calls
+        }
 
         XCTAssertEqual(rig.outbox.enqueued.map(\.action), [.remove])
         XCTAssertEqual(calls, [.removeReaction(localId: "m1", emoji: "🔥", participantId: "u1")])

@@ -100,16 +100,8 @@ class ConversationViewModel: ObservableObject {
     var isSending: Bool { sendActivity.isSending }
     @Published var error: String?
 
-    /// Maps a raw error to a string safe to show verbatim in the conversation
-    /// error banner. `MeeshyError.server` carries a raw debug/decoding
-    /// message meant for logs, not end users — it is swapped for a generic
-    /// localized message. Every other error keeps its `localizedDescription`
-    /// (already user-facing: `AuthError`, `NetworkError`, `MessageError`, ...).
     func userFacingMessage(for error: Error) -> String {
-        if let meeshyError = error as? MeeshyError, case .server = meeshyError {
-            return String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
-        }
-        return error.localizedDescription
+        ConversationErrorText.message(for: error)
     }
 
     /// Real-time translation/transcription/audio data keyed by messageId
@@ -511,7 +503,7 @@ class ConversationViewModel: ObservableObject {
     /// Exposed so ConversationView and MessageListViewController can observe typing
     /// state independently — avoids triggering the full VM objectWillChange on every keystroke.
     let stateStore: ConversationStateStore
-    let commandHandler: ConversationCommandHandler
+    let commands: any ConversationCommandProviding
     let mediaHandler: ConversationMediaHandler
     let searchHandler: ConversationSearchHandler
 
@@ -570,23 +562,6 @@ class ConversationViewModel: ObservableObject {
     var currentUserIdForView: String { currentUserId }
     var currentUsername: String? { authManager.currentUser?.username }
 
-    // Token bucket rate limiter for reaction spam prevention.
-    // Allows burst of 10, refills at 3 tokens/second.
-    private var reactionTokens: Double = 10
-    private var reactionLastRefill: Date = Date()
-    private static let reactionMaxTokens: Double = 10
-    private static let reactionRefillRate: Double = 3
-
-    func consumeReactionToken() -> Bool {
-        let now = Date()
-        let elapsed = now.timeIntervalSince(reactionLastRefill)
-        reactionTokens = min(Self.reactionMaxTokens, reactionTokens + elapsed * Self.reactionRefillRate)
-        reactionLastRefill = now
-        guard reactionTokens >= 1 else { return false }
-        reactionTokens -= 1
-        return true
-    }
-
     // MARK: - Mention Display Names (username → displayName) — cached
 
     var _mentionDisplayNames: [String: String]?
@@ -633,7 +608,8 @@ class ConversationViewModel: ObservableObject {
         protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared,
         receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared,
         sendCoordinator: (any ConversationSendCoordinatorProviding)? = nil,
-        translationSource: (any ConversationTranslationSourcing)? = nil
+        translationSource: (any ConversationTranslationSourcing)? = nil,
+        commands: (any ConversationCommandProviding)? = nil
     ) {
         self.receivedMediaAutoSaver = receivedMediaAutoSaver
         self.afterReadConsumer = afterReadConsumer
@@ -671,11 +647,13 @@ class ConversationViewModel: ObservableObject {
 
         let stateStore = ConversationStateStore()
         self.stateStore = stateStore
-        self.commandHandler = ConversationCommandHandler(
+        self.commands = commands ?? ConversationCommandHandler(
             state: stateStore,
             conversationId: conversationId,
             messageService: messageService,
-            persistence: dependencies.persistence
+            persistence: dependencies.persistence,
+            offlineQueue: offlineQueue,
+            networkMonitor: networkMonitor
         )
         self.mediaHandler = ConversationMediaHandler(state: stateStore)
         self.searchHandler = ConversationSearchHandler(
@@ -940,7 +918,7 @@ class ConversationViewModel: ObservableObject {
     /// handler — the legacy variant did the exact same call with an
     /// equally permissive error path.
     func markAsReceived() {
-        commandHandler.markAsReceived()
+        commands.markAsReceived()
         receivedMediaAutoSaver.consider(messages)
     }
 
