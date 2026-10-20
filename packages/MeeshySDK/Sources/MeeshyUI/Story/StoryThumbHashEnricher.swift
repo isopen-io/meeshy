@@ -119,7 +119,7 @@ public enum StoryThumbHashEnricher {
         await withTaskGroup(of: String?.self) { group in
             group.addTask { await operation() }
             group.addTask {
-                try? await Task.sleep(for: timeout)
+                _ = await cancellableSleep(for: timeout)
                 return nil
             }
             let first = await group.next() ?? nil

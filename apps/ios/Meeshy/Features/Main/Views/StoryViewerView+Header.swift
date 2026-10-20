@@ -37,6 +37,8 @@ nonisolated enum StoryOptionsMenuEntry: Hashable {
     case compose
     case share
     case report
+    /// #11151 — la modération retire la story d'un autre, avec un motif.
+    case remove
     case delete
     case close
 }
@@ -73,7 +75,8 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
         isOwnStory: Bool,
         isPublicStory: Bool,
         hasAudioTranscript: Bool,
-        canCompose: Bool
+        canCompose: Bool,
+        canRemove: Bool = false
     ) -> StoryOptionsMenuPlan {
         let reading: [StoryOptionsMenuEntry] = hasAudioTranscript ? [.fullscreen, .transcript] : [.fullscreen]
         guard hasStory else {
@@ -82,9 +85,9 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
         let composing: [StoryOptionsMenuEntry] = canCompose ? [.compose] : []
         let exporting: [StoryShareMenuEntry] = isPublicStory ? [.exportVideo, .shareWithFriend] : [.exportVideo]
         let sharing: [StoryShareMenuEntry] = exporting + [.repostAsPost, .repostAsReel]
-        let acting: StoryOptionsMenuEntry = isOwnStory ? .delete : .report
+        let acting: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .remove] : [.report])
         return StoryOptionsMenuPlan(
-            sections: [reading, composing, [.share], [acting], [.close]].filter { !$0.isEmpty },
+            sections: [reading, composing, [.share], acting, [.close]].filter { !$0.isEmpty },
             shareEntries: sharing
         )
     }
@@ -163,7 +166,8 @@ struct StoryHeaderView: View {
     @Binding var showExportShareSheet: Bool
 
     let makeStoryExternalShareURL: (String) -> URL?
-    let deleteCurrentStory: () -> Void
+    /// `nil` : l'auteur supprime ; un motif : la modération retire (#11151).
+    let deleteCurrentStory: (_ reason: String?) -> Void
     let pauseTimer: () -> Void
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
@@ -431,7 +435,8 @@ struct StoryHeaderView: View {
             isOwnStory: isOwnStory,
             isPublicStory: currentStory?.isPublic ?? false,
             hasAudioTranscript: hasAudioTranscript,
-            canCompose: composableSlide != nil && demanderComposer != nil
+            canCompose: composableSlide != nil && demanderComposer != nil,
+            canRemove: ContentRemovalPolicy.mayRemovePublication(authoredByViewer: isOwnStory, platformRole: AuthManager.shared.currentUser?.role)
         )
     }
 
@@ -495,24 +500,41 @@ struct StoryHeaderView: View {
                 Label(String(localized: "story.viewer.action.share", defaultValue: "Partager", bundle: .main),
                       systemImage: "square.and.arrow.up")
             }
-        case .report:
-            Button(role: .destructive) {
-                showReportSheet = true
-            } label: {
-                Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
-            }
-        case .delete:
-            Button(role: .destructive) {
-                deleteCurrentStory()
-            } label: {
-                Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-            }
+        case .report, .remove, .delete:
+            actingMenuItem(entry)
         case .close:
             Button {
                 dismissViewer()
             } label: {
                 Label(String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
                       systemImage: FullscreenChromeSymbol.close)
+            }
+        }
+    }
+
+    /// Ce que le lecteur FAIT de la story : la signaler, la retirer (modération,
+    /// #11151) ou la supprimer (l'auteur).
+    @ViewBuilder
+    private func actingMenuItem(_ entry: StoryOptionsMenuEntry) -> some View {
+        switch entry {
+        case .remove:
+            Button(role: .destructive) {
+                HapticFeedback.medium()
+                ContentRemovalPresenter.present(.story) { deleteCurrentStory($0) }
+            } label: {
+                Label(String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main), systemImage: ContentRemovalKind.symbol)
+            }
+        case .delete:
+            Button(role: .destructive) {
+                deleteCurrentStory(nil)
+            } label: {
+                Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+            }
+        default:
+            Button(role: .destructive) {
+                showReportSheet = true
+            } label: {
+                Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
             }
         }
     }

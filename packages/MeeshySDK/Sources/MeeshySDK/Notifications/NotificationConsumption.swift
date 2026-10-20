@@ -335,4 +335,4 @@ extension NotificationToastManager {
     }
 }
 
-private let consumptionLogger = Logger(subsystem: "me.meeshy.sdk", category: "notifications")
+private let consumptionLogger = MeeshyLog.logger(.notifications, subsystem: .sdk)

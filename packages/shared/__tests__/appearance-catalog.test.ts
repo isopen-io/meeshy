@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PACK_LANGUAGES } from '../types/content-pack';
-import { AppearancePackContractSchema, isDiscreetPattern, parseAppearanceDesign, parseAppearancePackContract, patternInkOpacity } from '../types/appearance-design';
+import { APPEARANCE_LIMITS, AppearancePackContractSchema, isDiscreetPattern, parseAppearanceDesign, parseAppearancePackContract, patternInkOpacity } from '../types/appearance-design';
 import { AvatarRingPackContractSchema, parseAvatarRingDesign, parseAvatarRingPackContract } from '../types/avatar-ring-design';
 import { canUseFrame } from '../types/frame-usage';
 import { parsePackIndex } from '../types/content-pack-index';
@@ -83,12 +83,43 @@ describe('le catalogue des 15 modèles de fond (#10632, #10638, § 6)', () => {
 });
 
 describe('les 6 bannières et les 6 contours (#10632, § 6)', () => {
-  it('reprennent six fonds À L’IDENTIQUE', () => {
+  it('six bannières que le contrat de bannière lit toutes', () => {
     const [pack] = banners.packs;
     expect(pack?.slug).toBe('bannieres-essentielles');
     expect(pack?.designs).toHaveLength(6);
-    pack?.designs?.forEach((banner) => expect(wallpaperDesigns).toContainEqual(banner));
     expect(parseAppearancePackContract({ domain: 'banner', designs: pack?.designs })?.designs).toHaveLength(6);
+  });
+
+  it('chaque bannière a son PROPRE dessin (#11165) : « Aurore » et « Aurore vive » ne se confondent plus, même image fixe', () => {
+    const drawing = (design: unknown) => {
+      const { key: _key, lottie: _lottie, ...rest } = design as { key: string; lottie?: unknown };
+      return JSON.stringify(rest);
+    };
+    const drawings = banners.packs.flatMap((pack) => pack.designs ?? []).map(drawing);
+    expect(new Set(drawings).size).toBe(drawings.length);
+  });
+
+  it('une bannière à motif se VOIT (#11165) : son encre dépasse le plafond discret d’un fond, sans le plafond de bannière', () => {
+    const patterns = banners.packs.flatMap((pack) => pack.designs ?? []).map((design) => parseAppearanceDesign(design, 'banner')).filter((design) => design?.style === 'pattern');
+    expect(patterns).toHaveLength(4);
+    patterns.forEach((design) => {
+      expect(patternInkOpacity(design!)).toBeGreaterThan(APPEARANCE_LIMITS.maxPatternOpacity);
+      expect(isDiscreetPattern(design!, 'banner')).toBe(true);
+    });
+  });
+
+  it('le plafond d’encre dépend de la SURFACE : 12 % sous un fil, 32 % sur une bannière, refus au-delà', () => {
+    const [monogramme] = wallpaperDesigns as { tile: { paths: { opacity: number }[] } }[];
+    const marked = structuredClone(monogramme);
+    marked.tile.paths.forEach((path) => { path.opacity = 0.3; });
+    expect(parseAppearanceDesign(marked)).toBeNull();
+    expect(parseAppearanceDesign(marked, 'banner')).not.toBeNull();
+    expect(parseAppearancePackContract({ domain: 'wallpaper', designs: [marked] })).toBeNull();
+    expect(parseAppearancePackContract({ domain: 'banner', designs: [marked] })).not.toBeNull();
+    const loud = structuredClone(monogramme);
+    loud.tile.paths[0]!.opacity = 0.4;
+    expect(parseAppearanceDesign(loud, 'banner')).toBeNull();
+    expect(parseAppearancePackContract({ domain: 'banner', designs: [loud] })).toBeNull();
   });
 
   it('les six contours se lisent, aux clés uniques, et le contrat refuse un index de couleur hors palette', () => {

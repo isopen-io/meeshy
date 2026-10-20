@@ -40,7 +40,7 @@ final class RequestsViewModel: ObservableObject {
     private let receivedKey = FriendshipCache.PersistenceKeys.receivedRequests
     private let sentKey = FriendshipCache.PersistenceKeys.sentRequests
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "requests")
+    private static let logger = MeeshyLog.logger(.requests)
 
     init(
         friendService: FriendServiceProviding = FriendService.shared,

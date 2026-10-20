@@ -24,7 +24,7 @@ public actor EngagementOutbox {
         }
     }
     private let now: @Sendable () -> Date
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "engagement-outbox")
+    private static let logger = MeeshyLog.logger(.engagementOutbox, subsystem: .legacySDK)
 
     /// Backoff identique au pattern existant : min(60s, 2^attempts × 5s).
     private static func backoff(attempts: Int) -> TimeInterval {

@@ -1,5 +1,6 @@
 import SwiftUI
 import os
+import MeeshySDK
 
 /// **Le splash se pose UNE fois, le temps que l'app démarre — et rien du
 /// démarrage ne peut le retenir** (#6744, arbitrage porteur de #6223 : « Dès que
@@ -79,7 +80,7 @@ final class LaunchSplashController: ObservableObject {
     private let elapsed: () -> Duration
     private let sleep: @concurrent (Duration) async throws -> Void
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "launch")
+    private static let log = MeeshyLog.logger(.launch)
 
     init(elapsed: (() -> Duration)? = nil,
          sleep: (@concurrent (Duration) async throws -> Void)? = nil) {

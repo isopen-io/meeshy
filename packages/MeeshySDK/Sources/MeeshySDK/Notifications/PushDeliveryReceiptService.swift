@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.meeshy.sdk", category: "push-receipt")
+private let logger = MeeshyLog.logger(.pushReceipt, subsystem: .legacySDK)
 
 /// Contract for emitting a delivery acknowledgement ("double-check" cursor
 /// in the sender's UI) when a push notification surfaces a message we have

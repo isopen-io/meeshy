@@ -165,7 +165,7 @@ protocol NearbyPostCaching: Sendable {
 /// L'implémentation réelle : le magasin de feed déjà en place, sous une clé
 /// préfixée `nearby:` pour ne jamais écraser « main-feed » ni « bookmarks ».
 struct NearbyFeedPostCache: NearbyPostCaching {
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "nearby-cache")
+    private static let log = MeeshyLog.logger(.nearbyCache)
 
     func load(key: String) async -> CacheResult<[FeedPost]> {
         await CacheCoordinator.shared.feed.load(for: key)
@@ -417,7 +417,7 @@ final class NearbyDiscoveryViewModel: ObservableObject {
     private var pendingForceRefresh: Bool?
     private var cancellables = Set<AnyCancellable>()
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "nearby")
+    private static let log = MeeshyLog.logger(.nearby)
 
     init(
         initialCoordinate: CLLocationCoordinate2D? = nil,

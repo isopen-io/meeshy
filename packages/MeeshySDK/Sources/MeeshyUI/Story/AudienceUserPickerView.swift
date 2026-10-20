@@ -231,8 +231,7 @@ public struct AudienceUserPickerView: View {
         .adaptiveOnChange(of: vm.query) { _, _ in
             searchTask?.cancel()
             searchTask = Task {
-                try? await Task.sleep(for: .milliseconds(350))
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .milliseconds(350)) else { return }
                 await vm.performSearch()
             }
         }

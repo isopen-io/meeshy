@@ -31,8 +31,34 @@ struct GallerySourceSignature: Equatable {
     }
 }
 
+/// **Ce que les couloirs du plateau lisent de la source, lu UNE fois par source**
+/// (#11163). Le parcours du lot vivait dans `stageCorridors`, que chaque page
+/// relit pour se cadrer : une galerie de N pièces payait N × N à chaque mise en
+/// page, et le journal de l'iPhone a pris le fil principal dans ce parcours
+/// jusqu'au chien de garde.
+struct GalleryLotShape: Equatable {
+    let isSeries: Bool
+    let carriesDuration: Bool
+
+    init(_ attachments: [MessageAttachment]) {
+        isSeries = attachments.count > 1
+        carriesDuration = MediaGalleryStage.carriesDuration(attachments)
+    }
+}
+
 /// La règle du suivi, sans vue : la page à rétablir après une extension.
 enum GalleryPagePinning {
+    /// **Une pièce, une page** (#11162). Le pager suit ses pages par leur
+    /// identifiant : un doublon y ferait deux pages au même nom, et la position
+    /// que la galerie lit (`indexByID`) divergerait de celle du pager pour
+    /// toutes les pages suivantes. La première occurrence est gardée.
+    static func distinct(_ attachments: [MessageAttachment]) -> [MessageAttachment] {
+        attachments.reduce(into: (seen: Set<String>(), kept: [MessageAttachment]())) { acc, piece in
+            guard acc.seen.insert(piece.id).inserted else { return }
+            acc.kept.append(piece)
+        }.kept
+    }
+
     /// La pièce qu'on regardait, si elle est toujours là — sinon rien : une
     /// pièce retirée ne se remplace pas par une autre choisie au hasard.
     static func pageToRestore(pinned: String?, among ids: [String]) -> String? {

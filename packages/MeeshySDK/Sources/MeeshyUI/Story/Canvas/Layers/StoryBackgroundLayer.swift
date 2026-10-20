@@ -7,7 +7,7 @@ import os
 /// aveugle (régressions 2026-05-22, 2026-06-09, 2026-06-11 toutes invisibles
 /// dans les logs). Couvre : choix de sous-chemin dans `configure(.video)`,
 /// résolution cache vs streaming distant, attach du player.
-let storyMediaLog = os.Logger(subsystem: "me.meeshy.app", category: "story-media")
+let storyMediaLog = MeeshyLog.logger(.storyMedia)
 
 /// Visual background of the story canvas (color/gradient/image+thumbHash/video).
 /// Lives below `itemsContainer` in `StoryCanvasUIView.rootLayer`.

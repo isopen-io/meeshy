@@ -369,7 +369,7 @@ extension OfflineQueue {
         while true {
             guard let context = commentContext(ownerId: ownerId) else {
                 guard CommentOwnership.identity(ownerId) != nil, Date() < deadline else { return nil }
-                try? await Task.sleep(for: .milliseconds(50))
+                guard await cancellableSleep(for: QueueTiming.rebindPoll) else { return nil }
                 continue
             }
             if CommentOwnership.baseBelongs(toOwner: context.ownerId, databasePath: context.pool.path,
@@ -377,7 +377,7 @@ extension OfflineQueue {
                 return context
             }
             guard Date() < deadline else { return nil }
-            try? await Task.sleep(for: .milliseconds(50))
+            guard await cancellableSleep(for: QueueTiming.rebindPoll) else { return nil }
         }
     }
 

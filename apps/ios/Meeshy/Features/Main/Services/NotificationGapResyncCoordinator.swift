@@ -139,5 +139,5 @@ final class NotificationGapResyncCoordinator {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let notifResync = Logger(subsystem: "me.meeshy.app", category: "notif-resync")
+    nonisolated static let notifResync = MeeshyLog.logger(.notifResync)
 }

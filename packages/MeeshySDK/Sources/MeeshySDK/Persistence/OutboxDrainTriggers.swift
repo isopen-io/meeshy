@@ -23,7 +23,7 @@ final class OutboxDrainTriggers {
                     // Brief delay to let the socket handshake complete before
                     // draining the outbox — avoids sending on an unhealthy pipe
                     // while keeping the UX snappy (was 2 000 ms, now 200 ms).
-                    try? await Task.sleep(for: .milliseconds(200))
+                    guard await cancellableSleep(for: QueueTiming.drainSettle) else { return }
                     await drain()
                 }
             }
@@ -46,7 +46,7 @@ final class OutboxDrainTriggers {
                 Task {
                     // Même délai que la voie socket : laisser la pile réseau
                     // se stabiliser avant de réémettre.
-                    try? await Task.sleep(for: .milliseconds(200))
+                    guard await cancellableSleep(for: QueueTiming.drainSettle) else { return }
                     await drain()
                 }
             }

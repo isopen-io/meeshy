@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import MeeshySDK
 @preconcurrency import Lottie
 
 /// **Un sticker Mee ou Meo, animé** (#9053, #10639) — la même vue dans la
@@ -80,8 +81,7 @@ public struct MeeStickerFilmView: View {
             guard animates, !reduceMotion, filmAnimated else { return }
             // Une case qui ne fait que PASSER pendant un lancer ne monte rien :
             // sa tâche est annulée avant la fin de ce délai.
-            try? await Task.sleep(for: .milliseconds(Self.filmDelayMilliseconds))
-            guard !Task.isCancelled,
+            guard await cancellableSleep(for: .milliseconds(Self.filmDelayMilliseconds)),
                   let source = await LottieFilm.load(url: url),
                   !Task.isCancelled else { return }
             film = source

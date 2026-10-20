@@ -8,6 +8,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { isMessagePiecesCatalogLoaded, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
+import { moderationReasonOf } from './content-removal';
 import { deleteOfferOf, offersDeletion, type DeleteOffer, type DeleteViewer } from './message-deletion';
 
 /**
@@ -23,11 +24,14 @@ import { deleteOfferOf, offersDeletion, type DeleteOffer, type DeleteViewer } fr
  * Un mode que la règle n'offre pas ne part pas, même demandé : le dialogue ne
  * le rend pas, cette garde vaut pour toute autre porte.
  */
-export type MessageDeleteMode = 'everyone' | 'me';
+export type MessageDeleteMode = 'everyone' | 'me' | 'remove';
 
 export type MessageDeleteRequest = { readonly messageIds: readonly string[]; readonly offer: DeleteOffer };
 
 type Transport = { readonly request: <T>(request: HttpRequest) => Promise<ApiResult<T>> };
+
+const offered = (offer: DeleteOffer, mode: MessageDeleteMode): boolean =>
+  mode === 'everyone' ? offer.forEveryone : mode === 'remove' ? offer.remove : offer.forMe;
 
 const noticeOf = (result: MessageDeleteResult): string | null => {
   const language = currentInterfaceLanguage();
@@ -76,15 +80,18 @@ export function useMessageDelete(params: {
   const dismiss = useCallback(() => setRequest(null), []);
 
   const confirm = useCallback(
-    (mode: MessageDeleteMode) => {
+    (mode: MessageDeleteMode, motive?: string) => {
       if (request === null) return;
       setRequest(null);
-      if (!(mode === 'everyone' ? request.offer.forEveryone : request.offer.forMe)) return;
+      const reason = mode === 'remove' && motive !== undefined ? moderationReasonOf(motive) : null;
+      if (!offered(request.offer, mode) || (mode === 'remove' && reason === null)) return;
       const messages = request.messageIds.map(messageOf).filter((m): m is Message => m !== undefined);
       if (messages.length === 0) return;
       onConfirmed();
-      const perform = mode === 'everyone' ? performDeleteForEveryone : performDeleteForMe;
-      void perform({ queryClient, conversationId, messages, transport }).then((result) => {
+      const params = { queryClient, conversationId, messages, transport };
+      const performed =
+        mode === 'me' ? performDeleteForMe(params) : performDeleteForEveryone({ ...params, ...(reason === null ? {} : { reason }) });
+      void performed.then((result) => {
         const notice = noticeOf(result);
         if (notice !== null) announce(notice);
       });

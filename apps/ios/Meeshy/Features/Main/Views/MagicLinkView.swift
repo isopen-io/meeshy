@@ -43,7 +43,7 @@ struct MagicLinkView: View {
     /// suit l'envoi, pour l'adresse à laquelle il est parti.
     @State private var codeEntry: EmailVerificationViewModel?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "magic-link")
+    private static let logger = MeeshyLog.logger(.magicLink)
 
     /// - Parameters:
     ///   - prefilledEmail: l'adresse déjà tapée ailleurs (#8216) — la retaper

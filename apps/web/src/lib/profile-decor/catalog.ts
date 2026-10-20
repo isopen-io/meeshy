@@ -38,7 +38,7 @@ const packsOf = <Design,>(raw: readonly RawPack[], designsOf: (pack: RawPack) =>
   }));
 
 export const BUILTIN_RING_PACKS: readonly BuiltinPack<AvatarRingDesign>[] = packsOf(avatarRingPacks.packs, (pack) => (pack as (typeof avatarRingPacks.packs)[number]).rings, parseAvatarRingDesign);
-export const BUILTIN_BANNER_PACKS: readonly BuiltinPack<AppearanceDesign>[] = packsOf(bannerPacks.packs, (pack) => (pack as (typeof bannerPacks.packs)[number]).designs, parseAppearanceDesign);
+export const BUILTIN_BANNER_PACKS: readonly BuiltinPack<AppearanceDesign>[] = packsOf(bannerPacks.packs, (pack) => (pack as (typeof bannerPacks.packs)[number]).designs, (design) => parseAppearanceDesign(design, 'banner'));
 export const BUILTIN_BANNER_FRAME_PACKS: readonly BuiltinPack<BannerFrameDesign>[] = packsOf(bannerFramePacks.packs, (pack) => (pack as (typeof bannerFramePacks.packs)[number]).frames, parseBannerFrameDesign);
 
 const pick = <Design extends { readonly key: string }>(packs: readonly BuiltinPack<Design>[], ref: ProfileDecorRef): Design | null =>

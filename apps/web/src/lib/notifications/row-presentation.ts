@@ -2,6 +2,7 @@ import { ENGAGEMENT_ACHIEVEMENT_KEYS, isEngagementAxisKey, type EngagementAchiev
 import { isGameNotificationType } from '@meeshy/shared/utils/game/notifications';
 import { engagementAchievementCondition, engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 
+import { translate } from '@/lib/i18n-catalog';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { AXIS_GLYPHS, type ProgressionGlyph } from '@/lib/view/progression';
@@ -35,8 +36,14 @@ export type MilestoneGlyph = ProgressionGlyph | 'trophy' | 'star' | 'fire';
 /**
  * `game` : la ligne du jeu SANS personne à nommer (résultat de ligue, étape de saison, #9490) — elle porte la
  * Signature de Meeshy à la place d'un avatar. Un duo, lui, a son ami pour acteur : avatar.
+ * `removed` : un contenu retiré par la modération (#11150) — le modérateur n'est jamais nommé, un médaillon
+ * tient la place.
  */
-export type RowLeading = { readonly kind: 'avatar' } | { readonly kind: 'milestone'; readonly glyph: MilestoneGlyph } | { readonly kind: 'game' };
+export type RowLeading =
+  | { readonly kind: 'avatar' }
+  | { readonly kind: 'milestone'; readonly glyph: MilestoneGlyph }
+  | { readonly kind: 'game' }
+  | { readonly kind: 'removed' };
 
 /** Où un message a été écrit : un groupe nommé, ou une conversation privée (#9992). */
 export type ConversationScope = 'group' | 'direct';
@@ -252,7 +259,22 @@ function milestoneReason(notification: NotificationRecord, milestone: Milestone,
 
 // --- La ligne -----------------------------------------------------------------
 
+/**
+ * **UN CONTENU RETIRÉ** (#11150) — titre et corps composés par la passerelle
+ * dans la langue du destinataire ; le MOTIF (`metadata.reason`) en citation,
+ * sauf quand le corps le porte déjà.
+ */
+function removedPresentation(notification: NotificationRecord, options: Options): NotificationRowPresentation {
+  const title = notificationTitle(notification);
+  const [, body = null] = distinctTexts([title, firstFilled(notification.content)]);
+  const reason = firstFilled(notification.metadata.reason);
+  const quote = reason === null || (body ?? '').includes(reason) ? null : translate(options.language, 'moderation.remove.notification.reason', { reason });
+  const shown = [title, body, quote].filter((text): text is string => text !== null);
+  return { leading: { kind: 'removed' }, title, body, quote, footer: conversationOrPlainFooter(notification, shown, options.language) };
+}
+
 export function notificationRowPresentation(notification: NotificationRecord, options: Options): NotificationRowPresentation {
+  if (notification.type === 'content_removed') return removedPresentation(notification, options);
   const milestone = milestoneOf(notification);
   if (milestone !== null) return milestonePresentation(notification, milestone, options.language);
   const title = notificationTitle(notification);

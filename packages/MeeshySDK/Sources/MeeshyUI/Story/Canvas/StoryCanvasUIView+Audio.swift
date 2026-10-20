@@ -111,7 +111,7 @@ extension StoryCanvasUIView {
             // d'enveloppe automatique 30%→100%→5% — le son joue à volume
             // plein dès le début et jusqu'au changement de slide.
         } catch {
-            os.Logger(subsystem: "me.meeshy.app", category: "media")
+            MeeshyLog.logger(.media)
                 .error("ReaderAudioMixer.play failed: \(error.localizedDescription, privacy: .public)")
         }
     }
@@ -386,7 +386,7 @@ extension StoryCanvasUIView {
                                     slideElapsed: anchor.slideElapsed)
             publishEditAudioPhase()
         } catch {
-            os.Logger(subsystem: "me.meeshy.app", category: "media")
+            MeeshyLog.logger(.media)
                 .error("edit ReaderAudioMixer.play failed: \(error.localizedDescription, privacy: .public)")
         }
     }

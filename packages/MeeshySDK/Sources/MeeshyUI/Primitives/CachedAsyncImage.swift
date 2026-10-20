@@ -537,8 +537,8 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         }
         .task(id: fullUrl) {
             showPlaceholder = false
-            try? await Task.sleep(for: .milliseconds(200))
-            if !Task.isCancelled { showPlaceholder = true }
+            guard await cancellableSleep(for: .milliseconds(200)) else { return }
+            showPlaceholder = true
         }
         .adaptiveOnChange(of: thumbnailUrl) { _, newUrl in
             guard fullImage == nil else { return }

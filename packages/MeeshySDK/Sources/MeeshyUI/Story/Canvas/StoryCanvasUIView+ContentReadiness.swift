@@ -11,6 +11,8 @@ import MeeshySDK
 // MARK: - StoryCanvasUIView + ContentReadiness
 
 extension StoryCanvasUIView {
+    static let contentReadinessFailsafe: Duration = .seconds(2)
+
     // MARK: - Content readiness (drives StoryReaderTimerController)
 
     /// Decides when the background media for the current slide is fully
@@ -103,8 +105,7 @@ extension StoryCanvasUIView {
                 // « progress bar ne progresse même plus du tout »).
                 pendingVideoReadinessTask?.cancel()
                 pendingVideoReadinessTask = Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .seconds(2))
-                    if Task.isCancelled { return }
+                    guard await cancellableSleep(for: StoryCanvasUIView.contentReadinessFailsafe) else { return }
                     guard let self else { return }
                     guard !self.contentReadyFired else { return }
                     self.backgroundDidBecomeReady()
@@ -177,8 +178,7 @@ extension StoryCanvasUIView {
         }
         pendingVideoReadinessTask?.cancel()
         pendingVideoReadinessTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(2))
-            if Task.isCancelled { return }
+            guard await cancellableSleep(for: StoryCanvasUIView.contentReadinessFailsafe) else { return }
             guard let self else { return }
             guard !self.contentReadyFired else { return }
             self.backgroundDidBecomeReady()
@@ -390,8 +390,7 @@ extension StoryCanvasUIView {
         // gate re-entries during loading don't restart the timer.
         guard foregroundVideoReadinessFailsafe == nil else { return }
         foregroundVideoReadinessFailsafe = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(2))
-            if Task.isCancelled { return }
+            guard await cancellableSleep(for: StoryCanvasUIView.contentReadinessFailsafe) else { return }
             guard let self, !self.contentReadyFired else { return }
             self.foregroundReadinessTimedOut = true
             self.fireContentReadyIfNeeded()

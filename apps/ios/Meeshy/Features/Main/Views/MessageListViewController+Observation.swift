@@ -30,9 +30,7 @@ extension MessageListViewController {
         observeConversationViewModel()
     }
 
-    /// Les observations qui EXIGENT un ViewModel. Extraites d'`observeStore()`
-    /// (#5947) pour être rappelables : la seule chose qui manquait au `guard`
-    /// d'origine était quelqu'un pour le rejouer quand la dépendance arrive.
+    /// Les observations qui EXIGENT un ViewModel. Extraites d'`observeStore()` (#5947) pour être rappelables : le `guard` d'origine n'avait personne pour le rejouer quand la dépendance arrive.
     func observeConversationViewModel() {
         guard !didObserveConversationViewModel else { return }
         guard let vm = conversationViewModel else { return }
@@ -43,23 +41,22 @@ extension MessageListViewController {
         observePerMessageDictionary(vm.$messageTranscriptions, initial: vm.messageTranscriptions)
         observePerMessageDictionary(vm.$messageTranslatedAudios, initial: vm.messageTranslatedAudios)
         observePerMessageDictionary(vm.$activeTranslationOverrides, initial: vm.activeTranslationOverrides)
-        // Flag-strip selection lifted out of the bubble's @State — a tap
-        // writes to the VM; reconfigure the touched cell so the bubble
-        // re-renders with the fresh snapped inputs (the Equatable gate sees
-        // them change and lets the body re-run).
+        // La sélection du bandeau de drapeaux vit dans le ViewModel : un tap reconfigure la cellule touchée avec les entrées fraîches.
         observePerMessageDictionary(vm.$bubbleLanguageSelections, initial: vm.bubbleLanguageSelections)
         observeVisitState(vm)
         observeConversationAppearance(vm)
-
-        // Séparateur de premier non-lu (D-L1..3, #7222) — voir
-        // `MessageListViewController+UnreadSeparator.swift`.
         bindUnreadSeparator(vm)
+        observeSnapshotTriggers(vm)
+        observeTypingRoster(vm)
+        observeRingsAndPresence()
+    }
 
+    /// Langue préférée, consentement vocal et terme de recherche exigent de rejouer la registration de chaque item : reconfigure complet.
+    func observeSnapshotTriggers(_ vm: ConversationViewModel) {
         vm.$preferredLanguageRevision
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in
-                // Preferred language revision change requires full reconfigure of all items
                 self?.applySnapshot(reconfigure: .allItems)
             }
             .store(in: &cancellables)
@@ -73,13 +70,6 @@ extension MessageListViewController {
             }
             .store(in: &cancellables)
 
-        // In-conversation search term changes (enter / exit / refine the
-        // filtered-conversation search) require re-running the cell registration
-        // so each bubble shows or clears the highlight. `applySnapshot`
-        // reconfigures every existing item in place — same full-reconfigure
-        // pattern as preferredLanguageRevision. The set change on enter/exit
-        // already triggers this; the explicit sink also covers a refinement
-        // that keeps the same match set but a different term.
         vm.$currentSearchQuery
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -88,18 +78,10 @@ extension MessageListViewController {
                 self?.applySnapshot(reconfigure: .allItems)
             }
             .store(in: &cancellables)
+    }
 
-        // Typing roster — la cellule typing entre/sort du flux comme toute
-        // rangée du rouleau, sans animation. Uses stateStore publisher so
-        // typing doesn't trigger full ConversationViewModel re-render.
-        //
-        // CHEMIN COURT (#4944) : `typing:start` est réémis toutes les trois
-        // secondes par chaque frappeur, et repasser par la pose complète payait
-        // la préparation de TOUTE la fenêtre pour un item qui entre ou sort du
-        // bas du flux. `applyTypingIndicatorFastPath` insère ou retire ce seul
-        // item dans le snapshot courant ; il rend `false` quand il ne peut pas
-        // trancher, et la voie complète reste alors le repli — jamais un
-        // silence.
+    /// CHEMIN COURT (#4944) : `typing:start` est réémis toutes les trois secondes par chaque frappeur ; `applyTypingIndicatorFastPath` n'insère ou ne retire que l'item typing, et rend `false` quand il ne peut pas trancher — la voie complète reste alors le repli.
+    func observeTypingRoster(_ vm: ConversationViewModel) {
         vm.typingParticipantsPublisher
             .receive(on: DispatchQueue.main)
             .dropFirst()
@@ -110,13 +92,10 @@ extension MessageListViewController {
                 }
             }
             .store(in: &cancellables)
+    }
 
-        // Anneaux story des avatars expéditeurs — l'état vu/non-vu vit dans
-        // StoryViewModel (jamais dans GRDB), donc aucun chemin existant ne
-        // reconfigure les cellules quand il change. Fingerprint id:hasUnviewed
-        // pour ignorer les mutations sans effet sur l'anneau (compteurs de
-        // vues, réactions…) ; la reconfiguration ne touche que les cellules
-        // visibles — les autres re-snappent l'état à leur prochaine config.
+    /// Anneaux story et présence 1/3/5 vivent hors GRDB : aucun chemin existant ne reconfigure les rangées quand ils changent. Seules les cellules visibles se reconfigurent ; les autres re-snappent à leur prochaine configuration.
+    func observeRingsAndPresence() {
         storyViewModel.$storyGroups
             .map { groups in
                 groups.map { "\($0.id):\($0.hasUnviewed)" }.joined(separator: ",")
@@ -129,14 +108,6 @@ extension MessageListViewController {
             }
             .store(in: &cancellables)
 
-        // Présence 1/3/5 sur la pastille d'identité (matrice §5) — l'état
-        // vit dans PresenceManager, hors GRDB : aucun chemin existant ne
-        // reconfigurait les rangées quand il change, la pastille restait
-        // FIGÉE à l'état de sa dernière configuration (audit 2026-08-18).
-        // Même canal que les anneaux story : `refreshSignal.presenceVersion`
-        // est publié pour ça (débouncé, un tick par rafale d'événements),
-        // reconfiguration des seules cellules visibles — les autres
-        // re-snappent à leur prochaine config.
         PresenceManager.shared.refreshSignal.$presenceVersion
             .dropFirst()
             .receive(on: DispatchQueue.main)

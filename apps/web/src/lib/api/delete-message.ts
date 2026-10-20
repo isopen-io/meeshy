@@ -2,6 +2,8 @@ import type { InfiniteData, QueryClient, QueryKey } from '@tanstack/react-query'
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 import * as messagesEndpoints from '@meeshy/shared/api/endpoints/messages';
 
+import { removalBody } from '@/lib/view/content-removal';
+
 import { CONVERSATIONS_QUERY_KEY, findCachedConversation, patchConversation } from './conversations';
 import type { ApiResult, HttpRequest } from './http';
 import { mediaHubConversationKey } from './media-hub-cache';
@@ -27,6 +29,11 @@ import type { Conversation, Message } from './types';
  * Optimiste dans les deux cas, et un refus ou une coupure REND ce qui n'est
  * pas parti, à sa place, sans écraser ce que le cache a appris pendant le vol.
  * Un échec PARTIEL ne rend que les messages refusés : l'issue les compte.
+ *
+ * RETIRER (#11150) — la même boucle « pour tous », le MOTIF en corps
+ * (`{ reason }`) : c'est ce qui distingue, côté passerelle, le retrait par la
+ * modération de la suppression par l'auteur. Sans motif, aucun corps — un
+ * auteur supprime comme avant.
  *
  * Hors ligne, la boucle « pour tous » s'arrête au premier échec de réseau :
  * les suivants échoueraient de même, chacun après son délai de garde.
@@ -86,7 +93,7 @@ function restoreTombstone(queryClient: QueryClient, conversationId: string, snap
   patchConversation(queryClient, conversationId, (c) => (c.lastMessage?.id === id && wasTombstonedAt(c.lastMessage, deletedAt) ? conversation : c));
 }
 
-export async function performDeleteForEveryone(params: DeleteParams & { readonly now?: Date }): Promise<MessageDeleteResult> {
+export async function performDeleteForEveryone(params: DeleteParams & { readonly now?: Date; readonly reason?: string }): Promise<MessageDeleteResult> {
   const { queryClient, conversationId, messages, transport } = params;
   if (messages.length === 0) return NOTHING;
 
@@ -103,6 +110,7 @@ export async function performDeleteForEveryone(params: DeleteParams & { readonly
       const result = await transport.request<unknown>({
         method: 'DELETE',
         path: conversationsEndpoints.byIdMessagesByMessageId(conversationId, snapshot.id),
+        ...removalBody(params.reason),
       });
       if (result.ok) return { ...so, deleted: so.deleted + 1 };
       return { ...so, failed: [...so.failed, snapshot], offline: result.status === 0 };

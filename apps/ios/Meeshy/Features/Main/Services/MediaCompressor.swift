@@ -108,7 +108,7 @@ nonisolated enum VideoColorTagging {
 actor MediaCompressor {
     static let shared = MediaCompressor()
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "media-compressor")
+    private static let logger = MeeshyLog.logger(.mediaCompressor)
 
     // MARK: - From UIImage (format already lost) → always JPEG
 

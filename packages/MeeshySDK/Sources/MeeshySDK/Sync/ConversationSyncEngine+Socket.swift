@@ -314,8 +314,7 @@ extension ConversationSyncEngine {
         stateQueue.sync {
             guard _markAsReceivedTasks[conversationId] == nil else { return }
             _markAsReceivedTasks[conversationId] = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(window))
-                guard let self else { return }
+                guard await cancellableSleep(for: .seconds(window)), let self else { return }
                 // La fenêtre se ferme AVANT l'envoi : un message arrivant
                 // pendant l'aller-retour ouvre la fenêtre SUIVANTE au lieu
                 // d'être avalé.

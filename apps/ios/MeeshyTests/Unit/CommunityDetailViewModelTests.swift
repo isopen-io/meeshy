@@ -48,4 +48,29 @@ final class CommunityDetailViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.conversationTitles["conv-direct"], "Bob Martin")
     }
+
+    func test_load_createurSansFicheMembre_estAdmin() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: []))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-creator" })
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.isCreator)
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertTrue(viewModel.isAdmin)
+        XCTAssertEqual(viewModel.currentUserRole, .admin)
+    }
+
+    func test_load_visiteurNonMembre_neChargePasLesConversations() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: []))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-visitor" })
+
+        await viewModel.load()
+
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertTrue(viewModel.conversations.isEmpty)
+    }
 }

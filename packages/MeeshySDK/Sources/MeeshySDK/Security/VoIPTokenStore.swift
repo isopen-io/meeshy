@@ -57,7 +57,7 @@ public final class KeychainVoIPTokenStore: VoIPTokenStoring, @unchecked Sendable
     private let userDefaults: UserDefaults
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "voip-token")
+    private let logger = MeeshyLog.logger(.voipToken, subsystem: .legacySDK)
 
     public init(
         keychain: KeychainManager = .shared,

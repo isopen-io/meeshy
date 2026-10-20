@@ -4,7 +4,7 @@
     {
       "slug": "cadres-haussmannien",
       "order": 0,
-      "installedByDefault": false,
+      "installedByDefault": true,
       "removable": true,
       "usage": {
         "kind": "free",
@@ -1414,7 +1414,7 @@
     {
       "slug": "cadres-ancestral",
       "order": 3,
-      "installedByDefault": false,
+      "installedByDefault": true,
       "removable": true,
       "usage": {
         "kind": "free",

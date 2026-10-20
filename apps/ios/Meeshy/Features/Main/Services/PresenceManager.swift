@@ -447,5 +447,5 @@ final class PresenceManager: ObservableObject {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let presence = Logger(subsystem: "me.meeshy.app", category: "presence")
+    nonisolated static let presence = MeeshyLog.logger(.presence)
 }

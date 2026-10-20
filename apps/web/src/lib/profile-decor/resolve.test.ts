@@ -71,8 +71,11 @@ describe('les cadres de bannière embarqués (#10936)', () => {
     expect(resolveBannerFrame(builtinItem('cadres-haussmannien', 'fantome'), new Map())).toBeNull();
   });
 
-  test('le sélecteur propose les packs de cadres installés et possédés, rien d’office', () => {
-    expect(bannerFrameOptions({ installed: undefined, contracts: new Map() })).toEqual([]);
+  test('le sélecteur propose les packs de cadres installés et possédés, et deux d’office (#11165)', () => {
+    expect(bannerFrameOptions({ installed: undefined, contracts: new Map() }).map((group) => [group.pack, group.items.map((item) => item.ref.item)])).toEqual([
+      ['cadres-haussmannien', ['haussmannien', 'haussmannien-anime']],
+      ['cadres-ancestral', ['ancestral', 'ancestral-anime']],
+    ]);
     const groups = bannerFrameOptions({ installed: [summary('cadres-celte', { domain: 'banner-frame', removable: true })], contracts: new Map() });
     expect(groups.map((group) => [group.pack, group.items.map((item) => item.ref.item)])).toEqual([['cadres-celte', ['celte', 'celte-anime']]]);
   });

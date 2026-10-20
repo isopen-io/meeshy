@@ -9,6 +9,7 @@ import { requirePermission } from '../../middleware/authorize';
 import { judgeReason, sendReasonRefusal } from '../../middleware/sovereign-reason';
 import { permissionsService as adminPermissionsService } from '../../services/admin/permissions.service';
 import { PostCommentService } from '../../services/PostCommentService';
+import { noticeAdminRemoval } from '../../services/moderation/adminRemovalNotices';
 import { commentEventAudience } from '../../services/posts/commentHome';
 import { NOT_DELETED } from '../../services/posts/softDelete';
 import { isNewlyResolvedReportTransition, notifyReportResolved } from '../../services/reports/reportResolvedNotification';
@@ -90,7 +91,7 @@ async function announceClosure(fastify: FastifyInstance, report: ReportRow, stat
 }
 
 type CommentRemoval =
-  | { readonly ok: true; readonly commentId: string; readonly removedAt: Date; readonly authorId: string }
+  | { readonly ok: true; readonly commentId: string; readonly removedAt: Date; readonly authorId: string; readonly postId: string }
   | { readonly ok: false; readonly status: 403 | 404; readonly code: string };
 
 /** Le commentaire, son sous-arbre, les compteurs et l'annonce aux clients — par la modération. */
@@ -120,7 +121,7 @@ async function removeComment(fastify: FastifyInstance, commentId: string, actor:
       )
       .catch((error: unknown) => logWarn(fastify.log, '[admin comment removal] broadcast failed', error));
   }
-  return { ok: true, commentId, removedAt: new Date(), authorId: comment.authorId };
+  return { ok: true, commentId, removedAt: new Date(), authorId: comment.authorId, postId: removed.postId };
 }
 
 const commentAudit = (request: FastifyRequest, removal: Extract<CommentRemoval, { ok: true }>, reason: string | null, reportId: string | null) => ({
@@ -133,6 +134,9 @@ const commentAudit = (request: FastifyRequest, removal: Extract<CommentRemoval, 
   ipAddress: request.ip,
   userAgent: request.headers['user-agent'] ?? null,
 });
+
+const noticeCommentRemoval = (fastify: FastifyInstance, request: FastifyRequest, removal: Extract<CommentRemoval, { ok: true }>, reason: string | null) =>
+  noticeAdminRemoval({ prisma: fastify.prisma }, { actorUserId: actorOf(request).id, authorUserId: removal.authorId, contentType: 'comment', contentId: removal.commentId, postId: removal.postId, reason });
 
 const REFUSAL: Readonly<Record<GestureRefusal, 403 | 404 | 409>> = {
   NOT_FOUND: 404,
@@ -221,6 +225,7 @@ export async function adminModerationActRoutes(fastify: FastifyInstance): Promis
           const removal = await removeComment(fastify, report.reportedEntityId, actor);
           if ('code' in removal) return sendRefused(reply, removal.status, removal.code);
           await fastify.prisma.adminAuditLog.create({ data: commentAudit(request, removal, reason, report.id) });
+          noticeCommentRemoval(fastify, request, removal, reason);
           await fastify.prisma.$transaction(async (tx) => close(tx));
           await announceClosure(fastify, report, closure.status);
           return sendSuccess(reply, { report: { id: report.id, status: closure.status }, target: { commentId: removal.commentId, removedAt: removal.removedAt.toISOString() } });
@@ -274,6 +279,7 @@ export async function adminModerationActRoutes(fastify: FastifyInstance): Promis
         const removal = await removeComment(fastify, request.params.commentId, actorOf(request));
         if ('code' in removal) return sendRefused(reply, removal.status, removal.code);
         await fastify.prisma.adminAuditLog.create({ data: commentAudit(request, removal, verdict.reason ?? null, null) });
+        noticeCommentRemoval(fastify, request, removal, verdict.reason ?? null);
         return sendSuccess(reply, { commentId: removal.commentId, removedAt: removal.removedAt.toISOString() });
       } catch (error) {
         logError(fastify.log, '[POST /admin/comments/:commentId/remove]', error);

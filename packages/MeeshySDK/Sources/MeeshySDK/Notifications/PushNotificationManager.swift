@@ -4,7 +4,7 @@ import UserNotifications
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
+private let logger = MeeshyLog.logger(.push)
 
 /// « Un message est arrivé dans cette conversation » — le seul fait qu'une
 /// notification entrante établisse. `messageId` est porté séparément pour que

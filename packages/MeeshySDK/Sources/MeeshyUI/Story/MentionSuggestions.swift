@@ -75,8 +75,7 @@ final class MentionSuggestionsModel: ObservableObject {
         recompute()
         let debounce = self.debounce
         searchTask = Task { [weak self] in
-            try? await Task.sleep(for: debounce)
-            guard let self, !Task.isCancelled else { return }
+            guard await cancellableSleep(for: debounce), let self else { return }
             self.isSearching = true
             defer { self.isSearching = false }
             guard let found = try? await self.userService.searchUsers(query: trimmed, limit: 20, offset: 0),

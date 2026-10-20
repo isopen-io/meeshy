@@ -4,7 +4,7 @@ import UIKit
 import UniformTypeIdentifiers
 import os
 
-private let photoLog = Logger(subsystem: "com.meeshy.sdk", category: "photo-library")
+private let photoLog = MeeshyLog.logger(.photoLibrary, subsystem: .legacySDK)
 
 /// Saves images and videos to a custom "Meeshy" album in the user's photo library.
 ///

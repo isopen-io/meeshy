@@ -22,16 +22,18 @@ final class ProfileDecorSheetParityGuardTests: XCTestCase {
         XCTAssertTrue(try source().contains("struct ProfileDecorSheet"))
     }
 
-    func test_laTuileSansDesignDeLaBanniereSAppellePhoto() throws {
+    /// #11165 — la tuile s'appelle « Image », montre la bannière actuelle et ouvre la sélection d'image.
+    func test_laTuileSansDesignDeLaBanniereSAppelleImageEtOuvreLaSelection() throws {
         let source = try source()
-        XCTAssertTrue(source.contains("bannerTile(ref: nil, design: nil, label: photoLabel)"))
-        XCTAssertTrue(source.contains("\"profile.decor.photo\""))
+        XCTAssertTrue(source.contains("\"profile.decor.image\""))
+        XCTAssertFalse(source.contains("\"profile.decor.photo\""), "« Photo » est devenu « Image »")
+        XCTAssertTrue(source.contains("PhotosPicker(selection: $pickedBanner, matching: .images)"), "toucher la tuile ouvre la sélection d'image")
         XCTAssertTrue(source.contains("ringTile(ref: nil, design: nil, label: noneLabel)"), "le contour garde « Aucun »")
     }
 
     func test_chaqueSectionEstUnConteneurNommePourVoiceOver() throws {
         let source = try source()
-        XCTAssertEqual(source.components(separatedBy: ".decorSection(title)").count - 1, 2)
+        XCTAssertEqual(source.components(separatedBy: ".decorSection(title)").count - 1, 3, "contour, bannière, cadre de bannière")
         XCTAssertTrue(source.contains("accessibilityElement(children: .contain)"))
     }
 

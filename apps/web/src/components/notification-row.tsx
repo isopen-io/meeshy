@@ -343,6 +343,8 @@ function NotificationRowView({
             <MilestoneMedallion glyph={milestoneGlyph(presentation.leading.glyph)} accent={accent} />
           ) : presentation.leading.kind === 'game' ? (
             <GameMedallion accent={accent} />
+          ) : presentation.leading.kind === 'removed' ? (
+            <MilestoneMedallion glyph={NOTIFICATIONS_GLYPHS.trash} accent={accent} />
           ) : (
             /* Les initiales d'une PERSONNE viennent de son nom, jamais du titre :
                « Marie est sur Meeshy ! » y lisait « ME » (#8143). Le titre ne

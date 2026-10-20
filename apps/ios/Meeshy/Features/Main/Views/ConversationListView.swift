@@ -65,6 +65,7 @@ struct ConversationListView: View {
     @State var showSearchOverlay: Bool = false
     @State private var expandedSections: Set<String> = ConversationListSectionMemory.shared.initial
     @State private var listColumnSize: CGSize = .zero
+    @State private var keyboardCursor: String?
     /// Pendant le glisser d'une conversation : les catégories dépliées AVANT, rendues au dépôt ou à l'annulation.
     @State private var sectionsBeforeDrag: Set<String>?
     /// Le glisser en cours : son jeton et la catégorie d'où il part. Posé dès le soulèvement — qui précède aussi
@@ -307,6 +308,10 @@ struct ConversationListView: View {
                 )
             }
         }
+        .modifier(ConversationListKeyboardNavigation(
+            visibleIds: conversationViewModel.groupedConversations
+                .filter { isSectionContentVisible($0.section.id) }.flatMap { $0.conversations.map(\.id) },
+            cursor: $keyboardCursor, onOpen: openConversation(id:)))
         // Sonde inerte : capture l'UIScrollView hôte pour l'auto-scroll de
         // bord du drag de chip (+Overlays). Aucune interaction, frame nulle.
         .background(ChipAutoScrollGrabber(driver: chipAutoScrollDriver))
@@ -361,11 +366,6 @@ struct ConversationListView: View {
                 listWidth: listColumnSize.width,
                 focusCandidateRegistry: focusCandidateRegistry,
                 onRowAppear: { conversation in
-                    // Cursor-based infinite scroll: trigger `loadMore`
-                    // 5 rows before the loaded tail. The ViewModel
-                    // short-circuits when `hasMore == false`, so it
-                    // is safe to call this on every onAppear past
-                    // the threshold.
                     triggerLoadMoreIfNeeded(conversation: conversation)
                     noteVisibleSection(trackedSectionId)
                 }
@@ -398,13 +398,6 @@ struct ConversationListView: View {
         visibleSectionId = sectionId
     }
 
-    // Builds one conversation row. The heavy subtree (swipe actions +
-    // context menu + preview) lives in the nominal `ConversationRowItem`
-    // struct (ConversationListView+Rows.swift) so it no longer bloats the
-    // ConversationListView body type — that monolithic type was the
-    // type-metadata instantiation crash on low-memory devices. This builder
-    // only wires the row's inputs; the returned `some View` is the nominal
-    // `ConversationRowItem`, which keeps the enclosing list type small.
     private func conversationRow(for conversation: Conversation, rowWidth: CGFloat, passContext: ConversationRowPassContext) -> some View {
         let community: MeeshyCommunity? = {
             guard conversation.type == .community || conversation.communityId != nil,
@@ -439,14 +432,7 @@ struct ConversationListView: View {
             onCreateShareLink: canCreateShareLink(for: conversation) ? {
                 sheetTargets.inviteSheet = conversation
             } : nil,
-            onTap: {
-                if ConversationLockManager.shared.isLocked(conversation.id) {
-                    lockSheetMode = .openConversation
-                    sheetTargets.lockSheet = conversation
-                } else {
-                    onSelect(conversation)
-                }
-            },
+            onTap: { openConversation(conversation) },
             onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
             },
@@ -514,14 +500,20 @@ struct ConversationListView: View {
         row.onDragBegan = { token in beginConversationDrag(conversation.id, token: token) }
         return row
         .equatable()
+        .meeshyPointerInteractive(shape: .roundedRect(cornerRadius: MeeshyRadius.lg))
+        .overlay { KeyboardCursorRing(isActive: keyboardCursor == conversation.id, accentColor: conversation.accentColor) }
     }
 
-    // `shareConversationLink(for:)` used to live here: it minted a join link and
-    // pushed a `UIActivityViewController` onto the top-most view controller. It
-    // had no caller left — the live affordance is `onCreateShareLink`, which
-    // routes to `InviteFriendsSheet` (a real sheet, with editable link options).
-    // Removed with the rest of the hand-rolled share presentations, along with
-    // the two hardcoded French strings it carried.
+    private func openConversation(_ conversation: Conversation) {
+        guard ConversationLockManager.shared.isLocked(conversation.id) else { return onSelect(conversation) }
+        lockSheetMode = .openConversation
+        sheetTargets.lockSheet = conversation
+    }
+
+    private func openConversation(id: String) {
+        conversationViewModel.groupedConversations.lazy.flatMap(\.conversations)
+            .first { $0.id == id }.map(openConversation(_:))
+    }
 
     private var swipeActions: ConversationSwipeActions {
         ConversationSwipeActions(

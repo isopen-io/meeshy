@@ -410,9 +410,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     // MARK: - Delete Story
 
-    func deleteStory(storyId: String) async -> Bool {
+    func deleteStory(storyId: String, reason: String? = nil) async -> Bool {
         do {
-            try await Self.deleteRemotely(storyId: storyId, with: storyService)
+            try await Self.deleteRemotely(storyId: storyId, reason: reason, with: storyService)
             // Même chemin que les tombstones et l'event socket. Une suppression
             // explicite l'emporte sur l'exception accordée à l'auteur pour ses
             // propres stories expirées : c'est une volonté, pas un délai.
@@ -444,10 +444,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// fasse la chaîne réseau.
     @concurrent
     nonisolated static func deleteRemotely(
-        storyId: String,
+        storyId: String, reason: String? = nil,
         with service: any StoryServiceProviding
     ) async throws {
-        try await service.delete(storyId: storyId)
+        try await service.delete(storyId: storyId, reason: reason)
     }
 
     // MARK: - Socket.IO Real-Time Updates
