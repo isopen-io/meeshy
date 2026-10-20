@@ -150,15 +150,20 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
 
     func test_acceptsDrops_onlyWhenTheComposerIsShown() {
         XCTAssertTrue(ComposerDropTargetModifier.acceptsDrops(
-            isSelecting: false, isBlockedDirect: false, isClosed: false, isWriteRestricted: false))
+            isSelecting: false, isBlockedDirect: false, isClosed: false, isWriteRestricted: false, isPreview: false))
         XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
-            isSelecting: true, isBlockedDirect: false, isClosed: false, isWriteRestricted: false))
+            isSelecting: true, isBlockedDirect: false, isClosed: false, isWriteRestricted: false, isPreview: false))
         XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
-            isSelecting: false, isBlockedDirect: true, isClosed: false, isWriteRestricted: false))
+            isSelecting: false, isBlockedDirect: true, isClosed: false, isWriteRestricted: false, isPreview: false))
         XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
-            isSelecting: false, isBlockedDirect: false, isClosed: true, isWriteRestricted: false))
+            isSelecting: false, isBlockedDirect: false, isClosed: true, isWriteRestricted: false, isPreview: false))
         XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
-            isSelecting: false, isBlockedDirect: false, isClosed: false, isWriteRestricted: true))
+            isSelecting: false, isBlockedDirect: false, isClosed: false, isWriteRestricted: true, isPreview: false))
+    }
+
+    func test_acceptsDrops_neverInTheNotificationPreview() {
+        XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: false, isBlockedDirect: false, isClosed: false, isWriteRestricted: false, isPreview: true))
     }
 
     func test_conversationView_hostsTheDropOnTheWholeBody_withTheComposerAllowance() throws {

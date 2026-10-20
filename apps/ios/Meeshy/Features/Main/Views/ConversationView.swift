@@ -545,7 +545,7 @@ struct ConversationView: View {
                 isSelecting: overlayState.isSelectionModeActive,
                 isBlockedDirect: blockedDirectParticipantId != nil,
                 isClosed: viewModel.isConversationClosed,
-                isWriteRestricted: viewModel.writeRestriction(served: liveConversation?.viewerWriteRestriction) != nil
+                isWriteRestricted: viewModel.writeRestriction(served: liveConversation?.viewerWriteRestriction) != nil, isPreview: previewMode
             ),
             onIngest: { ingestRespectingGuestAllowance($0) }
         ))

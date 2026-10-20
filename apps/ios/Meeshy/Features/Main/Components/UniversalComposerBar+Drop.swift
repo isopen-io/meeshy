@@ -50,8 +50,8 @@ struct ComposerDropTargetModifier: ViewModifier {
         isEnabled ? allTypes : []
     }
 
-    static func acceptsDrops(isSelecting: Bool, isBlockedDirect: Bool, isClosed: Bool, isWriteRestricted: Bool) -> Bool {
-        !(isSelecting || isBlockedDirect || isClosed || isWriteRestricted)
+    static func acceptsDrops(isSelecting: Bool, isBlockedDirect: Bool, isClosed: Bool, isWriteRestricted: Bool, isPreview: Bool) -> Bool {
+        !(isSelecting || isBlockedDirect || isClosed || isWriteRestricted || isPreview)
     }
 
     func body(content: Content) -> some View {
