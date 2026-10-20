@@ -38,7 +38,7 @@ final class ShareViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
-        let providers = inputProviders
+        let providers = inputProviders.map(ShareProviderHandoff.init(provider:))
         let shareId = shareId
         loading = Task { @MainActor [weak self] in
             let content = await Self.extractContent(providers)
@@ -184,10 +184,10 @@ final class ShareViewController: UIViewController {
     // MARK: - Extraction
 
     @concurrent
-    private static func extractContent(_ providers: [NSItemProvider]) async -> String? {
+    private static func extractContent(_ providers: [ShareProviderHandoff]) async -> String? {
         let payloads = await withTaskGroup(of: (index: Int, payload: ShareProviderPayload).self) { group in
-            for (index, provider) in providers.enumerated() {
-                let handoff = ShareProviderHandoff(provider: provider)
+            for (index, handoff) in providers.enumerated() {
+                let provider = handoff.provider
                 if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
                     group.addTask { (index, .url(await loadURL(from: handoff.provider))) }
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
@@ -246,20 +246,19 @@ final class ShareViewController: UIViewController {
     /// libre, fichier par fichier (`ShareMediaStaging.stage`).
     @concurrent
     private static func stageAttachments(
-        _ providers: [NSItemProvider],
+        _ providers: [ShareProviderHandoff],
         shareId: String
     ) async -> (media: [ShareStagedMedia], failure: ShareMediaStagingError?) {
-        let fileProviders = providers.filter { provider in
-            !provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
-                && !provider.hasItemConformingToTypeIdentifier(UTType.text.identifier)
+        let fileProviders = providers.filter { handoff in
+            !handoff.provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
+                && !handoff.provider.hasItemConformingToTypeIdentifier(UTType.text.identifier)
         }
         guard !fileProviders.isEmpty,
               let mediaRoot = ShareMediaStaging.prepareMediaRoot(shareId: shareId) else { return ([], nil) }
 
         let results = await withTaskGroup(of: ShareStagingResult.self) { group in
-            for (index, provider) in fileProviders.enumerated() {
-                guard let typeIdentifier = provider.registeredTypeIdentifiers.first else { continue }
-                let handoff = ShareProviderHandoff(provider: provider)
+            for (index, handoff) in fileProviders.enumerated() {
+                guard let typeIdentifier = handoff.provider.registeredTypeIdentifiers.first else { continue }
                 group.addTask {
                     await stage(handoff.provider, typeIdentifier: typeIdentifier, index: index, mediaRoot: mediaRoot, shareId: shareId)
                 }
@@ -322,8 +321,9 @@ final class ShareViewController: UIViewController {
 }
 
 /// `NSItemProvider` n'est pas `Sendable`, mais son chargement (`loadItem`) se fait
-/// depuis n'importe quel fil. Chaque tâche du groupe reçoit SON fournisseur, que
-/// rien d'autre ne touche pendant le chargement : le transfert ne partage rien.
+/// depuis n'importe quel fil. Les fournisseurs quittent le MainActor emballés, et
+/// chaque tâche du groupe reçoit SON fournisseur, que rien d'autre ne touche
+/// pendant le chargement : le transfert ne partage rien.
 private nonisolated struct ShareProviderHandoff: @unchecked Sendable {
     let provider: NSItemProvider
 }

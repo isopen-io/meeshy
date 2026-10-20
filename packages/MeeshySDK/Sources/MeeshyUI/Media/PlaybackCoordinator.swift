@@ -15,6 +15,13 @@ public protocol AudiblyPlayingPlayer: StoppablePlayer {
     var isPlayingAudibly: Bool { get }
 }
 
+/// Un lecteur externe qui sait s'arrêter « interrompu » pendant un appel
+/// Meeshy, et reprendre au raccrochage (`.callEndedShouldResume`, #11063).
+@MainActor
+public protocol InterruptiblePlayer: StoppablePlayer {
+    func interruptForCall()
+}
+
 /// Un lecteur qui sait s'éteindre en fondu plutôt que se couper net (#9867).
 @MainActor
 public protocol FadingStoppablePlayer: StoppablePlayer, Sendable {
@@ -129,6 +136,32 @@ public final class PlaybackCoordinator {
     public var isAnyAudioPlaying: Bool {
         for (_, weak) in audioPlayers where weak.player?.isPlaying == true { return true }
         return false
+    }
+
+    // MARK: - Appel Meeshy décroché (#11063)
+
+    /// L'appel prend la main : chaque lecteur qui sait reprendre se met en
+    /// pause MARQUÉE « interrompue » — sa reprise au raccrochage passe par
+    /// `.callEndedShouldResume`, comme après un appel du système. Les autres
+    /// s'arrêtent, comme le faisait `stopAll()`.
+    public func interruptAllForCall() {
+        pruneDeadReferences()
+        SharedAVPlayerManager.shared.handleSessionEvent(.interruptionBegan)
+        for (_, weak) in audioPlayers {
+            guard let player = weak.player else { continue }
+            if player.respondsToSessionInterruptions {
+                player.handleSessionEvent(.interruptionBegan)
+            } else {
+                player.stop()
+            }
+        }
+        for (_, weak) in externalPlayers {
+            if let player = weak.player as? InterruptiblePlayer {
+                player.interruptForCall()
+            } else {
+                weak.player?.stop()
+            }
+        }
     }
 
     // MARK: - Stop All Playback
