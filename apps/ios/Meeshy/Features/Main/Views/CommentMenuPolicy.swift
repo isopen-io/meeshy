@@ -8,6 +8,8 @@ enum CommentMenuAction: Hashable {
     case edit
     case report
     case delete
+    /// #11151 — la modération retire le commentaire d'un autre, avec un motif.
+    case remove
 }
 
 /// **Quelles actions pour ce commentaire et ce lecteur** (#8709).
@@ -40,13 +42,15 @@ enum CommentMenuPolicy {
     ///   - canImagine: la carte d'export existe pour ce commentaire.
     ///   - editable: l'hôte sait éditer un commentaire.
     ///   - deletable: l'hôte sait supprimer un commentaire.
+    ///   - removable: l'hôte sait retirer le commentaire d'un autre (modération, #11151).
     static func actions(
         for comment: FeedComment,
         viewerId: String?,
         servedText: String,
         canImagine: Bool,
         editable: Bool,
-        deletable: Bool
+        deletable: Bool,
+        removable: Bool = false
     ) -> [CommentMenuAction] {
         let mine = isAuthor(comment, viewerId: viewerId)
         let known = !(viewerId ?? "").isEmpty
@@ -58,6 +62,7 @@ enum CommentMenuPolicy {
             (.edit, mine && editable),
             (.report, known && !mine),
             (.delete, mine && deletable),
+            (.remove, known && !mine && removable),
         ]
         return offered.filter(\.1).map(\.0)
     }

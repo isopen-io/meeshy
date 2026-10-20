@@ -16,6 +16,9 @@ public protocol MessageServiceProviding: Sendable {
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData
     func edit(messageId: String, content: String) async throws -> APIMessage
     func delete(conversationId: String, messageId: String) async throws
+    /// #11151 — le retrait du message d'un AUTRE porte son motif. Requirement
+    /// séparée avec défaut : un double qui ne la surcharge pas reste conforme.
+    func delete(conversationId: String, messageId: String, reason: String?) async throws
     func pin(conversationId: String, messageId: String) async throws
     func unpin(conversationId: String, messageId: String) async throws
     func consumeViewOnce(conversationId: String, messageId: String) async throws -> ConsumeViewOnceResponse
@@ -24,6 +27,11 @@ public protocol MessageServiceProviding: Sendable {
 }
 
 public extension MessageServiceProviding {
+    func delete(conversationId: String, messageId: String, reason: String?) async throws {
+        guard reason == nil else { throw APIError.serverError(501, "delete(reason:) not implemented by \(Self.self)") }
+        try await delete(conversationId: conversationId, messageId: messageId)
+    }
+
     /// L'appel de #8100 — l'index VISUEL, sans recherche.
     func listMedia(conversationId: String, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse {
         try await listMedia(
@@ -199,7 +207,11 @@ public final class MessageService: MessageServiceProviding, AfterReadConsuming, 
     }
 
     public func delete(conversationId: String, messageId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(ConversationsEndpoint.byIdMessagesByMessageId(id: conversationId, messageId: messageId))
+        try await delete(conversationId: conversationId, messageId: messageId, reason: nil)
+    }
+
+    public func delete(conversationId: String, messageId: String, reason: String?) async throws {
+        try await api.deleteRemovingContent(ConversationsEndpoint.byIdMessagesByMessageId(id: conversationId, messageId: messageId), reason: reason)
     }
 
     public func pin(conversationId: String, messageId: String) async throws {

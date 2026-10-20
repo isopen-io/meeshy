@@ -34,6 +34,7 @@ struct ReelFeedCardContainer: View {
     /// masquée du menu (même convention de gating que `FeedPostCard`).
     var onEdit: ((FeedPost) -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
+    var onRemove: ((String) -> Void)? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
 
@@ -59,6 +60,7 @@ struct ReelFeedCardContainer: View {
             onTapAuthor: onTapAuthor,
             onEdit: onEdit,
             onDelete: onDelete,
+            onRemove: onRemove,
             onReport: onReport,
             onPin: onPin
         )
@@ -108,6 +110,7 @@ struct ReelFeedCard: View, Equatable {
     /// Menu « … » (parité avec `FeedPostCard`) — `nil` = action indisponible.
     var onEdit: ((FeedPost) -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
+    var onRemove: ((String) -> Void)? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
 
@@ -591,15 +594,7 @@ struct ReelFeedCard: View, Equatable {
                 Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
             }
         }
-        if let onDelete {
-            Divider()
-            Button(role: .destructive) {
-                onDelete(post.id)
-                HapticFeedback.medium()
-            } label: {
-                Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-            }
-        }
+        PublicationDestructiveMenuItems(postId: post.id, onDelete: onDelete, onRemove: onRemove)
         if let onReport {
             Divider()
             Button(role: .destructive) {

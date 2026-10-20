@@ -242,15 +242,7 @@ extension FeedPostCard {
                         Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                     }
                 }
-                if onDelete != nil {
-                    Divider()
-                    Button(role: .destructive) {
-                        onDelete?(post.id)
-                        HapticFeedback.medium()
-                    } label: {
-                        Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                    }
-                }
+                PublicationDestructiveMenuItems(postId: post.id, onDelete: onDelete, onRemove: onRemove)
                 if onReport != nil {
                     Divider()
                     Button(role: .destructive) {

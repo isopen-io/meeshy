@@ -28,7 +28,7 @@ extension ConversationView {
         let ctx = MessageMenuContext(
             isMine: msg.isMe,
             canEdit: msg.isMe || isCurrentUserAdminOrMod,
-            canDelete: msg.isMe || isCurrentUserAdminOrMod,
+            canDelete: msg.isMe || isCurrentUserAdminOrMod || canRemoveMessage(msg),
             hasText: hasText,
             hasMedia: !msg.attachments.isEmpty,
             hasTimebasedMedia: msg.attachments.contains {

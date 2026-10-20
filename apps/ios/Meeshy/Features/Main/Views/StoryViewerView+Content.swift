@@ -517,12 +517,12 @@ extension StoryViewerView {
 
     // MARK: - Delete Story
 
-    func deleteCurrentStory() {
+    func deleteCurrentStory(reason: String? = nil) {
         guard let story = currentStory else { return }
         HapticFeedback.light()
         
         Task {
-            let success = await viewModel.deleteStory(storyId: story.id)
+            let success = await viewModel.deleteStory(storyId: story.id, reason: reason)
             DispatchQueue.main.async {
                 if success {
                     HapticFeedback.success()

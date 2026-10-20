@@ -157,7 +157,7 @@ struct RootNotificationNavigator {
         // from the notification type. Never from the type alone.
         case .postLike, .legacyPostLike, .postRepost, .friendNewPost,
              .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
-             .storyReaction, .statusReaction,
+             .storyReaction, .statusReaction, .contentRemoved,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
              .friendNewStory, .friendNewMood:
             guard let postId = ctx.postId, !postId.isEmpty else {

@@ -559,18 +559,15 @@ struct PostDetailView: View {
                 } label: {
                     Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                 }
-                Divider()
-                Button(role: .destructive) {
-                    HapticFeedback.medium()
-                    Task {
-                        if await viewModel.deletePost(postId) {
-                            router.pop()
-                        }
-                    }
-                } label: {
-                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                }
+                PublicationDestructiveMenuItems(postId: postId, onDelete: { _ in
+                    Task { if await viewModel.deletePost(postId) { router.pop() } }
+                }, onRemove: nil)
             } else {
+                if let post = displayPost {
+                    PublicationDestructiveMenuItems(postId: postId, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: post) { [viewModel, router] in
+                        if await viewModel.deletePost($0, reason: $1) { router.pop() }
+                    })
+                }
                 Divider()
                 Button(role: .destructive) {
                     HapticFeedback.light()

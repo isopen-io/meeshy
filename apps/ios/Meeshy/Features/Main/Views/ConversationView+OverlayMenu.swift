@@ -35,7 +35,7 @@ struct ConversationOverlayMenu: View {
             // barre de méta, toutes deux à cheval sur son cadre.
             messageBubbleFrame: bubbleFrame,
             isPresented: $overlayState.showOverlayMenu,
-            canDelete: msg.isMe || isAdminOrMod,
+            canDelete: msg.isMe || isAdminOrMod || actions.canRemove(msg),
             canEdit: msg.isMe || isAdminOrMod,
             onCopy: {
                 // Prisme: copy what's DISPLAYED (the preferred translation when
