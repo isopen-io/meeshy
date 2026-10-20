@@ -79,6 +79,22 @@ nonisolated enum AttachmentAudioMetadata {
         return result
     }
 
+    /// Les métadonnées posées sous l'id LOCAL d'une bulle (transcription faite sur l'appareil) sont les
+    /// MÊMES vues sous l'id serveur qu'elle prend à l'accusé : on RECOPIE sans écraser — une transcription
+    /// serveur déjà arrivée fait autorité. Idempotent. `…ByAttachment` n'a rien à re-clé.
+    static func rekeyed(_ state: AttachmentAudioState, mapping: [String: String]) -> AttachmentAudioState {
+        var result = state
+        for (localId, serverId) in mapping where localId != serverId {
+            if result.transcriptions[serverId] == nil, let local = result.transcriptions[localId] {
+                result.transcriptions[serverId] = local
+            }
+            if result.translatedAudios[serverId] == nil, let local = result.translatedAudios[localId] {
+                result.translatedAudios[serverId] = local
+            }
+        }
+        return result
+    }
+
     private static func entry(
         from attachment: APIMessageAttachment,
         messageId: String,

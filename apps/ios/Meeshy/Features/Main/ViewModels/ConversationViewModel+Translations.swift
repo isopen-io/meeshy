@@ -421,15 +421,22 @@ extension ConversationViewModel {
         applyAudioMetadata(AttachmentAudioMetadata.entries(fromAPI: apiMessages), forceOverwrite: true)
     }
 
-    func applyAudioMetadata(_ entries: [AttachmentAudioEntry], forceOverwrite: Bool) {
-        guard !entries.isEmpty else { return }
-        let current = AttachmentAudioState(
+    var audioMetadataState: AttachmentAudioState {
+        AttachmentAudioState(
             transcriptions: messageTranscriptions,
             transcriptionsByAttachment: messageTranscriptionsByAttachment,
             translatedAudios: messageTranslatedAudios,
             translatedAudiosByAttachment: messageTranslatedAudiosByAttachment
         )
-        let next = AttachmentAudioMetadata.merged(entries, into: current, forceOverwrite: forceOverwrite)
+    }
+
+    func applyAudioMetadata(_ entries: [AttachmentAudioEntry], forceOverwrite: Bool) {
+        guard !entries.isEmpty else { return }
+        adoptAudioMetadata(AttachmentAudioMetadata.merged(entries, into: audioMetadataState, forceOverwrite: forceOverwrite))
+    }
+
+    func adoptAudioMetadata(_ next: AttachmentAudioState) {
+        let current = audioMetadataState
         if next.transcriptions != current.transcriptions { messageTranscriptions = next.transcriptions }
         if next.transcriptionsByAttachment != current.transcriptionsByAttachment {
             messageTranscriptionsByAttachment = next.transcriptionsByAttachment
