@@ -94,11 +94,10 @@ class ConversationViewModel: ObservableObject {
 
     @Published var hasOlderMessages = true
     @Published var hasNewerMessages = false
-    @Published var isSending = false
-    /// Number of sends currently awaiting their network round-trip. Backs
-    /// `isSending` (true ⇔ ≥1 in flight) WITHOUT gating new sends — DISTINCT
-    /// messages send concurrently (2026-06-09), identical ones too (#7985).
-    var inFlightSendCount = 0
+    /// Sends awaiting their round-trip. Deliberately NOT `@Published`: no view
+    /// renders it, and publishing it redrew the whole conversation twice per send.
+    var sendActivity: ConversationSendActivity = .idle
+    var isSending: Bool { sendActivity.isSending }
     @Published var error: String?
 
     /// Maps a raw error to a string safe to show verbatim in the conversation

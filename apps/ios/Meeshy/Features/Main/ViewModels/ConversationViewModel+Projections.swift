@@ -158,6 +158,11 @@ extension ConversationViewModel {
         messageIdIndex[id]
     }
 
+    func outgoingState(of messageId: String) -> OutgoingMessageState? {
+        guard let index = messageIndex(for: messageId) else { return nil }
+        return OutgoingMessageState(messageId: messageId, delivery: messages[index].deliveryStatus)
+    }
+
     func containsMessage(id: String) -> Bool {
         messageIdIndex[id] != nil || pendingServerIdSet.contains(id)
     }
