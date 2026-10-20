@@ -136,4 +136,34 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
         let handler = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Services/NotificationActionHandler.swift"))
         XCTAssertTrue(handler.contains("MainWindowRegistry.shared.bringPrimaryForwardIfHidden()"))
     }
+
+    func test_resizableHandle_declaresColumnResizePointer() throws {
+        let panels = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView+Panels.swift"))
+        let handle = try XCTUnwrap(panels.range(of: "struct iPadResizableHandle: View {"))
+        XCTAssertTrue(panels[handle.upperBound...].contains(".meeshyColumnResizePointer()"))
+    }
+
+    func test_conversationDrop_disabledAcceptsNoType() {
+        XCTAssertEqual(ComposerDropTargetModifier.acceptedTypes(isEnabled: false), [])
+        XCTAssertFalse(ComposerDropTargetModifier.acceptedTypes(isEnabled: true).isEmpty)
+    }
+
+    func test_acceptsDrops_onlyWhenTheComposerIsShown() {
+        XCTAssertTrue(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: false, isBlockedDirect: false, isClosed: false, isWriteRestricted: false))
+        XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: true, isBlockedDirect: false, isClosed: false, isWriteRestricted: false))
+        XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: false, isBlockedDirect: true, isClosed: false, isWriteRestricted: false))
+        XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: false, isBlockedDirect: false, isClosed: true, isWriteRestricted: false))
+        XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: false, isBlockedDirect: false, isClosed: false, isWriteRestricted: true))
+    }
+
+    func test_conversationView_hostsTheDropOnTheWholeBody_withTheComposerAllowance() throws {
+        let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
+        XCTAssertTrue(view.contains("ComposerDropTargetModifier("))
+        XCTAssertTrue(view.contains("ingestRespectingGuestAllowance"))
+    }
 }
