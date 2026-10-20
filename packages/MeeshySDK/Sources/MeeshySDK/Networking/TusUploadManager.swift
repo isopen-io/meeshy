@@ -136,21 +136,30 @@ public struct TusUploadTranscriptionMetadata: Codable, Sendable, Equatable {
 
 /// Les envois TUS EN VOL dans ce processus, par clé de checkpoint. Un manager naît par envoi : sans ce
 /// registre commun, deux envois des mêmes octets reprenaient la même session et croisaient leurs PATCH.
-final class TusUploadLeases: @unchecked Sendable {
+final class TusUploadLeases: Sendable {
     static let shared = TusUploadLeases()
-    private let lock = NSLock()
-    private var held = Set<String>()
+    private let held = Locked(Set<String>())
 
     /// Vrai si la clé était libre — l'appelant la tient jusqu'à `release`.
     func claim(_ key: String) -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        return held.insert(key).inserted
+        held.mutate { $0.insert(key).inserted }
     }
 
     func release(_ key: String) {
-        lock.lock(); defer { lock.unlock() }
-        held.remove(key)
+        held.mutate { _ = $0.remove(key) }
     }
+}
+
+private struct PendingTusUpload: Sendable {
+    let fileId: String
+    let fileURL: URL
+    let mimeType: String
+    let credential: MeeshyRequestCredential
+    let uploadContext: String?
+    let thumbHash: String?
+    let transcription: TusUploadTranscriptionMetadata?
+    let capturedInApp: Bool
+    let continuation: CheckedContinuation<TusUploadResult, Error>
 }
 
 public actor TusUploadManager {
@@ -178,7 +187,7 @@ public actor TusUploadManager {
     private let chunkSize: Int = 10 * 1024 * 1024 // 10 MB
     private let maxConcurrent: Int = 3
     private var activeCount = 0
-    nonisolated(unsafe) private var queue: [(String, URL, String, MeeshyRequestCredential, String?, String?, TusUploadTranscriptionMetadata?, Bool, CheckedContinuation<TusUploadResult, Error>)] = []
+    private var queue: [PendingTusUpload] = []
     /// Les envois en cours, par `fileId` : l'annulation de l'appelant les atteint (`cancelUpload`).
     private var activeTasks: [String: Task<Void, Never>] = [:]
     private var progressMap: [String: FileUploadProgress] = [:]
@@ -241,8 +250,8 @@ public actor TusUploadManager {
     }
 
     deinit {
-        for (_, _, _, _, _, _, _, _, continuation) in queue {
-            continuation.resume(throwing: CancellationError())
+        for pending in queue {
+            pending.continuation.resume(throwing: CancellationError())
         }
     }
 
@@ -281,7 +290,11 @@ public actor TusUploadManager {
                     continuation.resume(throwing: CancellationError())
                     return
                 }
-                queue.append((fileId, fileURL, mimeType, credential, uploadContext, thumbHash, transcription, capturedInApp, continuation))
+                queue.append(PendingTusUpload(
+                    fileId: fileId, fileURL: fileURL, mimeType: mimeType, credential: credential,
+                    uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription,
+                    capturedInApp: capturedInApp, continuation: continuation
+                ))
                 processQueue()
             }
         } onCancel: {
@@ -290,10 +303,10 @@ public actor TusUploadManager {
     }
 
     private func cancelUpload(fileId: String) {
-        if let index = queue.firstIndex(where: { $0.0 == fileId }) {
+        if let index = queue.firstIndex(where: { $0.fileId == fileId }) {
             let pending = queue.remove(at: index)
             markFileFailed(fileId: fileId, error: CancellationError())
-            pending.8.resume(throwing: CancellationError())
+            pending.continuation.resume(throwing: CancellationError())
             return
         }
         activeTasks[fileId]?.cancel()
@@ -316,7 +329,10 @@ public actor TusUploadManager {
 
     private func processQueue() {
         while activeCount < maxConcurrent, !queue.isEmpty {
-            let (fileId, fileURL, mimeType, credential, uploadContext, thumbHash, transcription, capturedInApp, continuation) = queue.removeFirst()
+            let next = queue.removeFirst()
+            let (fileId, fileURL, mimeType, credential) = (next.fileId, next.fileURL, next.mimeType, next.credential)
+            let (uploadContext, thumbHash, transcription) = (next.uploadContext, next.thumbHash, next.transcription)
+            let (capturedInApp, continuation) = (next.capturedInApp, next.continuation)
             activeCount += 1
             activeTasks[fileId] = Task {
                 do {

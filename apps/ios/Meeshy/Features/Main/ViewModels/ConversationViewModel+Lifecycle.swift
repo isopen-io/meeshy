@@ -339,7 +339,7 @@ extension ConversationViewModel {
     /// Call before any programmatic scroll. Resets after a short delay.
     func markProgrammaticScroll() {
         isProgrammaticScroll = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        CoalescingDeadline.shared.schedule(for: self, after: .milliseconds(500)) { [weak self] in
             self?.isProgrammaticScroll = false
         }
     }

@@ -51,7 +51,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // MARK: - Guard 2b — l'inspecteur gagne « Suivre la slide » (libellé + nil)
 
     func test_clipInspector_carriesTheFollowSlideLabel() throws {
-        let source = try Self.strippedSource(of: Self.clipInspectorURL)
+        let source = try Self.clipInspectorFamilySource()
         XCTAssertTrue(source.contains("story.timeline.inspector.followSlide"),
                      "L'action « Suivre la slide » doit exister comme libellé/clé dans ClipInspector")
         XCTAssertTrue(source.contains("onFollowSlide"),
@@ -62,7 +62,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     /// du retour fantôme U9 à `arrow.uturn.backward.circle` — `ClipInspector`
     /// dessinait `arrow.uturn.backward` (sans `.circle`), une glyphe DIFFÉRENTE.
     func test_clipInspector_followSlideIcon_matchesTheSymbolTable() throws {
-        let source = try Self.strippedSource(of: Self.clipInspectorURL)
+        let source = try Self.clipInspectorFamilySource()
         XCTAssertTrue(source.contains(#"systemImage: "arrow.uturn.backward.circle""#),
                      "L'icône de « Suivre la slide » doit être arrow.uturn.backward.circle "
                      + "(table des symboles, views.html:1687) — pas arrow.uturn.backward seul")
@@ -179,7 +179,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     // réinvention.
 
     func test_clipInspector_carriesTheMuteAction() throws {
-        let source = try Self.strippedSource(of: Self.clipInspectorURL)
+        let source = try Self.clipInspectorFamilySource()
         XCTAssertTrue(source.contains("onToggleMute"),
                      "Le mute par clip doit exister comme action sur ClipInspector")
         XCTAssertTrue(source.contains("story.timeline.inspector.mute"),
@@ -626,6 +626,19 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     private static var clipInspectorURL: URL {
         sourcesRoot.appendingPathComponent("Story/Timeline/Views/Inspector/ClipInspector.swift")
+    }
+
+    /// ClipInspector.swift et les sous-vues extraites qui vivent à côté
+    /// (`ClipInspector+*.swift`, `ClipInspector*.swift`, `ClipVolumeAutomation`, `ClipFadeChipRow`).
+    private static func clipInspectorFamilySource() throws -> String {
+        let dir = clipInspectorURL.deletingLastPathComponent()
+        let names = ["ClipInspector.swift", "ClipInspector+ClipSnapshot.swift",
+                     "ClipInspectorActionsRow.swift", "ClipInspectorNumericField.swift",
+                     "ClipInspectorTransformSection.swift", "ClipVolumeAutomation.swift",
+                     "ClipFadeChipRow.swift"]
+        return try names
+            .map { try strippedSource(of: dir.appendingPathComponent($0)) }
+            .joined(separator: "\n")
     }
 
     private static var timelineViewModelPlan4HelpersURL: URL {

@@ -41,7 +41,7 @@ final class MeeshyVideoPlayerAttachmentIdWiringTests: XCTestCase {
     }
 
     func test_startPlayback_passesAttachmentIdToLoad_notAsPriorPropertySet() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Media/MeeshyVideoPlayer+Renderers.swift")
+        let source = try sdkSource("Sources/MeeshyUI/Media/MeeshyVideoPlayer+InlineRenderer.swift")
         let fn = try block(
             from: "private func startPlayback() {",
             upTo: "private func",

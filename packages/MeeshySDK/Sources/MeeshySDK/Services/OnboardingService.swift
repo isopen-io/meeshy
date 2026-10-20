@@ -9,7 +9,7 @@ public protocol OnboardingServiceProviding: Sendable {
     func finish() async throws -> APIOnboardingState
 }
 
-public final class OnboardingService: OnboardingServiceProviding, @unchecked Sendable {
+public final class OnboardingService: OnboardingServiceProviding, Sendable {
     public static let shared = OnboardingService()
     private let api: APIClientProviding
 

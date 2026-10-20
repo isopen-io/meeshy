@@ -18,7 +18,7 @@ public protocol StatusServiceProviding: Sendable {
     func react(statusId: String, emoji: String) async throws
 }
 
-public final class StatusService: StatusServiceProviding, @unchecked Sendable {
+public final class StatusService: StatusServiceProviding, Sendable {
     public static let shared = StatusService()
     private let api: APIClientProviding
 

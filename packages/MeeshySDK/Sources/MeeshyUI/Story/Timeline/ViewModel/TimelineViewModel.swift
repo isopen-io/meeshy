@@ -342,7 +342,7 @@ public final class TimelineViewModel: ObservableObject {
         // Retour haptique léger au MOMENT où l'aimant accroche (transition
         // non-accroché → accroché), pas à chaque frame.
         if drag.snappedTo != nil, !previouslySnapped {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            HapticFeedback.light()
         }
         selection.updateDrag(currentStartTime: drag.currentStartTime,
                              snappedTo: drag.snappedTo)

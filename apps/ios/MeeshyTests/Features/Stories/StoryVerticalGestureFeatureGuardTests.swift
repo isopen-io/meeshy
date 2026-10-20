@@ -125,11 +125,11 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content+Gestures.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         guard let start = source.range(of: "var unifiedDragGesture: some Gesture {"),
               let end = source.range(of: "\n    }", range: start.upperBound..<source.endIndex) else {
-            XCTFail("unifiedDragGesture introuvable dans StoryViewerView+Content.swift")
+            XCTFail("unifiedDragGesture introuvable dans StoryViewerView+Content+Gestures.swift")
             return ""
         }
         return codeOnly(String(source[start.upperBound..<end.lowerBound]))
@@ -260,7 +260,7 @@ final class StoryVerticalGestureFeatureGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content+Gestures.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
         guard let start = source.range(of: "func resetGestureTracking() {"),
               let end = source.range(of: "\n    }", range: start.upperBound..<source.endIndex) else {

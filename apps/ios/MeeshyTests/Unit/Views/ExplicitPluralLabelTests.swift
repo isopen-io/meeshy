@@ -79,4 +79,31 @@ final class ExplicitPluralLabelTests: XCTestCase {
         XCTAssertEqual(MessageViewsDetailView.sendAttemptCountLabel(0, bundle: fr.bundle, locale: fr.locale),
                        "0 tentative")
     }
+
+    // MARK: - StoryCommentThread (bascule voir / masquer les réponses)
+
+    func test_storyCommentToggle_singularForOne() throws {
+        let en = try localized("en")
+        XCTAssertEqual(StoryCommentThread.toggleLabel(isExpanded: false, remaining: 1, bundle: en.bundle, locale: en.locale),
+                       "View 1 more reply")
+    }
+
+    func test_storyCommentToggle_pluralForMany() throws {
+        let en = try localized("en")
+        XCTAssertEqual(StoryCommentThread.toggleLabel(isExpanded: false, remaining: 3, bundle: en.bundle, locale: en.locale),
+                       "View 3 more replies")
+    }
+
+    func test_storyCommentToggle_frenchAgreesInTheSingular() throws {
+        let fr = try localized("fr")
+        XCTAssertEqual(StoryCommentThread.toggleLabel(isExpanded: false, remaining: 1, bundle: fr.bundle, locale: fr.locale),
+                       "Voir 1 réponse de plus")
+    }
+
+    func test_storyCommentToggle_expandedSaysHide() throws {
+        let en = try localized("en")
+        let fr = try localized("fr")
+        XCTAssertEqual(StoryCommentThread.toggleLabel(isExpanded: true, remaining: 3, bundle: en.bundle, locale: en.locale), "Hide")
+        XCTAssertEqual(StoryCommentThread.toggleLabel(isExpanded: true, remaining: 3, bundle: fr.bundle, locale: fr.locale), "Masquer")
+    }
 }

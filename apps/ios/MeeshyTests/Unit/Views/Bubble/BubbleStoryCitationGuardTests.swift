@@ -239,8 +239,12 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
             "Libellé « votre story » revenu : aucune donnée ne peut l'atteindre."
         )
 
-        let models = try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Models/MessageModels.swift")
-        let persistence = try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift")
+        let models = try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Models/APIMessage+MeeshyMessage.swift")
+        let persistence = try [
+            "APIMessageUpsert.swift",
+            "APIMessageUpsert+Attachments.swift",
+            "APIMessageUpsert+Merge.swift",
+        ].map { try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Persistence/\($0)") }.joined()
         XCTAssertGreaterThan(models.count, 10_000)
         XCTAssertGreaterThan(persistence.count, 10_000)
         XCTAssertTrue(
@@ -346,7 +350,8 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
     /// Témoin POSITIF exprès : en négatif il serait passé au vert le jour où
     /// quelqu'un renomme la closure, en ne décrivant plus rien.
     func test_aStoryThatCannotBeOpened_saysSo() throws {
-        let view = try source(Self.conversation)
+        // Le tap sur la citation d'une story est câblé dans la couche de la liste (`onStoryReplyTap`).
+        let view = try source("Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift")
 
         XCTAssertTrue(
             view.contains("guard let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) else {"),

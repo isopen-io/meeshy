@@ -14,7 +14,7 @@ final class PackShopUnifiedRoutingGuardTests: XCTestCase {
 
     func test_lesReglagesRoutentStickersEtCadresVersLaVitrineUnique() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.path))
-        XCTAssertTrue(source.contains("case .sticker, .wallpaper, .avatarRing, .banner:"),
+        XCTAssertTrue(source.contains("case .sticker, .wallpaper, .avatarRing, .banner, .bannerFrame:"),
                       "le domaine sticker doit passer par UnifiedShopView avec les autres (#10711)")
         XCTAssertFalse(source.contains("StickerPackShopScreen("),
                        "la seconde Boutique des stickers ne revient pas dans les Réglages (#10711)")

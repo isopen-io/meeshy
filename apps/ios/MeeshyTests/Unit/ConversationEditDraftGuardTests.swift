@@ -129,8 +129,9 @@ final class ConversationEditDraftGuardTests: XCTestCase {
 
     func test_persistDraft_neverPersistsTheMessageBeingEdited() throws {
         let code = try source("Features/Main/Views/ConversationView.swift")
-        guard let fn = body(of: "private func persistDraft(", in: code) else {
-            return XCTFail("`persistDraft` introuvable — la garde ne mesurerait rien.")
+        // La sauvegarde du brouillon vit dans `ConversationDraftCoordinator.persist` (compagnon préfixé de l'unité).
+        guard let fn = body(of: "func persist(text: String, attachmentRefs: [DraftAttachmentRef]? = nil, composerState: ConversationComposerState)", in: code) else {
+            return XCTFail("`persist` du brouillon introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
             fn.contains("composerState.persistedDraftText(composing: text)"),

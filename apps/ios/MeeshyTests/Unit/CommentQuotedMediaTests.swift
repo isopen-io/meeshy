@@ -14,6 +14,7 @@ import XCTest
 /// qui en porte quatre. Écrits sur le premier, ils ne pourraient PAS tomber —
 /// au rang 1, « le premier média » et « celui qu'on a nommé » rendent le même
 /// verdict (leçon 261).
+@MainActor
 final class CommentQuotedMediaTests: XCTestCase {
 
     // MARK: - Fixtures

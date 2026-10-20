@@ -368,7 +368,7 @@ final class FeedViewModelAudioPublishTests: XCTestCase {
     /// renaître les deux comportements que ce lot vient de fusionner — et la
     /// branche la moins empruntée serait, comme hier, celle qui détruit.
     func test_lePublieurDeVocal_neConsulteAucuneConditionReseau() throws {
-        let code = try source("Features/Main/ViewModels/FeedViewModel.swift")
+        let code = try source("Features/Main/ViewModels/FeedViewModel+Posting.swift")
         guard let corps = corpsDeDeclaration(
             commencantPar: "func publish(_ intent: PublishIntent)", dans: code
         ) else {
@@ -442,7 +442,7 @@ final class FeedViewModelAudioPublishTests: XCTestCase {
     /// jumelle sur `StatusViewModel` : la dépouiller effacerait précisément la
     /// phrase cherchée, et la garde serait verte pour la mauvaise raison.
     func test_leModeleDuFeed_neCitePlusUnServeurQuiAChange() throws {
-        let url = racineApp.appendingPathComponent("Features/Main/ViewModels/FeedViewModel.swift")
+        let url = racineApp.appendingPathComponent("Features/Main/ViewModels/FeedViewModel+Posting.swift")
         let brut = try String(contentsOf: url, encoding: .utf8)
 
         XCTAssertTrue(

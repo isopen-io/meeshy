@@ -218,7 +218,7 @@ final class StoryComposerFoldTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Views")
-        let content = try String(contentsOf: views.appendingPathComponent("StoryViewerView+Content.swift"), encoding: .utf8)
+        let content = try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
         XCTAssertTrue(content.contains("!composerOwnsDrag"), "Le drag du lecteur doit céder au composeur.")
         let layer = try String(contentsOf: views.appendingPathComponent("StoryViewerView+CanvasComposerLayer.swift"), encoding: .utf8)
         XCTAssertTrue(layer.contains("StoryComposerGesture.owner("))

@@ -109,6 +109,21 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var liveLocationStopConversationIds: [String] = []
     var sendWithAttachmentsCallCount = 0
     var sendViaSocketFallbackCallCount = 0
+    /// Les arguments de CHAQUE appel au repli socket, dans l'ordre : le compteur
+    /// dit combien, ce tableau dit avec quoi (socket-first et repli confondus).
+    struct SendViaSocketFallbackCall: Equatable {
+        let conversationId: String
+        let content: String?
+        let attachmentIds: [String]
+        let replyToId: String?
+        let storyReplyToId: String?
+        let originalLanguage: String?
+        let isEncrypted: Bool
+        let clientMessageId: String
+        let location: SharedPlace?
+        let sticker: MessageSticker?
+    }
+    var sendViaSocketFallbackCalls: [SendViaSocketFallbackCall] = []
     var sendViaSocketFallbackResult: MessageSocketManager.SendMessageAck?
     var lastSendViaSocketFallbackClientMessageId: String?
     var lastSendViaSocketFallbackAttachmentIds: [String]?
@@ -207,6 +222,11 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
 
     func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, location: SharedPlace?, sticker: MessageSticker?) async -> MessageSocketManager.SendMessageAck? {
         sendViaSocketFallbackCallCount += 1
+        sendViaSocketFallbackCalls.append(SendViaSocketFallbackCall(
+            conversationId: conversationId, content: content, attachmentIds: attachmentIds,
+            replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage,
+            isEncrypted: isEncrypted, clientMessageId: clientMessageId, location: location, sticker: sticker
+        ))
         lastSendViaSocketFallbackClientMessageId = clientMessageId
         lastSendViaSocketFallbackAttachmentIds = attachmentIds
         lastSendViaSocketFallbackIsEncrypted = isEncrypted

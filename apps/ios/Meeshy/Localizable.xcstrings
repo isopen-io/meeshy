@@ -16416,6 +16416,288 @@
         }
       }
     },
+    "commands.back": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رجوع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurück"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atrás"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retour"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indietro"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voltar"
+          }
+        }
+      }
+    },
+    "commands.close_window": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إغلاق النافذة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fenster schließen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close Window"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar ventana"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fermer la fenêtre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiudi finestra"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fechar janela"
+          }
+        }
+      }
+    },
+    "commands.contacts": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جهات الاتصال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontakte"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contacts"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contactos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contacts"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contatti"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contatos"
+          }
+        }
+      }
+    },
+    "commands.menu.go": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انتقال"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gehe zu"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ir"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aller"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vai"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ir"
+          }
+        }
+      }
+    },
+    "commands.new_conversation": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محادثة جديدة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Unterhaltung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Conversation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nueva conversación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouvelle conversation"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuova conversazione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nova conversa"
+          }
+        }
+      }
+    },
+    "commands.search": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بحث"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suchen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerca"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pesquisar"
+          }
+        }
+      }
+    },
     "composer.animated.toggle": {
       "extractionState": "manual",
       "localizations": {
@@ -155213,49 +155495,49 @@
         }
       }
     },
-    "root.ipad.resizable_handle.hint": {
+    "root.ipad.resizable_handle.hint_width": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يضبط عرض العمود الأيمن بين 30% و50%"
+            "value": "يضبط عرض العمود الأيمن بين %d و%d نقطة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passt die Breite der linken Spalte zwischen 30 % und 50 % an"
+            "value": "Passt die Breite der linken Spalte zwischen %d und %d Punkten an"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Adjusts the width of the left column between 30% and 50%"
+            "value": "Adjusts the width of the left column between %d and %d points"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajusta el ancho de la columna izquierda entre 30% y 50%"
+            "value": "Ajusta el ancho de la columna izquierda entre %d y %d puntos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajuste la largeur de la colonne de gauche entre 30% et 50%"
+            "value": "Ajuste la largeur de la colonne de gauche entre %d et %d points"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Regola la larghezza della colonna di sinistra tra il 30% e il 50%"
+            "value": "Regola la larghezza della colonna di sinistra tra %d e %d punti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajusta a largura da coluna esquerda entre 30% e 50%"
+            "value": "Ajusta a largura da coluna esquerda entre %d e %d pontos"
           }
         }
       }
@@ -155307,49 +155589,49 @@
         }
       }
     },
-    "root.ipad.resizable_handle.value_format": {
+    "root.ipad.resizable_handle.value_points": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d بالمئة"
+            "value": "%d نقطة"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d Prozent"
+            "value": "%d Punkte"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d percent"
+            "value": "%d points"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d por ciento"
+            "value": "%d puntos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d pour cent"
+            "value": "%d points"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d per cento"
+            "value": "%d punti"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d por cento"
+            "value": "%d pontos"
           }
         }
       }
@@ -259907,19 +260189,66 @@
         }
       }
     },
+    "game2.banner.glory.missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ نحو %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ bis %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ to %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hacia %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ vers %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ verso %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ rumo a %2$@"
+          }
+        }
+      }
+    },
     "game2.banner.missing": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "باقٍ %1$@ نحو المستوى %2$@"
+            "value": "%1$@ نحو المستوى %2$@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "noch %1$@ bis Level %2$@"
+            "value": "%1$@ bis Level %2$@"
           }
         },
         "en": {
@@ -259931,25 +260260,25 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "faltan %1$@ hacia el %2$@"
+            "value": "%1$@ hacia el %2$@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "encore %1$@ vers le %2$@"
+            "value": "%1$@ vers le %2$@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "ancora %1$@ verso il %2$@"
+            "value": "%1$@ verso il %2$@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "faltam %1$@ rumo ao %2$@"
+            "value": "%1$@ rumo ao %2$@"
           }
         }
       }

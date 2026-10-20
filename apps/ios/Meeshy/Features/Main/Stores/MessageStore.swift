@@ -38,7 +38,7 @@ private final class WeakBox: @unchecked Sendable {
 }
 
 // Notification.Name `messageStoreShouldRefresh` is defined in
-// `packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift`
+// `packages/MeeshySDK/Sources/MeeshySDK/Persistence/PersistenceNotifications.swift`
 // so both MessageStore (iOS app) and MessagePersistenceActor (SDK) can use it.
 
 /// Fetches the message window from GRDB based on `WindowMode`. Declared at

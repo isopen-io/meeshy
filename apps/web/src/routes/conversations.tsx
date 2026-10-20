@@ -52,6 +52,8 @@ import { navigate } from '@/lib/router';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
+import { searchBarHidden, searchCommunitiesShown, useSearchBarScrolledAway } from '@/lib/view/search-bar-reveal';
+import { usePrefersReducedMotion } from '@/lib/lottie/use-reduced-motion';
 import { createDayPillRevealSubscriber } from '@/lib/view/day-pill-reveal';
 import { useLensMetaReveal } from '@/lib/view/lens-meta-reveal';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
@@ -257,6 +259,10 @@ export default function ConversationsScreen() {
   const interfaceLanguage = currentInterfaceLanguage();
   useDismissRowSwipeOnViewChange(`${selection.join(',')}\u0001${search}`);
   const frame = useRef<HTMLUListElement | null>(null);
+  /* #11036 — la barre suit le SENS du défilement ; une recherche en cours la tient. */
+  const searchBarScrolledAway = useSearchBarScrolledAway(frame);
+  const searchBarAway = searchBarHidden({ scrolledAway: searchBarScrolledAway, focused: searchFocused, query: search });
+  const searchMotionReduced = usePrefersReducedMotion();
 
   /**
    * LA RÉSERVE DE LA BARRE DE RECHERCHE (#6220) — MESURÉE, jamais supposée,
@@ -915,11 +921,35 @@ export default function ConversationsScreen() {
         hauteur MESURÉE en `padding-block-end` (voir `searchBarRef` ci-dessus)
         : le contenu s'arrête toujours AU-DESSUS d'elle, jamais dessous.
       */}
-      <div ref={searchBarRef} data-search-bar className="absolute inset-x-0 bottom-0 z-10 px-4 pt-2 pb-safe">
+      {/*
+        LA BARRE ESCAMOTÉE NE DONNE AUCUNE COURSE AU CADRE (#11090). Escamotée,
+        elle déborde du bas par `transform` ; posée directement dans le cadre
+        (`overflow-hidden`, un scrollport), ce débordement le rendait défilable :
+        un focus ou un `scrollIntoView` le décalait jusqu'à 82 px, et le retour de
+        la barre le ramenait à 0 — l'écran entier glissait et refermait le menu de
+        rangée ouvert. Ce calque à la taille du cadre ROGNE le débordement
+        (`overflow-clip` ne crée pas de scrollport), et le cadre reste un
+        scrollport : le préchargement paresseux des avatars sous la ligne de
+        flottaison, qui en dépend, ne change pas.
+      */}
+      <div data-search-bar-layer className="pointer-events-none absolute inset-0 z-10 overflow-clip">
+      <div
+        ref={searchBarRef}
+        data-search-bar
+        data-search-bar-away={searchBarAway ? 'true' : 'false'}
+        inert={searchBarAway}
+        className="pointer-events-auto absolute inset-x-0 bottom-0 px-4 pt-2 pb-safe"
+        style={{
+          transform: searchBarAway ? 'translateY(calc(100% + 16px))' : 'translateY(0)',
+          opacity: searchBarAway ? 0 : 1,
+          transition: searchMotionReduced ? 'none' : 'transform 250ms ease-out, opacity 250ms ease-out',
+        }}
+      >
         {/* #10924 — SES communautés au focus, ou rien ; posées AU-DESSUS de la
-          barre, hors de sa hauteur mesurée. `pointerdown` retenu : le focus
+          barre, hors de sa hauteur mesurée. #11036 — repliées dès le premier
+          caractère, pour laisser voir les résultats. `pointerdown` retenu : le focus
           reste au champ jusqu'au clic d'une carte. */}
-        {searchFocused ? <SearchCommunitiesBand language={interfaceLanguage} className="glass-prominent glass-card absolute inset-x-4 bottom-full mb-2" /> : null}
+        {searchCommunitiesShown({ focused: searchFocused, query: search }) ? <SearchCommunitiesBand language={interfaceLanguage} className="glass-prominent glass-card absolute inset-x-4 bottom-full mb-2" /> : null}
         <div
           className="glass-prominent glass-card flex items-center gap-3 px-4 py-3"
           style={{
@@ -944,6 +974,7 @@ export default function ConversationsScreen() {
             </button>
           ) : null}
         </div>
+      </div>
       </div>
       {renameConversation === undefined && blockConversation === undefined ? null : (
         <Suspense fallback={null}>

@@ -87,7 +87,7 @@ extension VoiceNoteLocalTranscribing {
             let known = knownTranscriptions(for: attachmentIds)
             if known.count == attachmentIds.count { return known }
             guard ContinuousClock.now < deadline else { return known }
-            try? await Task.sleep(for: .milliseconds(40))
+            guard await cancellableSleep(for: .milliseconds(40)) else { return known }
         }
     }
 

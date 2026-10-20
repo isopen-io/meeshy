@@ -4,7 +4,7 @@ import MeeshySDK
 
 /// Pilule de section et rail vivants (contrat LWS-6, travaux 4-5) : le
 /// MONTAGE, pas les vues — celles-ci sont couvertes par I-061
-/// (`SectionScrollPillTests`, `StoriesVivantsRailTests`).
+/// (`SectionScrollPillTests`).
 ///
 /// Ce que ce fichier garde tient en une phrase : *la pilule est branchée sur
 /// le signal qui existe déjà, sa visibilité est décidée par la loi partagée, et
@@ -30,16 +30,15 @@ final class ScrollPillStateTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// L'UNITÉ de la liste (`ConversationListView.swift` + `ConversationListView+*.swift`) : le rail de
+    /// stories, la queue et les feuilles vivent dans leurs fichiers, et les gardes négatives
+    /// ci-dessous doivent les balayer aussi.
     private func listViewSource() throws -> String {
-        try source(at: "Meeshy/Features/Main/Views/ConversationListView.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
     }
 
     private func pillHostSource() throws -> String {
         try source(at: "Meeshy/Features/Main/Lentille/Chrome/SectionScrollPillHost.swift")
-    }
-
-    private func railSource() throws -> String {
-        try source(at: "Meeshy/Features/Main/Lentille/Chrome/StoriesVivantsRail.swift")
     }
 
     private func normalizedCode(_ source: String) -> String {
@@ -86,7 +85,7 @@ final class ScrollPillStateTests: XCTestCase {
             // communautés le suit) au lieu de fermer la bande à côté de lui.
             view.contains("adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in if !wasHidden && isHidden { isSearching = false } }"),
             "Le signal booléen ne pilote PLUS la pilule (arbitrage I-063bis) : il ne bascule " +
-            "qu'aux changements de direction, throttlés, et il est remis à false par " +
+            "qu'aux changements de direction, sous hystérésis, et il est remis à false par " +
             "programme (filtre, feed). Le brancher là donnait « une fenêtre après la dernière " +
             "bascule », pas « une fenêtre après l'ARRÊT ». Il reste ce qu'il était pour la " +
             "barre du bas et les boutons flottants."
@@ -439,156 +438,61 @@ final class ScrollPillStateTests: XCTestCase {
     // intégralement testée ci-dessus. Ne pas rétablir `sectionScrollPillOverlay`
     // sans ré-amender d'abord la directive de `463547f5d`.
 
-    func test_storiesVivantsRail_isMountedExactlyOnce_behindTheFlag_andKeepsTheStoryRoute() throws {
+    // MARK: - Un seul rail de stories, le même que le fil (#11033)
+
+    /// La liste montait sa JUMELLE (`StoriesVivantsRail`) pendant que le fil
+    /// montait `StoryTrayView` : la jumelle ne peignait ni le contour équipé,
+    /// ni la présence, ni les menus de l'avatar. Le rail est désormais le MÊME
+    /// composant aux deux emplacements, et la jumelle n'existe plus.
+    func test_conversationList_mountsTheFeedStoryTray_andNoTwinRail() throws {
         let code = normalizedCode(try listViewSource())
 
         XCTAssertEqual(
-            occurrences(of: "StoriesVivantsRail(", in: code), 1,
-            "Le rail doit être monté — une fois (contrat LWS-6 travail 5)."
-        )
-        XCTAssertEqual(
             occurrences(of: "StoryTrayView(", in: code), 1,
-            "…et `StoryTrayView` reste monté pour le drapeau OFF : « rendu identique à " +
-            "aujourd'hui » n'admet pas la disparition du carrousel."
-        )
-        XCTAssertTrue(
-            code.contains("if LentilleFeatureFlag.isLentilleListEnabled { StoriesVivantsRail("),
-            "Le mux de tête de liste vit derrière le drapeau, comme celui du header."
+            "La liste monte `StoryTrayView` — le composant du fil — une fois, sans condition."
         )
         XCTAssertEqual(
-            occurrences(of: "onStoryViewRequest?(userId, true)", in: code), 3,
-            "Le routage du tap story doit rester le MÊME sur les trois chemins — rail " +
-            "(drapeau ON), tray (drapeau OFF) et `PinnedStoryTrailBand` (inchangé, contrat " +
-            "LWS-6 travail 5). Un rail qui présenterait la story par un autre chemin " +
-            "rouvrirait l'écran noir « story introuvable » déjà corrigé côté tray."
+            occurrences(of: "StoriesVivantsRail", in: code), 0,
+            "La jumelle du rail ne revient pas dans la liste."
+        )
+        XCTAssertFalse(
+            code.contains("LentilleFeatureFlag.isLentilleListEnabled { StoryTrayView(")
+                || code.contains("} else { StoryTrayView("),
+            "Le rail ne dépend d'aucun drapeau : le même composant aux deux emplacements."
+        )
+        XCTAssertEqual(
+            occurrences(of: "onStoryViewRequest?(userId, true)", in: code), 2,
+            "Le tap story suit le MÊME chemin sur le tray et sur `PinnedStoryTrailBand`."
         )
         XCTAssertTrue(
             code.contains("PinnedStoryTrailBand( viewModel: storyViewModel, scrollOffset: offset, onViewStory: { userId in onStoryViewRequest?(userId, true) } )"),
-            "`PinnedStoryTrailBand` : inchangé (contrat LWS-6 travail 5)."
+            "`PinnedStoryTrailBand` : inchangé."
         )
-    }
-
-    // MARK: - Fusion du rail : « moi » en première pastille (I-063bis)
-
-    func test_railRendersTheSelfEntryFirst_beforeTheOthers() throws {
-        let rail = normalizedCode(try railSource())
-
-        guard let selfIndex = rail.range(of: "LentilleRailSelfEntryView(")?.lowerBound,
-              let othersIndex = rail.range(of: "ForEach(visible)")?.lowerBound else {
-            return XCTFail(
-                "Le rail doit rendre une pastille « moi » (`LentilleRailSelfEntryView`) ET la " +
-                "liste des autres (`ForEach(visible)`) — StoriesVivantsRail.swift."
-            )
-        }
-
-        XCTAssertTrue(
-            selfIndex < othersIndex,
-            "« Moi » est la PREMIÈRE pastille (arbitrage I-063bis) : rendue avant le " +
-            "`ForEach` des autres. Sous drapeau ON le rail REMPLACE `StoryTrayView` — " +
-            "reléguer « moi » après les autres, ou l'oublier, retire de la tête de liste le " +
-            "seul chemin vers mes stories et mon statut."
-        )
-        XCTAssertTrue(
-            rail.contains("if let selfEntry { LentilleRailSelfEntryView("),
-            "…et seulement s'il y a un utilisateur résolu."
-        )
-    }
-
-    /// La borne des `≤ 6` compte les AUTRES : « moi » n'est pas une des six,
-    /// exactement comme le tray comptait les autres à droite de son bouton.
-    func test_selfEntry_doesNotConsumeOneOfTheSixSlots() {
-        let entries = (0..<9).map { LentilleRailEntry(id: "u\($0)", displayName: "User \($0)") }
         XCTAssertEqual(
-            LentilleRailPolicy.visibleEntries(entries).count,
-            LentilleMetrics.Rail.maxEntries,
-            "La troncature s'applique aux entrées des autres, indépendamment de « moi »."
+            occurrences(of: "showStatusComposer = true", in: code), 2,
+            "L'ajout de statut ouvre la sheet que la liste héberge — un site pour le tray, un " +
+            "pour l'accès rapide « Poser un mood » de la queue de liste."
         )
     }
 
-    func test_railIsHidden_onlyWhenThereIsNeitherSelfNorAnyone() {
-        let me = LentilleRailSelfEntry(displayName: "Moi")
-
+    func test_twinRailSource_isDeleted() {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Lentille/Chrome/StoriesVivantsRail.swift")
         XCTAssertFalse(
-            LentilleRailPolicy.shouldRender(selfEntry: nil, entries: []),
-            "Ni moi ni personne ⇒ masqué (règle « masquée si vide » du contrat)."
-        )
-        XCTAssertTrue(
-            LentilleRailPolicy.shouldRender(selfEntry: me, entries: []),
-            "Personne d'autre n'a publié, mais « moi » reste : le rail est rendu. Le tray " +
-            "était lui aussi toujours là — faire disparaître le seul accès à mes stories et " +
-            "à mon statut parce que mes amis n'ont rien publié serait une régression."
-        )
-        XCTAssertTrue(
-            LentilleRailPolicy.shouldRender(selfEntry: nil, entries: [LentilleRailEntry(id: "u1", displayName: "A")]),
-            "Utilisateur non résolu mais des stories à montrer ⇒ rendu."
+            FileManager.default.fileExists(atPath: url.path),
+            "`StoriesVivantsRail.swift` est la jumelle du rail de stories : supprimée (#11033)."
         )
     }
 
-    /// Les trois destinations de « moi » sont celles d'AUJOURD'HUI : la règle
-    /// de routage est le résolveur partagé, la liste passe par le listener des
-    /// racines, le composeur de statut par la sheet que la liste héberge déjà.
-    /// Zéro navigation nouvelle.
-    func test_selfEntryRouting_reusesTheExistingDoors() throws {
-        let code = normalizedCode(try listViewSource())
+    func test_feedHosts_mountTheSameStoryTray() throws {
+        let iPhoneFeed = normalizedCode(try source(at: "Meeshy/Features/Main/Views/RootViewComponents.swift"))
+        let iPadFeed = normalizedCode(try source(at: "Meeshy/Features/Main/Views/FeedView.swift"))
 
-        // 2026-08-21 (retour user) : le tap sur MON avatar ouvre TOUJOURS le
-        // listing « Mes stories » (brouillons + boutons créer / sélectionner) ;
-        // le résolveur partagé du tray n'a plus rien à décider ici, et le (+)
-        // de l'entrée crée une story directement.
-        XCTAssertEqual(
-            occurrences(of: "StoryTrayActionResolver.avatarTap(", in: code), 0,
-            "Le tap « moi » du rail n'est plus une décision : il ouvre le listing, toujours."
-        )
-        XCTAssertTrue(
-            code.contains("actionLabel: StoryTrayCopy.manageStories"),
-            "L'annonce VoiceOver dit la destination RÉELLE du tap : « Mes stories »."
-        )
-        XCTAssertTrue(
-            code.contains("onSelfCreateStory: {"),
-            "Créer une story passe par le (+) de l'entrée « moi », pas par le tap avatar."
-        )
-        XCTAssertEqual(
-            // R-j (Porte V1) : la chaîne littérale a migré vers la constante
-            // partagée `Notification.Name.openMyStories` (`RootView.swift`) —
-            // ce témoin recherche désormais le SITE D'APPEL constant, pas la
-            // chaîne recopiée. `LentilleOpenMyStoriesLiteralGuardTests`
-            // couvre la garde d'ensemble « aucun des quatre sites ne recopie
-            // plus jamais le littéral » à part.
-            occurrences(of: "NotificationCenter.default.post(name: .openMyStories", in: code), 1,
-            "« Mes stories » passe par le listener des RACINES (RootView / iPadRootView) — la " +
-            "porte que la tuile Stories du profil emprunte déjà. Monter une sheet de plus " +
-            "depuis cet écran serait une navigation nouvelle, et une double présentation le " +
-            "jour où deux écrans la montent."
-        )
-        XCTAssertTrue(
-            code.contains("storyViewModel.showStoryComposer = true"),
-            "Le composeur de story passe par le cover monté aux racines, comme depuis S5."
-        )
-        XCTAssertEqual(
-            occurrences(of: "showStatusComposer = true", in: code), 3,
-            "L'ajout de statut ouvre la sheet que CETTE vue héberge déjà — un site pour le " +
-            "rail (drapeau ON), un pour le tray (OFF), un pour l'accès rapide « Poser un mood » " +
-            "de la queue de liste (2026-08-21), et pas une sheet de plus."
-        )
-    }
-
-    /// Le rail borne et masque LUI-MÊME (`LentilleRailPolicy`, I-061) : le
-    /// montage ne doit pas re-décider ces règles de son côté — deux endroits
-    /// qui tronquent, c'est un jour où ils tronquent différemment.
-    func test_railPolicy_ownsTheSixEntryCapAndTheEmptyCase() {
-        let entries = (0..<9).map { index in
-            LentilleRailEntry(id: "u\(index)", displayName: "User \(index)")
-        }
-
-        XCTAssertEqual(
-            LentilleRailPolicy.visibleEntries(entries).count,
-            LentilleMetrics.Rail.maxEntries,
-            "≤ 6 entrées (§4.3) — borne portée par la politique du rail."
-        )
-        XCTAssertFalse(
-            LentilleRailPolicy.shouldRender([]),
-            "Masqué si vide — le rail rend `EmptyView`, il ne laisse pas une bande vide en " +
-            "tête de liste."
-        )
+        XCTAssertEqual(occurrences(of: "StoryTrayView(", in: iPhoneFeed), 1, "Le fil iPhone monte `StoryTrayView`.")
+        XCTAssertEqual(occurrences(of: "StoryTrayView(", in: iPadFeed), 1, "Le fil iPad monte `StoryTrayView`.")
     }
 }

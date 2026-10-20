@@ -244,6 +244,8 @@ public final class ReaderAudioMixer {
             // HORS de toute correction #6580 : une reprise à clé identique reste
             // un `resume`, jamais une replanification — replanifier ici
             // ressusciterait l'ÉCHO que cette garde ferme (RC4.6).
+            // La reprise reprend la session que la pause a pu rendre (#11040, j).
+            if isSounding { MediaSessionCoordinator.shared.activateContentPlayback(.audible) }
             try resumeWithoutRescheduling()
             return false
         }
@@ -332,6 +334,9 @@ public final class ReaderAudioMixer {
     }
 
     public func pause() {
+        // Une story qui sonnait rend la main au bout de ≈ 3 s de pause ; sa
+        // reprise réactive la session et annule la libération (#11040, j).
+        if isPlaying, isSounding { MediaSessionCoordinator.shared.releaseAfterUserPause() }
         for entry in entries.values { entry.node.pause() }
         backgroundEntry?.player.pause()
         if engine.isRunning { engine.pause() }
@@ -868,7 +873,13 @@ public final class ReaderAudioMixer {
 /// `PlaybackCoordinator` lets a second reader surface (viewer + composer preview
 /// mounted together) stop the previous engine before starting its own, so the
 /// same background track is never heard from two engines at once (RC4.6).
-extension ReaderAudioMixer: StoppablePlayer {}
+extension ReaderAudioMixer: AudiblyPlayingPlayer {
+    public var isPlayingAudibly: Bool { isPlaying && isSounding }
+
+    /// Des clips chargés et le son ouvert : le mixer tient (ou reprend) une
+    /// session `.playback`. Une slide silencieuse n'en prend jamais.
+    var isSounding: Bool { !isMuted && (!entries.isEmpty || backgroundEntry != nil) }
+}
 
 // MARK: - Ducking + fade-out
 

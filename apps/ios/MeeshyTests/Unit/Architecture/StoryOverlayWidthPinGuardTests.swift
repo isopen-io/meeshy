@@ -19,17 +19,9 @@ import XCTest
 /// intercepte.
 final class StoryOverlayWidthPinGuardTests: XCTestCase {
 
+    /// L'UNITÉ du canvas : les couches flottantes vivent dans `StoryViewerView+Canvas+Layers.swift`.
     private func canvasSource() throws -> String {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()  // …/Unit/Architecture
-            .deletingLastPathComponent()  // …/Unit
-            .deletingLastPathComponent()  // …/MeeshyTests
-            .deletingLastPathComponent()  // …/apps/ios
-            .deletingLastPathComponent()  // …/apps
-            .deletingLastPathComponent()  // racine du dépôt
-        let path = root.appendingPathComponent(
-            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
-        return try String(contentsOf: path, encoding: .utf8)
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
     }
 
     /// Retire les commentaires : plusieurs d'entre eux CITENT le motif

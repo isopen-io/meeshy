@@ -18,7 +18,7 @@ public protocol OwnActiveCallProviding: Sendable {
 /// reconcile a device's local call state with the server's after this
 /// device's own `CallManager` session was lost (app relaunch, crash) while
 /// the call is still ongoing server-side. See `ActiveCallSession`.
-public final class ActiveCallService: ActiveCallServiceProviding, OwnActiveCallProviding, @unchecked Sendable {
+public final class ActiveCallService: ActiveCallServiceProviding, OwnActiveCallProviding, Sendable {
     public static let shared = ActiveCallService()
     private let api: APIClientProviding
 

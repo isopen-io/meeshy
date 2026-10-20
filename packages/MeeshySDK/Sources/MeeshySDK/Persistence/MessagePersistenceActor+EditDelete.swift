@@ -189,34 +189,6 @@ extension MessagePersistenceActor {
     // NOMBRE (le plus ancien part) et en DURÉE : ceux d'un message qu'on ne
     // recevra jamais — hors de la fenêtre chargée — ne s'accumulent pas.
 
-    static let pendingRowEventCap = 512
-    static let pendingRowEventLifetime: TimeInterval = 300
-    static let pendingReactionCapPerRow = 32
-
-    struct PendingTombstone: Sendable {
-        let deletedAt: Date
-        let sparingOpenedViewOnce: Bool
-        let expired: Bool
-    }
-
-    struct PendingEdit: Sendable {
-        let newContent: String
-        let editedAt: Date
-        let marksEdited: Bool
-        let noticeJson: Data?
-    }
-
-    typealias PendingReactionChange = @Sendable ([MeeshyReaction]) -> [MeeshyReaction]?
-
-    /// Ce qui attend une ligne, dans l'ordre où cela se rejoue : la
-    /// modification, les réactions, puis la suppression, qui l'emporte.
-    struct PendingRowEvents: Sendable {
-        let rememberedAt: Date
-        var edit: PendingEdit?
-        var reactions: [PendingReactionChange] = []
-        var tombstone: PendingTombstone?
-    }
-
     func rowExists(_ localId: String) throws -> Bool {
         try dbWriter.read { db in
             try MessageRecord.filter(Column("localId") == localId || Column("serverId") == localId).fetchCount(db) > 0
@@ -224,37 +196,16 @@ extension MessagePersistenceActor {
     }
 
     func rememberPendingRowEvent(_ id: String, now: Date = Date(), _ update: (inout PendingRowEvents) -> Void) {
-        dropExpiredPendingRowEvents(now: now)
-        var events = pendingRowEvents[id] ?? PendingRowEvents(rememberedAt: now)
-        if pendingRowEvents[id] == nil { pendingRowEventOrder.append(id) }
-        update(&events)
-        if events.reactions.count > Self.pendingReactionCapPerRow {
-            events.reactions.removeFirst(events.reactions.count - Self.pendingReactionCapPerRow)
-        }
-        pendingRowEvents[id] = events
-        while pendingRowEventOrder.count > Self.pendingRowEventCap {
-            pendingRowEvents.removeValue(forKey: pendingRowEventOrder.removeFirst())
-        }
-    }
-
-    /// L'ordre de mémoire est celui des dates : les échus sont en tête.
-    func dropExpiredPendingRowEvents(now: Date) {
-        while let oldest = pendingRowEventOrder.first,
-              let events = pendingRowEvents[oldest],
-              now.timeIntervalSince(events.rememberedAt) > Self.pendingRowEventLifetime {
-            pendingRowEventOrder.removeFirst()
-            pendingRowEvents.removeValue(forKey: oldest)
-        }
+        pendingRowEvents.remember(id, now: now, update)
     }
 
     /// Les messages visés viennent d'être écrits : ce qui leur est arrivé
     /// avant eux s'applique.
     func replayPendingRowEvents(for ids: [String], now: Date = Date()) {
         guard !pendingRowEvents.isEmpty else { return }
-        dropExpiredPendingRowEvents(now: now)
+        pendingRowEvents.dropExpired(now: now)
         for id in ids {
-            guard let events = pendingRowEvents.removeValue(forKey: id) else { continue }
-            pendingRowEventOrder.removeAll { $0 == id }
+            guard let events = pendingRowEvents.take(id) else { continue }
             do {
                 if let edit = events.edit {
                     try applyServerEdit(localId: id, newContent: edit.newContent, editedAt: edit.editedAt,

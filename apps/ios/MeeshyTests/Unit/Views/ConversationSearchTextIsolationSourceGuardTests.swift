@@ -62,7 +62,7 @@ final class ConversationSearchTextIsolationSourceGuardTests: XCTestCase {
     /// **Le pendant : le champ, lui, observe.** Sans cet abonné, la frappe
     /// n'apparaîtrait plus à l'écran et la croix d'effacement resterait figée.
     func test_theSearchFieldHostObservesTheTextItDraws() throws {
-        let code = try strippedSource("Views/ConversationListView+Overlays.swift")
+        let code = try strippedSource("Views/ConversationListView+BottomBar.swift")
         XCTAssertTrue(
             code.contains("@ObservedObject var searchTextModel: ConversationSearchTextModel"),
             "L'hôte du champ de recherche DOIT observer le modèle de texte : c'est lui qui rend la frappe et la croix d'effacement (#7158)."

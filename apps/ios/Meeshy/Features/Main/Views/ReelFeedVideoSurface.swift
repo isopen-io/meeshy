@@ -239,10 +239,9 @@ struct ReelFeedVideoSurface: View {
         // (DoD S2 rejet, constat majeur #2).
         ReelFeedSoundButtonPolicy.apply(soundOn: soundOn, to: manager)
         manager.shouldLoop = true
-        // D5 : aucun armement explicite de `.duckOthers` ici — `apply()`
+        // D5 : aucun armement explicite de la session ici — `apply()`
         // ci-dessus a déjà résolu `isMuted`/`isForceMuted` AVANT cet appel, et
-        // `manager.play()` (SharedAVPlayerManager) arme lui-même `.duckOthers`,
-        // gated sur `effectiveMuted` AU COMPLET (isMuted OU isForceMuted) — pas
+        // `manager.play()` arme lui-même la session (loi #11039), lue sur `effectiveMuted` AU COMPLET (isMuted OU isForceMuted) — pas
         // seulement sur `isForceMuted` comme le faisait l'ancien appel explicite
         // ici, qui pouvait armer la session pour une vidéo restée silencieuse
         // quand `isMuted` seul valait `true` (DoD S2 rejet, constat majeur #2).

@@ -48,9 +48,10 @@ final class MessageMoreJumpsToViewsGuardTests: XCTestCase {
     // MARK: - Site 1 : overlay appui-long custom (`onShowMore`)
 
     func test_overlayOnShowMore_opensFullGrid() throws {
-        let view = try source("Features/Main/Views/ConversationView.swift")
+        // Le menu d'appui long est composé par `ConversationOverlayMenu`, extrait de l'hôte.
+        let view = try source("Features/Main/Views/ConversationView+OverlayMenu.swift")
         guard let body = closureBody(after: "onShowMore: {", in: view) else {
-            XCTFail("ConversationView must define the onShowMore closure passed to MessageOverlayMenu")
+            XCTFail("ConversationOverlayMenu must define the onShowMore closure passed to MessageOverlayMenu")
             return
         }
         XCTAssertTrue(
@@ -91,7 +92,8 @@ final class MessageMoreJumpsToViewsGuardTests: XCTestCase {
     // MARK: - Accès directs préservés + ancien ternaire banni
 
     func test_directAccessesStillJumpToViews_andTernaryIsGone() throws {
-        let view = try source("Features/Main/Views/ConversationView.swift")
+        // Les accès directs sont câblés dans la couche de la liste, extraite de l'hôte.
+        let view = try source("Features/Main/Views/ConversationView+MessageListLayer.swift")
         for marker in ["onShowMessageInfo: {", "onShowReadStatus: {"] {
             guard let body = closureBody(after: marker, in: view) else {
                 XCTFail("ConversationView must keep the \(marker.dropLast(3)) direct-access closure")

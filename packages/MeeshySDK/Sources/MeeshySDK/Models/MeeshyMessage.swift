@@ -422,3 +422,4 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
 
 public typealias MeeshyChatMessage = MeeshyMessage
 
+extension MeeshyMessage: CacheIdentifiable {}

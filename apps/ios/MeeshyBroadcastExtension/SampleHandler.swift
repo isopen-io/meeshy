@@ -12,7 +12,7 @@ import os
 // Sans app en écoute (aucun appel en cours), la diffusion s'arrête aussitôt
 // avec un message qui dit pourquoi.
 
-nonisolated final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable {
+final class SampleHandler: RPBroadcastSampleHandler, @unchecked Sendable {
     private let uploader = ScreenShareFrameUploader()
     private var stopObserver: ScreenShareDarwinObserver?
     private var isFinishing = false
@@ -59,7 +59,7 @@ nonisolated final class SampleHandler: RPBroadcastSampleHandler, @unchecked Send
 /// Encode chaque trame retenue en JPEG réduit et l'écrit sur le socket.
 /// Tout se passe sur le fil de `processSampleBuffer` : ReplayKit ne livre pas
 /// la trame suivante avant le retour, ce qui fait la contre-pression.
-nonisolated final class ScreenShareFrameUploader: @unchecked Sendable {
+final class ScreenShareFrameUploader: @unchecked Sendable {
     private static let maxLongSide = 1280
     private static let jpegQuality = 0.6
 

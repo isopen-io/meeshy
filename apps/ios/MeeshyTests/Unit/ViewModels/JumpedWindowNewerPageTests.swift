@@ -552,7 +552,8 @@ final class JumpedWindowNewerPageTests: XCTestCase {
     }
 
     func test_conversationView_nearingBottom_handsTheSignalToTheModel() throws {
-        XCTAssertTrue(try viewSource("ConversationView.swift").contains("viewModel.noteNearBottom(nearBottom)"),
+        // Le pont de la liste (`onNearBottomChanged`) vit dans sa couche, extraite de l'hôte.
+        XCTAssertTrue(try viewSource("ConversationView+MessageListLayer.swift").contains("viewModel.noteNearBottom(nearBottom)"),
                       "L'état « en bas » va au modèle, qui enchaîne les pages plus récentes")
     }
 

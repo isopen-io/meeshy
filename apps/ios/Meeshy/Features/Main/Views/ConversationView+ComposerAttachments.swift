@@ -152,7 +152,7 @@ extension ConversationView {
         MediaKindLabel.attachmentLabel(for: attachment)
     }
 
-    // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, handlePhotoSelection, generateVideoThumbnail, handleFileImport, mimeTypeForURL, getFileSize, handleCameraCapture, sendMessage
+    // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, handlePhotoSelection, generateVideoThumbnail, handleFileImport, getFileSize, handleCameraCapture, sendMessage
 }
 
 // MARK: - Tuile d'un audio en attente

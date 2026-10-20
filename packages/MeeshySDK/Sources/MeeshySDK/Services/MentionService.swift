@@ -52,7 +52,7 @@ public protocol MentionServiceProviding: AnyObject, Sendable {
 
 // MARK: - Service
 
-public final class MentionService: MentionServiceProviding, @unchecked Sendable {
+public final class MentionService: MentionServiceProviding, Sendable {
     public static let shared = MentionService()
     private let api: APIClientProviding
 

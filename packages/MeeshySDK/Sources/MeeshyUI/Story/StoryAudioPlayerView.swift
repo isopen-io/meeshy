@@ -337,8 +337,7 @@ public struct StoryAudioPlayerView: View {
         } else {
             // Mode viewer : mute/unmute uniquement — s'applique au player actif
             // (externe fourni par ReaderState, ou interne en fallback).
-            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-            impactFeedback.impactOccurred()
+            HapticFeedback.light()
             isMuted.toggle()
             activePlayer?.isMuted = isMuted
         }

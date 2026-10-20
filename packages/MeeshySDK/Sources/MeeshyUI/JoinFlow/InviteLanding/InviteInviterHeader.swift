@@ -84,7 +84,7 @@ struct InviteInviterHeader: View {
 /// Une bulle dont le coin de DÉPART (haut, côté du texte) est resserré — le
 /// message vient de la personne au-dessus. Le coin suit la direction de
 /// lecture : il passe à droite en arabe.
-struct UnevenBubbleShape: Shape {
+nonisolated struct UnevenBubbleShape: Shape {
     let cornerRadius: CGFloat
     let leadingTopRadius: CGFloat
     let isRTL: Bool

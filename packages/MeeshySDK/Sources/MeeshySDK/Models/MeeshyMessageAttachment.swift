@@ -371,7 +371,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var durationFormatted: String? {
         guard let d = duration else { return nil }
         let seconds = d / 1000
-        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+        return DurationFormat.clock(wholeSeconds: seconds)
     }
 
     public var fileSizeFormatted: String {

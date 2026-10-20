@@ -11,8 +11,9 @@ final class MeeshyVideoPlayerControlSetTests: XCTestCase {
         XCTAssertTrue(MeeshyVideoPlayer.ControlSet.inlineDefault.contains(.expand))
     }
 
-    func test_inlineDefault_includesPip() {
-        XCTAssertTrue(MeeshyVideoPlayer.ControlSet.inlineDefault.contains(.pip))
+    /// #11041, décision e : seul le plein écran ouvre un PiP.
+    func test_inlineDefault_excludesPip() {
+        XCTAssertFalse(MeeshyVideoPlayer.ControlSet.inlineDefault.contains(.pip))
     }
 
     func test_inlineDefault_includesAirplay() {

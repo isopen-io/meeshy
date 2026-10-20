@@ -383,7 +383,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         ("Components/MessageMoreSheet.swift", ".captureShield(message.exitOffer.capture.shieldsCapture())"),
         ("Components/ConversationInfoSheet+Pinned.swift", ".captureShield(msg.exitOffer.capture.shieldsCapture())"),
         ("Views/ThreadView.swift", ".captureShield(parentMessage.exitOffer.capture.shieldsCapture())"),
-        ("Share/ShareContentZone.swift", "message.exitOffer.capture.shieldsCapture()"),
+        ("Share/ShareContentZone.swift", "message.contentExitLaw.capture.shieldsCapture()"),
         ("Views/ConversationView+ComposerBanners.swift", ".captureShield(reply.quotedCapture(quotedMessage:quoted).shieldsCapture())"),
         ("Views/MediaReplyComposerBar.swift", "citationBanner.captureShield(citation.quotedCapture(quotedMessage:nil).shieldsCapture())"),
         ("Views/ConversationPreviewLine.swift", ".captureShield(preview.icon==.ephemeral)"),
@@ -406,8 +406,10 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         XCTAssertTrue(try code("Views/MessageListViewController.swift")
             .contains("focalActions.onTapLocation={placeintapLocationHandler?(place,messageId)}"),
                       "la rangée Focal relaie le message du lieu touché")
+        XCTAssertTrue(try code("Views/ConversationView+MessageListLayer.swift")
+            .contains("focalFullscreenPlace=actions.focalPlace(place,messageId)"))
         XCTAssertTrue(try code("Views/ConversationView.swift")
-            .contains("focalFullscreenPlace=makeFocalFullscreenPlace(place,messageId:messageId)"))
+            .contains("focalPlace:{makeFocalFullscreenPlace($0,messageId:$1)}"))
     }
 
     func test_theProjections_readTheExitOfferOnce() throws {

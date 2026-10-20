@@ -24,15 +24,13 @@ import UIKit
 @MainActor
 final class WindowMetricsSSOTTests: XCTestCase {
 
-    /// `apps/ios/` — four levels up from `MeeshyTests/Unit/Views/<this file>`.
+    /// L'UNITÉ (`Foo.swift` + `Foo+*.swift`) : un type découpé garde une adresse, sinon
+    /// les gardes négatives de ce fichier lisent la moitié qui ne contient pas l'interdit.
     private func source(_ relativePath: String) throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent(relativePath)
-        return try AppSourceGuard.text(at: url)
+        // Le lecteur de story a des types sortis sous leur propre nom (`StoryViewerSources`).
+        try AppSourceGuard.unit(
+            relativePath,
+            alsoIncluding: relativePath.hasSuffix("/StoryViewerView.swift") ? StoryViewerSources.companions : [])
     }
 
     /// Comment lines are stripped before matching: the doc-comments deliberately
@@ -56,7 +54,9 @@ final class WindowMetricsSSOTTests: XCTestCase {
         "Meeshy/Features/Main/Views/RootView.swift",
         "Meeshy/Features/Main/Views/VideoLegacySupport.swift",
         "Meeshy/Features/Main/Components/ComposerModels.swift",
-        "Meeshy/Features/Main/Components/RecentMediaStrip.swift"
+        "Meeshy/Features/Main/Components/RecentMediaStrip.swift",
+        "Meeshy/Features/Main/Components/RecentMediaCell.swift",
+        "Meeshy/Features/Main/Components/RecentMediaPreview.swift"
     ]
 
     // MARK: - L'ancrage du bouton « redescendre en bas »
@@ -65,7 +65,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// chaque ligne tapée le faisait remonter — pendant que l'utilisateur
     /// relisait son historique.
     func test_scrollButtonAnchor_whileComposing_doesNotFollowTheGrowingComposer() {
-        let anchor = ConversationView.resolvedScrollButtonAnchor(
+        let anchor = ConversationViewRules.resolvedScrollButtonAnchor(
             current: 130,
             composerHeight: 186,
             isComposing: true
@@ -76,7 +76,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     }
 
     func test_scrollButtonAnchor_withAnEmptyComposer_realignsOnIt() {
-        let anchor = ConversationView.resolvedScrollButtonAnchor(
+        let anchor = ConversationViewRules.resolvedScrollButtonAnchor(
             current: 130,
             composerHeight: 164,
             isComposing: false
@@ -91,7 +91,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// bouton : elles passent par `isComposing == false`.
     func test_scrollButtonAnchor_shrinkingComposer_isFollowedWhenNotComposing() {
         XCTAssertEqual(
-            ConversationView.resolvedScrollButtonAnchor(current: 186, composerHeight: 130, isComposing: false),
+            ConversationViewRules.resolvedScrollButtonAnchor(current: 186, composerHeight: 130, isComposing: false),
             130
         )
     }
@@ -103,7 +103,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// default, which would collapse the composer on every keyboard frame.
     func test_composerHeight_whileKeyboardIsUp_declinesToUpdate() {
         XCTAssertNil(
-            ConversationView.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 336, safeAreaBottom: 34),
+            ConversationViewRules.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 336, safeAreaBottom: 34),
             "With the keyboard up the bottom inset is already 0 and the GeometryReader fires on " +
             "every animation frame — recomputing there loops the height against itself."
         )
@@ -111,7 +111,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
 
     func test_composerHeight_withKeyboardDown_addsTheWindowInset() {
         XCTAssertEqual(
-            ConversationView.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 34),
+            ConversationViewRules.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 34),
             164 as CGFloat?
         )
     }
@@ -121,7 +121,7 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// screen-derived guess padded onto the bottom.
     func test_composerHeight_withoutAnInset_isTheContentHeight() {
         XCTAssertEqual(
-            ConversationView.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 0),
+            ConversationViewRules.resolvedComposerHeight(contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 0),
             130 as CGFloat?
         )
     }
@@ -131,10 +131,10 @@ final class WindowMetricsSSOTTests: XCTestCase {
     /// iPad Split View pane (0 pt) shifts the composer by a full 34 pt — enough
     /// to float it clear of the bar it is supposed to sit against.
     func test_composerHeight_isSensitiveToWhichWindowTheInsetCameFrom() {
-        let fromTheActiveWindow = ConversationView.resolvedComposerHeight(
+        let fromTheActiveWindow = ConversationViewRules.resolvedComposerHeight(
             contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 0
         )
-        let fromABackgroundWindow = ConversationView.resolvedComposerHeight(
+        let fromABackgroundWindow = ConversationViewRules.resolvedComposerHeight(
             contentHeight: 130, keyboardHeight: 0, safeAreaBottom: 34
         )
 
@@ -223,31 +223,13 @@ final class WindowMetricsSSOTTests: XCTestCase {
         }
     }
 
-    /// `UIScreen.main` survives in exactly three places, all deliberate:
-    /// `DeviceLayout`'s own last resort, and two image-decode sites that want
-    /// the largest width an image could ever need (sizing those to the current
-    /// window would under-decode and blur the moment the window grows).
-    ///
-    /// Asserted as an equality, not an inclusion: an inclusion would stay green
-    /// if a new screen-derived measurement appeared, which is the only thing
-    /// this is here to catch.
-    func test_displayMeasurements_areConfinedToTheDeliberateSites() throws {
+    func test_appSources_neverReadTheMainScreen() throws {
         let appRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy")
-
-        let deliberate: Set<String> = [
-            "DeviceLayout.swift",              // the last resort when no scene exists
-            "BubbleStandardLayout.swift",      // decode target: widest the image may need
-            // Relocalisation PURE (98e96de97d) : la mesure n'a pas bougé, son
-            // fichier si — `ConversationMediaGalleryView` a été découpé pour rentrer
-            // dans son budget, et cette garde nommait l'ANCIEN fichier. Le nom
-            // change, la population des sites délibérés reste de trois.
-            "ConversationMediaGalleryView+Rules.swift" // decode target: widest the image may need
-        ]
 
         var found: Set<String> = []
         let walker = try XCTUnwrap(FileManager.default.enumerator(atPath: appRoot.path))
@@ -256,15 +238,15 @@ final class WindowMetricsSSOTTests: XCTestCase {
             let code = codeLines(
                 try AppSourceGuard.text(at: appRoot.appendingPathComponent(relativePath))
             )
-            if code.contains("UIScreen.main.bounds") {
+            if code.contains("UIScreen.main") {
                 found.insert((relativePath as NSString).lastPathComponent)
             }
         }
 
         XCTAssertEqual(
-            found, deliberate,
-            "New display-derived measurement, or a deliberate site removed without updating this " +
-            "guard. Layout reads DeviceLayout.windowSize; only image-decode targets read the screen."
+            found, [],
+            "Lecture de l'écran principal dans l'app : le layout lit DeviceLayout.windowSize, le " +
+            "décodage DecodeBudget, et WindowMetrics tient la seule lecture."
         )
     }
 

@@ -108,3 +108,44 @@ export async function consumeImpliedImpressions(
   await prisma.postImpression.deleteMany({ where: { id: { in: consumed.ids } } });
   return consumed.perPost;
 }
+
+/** La clé DÉTERMINISTE de l'unique impression qu'un auteur compte sur son propre contenu. */
+export const selfImpressionEventId = (userId: string, postId: string): string =>
+  `self-impression:${userId}:${postId}`;
+
+/**
+ * L'auteur ne compte qu'UNE impression par contenu (#11037, porteur
+ * 2026-10-19) ; tout autre lecteur compte à chaque affichage (#10483).
+ *
+ * Rend les impressions à écrire : celles des autres posts telles quelles, et
+ * pour chaque post de l'auteur qui n'a encore aucune impression de lui, la
+ * première occurrence sous {@link selfImpressionEventId}. L'index unique
+ * partiel d'`eventKey` refuse la seconde même quand deux lots concurrents
+ * passent la lecture ensemble ; la lecture couvre les lignes écrites avant
+ * cette règle, qui ne portent pas cette clé. Lecture par compte au même titre
+ * que les deux ci-dessus : l'intégrité du compteur, jamais un classement.
+ */
+export async function authorImpressionsOnce(
+  prisma: Pick<PrismaClient, 'postImpression'>,
+  userId: string,
+  events: readonly ImpressionEvent[],
+  ownPostIds: ReadonlySet<string>,
+): Promise<readonly ImpressionEvent[]> {
+  const ownShown = [...ownPostIds].filter((postId) => events.some((event) => event.postId === postId));
+  if (ownShown.length === 0) return events;
+
+  const alreadyShown: readonly { postId: string }[] = await prisma.postImpression.findMany({
+    where: { ...ofReader(userId), postId: { in: ownShown } },
+    select: { postId: true },
+  });
+  const shown = new Set(alreadyShown.map((row) => row.postId));
+
+  const own = ownShown
+    .filter((postId) => !shown.has(postId))
+    .flatMap((postId) => {
+      const first = events.find((event) => event.postId === postId);
+      return first ? [{ ...first, eventId: selfImpressionEventId(userId, postId) }] : [];
+    });
+
+  return [...events.filter((event) => !ownPostIds.has(event.postId)), ...own];
+}

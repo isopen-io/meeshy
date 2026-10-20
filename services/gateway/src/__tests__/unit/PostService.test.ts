@@ -15,6 +15,7 @@ import { MediaService } from '../../services/MediaService';
 import type { PostReactionService } from '../../services/PostReactionService';
 import { PostType, PostVisibility } from '@meeshy/shared/prisma/client';
 import { createMockPrisma, makePost, createMockPostReactionService } from './post-service-mocks';
+import { STORY_VIEW_RESET } from '../../services/posts/postCounters';
 
 // PostAudioService uses a singleton that requires initialization — mock it entirely
 // so PostService tests don't depend on ZMQ / SocialEventsHandler setup.
@@ -692,7 +693,7 @@ describe('PostService', () => {
         items: viewItems,
         total: 10,
         hasMore: true,
-        anonymousViewCount: 0, uniqueViewCount: 0, anonymousUniqueViewCount: 0,
+        anonymousViewCount: 0, uniqueViewCount: 0, anonymousUniqueViewCount: 0, viewCount: 0, impressionCount: 0,
       });
     });
 
@@ -709,7 +710,7 @@ describe('PostService', () => {
         items: expect.any(Array),
         total: 1,
         hasMore: false,
-        anonymousViewCount: 0, uniqueViewCount: 0, anonymousUniqueViewCount: 0,
+        anonymousViewCount: 0, uniqueViewCount: 0, anonymousUniqueViewCount: 0, viewCount: 0, impressionCount: 0,
       });
     });
 
@@ -1904,6 +1905,32 @@ describe('PostService', () => {
               contentEditedAt: expect.any(Date),
             }),
           }),
+        );
+      });
+
+      it('#11065 — remet aussi à zéro les personnes distinctes et les parts anonymes : aucune liste vidée sous un compteur plein', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', '0a0a0a0a0a0a0a0a0a0a0a01', { storyEffects: { background: { kind: 'color' } } });
+
+        expect(prisma.post.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining(STORY_VIEW_RESET) }),
+        );
+        expect(STORY_VIEW_RESET).toMatchObject({
+          viewCount: 0, impressionCount: 0, uniqueViewCount: 0,
+          anonymousViewCount: 0, anonymousUniqueViewCount: 0, anonymousImpressionCount: 0,
+        });
+      });
+
+      it('#11065 — la republication remet à zéro les mêmes compteurs que l’édition', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: '0a0a0a0a0a0a0a0a0a0a0a01', type: 'STORY', media: [] }));
+
+        await service.republishStory('post-1', '0a0a0a0a0a0a0a0a0a0a0a01');
+
+        expect(prisma.postView.deleteMany).toHaveBeenCalledWith({ where: { postId: 'post-1' } });
+        expect(prisma.post.update).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining(STORY_VIEW_RESET) }),
         );
       });
 

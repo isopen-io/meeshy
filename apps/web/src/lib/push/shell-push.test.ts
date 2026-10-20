@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, test } from 'bun:test';
 import { createStore } from 'zustand/vanilla';
 
@@ -8,7 +12,6 @@ import { pushTapTarget, type PushTapTarget } from '@/lib/notifications/target';
 
 import {
   SHELL_PUSH_CHANNEL_ID,
-  deliveredMessageOf,
   shellPushTargetInput,
   startShellPush,
   type ShellPushPermission,
@@ -226,18 +229,14 @@ describe('une identité anonyme tenue par le compte (#8816)', () => {
     expect(h.calls).toEqual(['register']);
   });
 
-  test('le jeton et les accusés partent sous le COMPTE, jamais sous l’identité anonyme', async () => {
+  test('le jeton part sous le COMPTE, jamais sous l’identité anonyme', async () => {
     const h = harness(authenticated('u1'));
     await h.start();
     await flush();
     h.store.setState({ session: heldBy(authenticated('u1')) });
     h.requests.length = 0;
     h.fire('registration', { value: 'fcm-token-refreshed' });
-    h.fire('pushNotificationReceived', { id: 'n', data: { type: 'new_message', conversationId: 'c42', messageId: 'm7' } });
-    expect(h.requests.map((request) => request.credential)).toEqual([
-      { kind: 'registered', token: 'jwt-u1' },
-      { kind: 'registered', token: 'jwt-u1' },
-    ]);
+    expect(h.requests.map((request) => request.credential)).toEqual([{ kind: 'registered', token: 'jwt-u1' }]);
   });
 });
 
@@ -260,30 +259,24 @@ describe('le tap d’une bannière de la coque aboutit (#7307)', () => {
   });
 });
 
-describe('la coque accuse la remise d’un message reçu (#7307, report de #7368)', () => {
-  test('une arrivée de message poste l’accusé « delivered » sur la route canonique', async () => {
+describe('la coque accuse la remise d’un message reçu UNE fois, en natif (#11122)', () => {
+  test('une arrivée de message ne poste aucun accusé depuis la page : `onMessageReceived` l’a déjà envoyé', async () => {
     const h = harness(authenticated('u1'));
     await h.start();
     await flush();
     h.requests.length = 0;
     h.fire('pushNotificationReceived', { id: 'n', data: { type: 'new_message', conversationId: 'c42', messageId: 'm7' } });
-    expect(h.requests).toEqual([
-      {
-        method: 'POST',
-        path: '/api/v1/conversations/c42/receipts',
-        body: { type: 'delivered', messageIds: ['m7'] },
-        credential: { kind: 'registered', token: 'jwt-u1' },
-      },
-    ]);
+    expect(h.requests).toEqual([]);
   });
 
-  test('une réaction porte le message RÉAGI : aucun accusé', async () => {
-    const h = harness(authenticated('u1'));
-    await h.start();
-    await flush();
-    h.requests.length = 0;
-    h.fire('pushNotificationReceived', { id: 'n', data: { type: 'message_reaction', conversationId: 'c42', messageId: 'm7' } });
-    expect(h.requests).toEqual([]);
+  test('le natif accuse toujours la remise d’un push relayé à la page', () => {
+    const service = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../android/app/src/main/java/me/meeshy/app/MeeshyMessagingService.java'),
+      'utf8',
+    );
+    const received = service.slice(service.indexOf('public void onMessageReceived('), service.indexOf('private void acknowledgeDelivery('));
+    expect(received).toContain('forward("sendRemoteMessage"');
+    expect(received).toContain('acknowledgeDelivery(PushDeliveryReceipt.of(');
   });
 });
 
@@ -313,11 +306,6 @@ describe('ce que la coque lit de la charge', () => {
       route: 'userProfile',
       params: { username: 'marie' },
     });
-  });
-
-  test('une remise sans message ni conversation n’est pas une remise', () => {
-    expect(deliveredMessageOf({ type: 'new_message', conversationId: 'c1', messageId: '' })).toBeNull();
-    expect(deliveredMessageOf(null)).toBeNull();
   });
 });
 

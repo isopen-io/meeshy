@@ -28,7 +28,10 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
     }
 
     private func stripped(_ relativePath: String) throws -> String {
-        AppSourceGuard.stripComments(try source(relativePath))
+        let chrome = relativePath == rowPath
+            ? "\n" + (try source("Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift"))
+            : ""
+        return AppSourceGuard.stripComments(try source(relativePath) + chrome)
     }
 
     private var hostPath: String { "Meeshy/Features/Main/Views/MessageListViewController.swift" }
@@ -138,7 +141,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "drapeau et réactions partagent une HStack — jamais deux lignes empilées"
         )
         guard let textBlockStart = code.range(of: "private var textBlock"),
-              let textBlockEnd = code.range(of: "private var headerTimeString")
+              let textBlockEnd = code.range(of: "private var expansion:")
         else { return XCTFail("bornes du textBlock introuvables") }
         let textBlockBody = code[textBlockStart.lowerBound..<textBlockEnd.lowerBound]
         XCTAssertFalse(

@@ -13,7 +13,7 @@ public protocol ContentCaptureSending: Sendable {
 /// muet. Le même `captureId` voyage sur les deux : la passerelle dédoublonne,
 /// un repli après une échéance ne crée rien de plus. Un refus FINAL du socket
 /// (non-participant, budget dépassé…) ne se rejoue pas en REST.
-public final class ContentCaptureService: ContentCaptureSending, @unchecked Sendable {
+public final class ContentCaptureService: ContentCaptureSending, Sendable {
     public static let shared = ContentCaptureService()
 
     private let api: APIClientProviding

@@ -215,20 +215,7 @@ public final class StoryInlineTextEditor: UITextView {
     }
 
     private static func color(hex: String?) -> UIColor? {
-        guard var trimmed = hex?.trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
-        if trimmed.hasPrefix("#") { trimmed.removeFirst() }
-        guard trimmed.count == 6 || trimmed.count == 8 else { return nil }
-        var rgb: UInt64 = 0
-        guard Scanner(string: trimmed).scanHexInt64(&rgb) else { return nil }
-        if trimmed.count == 8 {
-            return UIColor(red: CGFloat((rgb & 0xFF000000) >> 24) / 255,
-                           green: CGFloat((rgb & 0x00FF0000) >> 16) / 255,
-                           blue: CGFloat((rgb & 0x0000FF00) >> 8) / 255,
-                           alpha: CGFloat(rgb & 0x000000FF) / 255)
-        }
-        return UIColor(red: CGFloat((rgb & 0xFF0000) >> 16) / 255,
-                       green: CGFloat((rgb & 0x00FF00) >> 8) / 255,
-                       blue: CGFloat(rgb & 0x0000FF) / 255,
-                       alpha: 1)
+        guard let hex else { return nil }
+        return HexColor(hex: hex)?.uiColor
     }
 }

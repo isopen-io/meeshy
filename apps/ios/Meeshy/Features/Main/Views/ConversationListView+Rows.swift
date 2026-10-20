@@ -173,7 +173,7 @@ struct ConversationRowItem: View {
                             presenceState: conversation.type == .direct ? presenceState : nil,
                             isDirect: conversation.type == .direct
                         )
-                        .frame(width: 340)
+                        .frame(width: ConversationPreviewWidthLaw.width(rowTextWidth: ConversationRowWidthLaw.textWidth(listWidth: rowWidth, windowWidth: rowWidth, isRegular: false)))
                         // Les derniers messages se chargent À L'OUVERTURE de
                         // l'aperçu (au-delà des `autoPreviewLoadRowLimit`
                         // premières rangées, rien ne les a préchargés) : le

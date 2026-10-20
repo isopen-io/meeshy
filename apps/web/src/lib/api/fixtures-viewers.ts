@@ -58,13 +58,17 @@ const STORY_AUTHOR_OF: Readonly<Record<string, string>> = {
      (`engagement: 'unavailable'`) — id de test seulement : les lignes arrivent
      NUES, et la feuille doit dire pourquoi plutôt que « sans autre interaction ». */
   'st-mienne-detail-indisponible': VIEWER_ID,
+  /* UNE de MES stories dont la passerelle sert, AVEC la liste, un compte de vues
+     plus récent que celui qu'avait la carte à l'ouverture (#11065) — id de test
+     seulement : trois lecteurs, dont un revenu, soit quatre vues. */
+  'st-mienne-compte-relu': VIEWER_ID,
   'st-amie-1': 'u-ines',
   'st-amie-2': 'u-ines',
   'st-video': 'u-ines',
 };
 
 export type FixtureInteractionsResult =
-  | { readonly ok: true; readonly viewers: readonly PostViewerRow[]; readonly engagement?: 'unavailable' }
+  | { readonly ok: true; readonly viewers: readonly PostViewerRow[]; readonly engagement?: 'unavailable'; readonly viewCount?: number }
   | { readonly ok: false; readonly status: 403 | 404 };
 
 /**
@@ -79,6 +83,9 @@ export function fixturePostInteractions(postId: string): FixtureInteractionsResu
   if (author !== VIEWER_ID) return { ok: false, status: 403 };
   if (postId === 'st-mienne-detail-indisponible') {
     return { ok: true, viewers: VIEWERS_OF_ST_MIENNE.slice(1), engagement: 'unavailable' };
+  }
+  if (postId === 'st-mienne-compte-relu') {
+    return { ok: true, viewers: VIEWERS_OF_ST_MIENNE, viewCount: VIEWERS_OF_ST_MIENNE.length + 1 };
   }
   return { ok: true, viewers: postId === 'st-mienne' ? VIEWERS_OF_ST_MIENNE : [] };
 }

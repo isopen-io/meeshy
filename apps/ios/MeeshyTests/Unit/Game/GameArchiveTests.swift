@@ -9,8 +9,10 @@ import MeeshySDK
 @MainActor
 final class GameArchiveTests: XCTestCase {
 
-    private actor MemoryCache: GameWave2Caching {
+    @MainActor
+    private final class MemoryCache: GameWave2Caching {
         private var store: [String: Data] = [:]
+        nonisolated deinit {}
         func load<T: Decodable & Sendable>(_ type: T.Type, name: String) async -> T? {
             store[name].flatMap { try? JSONDecoder().decode(T.self, from: $0) }
         }

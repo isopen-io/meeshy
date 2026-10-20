@@ -206,7 +206,7 @@ final class ReelPlaybackRestingTests: XCTestCase {
 final class ReelElectionPathSourceGuardTests: XCTestCase {
 
     private static let forbidden = ["load(", "setCategory(", "setActive(", "AVPictureInPictureController(",
-                                    "AVPlayer(", "AVQueuePlayer(", "AVPlayerItem(", "activatePlaybackSync(",
+                                    "AVPlayer(", "AVQueuePlayer(", "AVPlayerItem(", "activatePlaybackSync(", "activateContentPlayback(",
                                     "willStartPlaying(", "configurePip("]
 
     private var views: URL {

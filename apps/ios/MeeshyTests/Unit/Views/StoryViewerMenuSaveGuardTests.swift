@@ -196,10 +196,13 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
     /// « Exporter en vidéo » ouvre la feuille EXISTANTE au choix de la langue,
     /// présentée par le lecteur, et l'auteur de la story la signe.
     func test_exportVideo_opensTheExistingLanguageSheet() throws {
-        let canvas = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+        // Le chrome haut (donc l'appel de l'en-tête) vit dans `+Canvas+Layers`, et les feuilles dans
+        // `StoryViewerSheets` : le lecteur ne fait plus que les monter.
+        let canvas = MyStoriesSourceCorpus.strippingComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
         let headerCall = try XCTUnwrap(canvas.range(of: "StoryHeaderView("))
         XCTAssertTrue(canvas[headerCall.upperBound...].prefix(1200).contains("showExportShareSheet: $showExportShareSheet"))
-        let viewer = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let viewer = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryViewerSheets.swift")
         XCTAssertTrue(viewer.contains(".sheet(isPresented: $showExportShareSheet"))
         XCTAssertTrue(viewer.contains("viewModel: exportShareViewModel, author: currentGroup.map(StoryExportAuthor.init(group:))"))
         let sheet = try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/StoryExportShareSheet.swift")

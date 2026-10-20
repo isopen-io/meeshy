@@ -39,18 +39,17 @@ public final class CacheBackgroundFlushTask: Sendable {
         self.coordinator = coordinator
     }
 
-    private static let registrationLock = NSLock()
-    nonisolated(unsafe) private static var didRegister = false
+    private static let registration = Locked(false)
 
     /// Un seul enregistrement par processus. `BGTaskScheduler` ne rend PAS `false` sur un doublon : il lève
     /// `NSInternalInconsistencyException` (« launch handler … already registered ») et l'app meurt au lancement —
     /// vu sur simulateur, build 1936, depuis `MeeshyApp.init`. Rend `true` à la première demande seulement.
     static func claimRegistration() -> Bool {
-        registrationLock.lock()
-        defer { registrationLock.unlock() }
-        guard !didRegister else { return false }
-        didRegister = true
-        return true
+        registration.mutate { claimed in
+            guard !claimed else { return false }
+            claimed = true
+            return true
+        }
     }
 
     /// Registers the task identifier with `BGTaskScheduler`, once per process — a second call is a no-op.

@@ -122,7 +122,7 @@ public struct PlayheadView: View, Equatable {
     }
 }
 
-private struct Triangle: Shape {
+nonisolated private struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: rect.midX, y: rect.maxY))

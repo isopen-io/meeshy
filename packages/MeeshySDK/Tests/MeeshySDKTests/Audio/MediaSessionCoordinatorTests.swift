@@ -172,7 +172,7 @@ final class MediaSessionCoordinatorThreadSafetySourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/MediaSessionCoordinator.swift")
+            .appendingPathComponent("Sources/MeeshySDK/Media/MediaSessionCoordinator.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

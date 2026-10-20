@@ -74,7 +74,7 @@ public struct TransitionBadge: View, Equatable {
     }
 }
 
-private struct Diamond: Shape {
+nonisolated private struct Diamond: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: rect.midX, y: rect.minY))

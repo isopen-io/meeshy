@@ -1512,7 +1512,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // du fil (`ConversationImageSceneDoor`) monte le meuble au lieu de
             // l'éditeur d'image à part. Elle passe les trois canaux — et n'en
             // publie aucun : son socle rend l'image au message.
-            ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "DocumentComposerDoor.swift",
+            ["StoryTrayActions.swift", "MoodComposerDoor.swift", "DocumentComposerDoor.swift",
              "MediaComposerDoor.swift", "ShareComposeDoor.swift",
              "StoryEditComposer.swift", "StoryRepublishComposer.swift",
              "ConversationImageSceneDoor.swift"],

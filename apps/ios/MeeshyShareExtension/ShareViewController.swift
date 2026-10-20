@@ -32,16 +32,23 @@ final class ShareViewController: UIViewController {
     /// laisse la feuille se fermer.
     private var relayAttempted = false
 
+    private var loading: Task<Void, Never>?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
-        extractContent { [weak self] content in
-            guard let self else { return }
-            self.extractAttachments { media, failure in
-                self.installInterface(content: content, media: media, failure: failure)
-            }
+        let providers = inputProviders.map(ShareProviderHandoff.init(provider:))
+        let shareId = shareId
+        loading = Task { @MainActor [weak self] in
+            let content = await Self.extractContent(providers)
+            let staged = await Self.stageAttachments(providers, shareId: shareId)
+            self?.installInterface(content: content, media: staged.media, failure: staged.failure)
         }
+    }
+
+    private var inputProviders: [NSItemProvider] {
+        (extensionContext?.inputItems as? [NSExtensionItem] ?? []).flatMap { $0.attachments ?? [] }
     }
 
     // MARK: - Composition de l'écran
@@ -163,6 +170,7 @@ final class ShareViewController: UIViewController {
     }
 
     private func complete() {
+        loading?.cancel()
         completionGate.fireOnce { [weak self] in
             self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
         }
@@ -175,75 +183,43 @@ final class ShareViewController: UIViewController {
 
     // MARK: - Extraction
 
-    /// Accumulateur protégé par verrou : `loadItem` rappelle sur une file
-    /// arbitraire, et plusieurs pièces jointes peuvent répondre en parallèle.
-    private final class ExtractionBox: @unchecked Sendable {
-        private let lock = NSLock()
-        // `nonisolated(unsafe)` : mutated only under `lock`, from `offer`/
-        // `snapshot` below — the lock IS the synchronization the compiler
-        // can't see across actor isolation.
-        nonisolated(unsafe) private var text: String?
-        nonisolated(unsafe) private var url: URL?
-
-        // `nonisolated` : called from `loadItem`'s completion, which runs on
-        // an arbitrary queue (same rationale as `asURL`/`asText` below). The
-        // `NSLock` is this type's own synchronization — it doesn't need (and
-        // must not wait for) the main actor.
-        nonisolated func offer(text value: String?) {
-            guard let value, !value.isEmpty else { return }
-            lock.lock(); defer { lock.unlock() }
-            if text == nil { text = value }
+    @concurrent
+    private static func extractContent(_ providers: [ShareProviderHandoff]) async -> String? {
+        let payloads = await withTaskGroup(of: (index: Int, payload: ShareProviderPayload).self) { group in
+            for (index, handoff) in providers.enumerated() {
+                let provider = handoff.provider
+                if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                    group.addTask { (index, .url(await loadURL(from: handoff.provider))) }
+                } else if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
+                    group.addTask { (index, .text(await loadText(from: handoff.provider))) }
+                }
+            }
+            var collected: [(index: Int, payload: ShareProviderPayload)] = []
+            for await entry in group { collected.append(entry) }
+            return collected.sorted { $0.index < $1.index }.map(\.payload)
         }
+        let reduced = ShareExtractionReduction.content(from: payloads)
+        return ShareSender.composeContent(text: reduced.text, url: reduced.url)
+    }
 
-        nonisolated func offer(url value: URL?) {
-            guard let value else { return }
-            lock.lock(); defer { lock.unlock() }
-            if url == nil { url = value }
-        }
-
-        nonisolated var snapshot: (text: String?, url: URL?) {
-            lock.lock(); defer { lock.unlock() }
-            return (text, url)
+    nonisolated private static func loadURL(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { continuation in
+            provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { data, _ in
+                continuation.resume(returning: asURL(data))
+            }
         }
     }
 
-    private func extractContent(completion: @escaping (String?) -> Void) {
-        guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
-            completion(nil)
-            return
-        }
-
-        let box = ExtractionBox()
-        let group = DispatchGroup()
-
-        for item in items {
-            for attachment in item.attachments ?? [] {
-                if attachment.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                    group.enter()
-                    attachment.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { data, _ in
-                        box.offer(url: Self.asURL(data))
-                        group.leave()
-                    }
-                } else if attachment.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
-                    group.enter()
-                    attachment.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { data, _ in
-                        box.offer(text: Self.asText(data))
-                        group.leave()
-                    }
-                }
+    nonisolated private static func loadText(from provider: NSItemProvider) async -> String? {
+        await withCheckedContinuation { continuation in
+            provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { data, _ in
+                continuation.resume(returning: asText(data))
             }
-        }
-
-        group.notify(queue: .main) {
-            let (text, url) = box.snapshot
-            completion(ShareSender.composeContent(text: text, url: url))
         }
     }
 
     /// `nonisolated` : appelées depuis la complétion de `loadItem`, qui
-    /// s'exécute sur une file arbitraire. Sans l'annotation, elles héritent du
-    /// MainActor de `UIViewController` et le compilateur refuse de leur « faire
-    /// traverser » une valeur non-Sendable.
+    /// s'exécute sur une file arbitraire.
     nonisolated private static func asURL(_ data: (any NSSecureCoding)?) -> URL? {
         if let url = data as? URL { return url }
         if let raw = data as? Data, let string = String(data: raw, encoding: .utf8) {
@@ -259,109 +235,95 @@ final class ShareViewController: UIViewController {
         return nil
     }
 
-    /// Accumulateur des fichiers copiés — même verrou que `ExtractionBox` :
-    /// `loadFileRepresentation` rappelle sur une file arbitraire, et plusieurs
-    /// pièces jointes répondent en parallèle.
-    private final class StagingBox: @unchecked Sendable {
-        private let lock = NSLock()
-        nonisolated(unsafe) private var staged: [Int: ShareStagedMedia] = [:]
-        nonisolated(unsafe) private var failure: ShareMediaStagingError?
-
-        nonisolated func offer(index: Int, media: ShareStagedMedia) {
-            lock.lock(); defer { lock.unlock() }
-            staged[index] = media
-        }
-
-        nonisolated func offer(failure value: ShareMediaStagingError) {
-            lock.lock(); defer { lock.unlock() }
-            if failure == nil { failure = value }
-        }
-
-        nonisolated var snapshot: (media: [ShareStagedMedia], failure: ShareMediaStagingError?) {
-            lock.lock(); defer { lock.unlock() }
-            return (staged.sorted { $0.key < $1.key }.map(\.value), failure)
-        }
-    }
-
     /// Copie chaque fichier reçu DANS la closure de `loadFileRepresentation`,
     /// de façon synchrone : l'URL fournie est SUPPRIMÉE au retour de cette
-    /// closure. La copier plus tard, ou l'ouvrir en asynchrone, ne trouverait
-    /// plus rien.
-    /// Round 1 de revue (fuite Important) : `prepareMediaRoot` crée
-    /// `share_pending_media/<shareId>/` sur disque. L'appeler avant de savoir
-    /// s'il y a le moindre fichier à copier — comme c'était le cas ici —
-    /// crée ce dossier pour TOUT partage, y compris un partage de texte pur,
-    /// et rien ne l'efface jamais. Il ne doit donc être appelé qu'une fois
-    /// tous les gardes d'absence/plafond franchis, jamais avant.
-    private func extractAttachments(
-        completion: @escaping ([ShareStagedMedia], ShareMediaStagingError?) -> Void
-    ) {
-        guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
-            completion([], nil)
-            return
+    /// closure. `prepareMediaRoot` crée `share_pending_media/<shareId>/` : il
+    /// n'est appelé qu'une fois certain qu'il y a un fichier à copier, sinon un
+    /// partage de texte pur laisserait un dossier que rien n'efface.
+    ///
+    /// Les plafonds communs (D10 : 20 fichiers, 500 Mo) ne refusent plus rien
+    /// ici : l'écran unique les DIT (V9). La copie reste gardée par l'espace
+    /// libre, fichier par fichier (`ShareMediaStaging.stage`).
+    @concurrent
+    private static func stageAttachments(
+        _ providers: [ShareProviderHandoff],
+        shareId: String
+    ) async -> (media: [ShareStagedMedia], failure: ShareMediaStagingError?) {
+        let fileProviders = providers.filter { handoff in
+            !handoff.provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
+                && !handoff.provider.hasItemConformingToTypeIdentifier(UTType.text.identifier)
         }
+        guard !fileProviders.isEmpty,
+              let mediaRoot = ShareMediaStaging.prepareMediaRoot(shareId: shareId) else { return ([], nil) }
 
-        let fileProviders: [NSItemProvider] = items
-            .flatMap { $0.attachments ?? [] }
-            .filter { provider in
-                !provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
-                    && !provider.hasItemConformingToTypeIdentifier(UTType.text.identifier)
+        let results = await withTaskGroup(of: ShareStagingResult.self) { group in
+            for (index, handoff) in fileProviders.enumerated() {
+                guard let typeIdentifier = handoff.provider.registeredTypeIdentifiers.first else { continue }
+                group.addTask {
+                    await stage(handoff.provider, typeIdentifier: typeIdentifier, index: index, mediaRoot: mediaRoot, shareId: shareId)
+                }
             }
-
-        guard !fileProviders.isEmpty else {
-            completion([], nil)
-            return
+            var collected: [ShareStagingResult] = []
+            for await result in group { collected.append(result) }
+            return collected
         }
+        return ShareExtractionReduction.staging(from: results)
+    }
 
-        guard let mediaRoot = ShareMediaStaging.prepareMediaRoot(shareId: shareId) else {
-            completion([], nil)
-            return
-        }
-
-        let box = StagingBox()
-        let group = DispatchGroup()
-        let shareId = shareId
-
-        for (index, provider) in fileProviders.enumerated() {
-            guard let typeIdentifier = provider.registeredTypeIdentifiers.first else { continue }
-            group.enter()
+    nonisolated private static func stage(
+        _ provider: NSItemProvider,
+        typeIdentifier: String,
+        index: Int,
+        mediaRoot: URL,
+        shareId: String
+    ) async -> ShareStagingResult {
+        await withCheckedContinuation { continuation in
             provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
-                defer { group.leave() }
-                guard let url else {
-                    box.offer(failure: .copyFailed(error?.localizedDescription ?? "aucune URL fournie"))
-                    return
-                }
-                // Une URL issue de Fichiers/iCloud est security-scoped :
-                // sans la paire start/stop, la lecture échoue en silence.
-                let scoped = url.startAccessingSecurityScopedResource()
-                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                do {
-                    let media = try ShareMediaStaging.stage(
-                        source: url,
-                        into: mediaRoot,
-                        shareId: shareId,
-                        index: index,
-                        mime: ShareMediaStaging.mimeType(
-                            typeIdentifier: typeIdentifier,
-                            fileExtension: url.pathExtension),
-                        freeBytes: ShareMediaStaging.availableCapacityBytes(at: mediaRoot)
-                    )
-                    box.offer(index: index, media: media)
-                } catch let error as ShareMediaStagingError {
-                    box.offer(failure: error)
-                } catch {
-                    box.offer(failure: .copyFailed(error.localizedDescription))
-                }
+                let outcome = copyProvidedFile(
+                    url, error: error, typeIdentifier: typeIdentifier,
+                    index: index, mediaRoot: mediaRoot, shareId: shareId
+                )
+                continuation.resume(returning: ShareStagingResult(index: index, outcome: outcome))
             }
-        }
-
-        // Les plafonds communs (D10 : 20 fichiers, 500 Mo) ne refusent plus rien
-        // ici : l'écran unique les DIT, marque ce qui dépasse et propose de le
-        // retirer d'un geste (V9). La copie elle-même reste gardée par l'espace
-        // libre, fichier par fichier (`ShareMediaStaging.stage`).
-        group.notify(queue: .main) {
-            let (media, failure) = box.snapshot
-            completion(media, failure)
         }
     }
+
+    nonisolated private static func copyProvidedFile(
+        _ url: URL?,
+        error: (any Error)?,
+        typeIdentifier: String,
+        index: Int,
+        mediaRoot: URL,
+        shareId: String
+    ) -> Result<ShareStagedMedia, ShareMediaStagingError> {
+        guard let url else {
+            return .failure(.copyFailed(error?.localizedDescription ?? "aucune URL fournie"))
+        }
+        // Une URL issue de Fichiers/iCloud est security-scoped : sans la paire
+        // start/stop, la lecture échoue en silence.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            return .success(try ShareMediaStaging.stage(
+                source: url,
+                into: mediaRoot,
+                shareId: shareId,
+                index: index,
+                mime: ShareMediaStaging.mimeType(typeIdentifier: typeIdentifier, fileExtension: url.pathExtension),
+                freeBytes: ShareMediaStaging.availableCapacityBytes(at: mediaRoot)
+            ))
+        } catch let error as ShareMediaStagingError {
+            return .failure(error)
+        } catch {
+            return .failure(.copyFailed(error.localizedDescription))
+        }
+    }
+}
+
+/// `NSItemProvider` n'est pas `Sendable`, mais son chargement (`loadItem`) se fait
+/// depuis n'importe quel fil. Les fournisseurs quittent le MainActor emballés, et
+/// chaque tâche du groupe reçoit SON fournisseur, que rien d'autre ne touche
+/// pendant le chargement : le transfert ne partage rien.
+private nonisolated struct ShareProviderHandoff: @unchecked Sendable {
+    let provider: NSItemProvider
 }

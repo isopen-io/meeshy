@@ -121,7 +121,7 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
     private static let presentationFiles = [
         "Meeshy/Features/Main/Views/RootLayers/RootSharedLayers.swift",
         "Meeshy/Features/Main/Views/RootViewComponents.swift",
-        "Meeshy/Features/Main/Views/ConversationListView.swift",
+        "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift",
     ]
 
     private func presentationSites() throws -> [PresentationSite] {
@@ -186,6 +186,15 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
                 "du mood par le meuble, et y revenir perdrait le socle, la règle de surface et le gate de matière."
             )
         }
+        // Le balayage négatif couvre l'UNITÉ de la liste, pas seulement le fichier qui monte la porte :
+        // un type extrait (rail, queue, feuilles) ne doit pas réintroduire le composer historique.
+        let listUnit = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
+        )
+        XCTAssertFalse(
+            listUnit.contains("StatusComposerView("),
+            "L'unité ConversationListView monte encore `StatusComposerView` : la porte du mood passe par le meuble."
+        )
     }
 
     /// **Chaque présentation donne à la porte ce qu'elle sait, et rien de plus.**
@@ -216,7 +225,7 @@ final class StatusComposerSheetPresentationTests: XCTestCase {
 
         let creation = [
             "Meeshy/Features/Main/Views/RootViewComponents.swift",
-            "Meeshy/Features/Main/Views/ConversationListView.swift",
+            "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift",
         ]
         for file in creation {
             let swift = try code(file)

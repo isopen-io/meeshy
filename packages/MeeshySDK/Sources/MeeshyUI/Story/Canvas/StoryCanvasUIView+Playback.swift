@@ -238,7 +238,7 @@ extension StoryCanvasUIView {
         // l'audio des vidéos qui bouclent ET des clips audio soit audible même
         // silent-switch ON. Idempotent / call-aware via la source unique.
         if AVAudioSession.sharedInstance().category != .playback {
-            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
+            MediaSessionCoordinator.shared.activateContentPlayback(.audible)
         }
         if playsVideoInEditMode {
             // Fond : `isPlaybackActive` joue le player (qui boucle déjà via son
@@ -849,7 +849,7 @@ extension StoryCanvasUIView {
                                                   geometry: geometry,
                                                   time: currentTime,
                                                   mode: mode,
-                                                  languages: readerContext.preferredLanguages)
+                                                  languages: readerContext.preferredLanguages, contentsScale: traitCollection.storyCanvasDisplayScale)
         // Re-feed the already-attached text layers in place — no rebuildLayers().
         // `setBackdropTexture` is a no-op on a non-glass text layer (its glass
         // backdrop sublayer is nil), so the filter is the crop work, which the

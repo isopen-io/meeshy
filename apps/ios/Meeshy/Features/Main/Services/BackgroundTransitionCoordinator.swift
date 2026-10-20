@@ -1,3 +1,4 @@
+import Combine
 import UIKit
 import MeeshySDK
 import MeeshyUI
@@ -39,9 +40,9 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
 
     func enterBackground() async {
         // Une transition déjà en cours reprend à son compte ce nouveau départ : le registre la marque
-        // « en arrière-plan », et elle suspendra sockets et base à sa fin.
+        // « en arrière-plan », et elle suspendra sockets et base à sa fin — tout sauf l'étape média.
         guard ledger.enterBackground() == .start else {
-            logger.info("Background re-entry joined the running transition")
+            await joinRunningTransition()
             return
         }
         defer { ledger.finishTransition() }
@@ -149,6 +150,17 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         }
 
         endBackgroundTask()
+    }
+
+    /// Le second départ rejoint la transition en cours, sauf son étape MÉDIA : elle a tranché pour ce
+    /// qui jouait AVANT la reprise, et une vidéo relancée depuis continuerait de jouer en arrière-plan,
+    /// sans PiP ni pause (#11041). Elle se rejoue sous la garde `beginBackgroundTask` que la transition
+    /// en cours tient encore.
+    private func joinRunningTransition() async {
+        logger.info("Background re-entry joined the running transition — media step replayed")
+        await withBudget("audio.prepareForBackground.joined") {
+            await MediaLifecycleBridge.shared.prepareForBackground()
+        }
     }
 
     // MARK: - Foreground entry
@@ -384,31 +396,76 @@ final class MediaLifecycleBridge {
     static let shared = MediaLifecycleBridge()
     private init() {}
 
+    /// Filet de l'attente du PiP automatique (#11041). AVKit annonce la
+    /// fenêtre par `willStart` d'ordinaire AVANT que la scène ne passe en
+    /// `.background` : l'attente rend la main au premier signal (démarrage,
+    /// ouverture ou échec) et ne dure que si aucun ne vient. Elle remplace
+    /// les 0,4 s qui guettaient `isPictureInPictureActive`, levé seulement
+    /// à la FIN de l'animation — la pause tombait au milieu et avortait la
+    /// fenêtre. Une seconde de son au plus quand aucune fenêtre ne s'ouvre.
+    static let pipHandOffWindow: TimeInterval = 1.0
+
+    private var isPreparingForBackground = false
+    private var pipFailureSubscription: AnyCancellable?
+
     func prepareForBackground() async {
+        observePipStartFailures()
+        isPreparingForBackground = true
+        defer { isPreparingForBackground = false }
         let video = SharedAVPlayerManager.shared
-        // L'auto-PiP système démarre PENDANT la transition — ce garde court
-        // contre son animation. Quand une surface a opté pour le PiP
-        // (`isPipConfigured`, jamais vrai sur simulateur), on lui laisse une
-        // fenêtre bornée pour s'engager avant de trancher, sinon un `pause()`
-        // prématuré avorterait la fenêtre que le système ouvrait.
-        var pipEngaged = video.isPipEngaged
-        if video.isPlaying, !pipEngaged, video.isPipConfigured {
-            pipEngaged = await video.waitForPipEngagement(timeout: 0.4)
+        // L'auto-PiP système démarre PENDANT la transition. Quand une surface
+        // a opté pour le PiP (`isPipConfigured`, jamais vrai sur simulateur)
+        // et que la fenêtre ne s'est pas encore déclarée, on lui laisse une
+        // fenêtre bornée avant de trancher.
+        if video.isPlaying, video.isPipConfigured, !video.isPipStartingOrEngaged {
+            _ = await video.waitForPipHandOff(timeout: Self.pipHandOffWindow)
         }
+        await applyBackgroundDecision(pipFailed: video.hasPipFailedToStart)
+    }
+
+    func resumeFromBackground() async {
+        // No-op for now — players re-activate their session on next play().
+        // Kept as an extension point if we later want to resume downloads.
+    }
+
+    /// Repli : la fenêtre PiP échoue à s'ouvrir alors que l'app est déjà en
+    /// arrière-plan — la vidéo n'a plus de lieu, elle s'arrête et la session
+    /// se rend (la musique coupée par Meeshy reprend).
+    private func observePipStartFailures() {
+        guard pipFailureSubscription == nil else { return }
+        pipFailureSubscription = SharedAVPlayerManager.shared.pipStartFailures
+            .receive(on: DispatchQueue.main)
+            .sink { _ in
+                Task { @MainActor in await MediaLifecycleBridge.shared.handlePipStartFailure() }
+            }
+    }
+
+    private func handlePipStartFailure() async {
+        guard !isPreparingForBackground,
+              UIApplication.shared.applicationState == .background else { return }
+        await applyBackgroundDecision(pipFailed: true)
+    }
+
+    private func applyBackgroundDecision(pipFailed: Bool) async {
+        let video = SharedAVPlayerManager.shared
+        let videoVerdict = MediaBackgroundPolicy.backgroundVideo(
+            videoPlaying: video.isPlaying,
+            pipConfigured: video.isPipConfigured,
+            pipStartingOrEngaged: video.isPipStartingOrEngaged,
+            pipFailed: pipFailed
+        )
         let decision = MediaBackgroundPolicy.decide(
             audioQueuePlaying: ConversationAudioCoordinator.sharedForTesting.isPlaying,
             audioQueueActive: ConversationAudioCoordinator.sharedForTesting.activeContext != nil,
             anyAudioEnginePlaying: PlaybackCoordinator.shared.isAnyAudioPlaying,
-            videoPlaying: video.isPlaying,
-            pipEngaged: pipEngaged
+            video: videoVerdict
         )
-        // Une vidéo (réel) hors PiP ne survit jamais à l'arrière-plan : le
-        // mode background "audio" couvre les messages vocaux et posts audio,
-        // pas la bande-son d'un réel. `pause()` (pas `stop()`) : ne touche pas
-        // à la session AVAudioSession qu'une file audio en pause peut encore
-        // tenir, et le retour en avant-plan retrouve la frame figée. Si
-        // l'auto-PiP a engagé la fenêtre pendant la transition, la vidéo lui
-        // appartient et continue.
+        Logger.pip.info("background decision — playing=\(video.isPlaying, privacy: .public) configured=\(video.isPipConfigured, privacy: .public) possible=\(video.isPipPossible, privacy: .public) startingOrEngaged=\(video.isPipStartingOrEngaged, privacy: .public) failed=\(pipFailed, privacy: .public) → video=\(String(describing: videoVerdict), privacy: .public) keepsSession=\(decision.keepsSessionAlive, privacy: .public)")
+        // `.handOffToPip` : la vidéo appartient à la fenêtre — ni pause, ni
+        // `stopAll()` (qui démonterait le PiP), et la session reste active.
+        // `.pause` : `pause()` (pas `stop()`) ne touche pas à la session
+        // qu'une file audio en pause peut encore tenir, et le retour au
+        // premier plan retrouve la frame figée.
         if decision.pausesVideo {
             video.pause()
         }
@@ -430,11 +487,6 @@ final class MediaLifecycleBridge {
         // and the guard skips the actual teardown). `stopAll()` does NOT self-count,
         // which is why its probe increment above stays external.
         await MediaSessionCoordinator.shared.deactivateForBackground()
-    }
-
-    func resumeFromBackground() async {
-        // No-op for now — players re-activate their session on next play().
-        // Kept as an extension point if we later want to resume downloads.
     }
 }
 

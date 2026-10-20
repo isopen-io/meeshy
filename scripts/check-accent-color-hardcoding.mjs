@@ -392,7 +392,7 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // `ProfileDecorSheet.swift` (1) teinte l'aperçu de la bannière par l'accent du PROFIL (`accentHex`, déjà remis à
 // `MeeshyAvatar(accentColor:)`), hors de tout contexte de conversation. Masqué en CI derrière le gate de poids web (#10974) ;
 // valeur MESURÉE le 2026-10-19 en CI (run 39192153480) et en local, commit par commit (c61aac2d11 : +4, c242265209 : +1).
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 483;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 481;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -410,7 +410,10 @@ const SEARCH_ROOTS = [
 
 const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests', 'Theme']);
 
-const HARDCODED_COLOR_RE = /Color\(hex:/g;
+// `HexColor(hex:)` (SDK cœur, #10988) est le PARSEUR que les couleurs de texte de
+// story délèguent, pas une couleur posée dans une vue : le compter ferait d'une
+// consolidation une régression. `(?<!Hex)` l'écarte, et lui seul.
+const HARDCODED_COLOR_RE = /(?<!Hex)Color\(hex:/g;
 
 // Les deux points d'accès que CLAUDE.md § Conversation Accent Color documente
 // ( `conversation.accentColor`, `conversation.colorPalette` avec

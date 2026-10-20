@@ -27,6 +27,11 @@ enum GameCopy {
         count.formatted(.number)
     }
 
+    /// « 8,7 k » dès 10 000, le chiffre plein en dessous — pour les textes serrés du bandeau (#11125).
+    static func compactCount(_ count: Int) -> String {
+        count < 10_000 ? formatCount(count) : count.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)))
+    }
+
     /// « 976 étincelles » — UNE clé aux variations plurielles du catalogue (#10846) : chaque langue y dit ses formes,
     /// dont les six de l'arabe. Le nombre est un entier, formaté selon la langue.
     static func points(_ count: Int) -> String {

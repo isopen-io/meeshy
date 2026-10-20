@@ -35,18 +35,19 @@ final class InlineVideoRendererScopedMirrorsSourceGuardTests: XCTestCase {
         )
     }
 
-    /// Le fichier porte quatre renderers ; la loi ne vaut que pour celui qui
-    /// est monté PAR CELLULE. Une garde qui lit le fichier entier jugerait
-    /// aussi le plein écran, dont l'abonnement est justifié.
     private func inlineRendererSource() throws -> String {
-        let code = try renderersSource()
-        guard let start = code.range(of: "internal struct _InlineRenderer"),
-              let end = code.range(of: "internal struct _MiniRenderer")
-        else {
+        let code = ComposerSourceGuard.stripComments(
+            try String(
+                contentsOf: ComposerSourceGuard.packageRoot
+                    .appendingPathComponent("Sources/MeeshyUI/Media/MeeshyVideoPlayer+InlineRenderer.swift"),
+                encoding: .utf8
+            )
+        )
+        guard code.contains("internal struct _InlineRenderer") else {
             XCTFail("Les bornes du renderer en ligne sont introuvables : la garde ne mesure plus rien.")
             return ""
         }
-        return String(code[start.lowerBound..<end.lowerBound])
+        return code
     }
 
     func test_theInlineRendererDoesNotSubscribeToTheSharedEngine() throws {

@@ -10,7 +10,7 @@ import type { GameGl } from '@/lib/game/gl/engine';
 import { ROLL_MS } from '@/lib/game/rolling';
 import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
-import { playerBannerLabel, playerBannerModel, type PlayerBannerModel } from '@/lib/view/player-banner';
+import { playerBannerLabel, playerBannerModel, type PlayerBannerModel, type PlayerBannerRank } from '@/lib/view/player-banner';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -44,6 +44,17 @@ const modelOf = (game: ReturnType<typeof gameBlockFixture>): PlayerBannerModel =
 };
 const newcomer = (): PlayerBannerModel => modelOf(gameBlockFixture(NEWCOMER));
 const markup = (model: PlayerBannerModel): string => renderToStaticMarkup(<PlayerBanner model={model} />);
+/** Conteur III à 3 400 Gloire, encore 1 200 vers Conteur II — l'exemple du porteur (#11125). */
+const conteur = (patch: Partial<PlayerBannerRank> = {}): PlayerBannerRank => ({
+  rank: 'conteur',
+  division: 3,
+  mythic: null,
+  glory: 3400,
+  progress: 0.4,
+  gloryMissing: 1200,
+  next: { rank: 'conteur', division: 2 },
+  ...patch,
+});
 
 const PIECES = ['meeshes', 'rank', 'league', 'flame'] as const;
 const piecesIn = (html: string): readonly string[] => PIECES.filter((piece) => html.includes(`data-player-banner-${piece}=`));
@@ -63,7 +74,7 @@ describe('seulement ce qui existe', () => {
 
   const alone: ReadonlyArray<readonly [(typeof PIECES)[number], PlayerBannerModel]> = [
     ['meeshes', { ...newcomer(), meeshes: 1 }],
-    ['rank', { ...newcomer(), rank: { rank: 'murmure', division: 3, mythic: null } }],
+    ['rank', { ...newcomer(), rank: conteur() }],
     ['league', { ...newcomer(), league: { league: 'jade', place: 4 } }],
     ['flame', { ...newcomer(), flame: { form: 'braise', days: 3 } }],
   ];
@@ -73,9 +84,9 @@ describe('seulement ce qui existe', () => {
     });
   }
 
-  test('l’ordre est fixe : anneau, jauge, Meeshes, rang, ligue, Flamme', () => {
+  test('l’ordre est fixe : anneau, jauge, puis le milieu — Flamme, Meeshes, mission, ligue — et le rang au bout (#11125)', () => {
     const html = markup(modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 })));
-    const order = ['ring', 'gauge', ...PIECES].map((piece) => html.indexOf(`data-player-banner-${piece}=`));
+    const order = ['ring', 'gauge', 'flame', 'meeshes', 'missions', 'league', 'rank'].map((piece) => html.indexOf(`data-player-banner-${piece}=`));
     expect(order.every((position) => position >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
@@ -169,12 +180,20 @@ describe('accessible', () => {
     }
   });
 
-  test('une cible d’au moins 44 px : le bandeau (56) et chaque lien', async () => {
+  test('une cible d’au moins 44 px (bandeau 48 : anneau, jauge, rang) ; les pièces du milieu font 24, sur deux lignes', async () => {
     expect(markup(newcomer())).toMatch(/data-player-banner=""[^>]*min-height:(4[4-9]|[5-9]\d)px/);
-    const host = await mount(<PlayerBanner model={modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }))} />);
-    for (const link of Array.from(host.querySelectorAll('a[data-player-banner-link]'))) {
-      expect(link.getAttribute('style') ?? '').toMatch(/min-height:\s*(4[4-9]|[5-9]\d)px/);
-    }
+    const host = await mount(<PlayerBanner model={modelOf(gameBlockWithExtrasFixture({ balance: 12, streak: 23 }))} motion={motion().value} />);
+    const direct = Array.from(host.querySelectorAll('[data-player-banner] > a[data-player-banner-link]'));
+    expect(direct.map((link) => (link as HTMLElement).dataset.playerBannerLink)).toEqual(['level', 'points', 'glory']);
+    for (const link of direct) expect(link.getAttribute('style') ?? '').toMatch(/min-height:\s*(4[4-9]|[5-9]\d)px/);
+    const rows = Array.from(host.querySelectorAll('[data-player-banner-middle] > [data-player-banner-row]')).map((row) =>
+      Array.from(row.querySelectorAll('a[data-player-banner-link]')).map((link) => (link as HTMLElement).dataset.playerBannerLink),
+    );
+    expect(rows).toEqual([
+      ['flame', 'meesh'],
+      ['missions', 'league'],
+    ]);
+    for (const link of Array.from(host.querySelectorAll('[data-player-banner-middle] a[data-player-banner-link]'))) expect(link.getAttribute('style') ?? '').toMatch(/min-height:\s*24px/);
   });
 });
 
@@ -192,7 +211,7 @@ describe('le toucher : chaque pièce ouvre SA fiche (porteur 2026-10-16)', () =>
     const model: PlayerBannerModel = {
       ...newcomer(),
       meeshes: 3,
-      rank: { rank: 'murmure', division: 3, mythic: null },
+      rank: conteur(),
       league: { league: 'jade', place: 4 },
       flame: { form: 'braise', days: 3 },
     };
@@ -205,7 +224,7 @@ describe('le toucher : chaque pièce ouvre SA fiche (porteur 2026-10-16)', () =>
 
   test('les trophées → showcase, la mission du jour → missions, la saison → season, avec un nom accessible par pièce', async () => {
     const model: PlayerBannerModel = { ...newcomer(), trophies: 2, missions: { done: 1, total: 3 }, season: { stars: 25 } };
-    const host = await mount(<PlayerBanner model={model} />);
+    const host = await mount(<PlayerBanner model={model} motion={motion({ largeText: true }).value} />);
     expect(hrefOf(host, 'showcase')).toBe('/me/progression/concept/showcase');
     expect(hrefOf(host, 'missions')).toBe('/me/progression/concept/missions');
     expect(hrefOf(host, 'season')).toBe('/me/progression/concept/season');
@@ -365,5 +384,61 @@ describe('aux très grandes tailles de texte', () => {
     const host = await mount(<PlayerBanner model={newcomer()} motion={motion().value} />);
     expect(host.querySelector('[data-player-banner]')?.hasAttribute('data-large-text')).toBe(false);
     expect(host.querySelector<HTMLElement>('[data-player-banner-gauge]')?.className).not.toContain('basis-full');
+  });
+});
+
+/**
+ * LE RANG AU BOUT DE LA RANGÉE (#11125, porteur 2026-10-20) — le blason et le nom du rang au-dessus d'une jauge de Gloire,
+ * et dessous ce qui manque pour le rang suivant, comme la jauge du niveau. Sans suite, la Gloire seule.
+ */
+describe('le rang, sa jauge de Gloire et ce qui manque', () => {
+  const rankBlock = (host: ParentNode): HTMLElement | null => host.querySelector<HTMLElement>('a[data-player-banner-link="glory"] [data-player-banner-rank-gauge]');
+
+  test('le nom du rang, la jauge de la division et la forme courte « 1 200 vers Conteur II »', async () => {
+    const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur() }} motion={motion().value} />);
+    const block = rankBlock(host);
+    expect(block?.querySelector('[data-player-banner-rank-name]')?.textContent).toBe('Conteur III');
+    expect(block?.querySelector<HTMLElement>('[data-player-banner-rank-fill]')?.style.transform).toBe('scaleX(0.400)');
+    expect(block?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('1 200 vers Conteur II');
+    expect(block?.querySelector('[data-player-banner-rank-total]')).toBeNull();
+  });
+
+  test('un manque de 10 000 et plus se dit en chiffre compact', async () => {
+    const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur({ gloryMissing: 12_345, next: { rank: 'passeur', division: 2 } }) }} motion={motion().value} />);
+    expect(rankBlock(host)?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('12,3 k vers Passeur II');
+  });
+
+  test('la jauge du niveau dit la forme courte : « 8 700 vers le 62 », compacte dès 10 000', async () => {
+    const at = (pointsToNext: number): PlayerBannerModel => ({ ...newcomer(), level: { level: 61, progress: 0.5, prestige: 0, nextLevel: 62, pointsToNext, opener: null } });
+    const short = (host: ParentNode): string => host.querySelector('[data-player-banner-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ') ?? '';
+    expect(short(await mount(<PlayerBanner model={at(8700)} motion={motion().value} />))).toBe('8 700 vers le 62');
+    expect(short(await mount(<PlayerBanner model={at(12_345)} motion={motion().value} />))).toBe('12,3 k vers le 62');
+  });
+
+  test('le lien du rang est nommé de son nom, de sa Gloire et de ce qui manque — la forme complète', async () => {
+    const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur() }} motion={motion().value} />);
+    expect(host.querySelector('a[data-player-banner-link="glory"]')?.getAttribute('aria-label')?.replace(/[\s\u202f]/g, ' ')).toBe('Conteur III, 3 400 Gloire, encore 1 200 vers Conteur II');
+  });
+
+  test('au Mythe (pas de suite) : le nom et « Gloire N » en chiffre compact, ni jauge ni manque', async () => {
+    const mythe = conteur({ rank: 'mythe', division: null, mythic: { number: 18, edition: 22 }, glory: 1_000_000, progress: 1, gloryMissing: null, next: null });
+    const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: mythe }} motion={motion().value} />);
+    const block = rankBlock(host);
+    expect(block?.querySelector('[data-player-banner-rank-name]')?.textContent).toBe('Mythe n° 18');
+    expect(block?.querySelector('[data-player-banner-rank-total]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('Gloire 1 M');
+    expect(block?.querySelector('[data-player-banner-rank-fill]')).toBeNull();
+    expect(block?.querySelector('[data-player-banner-rank-missing]')).toBeNull();
+  });
+
+  test('trophées et saison quittent la rangée compacte ; ils restent dans la disposition grand texte', async () => {
+    const model: PlayerBannerModel = { ...newcomer(), rank: conteur(), trophies: 2, season: { stars: 25 } };
+    const compact = await mount(<PlayerBanner model={model} motion={motion().value} />);
+    expect(compact.querySelector('a[data-player-banner-link="showcase"]')).toBeNull();
+    expect(compact.querySelector('a[data-player-banner-link="season"]')).toBeNull();
+    expect(compact.querySelector('[data-player-banner]')?.getAttribute('aria-label')).toBe(playerBannerLabel(model, 'fr'));
+    const large = await mount(<PlayerBanner model={model} motion={motion({ largeText: true }).value} />);
+    expect(large.querySelector('a[data-player-banner-link="showcase"]')).not.toBeNull();
+    expect(large.querySelector('a[data-player-banner-link="season"]')).not.toBeNull();
+    expect(large.querySelector('[data-player-banner]')?.getAttribute('aria-label')).toBe(playerBannerLabel(model, 'fr', 'large'));
   });
 });

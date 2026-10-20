@@ -112,6 +112,32 @@ public struct AudioClipBar: View, Equatable {
         String(format: String(localized: "story.timeline.a11y.clip.audio", bundle: .module), title)
     }
 
+    var accessibilityValueComposed: String {
+        let range = String(
+            format: String(localized: "story.timeline.a11y.clip.displayedRange", bundle: .module),
+            startTime, startTime + duration
+        )
+        return "\(range). \(accessibilityValueDescription)"
+    }
+
+    var accessibilityModel: ClipBarAccessibility {
+        ClipBarAccessibility(
+            geometry: geometry,
+            isLocked: isLocked,
+            muteLabels: onToggleMute == nil ? nil : (
+                mute: String(localized: "story.audio.track.mute", defaultValue: "Couper le son de cette piste", bundle: .module),
+                unmute: String(localized: "story.audio.track.unmute", defaultValue: "Activer le son de cette piste", bundle: .module)
+            ),
+            isMuted: isMuted
+        )
+    }
+
+    var accessibilityCallbacks: ClipBarCallbacks {
+        ClipBarCallbacks(onTap: onTap, onDoubleTap: onDoubleTap, onMoveDelta: onMoveDelta,
+                         onMoveEnded: onMoveEnded, onTrimStartDelta: onTrimStartDelta,
+                         onTrimEndDelta: onTrimEndDelta, onToggleMute: onToggleMute)
+    }
+
     public var accessibilityValueDescription: String {
         let pct = Int((volume * 100).rounded())
         let muted = isMuted
@@ -139,7 +165,8 @@ public struct AudioClipBar: View, Equatable {
             if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
                 ClipTrimHandles(laneHeight: laneHeight,
                                 onTrimStartDelta: onTrimStartDelta,
-                                onTrimEndDelta: onTrimEndDelta)
+                                onTrimEndDelta: onTrimEndDelta,
+                                adjustStepPoints: accessibilityModel.stepPoints)
             }
         }
         .frame(width: geometry.width(for: duration), height: laneHeight - 4)
@@ -158,7 +185,8 @@ public struct AudioClipBar: View, Equatable {
         .onTapGesture { onTap() }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
-        .accessibilityValue(accessibilityValueDescription)
+        .accessibilityValue(accessibilityValueComposed)
+        .clipBarAccessibility(accessibilityModel, callbacks: accessibilityCallbacks)
         .task(id: audioURL) {
             guard waveformSamples.isEmpty, let audioURL else { return }
             loadedSamples = await AudioWaveform.samples(url: audioURL, count: 80)

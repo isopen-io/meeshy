@@ -38,7 +38,7 @@ internal struct _InlineOverlayControls: View {
     /// `AVPictureInPictureController.isPictureInPictureSupported()`, donc le
     /// test ne dépend jamais de l'environnement (faux en CI/simulateur).
     nonisolated static func showsPipButton(controls: MeeshyVideoPlayer.ControlSet, isPipSupported: Bool) -> Bool {
-        controls.contains(.pip) && isPipSupported
+        MeeshyVideoPlayer.surfaceEnablesPip(style: .inline, controls: controls) && isPipSupported
     }
 
     /// Les sauts ±10 s suivent le jeu de contrôles, comme tous les autres

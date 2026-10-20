@@ -21,7 +21,8 @@ public protocol BackdropCapturing: AnyObject {
                                geometry: CanvasGeometry,
                                time: CMTime,
                                mode: RenderMode,
-                               languages: [String]) -> MTLTexture?
+                               languages: [String],
+                               contentsScale: CGFloat) -> MTLTexture?
 
     /// Returns a region of the cached canvas backdrop matching `frame`. See
     /// `StoryBackdropCapture.cropRegion`.
@@ -109,7 +110,11 @@ public final class StoryBackdropCapture: BackdropCapturing {
     private(set) var playbackKey: StoryGlassCaptureKey?
     private(set) var playbackCapturedAt: CFTimeInterval = 0
 
-    public init() {}
+    private let context: StoryRenderingContext
+
+    public init(context: StoryRenderingContext = .shared) {
+        self.context = context
+    }
 
     // `nonisolated` deinit : la classe @MainActor ne stocke que des références
     // (MTLTexture, CGSize) libérées par ARC — aucun cleanup isolé requis. Sans
@@ -141,7 +146,8 @@ public final class StoryBackdropCapture: BackdropCapturing {
                                       geometry: CanvasGeometry,
                                       time: CMTime,
                                       mode: RenderMode,
-                                      languages: [String]) -> MTLTexture? {
+                                      languages: [String],
+                                      contentsScale: CGFloat = StoryCanvasDisplayScale.ambient) -> MTLTexture? {
         // Fast exit : no glass texts → no backdrop needed.
         guard hasGlassItem(in: slide) else {
             cachedCanvasBackdrop = nil
@@ -152,7 +158,11 @@ public final class StoryBackdropCapture: BackdropCapturing {
         let renderSize = geometry.renderSize
         guard renderSize.width > 0, renderSize.height > 0 else { return nil }
 
-        let context = StoryRenderingContext.shared
+        guard let gpu = context.gpu else {
+            cachedCanvasBackdrop = nil
+            cachedRenderSize = nil
+            return nil
+        }
         let width = Int(renderSize.width.rounded())
         let height = Int(renderSize.height.rounded())
         guard width > 0, height > 0 else { return nil }
@@ -169,7 +179,7 @@ public final class StoryBackdropCapture: BackdropCapturing {
         // back on the CPU. CARenderer writes to the target via Metal — the
         // storage mode does not affect throughput at our sizes.
         descriptor.storageMode = .shared
-        guard let target = context.metalDevice.makeTexture(descriptor: descriptor) else {
+        guard let target = gpu.device.makeTexture(descriptor: descriptor) else {
             cachedCanvasBackdrop = nil
             cachedRenderSize = nil
             return nil
@@ -185,7 +195,8 @@ public final class StoryBackdropCapture: BackdropCapturing {
                                                 at: time,
                                                 mode: mode,
                                                 languages: languages,
-                                                backdropProvider: nil)
+                                                backdropProvider: nil,
+                                                contentsScale: contentsScale)
         // CARenderer paints whatever it gets at the texture's origin. Pin the
         // tree's frame to the texture extents so cropping is straightforward.
         backdropTree.frame = CGRect(origin: .zero, size: renderSize)
@@ -212,6 +223,7 @@ public final class StoryBackdropCapture: BackdropCapturing {
                                  geometry: CanvasGeometry,
                                  time: CMTime,
                                  languages: [String],
+                                 contentsScale: CGFloat,
                                  key: StoryGlassCaptureKey,
                                  now: CFTimeInterval) -> MTLTexture? {
         invalidate()
@@ -219,7 +231,8 @@ public final class StoryBackdropCapture: BackdropCapturing {
                                             geometry: geometry,
                                             time: time,
                                             mode: .play,
-                                            languages: languages)
+                                            languages: languages,
+                                            contentsScale: contentsScale)
         guard texture != nil else { return nil }
         playbackKey = key
         playbackCapturedAt = now
@@ -262,7 +275,7 @@ public final class StoryBackdropCapture: BackdropCapturing {
             return nil
         }
 
-        let context = StoryRenderingContext.shared
+        guard let gpu = context.gpu else { return nil }
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: source.pixelFormat,
             width: regionW,
@@ -274,8 +287,8 @@ public final class StoryBackdropCapture: BackdropCapturing {
         descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
         descriptor.storageMode = .shared
 
-        guard let cropped = context.metalDevice.makeTexture(descriptor: descriptor),
-              let buffer = context.commandQueue.makeCommandBuffer(),
+        guard let cropped = gpu.device.makeTexture(descriptor: descriptor),
+              let buffer = gpu.commandQueue.makeCommandBuffer(),
               let blit = buffer.makeBlitCommandEncoder() else {
             return nil
         }

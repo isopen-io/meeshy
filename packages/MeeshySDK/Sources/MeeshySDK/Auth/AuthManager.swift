@@ -2,80 +2,6 @@ import Foundation
 import Combine
 import os
 
-// MARK: - Profile Snapshot
-
-/// Immutable capture of the three profile-editable fields, returned by
-/// `AuthManaging.applyLocalProfileChanges` and consumed by
-/// `restoreLocalProfileSnapshot` for optimistic-rollback flows.
-public struct ProfileSnapshot: Sendable, Equatable, Codable {
-    public let displayName: String?
-    public let bio: String?
-    public let avatarUrl: String?
-
-    public init(displayName: String?, bio: String?, avatarUrl: String?) {
-        self.displayName = displayName
-        self.bio = bio
-        self.avatarUrl = avatarUrl
-    }
-}
-
-// MARK: - Protocol
-
-@MainActor
-public protocol AuthManaging: AnyObject {
-    var isAuthenticated: Bool { get }
-    var currentUser: MeeshyUser? { get }
-    var isLoading: Bool { get }
-    var errorMessage: String? { get }
-    var savedAccounts: [SavedAccount] { get }
-    var authToken: String? { get }
-    var currentUserPublisher: AnyPublisher<MeeshyUser?, Never> { get }
-    var requires2FA: Bool { get }
-    var twoFactorToken: String? { get }
-    func completeLoginWith2FA(code: String) async
-    @discardableResult
-    func login(username: String, password: String) async -> LoginOutcome
-    func register(request: RegisterRequest) async
-    func requestMagicLink(email: String) async -> Bool
-    func validateMagicLink(token: String) async
-    func requestPasswordReset(email: String) async -> Bool
-    /// P1 — quiesce-then-purge : disconnect sockets, reset les services SDK
-    /// (BlockService, UserPreferences, PushNotification, Notification*, etc.),
-    /// wipe le SessionSnapshot puis le keychain, et enfin bascule
-    /// `isAuthenticated = false` en dernier pour que le router voie un état
-    /// cohérent. Voir `docs/superpowers/specs/2026-05-26-user-session-migration-design.md`.
-    func logout() async
-    func checkExistingSession() async
-    func handleUnauthorized()
-    @discardableResult
-    func refreshSession(force: Bool) async throws -> String
-    func removeSavedAccount(userId: String)
-
-    /// Applies up to three profile field changes locally, without any
-    /// network call. `nil` for a field means "leave unchanged". Returns
-    /// a snapshot of the pre-mutation values for later rollback.
-    /// Publishes via `currentUser` so all subscribers refresh in the
-    /// same run-loop tick.
-    @discardableResult
-    func applyLocalProfileChanges(
-        displayName: String?,
-        bio: String?,
-        avatarUrl: String?
-    ) -> ProfileSnapshot
-
-    /// Restores the three profile fields from a snapshot. Used by
-    /// EditProfileViewModel when `OfflineQueue.outcomeStream` emits
-    /// `.exhausted` for the corresponding `updateProfile` row.
-    func restoreLocalProfileSnapshot(_ snapshot: ProfileSnapshot)
-
-    /// Reflects a confirmed `voicePublic` change onto `currentUser` (in-memory
-    /// publish + keychain persist) after a successful `PATCH /users/me`. Without
-    /// it, a screen that re-derives its toggle from `currentUser.voicePublic`
-    /// (e.g. VoiceProfileManageViewModel.loadProfile) would restore the stale
-    /// value on reopen.
-    func applyLocalVoicePublicChange(_ isPublic: Bool)
-}
-
 // MARK: - Implementation
 
 @MainActor
@@ -231,9 +157,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Namespaced keys
 
-    func tokenKey(for userId: String) -> String { "meeshy_token_\(userId)" }
-    func userKey(for userId: String) -> String { "meeshy_user_\(userId)" }
-    func sessionTokenKey(for userId: String) -> String { "meeshy_session_token_\(userId)" }
+    func tokenKey(for userId: String) -> String { AuthStorageKeys.token(for: userId) }
+    func userKey(for userId: String) -> String { AuthStorageKeys.user(for: userId) }
+    func sessionTokenKey(for userId: String) -> String { AuthStorageKeys.sessionToken(for: userId) }
 
     /// Le jeton de SESSION du compte actif, ou `nil`.
     ///
@@ -247,8 +173,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
         guard let userId = activeUserId else { return nil }
         return keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
     }
-    func tokenDateUDKey(for userId: String) -> String { "meeshy_token_date_\(userId)" }
-    func pendingProfileKey(for userId: String) -> String { "meeshy_pending_profile_\(userId)" }
+    func tokenDateUDKey(for userId: String) -> String { AuthStorageKeys.tokenDate(for: userId) }
+    func pendingProfileKey(for userId: String) -> String { AuthStorageKeys.pendingProfile(for: userId) }
 
     // MARK: - Active user
 
@@ -309,41 +235,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         Self.isTokenExpired(authToken, now: Date())
     }
 
-    /// D2 — pure decoder so tests can probe every branch without driving
-    /// the singleton's Keychain/UserDefaults state. Returns `true` for
-    /// every malformed input (safe default) and logs the reason so a
-    /// silent-logout report can be traced.
+    /// D2 — pure decoder (`AuthJWTExpiry`): `true` for every malformed input.
     nonisolated public static func isTokenExpired(_ token: String?, now: Date) -> Bool {
-        guard let token else { return true }
-        let parts = token.split(separator: ".")
-        guard parts.count == 3 else {
-            Logger.auth.warning("JWT structurally invalid (parts=\(parts.count)); treating as expired")
-            return true
-        }
-        var base64 = String(parts[1])
-            .replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-        while base64.count % 4 != 0 { base64.append("=") }
-        guard let data = Data(base64Encoded: base64) else {
-            Logger.auth.warning("JWT payload base64 decode failed; treating as expired")
-            return true
-        }
-        let json: [String: Any]
-        do {
-            guard let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                Logger.auth.warning("JWT payload not a JSON object; treating as expired")
-                return true
-            }
-            json = decoded
-        } catch {
-            Logger.auth.warning("JWT payload JSON deserialization failed: \(error.localizedDescription, privacy: .public); treating as expired")
-            return true
-        }
-        guard let exp = json["exp"] as? TimeInterval else {
-            Logger.auth.warning("JWT payload missing `exp` claim; treating as expired")
-            return true
-        }
-        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < now
+        AuthJWTExpiry.isExpired(token, now: now)
     }
 
     // MARK: - Login
@@ -524,38 +418,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
         isAuthenticated = false
     }
 
-    /// D5 — best-effort server logout with bounded retries. Returns once
-    /// the server has acked OR after 3 attempts (10s total) have failed.
-    /// The local logout state is already gone by the time this runs, so
-    /// failures are tolerated — the worst case is the gateway sees the
-    /// next request, fails token verification, and lazily kills the
-    /// session.
     func performServerLogoutWithRetries(token: String) async {
-        let delays: [TimeInterval] = [0, 1, 5] // total ≈ 6s wall-clock
-        for delay in delays {
-            if delay > 0 {
-                do {
-                    try await Task.sleep(for: .seconds(delay))
-                } catch {
-                    return // Task cancelled
-                }
-            }
-            do {
-                try await authService.logoutThrowing(token: token)
-                return
-            } catch let error as MeeshyError {
-                // #10463 — un 401 dit que CE jeton ne vaut plus rien : sa session
-                // est déjà close ou invalide. Le réessayer ne fermerait rien.
-                if case .auth = error {
-                    Logger.auth.info("Server logout refused the token: its session is already closed")
-                    return
-                }
-                Logger.auth.warning("Server logout attempt failed: \(error.localizedDescription)")
-            } catch {
-                Logger.auth.warning("Server logout attempt failed: \(error.localizedDescription)")
-            }
-        }
-        Logger.auth.error("Server logout exhausted retries — session may linger on gateway")
+        await AuthServerLogout.run(token: token, using: authService)
     }
 
     // MARK: - Remove Saved Account
@@ -852,57 +716,22 @@ public final class AuthManager: ObservableObject, AuthManaging {
         Task { await BlockService.shared.refreshCache() }
     }
 
+    private var profileStore: AuthProfileKeychainStore { AuthProfileKeychainStore(keychain: keychain) }
+
     private func saveUserToKeychain(_ user: MeeshyUser, userId: String) {
-        let sanitized = user.droppingDataURIImages()
-        do {
-            let encoded = try JSONEncoder().encode(sanitized)
-            guard let jsonString = String(data: encoded, encoding: .utf8) else {
-                Logger.auth.error("Failed to convert sanitized user data to UTF8 string for userId \(userId, privacy: .public)")
-                return
-            }
-            try keychain.save(jsonString, forKey: userKey(for: userId), account: nil)
-        } catch {
-            Logger.auth.error("Failed to save user to keychain for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
+        profileStore.saveUser(user, userId: userId)
     }
 
-    /// U3-cont'd — `pendingOptimisticProfile` guards a revalidation/refresh
-    /// response from clobbering an in-flight optimistic edit, but was
-    /// in-memory only: a kill+relaunch while the `updateProfile` outbox row
-    /// was still unconfirmed dropped the guard, so the next cold start's
-    /// `/auth/me` revalidation clobbered the correctly keychain-hydrated
-    /// optimistic profile with the stale pre-edit server value (no version/
-    /// timestamp compare recovers from that). Persisting the guard itself —
-    /// not just the optimistic user — closes that window: `checkExistingSession`
-    /// reloads it before the revalidation Task can run.
     private func savePendingProfileToKeychain(_ snapshot: ProfileSnapshot, userId: String) {
-        do {
-            let encoded = try JSONEncoder().encode(snapshot)
-            guard let jsonString = String(data: encoded, encoding: .utf8) else {
-                Logger.auth.error("Failed to convert pending profile guard to UTF8 string for userId \(userId, privacy: .public)")
-                return
-            }
-            try keychain.save(jsonString, forKey: pendingProfileKey(for: userId), account: nil)
-        } catch {
-            Logger.auth.error("Failed to persist pending profile guard for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
+        profileStore.savePendingProfile(snapshot, userId: userId)
     }
 
     func loadPendingProfileFromKeychain(userId: String) -> ProfileSnapshot? {
-        guard let jsonString = keychain.load(forKey: pendingProfileKey(for: userId), account: nil),
-              let data = jsonString.data(using: .utf8) else { return nil }
-        do {
-            return try JSONDecoder().decode(ProfileSnapshot.self, from: data)
-        } catch {
-            // Snapshot écrit par une version antérieure de `ProfileSnapshot` :
-            // traité comme « aucun profil en attente ».
-            Logger.auth.error("Failed to decode pending profile guard for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            return nil
-        }
+        profileStore.loadPendingProfile(userId: userId)
     }
 
     private func clearPendingProfileFromKeychain(userId: String) {
-        keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
+        profileStore.clearPendingProfile(userId: userId)
     }
 
     func updateUserAfterRevalidation(_ user: MeeshyUser, userId: String, generation: UInt64) {
@@ -1020,61 +849,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Migration from legacy global keys (one-time, at first launch)
 
     private func migrateFromLegacyKeysIfNeeded() {
-        // 1. Migrate activeUserId from UserDefaults to Keychain
-        if let legacyActiveId = userDefaults.string(forKey: activeUserIdUDKey) {
-            if keychain.load(forKey: activeUserIdUDKey, account: nil) == nil {
-                do {
-                    try keychain.save(legacyActiveId, forKey: activeUserIdUDKey, account: nil)
-                } catch {
-                    Logger.auth.error("Legacy migration failed for activeUserId: \(error.localizedDescription, privacy: .public)")
-                }
+        LegacyAuthKeyMigration(
+            keychain: keychain,
+            userDefaults: userDefaults,
+            activeUserIdKey: activeUserIdUDKey,
+            savedAccountsKey: savedAccountsUDKey,
+            legacyTokenKey: legacyTokenKey,
+            legacyUserKey: legacyUserKey,
+            currentActiveUserId: { [unowned self] in self.activeUserId },
+            adopt: { [unowned self] user in
+                self.activeUserId = user.id
+                self.upsertSavedAccount(from: user)
             }
-            userDefaults.removeObject(forKey: activeUserIdUDKey)
-        }
-
-        // 2. Migrate savedAccounts from UserDefaults to Keychain
-        if let legacyData = userDefaults.data(forKey: savedAccountsUDKey),
-           let legacyJson = String(data: legacyData, encoding: .utf8) {
-            if keychain.load(forKey: savedAccountsUDKey, account: nil) == nil {
-                do {
-                    try keychain.save(legacyJson, forKey: savedAccountsUDKey, account: nil)
-                } catch {
-                    Logger.auth.error("Legacy migration failed for savedAccounts: \(error.localizedDescription, privacy: .public)")
-                }
-            }
-            userDefaults.removeObject(forKey: savedAccountsUDKey)
-        }
-
-        // 3. First migrate any UserDefaults → Keychain entries
-        // (Uses the default keychain implementation's migration helper if available)
-        if let manager = keychain as? KeychainManager {
-            manager.migrateFromUserDefaults(keys: [legacyTokenKey, legacyUserKey])
-        }
-
-        // 4. Only migrate if no active user is set yet
-        guard activeUserId == nil,
-              let token = keychain.load(forKey: legacyTokenKey, account: nil),
-              let userJSON = keychain.load(forKey: legacyUserKey, account: nil),
-              let userData = userJSON.data(using: .utf8) else {
-            return
-        }
-
-        do {
-            let user = try JSONDecoder().decode(MeeshyUser.self, from: userData)
-            let userId = user.id
-            try keychain.save(token, forKey: tokenKey(for: userId), account: nil)
-            try keychain.save(userJSON, forKey: userKey(for: userId), account: nil)
-            // Use now as tokenSavedAt (we don't know the original date — within 1 year is safe)
-            let now = String(Date().timeIntervalSince1970)
-            try keychain.save(now, forKey: tokenDateUDKey(for: userId), account: nil)
-            activeUserId = userId
-            upsertSavedAccount(from: user)
-        } catch {
-            Logger.auth.error("Legacy user migration failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        keychain.delete(forKey: legacyTokenKey, account: nil)
-        keychain.delete(forKey: legacyUserKey, account: nil)
+        ).run()
     }
 
     // MARK: - Local Profile Mutation (optimistic)

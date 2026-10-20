@@ -98,11 +98,8 @@ final class LentilleFocusElectionJitterTests: XCTestCase {
     /// Le pas joué ici doit être celui que la liste rend : si l'espacement de
     /// la `LazyVStack` des rangées change, ces témoins doivent changer avec.
     func test_listSpacing_isTheOneThesePitchesAssume() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationListView.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
+        // L'UNITÉ de la liste : la pile des rangées d'une section vit dans `+SectionRows`.
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
         XCTAssertTrue(
             source.contains("LazyVStack(spacing: MeeshySpacing.xsPlus)"),
             "Les rangées de section sont espacées de `MeeshySpacing.xsPlus` : c'est le pas " +

@@ -117,6 +117,7 @@ final class LongMessageExpansionTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: sheetPath), "la feuille « Lire plus » est supprimée (#8147)")
         let chain = [
             "Meeshy/Features/Main/Views/ConversationView.swift",
+            "Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift",
             "Meeshy/Features/Main/Views/MessageListView.swift",
             "Meeshy/Features/Main/Views/MessageListViewController.swift",
             "Meeshy/Features/Main/Focal/Core/FocalRowInput.swift",

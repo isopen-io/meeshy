@@ -43,23 +43,23 @@ final class ConversationViewReadingModeInitTests: XCTestCase {
     // MARK: - readingModeConversationType(for:) — mapping pur, NOUVEAU (F-086)
 
     func test_readingModeConversationType_directMapsDirect() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .direct), .direct)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .direct), .direct)
     }
 
     func test_readingModeConversationType_groupMapsGroup() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .group), .group)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .group), .group)
     }
 
     func test_readingModeConversationType_publicMapsPublic() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .public), .public)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .public), .public)
     }
 
     func test_readingModeConversationType_globalMapsGlobal() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .global), .global)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .global), .global)
     }
 
     func test_readingModeConversationType_broadcastMapsBroadcast() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .broadcast), .broadcast)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .broadcast), .broadcast)
     }
 
     /// Les trois cas ABSENTS du miroir gelé (`community`/`channel`/`bot`) —
@@ -67,22 +67,22 @@ final class ConversationViewReadingModeInitTests: XCTestCase {
     /// Repliés sur `.group` : jamais `.direct`, seule distinction qui compte
     /// pour `resolveCapabilities` (éligibilité Rivière : « jamais en direct »).
     func test_readingModeConversationType_communityFallsBackToGroup() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .community), .group)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .community), .group)
     }
 
     func test_readingModeConversationType_channelFallsBackToGroup() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .channel), .group)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .channel), .group)
     }
 
     func test_readingModeConversationType_botFallsBackToGroup() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: .bot), .group)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .bot), .group)
     }
 
     /// `nil` (aucune conversation) ⇒ `.group`, cohérent avec `isDirect`
     /// (`ConversationView.isDirect`, ci-dessus dans le fichier) qui traite
     /// déjà un `conversation` nil comme « pas direct ».
     func test_readingModeConversationType_nilFallsBackToGroup() {
-        XCTAssertEqual(ConversationView.readingModeConversationType(for: nil), .group)
+        XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: nil), .group)
     }
 
     // MARK: - Le câblage flag-ON/sticky/OFF de `ConversationView.init`

@@ -85,7 +85,7 @@ final class StoryPastePolicyTests: XCTestCase {
             XCTAssertFalse(
                 code.contains(interdit),
                 "`\(interdit)` réintroduirait une seconde règle de placement média. La première "
-                    + "vit dans `StoryComposerViewModel+Elements` (`shouldBeBackground`) et dans "
+                    + "vit dans `StoryComposerViewModel+MediaObjects` (`shouldBeBackground`) et dans "
                     + "`ComposerAudioPlacement`."
             )
         }

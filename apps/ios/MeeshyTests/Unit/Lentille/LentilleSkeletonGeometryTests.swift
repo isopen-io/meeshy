@@ -46,8 +46,17 @@ final class LentilleSkeletonGeometryTests: XCTestCase {
         try source(at: "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift")
     }
 
+    /// Le mux de squelette vit dans le rendu des branches vides, extrait de la liste.
     private func listViewSource() throws -> String {
-        try source(at: "Meeshy/Features/Main/Views/ConversationListView.swift")
+        try source(at: "Meeshy/Features/Main/Views/ConversationListView+EmptyState.swift")
+    }
+
+    /// L'unité de la liste SANS `+Rows` : seul `ConversationListView+Rows.swift` a le droit de construire le rang.
+    private func listUnitSourceExceptRows() throws -> String {
+        try AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/ConversationListView.swift")
+            .filter { $0.lastPathComponent != "ConversationListView+Rows.swift" }
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     private func normalizedCode(_ source: String) -> String {
@@ -208,7 +217,7 @@ final class LentilleSkeletonGeometryTests: XCTestCase {
     /// du `case .skeleton`), ni plus (fuite du mux ailleurs dans le fichier,
     /// hors périmètre Partie B), ni moins.
     func test_emptyBranchSkeletonMux_hasExactlyOneOccurrenceOfEachRowType() throws {
-        let code = normalizedCode(try listViewSource())
+        let code = normalizedCode(try listUnitSourceExceptRows())
         XCTAssertEqual(
             occurrences(of: "LentilleSkeletonRow()", in: code), 1,
             "Une seule occurrence de LentilleSkeletonRow() attendue dans ConversationListView.swift (branche ON du mux)."
@@ -226,7 +235,7 @@ final class LentilleSkeletonGeometryTests: XCTestCase {
     /// par opposition au squelette) n'a AUCUNE raison d'apparaître dans ce
     /// fichier : sa seule construction vit dans `ConversationListView+Rows.swift`.
     func test_conversationListView_doesNotConstructLentilleConversationRow_muxStaysInRowsFile() throws {
-        let code = normalizedCode(try listViewSource())
+        let code = normalizedCode(try listUnitSourceExceptRows())
         XCTAssertEqual(
             occurrences(of: "LentilleConversationRow(", in: code), 0,
             "ConversationListView.swift ne doit JAMAIS construire LentilleConversationRow directement " +

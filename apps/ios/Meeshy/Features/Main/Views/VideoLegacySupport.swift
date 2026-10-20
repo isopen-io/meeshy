@@ -36,7 +36,13 @@ final class OrientationManager: ObservableObject {
 struct FullscreenAVPlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
     let gravity: AVLayerVideoGravity
+    /// La galerie est un plein écran : elle ouvre un PiP en sortie d'app
+    /// (`PipPresentationLaw`, #11041, e), sauf si l'hôte le refuse.
     var configurePip: Bool = true
+
+    private var enablesPip: Bool {
+        PipPresentationLaw.mayConfigurePip(presentation: .fullscreen, requestsPip: configurePip)
+    }
     /// Première frame COMPOSÉE (`AVPlayerLayer.isReadyForDisplay`, KVO) — le
     /// signal sur lequel la galerie retire son poster net. Jamais
     /// `currentItem` (`tasks/lessons.md` § 24) ; défaut `nil`, call sites intacts.
@@ -50,7 +56,7 @@ struct FullscreenAVPlayerLayerView: UIViewRepresentable {
         view.armReadinessObserver()
         let policy = ProtectedPlaybackPolicy.of(isCaptureShielded: context.environment.isCaptureShielded)
         policy.apply(to: player)
-        if configurePip, policy.allowsPictureInPicture {
+        if enablesPip, policy.allowsPictureInPicture {
             SharedAVPlayerManager.shared.configurePip(playerLayer: view.playerLayer)
         }
         return view
@@ -64,7 +70,7 @@ struct FullscreenAVPlayerLayerView: UIViewRepresentable {
         // recopie d'écran, ni par une fenêtre PiP.
         let policy = ProtectedPlaybackPolicy.of(isCaptureShielded: context.environment.isCaptureShielded)
         policy.apply(to: player)
-        if configurePip, policy.allowsPictureInPicture {
+        if enablesPip, policy.allowsPictureInPicture {
             SharedAVPlayerManager.shared.configurePip(playerLayer: uiView.playerLayer)
         }
     }

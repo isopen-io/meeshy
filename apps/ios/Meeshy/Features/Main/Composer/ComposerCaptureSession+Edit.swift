@@ -22,7 +22,7 @@ extension ComposerCaptureSession {
         framing = .identity
         openFamily = nil
         activeEditTools = ComposerEditTools.initial(.photo)
-        editChromeShown = false
+        editChromeShown = true
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.photo)
         camera.pauseRunning()
@@ -50,7 +50,7 @@ extension ComposerCaptureSession {
         loopedTrim = trim
         openFamily = nil
         activeEditTools = ComposerEditTools.initial(.video(hasAudio: lecteur.hasAudio))
-        editChromeShown = false
+        editChromeShown = true
         takeSound = ComposerTakeSound()
         editPaused = false
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
@@ -406,8 +406,7 @@ extension ComposerCaptureSession {
     }
 
     /// **Le glissé vers le haut pose le chrome par-dessus la prise** (#10930) :
-    /// la première fois, « Couper » sélectionné ; ensuite, les outils comme on
-    /// les a laissés.
+    /// les outils comme on les a laissés.
     func revealEditChrome() {
         guard phase.isEditing, !isRenderingLook, !editChromeShown, let take = editTake else { return }
         if activeEditTools.isEmpty { activeEditTools = ComposerEditTools.revealed(take) }

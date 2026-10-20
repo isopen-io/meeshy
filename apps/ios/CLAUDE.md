@@ -108,6 +108,8 @@ $R stop
 - `start` **remplace l'app de l'iPhone** par la build du dépôt (Debug), sur l'environnement que l'app avait déjà choisi (staging ou production). En production, n'écrire qu'aux comptes de test convenus avec le porteur.
 - Ce qui n'a pas d'identifiant d'accessibilité ne se touche que par coordonnées, et un décalage de mise en page fait tomber le toucher à côté. Poser un `accessibilityIdentifier` sur tout ce qu'une recette doit atteindre (#10683).
 - Un NSLog temporaire (préfixe `RECETTE`) lu par `$R log RECETTE` mesure ce que l'écran ne montre pas. Il ne se commite jamais.
+- **iPhone relié en Wi-Fi** (`devicectl device info details` → `Transport Type: localNetwork`) : `iproxy` ne passe que par USB. Viser le tunnel CoreDevice avec `IPHONE_REMOTE_HOST=<Tunnel IP Address>` (l'adresse change à chaque reconnexion).
+- **Meeshy s'anime sans cesse**, donc XCUITest attend en vain qu'elle soit « au repos » avant chaque geste. Lancer le serveur avec `TEST_RUNNER_IPHONE_REMOTE_SPRINGBOARD=1` : les touchers passent par le tremplin, par coordonnées (`xy`, `dxy`, `press`, `swipe`). Dans ce mode, `url` fait tomber le serveur : ouvrir les liens avec `xcrun devicectl device process launch --payload-url <lien> me.meeshy.app`, et capturer l'écran avec `xcrun devicectl device capture screenshot`.
 
 ## Naming Conventions
 
@@ -905,7 +907,7 @@ Meeshy a **deux** systemes de toasts in-app, separes par **source d'evenement**.
 
 Les composants suivants gerent l'**entite** Notification (CRUD, listing, preferences) — distincts du toast in-app. A ne pas confondre :
 
-- `NotificationModels`, `NotificationContext`, `APINotification`, `SocketNotificationEvent` (types)
+- `NotificationContext`, `APINotification`, `SocketNotificationEvent` (types)
 - `NotificationCoordinator` (unread count global, badge, widget)
 - `PushNotificationManager` (APN/Firebase plumbing)
 - `NotificationService` (REST CRUD)
@@ -1020,6 +1022,14 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
 | Production | gate.meeshy.me | Crash reporting |
 
 ## Code Organization
+> **Cohésion d'abord (directive porteur 2026-10-19, #10988) — PRIORITAIRE sur le budget de lignes.** Garde : `apps/ios/scripts/check_cohesion_budget.sh` (cliquet CI, référence `apps/ios/scripts/cohesion-budget.json`).
+> 1. Un type a UNE responsabilité.
+> 2. Une fonction tient sur un écran : <= 80 lignes (cliquet).
+> 3. Une vue SwiftUI se compose de sous-vues qui reçoivent des valeurs, des `Binding` et des closures.
+> 4. L'état privé reste `private` ; l'élargir pour une extension sœur est une exception justifiée.
+> 5. `Type+X.swift` n'est PAS une décomposition : un type se mesure en UNITÉ (déclaration + extensions du module, cliquet <= 1 500 lignes). Extraire un vrai type cohésif, pas un fichier.
+> 6. Le budget de lignes par fichier (1000–1200) n'est plus qu'un indicateur secondaire.
+
 - `// MARK: - SectionName` to divide file sections
 - Extensions group protocol conformances
 - Private properties/methods clearly marked

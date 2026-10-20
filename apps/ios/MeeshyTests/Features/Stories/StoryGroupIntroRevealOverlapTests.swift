@@ -157,7 +157,7 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
                 .deletingLastPathComponent()   // Features
                 .deletingLastPathComponent()   // MeeshyTests
                 .deletingLastPathComponent()   // ios
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView.swift"),
+                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+GroupIntro.swift"),
             encoding: .utf8
         )
 

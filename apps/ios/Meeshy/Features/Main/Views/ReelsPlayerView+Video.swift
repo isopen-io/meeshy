@@ -162,7 +162,7 @@ struct ReelVideoView: View {
                 // l'image du moteur au lieu de retomber sur le poster.
                 if ready, let shown = displayedPlayer {
                     ReelVideoSurface(player: shown, videoGravity: .resizeAspect,
-                                     enablesPip: isEngaged && isShowingThis)
+                                     presentation: .fullscreen, requestsPip: isEngaged && isShowingThis)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                 } else if isEngaged, !ready {
@@ -368,8 +368,14 @@ struct ReelVideoSurface: UIViewRepresentable {
     /// au lieu de laisser sa bande-son jouer invisible en arrière-plan ;
     /// fermer la fenêtre arrête la vidéo. La surface muette du feed
     /// (`ReelFeedVideoSurface`) reste hors PiP — un autoplay silencieux ne
-    /// doit jamais ouvrir de fenêtre.
-    var enablesPip: Bool = false
+    /// doit jamais ouvrir de fenêtre. La décision passe par
+    /// `PipPresentationLaw` : seul le plein écran ouvre un PiP (#11041, e).
+    var presentation: VideoPresentation = .inline
+    var requestsPip: Bool = false
+
+    private var enablesPip: Bool {
+        PipPresentationLaw.mayConfigurePip(presentation: presentation, requestsPip: requestsPip)
+    }
 
     func makeUIView(context: Context) -> ReelPlayerLayerView {
         let view = ReelPlayerLayerView()

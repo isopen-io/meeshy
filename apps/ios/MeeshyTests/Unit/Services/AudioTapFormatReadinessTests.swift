@@ -84,8 +84,10 @@ final class AudioTapFormatReadinessTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("Meeshy/Features/Main")
+        return try ["Services/CallTranscriptionService.swift", "Models/TranscriptionError.swift"]
+            .map { try String(contentsOf: url.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     /// **Les DEUX seuls `installTap` du dépôt sont précédés de la règle.** Une

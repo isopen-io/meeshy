@@ -259,7 +259,7 @@ final class CallCaptureControllerFramesTests: XCTestCase {
     }
 }
 
-private final class FramesMockGrabber: CallFrameGrabbing, @unchecked Sendable {
+nonisolated private final class FramesMockGrabber: CallFrameGrabbing, @unchecked Sendable {
     var snapshotResult = CallFrameSnapshot.empty
 
     func attach(track: Any?, id: String, isMirrored: Bool) {}
@@ -304,7 +304,7 @@ private final class FramesMockRecorder: CallMontageRecordingProviding {
     func cancel() {}
 }
 
-private final class FramesMockFaceLocator: CallFaceLocating, @unchecked Sendable {
+nonisolated private final class FramesMockFaceLocator: CallFaceLocating, @unchecked Sendable {
     func faceRect(in image: CGImage) -> CGRect? {
         nil
     }

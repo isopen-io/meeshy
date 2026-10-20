@@ -17,7 +17,13 @@ public actor SocialEventsV2Outbox {
     public static let visitorOwner = "visitor"
     public static let maxRows = 5_000
 
-    private let db: DatabaseQueue
+    private let storage: DatabaseQueue?
+    private var db: DatabaseQueue {
+        get throws {
+            guard let storage else { throw DatabaseStorageUnavailable() }
+            return storage
+        }
+    }
     private let now: @Sendable () -> Date
     private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "social-events-v2-outbox")
 
@@ -27,27 +33,33 @@ public actor SocialEventsV2Outbox {
 
     public init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        self.db = Self.makeQueue(path: dir.appendingPathComponent("meeshy_social_events_v2.db").path)
-        self.now = { Date() }
+        self.init(storage: ResilientDatabaseQueue.open(path: dir.appendingPathComponent("meeshy_social_events_v2.db").path))
     }
 
     public init(dbPath: String?, clock: @escaping @Sendable () -> Date = { Date() }) {
-        self.db = Self.makeQueue(path: dbPath)
+        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock)
+    }
+
+    init(storage opened: OpenedDatabaseQueue, clock: @escaping @Sendable () -> Date = { Date() }) {
+        self.storage = Self.prepare(opened)
         self.now = clock
     }
 
-    private static func makeQueue(path: String?) -> DatabaseQueue {
-        let queue: DatabaseQueue
-        do {
-            if let path {
-                queue = try DatabaseQueue(path: path)
-            } else {
-                queue = try DatabaseQueue()
-            }
-        } catch {
-            logger.error("On-disk social events v2 outbox unavailable, falling back to memory: \(error.localizedDescription, privacy: .public)")
-            do { queue = try DatabaseQueue() } catch { fatalError("[SocialEventsV2Outbox] Cannot create in-memory GRDB queue: \(error)") }
+    private static func prepare(_ opened: OpenedDatabaseQueue) -> DatabaseQueue? {
+        switch opened {
+        case .persistent:
+            break
+        case .memoryFallback(_, let diskError):
+            logger.error("On-disk social events v2 outbox unavailable, falling back to memory: \(diskError, privacy: .public)")
+        case .unavailable(let diskError, let memoryError):
+            logger.fault("Social events v2 outbox has no storage at all, events are dropped: disk=\(diskError, privacy: .public) memory=\(memoryError, privacy: .public)")
         }
+        guard let queue = opened.queue else { return nil }
+        createSchemaOrLog(in: queue)
+        return queue
+    }
+
+    private static func createSchemaOrLog(in queue: DatabaseQueue) {
         do {
             try queue.write { db in
                 try db.create(table: "social_events_v2", ifNotExists: true) { t in
@@ -63,7 +75,6 @@ public actor SocialEventsV2Outbox {
         } catch {
             logger.fault("Social events v2 outbox schema creation failed: \(error.localizedDescription, privacy: .public)")
         }
-        return queue
     }
 
     /// Met en file. Un événement de plus de 2 Kio ou déjà présent (même

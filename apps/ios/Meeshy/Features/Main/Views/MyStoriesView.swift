@@ -275,60 +275,16 @@ struct MyStoriesView: View {
                 applyVisibility(target.mode, for: target.story, userIds: ids)
             }
         }
-        .alert(
-            MyStoriesDeleteConfirmation.title(for: .publishedStory),
-            isPresented: Binding(get: { deleteCandidate != nil }, set: { if !$0 { deleteCandidate = nil } })
-        ) {
-            Button(String(localized: "common.cancel", defaultValue: "Annuler"), role: .cancel) {
-                deleteCandidate = nil
-            }
-            Button(String(localized: "common.delete", defaultValue: "Supprimer"), role: .destructive) {
-                if let story = deleteCandidate { delete(story) }
-                deleteCandidate = nil
-            }
-        } message: {
-            Text(MyStoriesDeleteConfirmation.message(for: .publishedStory))
-        }
-        .alert(
-            MyStoriesDeleteConfirmation.title(for: .draft),
-            isPresented: Binding(get: { draftDeleteCandidate != nil }, set: { if !$0 { draftDeleteCandidate = nil } })
-        ) {
-            Button(String(localized: "common.cancel", defaultValue: "Annuler"), role: .cancel) {
-                draftDeleteCandidate = nil
-            }
-            Button(String(localized: "common.delete", defaultValue: "Supprimer"), role: .destructive) {
-                if let draft = draftDeleteCandidate { draftsViewModel.delete(draft.id) }
-                draftDeleteCandidate = nil
-            }
-        } message: {
-            Text(MyStoriesDeleteConfirmation.message(for: .draft))
-        }
-        .alert(
-            MyStoriesDeleteConfirmation.title(for: .failedItem),
-            isPresented: Binding(get: { failedDeleteCandidate != nil }, set: { if !$0 { failedDeleteCandidate = nil } })
-        ) {
-            Button(String(localized: "common.cancel", defaultValue: "Annuler"), role: .cancel) {
-                failedDeleteCandidate = nil
-            }
-            Button(String(localized: "common.delete", defaultValue: "Supprimer"), role: .destructive) {
-                if let item = failedDeleteCandidate { discardFailedItem(item) }
-                failedDeleteCandidate = nil
-            }
-        } message: {
-            Text(MyStoriesDeleteConfirmation.message(for: .failedItem))
-        }
-        .alert(
-            String(localized: "story.mine.delete.selected.title", defaultValue: "Supprimer les stories sélectionnées ?"),
-            isPresented: $isBulkDeleteConfirming
-        ) {
-            Button(String(localized: "common.cancel", defaultValue: "Annuler"), role: .cancel) {}
-            Button(String(localized: "common.delete", defaultValue: "Supprimer"), role: .destructive) {
-                bulkDelete()
-            }
-        } message: {
-            Text(String(localized: "story.mine.delete.selected.message",
-                        defaultValue: "Cette action est définitive. Ces stories ne seront plus visibles par personne."))
-        }
+        .myStoriesDeleteAlerts(
+            deleteCandidate: $deleteCandidate,
+            draftDeleteCandidate: $draftDeleteCandidate,
+            failedDeleteCandidate: $failedDeleteCandidate,
+            isBulkDeleteConfirming: $isBulkDeleteConfirming,
+            onConfirmDeleteStory: { story in delete(story) },
+            onConfirmDeleteDraft: { draft in draftsViewModel.delete(draft.id) },
+            onConfirmDeleteFailed: { item in discardFailedItem(item) },
+            onConfirmBulkDelete: { bulkDelete() }
+        )
     }
 
     /// Deux onglets COMPLÈTEMENT distincts (directive user 2026-08-01). Un
@@ -400,24 +356,8 @@ struct MyStoriesView: View {
     }
 
     private func publishedCardModel(for story: StoryItem) -> MyStoryCardModel {
-        MyStoryCardModel(
-            id: story.id,
-            kind: .published,
-            thumbnailURL: story.media.first?.thumbnailUrl ?? story.media.first?.url,
-            thumbHash: story.storyEffects?.thumbHash,
-            localCoverPath: MyStoryThumbnailResolver.localCoverPath(
-                renderedCover: CacheCoordinator.thumbnailLocalFileURL(
-                    for: StoryCoverThumbnail.cacheKey(storyId: story.id))?.path,
-                legacyFallback: nil),
-            backgroundHex: story.storyEffects?.background,
-            date: story.createdAt,
-            expiresAt: story.expiresAt,
-            counts: [
-                .viewsAndReactions: story.viewCount ?? 0,
-                .reactions: story.reactionCount,
-                .comments: story.commentCount,
-            ],
-            title: nil,
+        MyStoryCardModelRules.published(
+            story,
             saveProgress: saveService.progress(for: story.id),
             saveIsCancellable: saveService.isCancellable(storyId: story.id))
     }
@@ -465,6 +405,7 @@ struct MyStoriesView: View {
                 ForEach(viewModel.activeUploads) { upload in
                     ActiveUploadRow(
                         upload: upload,
+                        progress: viewModel.uploadProgress,
                         onRetry: { viewModel.retryUpload(id: upload.id) },
                         onCancel: { viewModel.cancelUpload(id: upload.id) }
                     )
@@ -612,20 +553,8 @@ struct MyStoriesView: View {
     }
 
     private func draftCardModel(for draft: StoryDraftSummary) -> MyStoryCardModel {
-        MyStoryCardModel(
-            id: draft.id,
-            kind: .draft,
-            thumbnailURL: nil,
-            thumbHash: draft.thumbHash,
-            localCoverPath: MyStoryThumbnailResolver.localCoverPath(
-                renderedCover: CacheCoordinator.thumbnailLocalFileURL(
-                    for: StoryCoverThumbnail.cacheKey(storyId: draft.id))?.path,
-                legacyFallback: draft.coverFileURL?.path),
-            backgroundHex: draft.backgroundHex,
-            date: draft.updatedAt,
-            expiresAt: nil,
-            counts: [:],
-            title: draft.title,
+        MyStoryCardModelRules.draft(
+            draft,
             saveProgress: saveService.progress(for: draft.id),
             saveIsCancellable: saveService.isCancellable(storyId: draft.id))
     }
@@ -698,64 +627,19 @@ struct MyStoriesView: View {
 
     // MARK: Menu
 
-    @ViewBuilder
     private func actionMenu(for story: StoryItem) -> some View {
-        Button {
-            onOpen(story)
-        } label: {
-            Label(String(localized: "story.mine.open", defaultValue: "Ouvrir"), systemImage: "play.circle")
-        }
-        Button {
-            viewersStory = story
-        } label: {
-            Label(String(localized: "story.mine.viewers", defaultValue: "Listing des vues"), systemImage: "eye")
-        }
-        Button {
-            onEditStory(story)
-        } label: {
-            Label(String(localized: "story.mine.edit", defaultValue: "Modifier"), systemImage: "pencil")
-        }
-        Menu {
-            ForEach(PostVisibility.composerSelectableCases) { mode in
-                Button {
-                    selectVisibility(mode, for: story)
-                } label: {
-                    Label(mode.label,
-                          systemImage: StoryVisibilityMenuResolver.symbol(
-                            for: mode, currentRawValue: story.visibility))
-                }
-            }
-        } label: {
-            Label(String(localized: "story.mine.visibility", defaultValue: "Visibilité"),
-                  systemImage: "lock.rotation")
-        }
-        Button {
-            exportStory = story
-        } label: {
-            Label(String(localized: "story.mine.share", defaultValue: "Partager"), systemImage: "square.and.arrow.up")
-        }
-        Button {
-            StoryPhotoSaveService.shared.save(story: story)
-        } label: {
-            Label(String(localized: "story.mine.save", defaultValue: "Enregistrer"), systemImage: "square.and.arrow.down")
-        }
-        Button {
-            forwardStory = story
-        } label: {
-            Label(String(localized: "story.mine.forward", defaultValue: "Transférer"), systemImage: "arrowshape.turn.up.right")
-        }
-        Button {
-            repost(story)
-        } label: {
-            Label(String(localized: "story.mine.repost", defaultValue: "Republier"), systemImage: "arrow.2.squarepath")
-        }
-        .disabled(isReposting)
-        Divider()
-        Button(role: .destructive) {
-            deleteCandidate = story
-        } label: {
-            Label(String(localized: "common.delete", defaultValue: "Supprimer"), systemImage: "trash")
-        }
+        MyStoryActionMenu(
+            story: story,
+            isReposting: isReposting,
+            actions: MyStoryMenuActions(
+                onOpen: { onOpen(story) },
+                onViewers: { viewersStory = story },
+                onEdit: { onEditStory(story) },
+                onSelectVisibility: { mode in selectVisibility(mode, for: story) },
+                onExport: { exportStory = story },
+                onForward: { forwardStory = story },
+                onRepost: { repost(story) },
+                onDelete: { deleteCandidate = story }))
     }
 
     // MARK: Actions
@@ -935,221 +819,4 @@ struct MyStoriesView: View {
         }
         viewModel.removeOptimisticStories(tempStoryId: item.tempStoryId)
     }
-}
-
-// MARK: - Comments sheet resolution
-
-/// Résolution cache-first du `FeedPost` derrière une story pour la sheet de
-/// commentaires (`CommentsSheetView`, celle des posts). Une story fraîchement
-/// listée dans « Mes stories » est déjà dans `StoryService.cachedPost` —
-/// inutile de payer un aller-retour réseau pour ouvrir ses commentaires.
-/// Générique : garde pure, aucune dépendance sur `APIPost` pour rester
-/// testable sans construire le modèle SDK complet.
-enum MyStoriesCommentsResolver {
-    static func shouldUseCache<T>(cachedPost: T?) -> Bool {
-        cachedPost != nil
-    }
-}
-
-// MARK: - Visibility menu
-
-/// Marquage du mode de visibilité courant dans le sous-menu « Modifier la
-/// visibilité ». Le mode actif porte un `checkmark` à la place de son icône.
-///
-/// Pourquoi pas un `Picker` inline (qui coche nativement) : sous iOS 26, un
-/// `.tint(.clear)` fait disparaître toutes les icônes d'un menu — on garde donc
-/// la main sur le symbole rendu.
-enum StoryVisibilityMenuResolver {
-
-    /// Ce que déclenche le tap sur une entrée du sous-menu.
-    enum Route: Equatable {
-        /// Mode déjà actif : ne rien faire (ni réseau, ni picker).
-        case ignored
-        /// Écriture directe — aucune sélection d'utilisateurs requise.
-        ///
-        /// `userIds` vaut `[]`, **jamais `nil`**, et c'est le cœur de la
-        /// correction : `UpdatePostRequest` encode ses optionnels via
-        /// l'`Encodable` synthétisé, donc un `nil` est simplement OMIS du JSON
-        /// — et le gateway ne touche le champ que s'il est présent
-        /// (`PostService.updatePost` : `if (data.visibilityUserIds !==
-        /// undefined)`). Passer de `EXCEPT[a,b,c]` à Public en envoyant `nil`
-        /// vidait donc la liste LOCALEMENT pendant que la base gardait
-        /// `[a,b,c]` : au refresh suivant, rouvrir « Sauf… » repré-cochait
-        /// a/b/c. `[]` est accepté par le schéma Zod du gateway pour toutes
-        /// les visibilités sans sélection (le `refine` ne rejette une liste
-        /// vide que pour `EXCEPT`/`ONLY`) et nettoie réellement le champ.
-        ///
-        /// Le payload est porté par le cas plutôt que décidé au site d'appel :
-        /// un retour à `nil` ne compile plus.
-        case applyDirectly(userIds: [String])
-        /// `EXCEPT` / `ONLY` : le gateway rejette un envoi sans `visibilityUserIds`.
-        case openAudiencePicker
-    }
-
-    static func isCurrent(_ candidate: PostVisibility, rawValue: String?) -> Bool {
-        guard let rawValue else { return false }
-        return rawValue.uppercased() == candidate.rawValue
-    }
-
-    static func symbol(for candidate: PostVisibility, currentRawValue: String?) -> String {
-        isCurrent(candidate, rawValue: currentRawValue) ? "checkmark" : candidate.icon
-    }
-
-    static func route(to candidate: PostVisibility, current rawValue: String?) -> Route {
-        if isCurrent(candidate, rawValue: rawValue) { return .ignored }
-        // `[]` et non `nil` — voir la doc de `Route.applyDirectly` : c'est ce
-        // qui nettoie RÉELLEMENT une liste d'audience orpheline côté serveur.
-        return candidate.requiresUserSelection ? .openAudiencePicker : .applyDirectly(userIds: [])
-    }
-}
-
-// MARK: - Active Upload Row
-
-/// Same `StoryViewModel.StoryUploadState` the tray's `StoryUploadOverlay`
-/// renders as a circular badge, shown here as a list row. The badge is
-/// purely informative (`.allowsHitTesting(false)`, directive 2026-08-01) —
-/// this row is the ONLY surface carrying retry/cancel for an in-flight or
-/// failed upload attempt.
-private struct ActiveUploadRow: View {
-    let upload: StoryViewModel.StoryUploadState
-    let onRetry: () -> Void
-    let onCancel: () -> Void
-
-    private var isFailed: Bool { upload.phase.isFailed }
-
-    private var isWaiting: Bool { upload.phase.isWaiting }
-
-    var body: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            Image(uiImage: upload.thumbnailImage)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                        .stroke(isFailed ? MeeshyColors.error : MeeshyColors.indigo400, lineWidth: 1)
-                )
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                Text(StoryUploadPresentation.statusTitle(for: upload.phase))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                if !isFailed, !isWaiting {
-                    Text("\(Int(upload.progress * 100))%")
-                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(.secondary)
-                }
-            }
-
-            Spacer()
-
-            if isFailed {
-                Button(action: onRetry) {
-                    Label(String(localized: "story.tray.retry", defaultValue: "Réessayer", bundle: .main), systemImage: "arrow.clockwise")
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                Button(role: .destructive, action: onCancel) {
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.bordered)
-                .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-            } else {
-                ProgressView()
-            }
-        }
-        .padding(.vertical, MeeshySpacing.xs)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-// MARK: - Failed Story Row
-
-/// One entry in the permanently-failed publish history
-/// (`StoryPublishService.failedItems`). No rich thumbnail for the MVP — the
-/// local media backing `item` is preserved on disk but decoding a preview
-/// frame from it is a separate feature.
-///
-/// « Reprendre » (incrément 5) est l'action PRIMAIRE : convertir l'échec en
-/// brouillon éditable est le seul chemin qui débloque un rejet serveur
-/// déterministe (4xx) — rejouer le payload identique ré-échouera. Le retry
-/// reste disponible en action secondaire (icône seule) pour les échecs
-/// transitoires (réseau).
-private struct FailedStoryRow: View {
-    let item: StoryPublishQueueItem
-    let isResuming: Bool
-    let onResume: () -> Void
-    let onRetry: () -> Void
-
-    private static let relativeFormatter = RelativeDateTimeFormatter()
-
-    private var relativeTime: String {
-        Self.relativeFormatter.localizedString(for: item.createdAt, relativeTo: Date())
-    }
-
-    var body: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            ZStack {
-                Circle().fill(MeeshyColors.error.opacity(0.15))
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(MeeshyColors.error)
-            }
-            .frame(width: 44, height: 44)
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                Text(String(localized: "story.mine.failed.title", defaultValue: "Story non publiée"))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                if let lastError = item.lastError {
-                    Text(lastError)
-                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                }
-                Text(relativeTime)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
-
-            Button(action: onResume) {
-                Label(MyStoriesView.resumeActionTitle, systemImage: "square.and.pencil")
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(isResuming)
-
-            Button(action: onRetry) {
-                Image(systemName: "arrow.clockwise")
-                    .font(MeeshyFont.relative(13, weight: .semibold))
-            }
-            .buttonStyle(.bordered)
-            .accessibilityLabel(String(localized: "story.tray.retry", defaultValue: "Réessayer", bundle: .main))
-        }
-        .padding(.vertical, MeeshySpacing.xs)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            String(
-                localized: "story.mine.failed.a11y",
-                defaultValue: "Story non publiée, il y a \(relativeTime). \(item.lastError ?? "")"
-            )
-        )
-    }
-}
-
-// MARK: - Audience target
-
-/// Story + mode en attente d'une sélection d'utilisateurs (`EXCEPT` / `ONLY`).
-private struct AudienceTarget: Identifiable {
-    let story: StoryItem
-    let mode: PostVisibility
-    var id: String { "\(story.id)-\(mode.rawValue)" }
-}
-
-// MARK: - Comments target
-
-/// `FeedPost` résolu pour la sheet de commentaires d'une story.
-private struct MyStoriesCommentTarget: Identifiable {
-    let post: FeedPost
-    var id: String { post.id }
 }

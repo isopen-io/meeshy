@@ -100,7 +100,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/LoginView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/ProfileDecorSheet.swift": "soi — l'avatar du compte connecté",
         "Main/Views/ProfileOwnAvatar.swift": "soi — l'avatar du compte connecté",
-        "Main/Views/RootView.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/RootFloatingChrome.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedComposerSheet.swift": "soi — l'avatar du compte connecté",
         "Main/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",

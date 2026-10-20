@@ -27,11 +27,22 @@ public struct GamePlayerBanner: Equatable, Sendable {
         public let division: GloryDivision5?
         /// La place du Mythe (son numéro se dit : « Mythe n° 42 »).
         public let mythic: MythicSeatRef?
+        /// La Gloire gagnée, la part parcourue dans la division (0 à 1), ce qu'il manque et la marche suivante —
+        /// lus du bloc servi (#11125) ; `next == nil` au sommet de l'échelle et pour le Mythe.
+        public let glory: Int
+        public let progress: Double
+        public let gloryMissing: Int?
+        public let next: GloryStep?
 
-        public init(rank: GloryRank, division: GloryDivision5?, mythic: MythicSeatRef? = nil) {
+        public init(rank: GloryRank, division: GloryDivision5?, mythic: MythicSeatRef? = nil, glory: Int = 0,
+                    progress: Double = 0, gloryMissing: Int? = nil, next: GloryStep? = nil) {
             self.rank = rank
             self.division = division
             self.mythic = mythic
+            self.glory = glory
+            self.progress = min(max(progress, 0), 1)
+            self.gloryMissing = gloryMissing
+            self.next = next
         }
     }
 
@@ -155,7 +166,11 @@ public struct GamePlayerBanner: Equatable, Sendable {
         self.pointsToNext = atTop ? nil : level.pointsToNext
         self.levelCap = level.isMax ? level.cap : nil
         self.meeshes = game.treasury.held > 0 ? game.treasury.held : nil
-        self.rank = game.glory.glory > 0 ? Rank(rank: game.glory.rank, division: game.glory.shownDivision, mythic: game.glory.mythicSeat) : nil
+        let glory = game.glory
+        self.rank = glory.glory > 0
+            ? Rank(rank: glory.rank, division: glory.shownDivision, mythic: glory.mythicSeat, glory: glory.glory,
+                   progress: glory.next == nil ? 1 : glory.progress, gloryMissing: glory.gloryMissing, next: glory.next)
+            : nil
         if let league = game.league, league.access == .open, let current = league.current {
             self.league = League(league: current.league, place: current.rank)
         } else {

@@ -70,14 +70,14 @@ MeeshySDK/                      -> Target core (logique mtier)
     MessageSocketManager.swift -> WebSocket messages temps rel
     SocialSocketManager.swift  -> WebSocket feed social (posts, stories)
   Models/
-    CoreModels.swift           -> Types de base (User, enums)
+    MeeshyConversation.swift   -> MeeshyConversation (accentColor, resolvedLastMessagePreview)
     ConversationModels.swift   -> Conversation, ConversationMember
-    MessageModels.swift        -> Message, MessageTranslation
+    MeeshyMessage.swift        -> MeeshyMessage ; APIMessage.swift, APITextTranslation.swift -> modeles API
     PostModels.swift           -> Post, PostComment
-    FeedModels.swift           -> Feed, FeedItem
-    StoryModels.swift          -> Story, StorySlide
-    UserModels.swift           -> UserProfile, UserPreferences
-    NotificationModels.swift   -> Notification types
+    FeedPost.swift             -> FeedPost, FeedComment.swift, FeedMedia.swift
+    StoryItem.swift            -> StoryItem, StorySlide.swift, StoryGroup.swift, StoryEffects.swift
+    UserModels.swift           -> UpdateProfileRequest/Response, changement e-mail/telephone
+    APINotification.swift      -> APINotification ; NotificationContext.swift, MeeshyNotificationType.swift
     SampleData.swift           -> Donnes de dmo
   Cache/
     CachePolicy.swift          -> TTL, staleTTL, maxItemCount, StorageLocation, predefined policies
@@ -171,7 +171,7 @@ accentHex    = hueShift(primary, −30°)
 saturationBoost = min(1.0, memberCount / 100) × 0.2
 ```
 
-**Acces** (`Models/CoreModels.swift` → `MeeshyConversation`) :
+**Acces** (`Sources/MeeshySDK/Models/MeeshyConversation.swift` → `MeeshyConversation`) :
 - `conversation.accentColor` → `String` (hex primary, propriete calculee)
 - `conversation.colorPalette` → `ConversationColorPalette { primary, secondary, accent, saturationBoost }`
 - `conversation.colorContext` → `ConversationContext { name, type, language, theme, memberCount }`
@@ -188,7 +188,7 @@ saturationBoost = min(1.0, memberCount / 100) × 0.2
 
 Le SDK fournit les types API et la communication temps reel pour le prisme linguistique :
 
-**Models SDK** (`Models/MessageModels.swift`) :
+**Models SDK** (`Sources/MeeshySDK/Models/APITextTranslation.swift`, `Sources/MeeshySDK/Models/APIMessage.swift`) :
 - `APITextTranslation` : Traduction brute depuis l'API (id, messageId, sourceLanguage, targetLanguage, translatedContent, translationModel, confidenceScore)
 - `APIMessage.translations: [APITextTranslation]?` : Traductions pre-chargees avec le message via REST
 
@@ -263,6 +263,14 @@ Semantic: success=#34D399  error=#F87171  warning=#FBBF24  info=#60A5FA
 5. Ambient orbs use Indigo family colors (indigo500, indigo700, indigo400, indigo300)
 
 ## Conventions
+> **Cohésion d'abord (directive porteur 2026-10-19, #10988) — PRIORITAIRE sur le budget de lignes.** Garde : `apps/ios/scripts/check_cohesion_budget.sh` (cliquet CI, référence `apps/ios/scripts/cohesion-budget.json`).
+> 1. Un type a UNE responsabilité.
+> 2. Une fonction tient sur un écran : <= 80 lignes (cliquet).
+> 3. Une vue SwiftUI se compose de sous-vues qui reçoivent des valeurs, des `Binding` et des closures.
+> 4. L'état privé reste `private` ; l'élargir pour une extension sœur est une exception justifiée.
+> 5. `Type+X.swift` n'est PAS une décomposition : un type se mesure en UNITÉ (déclaration + extensions du module, cliquet <= 1 500 lignes). Extraire un vrai type cohésif, pas un fichier.
+> 6. Le budget de lignes par fichier (1000–1200) n'est plus qu'un indicateur secondaire.
+
 
 ### Nommage
 ```swift

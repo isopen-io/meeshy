@@ -39,7 +39,7 @@ struct CallCaptionLine: Equatable, Identifiable {
     }
 
     static func make(
-        segment: TranscriptionSegment,
+        segment: CallTranscriptionSegment,
         isLocal: Bool,
         speakerName: String,
         prefersOriginal: Bool,
@@ -64,7 +64,7 @@ struct CallCaptionLine: Equatable, Identifiable {
         )
     }
 
-    private static func servedTranslation(_ segment: TranscriptionSegment) -> String? {
+    private static func servedTranslation(_ segment: CallTranscriptionSegment) -> String? {
         guard let text = segment.translatedText,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         return text

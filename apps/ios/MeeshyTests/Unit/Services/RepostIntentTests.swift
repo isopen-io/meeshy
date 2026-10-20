@@ -542,7 +542,8 @@ final class RepostIntentTests: XCTestCase {
     /// (Republier au rail, `StoryDirectRepost`) : l'ancre positive y est lue, et
     /// la branche morte reste interdite dans les DEUX fichiers du viewer.
     func test_leViewerDeStory_neMappePlusSesRefus_surUnTypeQuePersonneNeLance() throws {
-        let viewer = AppSourceGuard.stripComments(try sourceDeProduction("StoryViewerView.swift"))
+        // Le lecteur, ses extensions ET les types que la découpe par cohésion a rangés sous leur nom.
+        let viewer = AppSourceGuard.stripComments(try StoryViewerSources.unit())
         let source = AppSourceGuard.stripComments(try sourceDeProduction("StoryViewerView+Sidebar.swift"))
 
         XCTAssertFalse(
@@ -613,8 +614,8 @@ final class RepostIntentTests: XCTestCase {
     /// derrière la garde négative.
     func test_lesNeufSitesDuRepost_publientParLEcrivainUnique() throws {
         let sites = [
-            "FeedViewModel.swift", "ReelsViewModel.swift", "StatusViewModel.swift",
-            "PostDetailView.swift", "ProfileUserPostsList.swift", "RootViewComponents.swift",
+            "FeedViewModel+PostActions.swift", "ReelsViewModel.swift", "StatusViewModel.swift",
+            "PostDetailView.swift", "ProfileUserPostsViewModel.swift", "RootViewComponents.swift",
             "FeedView.swift", "StoryViewerView+Sidebar.swift"
         ]
 

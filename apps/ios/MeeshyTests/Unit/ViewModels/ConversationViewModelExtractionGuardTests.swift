@@ -224,7 +224,7 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
     func test_host_keepsWhatThreeOtherSourceGuardsPinToIt() throws {
         let audioQueue = "ConversationViewModel+AudioQueue.swift"
         let anchors: [(file: String, anchor: String, guardName: String)] = [
-            (Self.host, "requestPermissionsThenStartCall", "PermissionGateSourceGuardTests"),
+            ("ConversationViewModel+CallLauncher.swift", "requestPermissionsThenStartCall", "PermissionGateSourceGuardTests"),
             (audioQueue, "fileUrl: served.url", "FocalMatrixWiringGuardTests"),
             (Self.host, "audioCoordinator.syncActiveTrack(", "FocalMatrixWiringGuardTests"),
             (audioQueue, "trackUrlResolver:", "FocalMatrixWiringGuardTests"),
