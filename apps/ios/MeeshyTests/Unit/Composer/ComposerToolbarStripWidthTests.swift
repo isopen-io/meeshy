@@ -434,10 +434,11 @@ final class ConversationComposerFoldTests: XCTestCase {
     }
 
     func test_conversation_mountsTheSharedFold() throws {
-        let composer = try source("Meeshy/Features/Main/Views/ConversationView+Composer.swift")
+        let host = try source("Meeshy/Features/Main/Views/ConversationView+Composer.swift")
+        let composer = try source("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
         XCTAssertTrue(composer.contains(".foldableConversationComposer("),
                       "La barre de la conversation se replie comme la story (#9955).")
-        XCTAssertTrue(composer.contains("isFocused: isTyping || composerState.focusRequested"),
+        XCTAssertTrue(host.contains("isFocusedOrRequested: isTyping || composerState.focusRequested"),
                       "Le ⌄ s'efface clavier levé, et une demande de focus rouvre la barre.")
         XCTAssertTrue(composer.contains("isRecording: isRecording"),
                       "Le ⌄ s'efface pendant l'enregistrement d'un vocal.")
