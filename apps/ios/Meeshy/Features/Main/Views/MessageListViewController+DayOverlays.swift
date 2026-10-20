@@ -253,4 +253,16 @@ extension MessageListViewController {
             stickyDayState.label = label
         }
     }
+
+    func relativeDayLabel(for date: Date, now: Date = Date()) -> String {
+        MessageDayLabel.label(
+            for: date,
+            now: now,
+            calendar: .current,
+            locale: .current,
+            today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+            yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+            dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
+        )
+    }
 }
