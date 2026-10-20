@@ -88,7 +88,7 @@ struct iPadRootView: View {
     @State var showNewConversation = false
     @State private var isScrollingDown = false
     @State private var feedIsVisible = true
-    @State private var leftColumnRatio: CGFloat = 0.38
+    @SceneStorage("meeshy.ipad.leftColumnRatio") private var leftColumnRatio: Double = ColumnWidthLaw.defaultRatio
 
     /// Choix d'identité en attente sur un lien de partage — jumeau de
     /// `RootView`. Les deux vues partagent la RÉSOLUTION
@@ -128,9 +128,9 @@ struct iPadRootView: View {
             GeometryReader { geometry in
                 HStack(spacing: 0) {
                     leftColumn
-                        .frame(width: geometry.size.width * leftColumnRatio)
+                        .frame(width: ColumnWidthLaw.width(ratio: leftColumnRatio, windowWidth: geometry.size.width))
 
-                    iPadResizableHandle(ratio: $leftColumnRatio, screenWidth: geometry.size.width)
+                    iPadResizableHandle(ratio: $leftColumnRatio, windowWidth: geometry.size.width)
 
                     rightColumn
                         .frame(maxWidth: .infinity)
