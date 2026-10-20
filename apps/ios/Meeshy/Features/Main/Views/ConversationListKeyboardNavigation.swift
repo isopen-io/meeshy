@@ -48,18 +48,21 @@ struct ConversationListKeyboardNavigation: ViewModifier {
         }
     }
 
+    @available(iOS 17.0, *)
     private func step(_ move: ConversationKeyboardCursor.Move) -> KeyPress.Result {
         guard !visibleIds.isEmpty else { return .ignored }
         cursor = ConversationKeyboardCursor.moved(cursor, move, in: visibleIds)
         return .handled
     }
 
+    @available(iOS 17.0, *)
     private func open() -> KeyPress.Result {
         guard let cursor else { return .ignored }
         onOpen(cursor)
         return .handled
     }
 
+    @available(iOS 17.0, *)
     private func release() -> KeyPress.Result {
         guard cursor != nil else { return .ignored }
         cursor = nil
