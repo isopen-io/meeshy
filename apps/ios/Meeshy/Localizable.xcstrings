@@ -155495,53 +155495,6 @@
         }
       }
     },
-    "root.ipad.resizable_handle.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يضبط عرض العمود الأيمن بين 30% و50%"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Passt die Breite der linken Spalte zwischen 30 % und 50 % an"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adjusts the width of the left column between 30% and 50%"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajusta el ancho de la columna izquierda entre 30% y 50%"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajuste la largeur de la colonne de gauche entre 30% et 50%"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Regola la larghezza della colonna di sinistra tra il 30% e il 50%"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajusta a largura da coluna esquerda entre 30% e 50%"
-          }
-        }
-      }
-    },
     "root.ipad.resizable_handle.hint_width": {
       "extractionState": "manual",
       "localizations": {
@@ -155632,53 +155585,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Separador de colunas"
-          }
-        }
-      }
-    },
-    "root.ipad.resizable_handle.value_format": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d بالمئة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d Prozent"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d percent"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d por ciento"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d pour cent"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d per cento"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d por cento"
           }
         }
       }
