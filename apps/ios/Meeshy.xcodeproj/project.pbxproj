@@ -1723,6 +1723,7 @@
 		78E95E43D6C7DA0EC7D427A2 /* ComposerLookStripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1726C55F0E95312B582FE7C /* ComposerLookStripTests.swift */; };
 		78F08FBC30F3BECEE9079421 /* ShareRecipient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C2720C4BFD7FFB9755A24E2 /* ShareRecipient.swift */; };
 		78F27375E1BB8FDC9D1F195C /* ConversationRowWidthLaw.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02A5C0D62203B65C316A3A64 /* ConversationRowWidthLaw.swift */; };
+		EEEE973A6ADBD291E02DD56A /* ConversationPreviewWidthLaw.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF544EE53B9D807DE96E4507 /* ConversationPreviewWidthLaw.swift */; };
 		2D68F1346E6A95CA60FF5B77 /* RootScopeSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 852E4AACDA158E55D0AEDA27 /* RootScopeSwitch.swift */; };
 		37A3B9D3833C9F5011AB3387 /* RootScopeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D36F035013C32A7CAB3398A /* RootScopeModels.swift */; };
 		14FD8794FB6407E083829CB9 /* ColumnWidthLaw.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFE9A7D23BE7BF0CEC94C43 /* ColumnWidthLaw.swift */; };
@@ -3790,6 +3791,7 @@
 		027ADE32E61B664A5FD1F8C6 /* LinkPreviewStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkPreviewStore.swift; sourceTree = "<group>"; };
 		028EE143208736226E4D1C19 /* WidgetDataManagerSharedContainerWriteGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataManagerSharedContainerWriteGuardTests.swift; sourceTree = "<group>"; };
 		02A5C0D62203B65C316A3A64 /* ConversationRowWidthLaw.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationRowWidthLaw.swift; sourceTree = "<group>"; };
+		CF544EE53B9D807DE96E4507 /* ConversationPreviewWidthLaw.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationPreviewWidthLaw.swift; sourceTree = "<group>"; };
 		852E4AACDA158E55D0AEDA27 /* RootScopeSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootScopeSwitch.swift; sourceTree = "<group>"; };
 		5D36F035013C32A7CAB3398A /* RootScopeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootScopeModels.swift; sourceTree = "<group>"; };
 		8DFE9A7D23BE7BF0CEC94C43 /* ColumnWidthLaw.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColumnWidthLaw.swift; sourceTree = "<group>"; };
@@ -10399,6 +10401,7 @@
 				4A875F8153B6A7066843315C /* ConversationPreviewLine.swift */,
 				269A464283935AC7F72B6684 /* ConversationReadingMode+UsesFlatRow.swift */,
 				02A5C0D62203B65C316A3A64 /* ConversationRowWidthLaw.swift */,
+				CF544EE53B9D807DE96E4507 /* ConversationPreviewWidthLaw.swift */,
 				852E4AACDA158E55D0AEDA27 /* RootScopeSwitch.swift */,
 				5D36F035013C32A7CAB3398A /* RootScopeModels.swift */,
 				8DFE9A7D23BE7BF0CEC94C43 /* ColumnWidthLaw.swift */,
@@ -13254,6 +13257,7 @@
 				612C9EA83D6AF01AAF216EF8 /* ConversationReadSignal.swift in Sources */,
 				9D2A7E57CF57BC12FF24CC2E /* ConversationReadingMode+UsesFlatRow.swift in Sources */,
 				78F27375E1BB8FDC9D1F195C /* ConversationRowWidthLaw.swift in Sources */,
+				EEEE973A6ADBD291E02DD56A /* ConversationPreviewWidthLaw.swift in Sources */,
 				2D68F1346E6A95CA60FF5B77 /* RootScopeSwitch.swift in Sources */,
 				37A3B9D3833C9F5011AB3387 /* RootScopeModels.swift in Sources */,
 				14FD8794FB6407E083829CB9 /* ColumnWidthLaw.swift in Sources */,
