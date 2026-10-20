@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Adaptive Liquid Glass (iOS 26)
 
