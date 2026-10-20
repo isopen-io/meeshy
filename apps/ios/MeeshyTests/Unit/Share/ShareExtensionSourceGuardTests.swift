@@ -162,14 +162,29 @@ final class ShareExtensionSourceGuardTests: XCTestCase {
     func test_extension_pairsTheSecurityScopedAccess() throws {
         try assertPresent(
             "startAccessingSecurityScopedResource",
-            in: "ShareViewController.swift",
+            in: "ShareItemLoader.swift",
             because: "une URL de Fichiers/iCloud n'est lisible que sous portée sécurisée"
         )
         try assertPresent(
             "stopAccessingSecurityScopedResource",
-            in: "ShareViewController.swift",
+            in: "ShareItemLoader.swift",
             because: "une portée ouverte et jamais refermée fuit une ressource du système"
         )
+    }
+
+    /// #11064 : `NSItemProvider` n'est pas `Sendable`, et Xcode 27 refuse de
+    /// l'envoyer à une tâche concurrente. Les chargements partent de
+    /// l'appelant, de façon synchrone ; seul ce qu'ils rendent traverse les
+    /// fils. Un emballage `@unchecked Sendable` ne ferait que taire le
+    /// compilateur.
+    func test_providers_neverCrossToAConcurrentTask() throws {
+        let files = try swiftSources().filter { ["ShareViewController.swift", "ShareItemLoader.swift"].contains($0.name) }
+        XCTAssertEqual(files.count, 2)
+        for file in files {
+            for needle in ["withTaskGroup", "@concurrent", "@unchecked Sendable"] {
+                XCTAssertFalse(strippingComments(file.code).contains(needle), "\(file.name) contient « \(needle) »")
+            }
+        }
     }
 
     /// Sans cet entitlement, la lecture du JWT renvoie `errSecItemNotFound`

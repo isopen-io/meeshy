@@ -72,17 +72,20 @@ const send = (
  * la garde « rien à écrire » de `story-caches.ts` s'en assure), et un échec
  * relit `STORIES_QUERY_PREFIX` en plus du Flux : la story revient au listing
  * exactement comme une carte revient au Flux.
+ *
+ * **RETIRER** (#11150) — le même geste, le MOTIF de la modération en corps
+ * (`{ reason }`) ; sans motif, aucun corps : l'auteur supprime comme avant.
  */
 const removeEverywhere = (queryClient: QueryClient, postId: string): void => {
   removeCardPost(queryClient, postId);
   removeStoryFromCaches(queryClient, postId);
 };
 
-export async function deletePost(params: { readonly postId: string; readonly deps: PostActionDeps }): Promise<PostActionOutcome> {
-  const { postId, deps } = params;
+export async function deletePost(params: { readonly postId: string; readonly deps: PostActionDeps; readonly reason?: string }): Promise<PostActionOutcome> {
+  const { postId, deps, reason } = params;
   removeEverywhere(deps.queryClient, postId);
 
-  const result = outcome(await send(deps, 'DELETE', postsEndpoints.byPostId(postId)));
+  const result = outcome(await send(deps, 'DELETE', postsEndpoints.byPostId(postId), reason === undefined ? undefined : { body: { reason } }));
   if (result === 'done') {
     /* UNE RELECTURE PENDANT LE VOL (revue-correction #6149) — une autre
        suppression refusée, un `story:viewed`, un retour au premier plan :

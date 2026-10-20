@@ -4,6 +4,7 @@ import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 
 import { GlyphSvg } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
+import { NOTIFICATIONS_GLYPHS } from '@/components/glyphs-notifications';
 import type { SoundCreditControl } from '@/components/background-sound-credit';
 import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from '@/components/viewer-chrome';
 import { ViewerCaption } from '@/components/viewer-caption';
@@ -49,6 +50,7 @@ export function StoryTopBar({
   language,
   onClose,
   onSave,
+  onRemove,
   onOptionsOpenChange,
   prism,
   soundDocument,
@@ -64,6 +66,8 @@ export function StoryTopBar({
   readonly onClose: () => void;
   /** « Enregistrer » du menu « … » — la sauvegarde du rail auteur, offerte à tout lecteur (#8823). */
   readonly onSave?: (() => void) | undefined;
+  /** « Retirer » (#11150) — la modération, sur la story d'un autre ; absent ⇒ aucune entrée. */
+  readonly onRemove?: (() => void) | undefined;
   readonly onOptionsOpenChange?: ((open: boolean) => void) | undefined;
   /** La pastille du Prisme (D-99, #7114) — entre l'heure et le menu, comme le fil et les commentaires ; absente quand rien n'est traduit. */
   readonly prism?: ReactNode;
@@ -89,7 +93,10 @@ export function StoryTopBar({
             label={translate(language, 'feed.post.more_options')}
             probe={{ 'data-story-options': '' }}
             onOpenChange={onOptionsOpenChange}
-            items={[{ key: 'save', label: translate(language, 'story.action.save'), glyph: <GlyphSvg glyph={GLYPHS.downloadSimple} size={18} />, onSelect: onSave }]}
+            items={[
+              { key: 'save', label: translate(language, 'story.action.save'), glyph: <GlyphSvg glyph={GLYPHS.downloadSimple} size={18} />, onSelect: onSave },
+              { key: 'remove', label: translate(language, 'moderation.remove.action'), glyph: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={18} />, onSelect: onRemove, destructive: true },
+            ]}
           />
         </>
       }

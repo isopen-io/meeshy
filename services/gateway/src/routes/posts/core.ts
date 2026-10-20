@@ -3,6 +3,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest, requirePublishingGrace, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
+import { NOT_DELETED } from '../../services/posts/softDelete';
+import { decideContentRemoval, MODERATION_REASON_MESSAGE, notifyContentRemoved, removedPostContentType } from '../../services/moderation/contentRemoval';
 import { withViewerPoints } from '../../services/engagement/viewerPostPoints';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
@@ -836,11 +838,33 @@ export function registerCoreRoutes(
       }
 
       const { postId } = request.params;
-      const result = await postService.deletePost(postId, authContext.registeredUser.id, {
-        actorRole: authContext.registeredUser.role,
+      const actor = authContext.registeredUser;
+      const target = await prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select: { authorId: true, type: true } });
+      if (!target) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      // #11149 — un tiers (MODERATOR+, dominant l'auteur) retire avec un motif.
+      const decision = await decideContentRemoval(prisma, { actorId: actor.id, actorRole: actor.role, authorId: target.authorId, body: request.body });
+      if (decision.kind === 'refused') {
+        return decision.status === 400
+          ? sendBadRequest(reply, MODERATION_REASON_MESSAGE, { code: decision.code })
+          : sendForbidden(reply, 'Not authorized to delete this post', { code: decision.code });
+      }
+      const result = await postService.deletePost(postId, actor.id, {
+        actorRole: actor.role,
+        ...(decision.kind === 'moderation' ? { reason: decision.reason } : {}),
       });
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      if (decision.kind === 'moderation') {
+        notifyContentRemoved({ prisma }, {
+          authorUserId: target.authorId,
+          contentType: removedPostContentType(target.type),
+          contentId: postId,
+          postId,
+          reason: decision.reason,
+        }).catch((err) => logWarn(fastify.log, '[DELETE /posts/:postId]: author notification failed', err));
       }
 
       // `deletePost` autorise « l'auteur OU un modérateur et plus » : l'acteur

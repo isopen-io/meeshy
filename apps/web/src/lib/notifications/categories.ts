@@ -146,6 +146,7 @@ const FAMILY_TYPES: Readonly<Record<FamilyCategory, readonly string[]>> = {
     'maintenance',
     'update_available',
     'AFFILIATE_SIGNUP',
+    'content_removed',
   ],
 };
 
@@ -265,7 +266,7 @@ const ACCENTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['var(--ios-warning)', FAMILY_TYPES.engagement],
   ['#E91E63', FAMILY_TYPES.calls], // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
   ['#2ECC71', ['AFFILIATE_SIGNUP']], // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
-  ['var(--ios-error-strong)', ['security_alert', 'login_new_device', 'SYSTEM_ALERT', 'password_changed', 'two_factor_enabled', 'two_factor_disabled']],
+  ['var(--ios-error-strong)', ['security_alert', 'login_new_device', 'SYSTEM_ALERT', 'password_changed', 'two_factor_enabled', 'two_factor_disabled', 'content_removed']],
   ['#08D9D6', FAMILY_TYPES.translations], // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
 ];
 

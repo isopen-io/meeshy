@@ -29,12 +29,12 @@ afterAll(async () => {
 const mounter = createActMounter();
 afterEach(() => mounter.unmountAll());
 
-const mount = (options: { readonly count?: number; readonly forEveryone?: boolean; readonly forMe?: boolean }, journal: string[] = []) =>
+const mount = (options: { readonly count?: number; readonly forEveryone?: boolean; readonly forMe?: boolean; readonly remove?: boolean }, journal: string[] = []) =>
   mounter.mount(
     <MessageDeleteDialog
       count={options.count ?? 1}
-      offer={{ forEveryone: options.forEveryone ?? true, forMe: options.forMe ?? true }}
-      onConfirm={(mode) => journal.push(mode)}
+      offer={{ forEveryone: options.forEveryone ?? true, forMe: options.forMe ?? true, remove: options.remove ?? false }}
+      onConfirm={(mode, reason) => journal.push(reason === undefined ? mode : `${mode}:${reason}`)}
       onDismiss={() => journal.push('dismiss')}
     />,
   );
@@ -83,5 +83,23 @@ describe('MessageDeleteDialog — ce qu’il remet', () => {
     const host = await mount({}, journal);
     await mounter.click(host.querySelector('[data-message-delete="cancel"]'));
     expect(journal).toEqual(['dismiss']);
+  });
+});
+
+describe('MessageDeleteDialog — retirer le message d’un autre (#11150)', () => {
+  test('« Retirer » n’existe que si la règle l’offre, avant « pour moi »', async () => {
+    expect(choices(await mount({ forEveryone: false }))).toEqual(['me', 'cancel']);
+    expect(choices(await mount({ forEveryone: false, remove: true }))).toEqual(['remove', 'me', 'cancel']);
+  });
+
+  test('« Retirer » demande le motif, puis remet `remove` avec le motif nettoyé', async () => {
+    const journal: string[] = [];
+    const host = await mount({ forEveryone: false, remove: true }, journal);
+    await mounter.click(host.querySelector('[data-message-delete="remove"]'));
+    expect(journal).toEqual([]);
+    expect(host.ownerDocument.querySelector('[data-content-removal-reason]')).not.toBeNull();
+    mounter.type(host.ownerDocument, '[data-content-removal-reason]', ' Propos haineux ');
+    await mounter.click(host.ownerDocument.querySelector('[data-content-removal="confirm"]'));
+    expect(journal).toEqual(['remove:Propos haineux']);
   });
 });

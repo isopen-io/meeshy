@@ -40,6 +40,7 @@ import ptDownload from './catalog-pt-download';
 import ptPhonePrompt from './catalog-pt-phone-prompt';
 import ptUserProfile from './catalog-pt-user-profile';
 import ptContentRefused from './catalog-pt-content-refused';
+import ptContentRemoval from './catalog-pt-content-removal';
 import ptPublicEntry from './catalog-pt-public-entry';
 import ptThreadSearch from './catalog-pt-thread-search';
 
@@ -1076,6 +1077,7 @@ const pt = {
   ...ptContactDiscovery,
   ...ptUserProfile,
   ...ptContentRefused,
+  ...ptContentRemoval,
   ...ptPublicEntry,
   ...ptThreadSearch,
 } satisfies InterfaceCatalog;
