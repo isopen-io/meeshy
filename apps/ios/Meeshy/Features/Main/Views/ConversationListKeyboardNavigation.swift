@@ -97,6 +97,8 @@ struct CursorRevealAnchor: UIViewRepresentable {
     func updateUIView(_ uiView: RevealView, context: Context) {}
 
     final class RevealView: UIView {
+        nonisolated deinit {}
+
         override func didMoveToWindow() {
             super.didMoveToWindow()
             guard window != nil else { return }
