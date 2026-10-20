@@ -147,8 +147,13 @@ final class StoryGroupCubeTests: XCTestCase {
     func test_sharedEdge_staysInTheScreenPlane() {
         for progress in [0.1, 0.3, 0.5, 0.7, 0.9] as [CGFloat] {
             let current = -progress * screen.width
-            XCTAssertEqual(point(screen.width, 0, of: current).y, 0, accuracy: 0.01)
-            XCTAssertEqual(point(screen.width, screen.height, of: current).y, screen.height, accuracy: 0.01)
+            // L'arête se mesure sur la face VISIBLE : en fin de course la face
+            // sortante est déjà de dos, donc masquée.
+            let (offset, edgeX) = StoryGroupCube.face(offsetX: current, size: screen).isFacingViewer
+                ? (current, screen.width)
+                : (current + screen.width, CGFloat(0))
+            XCTAssertEqual(point(edgeX, 0, of: offset).y, 0, accuracy: 0.01, "à \(progress)")
+            XCTAssertEqual(point(edgeX, screen.height, of: offset).y, screen.height, accuracy: 0.01, "à \(progress)")
         }
     }
 
@@ -196,8 +201,13 @@ final class StoryGroupCubeTests: XCTestCase {
         for step in -110...110 {
             let offset = CGFloat(step) / 100 * w
             for face in [offset, offset + w, offset - w] {
-                let transform = ProjectionTransform(StoryGroupCube.face(offsetX: face, size: screen).transform)
-                XCTAssertTrue(transform.isInvertible, "offset \(face)")
+                let m = StoryGroupCube.face(offsetX: face, size: screen).transform
+                // La projection 2D que SwiftUI tire du `CATransform3D` : lignes et
+                // colonnes 1, 2, 4. Un déterminant nul est la matrice singulière de #10803.
+                let determinant = m.m11 * (m.m22 * m.m44 - m.m24 * m.m42)
+                    - m.m12 * (m.m21 * m.m44 - m.m24 * m.m41)
+                    + m.m14 * (m.m21 * m.m42 - m.m22 * m.m41)
+                XCTAssertGreaterThan(abs(determinant), 1e-9, "offset \(face)")
             }
         }
     }
