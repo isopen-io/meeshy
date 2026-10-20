@@ -10,7 +10,7 @@ public nonisolated enum ComposerControlMetrics {
     /// avant correction, faites sur le code : pastilles de header Ø36, capsule
     /// d'audience ~27 pt, poignée de restauration du chrome 37 pt (5 + 16 + 16),
     /// reset de zoom 30 pt, chips de couche ~19 pt.
-    public static let hitDiameter: CGFloat = 44
+    public static let hitDiameter: CGFloat = MeeshyControlSize.tapTarget
 
     /// Marge transparente ajoutée de CHAQUE côté d'une pastille de 36.
     public static let hitInset: CGFloat = (hitDiameter - visualDiameter) / 2

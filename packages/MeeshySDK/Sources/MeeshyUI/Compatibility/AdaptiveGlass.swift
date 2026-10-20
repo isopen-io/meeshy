@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Adaptive Liquid Glass (iOS 26)
 
@@ -93,6 +94,8 @@ private struct AdaptiveGlassModifier<S: Shape>: ViewModifier {
     let tint: Color?
     let interactive: Bool
 
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     func body(content: Content) -> some View {
         if #available(iOS 26.0, *) {
             content.glassEffect(makeMeeshyGlass(tint: tint, interactive: interactive), in: shape)
@@ -103,12 +106,34 @@ private struct AdaptiveGlassModifier<S: Shape>: ViewModifier {
 
     @ViewBuilder
     private var regularFallback: some View {
+        switch MeeshySurface.translucent.resolved(reduceTransparency: reduceTransparency) {
+        case .translucent:
+            translucentFallback
+        case .opaque:
+            opaqueFallback
+        }
+    }
+
+    @ViewBuilder
+    private var translucentFallback: some View {
         if let tint {
             shape.fill(.ultraThinMaterial)
                 .overlay(shape.fill(tint.opacity(0.22)))
                 .overlay(shape.stroke(tint.opacity(0.5), lineWidth: 1))
         } else {
             shape.fill(.ultraThinMaterial)
+                .overlay(shape.stroke(Color.white.opacity(0.18), lineWidth: 1))
+        }
+    }
+
+    @ViewBuilder
+    private var opaqueFallback: some View {
+        if let tint {
+            shape.fill(Color(uiColor: .secondarySystemBackground))
+                .overlay(shape.fill(tint.opacity(0.22)))
+                .overlay(shape.stroke(tint.opacity(0.5), lineWidth: 1))
+        } else {
+            shape.fill(Color(uiColor: .secondarySystemBackground))
                 .overlay(shape.stroke(Color.white.opacity(0.18), lineWidth: 1))
         }
     }
@@ -141,8 +166,10 @@ private struct AdaptiveGlassProminentModifier<S: Shape>: ViewModifier {
 }
 
 private struct AdaptiveSheetGlassBackgroundModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     func body(content: Content) -> some View {
-        if #available(iOS 16.4, *) {
+        if #available(iOS 16.4, *), MeeshySurface.translucent.resolved(reduceTransparency: reduceTransparency) == .translucent {
             content.presentationBackground(.ultraThinMaterial)
         } else {
             content
