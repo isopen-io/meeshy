@@ -44,12 +44,18 @@ public struct PlayerBannerView: View {
         public let mission: String?
         /// « S1 » (la saison).
         public let season: String?
+        /// « Conteur III » (#11125).
+        public let rank: String?
+        /// « encore 1 200 vers Conteur II », ou « Gloire 990 000 » au sommet.
+        public let gloryMissing: String?
         /// La phrase de lecteur d'écran de CHAQUE pièce quand elles sont des boutons (`onSelect`).
         public let pieceLabels: [GamePlayerBanner.Piece: String]
 
         public init(points: String, missing: String? = nil, meeshes: String? = nil, place: String? = nil, flameDays: String? = nil,
-                    trophies: String? = nil, mission: String? = nil, season: String? = nil,
-                    pieceLabels: [GamePlayerBanner.Piece: String] = [:]) {
+                    trophies: String? = nil, mission: String? = nil, season: String? = nil, rank: String? = nil,
+                    gloryMissing: String? = nil, pieceLabels: [GamePlayerBanner.Piece: String] = [:]) {
+            self.rank = rank
+            self.gloryMissing = gloryMissing
             self.points = points
             self.missing = missing
             self.meeshes = meeshes
@@ -96,11 +102,13 @@ public struct PlayerBannerView: View {
     /// La cible tactile minimale d'une pièce.
     public static let pieceTarget: CGFloat = 44
 
-    /// L'ANGLE du bandeau (#11125, miroir du web `06a2061754`) : les Meeshes en haut, le rang et la mission dessous,
-    /// au bout de la jauge. Deux lignes de 24 pt — compromis demandé par le porteur pour que le bandeau tienne en
-    /// 48 pt, ces trois pièces sortent de la cible de 44.
-    public static let cornerPieces: [GamePlayerBanner.Piece] = [.meesh, .rank, .mission]
+    /// Le MILIEU du bandeau (#11125, décision porteur 2026-10-20) : la Flamme et les Meeshes en haut, la mission et
+    /// la ligue dessous, entre les étincelles (à gauche) et la Gloire (à droite). Deux lignes de 24 pt — compromis
+    /// demandé par le porteur pour que le bandeau tienne en 48 pt, ces pièces sortent de la cible de 44.
+    public static let middlePieces: [GamePlayerBanner.Piece] = [.flame, .meesh, .mission, .league]
     public static let cornerTarget: CGFloat = 24
+    /// Ce que la rangée compacte montre ; trophées et saison n'y tiennent pas et restent à la disposition empilée.
+    public static let compactPieces: [GamePlayerBanner.Piece] = [.level, .sparks, .flame, .meesh, .mission, .league, .rank]
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -179,10 +187,10 @@ public struct PlayerBannerView: View {
 
     // MARK: Le bandeau compact (#11125)
 
-    /// UNE rangée : l'anneau, la jauge qui prend la place restante, la ligue, la Flamme, les trophées et la saison,
-    /// puis l'ANGLE — les Meeshes en haut, le rang et la mission dessous. Aucune pièce ne passe sous la jauge.
+    /// UNE rangée : à gauche l'anneau et la jauge des étincelles, au milieu la Flamme, les Meeshes, la mission et la
+    /// ligue, à droite le rang et sa jauge de Gloire. Aucune pièce ne passe sous les jauges.
     private var compactRow: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             if model.showsLevel { select(.level) { ring(side: compactRingSide) } }
             if model.showsScore {
                 select(.sparks) { model.showsLevel ? AnyView(gauge) : AnyView(scoreOnly) }
@@ -190,36 +198,73 @@ public struct PlayerBannerView: View {
             } else {
                 Spacer(minLength: 0)
             }
-            ForEach(model.pieces.filter { !Self.cornerPieces.contains($0) && $0 != .level && $0 != .sparks }, id: \.self) { kind in
-                select(kind, minWidth: Self.cornerTarget) { pieceContent(kind) }
+            middle
+            if let rank = model.rank {
+                select(.rank) { gloryGauge(rank) }
+                    .frame(minWidth: 56, maxWidth: .infinity, alignment: .leading)
             }
-            corner
         }
     }
 
     @ViewBuilder
-    private var corner: some View {
-        let shown = model.pieces.filter(Self.cornerPieces.contains)
+    private var middle: some View {
+        let shown = model.pieces.filter(Self.middlePieces.contains)
         if !shown.isEmpty {
-            VStack(alignment: .trailing, spacing: 0) {
-                if shown.contains(.meesh) {
-                    select(.meesh, target: Self.cornerTarget) {
-                        piece(text: texts.meeshes) { MeeshCoinView(face: .obverse, edition: .silver, figures: nil).frame(width: 20, height: 20) }
-                    }
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 4) {
+                    ForEach(shown.filter { $0 == .flame || $0 == .meesh }, id: \.self) { middlePiece($0) }
                 }
-                HStack(spacing: 6) {
-                    if let rank = model.rank {
-                        select(.rank, target: Self.cornerTarget) {
-                            RankBlasonView(rank: rank.rank, division5: rank.division, mythic: rank.mythic, figures: nil).frame(height: 22)
-                        }
-                    }
-                    if shown.contains(.mission) {
-                        select(.mission, target: Self.cornerTarget) { piece(text: texts.mission) { symbol("target", side: 16) } }
-                    }
+                HStack(spacing: 4) {
+                    ForEach(shown.filter { $0 == .mission || $0 == .league }, id: \.self) { middlePiece($0) }
                 }
             }
             .fixedSize()
         }
+    }
+
+    @ViewBuilder
+    private func middlePiece(_ kind: GamePlayerBanner.Piece) -> some View {
+        select(kind, target: Self.cornerTarget) {
+            switch kind {
+            case .flame:
+                if let form = model.flame?.form { piece(text: texts.flameDays) { FlameView(form: form, flickers: false).frame(width: 18, height: 18) } }
+            case .meesh:
+                piece(text: texts.meeshes) { MeeshCoinView(face: .obverse, edition: .silver, figures: nil).frame(width: 18, height: 18) }
+            case .mission:
+                piece(text: texts.mission) { symbol("target", side: 16) }
+            case .league:
+                if let league = model.league { piece(text: texts.place) { LeagueGemView(league: league.league).frame(width: 18, height: 18) } }
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    /// Le rang au-dessus de sa jauge de Gloire, ce qui manque au rang suivant dessous — la jumelle de la jauge des étincelles.
+    private func gloryGauge(_ rank: GamePlayerBanner.Rank) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                RankBlasonView(rank: rank.rank, division5: rank.division, mythic: rank.mythic, figures: nil).frame(height: 18)
+                if let name = texts.rank {
+                    Text(name)
+                        .font(.system(.footnote, design: .rounded).weight(.bold))
+                        .foregroundColor(palette.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            GaugeBar(progress: rank.progress, tint: AnyShapeStyle(MeeshyColors.indigo500), rail: palette.ink.opacity(0.12), animated: !reduceMotion)
+                .frame(height: 6)
+            if let missing = texts.gloryMissing {
+                Text(missing)
+                    .font(.caption2.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundColor(Self.detailColor(palette: palette, overBackdrop: hasBackdrop))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .frame(minWidth: 44, maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: Les pièces-boutons (#10846)
@@ -398,7 +443,7 @@ public struct PlayerBannerView: View {
                     .monospacedDigit()
                     .foregroundColor(Self.detailColor(palette: palette, overBackdrop: hasBackdrop))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.65)
             }
         }
         .frame(minWidth: 44, maxWidth: .infinity, alignment: .leading)

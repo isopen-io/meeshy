@@ -84,6 +84,16 @@ extension GameText {
         String(localized: "game2.banner.missing", defaultValue: "encore \(points) vers le \(level)", bundle: .main)
     }
 
+    /// « encore 466 vers Voix I » — ce qui manque au rang suivant (#11125).
+    static func bannerGloryMissing(points: String, rank: String) -> String {
+        String(localized: "game2.banner.glory.missing", defaultValue: "encore \(points) vers \(rank)", bundle: .main)
+    }
+
+    /// « Gloire 990 000 » — au sommet, le total remplace ce qui manque.
+    static func bannerGloryTotal(points: String) -> String {
+        String(localized: "game.rank.glory", defaultValue: "Gloire \(points)", bundle: .main)
+    }
+
     static var bannerSeparator: String { String(localized: "game2.banner.separator", defaultValue: ", ", bundle: .main) }
 
     static func durationDaysHours(days: String, hours: String) -> String {

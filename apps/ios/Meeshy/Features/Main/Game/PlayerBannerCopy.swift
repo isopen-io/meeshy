@@ -26,8 +26,19 @@ enum PlayerBannerCopy {
             trophies: banner.trophies.map { GameCopy.formatCount($0) },
             mission: banner.dailyMission.map { "\(GameCopy.formatCount($0.done))/\(GameCopy.formatCount($0.total))" },
             season: banner.season.map { seasonShort($0.number) },
+            rank: banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) },
+            gloryMissing: banner.rank.map(gloryMissing),
             pieceLabels: Dictionary(uniqueKeysWithValues: banner.pieces.map { ($0, pieceLabel($0, banner)) })
         )
+    }
+
+    /// « encore 466 vers Voix I », ou « Gloire 990 000 » quand il n'y a plus de marche.
+    static func gloryMissing(_ rank: GamePlayerBanner.Rank) -> String {
+        guard let next = rank.next, let missing = rank.gloryMissing else {
+            return GameText.bannerGloryTotal(points: GameCopy.formatCount(rank.glory))
+        }
+        return GameText.bannerGloryMissing(points: GameCopy.formatCount(missing),
+                                           rank: GameCopy.rankLabel(next.rank, division5: next.shownDivision))
     }
 
     /// « S1 ».
@@ -49,7 +60,9 @@ enum PlayerBannerCopy {
         case .meesh:
             return GameCopy.meeshes(banner.meeshes ?? 0)
         case .rank:
-            return banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) } ?? ""
+            return banner.rank.map {
+                [GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic), gloryMissing($0)].joined(separator: GameText.bannerSeparator)
+            } ?? ""
         case .league:
             return banner.league.map {
                 GameText.bannerLeague(league: GameText.leagueName($0.league), place: GameText.bannerPlace(count: $0.place))
