@@ -57,25 +57,4 @@ extension ConversationMediaGalleryView {
         }
         return String(localized: "gallery.image", defaultValue: "Image", bundle: .main)
     }
-
-    /// Résumé VoiceOver de la rangée métadonnées (dimensions + poids), joint de
-    /// façon locale-aware. Chaîne vide si aucune métadonnée n'est disponible.
-    func mediaMetadataAccessibilityLabel(_ att: MessageAttachment) -> String {
-        var parts: [String] = []
-        if let w = att.width, let h = att.height, w > 0, h > 0 {
-            parts.append(String(
-                format: String(localized: "gallery.dimensions", defaultValue: "%1$d par %2$d", bundle: .main),
-                w, h
-            ))
-        }
-        if att.fileSize > 0 {
-            parts.append(att.fileSizeFormatted)
-        }
-        // #9577 — la durée fait partie de la ligne ; VoiceOver en lit le TOTAL,
-        // pas le décompte (un libellé qui change chaque seconde se relirait).
-        if MediaGalleryStage.carriesDuration([att]), let duree = att.durationFormatted {
-            parts.append(duree)
-        }
-        return ListFormatter.localizedString(byJoining: parts)
-    }
 }
