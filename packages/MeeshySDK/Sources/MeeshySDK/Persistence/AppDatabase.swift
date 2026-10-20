@@ -260,7 +260,7 @@ public final class AppDatabase: @unchecked Sendable {
 
     static let fallbackOpeners: [InMemoryOpener] = [
         { try DatabaseQueue() },
-        { try DatabaseQueue(path: temporaryFallbackPath()) },
+        { try DatabaseQueue(path: AppDatabase.temporaryFallbackPath()) },
     ]
 
     private static func temporaryFallbackPath() -> String {

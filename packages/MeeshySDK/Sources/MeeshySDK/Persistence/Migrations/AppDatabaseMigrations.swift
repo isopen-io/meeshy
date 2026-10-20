@@ -2,14 +2,18 @@ import Foundation
 import GRDB
 
 enum AppDatabaseMigrations {
-    static let all: [any DatabaseMigration] = [
+    static let all: [any DatabaseMigration] = beforeSearchIndex + SearchIndexMigrations.all + afterSearchIndex
+
+    private static let beforeSearchIndex: [any DatabaseMigration] = [
         V1CreateTablesMigration(),
         V2ParticipantCacheMigration(),
         V3UnifiedCacheMigration(),
         V4DropLegacyTablesMigration(),
         V5TranslationCacheMigration(),
         V6TusUploadCheckpointMigration(),
-    ] + SearchIndexMigrations.all + [
+    ]
+
+    private static let afterSearchIndex: [any DatabaseMigration] = [
         V7CacheEntriesItemIdIndexMigration(),
         V8CacheEntriesContentHashMigration(),
         V9CacheEntriesPositionMigration(),

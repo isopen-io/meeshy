@@ -69,12 +69,12 @@ final class DatabaseMigrationTableTests: XCTestCase {
 
     private func schemaFingerprint(_ queue: DatabaseQueue) throws -> [String] {
         try queue.read { db in
-            try Row.fetchAll(db, sql: """
-                SELECT type, name, tbl_name, sql FROM sqlite_master
+            try String.fetchAll(db, sql: """
+                SELECT type || '|' || name || '|' || tbl_name || '|' || COALESCE(sql, '')
+                FROM sqlite_master
                 WHERE name NOT LIKE 'sqlite_%' AND name != 'grdb_migrations'
                 ORDER BY type, name, tbl_name
                 """)
-                .map { "\($0["type"] ?? "")|\($0["name"] ?? "")|\($0["tbl_name"] ?? "")|\($0["sql"] ?? "")" }
         }
     }
 
