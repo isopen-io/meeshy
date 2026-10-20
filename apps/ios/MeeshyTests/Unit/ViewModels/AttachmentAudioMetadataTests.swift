@@ -79,6 +79,28 @@ final class AttachmentAudioMetadataTests: XCTestCase {
         XCTAssertEqual(state, AttachmentAudioState())
     }
 
+    func test_rekeyed_copiesTheLocalMetadataUnderTheServerId_withoutOverwritingTheServerOnes() {
+        var state = AttachmentAudioState()
+        state.transcriptions["cid_1"] = makeTranscription(attachmentId: "a1", text: "local")
+        state.translatedAudios["cid_1"] = [makeAudio(attachmentId: "a1", language: "en")]
+        state.transcriptions["srv_2"] = makeTranscription(attachmentId: "a2", text: "serveur")
+        state.transcriptions["cid_2"] = makeTranscription(attachmentId: "a2", text: "local-2")
+
+        let next = AttachmentAudioMetadata.rekeyed(state, mapping: ["cid_1": "srv_1", "cid_2": "srv_2"])
+
+        XCTAssertEqual(next.transcriptions["srv_1"]?.text, "local")
+        XCTAssertEqual(next.translatedAudios["srv_1"]?.count, 1)
+        XCTAssertEqual(next.transcriptions["srv_2"]?.text, "serveur")
+        XCTAssertEqual(next.transcriptions["cid_1"]?.text, "local")
+    }
+
+    func test_rekeyed_ignoresIdentityMappings() {
+        var state = AttachmentAudioState()
+        state.transcriptions["srv_1"] = makeTranscription(attachmentId: "a1", text: "t")
+
+        XCTAssertEqual(AttachmentAudioMetadata.rekeyed(state, mapping: ["srv_1": "srv_1"]), state)
+    }
+
     func test_undecodableAttachmentsJson_isSkipped() {
         let record = MessageRecord.audioMetadataFixture(localId: "l1", serverId: nil, attachmentsJson: Data("pas du json".utf8))
 
