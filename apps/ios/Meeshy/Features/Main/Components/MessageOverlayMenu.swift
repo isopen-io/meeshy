@@ -9,9 +9,12 @@ import MeeshyUI
 struct MessageOverlayMenu: View {
     let message: Message
     let contactColor: String
-    /// Le cadre de la cellule pressée, en coordonnées de fenêtre (#11208) :
+    /// Le cadre de la cellule pressée, en coordonnées de FENÊTRE (#11208) :
     /// l'aperçu s'ouvre À SA PLACE. `.zero` quand la cellule n'est pas
     /// matérialisée — l'aperçu se pose alors au centre, même loi de placement.
+    /// Le corps ne le lit jamais tel quel : il le ramène d'abord dans son
+    /// propre repère (`sourceFrame(windowFrame:containerOrigin:)`) — sur iPad,
+    /// la conversation vit à droite de la colonne de gauche.
     let messageBubbleFrame: CGRect
     // `focalPreviewImage` a vécu ici : en mode Focal, l'aperçu élevé rendait
     // les PIXELS de la cellule vivante, capturés au geste. La capture, bornée
@@ -106,14 +109,25 @@ struct MessageOverlayMenu: View {
     @State private var committedReveal: CGFloat?
     /// Haptic d'armement émis une seule fois par geste ; réarmé au release.
     @State private var dragHapticArmed = false
+    /// La rangée plate de l'aperçu, construite une fois par jeu d'entrées : le
+    /// corps se réévalue à chaque image du glissement (#11208).
+    @State private var flatRowMemo = MessageOverlayFlatRowMemo()
 
     /// La durée du fondu qui remplace le ressort sous « Réduire les animations ».
     static let reducedMotionFadeDuration: TimeInterval = 0.18
-    /// La bande que la cellule porte au-dessus de sa bulle dans la liste
-    /// (`.padding(.vertical, 8)` du row) : le cadre source l'englobe, l'aperçu
-    /// rendu ne la porte pas. La bulle élevée commence donc 8 pt plus bas que
-    /// le haut du cadre.
-    private static let bubbleRowInset: CGFloat = 8
+
+    /// **Le cadre de la cellule, ramené de la fenêtre au repère de l'overlay**
+    /// (#11208). La cellule le donne en coordonnées de fenêtre
+    /// (`cellFrameInWindow`) ; l'overlay pose son aperçu en `.position` dans
+    /// SON repère. Sur iPad, la conversation vit à droite de la colonne de
+    /// gauche : sans la conversion, la bulle s'ouvrait décalée de la largeur de
+    /// cette colonne, coupée au bord. Le cadre de la cellule commence au haut
+    /// de sa bulle (la cellule n'a aucune marge verticale) : aucun retrait.
+    /// `.zero` (aucune cellule) reste `.zero`.
+    static func sourceFrame(windowFrame: CGRect, containerOrigin: CGPoint) -> CGRect {
+        guard windowFrame != .zero else { return .zero }
+        return windowFrame.offsetBy(dx: -containerOrigin.x, dy: -containerOrigin.y)
+    }
 
     // Expanded emoji set — far more than fits in the viewport, so the
     // quick reaction strip becomes horizontally scrollable. The first 6
@@ -230,14 +244,14 @@ struct MessageOverlayMenu: View {
 
             // ── La face de l'aperçu : la cellule du fil, dans son mode (#11208) ──
             let kind = MessageOverlayPreviewKind.resolve(readingMode: threadLanguage.readingMode)
-            let hasSourceFrame = messageBubbleFrame != .zero
+            let cellFrame = Self.sourceFrame(windowFrame: messageBubbleFrame, containerOrigin: geometry.frame(in: .global).origin)
+            let hasSourceFrame = cellFrame != .zero
             // La rangée plate se pose sur toute la largeur (ses 16 pt de marge
             // sont dans l'aperçu) ; la bulle, sur la largeur de sa cellule.
-            let previewW: CGFloat = kind == .bubble && messageBubbleFrame.width > 0 ? messageBubbleFrame.width : containerW
-            let previewH: CGFloat = max(1, measuredPreviewHeight ?? messageBubbleFrame.height)
-            let rowInset: CGFloat = kind == .bubble && hasSourceFrame ? Self.bubbleRowInset : 0
+            let previewW: CGFloat = kind == .bubble && cellFrame.width > 0 ? cellFrame.width : containerW
+            let previewH: CGFloat = max(1, measuredPreviewHeight ?? cellFrame.height)
             let sourceRect = hasSourceFrame
-                ? messageBubbleFrame
+                ? cellFrame
                 : CGRect(x: (containerW - previewW) / 2, y: (screenH - previewH) / 2, width: previewW, height: previewH)
 
             // ── Géométrie native-lean : barre réactions (haut) + aperçu + liste verticale (bas) ──
@@ -267,12 +281,12 @@ struct MessageOverlayMenu: View {
                 : (message.isMe ? sourceRect.maxX - nlBubbleW / 2 : sourceRect.minX + nlBubbleW / 2)
             // Le cluster part de la cellule et remonte quand elle est trop
             // basse : c'est lui qui bouge, jamais la liste (#11208).
-            let nlDesiredTop = sourceRect.minY + rowInset - nlEmojiBarHeight - nlGap
+            let nlDesiredTop = sourceRect.minY - nlEmojiBarHeight - nlGap
             let nlClusterTop = max(nlAvailTop, min(nlDesiredTop, nlAvailBottom - nlClusterH))
             let nlEmojiY = nlClusterTop + nlEmojiBarHeight / 2
             let nlBubbleTop = nlClusterTop + nlEmojiBarHeight + nlGap
             let nlBubbleMidY = nlBubbleTop + nlBubbleH / 2
-            let nlSourceMidY = sourceRect.minY + rowInset + nlBubbleH / 2
+            let nlSourceMidY = sourceRect.minY + nlBubbleH / 2
             let nlMenuY = nlBubbleTop + nlBubbleH + nlMenuGap + nlMenuHeight / 2
             let nlMenuX = max(nlSidePadding + nlMenuWidth / 2, min(containerW - nlSidePadding - nlMenuWidth / 2, nlAnchorX))
             let nlEmojiX = max(nlSidePadding + nlEmojiWidth / 2, min(containerW - nlSidePadding - nlEmojiWidth / 2, nlAnchorX))
@@ -322,9 +336,9 @@ struct MessageOverlayMenu: View {
                 // mode de lecture, avec la peau et la largeur de colonne que
                 // la liste remet à la cellule. Mesurée à sa largeur, puis
                 // réduite d'un `.scaleEffect` uniforme seulement si elle ne
-                // tient pas dans la fenêtre. Gate Equatable (H3) : pendant le
-                // drag 60 fps (`clusterDragOffset`) le body du GeometryReader
-                // se ré-évalue ; les entrées de l'aperçu, elles, ne bougent pas.
+                // tient pas dans la fenêtre. Gate Equatable (H3) + mémoire de
+                // la rangée plate : le drag 60 fps ne reconstruit rien. Une
+                // image de la cellule, pas un lecteur — rien ne s'y lit (#11339).
                 MessageOverlayCellPreview(
                     face: previewFace(kind: kind, containerWidth: containerW),
                     message: message,
@@ -396,21 +410,35 @@ struct MessageOverlayMenu: View {
         case .bubble:
             return .bubble(previewBubble)
         case .flatRow:
-            return .flatRow(previewRow(availableWidth: max(0, containerWidth - 2 * MessageOverlayCellPreview.flatRowMargin)))
+            let width = max(0, containerWidth - 2 * MessageOverlayCellPreview.flatRowMargin)
+            return .flatRow(flatRowMemo.row(for: flatRowKey(availableWidth: width)) { previewRow(availableWidth: width) })
         }
+    }
+
+    /// Ce que la rangée plate MONTRE — sa construction ne se rejoue que si
+    /// l'une de ces valeurs a changé, jamais parce que le doigt a bougé.
+    private func flatRowKey(availableWidth: CGFloat) -> MessageOverlayFlatRowMemo.Key {
+        MessageOverlayFlatRowMemo.Key(
+            messageId: message.id, updatedAt: message.updatedAt, content: message.content,
+            effects: message.effects.flags, reactionCount: message.reactions.count,
+            translations: textTranslations, served: preferredTranslation, selection: threadLanguage.selection,
+            transcription: transcription, translatedAudios: translatedAudios, readingMode: threadLanguage.readingMode,
+            senderStoryRing: threadLanguage.senderStoryRing, senderMoodEmoji: threadLanguage.senderMoodEmoji,
+            isDark: isDark, isRightToLeft: layoutDirection == .rightToLeft, availableWidth: availableWidth)
     }
 
     /// La rangée plate que le fil montre pour ce message, avec les entrées de
     /// sa cellule : la traduction que le fil sert (override compris), le
-    /// drapeau basculé, la piste audio du Prisme.
+    /// drapeau basculé, la piste audio du Prisme, l'anneau et l'humeur de
+    /// l'auteur.
     private func previewRow(availableWidth: CGFloat) -> FocalRowInput {
         FocalRowInput.preview(
             message: message,
             translations: textTranslations,
+            servedTranslation: preferredTranslation,
             accentHex: contactColor,
             density: MessageOverlayPreviewKind.density(for: threadLanguage.readingMode),
             context: FocalRowInput.PreviewContext(
-                chosenTranslation: .some(preferredTranslation),
                 selection: threadLanguage.selection,
                 translatedAudios: translatedAudios,
                 preferredAudioLangCode: AudioTrackLanguageResolver.resolve(
@@ -422,6 +450,9 @@ struct MessageOverlayMenu: View {
                 mentionDisplayNames: mentionDisplayNames,
                 currentUserId: currentUserId,
                 senderPresence: PresenceManager.shared.presenceState(forSenderOf: message),
+                senderStoryRing: threadLanguage.senderStoryRing,
+                senderMoodEmoji: threadLanguage.senderMoodEmoji,
+                recipientCount: threadLanguage.recipientCount,
                 isDark: isDark,
                 isDirect: isDirect,
                 isRightToLeft: layoutDirection == .rightToLeft,
@@ -613,6 +644,12 @@ extension MessageOverlayMenu {
         var servedAudioTracks: [String: ServedAudioTrack] = [:]
         var onSetActiveDisplayLanguage: ((String?) -> Void)? = nil
         var onSetSecondaryLanguage: ((String?) -> Void)? = nil
+        /// Ce que la cellule pose AUTOUR du message (#11208) — l'anneau de story
+        /// et l'humeur de l'auteur, le dénominateur des accusés : mêmes
+        /// sources que `MessageCellInputs`, pour que l'aperçu ne les perde pas.
+        var senderStoryRing: StoryRingState = .none
+        var senderMoodEmoji: String? = nil
+        var recipientCount: Int = 1
 
         /// Le fil se lit en rangées plates (Focal, Script) : sa bande de drapeaux
         /// porte aussi la langue affichée (`FocalRow.focusFlagCodes`, #9838).
@@ -623,7 +660,7 @@ extension MessageOverlayMenu {
     /// (`MessageListViewController`) : la face affichée ET la piste jouée
     /// suivent une bascule faite dans le fil, pas le seul Prisme (#9259).
     var previewBubble: ThemedMessageBubble {
-        ThemedMessageBubble(
+        var bubble = ThemedMessageBubble(
             message: message,
             contactColor: contactColor,
             isDirect: isDirect,
@@ -648,6 +685,10 @@ extension MessageOverlayMenu {
             onSetActiveDisplayLanguage: threadLanguage.onSetActiveDisplayLanguage,
             onSetSecondaryLanguage: threadLanguage.onSetSecondaryLanguage
         )
+        bubble.recipientCount = threadLanguage.recipientCount
+        bubble.senderMoodEmoji = threadLanguage.senderMoodEmoji
+        bubble.senderStoryRingState = threadLanguage.senderStoryRing
+        return bubble
     }
 }
 

@@ -77,7 +77,9 @@ extension ConversationView {
     }
 
     /// Ce que le fil sert pour `message` — le drapeau de sa cellule et les
-    /// pistes qu'il élit, mêmes écrivains que la cellule (#9259).
+    /// pistes qu'il élit, mêmes écrivains que la cellule (#9259) — et ce que la
+    /// cellule pose autour de lui : anneau de story, humeur de l'auteur,
+    /// dénominateur des accusés, mêmes sources que `messageCellInputs` (#11208).
     func overlayThreadLanguage(for message: Message) -> MessageOverlayMenu.ThreadLanguage {
         let messageId = message.id
         return MessageOverlayMenu.ThreadLanguage(
@@ -85,7 +87,14 @@ extension ConversationView {
             readingMode: readingModeController.mode,
             servedAudioTracks: viewModel.servedAudioTracks(of: message),
             onSetActiveDisplayLanguage: { viewModel.setBubbleActiveDisplayLanguage($0, for: messageId) },
-            onSetSecondaryLanguage: { viewModel.setBubbleSecondaryLanguage($0, for: messageId) }
+            onSetSecondaryLanguage: { viewModel.setBubbleSecondaryLanguage($0, for: messageId) },
+            senderStoryRing: message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId),
+            senderMoodEmoji: statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,
+            recipientCount: MessageCellInputs.recipientCount(
+                isDirect: isDirect,
+                serverRecipients: message.recipientCount,
+                memberCount: viewModel.currentConversation?.memberCount
+            )
         )
     }
 }

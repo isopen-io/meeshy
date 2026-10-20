@@ -340,15 +340,9 @@ struct FocalRowInput: Equatable {
 
 extension FocalRowInput {
 
-    /// Ce que l'aperçu reçoit du fil, au-delà du message et de ses traductions.
+    /// Ce que l'aperçu reçoit du fil, au-delà du message, de ses traductions et
+    /// de la traduction servie — ce que la cellule reçoit de `MessageCellInputs`.
     struct PreviewContext {
-        /// Le prisme du lecteur (`ConversationLanguagePreferences.resolved`),
-        /// descendu quand le fil n'a rien résolu pour ce message.
-        var readerPrism: [String] = []
-        /// La traduction que le fil sert DÉJÀ — `preferredTranslation(for:)`,
-        /// override manuel compris. `.some(nil)` : l'original, choisi ;
-        /// `nil` : rien de résolu, la fabrique descend `readerPrism`.
-        var chosenTranslation: MessageTranslation?? = nil
         var selection: ConversationViewModel.BubbleLanguageSelection? = nil
         var translatedAudios: [MessageTranslatedAudio] = []
         var preferredAudioLangCode: String? = nil
@@ -357,6 +351,9 @@ extension FocalRowInput {
         var mentionDisplayNames: [String: String] = [:]
         var currentUserId: String = ""
         var senderPresence: PresenceState = .offline
+        var senderStoryRing: StoryRingState = .none
+        var senderMoodEmoji: String? = nil
+        var recipientCount: Int = 1
         var isDark: Bool = false
         var isDirect: Bool = false
         var isRightToLeft: Bool = false
@@ -371,14 +368,20 @@ extension FocalRowInput {
     /// le chrome (carte, pastille soulevée) déborde : c'est ce débordement que
     /// la capture de la cellule tranchait (directive 2026-08-23). Elle est
     /// immobile : ni envoi en cours, ni bouton d'ajout de réaction, ni effet
-    /// d'apparition rejoué sous le doigt.
+    /// d'APPARITION rejoué sous le doigt — les effets PERSISTANTS, eux, restent,
+    /// comme la bulle les garde en Bulles.
     ///
     /// Le texte est celui de la cellule : la même `BubbleContent`, avec la
-    /// traduction que le fil sert et le drapeau qu'il a basculé — la source que
-    /// `MessageOverlayMenu.previewServedText` lit aussi.
+    /// traduction que le fil sert DÉJÀ (`servedTranslation`, l'élue de
+    /// `preferredTranslation(for:)`, override manuel compris ; `nil` =
+    /// l'original) et le drapeau qu'il a basculé — la source que
+    /// `MessageOverlayMenu.previewServedText` lit aussi. La fabrique ne
+    /// redescend jamais le Prisme : une seconde descente à côté de celle du fil
+    /// serait une jumelle à tenir d'accord.
     static func preview(
         message: Message,
         translations: [MessageTranslation],
+        servedTranslation: MessageTranslation?,
         accentHex: String,
         density: Density,
         context: PreviewContext = PreviewContext()
@@ -387,13 +390,14 @@ extension FocalRowInput {
         let content = BubbleContent(
             message: message,
             translations: translations,
-            preferredTranslation: servedTranslation(of: message, translations: translations, context: context),
+            preferredTranslation: servedTranslation,
             translatedAudios: context.translatedAudios,
             userLanguages: context.userLanguages,
             secondaryLangCode: selection?.secondaryLangCode,
             activeDisplayLangCode: selection?.activeDisplayLangCode,
             preferredAudioLangCode: context.preferredAudioLangCode,
-            currentUserId: context.currentUserId
+            currentUserId: context.currentUserId,
+            recipientCount: context.recipientCount
         )
         return FocalRowInput(
             localId: message.id,
@@ -408,9 +412,9 @@ extension FocalRowInput {
             senderAvatarURL: message.senderAvatarURL,
             senderThumbHash: nil,
             senderColorHex: message.senderColor ?? accentHex,
-            senderPresence: context.senderPresence,
-            senderStoryRing: .none,
-            senderMoodEmoji: nil,
+            senderPresence: message.isMe ? .offline : context.senderPresence,
+            senderStoryRing: message.isMe ? .none : context.senderStoryRing,
+            senderMoodEmoji: context.senderMoodEmoji,
             senderIsAnonymous: message.senderIsAnonymous,
             senderRing: message.isMe ? nil : message.senderRing,
             accentHex: accentHex,
@@ -430,27 +434,18 @@ extension FocalRowInput {
             translatedAudios: context.translatedAudios,
             allAudioItems: [],
             conversationName: "",
+            effects: stillEffects(of: message.effects),
             sentAt: message.createdAt,
             availableWidth: context.availableWidth
         )
     }
 
-    /// Le choix du fil s'il en a fait un, sinon la descente du Prisme — la
-    /// même fonction que la bulle (`ConversationViewModel.prismTranslation`) :
-    /// la langue d'origine concourt à son rang, jamais `translations.first`.
-    private static func servedTranslation(
-        of message: Message, translations: [MessageTranslation], context: PreviewContext
-    ) -> MessageTranslation? {
-        switch context.chosenTranslation {
-        case .some(let chosen):
-            return chosen
-        case .none:
-            return ConversationViewModel.prismTranslation(
-                in: translations,
-                originalLanguage: message.originalLanguage.lowercased(),
-                preferredLanguages: context.readerPrism
-            )
-        }
+    /// Les effets du message, moins ceux d'APPARITION : un aperçu ne rejoue pas
+    /// une entrée, mais garde l'arc-en-ciel ou la lueur que le fil montre.
+    private static func stillEffects(of effects: MessageEffects) -> MessageEffects {
+        var still = effects
+        still.flags = effects.flags.subtracting(.appearanceMask)
+        return still
     }
 }
 

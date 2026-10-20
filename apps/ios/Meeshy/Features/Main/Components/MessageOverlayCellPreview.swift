@@ -103,6 +103,48 @@ struct MessageOverlayCellPreview: View {
     }
 }
 
+// MARK: - La rangée plate se construit une fois par jeu d'entrées
+
+/// **La rangée plate de l'aperçu, mémorisée le temps d'une présentation**
+/// (#11208). Le corps de l'overlay se réévalue à chaque image du glissement ;
+/// le portillon `.equatable()` protège le RENDU, pas la construction — qui
+/// résout la piste audio du Prisme, lit la présence et bâtit une
+/// `BubbleContent` (balayage des liens du texte compris). Elle ne se rejoue que
+/// si ce que la rangée montre a changé.
+///
+/// Une classe, et non un `@State` de valeur : la mémoire s'écrit pendant
+/// l'évaluation du corps, ce qu'aucun état observé ne permet ; rien ne
+/// l'observe, donc l'écrire ne provoque aucun rendu.
+final class MessageOverlayFlatRowMemo {
+    struct Key: Equatable {
+        let messageId: String
+        let updatedAt: Date
+        let content: String
+        let effects: MessageEffectFlags
+        let reactionCount: Int
+        let translations: [MessageTranslation]
+        let served: MessageTranslation?
+        let selection: ConversationViewModel.BubbleLanguageSelection?
+        let transcription: MessageTranscription?
+        let translatedAudios: [MessageTranslatedAudio]
+        let readingMode: ConversationReadingMode
+        let senderStoryRing: StoryRingState
+        let senderMoodEmoji: String?
+        let isDark: Bool
+        let isRightToLeft: Bool
+        let availableWidth: CGFloat
+    }
+
+    private var stored: (key: Key, row: FocalRowInput)?
+
+    func row(for key: Key, build: () -> FocalRowInput) -> FocalRowInput {
+        if let stored, stored.key == key { return stored.row }
+        let row = build()
+        stored = (key, row)
+        return row
+    }
+}
+
 /// Gate de re-rendu : pendant le glissement (60 fps), le corps de l'overlay se
 /// réévalue à chaque image ; les entrées de l'aperçu, elles, ne bougent pas.
 extension MessageOverlayCellPreview: @MainActor Equatable {
