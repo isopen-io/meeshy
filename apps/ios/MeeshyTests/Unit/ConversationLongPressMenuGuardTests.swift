@@ -190,6 +190,20 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
         XCTAssertTrue(cell.contains("OverlayProtectedPreview("), "La protection reste en amont des deux faces.")
     }
 
+    /// La rangée plate lit l'objet du révélé des heures (`FocalRevealedTime`,
+    /// `@EnvironmentObject`). La cellule le reçoit de sa liste ; l'overlay vit
+    /// hors de la liste et doit le poser lui-même — sans lui, l'appui long en
+    /// Script ou en Focal plante à l'ouverture.
+    func test_flatRowPreview_receivesTheTimestampRevealObject() throws {
+        let cell = try source("Features/Main/Components/MessageOverlayCellPreview.swift")
+        XCTAssertTrue(cell.contains("@StateObject private var timestampReveal = FocalTimestampRevealState()"))
+        guard let row = cell.range(of: "FocalRow(input:") else {
+            return XCTFail("`FocalRow(input:` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(String(cell[row.lowerBound...].prefix(200)).contains(".environmentObject(timestampReveal)"),
+                      "La rangée de l'aperçu reçoit son révélé des heures.")
+    }
+
     /// Le voile ne floute plus le fond à 12 : un flou léger, d'au plus 8, sous
     /// l'assombrissement de l'overlay (#11222 en fixe la loi commune).
     func test_backdropBlur_isAtMostEight() throws {
