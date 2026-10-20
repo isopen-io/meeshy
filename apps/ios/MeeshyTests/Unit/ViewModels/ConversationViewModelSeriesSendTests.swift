@@ -75,4 +75,58 @@ final class ConversationViewModelSeriesSendTests: XCTestCase {
 
         XCTAssertEqual(messageService.sendCallCount, 3)
     }
+
+    // MARK: - validate et send
+
+    private func makeOutgoing(content: String, location: SharedPlace? = nil) -> OutgoingMessage {
+        OutgoingMessage(
+            conversationId: ConversationID(conversationId),
+            content: content,
+            relation: .none,
+            attachments: OutgoingAttachments(ids: nil, previews: nil),
+            location: location
+        )
+    }
+
+    func test_validate_emptyContentWithoutLocation_returnsIneligible_andNoFlameReplay() async throws {
+        let (sut, _) = try await makeSUT()
+        var replays: [String] = []
+        let cancellable = HeaderFlameReplay.sent.sink { replays.append($0) }
+
+        let failure = sut.validate(makeOutgoing(content: "  \n"))
+
+        cancellable.cancel()
+        XCTAssertEqual(failure, SendFailure.ineligible)
+        XCTAssertTrue(replays.isEmpty, "un envoi refusé par la garde ne fait pas jouer la flamme")
+    }
+
+    func test_validate_locationOnly_isEligible() async throws {
+        let (sut, _) = try await makeSUT()
+        let place = SharedPlace(latitude: 48.85, longitude: 2.35)
+
+        let failure = sut.validate(makeOutgoing(content: "", location: place))
+
+        XCTAssertNil(failure)
+    }
+
+    func test_send_ineligible_returnsFailureIneligible_andLeavesIsSendingFalse() async throws {
+        let (sut, messageService) = try await makeSUT()
+
+        let result = await sut.send(makeOutgoing(content: " "))
+
+        guard case .failure(let failure) = result else { return XCTFail("un envoi vide ne part pas") }
+        XCTAssertEqual(failure, SendFailure.ineligible)
+        XCTAssertFalse(sut.isSending)
+        XCTAssertEqual(messageService.sendCallCount, 0)
+    }
+
+    func test_send_online_returnsAcknowledgedReceipt_andReleasesTheLock() async throws {
+        let (sut, messageService) = try await makeSUT()
+
+        let result = await sut.send(makeOutgoing(content: "Salut"))
+
+        guard case .success(let receipt) = result else { return XCTFail("l'envoi en ligne doit réussir") }
+        XCTAssertEqual(receipt.clientMessageId.rawValue, messageService.lastSendRequest?.clientMessageId)
+        XCTAssertFalse(sut.isSending)
+    }
 }
