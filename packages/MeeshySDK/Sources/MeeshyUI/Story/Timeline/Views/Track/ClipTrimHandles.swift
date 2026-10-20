@@ -24,6 +24,27 @@ struct ClipTrimHandles: View {
     let laneHeight: CGFloat
     let onTrimStartDelta: (CGFloat) -> Void
     let onTrimEndDelta: (CGFloat) -> Void
+    var adjustStepPoints: CGFloat = ClipTrimHandles.defaultAdjustStepPoints
+    var startValue: String?
+    var endValue: String?
+
+    static let defaultAdjustStepPoints: CGFloat = 5
+
+    static func handleLabel(leading: Bool) -> String {
+        leading
+            ? String(localized: "story.timeline.trim.handle.start", bundle: .module)
+            : String(localized: "story.timeline.trim.handle.end", bundle: .module)
+    }
+
+    func adjust(leading: Bool, _ direction: AccessibilityAdjustmentDirection) {
+        guard let signed = MeeshyAdjustStep.signed(Double(adjustStepPoints), direction) else { return }
+        let delta = CGFloat(signed)
+        if leading {
+            onTrimStartDelta(delta)
+        } else {
+            onTrimEndDelta(delta)
+        }
+    }
 
     @State private var lastLeadingTranslation: CGFloat = 0
     @State private var lastTrailingTranslation: CGFloat = 0
@@ -58,10 +79,10 @@ struct ClipTrimHandles: View {
                         lastTrailingTranslation = 0
                     }
             )
-            .accessibilityLabel(
-                leading
-                    ? String(localized: "story.timeline.clip.tooltip.start", bundle: .module)
-                    : String(localized: "story.timeline.clip.tooltip.duration", bundle: .module)
-            )
+            .accessibilityLabel(Self.handleLabel(leading: leading))
+            .accessibilityValue((leading ? startValue : endValue) ?? "")
+            .accessibilityAdjustableAction { direction in
+                adjust(leading: leading, direction)
+            }
     }
 }

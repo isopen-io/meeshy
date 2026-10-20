@@ -38,6 +38,12 @@ struct MessageReactionsDetailView: View {
                     },
                     onExpandFullPicker: { showFullEmojiPicker = true }
                 )
+                .anchoredPicker(isPresented: $showFullEmojiPicker) {
+                    EmojiFullPickerSheet(
+                        style: isDark ? .dark : .light,
+                        onReact: { emoji in onReact(emoji); showFullEmojiPicker = false }
+                    )
+                }
                 .frame(maxWidth: .infinity)
                 Divider().opacity(0.4)
             }
@@ -82,12 +88,6 @@ struct MessageReactionsDetailView: View {
             }
         }
         .onAppear { Task { await loadReactionDetails() } }
-        .sheet(isPresented: $showFullEmojiPicker) {
-            EmojiFullPickerSheet(
-                style: isDark ? .dark : .light,
-                onReact: { emoji in onReact?(emoji); showFullEmojiPicker = false }
-            )
-        }
     }
 
     private var filteredReactionUsers: [ReactionUserItem] {

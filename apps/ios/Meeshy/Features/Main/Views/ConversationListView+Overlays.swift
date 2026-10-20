@@ -489,7 +489,7 @@ extension ConversationListView {
                     .scrollDisabled(true)
                     // 340 pt au plus, et jamais plus large que la colonne (volet
                     // gauche iPad étroit) : la carte débordait de ses bords.
-                    .frame(maxWidth: .infinity).frame(maxWidth: 340).padding(.horizontal, MeeshySpacing.md)
+                    .frame(maxWidth: .infinity).frame(maxWidth: ConversationPreviewWidthLaw.maximum).padding(.horizontal, MeeshySpacing.md)
                     // Frame de repos de la carte (mesurée overlay invisible,
                     // hors transformation) — point d'arrivée de l'émergence.
                     .background(

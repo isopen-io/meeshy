@@ -222,11 +222,10 @@ public struct Plan2DView: View, Equatable {
         // reste intact — ces enfants ne coûtent aucun dessin.
         .accessibilityChildren {
             VStack(spacing: 0) {
-                ForEach(tracks) { track in
+                ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     Color.clear
                         .frame(height: TimelineMetrics.laneHeight)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(Self.accessibilityLabel(for: track))
+                        .modifier(Plan2DTrackAccessibilityModifier(plan: self, track: track, index: index, label: Self.accessibilityLabel(for: track)))
                 }
             }
         }
