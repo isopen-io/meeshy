@@ -530,6 +530,7 @@ class ConversationViewModel: ObservableObject {
     let offlineQueue: OfflineMessageQueueing
     let sendCoordinator: any ConversationSendCoordinatorProviding
     let translationSource: any ConversationTranslationSourcing
+    let historyLoader: any ConversationHistoryLoading
     /// #8303 — les flammes-œil vues pendant la visite, et ce que la sortie en fait.
     var afterReadVisit = AfterReadVisit()
     let afterReadConsumer: AfterReadConsumptionProviding
@@ -609,7 +610,8 @@ class ConversationViewModel: ObservableObject {
         receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared,
         sendCoordinator: (any ConversationSendCoordinatorProviding)? = nil,
         translationSource: (any ConversationTranslationSourcing)? = nil,
-        commands: (any ConversationCommandProviding)? = nil
+        commands: (any ConversationCommandProviding)? = nil,
+        historyLoader: (any ConversationHistoryLoading)? = nil
     ) {
         self.receivedMediaAutoSaver = receivedMediaAutoSaver
         self.afterReadConsumer = afterReadConsumer
@@ -640,6 +642,9 @@ class ConversationViewModel: ObservableObject {
         self.offlineQueue = offlineQueue
         self.sendCoordinator = sendCoordinator ?? ConversationSendCoordinator(conversationId: conversationId, messageService: messageService, messageSocket: messageSocket, offlineQueue: offlineQueue, persistence: dependencies.persistence)
         self.translationSource = translationSource ?? ConversationTranslationSource(persistence: dependencies.persistence)
+        self.historyLoader = historyLoader ?? ConversationHistoryLoader(
+            conversationId: conversationId, messageService: messageService, persistence: dependencies.persistence
+        )
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
         self.startupDependencies = dependencies
@@ -667,13 +672,17 @@ class ConversationViewModel: ObservableObject {
             persistence: dependencies.persistence
         )
         self.messageStore = store
-        // Wire up the mention controller for this conversation.
-        // participants closure is evaluated lazily when a mention query fires,
-        // so mentionCandidates (which depend on messages) is always up-to-date.
-        // messageStore is initialized first: the participants closure
-        // transitively reads it through `mentionCandidates` -> `messages`,
-        // so forming it before messageStore is set is a use-before-init error.
-        self.mentionController = MentionComposerController(
+        wireMentionsAndSocket(mentionService: mentionService, mentionContacts: mentionContacts, persistence: dependencies.persistence)
+        restoreArmedProtection()
+    }
+
+    /// Le contrôleur de mentions lit `mentionCandidates` (donc `messages`) à la demande : il se câble APRÈS
+    /// `messageStore`. Le socket arme ses abonnements plus tard (`loadMessages`), jamais à l'init.
+    private func wireMentionsAndSocket(
+        mentionService: MentionServiceProviding, mentionContacts: MentionContactsProviding,
+        persistence: MessagePersistenceActor
+    ) {
+        mentionController = MentionComposerController(
             context: .conversation(id: conversationId),
             participants: { [weak self] in self?.mentionCandidates ?? [] },
             service: mentionService,
@@ -686,9 +695,8 @@ class ConversationViewModel: ObservableObject {
             messageSocket: messageSocket
         )
         handler.delegate = self
-        handler.persistence = dependencies.persistence
-        self.socketHandler = handler
-        restoreArmedProtection()
+        handler.persistence = persistence
+        socketHandler = handler
     }
 
     // MARK: - MessageStore Observation (Task 1.3)
