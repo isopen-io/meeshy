@@ -3,6 +3,8 @@
 > Tiré de la conception `docs/superpowers/specs/2026-10-20-epopee-du-jeu-design.md` (§ 2, § 3, § 4). En cas d'écart, la conception a raison et ce glossaire se corrige. Les six autres langues ont chacune leur glossaire (`en.md`, `es.md`, `de.md`, `it.md`, `pt.md`, `ar.md`), qui traduisent CE fichier terme pour terme.
 >
 > Ce glossaire fait foi pour les textes du jeu sur le web, sur iOS et dans la passerelle : **un terme par concept, le même partout.**
+>
+> Sa projection vérifiable est `packages/shared/design/game-epic-vocabulary/fr.json` (les mots bannis et les noms canoniques), que la garde web `apps/web/src/lib/game/epic-vocabulary.test.ts` applique à chaque valeur des catalogues du jeu. Une règle qui entre ici entre là, dans le même commit. Format : `README.md`.
 
 ## Ce qui ne change jamais
 

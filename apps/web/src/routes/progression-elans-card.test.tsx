@@ -55,7 +55,7 @@ const sentenceOf = (host: HTMLElement): string => clean(host.querySelector('p')?
 const chipsOf = (host: HTMLElement): readonly string[] => [...host.querySelectorAll('[data-chip]')].map((chip) => clean(chip.textContent));
 
 const ACCELERATED: Readonly<Record<InterfaceLanguage, string>> = {
-  fr: '3 familles actives sur 7 jours, plus votre assise. Vos prochains gestes rapportent 3 fois plus.',
+  fr: '3 familles actives sur 7 jours, plus ton assise. Tes prochains gestes rapportent 3 fois plus.',
   en: '3 active families over 7 days, plus your standing. Your next actions earn 3 times more.',
   es: '3 familias activas en 7 días, más tu base. Tus próximas acciones valen 3 veces más.',
   pt: '3 famílias ativas em 7 dias, mais sua base. Suas próximas ações valem 3 vezes mais.',
@@ -65,7 +65,7 @@ const ACCELERATED: Readonly<Record<InterfaceLanguage, string>> = {
 };
 
 const ACCELERATED_ONE: Readonly<Record<InterfaceLanguage, string>> = {
-  fr: '1 famille active sur 7 jours. Vos prochains gestes rapportent 2 fois plus.',
+  fr: '1 famille active sur 7 jours. Tes prochains gestes rapportent 2 fois plus.',
   en: '1 active family over 7 days. Your next actions earn 2 times more.',
   es: '1 familia activa en 7 días. Tus próximas acciones valen 2 veces más.',
   pt: '1 família ativa em 7 dias. Suas próximas ações valem 2 vezes mais.',
@@ -75,7 +75,7 @@ const ACCELERATED_ONE: Readonly<Record<InterfaceLanguage, string>> = {
 };
 
 const HINT: Readonly<Record<InterfaceLanguage, string>> = {
-  fr: 'Tenez une famille de plus en même temps pour déclencher le multiplicateur.',
+  fr: 'Tiens une famille de plus en même temps pour déclencher le multiplicateur.',
   en: 'Keep one more family going at the same time to trigger the multiplier.',
   es: 'Mantén una familia más a la vez para activar el multiplicador.',
   pt: 'Mantenha mais uma família ao mesmo tempo para ativar o multiplicador.',
@@ -85,7 +85,7 @@ const HINT: Readonly<Record<InterfaceLanguage, string>> = {
 };
 
 const EMPTY: Readonly<Record<InterfaceLanguage, string>> = {
-  fr: 'Publiez une story, un post, un réel ou lancez une conversation : chaque famille tenue en même temps multiplie vos étincelles.',
+  fr: 'Publie une story, un post, un réel ou lance une conversation : chaque famille tenue en même temps multiplie tes étincelles.',
   en: 'Post a story, a post, a reel or start a conversation: every family you keep going at once multiplies your sparks.',
   es: 'Publica una historia, una publicación, un reel o inicia una conversación: cada familia que mantienes a la vez multiplica tus chispas.',
   pt: 'Publique um story, um post, um reel ou inicie uma conversa: cada família mantida ao mesmo tempo multiplica as suas faíscas.',
