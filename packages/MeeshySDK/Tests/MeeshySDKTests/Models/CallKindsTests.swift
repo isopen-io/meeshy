@@ -90,4 +90,12 @@ struct CallKindsTests {
         let bare = ActiveCallSession(id: "a2", conversationId: "conv1", mode: "p2p", status: "active", metadata: nil, participants: [])
         #expect(bare.callKind == .unknown)
     }
+
+    @Test func test_initIsVideo_mapsToVideoOrAudio() {
+        #expect(CallKind(isVideo: true) == .video)
+        #expect(CallKind(isVideo: false) == .audio)
+        #expect(CallKind.video.isVideo == true)
+        #expect(CallKind.audio.isVideo == false)
+        #expect(CallKind.unknown.isVideo == false)
+    }
 }
