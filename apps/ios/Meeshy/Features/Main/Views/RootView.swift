@@ -42,20 +42,20 @@ struct StoryViewerRequest: Identifiable, Equatable {
 
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
-    @StateObject private var storyViewModel = StoryViewModel()
-    @StateObject private var statusViewModel = StatusViewModel()
+    @ObservedObject private var storyViewModel: StoryViewModel
+    @ObservedObject private var statusViewModel: StatusViewModel
     // Possédé sans être observé (cf. ConversationListVMOwner) : évite que le churn
     // du VM (presence, reloadFromCache) ne re-render RootView à l'idle. Exposé via
     // la propriété calculée `conversationViewModel` ci-dessous — les 12 usages
     // (injections + closures) restent inchangés.
-    @StateObject private var conversationVMOwner = ConversationListVMOwner()
+    private let conversationVMOwner: ConversationListVMOwner
     private var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
     @StateObject private var router = Router()
     // CallManager n'est PLUS observé ici : sa présentation (cover + overlays) est
     // portée par `.modifier(CallPresentationLayer())`, qui isole le churn d'appel
     // (callDuration 1 Hz + stats qualité) hors de `RootView.body`. Cf. watchdog
     // 0x8BADF00D. RootView ne se ré-évalue donc plus à chaque tick d'appel.
-    @StateObject private var notifications = RootNotificationSource()  // #7010 — le compteur SEUL est observé ; cf. RootNotificationSource.
+    @ObservedObject private var notifications: RootNotificationSource  // #7010 — le compteur SEUL est observé ; cf. RootNotificationSource.
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnabled
     @State private var showFeed = false
@@ -136,7 +136,15 @@ struct RootView: View {
     /// C4b — rupture cliente. Deux entrées (le 426 vécu, le plancher lu au
     /// démarrage), une porte qui ne se referme pas. `iPadRootView` porte le
     /// jumeau : l'iPad a sa racine PROPRE et n'hérite rien d'ici.
-    @StateObject private var upgradeGate = UpgradeGateController()
+    @ObservedObject private var upgradeGate: UpgradeGateController
+
+    init(scope: RootScopeModels) {
+        _storyViewModel = ObservedObject(wrappedValue: scope.story)
+        _statusViewModel = ObservedObject(wrappedValue: scope.status)
+        conversationVMOwner = scope.conversations
+        _notifications = ObservedObject(wrappedValue: scope.notifications)
+        _upgradeGate = ObservedObject(wrappedValue: scope.upgradeGate)
+    }
 
     var body: some View {
         ZStack {
