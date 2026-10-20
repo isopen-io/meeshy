@@ -125,7 +125,7 @@ extension CallDirection {
     var localizedLabel: String {
         switch self {
         case .outgoing: return String(localized: "calls.direction.outgoing", defaultValue: "appel émis", bundle: .main)
-        case .incoming: return String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
+        case .incoming, .unknown: return String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
         case .missed: return String(localized: "calls.direction.missed", defaultValue: "appel manqué", bundle: .main)
         }
     }

@@ -65,19 +65,6 @@ extension ConversationView {
         composerState.showGuestAttachmentSheet = true
     }
 
-    /// Maillon de la chaîne du composer (voir la garde anti-débordement sur
-    /// `themedComposer`) : la feuille de l'invité restreint.
-    func composerGuestAttachments(_ content: AnyView) -> AnyView {
-        AnyView(content
-            .sheet(isPresented: $composerState.showGuestAttachmentSheet) {
-                GuestAttachmentSheet(
-                    conversationTitle: liveConversation?.name ?? "",
-                    allowance: guestAttachmentAllowance,
-                    onAccepted: { urls in handleFileImport(.success(urls)) }
-                )
-            })
-    }
-
     /// Dépôt et collage suivent la MÊME loi que la feuille : un fichier hors
     /// des familles ouvertes ne rejoint pas le composeur, et le refus se dit.
     func ingestRespectingGuestAllowance(_ items: [ComposerIngest]) {
@@ -102,5 +89,24 @@ extension ConversationView {
         }
         guard !screened.kept.isEmpty else { return }
         handleComposerIngest(screened.kept)
+    }
+}
+
+/// La feuille de l'invité restreint : un maillon NOMINAL de la chaîne du
+/// composer (`ConversationComposerLayers`).
+struct ConversationComposerGuestSheet: ViewModifier {
+    @Binding var composerState: ConversationComposerState
+    let conversationTitle: String
+    let allowance: GuestAttachmentAllowance
+    let onAccepted: ([URL]) -> Void
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $composerState.showGuestAttachmentSheet) {
+            GuestAttachmentSheet(
+                conversationTitle: conversationTitle,
+                allowance: allowance,
+                onAccepted: onAccepted
+            )
+        }
     }
 }
