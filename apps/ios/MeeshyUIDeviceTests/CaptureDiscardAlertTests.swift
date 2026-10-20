@@ -48,6 +48,26 @@ nonisolated final class CaptureDiscardAlertTests: XCTestCase {
                        "« Abandonner » ramène la visée : \(app.debugDescription)", file: file, line: line)
     }
 
+    /// Une vidéo filmée (appui long sur la scène) s'ouvre en retouche et
+    /// montre son image : la capture d'écran est déposée à côté pour être
+    /// regardée (recette iPhone 2026-10-20 : image noire).
+    func test_aFilmedTake_opensInRetouche() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-MeeshyCaptureFixture", "-MeeshyRetoucheRecette",
+                               "-AppleLanguages", "(fr)", "-AppleLocale", "fr_FR"]
+        app.launch()
+        _ = app.buttons["Prendre une photo"].firstMatch.waitForExistence(timeout: 20)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)).press(forDuration: 2.5)
+        let poser = app.buttons["Poser dans la scène"].firstMatch
+        if poser.waitForExistence(timeout: 5) { poser.tap() }
+        let ouverte = app.buttons["Couper"].waitForExistence(timeout: 20)
+        XCTAssertTrue(ouverte, "la vidéo s'ouvre en retouche : \(app.debugDescription)")
+        Thread.sleep(forTimeInterval: 3)
+        let sortie = ProcessInfo.processInfo.environment["RETOUCHE_SHOT"] ?? NSTemporaryDirectory() + "retouche-video.png"
+        try XCUIScreen.main.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: sortie))
+        XCTAssertFalse(app.buttons["Couper"].isSelected, "aucun outil ne s'allume seul après le chargement")
+    }
+
     func test_discardButton_byElement_returnsToTheViewfinder() {
         let app = launchedInRetouche()
         let alerte = askToDiscard(app)

@@ -207,6 +207,26 @@ final class ComposerEditToolsTests: XCTestCase {
                       "une retouche se fait même sans accès à la caméra")
     }
 
+    /// **Un outil touché est CET outil, et il n'existe qu'une fois** (recette
+    /// iPhone 2026-10-20 : Couper et Son s'allumaient seuls, toucher Couper
+    /// éteignait Son, toucher Son allumait Recadrer). Le rail ne doit porter
+    /// qu'UNE instance de chaque outil — une copie fantôme décalée prend les
+    /// touchers de sa voisine.
+    func test_eachEditTool_isRenderedOnce_andActivatingItTogglesItAlone() async {
+        let (session, _) = await videoSession()
+        let ecran = RenderedScreen(ComposerCaptureBottomRow(session: session, context: session.gestureContext)
+                                    .frame(width: 440),
+                                   size: CGSize(width: 440, height: 400))
+        defer { ecran.dismount() }
+        XCTAssertEqual(session.activeEditTools, [], "aucun outil ouvert à l'entrée")
+        for outil in session.editTools {
+            let nom = ComposerCaptureCopy.editToolName(outil)
+            let noeuds = ecran.nodes.filter { $0.label == nom }
+            XCTAssertEqual(noeuds.count, 1, "« \(nom) » est rendu une seule fois : \(ecran.labels)")
+        }
+        XCTAssertEqual(session.activeEditTools, [], "monter le rail n'allume rien")
+    }
+
     private static func settles(_ condition: () -> Bool) -> Bool {
         let fin = Date().addingTimeInterval(3)
         while Date() < fin {
