@@ -1,7 +1,22 @@
 import SwiftUI
 
-struct MeeshySceneAction {
+/// Une valeur focalisée est comparée à chaque rendu : sans égalité, SwiftUI y
+/// voit un changement, reconstruit la barre de menus et réévalue l'émetteur,
+/// qui republie — la boucle qui figeait l'ouverture d'une conversation. Une
+/// action portée par un `owner` est égale à toute action du même propriétaire.
+struct MeeshySceneAction: Equatable {
+    let owner: AnyObject?
     let perform: () -> Void
+
+    init(owner: AnyObject? = nil, perform: @escaping () -> Void) {
+        self.owner = owner
+        self.perform = perform
+    }
+
+    static func == (lhs: MeeshySceneAction, rhs: MeeshySceneAction) -> Bool {
+        guard let left = lhs.owner, let right = rhs.owner else { return false }
+        return left === right
+    }
 }
 
 enum MeeshySceneRole {
