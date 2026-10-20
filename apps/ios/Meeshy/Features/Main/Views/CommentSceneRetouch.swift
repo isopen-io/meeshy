@@ -3,12 +3,11 @@ import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
-// **Les commentaires éditent leurs médias dans la SCÈNE du composeur** (#9127) —
-// la même porte que la conversation (#9119, #9124, #9126, #9136) : « Éditer »
-// sur une pièce ouvre toutes les pièces du commentaire en scènes, et
-// « Terminé » remplace chaque pièce retouchée À SA PLACE. Les anciens éditeurs
-// d'image et de vidéo ne sont plus atteignables depuis un commentaire. Un son
-// n'a pas de scène.
+// **Les commentaires retouchent leurs médias dans LA retouche de la caméra**
+// (#11133, décision porteur 2026-10-20 : « un seul éditeur ») — la même porte
+// que la conversation : « Éditer » sur une pièce ouvre `ConversationPieceRetouch`,
+// « Terminé » la remplace À SA PLACE, « Abandonner » la retire. Un son n'a pas
+// de retouche.
 
 /// Les règles pures — aucune ne lit un état.
 enum CommentSceneRetouch {
@@ -86,8 +85,7 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// Les pièces d'un commentaire s'éditent dans la scène : la série est
-    /// préparée (sources à 2 048 px) AVANT de présenter le composer.
+    /// Les pièces d'un commentaire se retouchent dans la retouche de la caméra.
     func commentSceneRetouch(attachments: Binding<[ComposerAttachment]>) -> some View {
         modifier(CommentSceneRetouchModifier(attachments: attachments))
     }
@@ -102,25 +100,30 @@ extension View {
 
 private struct CommentSceneRetouchModifier: ViewModifier {
     @Binding var attachments: [ComposerAttachment]
-    @State private var serie: ConversationRetouchSeries?
+    @State private var piece: ComposerRetouchPiece?
 
     func body(content: Content) -> some View {
         content
             .environment(\.commentRetouch, CommentRetouchAction(open: open))
-            .fullScreenCover(item: $serie) { serie in
-                ConversationRetouchSeriesEditor(series: serie, onDone: replace, onCancel: { self.serie = nil })
+            .fullScreenCover(item: $piece) { piece in
+                ConversationPieceRetouch(piece: piece, onDone: { media in
+                    self.piece = nil
+                    replace([ComposerRetouchedPiece(attachmentId: piece.attachmentId, media: media)])
+                }, onRemove: {
+                    self.piece = nil
+                    attachments.removeAll { $0.id == piece.attachmentId }
+                }, onCancel: { self.piece = nil })
             }
     }
 
     private func open(_ focusId: String) {
-        let candidates = CommentSceneRetouch.candidates(attachments)
-        guard candidates.contains(where: { $0.attachmentId == focusId }) else { return }
+        guard let choisie = CommentSceneRetouch.candidates(attachments).first(where: { $0.attachmentId == focusId })
+        else { return }
         HapticFeedback.light()
-        Task { serie = await ConversationRetouchSeries.prepare(candidates, focusId: focusId) }
+        piece = choisie
     }
 
     private func replace(_ rendues: [ComposerRetouchedPiece]) {
-        serie = nil
         Task {
             for rendue in rendues {
                 guard let fichier = await Self.file(of: rendue.media) else {
