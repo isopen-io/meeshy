@@ -74,4 +74,52 @@ final class LockedSweepPersistedLedgersConcurrencyTests: XCTestCase {
         XCTAssertEqual(inbox.drain().count, 64)
         XCTAssertTrue(inbox.drain().isEmpty)
     }
+
+    private enum Failure: Error { case network }
+
+    private func makeFailingDependencies() -> PushDeliveryReceiptService.Dependencies {
+        PushDeliveryReceiptService.Dependencies(
+            markAsReceived: { _ in throw Failure.network },
+            isAuthenticated: { true }
+        )
+    }
+
+    func test_ack_concurrentFailuresForDistinctConversations_queueEveryReceipt() async {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let service = PushDeliveryReceiptService(dependencies: makeFailingDependencies(), defaults: defaults)
+
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<100 {
+                group.addTask { await service.ack(conversationId: "c\(index)", messageId: nil) }
+            }
+        }
+
+        XCTAssertEqual(service._pendingCount(), 100)
+    }
+
+    func test_setDependencies_concurrentWithAck_neverCrashesAndEndsOnLastDependencies() async {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let service = PushDeliveryReceiptService(dependencies: makeFailingDependencies(), defaults: defaults)
+        let failing = makeFailingDependencies()
+
+        await withTaskGroup(of: Void.self) { group in
+            for index in 0..<200 {
+                group.addTask {
+                    if index % 4 == 0 {
+                        service._setDependencies(failing)
+                    } else {
+                        await service.ack(conversationId: "c\(index)", messageId: nil)
+                    }
+                }
+            }
+        }
+        let anonymous = PushDeliveryReceiptService.Dependencies(markAsReceived: { _ in }, isAuthenticated: { false })
+        service._setDependencies(anonymous)
+        let before = service._pendingCount()
+        await service.ack(conversationId: "last", messageId: nil)
+
+        XCTAssertEqual(service._pendingCount(), before + 1)
+    }
 }

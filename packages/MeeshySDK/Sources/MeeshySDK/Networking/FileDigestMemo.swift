@@ -46,7 +46,7 @@ final class FileDigestMemo: Sendable {
         guard let identity = Self.identity(of: fileURL) else { return try compute(fileURL) }
         if let known = memory.read({ $0.digests[identity] }) { return known }
         let digest = try compute(fileURL)
-        let capacity = capacity
+        let capacity = self.capacity
         memory.mutate { $0.remember(digest, for: identity, capacity: capacity) }
         return digest
     }

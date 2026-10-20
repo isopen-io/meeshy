@@ -106,10 +106,10 @@ public final class ContactResolveService: ContactResolveServiceProviding, Sendab
     }
 
     private func plan(for request: ContactResolveRequest) -> Plan {
-        let now = now
-        let freshness = freshness
-        let failureBackoff = failureBackoff
-        let api = api
+        let now = self.now
+        let freshness = self.freshness
+        let failureBackoff = self.failureBackoff
+        let api = self.api
         return ledger.mutate { state -> Plan in
             let cached = state.entries[request]
             if let cached, now().timeIntervalSince(cached.storedAt) < freshness {
@@ -126,8 +126,8 @@ public final class ContactResolveService: ContactResolveServiceProviding, Sendab
     }
 
     private func settle(_ request: ContactResolveRequest, with fetched: [PublicContactAccount]?) -> [PublicContactAccount] {
-        let now = now
-        let capacity = capacity
+        let now = self.now
+        let capacity = self.capacity
         return ledger.mutate { state -> [PublicContactAccount] in
             state.inFlight[request] = nil
             guard let fetched else {
