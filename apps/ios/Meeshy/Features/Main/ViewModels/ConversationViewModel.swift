@@ -19,57 +19,16 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Cache Invalidation
 
-    /// Invalidates all derived caches that depend on `messages`.
-    /// Called both from the `messages.didSet` observer (legacy pipeline) and
-    /// from the MessageStore observation subscription (GRDB pipeline).
+    /// Appelée depuis `messages.didSet` et depuis l'observation du store : tout changement de `messages`
+    /// traverse ce seul endroit, qui réarme aussi l'unique réveil d'expiration des éphémères (#7452).
     private func invalidateCaches(previousMessages: [Message]? = nil) {
-        let structureChanged: Bool
-        if let oldValue = previousMessages {
-            structureChanged = messages.count != oldValue.count
-                || messages.first?.id != oldValue.first?.id
-                || messages.last?.id != oldValue.last?.id
-        } else {
-            structureChanged = true
-        }
-        // La confirmation d'un envoi remplace les pièces LOCALES par celles du
-        // serveur sans toucher à la structure : les mémoires de médias, keyées
-        // par identifiant de pièce, se vident aussi sur ce changement (#10690).
-        let mediaChanged = structureChanged
-            || !Self.sameAttachmentIdentities(messages, previousMessages ?? [])
-
-        _messageIdIndex = nil
+        derived.invalidate(previous: previousMessages, current: messages)
         forgetPrismResolutions(whoseOriginChangedFrom: previousMessages)
-        _cachedLastReceivedIndex = .uncomputed
-        _cachedLastSentIndex = .uncomputed
-
-        if structureChanged {
-            _topActiveMembers = nil
-            _mentionDisplayNames = nil
-            _mentionCandidates = nil
-        }
-        if mediaChanged {
-            _mediaSenderInfoMap = nil
-            _allVisualAttachments = nil
-            _mediaCaptionMap = nil
-            _allAudioItems = nil
-        }
-
-        // #7452 — l'unique réveil du fil se réarme ici, au seul endroit que
-        // TOUT changement de `messages` traverse (les deux pipelines, legacy et
-        // GRDB). Le retrait lui-même est toujours différé : voir
-        // `EphemeralExpiryCoordinator`.
         refreshEphemeralExpirySchedule()
     }
 
-    /// Les mêmes messages portent-ils les mêmes pièces, aux mêmes adresses ?
-    /// Comparé message par message, sans rien allouer.
-    nonisolated static func sameAttachmentIdentities(_ lhs: [Message], _ rhs: [Message]) -> Bool {
-        guard lhs.count == rhs.count else { return false }
-        return zip(lhs, rhs).allSatisfy { new, old in
-            new.attachments.count == old.attachments.count
-                && zip(new.attachments, old.attachments).allSatisfy { $0.id == $1.id && $0.fileUrl == $1.fileUrl }
-        }
-    }
+    /// Mémos des projections dérivées de `messages` — leur invalidation est une propriété du CHAMP.
+    let derived = ConversationDerivedCache()
 
     /// L'ordonnanceur des disparitions d'éphémères — un réveil pour tout le
     /// fil, jamais un minuteur par bulle (#7452).
@@ -78,10 +37,6 @@ class ConversationViewModel: ObservableObject {
         coordinator.onExpired = { [weak self] ids in self?.expireEphemeralsIfNeeded(ids) }
         return coordinator
     }()
-
-    var _cachedLastReceivedIndex: IndexCache = .uncomputed
-
-    var _cachedLastSentIndex: IndexCache = .uncomputed
 
     @Published var isLoadingInitial = false
     @Published var isLoadingOlder = false
@@ -117,12 +72,12 @@ class ConversationViewModel: ObservableObject {
     /// `translationResolutionCache`, jamais dans ce dictionnaire.
     @Published var messageTranslations: [String: [MessageTranslation]] = [:] {
         didSet {
-            _mediaCaptionMap = nil
+            derived.invalidateTranslationDerived()
             translationResolutionCache.removeAll()
         }
     }
     @Published var messageTranscriptions: [String: MessageTranscription] = [:] {
-        didSet { _allAudioItems = nil }
+        didSet { derived.invalidateAudioDerived() }
     }
     /// Per-attachment transcription keyed by `attachmentId`. The per-message
     /// `messageTranscriptions` slot only holds ONE transcription per message —
@@ -131,10 +86,10 @@ class ConversationViewModel: ObservableObject {
     /// transcription so the audio carousel can show per-page karaoke.
     /// The single-audio path still reads `messageTranscriptions[msg.id]`.
     @Published var messageTranscriptionsByAttachment: [String: MessageTranscription] = [:] {
-        didSet { _allAudioItems = nil }
+        didSet { derived.invalidateAudioDerived() }
     }
     @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:] {
-        didSet { _allAudioItems = nil }
+        didSet { derived.invalidateAudioDerived() }
     }
     /// Per-attachment translated audios keyed by `attachmentId`. The per-message
     /// `messageTranslatedAudios` slot only holds ONE attachment's audios per
@@ -144,7 +99,7 @@ class ConversationViewModel: ObservableObject {
     /// buttons (Prisme Linguistique). The single-audio path still falls back to
     /// `messageTranslatedAudios[msg.id]`. Mirrors `messageTranscriptionsByAttachment`.
     @Published var messageTranslatedAudiosByAttachment: [String: [MessageTranslatedAudio]] = [:] {
-        didSet { _allAudioItems = nil }
+        didSet { derived.invalidateAudioDerived() }
     }
 
     /// On-demand translation requests currently in flight, keyed by messageId
@@ -410,10 +365,6 @@ class ConversationViewModel: ObservableObject {
     }
     var pendingServerIdSet: Set<String> = []
 
-    // MARK: - O(1) Message Index
-
-    var _messageIdIndex: [String: Int]?
-
     // MARK: - Conversation-Wide Media
 
     struct MediaSenderInfo {
@@ -442,11 +393,6 @@ class ConversationViewModel: ObservableObject {
         var senderRing: ServedProfileDecorItem? = nil
     }
 
-    var _mediaSenderInfoMap: [String: MediaSenderInfo]?
-
-    /// All visual attachments (images + videos) across every loaded message, in chronological order.
-    var _allVisualAttachments: [MessageAttachment]?
-
     // MARK: - Audio Items for Fullscreen Gallery
 
     struct AudioItem: Identifiable {
@@ -456,15 +402,6 @@ class ConversationViewModel: ObservableObject {
         let transcription: MessageTranscription?
         let translatedAudios: [MessageTranslatedAudio]
     }
-
-    var _allAudioItems: [AudioItem]? { didSet { _audioItemsByMessageId = nil } }
-    /// Index par message de `_allAudioItems` — voir `audioItemsByMessageId`
-    /// (ConversationViewModel+Projections.swift). Invalidé avec son parent.
-    var _audioItemsByMessageId: [String: [AudioItem]]?
-
-    /// Maps attachment.id -> caption text for the fullscreen gallery.
-    /// Priority: 1) attachment.caption  2) message text (only if single visual attachment)
-    var _mediaCaptionMap: [String: String]?
 
     // MARK: - Private
 
@@ -562,18 +499,6 @@ class ConversationViewModel: ObservableObject {
     /// Public read-only accessor for the view layer (UIKit bridge needs the user id).
     var currentUserIdForView: String { currentUserId }
     var currentUsername: String? { authManager.currentUser?.username }
-
-    // MARK: - Mention Display Names (username → displayName) — cached
-
-    var _mentionDisplayNames: [String: String]?
-
-    // MARK: - Mention Autocomplete Logic — cached
-
-    var _mentionCandidates: [MentionCandidate]?
-
-    // MARK: - Top Active Members (cached)
-
-    var _topActiveMembers: [ConversationActiveMember]?
 
     // MARK: - Init
 

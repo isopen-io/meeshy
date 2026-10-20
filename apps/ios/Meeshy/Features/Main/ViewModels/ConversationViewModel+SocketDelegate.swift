@@ -31,7 +31,7 @@ import os
 extension ConversationViewModel: ConversationSocketDelegate {
     func handleParticipantRoleUpdated(participantId: String, newRole: String) {
         Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
-        _topActiveMembers = nil
+        derived.topActiveMembers = nil
         let convId = conversationId
         Task {
             await CacheCoordinator.shared.participants.invalidate(for: convId)

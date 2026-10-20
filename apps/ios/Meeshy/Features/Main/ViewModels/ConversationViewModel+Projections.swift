@@ -26,37 +26,26 @@ import os
 // la conversation pour le mini-player, médias et vocaux de toute la
 // conversation, légendes, mentions et membres les plus actifs.
 //
-// Les ARDOISES de cache (`_allVisualAttachments`, `_allAudioItems`, …) restent
+// Les ARDOISES de cache (`derived.allVisualAttachments`, `derived.allAudioItems`, …) restent
 // chez l'hôte, où `invalidateCaches(previousMessages:)` les efface : ce sont des
 // propriétés stockées, et leur invalidation est une propriété du CHAMP, pas une
 // discipline d'appelant.
 
 extension ConversationViewModel {
 
-    // MARK: - Sentinelle de cache d'index
-
-    /// Two-state cache sentinel for Int? properties where both `nil` (absent)
-    /// and a concrete index are valid computed results. Replaces the `Int??`
-    /// pattern (`nil` = uncomputed, `.some(nil)` = absent) with explicit cases
-    /// that are immediately readable without knowing Swift nested-optional semantics.
-    enum IndexCache {
-        case uncomputed
-        case resolved(Int?)
-    }
-
     // MARK: - Derniers messages reçu / envoyé
 
     var cachedLastReceivedIndex: Int? {
-        if case .resolved(let cached) = _cachedLastReceivedIndex { return cached }
+        if case .resolved(let cached) = derived.lastReceivedIndex { return cached }
         let result = messages.indices.last(where: { !messages[$0].isMe })
-        _cachedLastReceivedIndex = .resolved(result)
+        derived.lastReceivedIndex = .resolved(result)
         return result
     }
 
     var cachedLastSentIndex: Int? {
-        if case .resolved(let cached) = _cachedLastSentIndex { return cached }
+        if case .resolved(let cached) = derived.lastSentIndex { return cached }
         let result = messages.indices.last(where: { messages[$0].isMe })
-        _cachedLastSentIndex = .resolved(result)
+        derived.lastSentIndex = .resolved(result)
         return result
     }
 
@@ -145,12 +134,12 @@ extension ConversationViewModel {
     // MARK: - O(1) Message Index
 
     private var messageIdIndex: [String: Int] {
-        if let cached = _messageIdIndex { return cached }
+        if let cached = derived.messageIdIndex { return cached }
         var index = [String: Int](minimumCapacity: messages.count)
         for (i, msg) in messages.enumerated() {
             index[msg.id] = i
         }
-        _messageIdIndex = index
+        derived.messageIdIndex = index
         return index
     }
 
@@ -173,7 +162,7 @@ extension ConversationViewModel {
     /// la même règle que l'index des médias (#8095) applique aux porteurs que
     /// la fenêtre n'a pas chargés.
     var mediaSenderInfoMap: [String: MediaSenderInfo] {
-        if let cached = _mediaSenderInfoMap { return cached }
+        if let cached = derived.mediaSenderInfoMap { return cached }
         var map = [String: MediaSenderInfo](minimumCapacity: messages.count)
         for msg in messages {
             let info = ConversationMediaRules.senderInfo(of: msg)
@@ -181,7 +170,7 @@ extension ConversationViewModel {
                 map[att.id] = info
             }
         }
-        _mediaSenderInfoMap = map
+        derived.mediaSenderInfoMap = map
         return map
     }
 
@@ -190,18 +179,18 @@ extension ConversationViewModel {
     /// seule, par sa puce (`ConversationMediaGalleryLayer`). Un STICKER n'y entre
     /// pas non plus : son image jointe n'est pas une photo (#10630).
     var allVisualAttachments: [MessageAttachment] {
-        if let cached = _allVisualAttachments { return cached }
+        if let cached = derived.allVisualAttachments { return cached }
         let result = messages.filter { !$0.holdsViewOnce && !ReceivedSticker.isGalleryExcluded($0) }.flatMap { msg in
             msg.attachments.filter { [.image, .video].contains($0.type) }
         }
-        _allVisualAttachments = result
+        derived.allVisualAttachments = result
         return result
     }
 
     // MARK: - Audio Items for Fullscreen Gallery
 
     var allAudioItems: [AudioItem] {
-        if let cached = _allAudioItems { return cached }
+        if let cached = derived.allAudioItems { return cached }
         let result = messages.filter { !$0.holdsViewOnce }.flatMap { msg in
             msg.attachments
                 .filter { $0.type == .audio }
@@ -218,17 +207,17 @@ extension ConversationViewModel {
                     )
                 }
         }
-        _allAudioItems = result
+        derived.allAudioItems = result
         return result
     }
 
     /// Les pistes audio d'UN message — la tranche que `ThemedMessageBubble.==`
     /// refiltrait depuis la liste de TOUTE la conversation à chaque comparaison.
-    /// Invalidé avec `_allAudioItems` (son `didSet`).
+    /// Invalidé avec `derived.allAudioItems` (son `didSet`).
     var audioItemsByMessageId: [String: [AudioItem]] {
-        if let cached = _audioItemsByMessageId { return cached }
+        if let cached = derived.audioItemsByMessageId { return cached }
         let index = Dictionary(grouping: allAudioItems, by: \.message.id)
-        _audioItemsByMessageId = index
+        derived.audioItemsByMessageId = index
         return index
     }
 
@@ -236,7 +225,7 @@ extension ConversationViewModel {
     /// (#8095), partagée avec l'index des médias ; le texte servi est celui du
     /// Prisme de la fenêtre, bascules manuelles comprises.
     var mediaCaptionMap: [String: String] {
-        if let cached = _mediaCaptionMap { return cached }
+        if let cached = derived.mediaCaptionMap { return cached }
         let map = messages.reduce(into: [String: String]()) { map, msg in
             let captions = ConversationMediaRules.captions(
                 of: msg,
@@ -244,24 +233,24 @@ extension ConversationViewModel {
             )
             map.merge(captions) { _, latest in latest }
         }
-        _mediaCaptionMap = map
+        derived.mediaCaptionMap = map
         return map
     }
 
     // MARK: - Mention Display Names (username → displayName) — cached
 
     var mentionDisplayNames: [String: String] {
-        if let cached = _mentionDisplayNames { return cached }
+        if let cached = derived.mentionDisplayNames { return cached }
         UserDisplayNameCache.shared.trackFromMessages(messages)
         let map = UserDisplayNameCache.shared.allMappings()
-        _mentionDisplayNames = map
+        derived.mentionDisplayNames = map
         return map
     }
 
     // MARK: - Mention Autocomplete Logic — cached
 
     var mentionCandidates: [MentionCandidate] {
-        if let cached = _mentionCandidates { return cached }
+        if let cached = derived.mentionCandidates { return cached }
         var seen = Set<String>()
         var candidates: [MentionCandidate] = []
         for msg in messages {
@@ -275,7 +264,7 @@ extension ConversationViewModel {
                 ring: msg.senderRing
             ))
         }
-        _mentionCandidates = candidates
+        derived.mentionCandidates = candidates
         return candidates
     }
 
@@ -298,9 +287,9 @@ extension ConversationViewModel {
     // MARK: - Top Active Members (cached)
 
     func topActiveMembersList(accentColor: String) -> [ConversationActiveMember] {
-        if let cached = _topActiveMembers { return cached }
+        if let cached = derived.topActiveMembers { return cached }
         let result = ConversationActiveMember.ranked(from: messages, fallbackColor: accentColor)
-        _topActiveMembers = result
+        derived.topActiveMembers = result
         return result
     }
 }
