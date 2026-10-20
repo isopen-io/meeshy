@@ -295,7 +295,7 @@ public class MeeshyCallPlugin extends Plugin {
         AudioDeviceInfo[] outputs = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
         int[] types = new int[outputs.length];
         for (int i = 0; i < types.length; i++) types[i] = outputs[i].getType();
-        return types;
+        return CallAudioRoutes.routableTypes(types, Build.VERSION.SDK_INT);
     }
 
     @SuppressWarnings("deprecation")
