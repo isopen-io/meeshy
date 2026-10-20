@@ -64,7 +64,15 @@ import { PRIVILEGED_GLOBAL_ROLES } from './messageEditAdmission.js';
  */
 
 /** `Participant.role` — en MINUSCULES, contrairement à `User.role`. Confondre les deux a déjà produit un bypass mort. */
-const PRIVILEGED_CONVERSATION_ROLES = new Set(['admin', 'moderator']);
+const PRIVILEGED_CONVERSATION_ROLES = new Set(['admin', 'moderator', 'creator']);
+
+/**
+ * Les conversations où un TIERS peut retirer le message d'un autre (#11149,
+ * directive porteur 2026-10-20 : « groupe et plus ouvert »). Une conversation
+ * directe reste à ses deux membres — aucun rôle, même plateforme, n'y retire
+ * les mots de l'autre.
+ */
+const MODERATED_CONVERSATION_TYPES = new Set(['group', 'public', 'global', 'broadcast']);
 
 /**
  * Les deux seules lectures que la décision peut demander, en structural : le
@@ -87,6 +95,9 @@ export interface DeleteAdmissionReader {
       where: { conversationId: string; userId: string; isActive: true };
       select: { id: true; role: true; user: { select: { role: true } } };
     }): Promise<{ id?: string | null; role?: string | null; user?: { role?: string | null } | null } | null>;
+  };
+  conversation: {
+    findUnique(args: { where: { id: string }; select: { type: true } }): Promise<{ type?: string | null } | null>;
   };
   /** Lu pour un avis de capture SEULEMENT : l'auteur du message qu'il nomme peut le retirer (#9641). */
   message?: {
@@ -111,6 +122,13 @@ export interface MessageDeleteAdmission {
    * `User.id` suffit.
    */
   readonly actorParticipantId?: string;
+  /**
+   * Le retrait est un acte de MODÉRATION : un tiers l'a décidé au titre de son
+   * rôle. Le transport exige alors un motif, journalise et prévient l'auteur
+   * (`services/moderation/contentRemoval.ts`). Absent pour l'auteur et pour
+   * l'auteur d'une capture qui retire l'avis qui la nomme.
+   */
+  readonly byModeration?: true;
 }
 
 export interface MessageDeleteAdmissionParams {
@@ -174,25 +192,51 @@ export async function admitMessageDelete(
   if (membership) {
     const actorParticipantId = membership.id ?? undefined;
     const conversationRole = membership.role ?? undefined;
-    if (conversationRole && PRIVILEGED_CONVERSATION_ROLES.has(conversationRole)) {
-      return { admitted: true, actorParticipantId };
-    }
-
     const globalRole = membership.user?.role ?? undefined;
+    const privileged =
+      (Boolean(conversationRole) && PRIVILEGED_CONVERSATION_ROLES.has(conversationRole)) ||
+      (Boolean(globalRole) && PRIVILEGED_GLOBAL_ROLES.has(globalRole));
+    if (privileged) return moderationAdmission(prisma, message.conversationId, actorParticipantId, onError);
+
     const admitted =
-      (Boolean(globalRole) && PRIVILEGED_GLOBAL_ROLES.has(globalRole)) ||
-      (capture !== null && (await authorsCapturedMessage(prisma, capture.capturedMessageId, actorParticipantId, onError)));
-    return { admitted, actorParticipantId: admitted ? actorParticipantId : undefined };
+      capture !== null && (await authorsCapturedMessage(prisma, capture.capturedMessageId, actorParticipantId, onError));
+    return admitted ? { admitted, actorParticipantId } : REFUSED_OR_ADMITTED(false);
   }
 
   try {
     const record = await prisma.user.findUnique({ where: { id: deleterUserId }, select: { role: true } });
     const globalRole = record?.role ?? undefined;
-    return REFUSED_OR_ADMITTED(Boolean(globalRole) && PRIVILEGED_GLOBAL_ROLES.has(globalRole));
+    if (!globalRole || !PRIVILEGED_GLOBAL_ROLES.has(globalRole)) return REFUSED_OR_ADMITTED(false);
   } catch (error) {
     onError?.(error);
     return REFUSED_OR_ADMITTED(false);
   }
+  return moderationAdmission(prisma, message.conversationId, undefined, onError);
+}
+
+/**
+ * Un tiers privilégié n'est admis que dans une conversation de groupe ou plus
+ * ouverte (#11149). Le type se lit SEULEMENT ici — l'auteur et le simple membre
+ * n'en paient pas la lecture — et une conversation introuvable ou illisible
+ * n'admet personne.
+ */
+async function moderationAdmission(
+  prisma: DeleteAdmissionReader,
+  conversationId: string,
+  actorParticipantId: string | undefined,
+  onError?: (error: unknown) => void,
+): Promise<MessageDeleteAdmission> {
+  try {
+    const conversation = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { type: true } });
+    const type = conversation?.type ?? undefined;
+    if (!type || !MODERATED_CONVERSATION_TYPES.has(type)) return REFUSED_OR_ADMITTED(false);
+  } catch (error) {
+    onError?.(error);
+    return REFUSED_OR_ADMITTED(false);
+  }
+  return actorParticipantId === undefined
+    ? { admitted: true, byModeration: true }
+    : { admitted: true, actorParticipantId, byModeration: true };
 }
 
 /**
