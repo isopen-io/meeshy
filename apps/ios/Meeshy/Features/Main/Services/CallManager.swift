@@ -108,6 +108,10 @@ final class CallManager: ObservableObject {
 
     @Published var callState: CallState = .idle {
         didSet {
+            if !CallStateMachine.isLegal(from: oldValue, to: callState) {
+                let status = String(describing: CallStateMachine.status(of: callState))
+                Logger.calls.fault("[CallFSM] transition illégale \(String(describing: oldValue)) -> \(String(describing: self.callState)) (status=\(status))")
+            }
             let active = callState.isActive
             CallManager.isCallActiveFlag = active
             // Étape B unification audio — point de propagation unique de l'état
