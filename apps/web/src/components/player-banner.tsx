@@ -19,6 +19,7 @@ import { loadGameScreenCatalog, suspendForGameCatalog, translateGame } from '@/l
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { formatCount, rankLabel, standingLabel } from '@/lib/view/game-copy';
 import {
+  bannerShortCount,
   isLargeText,
   leaguePlace,
   playerBannerLabel,
@@ -176,7 +177,7 @@ function Gauge({ model, level, tint, roll, large }: { readonly model: PlayerBann
       </span>
       {level.pointsToNext === null ? null : (
         <span data-player-banner-missing={level.pointsToNext} className="truncate text-caption tabular-nums" style={{ color: INK_2 }}>
-          {translateGame(language, 'game.banner.missing', { points: formatCount(missing, language), level: formatCount(level.nextLevel ?? level.level + 1, language) })}
+          {translateGame(language, 'game.banner.level_short', { n: bannerShortCount(missing, language), level: formatCount(level.nextLevel ?? level.level + 1, language) })}
         </span>
       )}
     </span>
@@ -191,7 +192,10 @@ function Piece({ name, value, children }: { readonly name: string; readonly valu
   );
 }
 
-/** Le nom du rang au-dessus de sa jauge de Gloire, et ce qui manque pour le suivant — ou la Gloire seule, sans suite. */
+/**
+ * Le nom du rang au-dessus de sa jauge de Gloire, et dessous la forme courte « 5 543 vers Passeur II » — ou « Gloire N »,
+ * sans suite. Le chiffre est compact dès 10 000 (`bannerShortCount`) ; le nom accessible garde la phrase complète.
+ */
 function RankGauge({ rank, roll }: { readonly rank: PlayerBannerRank; readonly roll: RollEnv | undefined }) {
   const language = currentInterfaceLanguage();
   const missing = useRollingNumber(rank.gloryMissing ?? 0, roll);
@@ -205,7 +209,7 @@ function RankGauge({ rank, roll }: { readonly rank: PlayerBannerRank; readonly r
       </span>
       {next === null ? (
         <span data-player-banner-rank-total="" className="truncate text-caption tabular-nums" style={{ color: INK_2 }}>
-          {translateGame(language, 'game.banner.glory', { glory: formatCount(total, language) })}
+          {translateGame(language, 'game.banner.glory_top', { n: bannerShortCount(total, language) })}
         </span>
       ) : (
         <>
@@ -213,7 +217,7 @@ function RankGauge({ rank, roll }: { readonly rank: PlayerBannerRank; readonly r
             <span data-player-banner-rank-fill="" className="player-banner-fill absolute inset-0 rounded-chip" style={{ transform: `scaleX(${fill.toFixed(3)})`, backgroundColor: GLORY }} />
           </span>
           <span data-player-banner-rank-missing="" className="truncate text-caption tabular-nums" style={{ color: INK_2 }}>
-            {translateGame(language, 'game.banner.glory_missing', { glory: formatCount(missing, language), rank: rankLabel(next.rank, next.division, language) })}
+            {translateGame(language, 'game.banner.glory_short', { n: bannerShortCount(missing, language), rank: rankLabel(next.rank, next.division, language) })}
           </span>
         </>
       )}

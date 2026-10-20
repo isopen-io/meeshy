@@ -394,26 +394,38 @@ describe('aux très grandes tailles de texte', () => {
 describe('le rang, sa jauge de Gloire et ce qui manque', () => {
   const rankBlock = (host: ParentNode): HTMLElement | null => host.querySelector<HTMLElement>('a[data-player-banner-link="glory"] [data-player-banner-rank-gauge]');
 
-  test('le nom du rang, la jauge de la division et « encore 1 200 vers Conteur II »', async () => {
+  test('le nom du rang, la jauge de la division et la forme courte « 1 200 vers Conteur II »', async () => {
     const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur() }} motion={motion().value} />);
     const block = rankBlock(host);
     expect(block?.querySelector('[data-player-banner-rank-name]')?.textContent).toBe('Conteur III');
     expect(block?.querySelector<HTMLElement>('[data-player-banner-rank-fill]')?.style.transform).toBe('scaleX(0.400)');
-    expect(block?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('encore 1 200 vers Conteur II');
+    expect(block?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('1 200 vers Conteur II');
     expect(block?.querySelector('[data-player-banner-rank-total]')).toBeNull();
   });
 
-  test('le lien du rang est nommé de son nom, de sa Gloire et de ce qui manque', async () => {
+  test('un manque de 10 000 et plus se dit en chiffre compact', async () => {
+    const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur({ gloryMissing: 12_345, next: { rank: 'passeur', division: 2 } }) }} motion={motion().value} />);
+    expect(rankBlock(host)?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('12,3 k vers Passeur II');
+  });
+
+  test('la jauge du niveau dit la forme courte : « 8 700 vers le 62 », compacte dès 10 000', async () => {
+    const at = (pointsToNext: number): PlayerBannerModel => ({ ...newcomer(), level: { level: 61, progress: 0.5, prestige: 0, nextLevel: 62, pointsToNext, opener: null } });
+    const short = (host: ParentNode): string => host.querySelector('[data-player-banner-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ') ?? '';
+    expect(short(await mount(<PlayerBanner model={at(8700)} motion={motion().value} />))).toBe('8 700 vers le 62');
+    expect(short(await mount(<PlayerBanner model={at(12_345)} motion={motion().value} />))).toBe('12,3 k vers le 62');
+  });
+
+  test('le lien du rang est nommé de son nom, de sa Gloire et de ce qui manque — la forme complète', async () => {
     const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur() }} motion={motion().value} />);
     expect(host.querySelector('a[data-player-banner-link="glory"]')?.getAttribute('aria-label')?.replace(/[\s\u202f]/g, ' ')).toBe('Conteur III, 3 400 Gloire, encore 1 200 vers Conteur II');
   });
 
-  test('au Mythe (pas de suite) : le nom et le total de Gloire, ni jauge ni « encore »', async () => {
+  test('au Mythe (pas de suite) : le nom et « Gloire N » en chiffre compact, ni jauge ni manque', async () => {
     const mythe = conteur({ rank: 'mythe', division: null, mythic: { number: 18, edition: 22 }, glory: 1_000_000, progress: 1, gloryMissing: null, next: null });
     const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: mythe }} motion={motion().value} />);
     const block = rankBlock(host);
     expect(block?.querySelector('[data-player-banner-rank-name]')?.textContent).toBe('Mythe n° 18');
-    expect(block?.querySelector('[data-player-banner-rank-total]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('1 000 000 Gloire');
+    expect(block?.querySelector('[data-player-banner-rank-total]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('Gloire 1 M');
     expect(block?.querySelector('[data-player-banner-rank-fill]')).toBeNull();
     expect(block?.querySelector('[data-player-banner-rank-missing]')).toBeNull();
   });

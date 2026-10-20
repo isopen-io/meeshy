@@ -6,7 +6,7 @@ import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture, gameExtr
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
-import { isLargeText, playerBannerLabel, playerBannerModel, playerBannerPieceLabels } from './player-banner';
+import { bannerShortCount, isLargeText, playerBannerLabel, playerBannerModel, playerBannerPieceLabels } from './player-banner';
 
 /**
  * LA BANNIÈRE DU JOUEUR (#9494) — SEULEMENT CE QUI EXISTE. Le modèle ne pose
@@ -316,5 +316,27 @@ describe('le rang porte sa Gloire, sa jauge et ce qui manque', () => {
     const label = playerBannerPieceLabels(mythe, 'fr').rank ?? '';
     expect(label).toMatch(/^Mythe n° 18, 1[\s\u202f]000[\s\u202f]000 Gloire$/u);
     expect(label).not.toContain('encore');
+  });
+});
+
+/**
+ * LE CHIFFRE COURT DU BANDEAU (porteur 2026-10-20, #11125) — « 5 543 vers Passeur II », « 12,3 k vers le 62 » : le chiffre
+ * plein sous 10 000, compact dès 10 000 (une décimale au plus), dans la langue de l'interface.
+ */
+describe('bannerShortCount', () => {
+  test('sous 10 000 : le chiffre plein de la langue', () => {
+    expect(bannerShortCount(5543, 'fr')).toBe(new Intl.NumberFormat('fr-FR').format(5543));
+    expect(bannerShortCount(9999, 'en')).toBe('9,999');
+  });
+
+  test('dès 10 000 : compact, une décimale au plus', () => {
+    expect(bannerShortCount(10_000, 'en')).toBe('10K');
+    expect(bannerShortCount(12_345, 'en')).toBe('12.3K');
+    expect(bannerShortCount(12_345, 'fr')).toBe(new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }).format(12_345));
+    expect(bannerShortCount(1_000_000, 'fr')).toBe(new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }).format(1_000_000));
+  });
+
+  test('l’arabe garde les chiffres latins du jeu', () => {
+    expect(bannerShortCount(12_345, 'ar')).toMatch(/12[.,٫]3/);
   });
 });

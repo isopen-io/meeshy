@@ -245,6 +245,7 @@ const LOCALES: Readonly<Record<InterfaceLanguage, string>> = {
 };
 
 const numberFormats = new Map<InterfaceLanguage, Intl.NumberFormat>();
+const compactFormats = new Map<InterfaceLanguage, Intl.NumberFormat>();
 const pluralRules = new Map<InterfaceLanguage, Intl.PluralRules>();
 
 export function formatGameNumber(language: InterfaceLanguage, value: number): string {
@@ -252,6 +253,15 @@ export function formatGameNumber(language: InterfaceLanguage, value: number): st
   if (known !== undefined) return known.format(value);
   const created = new Intl.NumberFormat(LOCALES[language]);
   numberFormats.set(language, created);
+  return created.format(value);
+}
+
+/** Le chiffre COMPACT de la langue (« 12,3 k », « 12.3K »), une décimale au plus — les chiffres latins du jeu en arabe. */
+export function formatGameCompact(language: InterfaceLanguage, value: number): string {
+  const known = compactFormats.get(language);
+  if (known !== undefined) return known.format(value);
+  const created = new Intl.NumberFormat(LOCALES[language], { notation: 'compact', maximumFractionDigits: 1 });
+  compactFormats.set(language, created);
   return created.format(value);
 }
 

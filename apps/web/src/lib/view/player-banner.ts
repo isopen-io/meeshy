@@ -4,7 +4,7 @@ import type { GloryDivision5, GloryRankOrMythic } from '@meeshy/shared/utils/gam
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
 
-import { formatGameNumber, translateGame, translateGameOrdinal, translateGamePlural } from '@/lib/i18n-game-catalog';
+import { formatGameCompact, formatGameNumber, translateGame, translateGameOrdinal, translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 
@@ -235,6 +235,16 @@ export function playerBannerPieceLabels(model: PlayerBannerModel, language: Inte
     season: model.season === null ? null : translateGame(language, 'game.banner.link.season', { stars: count(model.season.stars) }),
   };
 }
+
+/** Le seuil du chiffre compact du bandeau : plein en dessous, compact à partir de lui. */
+const COMPACT_FROM = 10_000;
+
+/**
+ * LE CHIFFRE COURT DU BANDEAU (porteur 2026-10-20, #11125) — ce que les lignes visibles « 5 543 vers Passeur II », « 12,3 k vers le 62 » et « Gloire N »
+ * écrivent : le chiffre plein sous 10 000, compact dès 10 000 (une décimale au plus). Les phrases lues gardent le plein.
+ */
+export const bannerShortCount = (value: number, language: InterfaceLanguage = currentInterfaceLanguage()): string =>
+  value >= COMPACT_FROM ? formatGameCompact(language, value) : formatGameNumber(language, value);
 
 /** Le texte ordinaire du navigateur, en pixels : la taille de la racine qu'on compare. */
 const ORDINARY_TEXT_PX = 16;
