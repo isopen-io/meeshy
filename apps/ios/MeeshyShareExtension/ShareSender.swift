@@ -1,12 +1,13 @@
 import Foundation
 import os
+import MeeshySDK
 
 /// Porté par un type `nonisolated` plutôt que déclaré en global de fichier :
 /// sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, une globale de fichier
 /// hérite de l'isolation MainActor et devient inaccessible depuis le code
 /// nonisolated de ce même fichier.
 nonisolated enum ShareLog {
-    static let logger = Logger(subsystem: "me.meeshy.app", category: "share-extension")
+    static let logger = MeeshyLog.logger(.shareExtension)
 }
 
 /// Issue d'une tentative d'envoi.

@@ -127,25 +127,29 @@ struct ConversationComposerEditingCovers: ViewModifier {
     let accentColor: String
     let onRetouched: ([ComposerRetouchedPiece]) -> Void
     let onSceneMedia: (ComposerReturnedMedia) -> Void
+    let onRemovePiece: (String) -> Void
 
     func body(content: Content) -> some View {
         content
-            .conversationCover(item: $scrollState.retouchSeries) { serie in
-                ConversationRetouchSeriesEditor(series: serie, onDone: { rendues in
-                    onRetouched(rendues)
-                }, onCancel: { scrollState.retouchSeries = nil })
+            .conversationCover(item: $scrollState.pieceToRetouch) { piece in
+                ConversationPieceRetouch(piece: piece, onDone: { media in
+                    scrollState.pieceToRetouch = nil
+                    onRetouched([ComposerRetouchedPiece(attachmentId: piece.attachmentId, media: media)])
+                }, onRemove: {
+                    scrollState.pieceToRetouch = nil
+                    onRemovePiece(piece.attachmentId)
+                }, onCancel: { scrollState.pieceToRetouch = nil })
             }
             .conversationCover(isPresented: Binding(
                 get: { scrollState.recentImageToEdit != nil },
                 set: { if !$0 { scrollState.recentImageToEdit = nil } }
             )) {
                 if let image = scrollState.recentImageToEdit {
-                    ConversationImageSceneEditor(image: image, staged: false, onDone: { media in
+                    ConversationPieceRetouch(source: .image(image), onDone: { media in
                         scrollState.recentImageToEdit = nil
                         onSceneMedia(media)
-                    }, onCancel: {
-                        scrollState.recentImageToEdit = nil
-                    })
+                    }, onRemove: { scrollState.recentImageToEdit = nil },
+                       onCancel: { scrollState.recentImageToEdit = nil })
                 }
             }
             .conversationCover(isPresented: Binding(
@@ -153,10 +157,11 @@ struct ConversationComposerEditingCovers: ViewModifier {
                 set: { if !$0 { scrollState.recentVideoToEdit = nil } }
             )) {
                 if let url = scrollState.recentVideoToEdit {
-                    ConversationVideoSceneEditor(url: url, staged: false, onDone: { media in
+                    ConversationPieceRetouch(source: .video(url), onDone: { media in
                         scrollState.recentVideoToEdit = nil
                         onSceneMedia(media)
-                    }, onCancel: { scrollState.recentVideoToEdit = nil })
+                    }, onRemove: { scrollState.recentVideoToEdit = nil },
+                       onCancel: { scrollState.recentVideoToEdit = nil })
                 }
             }
             .conversationCover(item: $scrollState.audioToEdit) { target in

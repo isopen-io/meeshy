@@ -69,7 +69,7 @@ struct ConversationInfoSheet: View {
     @State private var showLeaveConfirmation = false
     @State private var showSecurityVerification = false
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-info")
+    private static let logger = MeeshyLog.logger(.conversationInfo)
 
     @State var showAllPinnedMessages = false
 

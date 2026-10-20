@@ -35,7 +35,7 @@ final class FramePackShelfLoader: ObservableObject {
     private let usageText: @MainActor (FrameUsage) -> String
     private let index: PackFileIndex
     private var loaded: Set<String> = []
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "packs")
+    private let logger = MeeshyLog.logger(.packs)
 
     init(service: any PackServiceProviding<FramePack> = FramePackService.shared,
          assets: any PackAssetReading = ContentAddressedStore.shared,

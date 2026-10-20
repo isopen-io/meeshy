@@ -133,67 +133,50 @@ extension MessageListViewController {
     /// anime depuis la valeur présentée (pas de saut) ; ensuite, sec.
     func applyFocalPerspectiveToVisibleCells() {
         guard readingMode == .focal, isViewLoaded, focalSceneActive else { return }
-        // #8147 — un message long déplié ET visible est LA mise en avant : la
-        // scène lui cède les layers (une seule loupe, un seul bloc de verre).
+        // #8147 : un message long déplié ET visible est LA mise en avant ; la scène lui cède les layers.
         guard !isLongMessageExpansionVisible else { return applyLongMessageExpansionPresentation(animated: false) }
         let focusY = focalFocusY
         let cells = collectionView.visibleCells
-        // **Tant que la magnificence n'est pas armée, le fil défile comme en
-        // Script** (directive 2026-08-24 : « si la magnificence n'est pas
-        // activée, la réduction et l'effet loop non plus ; le scroll se fait
-        // naturellement en Script jusqu'à activation, où on considère TOUTES
-        // les fonctions du mode Focal »). J'avais d'abord retardé la seule
-        // élection en laissant le relief s'appliquer — c'était la moitié de la
-        // règle : la réduction et la compaction sont, elles aussi, des
-        // fonctions du mode, pas un décor neutre.
+        // Tant que la magnificence n'est pas armée, le fil défile comme en Script (directive 2026-08-24) : la réduction et la compaction sont des fonctions du mode, pas un décor neutre.
         guard focalMagnificationArmed else {
-            for cell in cells {
-                FocalScrollPerspective.reset(cell.contentView.layer)
-                (cell as? MessageListCell)?.touchOverflow = .zero
-            }
-            if focalFocusedLocalId != nil {
-                focalFocusedLocalId = nil
-                syncFocalFocusDetails()
-            }
+            resetFocalPerspective(on: cells)
             return
         }
-        // Les géométries ne servent QU'à l'élection, donc qu'une fois armé :
-        // les construire avant la garde, c'était une résolution d'indexPath,
-        // d'identifiant et de conversion de repère PAR CELLULE ET PAR FRAME
-        // jetée pendant les quatre secondes de défilement soutenu qui
-        // précèdent l'armement (`FocalMagnificationLaw.sustainedScrollMs`).
+        // Les géométries ne servent QU'à l'élection : les construire avant la garde les jetterait pendant les quatre secondes qui précèdent l'armement.
         var geometries: [FocalScrollPerspective.CellGeometry] = []
         geometries.reserveCapacity(cells.count)
         for cell in cells {
             guard let geometry = focalGeometry(of: cell) else { continue }
             geometries.append(geometry)
         }
-        // **Aucune animation ENTRE les messages** (directive 2026-08-24 :
-        // « les messages font comme des ressorts pour entrer et ressortir de
-        // l'écran ; JE NE VEUX aucune animation entre les messages — une fois
-        // dans la planche ils sont fixes »).
-        //
-        // `FocalScrollPerspective.poses` appliquait à CHAQUE rangée une échelle
-        // et une opacité fonction de sa distance à la ligne de focus, plus une
-        // compaction : c'est ce qui donnait le ressort à l'entrée et à la
-        // sortie de l'écran. La loi elle-même (spec Focal §5, courbe gelée)
-        // reste écrite et testée — elle n'est simplement plus APPLIQUÉE ; la
-        // planche est fixe.
-        //
-        // Ce qui distingue l'élu : sa CARTE, ses chips et sa LOUPE (#6586,
-        // 2026-09-15) — lui seul grandit, ses voisins restent à plat.
+        // Aucune animation ENTRE les messages (directive 2026-08-24) : la loi `poses` reste écrite et testée, plus APPLIQUÉE. Ce qui distingue l'élu : sa CARTE, ses chips et sa LOUPE (#6586) — lui seul grandit.
         let focused = FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
         let electionChanged = focalFocusedLocalId != focused
-        // #7953 — la rangée qui PORTE ses pastilles ouvre un passage : ses
-        // voisines s'écartent du pas que les pastilles mordent, par transform
-        // seul — aucune hauteur ne change. Lue sur la CELLULE (ce qu'elle
-        // rend), jamais sur `focalDetailedLocalId`, qui change avant que la
-        // reconfiguration n'ait posé les pastilles sur la nouvelle rangée.
+        // #7953 : la rangée qui PORTE ses pastilles ouvre un passage, lue sur la CELLULE (ce qu'elle rend), jamais sur `focalDetailedLocalId`, qui change avant la reconfiguration.
         let anchor = cells.first { FocalScrollPerspective.showsFocusDetails(cellTag: $0.tag) }
+        poseElectionPassage(on: cells, anchor: anchor, electionChanged: electionChanged)
+        focalFocusedLocalId = focused
+        // Carte et détails : différés, coalescés, jamais réentrants ni en plein fling (#7624, `FocalFocusDetailsMotionLaw`).
+        if focalDetailedLocalId != focused,
+           FocalFocusDetailsMotionLaw.revealsDetails(speed: focalScrollSpeedMeter.speed) {
+            syncFocalFocusDetails()
+        }
+    }
+
+    func resetFocalPerspective(on cells: [UICollectionViewCell]) {
+        for cell in cells {
+            FocalScrollPerspective.reset(cell.contentView.layer)
+            (cell as? MessageListCell)?.touchOverflow = .zero
+        }
+        if focalFocusedLocalId != nil {
+            focalFocusedLocalId = nil
+            syncFocalFocusDetails()
+        }
+    }
+
+    /// #8506 : le passage mesure le CADRE entier de la rangée détaillée ; ses voisines s'écartent par transform seul, aucune hauteur ne change.
+    func poseElectionPassage(on cells: [UICollectionViewCell], anchor: UICollectionViewCell?, electionChanged: Bool) {
         let anchorMidY = anchor.flatMap { focalGeometry(of: $0)?.visualMidY }
-        // #8506 — le passage mesure le CADRE entier de la rangée détaillée :
-        // identité et bande vivent dans le cadre, qui grandit avec le contenu
-        // grossi (#8537 : la loupe ne porte plus que le contenu, dans la rangée).
         let anchorBounds = anchor?.contentView.layer.bounds ?? .zero
         let anchorIsGroupHead = anchor.map { FocalScrollPerspective.isGroupHead(cellTag: $0.tag) } ?? false
         let contentScale = FocalScrollPerspective.electedScale(reduceMotion: UIAccessibility.isReduceMotionEnabled, rowWidth: anchorBounds.width)
@@ -206,26 +189,9 @@ extension MessageListViewController {
             let geometry = focalGeometry(of: cell)
             let shift = geometry.map { FocalScrollPerspective.electionShift(cellMidY: $0.visualMidY, magnifiedMidY: anchorMidY, clearance: clearance) } ?? 0
             FocalScrollPerspective.poseElectionPassage(cell.contentView.layer, shift: shift, animated: electionChanged)
-            // #8537 — les contrôles du cadre, posés sous la rangée, reçoivent le toucher.
+            // #8537 : les contrôles du cadre, posés sous la rangée, reçoivent le toucher.
             (cell as? MessageListCell)?.touchOverflow = cell === anchor ? anchorOverflow : .zero
         }
-        focalFocusedLocalId = focused
-        // Les détails du message en focus apparaissent AVEC la carte, pas au
-        // posé (directive 2026-08-22) : la reconfiguration ne change aucune
-        // hauteur (chips et identité sont des superpositions sur les lignes
-        // de la carte), elle ne coûte qu'un rendu de deux cellules.
-        // Carte et détails : différés + coalescés, jamais réentrants — et
-        // jamais en plein fling (#7624, `FocalFocusDetailsMotionLaw`). La
-        // condition porte sur l'ÉCART entre l'élu et la rangée détaillée, pas
-        // sur le changement d'élection : un élu élu en pleine vitesse reçoit
-        // sa carte au premier tick où le défilement repasse sous le seuil.
-        if focalDetailedLocalId != focused,
-           FocalFocusDetailsMotionLaw.revealsDetails(speed: focalScrollSpeedMeter.speed) {
-            syncFocalFocusDetails()
-        }
-        // La carte du focus est le FOND SwiftUI de la rangée — un bloc de
-        // verre depuis #8147 (`FocalGlassBlock`). Il n'existe plus AUCUNE
-        // carte UIKit : rien à poser ni à démonter par cellule et par frame.
     }
 
     /// Les détails du message en focus (identité, jour + heure, texte

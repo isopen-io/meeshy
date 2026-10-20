@@ -67,7 +67,7 @@ final class VisitorReachReporter: VisitorReachReporting {
     static let shared = VisitorReachReporter()
     static let storageKey = "meeshy.reach.pending.visitor"
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "visitor-reach")
+    private static let logger = MeeshyLog.logger(.visitorReach)
 
     private let postService: PostServiceProviding
     private let defaults: UserDefaults

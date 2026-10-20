@@ -119,6 +119,32 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
     });
   };
 
+  test('« Retirer » (#11150) : la modération demande le motif, puis remet la publication et le motif nettoyé', async () => {
+    const { menu, journal } = host('u-me');
+    monte(post(), { ...menu, viewerModerates: true, onRemove: (id, reason) => journal.push(`remove:${id}:${reason}`) });
+    const entrees = await ouvre();
+    expect(entrees.map((e) => e.dataset.feedPostAction)).toEqual(['open', 'copyText', 'share', 'save', 'remove', 'report']);
+    act(() => entrees.find((e) => e.dataset.feedPostAction === 'remove')?.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const champ = document.querySelector<HTMLTextAreaElement>('[data-content-removal-reason]');
+    expect(champ).not.toBeNull();
+    const confirme = document.querySelector<HTMLButtonElement>('[data-content-removal="confirm"]');
+    expect(confirme?.disabled).toBe(true);
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    act(() => {
+      setter?.call(champ, '  Contenu violent ');
+      champ?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => document.querySelector<HTMLButtonElement>('[data-content-removal="confirm"]')?.click());
+    expect(journal).toEqual(['remove:p1:Contenu violent']);
+  });
+
+  test('« Retirer » ne s’offre pas sans le rôle, ni sur sa propre publication', async () => {
+    const { menu } = host('u-me');
+    monte(post({ author: { id: 'u-me', displayName: 'Moi', username: 'moi' } }), { ...menu, viewerModerates: true, onRemove: () => undefined });
+    expect((await ouvre()).map((e) => e.dataset.feedPostAction)).not.toContain('remove');
+  });
+
   test('sans hôte de menu, aucun bouton — un contrôle sans effet n’existe pas', () => {
     monte(post());
     expect(container.querySelector('[data-feed-post-menu]')).toBeNull();

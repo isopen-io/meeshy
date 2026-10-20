@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import os
+import MeeshySDK
 
 // #8064 — ce qui CAPTE un appel enregistré, sur l'appareil de celui qui l'a
 // demandé et seulement quand tous ont consenti (la passerelle en décide).
@@ -36,7 +37,7 @@ final class CallRecordingService: CallRecordingServiceProviding {
     private let engine = AVAudioEngine()
     private var file: AVAudioFile?
     private var fileURL: URL?
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-recording")
+    private let logger = MeeshyLog.logger(.callRecording)
 
     nonisolated deinit {}
 

@@ -94,6 +94,9 @@ struct ComposerLookRail: View {
     /// Les outils dont la surface est à l'écran : ils s'allument, ensemble.
     var shownTools: Set<ComposerEditTool> = []
     var onTool: (ComposerEditTool) -> Void = { _ in }
+    /// Les libellés gardent leur largeur entière : le rail défile plutôt que de
+    /// les rétrécir ou les couper (porteur 2026-10-20).
+    var fitsLabels = false
     /// **Posée à côté des cases** (#10339) : la colonne prend leur hauteur exacte
     /// et leur espacement — chaque entrée en ligne, pictogramme puis nom.
     var alignedWithCells = false
@@ -149,7 +152,8 @@ struct ComposerLookRail: View {
                 Text(name)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(fitsLabels ? 1 : 0.7)
+                    .fixedSize(horizontal: fitsLabels, vertical: false)
             }
             .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
         }

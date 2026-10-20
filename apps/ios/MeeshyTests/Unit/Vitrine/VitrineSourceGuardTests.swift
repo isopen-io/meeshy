@@ -50,7 +50,7 @@ final class VitrineSourceGuardTests: XCTestCase {
             "packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkService.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine+Vitrine.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Configuration/MeeshyConfig.swift",
-            "packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/JoinFlowViewModel.swift",
+            "apps/ios/Meeshy/Features/JoinFlow/JoinFlowViewModel.swift",
         ]
         for chemin in fichiers {
             var pile: [Bool] = []

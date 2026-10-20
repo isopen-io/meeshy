@@ -238,11 +238,16 @@ async function buildApp(opts: {
       // Voir messages.test.ts : `applyMessageRemovalEffects` relit
       // `lastMessageAt` lui-même au lieu de le recevoir joint au message.
       findUnique: jest.fn().mockResolvedValue({
+        type: 'group',
+        title: 'Les Amis',
         lastMessageAt: mockMessage.conversation.lastMessageAt,
         createdAt: mockMessage.conversation.createdAt,
       }),
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    adminAuditLog: {
+      create: jest.fn().mockResolvedValue({ id: 'audit-1' }),
     },
     trackingLink: {
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -341,20 +346,55 @@ describe('DELETE /messages/:messageId — admission', () => {
     sender: { ...mockMessage.sender, userId: OTHER_USER },
   };
 
-  async function deleteAs(opts: { membership?: any; globalRole?: string | null }) {
+  async function deleteAs(opts: { membership?: any; globalRole?: string | null; reason?: string | null; conversationType?: string }) {
     const app = await buildApp({ messageOverride: foreignMessage });
     (app as any).prisma.participant.findFirst.mockResolvedValue(opts.membership ?? null);
     (app as any).prisma.user.findUnique.mockResolvedValue(
       opts.globalRole === undefined ? { role: 'USER' } : { role: opts.globalRole }
     );
+    if (opts.conversationType) {
+      (app as any).prisma.conversation.findUnique.mockResolvedValue({ type: opts.conversationType, title: 'Duo' });
+    }
     (app as any).prisma.message.findFirst
       .mockResolvedValueOnce(foreignMessage)
       .mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+    const reason = opts.reason === undefined ? 'Propos hors charte' : opts.reason;
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/messages/' + MSG_ID,
+      ...(reason === null ? {} : { payload: { reason } }),
+    });
     const participantQuery = (app as any).prisma.participant.findFirst.mock.calls[0]?.[0];
+    const auditCalls = (app as any).prisma.adminAuditLog.create.mock.calls;
+    const updated = (app as any).prisma.message.update.mock.calls.length > 0;
     await app.close();
-    return { res, participantQuery };
+    return { res, participantQuery, auditCalls, updated };
   }
+
+  it('#11149 — un tiers sans motif reçoit 400 MODERATION_REASON_REQUIRED et rien ne part', async () => {
+    const { res, updated } = await deleteAs({ membership: { role: 'admin', user: { role: 'USER' } }, reason: null });
+
+    expect(res.statusCode).toBe(400);
+    expect(JSON.parse(res.body).code).toBe('MODERATION_REASON_REQUIRED');
+    expect(updated).toBe(false);
+  });
+
+  it('#11149 — un tiers est refusé en conversation directe, même BIGBOSS', async () => {
+    const { res, updated } = await deleteAs({ globalRole: 'BIGBOSS', conversationType: 'direct' });
+
+    expect(res.statusCode).toBe(403);
+    expect(updated).toBe(false);
+  });
+
+  it('#11149 — admet le créateur et journalise REMOVE_CONTENT avec le motif nettoyé', async () => {
+    const { res, auditCalls } = await deleteAs({ membership: { role: 'creator', user: { role: 'USER' } }, reason: '  Spam répété  ' });
+
+    expect(res.statusCode).toBe(200);
+    expect(auditCalls).toEqual([[{ data: expect.objectContaining({
+      action: 'REMOVE_CONTENT', entity: 'Message', entityId: MSG_ID, adminId: USER_ID, userId: OTHER_USER,
+      metadata: JSON.stringify({ reason: 'Spam répété', via: 'app' }),
+    }) }]]);
+  });
 
   it("admet l'admin de CONVERSATION qui n'est qu'un USER global", async () => {
     const { res } = await deleteAs({ membership: { role: 'admin', user: { role: 'USER' } } });

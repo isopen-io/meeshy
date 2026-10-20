@@ -92,3 +92,33 @@ struct ComposerViewfinder: View {
         dismiss()
     }
 }
+
+#if DEBUG
+/// **La recette de la retouche au simulateur** (#10930) : `-MeeshyRetoucheRecette`
+/// avec `-MeeshyCaptureFixture` ouvre le viseur plein écran sur la fausse caméra,
+/// sans compte ni navigation — le test d'interface de l'alerte « Abandonner » y
+/// entre directement. DEBUG et simulateur seulement.
+nonisolated enum ComposerRetoucheRecette {
+    static let argument = "-MeeshyRetoucheRecette"
+
+    static func isActive(arguments: [String] = ProcessInfo.processInfo.arguments) -> Bool {
+        ComposerCaptureFixture.isActive(arguments: arguments) && arguments.contains(argument)
+    }
+}
+
+#endif
+
+/// Sans effet hors DEBUG.
+struct ComposerRetoucheRecetteCover: ViewModifier {
+    #if DEBUG
+    @State private var shown = ComposerRetoucheRecette.isActive()
+
+    func body(content: Content) -> some View {
+        content.fullScreenCover(isPresented: $shown) {
+            ComposerViewfinder { _ in }
+        }
+    }
+    #else
+    func body(content: Content) -> some View { content }
+    #endif
+}

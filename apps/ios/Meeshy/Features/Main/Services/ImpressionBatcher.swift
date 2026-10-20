@@ -40,7 +40,7 @@ final class ImpressionBatcher: ObservableObject {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "impressions")
+    private static let logger = MeeshyLog.logger(.impressions)
 
     /// outbox-11 — préfixe partagé des clés de persistance (une par surface).
     static let storageKeyPrefix = "meeshy.impressions.pending."

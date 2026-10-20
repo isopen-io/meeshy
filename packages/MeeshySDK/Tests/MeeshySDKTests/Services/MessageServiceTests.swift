@@ -342,6 +342,25 @@ final class MessageServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
+    func test_delete_withoutReason_sendsNoBody() async throws {
+        mock.stub("/conversations/\(convId)/messages/\(msgId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+
+        try await service.delete(conversationId: convId, messageId: msgId, reason: nil)
+
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertNil(mock.lastRequest?.bodyJSON)
+    }
+
+    func test_delete_withReason_sendsReasonInJSONBody() async throws {
+        mock.stub("/conversations/\(convId)/messages/\(msgId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+
+        try await service.delete(conversationId: convId, messageId: msgId, reason: "Propos haineux")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/\(convId)/messages/\(msgId)")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reason"] as? String, "Propos haineux")
+    }
+
     // MARK: - pin
 
     func testPinCallsCorrectEndpoint() async throws {

@@ -9,16 +9,6 @@ import MeeshySDK
 // cache vide ; un échec de synchronisation ne retire jamais ce qui est affiché.
 
 @MainActor
-protocol ProfileSheetDataProviding: AnyObject {
-    func cachedProfile(for key: String) async -> CacheResult<[MeeshyUser]>
-    func fetchProfile(handle: String) async throws -> MeeshyUser
-    func storeProfile(_ user: MeeshyUser, lookupKey: String) async
-    func cachedStats(for userId: String) async -> CacheResult<[UserStats]>
-    func fetchStats(userId: String) async throws -> UserStats
-    func storeStats(_ stats: UserStats, userId: String) async
-}
-
-@MainActor
 final class ProfileSheetLoader: ObservableObject {
     @Published private(set) var profile: MeeshyUser?
     @Published private(set) var stats: UserStats?
@@ -30,17 +20,13 @@ final class ProfileSheetLoader: ObservableObject {
     /// recouvert d'une erreur, et un refus (403) n'en est pas une.
     @Published private(set) var profileLoadFailed = false
 
-    private let data: ProfileSheetDataProviding
-
-    init(data: ProfileSheetDataProviding? = nil) {
-        self.data = data ?? LiveProfileSheetData()
-    }
+    init() {}
 
     /// Une deinit isolée au MainActor tue xctest au démontage sur iOS 18.4+/26 (#9694).
     nonisolated deinit {}
 
     /// Ce que le cache garde, peint sans attendre le réseau.
-    func paintFromCache(userId: String?, username: String) async {
+    func paintFromCache(userId: String?, username: String, using data: any ProfileLoading) async {
         let userId = Self.known(userId)
         let key = Self.lookupKey(userId: userId, username: username)
         guard !key.isEmpty else { return }
@@ -55,29 +41,29 @@ final class ProfileSheetLoader: ObservableObject {
     }
 
     /// Peint le cache, puis synchronise profil et statistiques.
-    func open(userId: String?, username: String) async {
+    func open(userId: String?, username: String, using data: any ProfileLoading) async {
         let userId = Self.known(userId)
         let key = Self.lookupKey(userId: userId, username: username)
         guard !key.isEmpty else { return }
-        await paintFromCache(userId: userId, username: username)
+        await paintFromCache(userId: userId, username: username, using: data)
         if let id = userId ?? profile?.id {
-            async let syncedProfile: Void = synchronizeProfile(key)
-            async let syncedStats: Void = synchronizeStats(id)
+            async let syncedProfile: Void = synchronizeProfile(key, using: data)
+            async let syncedStats: Void = synchronizeStats(id, using: data)
             _ = await (syncedProfile, syncedStats)
             return
         }
-        await synchronizeProfile(key)
+        await synchronizeProfile(key, using: data)
         guard let resolved = profile?.id else {
             isLoadingStats = false
             return
         }
-        await synchronizeStats(resolved)
+        await synchronizeStats(resolved, using: data)
     }
 
     /// « Réessayer » : rejoue l'ouverture — le cache d'abord, puis la synchronisation.
-    func retry(userId: String?, username: String) async {
+    func retry(userId: String?, username: String, using data: any ProfileLoading) async {
         profileLoadFailed = false
-        await open(userId: userId, username: username)
+        await open(userId: userId, username: username, using: data)
     }
 
     /// Le pair s'est renommé ou a changé de photo pendant que sa fiche est ouverte.
@@ -85,7 +71,7 @@ final class ProfileSheetLoader: ObservableObject {
         profile = user
     }
 
-    private func synchronizeProfile(_ key: String) async {
+    private func synchronizeProfile(_ key: String, using data: any ProfileLoading) async {
         defer { isLoadingProfile = false }
         do {
             let fresh = try await data.fetchProfile(handle: key)
@@ -113,7 +99,7 @@ final class ProfileSheetLoader: ObservableObject {
         stats = nil
     }
 
-    private func synchronizeStats(_ userId: String) async {
+    private func synchronizeStats(_ userId: String, using data: any ProfileLoading) async {
         defer { isLoadingStats = false }
         guard let fresh = try? await data.fetchStats(userId: userId) else { return }
         stats = fresh
@@ -127,51 +113,5 @@ final class ProfileSheetLoader: ObservableObject {
 
     private static func lookupKey(userId: String?, username: String) -> String {
         userId ?? username
-    }
-}
-
-// MARK: - Le cache et le réseau réels
-
-@MainActor
-final class LiveProfileSheetData: ProfileSheetDataProviding {
-
-    nonisolated deinit {}
-
-    func cachedProfile(for key: String) async -> CacheResult<[MeeshyUser]> {
-        let result = await CacheCoordinator.shared.profiles.load(for: key)
-        // Chaque visite prolonge la vie de l'entrée (30 jours) : une fiche revisitée ne repart pas à froid.
-        await CacheCoordinator.shared.profiles.touch(for: key)
-        return result
-    }
-
-    func fetchProfile(handle: String) async throws -> MeeshyUser {
-        // `presence` POSE la question (#9063) : la passerelle ne sert `isOnline` / `lastActiveAt` qu'à un ami
-        // accepté, sous les réglages de la personne regardée.
-        let user = try await UserService.shared.getProfile(handle: handle, expand: [.presence]).user
-        UserDisplayNameCache.shared.trackFromUser(user)
-        return user
-    }
-
-    func storeProfile(_ user: MeeshyUser, lookupKey: String) async {
-        try? await CacheCoordinator.shared.profiles.save([user], for: user.id)
-        // Ouverte par pseudo, la fiche range aussi l'entrée sous ce pseudo : la prochaine ouverture par pseudo
-        // se peint depuis le cache au lieu de repartir à froid.
-        if lookupKey != user.id {
-            try? await CacheCoordinator.shared.profiles.save([user], for: lookupKey)
-        }
-        await CacheCoordinator.shared.profiles.touch(for: user.id)
-        await SearchIndex.shared.indexUsers([user])
-    }
-
-    func cachedStats(for userId: String) async -> CacheResult<[UserStats]> {
-        await CacheCoordinator.shared.profileStats.load(for: userId)
-    }
-
-    func fetchStats(userId: String) async throws -> UserStats {
-        try await UserService.shared.getUserStats(userId: userId)
-    }
-
-    func storeStats(_ stats: UserStats, userId: String) async {
-        try? await CacheCoordinator.shared.profileStats.save([stats], for: userId)
     }
 }

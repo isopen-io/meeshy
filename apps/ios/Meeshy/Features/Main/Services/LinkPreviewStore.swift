@@ -161,5 +161,5 @@ final class LinkPreviewStore: ObservableObject {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let linkPreview = Logger(subsystem: "me.meeshy.app", category: "link-preview")
+    nonisolated static let linkPreview = MeeshyLog.logger(.linkPreview)
 }

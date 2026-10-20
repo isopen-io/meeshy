@@ -7,7 +7,7 @@ import { lazy, Suspense, useCallback, useState, type ReactNode } from 'react';
 
 import { PeerAvatar } from './peer-avatar';
 import { FeedActionsRow, type CommentHandler, type GestureHandler, type RepostHandler, type ShareHandler } from './feed-actions-row';
-import { FeedPostMenu, type PostMenuHost } from './feed-post-menu';
+import { ModelPostMenu, type PostMenuHost } from './feed-post-menu';
 import { FeedRepostEmbed } from './feed-repost-embed';
 import { PersonName } from './person-name';
 import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
@@ -334,21 +334,7 @@ const hostsOf = ({ onGesture, onShare, onComment, onRepost }: CardHosts): Omit<C
 function CardMenu({ model, isDetail, tone, hosts }: { readonly model: FeedCardModel; readonly isDetail: boolean; readonly tone: 'card' | 'overlay'; readonly hosts: CardHosts }) {
   if (hosts.menu === undefined) return null;
   return (
-    <FeedPostMenu
-      postId={model.id}
-      authorId={model.author.id}
-      authorName={model.author.name}
-      text={model.text?.full}
-      originalText={model.text?.original}
-      originalLanguage={model.text?.originalLanguage}
-      bookmarked={model.viewer.bookmarked}
-      studioEditable={model.repostOf === undefined && (model.scene !== undefined || model.media.length > 0)}
-      isDetail={isDetail}
-      tone={tone}
-      menu={hosts.menu}
-      onShare={hosts.onShare}
-      onGesture={hosts.onGesture}
-    />
+    <ModelPostMenu model={model} isDetail={isDetail} tone={tone} menu={hosts.menu} onShare={hosts.onShare} onGesture={hosts.onGesture} />
   );
 }
 

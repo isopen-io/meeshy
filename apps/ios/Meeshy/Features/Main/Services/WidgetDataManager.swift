@@ -518,5 +518,5 @@ final class WidgetDataManager: NotificationWidgetSink {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let widgetData = Logger(subsystem: "me.meeshy.app", category: "widget-data")
+    nonisolated static let widgetData = MeeshyLog.logger(.widgetData)
 }

@@ -18,7 +18,7 @@ public actor ConversationDraftManager {
     private let cache: CacheCoordinator
     private let debounce: TimeInterval
     private var pendingTasks: [String: Task<Void, Never>] = [:]
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "drafts")
+    private let logger = MeeshyLog.logger(.drafts)
 
     public init(
         cache: CacheCoordinator = .shared,
@@ -44,8 +44,7 @@ public actor ConversationDraftManager {
         let debounce = self.debounce
         let draft = ConversationDraft(conversationId: conversationId, text: text, updatedAt: Date())
         pendingTasks[conversationId] = Task { [cache, logger] in
-            try? await Task.sleep(for: .seconds(debounce))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(debounce)) else { return }
             do {
                 try await cache.drafts.save([draft], for: conversationId)
             } catch {

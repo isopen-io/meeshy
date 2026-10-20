@@ -99,7 +99,7 @@ final class CallControlsController: ObservableObject {
     private var subscription: AnyCancellable?
     private var changeForwarding: AnyCancellable?
     private(set) var pendingExpiry: Task<Void, Never>?
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-controls")
+    private let logger = MeeshyLog.logger(.callControls)
 
     nonisolated deinit {}
 

@@ -438,6 +438,7 @@ struct iPadResizableHandle: View {
         }
         .frame(width: handleWidth)
         .contentShape(Rectangle())
+        .meeshyColumnResizePointer()
         .gesture(
             // minimumDistance > tap-wobble so an accidental tap near the divider
             // never starts a resize (and never swallows a nearby tap sequence).

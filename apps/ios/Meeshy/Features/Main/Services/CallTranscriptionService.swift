@@ -12,7 +12,7 @@ import os
 // Discovered via the Task 1 spike (2026-07-10): a bare `private let` here
 // made the tap closure's log call fail to compile once the closure was
 // correctly typed `@Sendable` (see below) — same fix applied there.
-private nonisolated let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+private nonisolated let callsLogger = MeeshyLog.logger(.calls)
 
 // MARK: - Protocol
 

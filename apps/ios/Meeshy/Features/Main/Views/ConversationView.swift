@@ -267,6 +267,15 @@ struct ConversationView: View {
         return modRoles.contains(convRole) || modRoles.contains(platformRole)
     }
 
+    /// « Retirer » le message d'un AUTRE (#11151) — créateur compris, jamais en direct.
+    func canRemoveMessage(_ message: Message) -> Bool {
+        guard let conversation else { return false }
+        return ContentRemovalPolicy.mayRemoveMessage(
+            authoredByViewer: message.isMe, conversationType: conversation.type,
+            conversationRole: conversation.currentUserRole, platformRole: AuthManager.shared.currentUser?.role
+        )
+    }
+
     // MARK: - Init
 
     init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, showsOwnConnectionBanner: Bool = false, onOpenFullConversation: (() -> Void)? = nil, forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil, landsOnMessage: Bool = false) {
@@ -491,22 +500,12 @@ struct ConversationView: View {
         pendingAudioPlayer.stop()
     }
 
-    /// Revenir au premier plan ne marque plus la conversation lue : l'observateur
-    /// de visibilité reprend. Passer en arrière-plan : ce qui était à l'écran a
-    /// bien été lu (accusé AVANT que l'app ne s'endorme), les pièces jointes du
-    /// brouillon se copient durablement (les fichiers du tray vivent dans tmp/,
-    /// purgeable par iOS), et #7500 — « quitter, c'est quitter » : l'arrière-plan
-    /// et le verrouillage sont des sorties au même titre que le retour, par le
-    /// MÊME geste idempotent.
     private func conversationDidEnterBackground() {
         scrollState.flushSeenTrigger += 1
         persistDraftAttachmentsForBackground()
         consumeOpenedViewOnceOnExit()
     }
 
-    /// Le serveur a signalé que l'utilisateur n'a plus accès (expulsé, groupe
-    /// supprimé, bloqué…). Le ViewModel a déjà purgé le cache et l'état local :
-    /// l'écran se ferme, et un toast dit pourquoi.
     private func conversationAccessWasRevoked() {
         FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", bundle: .main))
         if anonymousSession != nil { dismiss() } else { router.pop() } // iPad : `dismiss()` y est un no-op
@@ -540,6 +539,16 @@ struct ConversationView: View {
             dock: { composerDock },
             searchOverlay: { searchResultsBlurOverlay }
         )
+        .modifier(ComposerDropTargetModifier(
+            accentColor: accentColor,
+            isEnabled: ComposerDropTargetModifier.acceptsDrops(
+                isSelecting: overlayState.isSelectionModeActive,
+                isBlockedDirect: blockedDirectParticipantId != nil,
+                isClosed: viewModel.isConversationClosed,
+                isWriteRestricted: viewModel.writeRestriction(served: liveConversation?.viewerWriteRestriction) != nil, isPreview: previewMode
+            ),
+            onIngest: { ingestRespectingGuestAllowance($0) }
+        ))
     }
 
     private var readerModeBranch: ConversationReaderModeBranch {
@@ -636,7 +645,8 @@ struct ConversationView: View {
             requestDelete: { requestDeleteMessage($0) },
             edit: { beginEdit($0) },
             export: { beginMessageExport($0, quick: $1) },
-            compose: { composerState.composeMediaTarget = ComposerSeedTarget(message: $0) }
+            compose: { composerState.composeMediaTarget = ComposerSeedTarget(message: $0) },
+            canRemove: { canRemoveMessage($0) }
         )
     }
 

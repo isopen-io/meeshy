@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let brandingLog = Logger(subsystem: "me.meeshy.app", category: "media-branding")
+private let brandingLog = MeeshyLog.logger(.mediaBranding)
 
 // MARK: - Résultat
 

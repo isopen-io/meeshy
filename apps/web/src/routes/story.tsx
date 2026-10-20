@@ -37,6 +37,7 @@ import { readerCardFraming } from '@/lib/stories/framing';
 
 import { StoryBottomBar, StoryTopBar } from './story-chrome';
 import { ProgressBars, StoryMediaLayer } from './story-parts';
+import { useStoryRemoval } from './story-removal';
 import { useStoryScrub } from './use-story-scrub';
 import {
   currentStoryAt,
@@ -594,7 +595,8 @@ export default function StoryScreen() {
      passer à la suivante (le composeur ne change jamais de publication à
      mi-phrase). Seule la pause demandée la fige. */
   const [optionsOpen, setOptionsOpen] = useState(false);
-  const engaged = layerOpen || optionsOpen;
+  const removal = useStoryRemoval({ storyId: currentStory?.id, isMine: group?.isMine === true, announce, onRemoved: dismissByUser });
+  const engaged = layerOpen || optionsOpen || removal.open;
   const hold = resolveStoryPlaybackHold({ paused, engaged });
   holdRef.current = hold;
 
@@ -879,6 +881,7 @@ export default function StoryScreen() {
             language={interfaceLanguage}
             onClose={dismissByUser}
             onSave={ownerRail.handlers.save}
+            onRemove={removal.onRemove}
             onOptionsOpenChange={setOptionsOpen}
             /* LE CRÉDIT DU SON (#9678, vue `2f`) — lu sur la scène QUI JOUE : celle
                de la source pour une story repartagée sans effets propres. */
@@ -1000,6 +1003,7 @@ export default function StoryScreen() {
         </div>
       ) : null}
       {invitation.dialog}
+      {removal.sheet}
     </div>
   );
 }

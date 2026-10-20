@@ -2,8 +2,9 @@ import AVFoundation
 import Combine
 import Foundation
 import os
+import MeeshySDK
 
-private let logger = Logger(subsystem: "me.meeshy.app.notification-content", category: "player")
+private let logger = MeeshyLog.logger(.player, subsystem: .notificationContent)
 
 /// Ce que la notification déployée demande à un lecteur : le bouton natif
 /// (`mediaPlayPauseButtonType`) joue et met en pause, la vue change la vitesse.

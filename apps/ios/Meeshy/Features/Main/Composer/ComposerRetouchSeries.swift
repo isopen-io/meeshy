@@ -15,6 +15,10 @@ nonisolated struct ComposerRetouchPiece: Equatable {
     let kind: Kind
 }
 
+nonisolated extension ComposerRetouchPiece: Identifiable {
+    var id: String { attachmentId }
+}
+
 /// Ce que « Éditer » remet au composer : les pièces, et celle qu'on a touchée.
 nonisolated struct ComposerRetouchSeed: Equatable {
     let pieces: [ComposerRetouchPiece]

@@ -532,8 +532,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
 
         persistTask?.cancel()
         persistTask = Task {
-            try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(2)) else { return }
             await self.flushDirtyKeys()
         }
     }

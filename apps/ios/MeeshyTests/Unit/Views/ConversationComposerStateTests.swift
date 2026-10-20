@@ -168,7 +168,8 @@ final class ConversationComposerStateTests: XCTestCase {
             .appendingPathComponent("FeedComposerSheet.swift"), encoding: .utf8)
         XCTAssertFalse(citation.contains("onComplete: { _ in editingVideoURL = nil }"),
                        "La citation d'un post jette le résultat de l'éditeur vidéo.")
-        XCTAssertTrue(citation.contains("PendingVideoEditReplacement.apply(result, to: target.id"))
+        XCTAssertTrue(citation.contains("PendingVideoEditReplacement.apply(result, to: id"),
+                      "La vidéo retouchée remplace SA pièce dans la feuille du fil (#11170).")
         // #9166 — la scène se retire elle-même et sa fermeture vide la file
         // avant « Terminé » : `removeFirst()` sur une file vide abattait l'app
         // (mesuré au simulateur).

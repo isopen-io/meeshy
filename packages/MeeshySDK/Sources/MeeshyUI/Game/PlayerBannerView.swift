@@ -193,7 +193,7 @@ public struct PlayerBannerView: View {
         HStack(spacing: 6) {
             if model.showsLevel { select(.level) { ring(side: compactRingSide) } }
             if model.showsScore {
-                select(.sparks) { model.showsLevel ? AnyView(gauge) : AnyView(scoreOnly) }
+                select(.sparks) { if model.showsLevel { gauge } else { scoreOnly } }
                     .frame(minWidth: 56, maxWidth: .infinity, alignment: .leading)
             } else {
                 Spacer(minLength: 0)
@@ -277,7 +277,7 @@ public struct PlayerBannerView: View {
                 HStack(spacing: 10) {
                     if model.showsLevel { select(.level) { ring(side: ringWidth) } }
                     if model.showsScore {
-                        select(.sparks) { model.showsLevel ? AnyView(gauge) : AnyView(scoreOnly) }
+                        select(.sparks) { if model.showsLevel { gauge } else { scoreOnly } }
                     }
                 }
             }

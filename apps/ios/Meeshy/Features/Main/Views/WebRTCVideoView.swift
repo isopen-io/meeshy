@@ -1,10 +1,11 @@
 import SwiftUI
 import os
 
-private let videoLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+private let videoLogger = MeeshyLog.logger(.calls)
 
 #if canImport(WebRTC)
 import WebRTC
+import MeeshySDK
 
 // MARK: - WebRTC Video View (SwiftUI wrapper for RTCMTLVideoView)
 

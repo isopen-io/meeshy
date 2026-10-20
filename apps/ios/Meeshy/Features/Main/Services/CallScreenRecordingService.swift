@@ -66,7 +66,7 @@ final class CallScreenRecordingService: CallRecordingServiceProviding {
     private var writer: CallScreenSampleWriter?
     private var targetURL: URL?
     private var fallbackActive = false
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-recording")
+    private let logger = MeeshyLog.logger(.callRecording)
 
     nonisolated deinit {}
 

@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 import os
 
-private let convStateOutboxLog = Logger(subsystem: "com.meeshy.sdk", category: "conversation-state-outbox")
+private let convStateOutboxLog = MeeshyLog.logger(.conversationStateOutbox, subsystem: .legacySDK)
 
 // MARK: - Public types
 

@@ -7,7 +7,7 @@ import MeeshySDK
 import os
 import UIKit
 
-private nonisolated let containerLogger = Logger(subsystem: "me.meeshy.app", category: "dependency-container")
+private nonisolated let containerLogger = MeeshyLog.logger(.dependencyContainer)
 
 /// Diagnostic record produced by ``DependencyContainer`` boot.
 ///
@@ -523,9 +523,9 @@ final class DependencyContainer {
                     // sans compte : un post vu des deux comptes rendait au
                     // second le brouillon du premier.
                     await MainActor.run { CommentDraftStore.shared.clearAll() }
-                    // #8848 — la création en cours du composer appartient au
-                    // compte sortant, comme son brouillon de story (E9).
+                    // #8848 — création du composer (E9) et copies temporaires du glisser : au compte sortant.
                     ComposerAutosaveStore.shared.deleteAll()
+                    BubbleDragScratch.purge()
                 }
             }
             .store(in: &cancellables)

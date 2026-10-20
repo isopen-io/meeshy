@@ -25,7 +25,7 @@ public actor SocialEventsV2Outbox {
         }
     }
     private let now: @Sendable () -> Date
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "social-events-v2-outbox")
+    private static let logger = MeeshyLog.logger(.socialEventsV2Outbox, subsystem: .legacySDK)
 
     private static func backoff(attempts: Int) -> TimeInterval {
         min(300, pow(2.0, Double(max(0, attempts))) * 5)

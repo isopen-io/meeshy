@@ -117,7 +117,7 @@ final class ConversationMediaCatalog: ObservableObject, ConversationMediaCatalog
     /// tête suffit à revalider.
     private var isComplete = false
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "media-index")
+    private static let logger = MeeshyLog.logger(.mediaIndex)
 
     /// Où en est la remontée : la TÊTE (du plus récent jusqu'au premier porteur
     /// déjà connu) puis la QUEUE (depuis le plus ancien connu jusqu'au premier

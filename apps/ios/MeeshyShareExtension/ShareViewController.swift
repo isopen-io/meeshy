@@ -1,5 +1,4 @@
 import UIKit
-import UniformTypeIdentifiers
 import SwiftUI
 import MeeshySDK
 
@@ -38,12 +37,12 @@ final class ShareViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
-        let providers = inputProviders.map(ShareProviderHandoff.init(provider:))
-        let shareId = shareId
+        // Les chargements partent ICI, sur le MainActor : aucun fournisseur
+        // (non `Sendable`) ne traverse de fil, seul ce qu'ils rendent (#11064).
+        let loads = ShareItemLoader.start(inputProviders, shareId: shareId)
         loading = Task { @MainActor [weak self] in
-            let content = await Self.extractContent(providers)
-            let staged = await Self.stageAttachments(providers, shareId: shareId)
-            self?.installInterface(content: content, media: staged.media, failure: staged.failure)
+            let gathered = await loads.gather()
+            self?.installInterface(content: gathered.content, media: gathered.media, failure: gathered.failure)
         }
     }
 
@@ -180,150 +179,4 @@ final class ShareViewController: UIViewController {
         guard let mediaRoot = ShareMediaStaging.mediaRootURL() else { return }
         ShareMediaStaging.discard(shareId: shareId, in: mediaRoot)
     }
-
-    // MARK: - Extraction
-
-    @concurrent
-    private static func extractContent(_ providers: [ShareProviderHandoff]) async -> String? {
-        let payloads = await withTaskGroup(of: (index: Int, payload: ShareProviderPayload).self) { group in
-            for (index, handoff) in providers.enumerated() {
-                let provider = handoff.provider
-                if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
-                    group.addTask { (index, .url(await loadURL(from: handoff.provider))) }
-                } else if provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
-                    group.addTask { (index, .text(await loadText(from: handoff.provider))) }
-                }
-            }
-            var collected: [(index: Int, payload: ShareProviderPayload)] = []
-            for await entry in group { collected.append(entry) }
-            return collected.sorted { $0.index < $1.index }.map(\.payload)
-        }
-        let reduced = ShareExtractionReduction.content(from: payloads)
-        return ShareSender.composeContent(text: reduced.text, url: reduced.url)
-    }
-
-    nonisolated private static func loadURL(from provider: NSItemProvider) async -> URL? {
-        await withCheckedContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { data, _ in
-                continuation.resume(returning: asURL(data))
-            }
-        }
-    }
-
-    nonisolated private static func loadText(from provider: NSItemProvider) async -> String? {
-        await withCheckedContinuation { continuation in
-            provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { data, _ in
-                continuation.resume(returning: asText(data))
-            }
-        }
-    }
-
-    /// `nonisolated` : appelées depuis la complétion de `loadItem`, qui
-    /// s'exécute sur une file arbitraire.
-    nonisolated private static func asURL(_ data: (any NSSecureCoding)?) -> URL? {
-        if let url = data as? URL { return url }
-        if let raw = data as? Data, let string = String(data: raw, encoding: .utf8) {
-            return URL(string: string)
-        }
-        if let string = data as? String { return URL(string: string) }
-        return nil
-    }
-
-    nonisolated private static func asText(_ data: (any NSSecureCoding)?) -> String? {
-        if let string = data as? String { return string }
-        if let raw = data as? Data { return String(data: raw, encoding: .utf8) }
-        return nil
-    }
-
-    /// Copie chaque fichier reçu DANS la closure de `loadFileRepresentation`,
-    /// de façon synchrone : l'URL fournie est SUPPRIMÉE au retour de cette
-    /// closure. `prepareMediaRoot` crée `share_pending_media/<shareId>/` : il
-    /// n'est appelé qu'une fois certain qu'il y a un fichier à copier, sinon un
-    /// partage de texte pur laisserait un dossier que rien n'efface.
-    ///
-    /// Les plafonds communs (D10 : 20 fichiers, 500 Mo) ne refusent plus rien
-    /// ici : l'écran unique les DIT (V9). La copie reste gardée par l'espace
-    /// libre, fichier par fichier (`ShareMediaStaging.stage`).
-    @concurrent
-    private static func stageAttachments(
-        _ providers: [ShareProviderHandoff],
-        shareId: String
-    ) async -> (media: [ShareStagedMedia], failure: ShareMediaStagingError?) {
-        let fileProviders = providers.filter { handoff in
-            !handoff.provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
-                && !handoff.provider.hasItemConformingToTypeIdentifier(UTType.text.identifier)
-        }
-        guard !fileProviders.isEmpty,
-              let mediaRoot = ShareMediaStaging.prepareMediaRoot(shareId: shareId) else { return ([], nil) }
-
-        let results = await withTaskGroup(of: ShareStagingResult.self) { group in
-            for (index, handoff) in fileProviders.enumerated() {
-                guard let typeIdentifier = handoff.provider.registeredTypeIdentifiers.first else { continue }
-                group.addTask {
-                    await stage(handoff.provider, typeIdentifier: typeIdentifier, index: index, mediaRoot: mediaRoot, shareId: shareId)
-                }
-            }
-            var collected: [ShareStagingResult] = []
-            for await result in group { collected.append(result) }
-            return collected
-        }
-        return ShareExtractionReduction.staging(from: results)
-    }
-
-    nonisolated private static func stage(
-        _ provider: NSItemProvider,
-        typeIdentifier: String,
-        index: Int,
-        mediaRoot: URL,
-        shareId: String
-    ) async -> ShareStagingResult {
-        await withCheckedContinuation { continuation in
-            provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
-                let outcome = copyProvidedFile(
-                    url, error: error, typeIdentifier: typeIdentifier,
-                    index: index, mediaRoot: mediaRoot, shareId: shareId
-                )
-                continuation.resume(returning: ShareStagingResult(index: index, outcome: outcome))
-            }
-        }
-    }
-
-    nonisolated private static func copyProvidedFile(
-        _ url: URL?,
-        error: (any Error)?,
-        typeIdentifier: String,
-        index: Int,
-        mediaRoot: URL,
-        shareId: String
-    ) -> Result<ShareStagedMedia, ShareMediaStagingError> {
-        guard let url else {
-            return .failure(.copyFailed(error?.localizedDescription ?? "aucune URL fournie"))
-        }
-        // Une URL issue de Fichiers/iCloud est security-scoped : sans la paire
-        // start/stop, la lecture échoue en silence.
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        do {
-            return .success(try ShareMediaStaging.stage(
-                source: url,
-                into: mediaRoot,
-                shareId: shareId,
-                index: index,
-                mime: ShareMediaStaging.mimeType(typeIdentifier: typeIdentifier, fileExtension: url.pathExtension),
-                freeBytes: ShareMediaStaging.availableCapacityBytes(at: mediaRoot)
-            ))
-        } catch let error as ShareMediaStagingError {
-            return .failure(error)
-        } catch {
-            return .failure(.copyFailed(error.localizedDescription))
-        }
-    }
-}
-
-/// `NSItemProvider` n'est pas `Sendable`, mais son chargement (`loadItem`) se fait
-/// depuis n'importe quel fil. Les fournisseurs quittent le MainActor emballés, et
-/// chaque tâche du groupe reçoit SON fournisseur, que rien d'autre ne touche
-/// pendant le chargement : le transfert ne partage rien.
-private nonisolated struct ShareProviderHandoff: @unchecked Sendable {
-    let provider: NSItemProvider
 }

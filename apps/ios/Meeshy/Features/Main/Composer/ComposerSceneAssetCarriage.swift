@@ -59,7 +59,7 @@ struct ComposerCarriedSceneAssets {
                             loadedImages: [String: UIImage],
                             stickerAnimations: [String: Data],
                             directory: URL = FileManager.default.temporaryDirectory) -> ComposerCarriedSceneAssets {
-        let journal = os.Logger(subsystem: "me.meeshy.app", category: "media")
+        let journal = MeeshyLog.logger(.media)
         var media: [ComposerDocumentMedia] = []
         var bridge: [URL: String] = [:]
         for item in pending {

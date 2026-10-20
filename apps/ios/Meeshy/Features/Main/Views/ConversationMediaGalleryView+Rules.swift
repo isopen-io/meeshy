@@ -63,6 +63,15 @@ enum GalleryRenderWindow {
         abs(distance) <= radius
     }
 
+    /// **Une page n'est construite que près de la page ouverte** (#11163). Le
+    /// pager par sélection appelle le constructeur de CHAQUE pièce à chaque
+    /// mise à jour ; au-delà de la fenêtre et de sa marge, la page est un fond
+    /// noir sans état. La marge d'une page fait qu'une page devient réelle
+    /// AVANT d'entrer dans la fenêtre — jamais sous les yeux de l'utilisateur.
+    static func buildsPage(distance: Int) -> Bool {
+        abs(distance) <= radius + 1
+    }
+
     /// Ce qu'on préchauffe : STRICTEMENT la fenêtre de rendu. Préchauffer
     /// au-delà décoderait des images que personne ne peut voir, donc de la
     /// pression mémoire pure — donc des évictions, donc un re-décodage au

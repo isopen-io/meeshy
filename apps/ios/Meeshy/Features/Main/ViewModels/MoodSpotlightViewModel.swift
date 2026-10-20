@@ -140,5 +140,5 @@ final class MoodSpotlightViewModel: ObservableObject {
 }
 
 extension Logger {
-    nonisolated static let moodSpotlight = Logger(subsystem: "me.meeshy.app", category: "mood-spotlight")
+    nonisolated static let moodSpotlight = MeeshyLog.logger(.moodSpotlight)
 }

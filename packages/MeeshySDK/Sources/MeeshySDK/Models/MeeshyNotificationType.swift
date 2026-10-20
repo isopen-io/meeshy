@@ -116,6 +116,9 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     /// L'issue d'un signalement, notifiée au déclarant (art. 16 DSA, #3718).
     /// Absent du catalogue, il décodait en `.system` (#6508).
     case reportResolved = "report_resolved"
+    /// Le contenu de l'auteur retiré par un administrateur, avec son motif
+    /// (#11151) — adressé à l'auteur seul. Titre et corps servis par la passerelle.
+    case contentRemoved = "content_removed"
 
     // Engagement — les QUATRE types que la passerelle émet
     // (`packages/shared/types/notification.ts`). `level_up` manquait : un
@@ -192,6 +195,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled: return "exclamationmark.triangle.fill"
         case .system, .maintenance, .updateAvailable: return "bell.fill"
         case .reportResolved: return "checkmark.shield.fill"
+        case .contentRemoved: return "xmark.shield.fill"
         case .legacyAffiliateSignup: return "link.badge.plus"
         case .legacyStatusUpdate: return "circle.fill"
         case .voiceCloneReady: return "waveform"
@@ -233,7 +237,8 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
             return "E91E63"
         case .legacyAffiliateSignup:
             return "2ECC71"
-        case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled:
+        case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
+             .contentRemoved:
             return "EF4444"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted, .voiceCloneReady:
             return "08D9D6"

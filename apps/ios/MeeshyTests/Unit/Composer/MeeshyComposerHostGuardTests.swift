@@ -1512,10 +1512,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // du fil (`ConversationImageSceneDoor`) monte le meuble au lieu de
             // l'éditeur d'image à part. Elle passe les trois canaux — et n'en
             // publie aucun : son socle rend l'image au message.
+            //
+            // **Une porte de moins, 2026-10-20** (#11170) : la retouche d'une
+            // image ou d'une vidéo passe partout par la retouche de la caméra
+            // (`ConversationPieceRetouch`), qui ne monte pas le meuble. La porte
+            // de scène a quitté le dépôt avec son dernier appelant.
             ["StoryTrayActions.swift", "MoodComposerDoor.swift", "DocumentComposerDoor.swift",
              "MediaComposerDoor.swift", "ShareComposeDoor.swift",
-             "StoryEditComposer.swift", "StoryRepublishComposer.swift",
-             "ConversationImageSceneDoor.swift"],
+             "StoryEditComposer.swift", "StoryRepublishComposer.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
                 + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "

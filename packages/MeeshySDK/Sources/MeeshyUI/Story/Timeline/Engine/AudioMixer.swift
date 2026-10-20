@@ -30,7 +30,7 @@ public final class AudioMixer: AudioMixerProviding {
     public var activeNodeCount: Int { nodes.count }
     public func intendedVolume(for audioId: String) -> Float? { volumes[audioId] }
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    private let logger = MeeshyLog.logger(.media)
     private let engine = AVAudioEngine()
     private var nodes: [String: AVAudioPlayerNode] = [:]
     private var files: [String: AVAudioFile] = [:]
@@ -296,7 +296,7 @@ public final class AudioMixer: AudioMixerProviding {
         // still release AVAudioEngine + nodes (Foundation classes have their
         // own teardown), so this is a leak hint, not a crash.
         if !didShutdown {
-            os.Logger(subsystem: "me.meeshy.app", category: "media").warning(
+            MeeshyLog.logger(.media).warning(
                 "AudioMixer deinit without shutdown() — owner should call shutdown() before drop to release AVAudioEngine + nodes deterministically."
             )
         }

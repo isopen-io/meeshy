@@ -8,6 +8,7 @@ import type { CommentMenuEntry } from '@/lib/view/comment-menu';
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 
+import { ContentRemovalSheet } from './content-removal-sheet';
 import { Glyph, GlyphSvg } from './glyph';
 import { NOTIFICATIONS_GLYPHS } from './glyphs-notifications';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
@@ -30,7 +31,8 @@ import { ReportSheet } from './report-sheet';
  *    sur ce geste) ; l'appui HORS du menu s'écoute donc en capture aussi.
  *
  * « Signaler » demande son motif (`ReportSheet`, la feuille de tout
- * signalement) : choisir un motif EST la confirmation.
+ * signalement) : choisir un motif EST la confirmation. « Retirer » (#11150)
+ * demande le sien par écrit (`ContentRemovalSheet`), l'auteur en est prévenu.
  */
 const MENU_WIDTH = 248;
 const MENU_MARGIN = 8;
@@ -39,7 +41,7 @@ const MENU_ITEM_HEIGHT = 44;
 const MENU_PADDING = 8;
 const MENU_Z_INDEX = 300;
 
-const DESTRUCTIVE: ReadonlySet<CommentMenuEntry> = new Set(['delete', 'report']);
+const DESTRUCTIVE: ReadonlySet<CommentMenuEntry> = new Set(['delete', 'remove', 'report']);
 
 const LABEL = {
   copy: 'feed.post.menu.copy_text',
@@ -47,6 +49,7 @@ const LABEL = {
   imageWithReplies: 'comments.action.image_with_replies',
   edit: 'comments.action.edit',
   delete: 'comments.action.delete',
+  remove: 'moderation.remove.action',
   report: 'report.action',
 } as const satisfies Readonly<Record<CommentMenuEntry, InterfaceCatalogKey>>;
 
@@ -56,11 +59,15 @@ const ICON: Readonly<Record<CommentMenuEntry, () => ReactNode>> = {
   imageWithReplies: () => <GlyphSvg glyph={THREAD_MENU_GLYPHS.imageSquare} size={16} />,
   edit: () => <GlyphSvg glyph={THREAD_MENU_GLYPHS.pencilSimple} size={16} />,
   delete: () => <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />,
+  remove: () => <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />,
   report: () => <Glyph name="warningCircle" size={16} />,
 };
 
-/** Le geste choisi — « Signaler » arrive avec son motif. */
-export type CommentMenuPick = { readonly entry: Exclude<CommentMenuEntry, 'report'> } | { readonly entry: 'report'; readonly reason: ReportReason };
+/** Le geste choisi — « Signaler » arrive avec son motif choisi, « Retirer » (#11150) avec son motif écrit. */
+export type CommentMenuPick =
+  | { readonly entry: Exclude<CommentMenuEntry, 'report' | 'remove'> }
+  | { readonly entry: 'report'; readonly reason: ReportReason }
+  | { readonly entry: 'remove'; readonly reason: string };
 
 export function CommentRowMenu({
   entries,
@@ -77,6 +84,7 @@ export function CommentRowMenu({
   readonly onPick: (pick: CommentMenuPick) => void;
 }) {
   const [reporting, setReporting] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
   const { open, setOpen, closeAndFocusButton, activeIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = useRovingMenu({
     itemCount: entries.length,
@@ -187,6 +195,10 @@ export function CommentRowMenu({
                         setReporting(true);
                         return;
                       }
+                      if (entry === 'remove') {
+                        setRemoving(true);
+                        return;
+                      }
                       onPick({ entry });
                     }}
                     className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-title font-medium"
@@ -207,6 +219,20 @@ export function CommentRowMenu({
             document.body,
           )
         : null}
+
+      {removing ? (
+        <ContentRemovalSheet
+          onConfirm={(reason) => {
+            setRemoving(false);
+            onPick({ entry: 'remove', reason });
+            buttonRef.current?.focus();
+          }}
+          onCancel={() => {
+            setRemoving(false);
+            buttonRef.current?.focus();
+          }}
+        />
+      ) : null}
 
       {reporting ? (
         <ReportSheet

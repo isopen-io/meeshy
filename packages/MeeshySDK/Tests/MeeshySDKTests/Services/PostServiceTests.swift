@@ -99,6 +99,33 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
+    func test_delete_withReason_sendsReasonInJSONBody() async throws {
+        mock.stub("/posts/\(postId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+
+        try await service.delete(postId: postId, reason: "Contenu violent")
+
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reason"] as? String, "Contenu violent")
+    }
+
+    func test_delete_withoutReason_sendsNoBody() async throws {
+        mock.stub("/posts/\(postId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+
+        try await service.delete(postId: postId, reason: nil)
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON)
+    }
+
+    func test_deleteComment_withReason_sendsReasonInJSONBody() async throws {
+        mock.stub("/posts/\(postId)/comments/c1", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+
+        try await service.deleteComment(postId: postId, commentId: "c1", reason: "Harcèlement")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/comments/c1")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reason"] as? String, "Harcèlement")
+    }
+
     // MARK: - like
 
     func testLikeCallsCorrectEndpoint() async throws {

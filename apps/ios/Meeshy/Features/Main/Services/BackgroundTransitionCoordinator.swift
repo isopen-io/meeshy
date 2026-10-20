@@ -4,7 +4,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "background-transition")
+private let logger = MeeshyLog.logger(.backgroundTransition)
 
 /// Orchestrates the `.background` scene transition under a real
 /// `beginBackgroundTask` umbrella so every step gets a bounded OS budget
@@ -493,5 +493,5 @@ final class MediaLifecycleBridge {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let backgroundTransition = Logger(subsystem: "me.meeshy.app", category: "background-transition")
+    nonisolated static let backgroundTransition = MeeshyLog.logger(.backgroundTransition)
 }

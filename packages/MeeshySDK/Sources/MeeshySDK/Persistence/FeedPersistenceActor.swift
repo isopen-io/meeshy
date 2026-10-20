@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 import os
 
-private let feedPersistenceLog = Logger(subsystem: "com.meeshy.sdk", category: "feed-persistence")
+private let feedPersistenceLog = MeeshyLog.logger(.feedPersistence, subsystem: .legacySDK)
 
 /// Notification posted after FeedPersistenceActor commits a write that may
 /// have changed the feed posts or comments. `FeedStore` and `CommentStore`

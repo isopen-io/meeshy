@@ -81,7 +81,8 @@ struct ComposerCaptureMount<Content: View>: View {
                                     in: ComposerEditScene.area(container: proxy.size, top: marges.safeAreaInsets.top,
                                                                bottom: marges.safeAreaInsets.bottom,
                                                                panels: session.editPanels,
-                                                               framed: session.editFramesScene))
+                                                               framed: session.editFramesScene,
+                                                               playback: session.offersEditPlayback))
                             } ?? rect(card: proxy[ancre], in: proxy.size, taille), taille)
                             // En plein écran, l'écran ne blanchit qu'à la prise.
                             if aspect == nil,

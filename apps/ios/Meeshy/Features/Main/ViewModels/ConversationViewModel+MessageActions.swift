@@ -360,6 +360,26 @@ extension ConversationViewModel {
         }
     }
 
+    /// **Retirer le message d'un AUTRE, avec son motif** (#11151). Optimiste comme
+    /// « supprimer pour tous » : le message s'efface, la passerelle confirme, le
+    /// message revient si elle refuse. Jamais par la file hors ligne : elle ne
+    /// porte pas de motif, et un retrait rejoué sans lui serait refusé.
+    func removeMessage(messageId: String, reason: String) async {
+        guard networkMonitor.isOnline else {
+            self.error = String(localized: "moderation.removal.offline", defaultValue: "Connectez-vous pour retirer ce contenu.", bundle: .main)
+            return
+        }
+        let target = serverId(for: messageId)
+        try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
+        StarredMessagesStore.shared.remove(messageId: target)
+        do {
+            try await messageService.delete(conversationId: conversationId, messageId: target, reason: reason)
+        } catch {
+            try? await messagePersistence.markUndeleted(localId: messageId)
+            self.error = userFacingMessage(for: error)
+        }
+    }
+
     // MARK: - Delete Attachment
 
     func deleteAttachment(messageId: String, attachmentId: String) async {

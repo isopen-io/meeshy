@@ -201,7 +201,7 @@ final class UserStatsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "stats")
+    private static let logger = MeeshyLog.logger(.stats)
 
     func load() async {
         let userId = AuthManager.shared.currentUser?.id ?? ""

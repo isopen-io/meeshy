@@ -46,7 +46,7 @@ enum MessageCardExportPresenter {
         }
     }
 
-    private enum Top {
+    enum Top {
         case ready(UIViewController)
         /// Une feuille est en train de se fermer : réessayer tout à l'heure.
         case busy
@@ -54,7 +54,7 @@ enum MessageCardExportPresenter {
     }
 
     @MainActor
-    private static func topMostController() -> Top {
+    static func topMostController() -> Top {
         guard var top = DeviceLayout.activeWindow?.rootViewController else { return .none }
         while let presented = top.presentedViewController {
             if presented.isBeingDismissed { return .busy }
