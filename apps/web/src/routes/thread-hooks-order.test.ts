@@ -108,6 +108,7 @@ const HOOK_NAMES = [
   'useComposerAccess',
   // #10624 — le fil prête à ses pièces le nom et l'avatar de la conversation.
   'useThreadMediaValue',
+  'useServedGlobalRole',
 ] as const;
 
 const EARLY_RETURN_MARKERS = [
