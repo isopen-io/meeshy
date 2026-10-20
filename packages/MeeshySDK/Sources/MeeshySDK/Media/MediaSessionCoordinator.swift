@@ -7,6 +7,14 @@ import UIKit
 
 private let logger = Logger(subsystem: "com.meeshy.sdk", category: "audio-session")
 
+typealias DelayedScheduler = @Sendable (_ delay: TimeInterval, _ queue: DispatchQueue, _ work: @escaping @Sendable () -> Void) -> Void
+
+enum DelayedScheduling {
+    static let real: DelayedScheduler = { delay, queue, work in
+        queue.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+}
+
 /// Coordonne l'accès à AVAudioSession entre tous les composants audio.
 ///
 /// Actor = thread-safe garanti à la compilation. Responsible for:
@@ -164,12 +172,18 @@ public actor MediaSessionCoordinator {
     public nonisolated(unsafe) var testProbe: MediaSessionCoordinatorTestProbe?
     #endif
 
-    private init() {}
+    private nonisolated let scheduleAfter: DelayedScheduler
+
+    private init(scheduleAfter: @escaping DelayedScheduler = DelayedScheduling.real) {
+        self.scheduleAfter = scheduleAfter
+    }
 
     #if DEBUG
     /// Une instance à part (tests) : le compteur du singleton est partagé avec
     /// des suites qui tournent en parallèle et le remettent à zéro.
-    static func makeForTesting() -> MediaSessionCoordinator { MediaSessionCoordinator() }
+    static func makeForTesting(scheduleAfter: @escaping DelayedScheduler = DelayedScheduling.real) -> MediaSessionCoordinator {
+        MediaSessionCoordinator(scheduleAfter: scheduleAfter)
+    }
     #endif
 
     deinit {
@@ -378,7 +392,7 @@ public actor MediaSessionCoordinator {
         playbackLeaseHeld = false
         let generation = _activationGeneration.withLock { $0 }
         let run: @Sendable () -> Void = deactivate ?? { [self] in deactivatePlaybackSync() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [self] in
+        scheduleAfter(delay, .main) { [self] in
             let stillPlays = MainActor.assumeIsolated { meeshyStillPlays() }
             let activated = _activationGeneration.withLock { $0 } != generation
             guard ContentSessionReleaseLaw.mayRelease(activatedSinceRequest: activated, meeshyStillPlays: stillPlays) else { return }
@@ -401,7 +415,7 @@ public actor MediaSessionCoordinator {
             deactivate()
         }
         guard delay > 0 else { return queue.async(execute: run) }
-        queue.asyncAfter(deadline: .now() + delay, execute: run)
+        scheduleAfter(delay, queue, run)
     }
 
     /// **Le point d'entrée des lecteurs de CONTENU** (#11039) : la session
