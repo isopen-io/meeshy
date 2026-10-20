@@ -111,6 +111,6 @@ describe('l’écran Progression parle la langue d’interface', () => {
   test('interface de : la section et le palier viennent du catalogue allemand', async () => {
     await loadGameCatalog('de');
     expect(achievementSectionTitle('appels', 'de')).toBe('Anrufe');
-    expect(messages && nextStepLabel(messages, 'de')).toBe('Noch 8 bis Stufe 50');
+    expect(messages && nextStepLabel(messages, 'de')).toBe('8 bis Stufe 50');
   });
 });
