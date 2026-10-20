@@ -168,7 +168,7 @@ struct MeeshyApp: App {
                         }
                     }
                     .opacity(launchSplash.phase == .covering ? 0 : 1)
-                    .accessibilityHidden(arrivalCelebration.isShowing)
+                    .accessibilityHidden(arrivalCelebration.isShowing).modifier(ComposerRetoucheRecetteCover())
 
                     // #8089 — l'adresse prouvée vient d'ouvrir la session : la
                     // fête passe AVANT l'onboarding, qui l'attend
