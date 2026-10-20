@@ -139,7 +139,7 @@ class NotificationService: UNNotificationServiceExtension {
         let identifier = request.identifier
         let owned = NSEOwnedContent(content: working)
         enrichment = Task {
-            await Self.deliverEnriched(
+            await NotificationService.deliverEnriched(
                 owned.content,
                 plan: plan,
                 incomingIdentifier: identifier,
