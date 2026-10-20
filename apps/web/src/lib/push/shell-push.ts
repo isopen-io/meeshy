@@ -1,10 +1,8 @@
-import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
 import type { Credential, HttpTransport } from '@/lib/api/http';
 import { heldAccountOf, type SessionState } from '@/lib/api/session';
 import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
-import { DELIVERY_RECEIPT_TYPES } from '@/lib/notifications/delivery-receipt-types';
 import { notificationEventOf } from '@/lib/notifications/notification-telemetry';
 import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from '@/lib/notifications/target';
 
@@ -22,7 +20,9 @@ import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from 
  * `notification` de FCM est affiché par le SYSTÈME, dans le canal que la
  * passerelle nomme. Il ne re-résout pas non plus le Prisme — le corps est
  * composé serveur (`servedBannerBody`) ; de la carte `data`, seuls les champs
- * qui servent à NAVIGUER et à ACCUSER la remise sont lus.
+ * qui servent à NAVIGUER sont lus. La REMISE s'accuse en natif, une seule fois
+ * (`MeeshyMessagingService`, #8124, #11122), comme `accuserRemise` dans
+ * `sw-push.js`.
  *
  * Tout est injecté : le plugin, la session, le transport, la navigation.
  * `startShellPushInShell()` (`shell-push-runtime.ts`) branche les réels.
@@ -122,16 +122,6 @@ export function shellPushTargetInput(raw: unknown): NotificationTargetInput {
   };
 }
 
-/** La conversation et le message dont un push annonce la REMISE, ou `null`. */
-export function deliveredMessageOf(raw: unknown): { readonly conversationId: string; readonly messageId: string } | null {
-  const data = dataOf(raw);
-  const conversationId = (data.conversationId ?? '').trim();
-  const messageId = (data.messageId ?? '').trim();
-  if (!DELIVERY_RECEIPT_TYPES.has((data.type ?? '').trim())) return null;
-  if (conversationId === '' || messageId === '') return null;
-  return { conversationId, messageId };
-}
-
 /**
  * LE COMPTE, jamais l'identité qui parle (#8816) : lire une conversation sous
  * une identité anonyme TENUE par le compte ne ferme pas ses notifications, et
@@ -201,20 +191,7 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
     env.navigate(env.urlOf(pushTapTarget(shellPushTargetInput(notification.data))));
   });
 
-  await plugin.addListener('pushNotificationReceived', ({ data }) => {
-    note(data, 'received');
-    const delivered = deliveredMessageOf(data);
-    const credential = account();
-    if (delivered === null || activeUser === null || credential === null) return;
-    void transport
-      .request({
-        method: 'POST',
-        path: conversationsEndpoints.byConversationIdReceipts(delivered.conversationId),
-        body: { type: 'delivered', messageIds: [delivered.messageId] },
-        credential,
-      })
-      .catch(() => undefined);
-  });
+  await plugin.addListener('pushNotificationReceived', ({ data }) => note(data, 'received'));
 
   await plugin.createChannel({ id: SHELL_PUSH_CHANNEL_ID, name: 'Meeshy', importance: 4, visibility: 0 }).catch(() => undefined);
 
