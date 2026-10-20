@@ -185,8 +185,8 @@ final class ForwardAttributionSiteGuardTests: XCTestCase {
     /// toute rangée relue du cache arrivait avec `conversationType == nil`. Avec
     /// une règle qui échoue FERMÉE, l'oubli anonymiserait tous les groupes.
     func test_thePersistedForwardReference_gravesTheTypeLikeTheNetworkPath() throws {
-        let code = try source("packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor+Migration.swift")
-        guard let start = code.range(of: "let forwardedFromJson: Data? = api.forwardedFrom.flatMap"),
+        let code = try source("packages/MeeshySDK/Sources/MeeshySDK/Persistence/APIMessageUpsert+Attachments.swift")
+        guard let start = code.range(of: "static func forwardedFromJson(for api: APIMessage"),
               let end = code.range(of: "field: \"forwardedFromJson\"", range: start.upperBound..<code.endIndex) else {
             return XCTFail("bloc forwardedFromJson introuvable — la garde ne mesure plus rien")
         }
