@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { pendingAttachmentOf, type PendingAttachment } from '@/lib/send/attachments';
+import { speechRecorderOptionsOf } from '@/lib/media/recording-codec';
 
 import { shellMicrophoneHold, type MicrophoneHold } from './shell-microphone';
 
@@ -43,15 +44,8 @@ export type RecorderEngine = {
   readonly release: (stream: MediaStream) => void;
 };
 
-/** Ce que `MediaRecorder.isTypeSupported` accepte, DANS L'ORDRE (§ 0 de la
- * spécification #5668) — `audio/webm;codecs=opus` (Chrome/Android) puis
- * `audio/mp4` (WebKit) ; les DEUX sont dans `ACCEPTED_MIME_TYPES.AUDIO`
- * (`@meeshy/shared/types/attachment.ts:47`). */
-const MIME_CANDIDATES = ['audio/webm;codecs=opus', 'audio/mp4'] as const;
-
-function chosenMimeType(): string | undefined {
-  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return undefined;
-  return MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+function speechRecorderOptions(): MediaRecorderOptions {
+  return speechRecorderOptionsOf('audio', (candidate) => typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(candidate));
 }
 
 /**
@@ -93,8 +87,7 @@ export function createBrowserRecorderEngine(): RecorderEngine {
     },
     start(stream, onLevel) {
       chunks = [];
-      const mimeType = chosenMimeType();
-      recorder = mimeType === undefined ? new MediaRecorder(stream) : new MediaRecorder(stream, { mimeType });
+      recorder = new MediaRecorder(stream, speechRecorderOptions());
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data);
       };

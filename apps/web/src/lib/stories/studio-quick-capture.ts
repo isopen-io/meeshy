@@ -1,5 +1,6 @@
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
+import { recordingMimeOf } from '@/lib/media/recording-codec';
 
 /**
  * **LA CAPTURE RAPIDE SUR UNE SCÈNE VIDE** (#8654, jumelle web de
@@ -129,10 +130,7 @@ export function cameraFlashPlan({
   return facing === 'environment' && torch ? 'torch' : 'screen';
 }
 
-/** Les conteneurs que la passerelle accepte (`ACCEPTED_MIME_TYPES.VIDEO`),
- * dans l'ordre : mp4 (WebKit, lu partout), puis webm (Chromium, Android). */
-const VIDEO_CANDIDATES = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'] as const;
-
+/** La caméra enregistre le premier conteneur de la loi unique (`recordingMimeOf`). */
 export function cameraVideoMime(isTypeSupported: (type: string) => boolean): string | undefined {
-  return VIDEO_CANDIDATES.find((candidate) => isTypeSupported(candidate));
+  return recordingMimeOf('video', isTypeSupported);
 }

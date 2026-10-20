@@ -99,7 +99,7 @@ describe('cameraFlashPlan — le flash fait vraiment de la lumière', () => {
 
 describe('cameraVideoMime — un conteneur que la passerelle accepte', () => {
   test('mp4 d’abord (WebKit), webm ensuite (Chromium)', () => {
-    expect(cameraVideoMime(() => true)).toBe('video/mp4');
+    expect(cameraVideoMime(() => true)).toBe('video/mp4;codecs=avc1,mp4a.40.2');
     expect(cameraVideoMime((type) => type.startsWith('video/webm'))).toBe('video/webm;codecs=vp9,opus');
     expect(cameraVideoMime((type) => type === 'video/webm')).toBe('video/webm');
   });

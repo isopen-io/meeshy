@@ -2,6 +2,7 @@ import * as callsEndpoints from '@meeshy/shared/api/endpoints/calls';
 import type { CallRecordingKind, CallRecordingLinkResult as LinkedRecording } from '@meeshy/shared/types/call-recording';
 
 import { uploadAttachments } from '@/lib/api/attachments';
+import { speechRecorderOptionsOf } from '@/lib/media/recording-codec';
 import { apiDeps } from '@/lib/api/deps';
 
 import type { CallRecorderHandle, CallRecorderStart, CallRecorderTarget, CallRecordingOutcome } from './call-recording';
@@ -143,11 +144,6 @@ export function createCallRecorder(deps: CallRecorderDeps): CallRecorderStart {
   };
 }
 
-const MIME_CANDIDATES: Readonly<Record<CallRecordingKind, readonly string[]>> = {
-  audio: ['audio/webm;codecs=opus', 'audio/mp4'],
-  video: ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'],
-};
-
 function createBrowserMixer(): AudioMixer {
   const context = new AudioContext();
   const destination = context.createMediaStreamDestination();
@@ -164,8 +160,7 @@ function createBrowserMixer(): AudioMixer {
 }
 
 function createBrowserCapture(stream: MediaStream, kind: CallRecordingKind): AudioCapture {
-  const mimeType = MIME_CANDIDATES[kind].find((candidate) => MediaRecorder.isTypeSupported(candidate));
-  const recorder = mimeType === undefined ? new MediaRecorder(stream) : new MediaRecorder(stream, { mimeType });
+  const recorder = new MediaRecorder(stream, speechRecorderOptionsOf(kind, (candidate) => MediaRecorder.isTypeSupported(candidate)));
   const chunks: Blob[] = [];
   recorder.ondataavailable = (event) => {
     if (event.data.size > 0) chunks.push(event.data);
