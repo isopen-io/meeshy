@@ -80,8 +80,10 @@ describe('un emblème par sorte de moment', () => {
     });
   }
 
-  test('une Meesh frappée montre son numéro', () => {
-    expect(text(render(meeshMoment({ number: 10, edition: 'silver' })))).toContain('N° 10');
+  test('une Meesh frappée montre son numéro, « Nº » dans toutes les langues (épopée § 6)', () => {
+    const html = render(meeshMoment({ number: 10, edition: 'silver' }));
+    expect(html).toContain('data-game-number="10"');
+    expect(text(html)).not.toContain('N° 10');
   });
 });
 
@@ -253,14 +255,14 @@ describe('les emblèmes de la vague 2', () => {
   test('une montée de ligue : la gemme de la ligue atteinte', () => {
     const html = render(photoMomentOfEmblemV2({ kind: 'league-up', league: 'saphir', weekKey: '2026-11-09' }));
     expect(html).toContain('data-game-league-gem="saphir"');
-    expect(text(html)).toContain('Ligue Saphir');
+    expect(text(html)).toContain('Joute Saphir');
   });
 
   test('une saison terminée et un Prestige : leur coupe, plaque numérotée', () => {
-    expect(render(photoMomentOfEmblemV2({ kind: 'season', season: 1 }))).toContain('>SAISON 1<');
+    expect(render(photoMomentOfEmblemV2({ kind: 'season', season: 1 }))).toContain('>VOYAGE 1<');
     const prestige = render(photoMomentOfEmblemV2({ kind: 'prestige', number: 2 }));
     expect(prestige).toContain('data-game-trophy="prestige"');
-    expect(prestige).toContain('>PRESTIGE 2<');
+    expect(prestige).toContain('>RENAISSANCE 2<');
   });
 
   test('un trophée d’une version plus récente : la coupe neutre, jamais une erreur', () => {

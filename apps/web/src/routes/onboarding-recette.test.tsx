@@ -149,7 +149,7 @@ describe('#7908 — les points sont ceux du serveur, élan compris', () => {
     await click(action(host, 'global.send'));
     await settle();
     expect(text(host, '[data-onb-flight]')).toBe('+28');
-    expect(text(host, '[data-onb-announce]')).toBe('Tu gagnes 28 étincelles.');
+    expect(text(host, '[data-onb-announce]')).toBe('Tu fais jaillir 28 étincelles.');
     await landed();
     expect(text(host, '[data-onb-pill]')).toBe('28');
   });
@@ -213,7 +213,7 @@ describe('#7909 — le récapitulatif ne montre que les chiffres du serveur', ()
     await click(action(host, 'friends.later'));
     await settle();
     expect(text(host, '[data-tile="points"]')).toBe('35 étincelles');
-    expect(text(host, '[data-tile="badges"]')).toBe('Badges : 3');
+    expect(text(host, '[data-tile="badges"]')).toBe('Médailles : 3');
   });
 });
 

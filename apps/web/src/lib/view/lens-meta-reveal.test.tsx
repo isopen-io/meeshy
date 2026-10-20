@@ -262,7 +262,7 @@ describe('la rangée — ce qui s’efface est visuel, et rien ne se remet en pa
   test('le lecteur d’écran lit toujours l’heure et les points : rien n’est retiré de l’arbre', () => {
     const opening = meta?.match(/^<span[^>]*>/)?.[0] ?? '';
     expect(opening).not.toContain('aria-hidden');
-    expect(meta).toContain('<span class="sr-only">Série de 4 jours, 120 étincelles dont 12 aujourd’hui</span>');
+    expect(meta).toContain('<span class="sr-only">Flamme de 4 jours, 120 étincelles dont 12 aujourd’hui</span>');
     expect(meta).toMatch(/<time[^>]*data-time[^>]*>[^<]+<\/time>/);
   });
 });

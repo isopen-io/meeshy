@@ -518,7 +518,7 @@ describe('la carte montre d’abord ce qui demande une action', () => {
 
   test('coffre prêt : en tête de la carte des Missions', () => {
     const ready = withGame((game) => ({ ...game, chest: { ...game.chest, status: 'ready' } }));
-    expect(firstChip(ready, 'missions')).toBe('Coffre prêt');
+    expect(firstChip(ready, 'missions')).toBe('Offrande prête');
     expect(urgent(ready)).toContain('missions');
   });
 
@@ -538,7 +538,7 @@ describe('la carte montre d’abord ce qui demande une action', () => {
 
   test('Prestige possible : en tête de la carte du Prestige', () => {
     const ready = withGame((game) => ({ ...game, prestige: game.prestige === undefined ? undefined : { ...game.prestige, canPrestige: true } }));
-    expect(firstChip(ready, 'prestige')).toBe('Tu peux passer en Prestige');
+    expect(firstChip(ready, 'prestige')).toBe('Ta lumière peut renaître');
   });
 
   test('rien à faire : aucune carte ne se signale, et l’ordre des cartes ne change jamais', () => {
@@ -590,15 +590,15 @@ describe('le concept des étincelles : la poche, le total à vie, la dette', () 
   });
 
   test('le cumul paraît en pastille quand le total à vie est servi, et seulement alors', () => {
-    expect(chipsOf(sparky({ sparks: 300, sparksLifetime: 5_000 })).some((text) => /Record d’étincelles : 5 000/.test(text))).toBe(true);
+    expect(chipsOf(sparky({ sparks: 300, sparksLifetime: 5_000 })).some((text) => /5 000 reçues depuis toujours/.test(text))).toBe(true);
     expect(chipsOf(sparky({ sparks: 300 })).some((text) => /Record d’étincelles|cumulées/.test(text))).toBe(false);
   });
 
   test('après un Prestige, le cumul rapporte le cycle au total à vie (porteur 2026-10-17)', () => {
-    expect(chipsOf(sparky({ sparks: 300, sparksCycle: 1_200, sparksLifetime: 5_000 })).some((text) => /1 200 cumulées · record 5 000/.test(text))).toBe(true);
+    expect(chipsOf(sparky({ sparks: 300, sparksCycle: 1_200, sparksLifetime: 5_000 })).some((text) => /1 200 cet Âge · 5 000 en tout/.test(text))).toBe(true);
   });
 
   test('une dette se dit en pastille', () => {
-    expect(chipsOf(sparky({ sparks: 0, sparksDebt: 40 })).some((text) => /Dette : 40/.test(text))).toBe(true);
+    expect(chipsOf(sparky({ sparks: 0, sparksDebt: 40 })).some((text) => /Une ombre sur 40 étincelles/.test(text))).toBe(true);
   });
 });

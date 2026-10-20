@@ -55,6 +55,29 @@
   --game-coin-gold-1: #e2a72e;
   --game-coin-gold-2: #8a5a10;
   --game-coin-gold-ink: #6b4610;
+  /* L'or PUR du champ de la pièce d'or (épopée § 6) : plus de centre d'argent. */
+  --game-coin-gold-in-0: #ffeaa6;
+  --game-coin-gold-in-1: #e3a935;
+  --game-coin-gold-in-2: #a86f14;
+  --game-coin-gold-in-ink: #5e3c0b;
+  /* L'or MÊLÉ DE DIAMANT du champ du prisme : de l'or, traversé d'un blanc de diamant. */
+  --game-coin-diamond-in-0: #fff3c8;
+  --game-coin-diamond-in-1: #f6fbff;
+  --game-coin-diamond-in-2: #e8b545;
+  --game-coin-diamond-in-3: #a2701a;
+  --game-coin-diamond-in-ink: #5a3a0c;
+  /* Le diamant taillé des cabochons du prisme. */
+  --game-diamond-0: #ffffff;
+  --game-diamond-1: #d7efff;
+  --game-diamond-2: #8fb6de;
+  --game-diamond-ink: #46668a;
+  /* La veine d'or de l'argent, et les teintes des éclats de diamant. */
+  --game-coin-vein: #d6a93c;
+  --game-sparkle-0: #ffffff;
+  --game-sparkle-1: #cdeeff;
+  --game-sparkle-2: #ffd6f2;
+  --game-sparkle-3: #d8ffe9;
+  --game-sparkle-4: #fff3c4;
   --game-indigo-0: var(--ios-indigo-500);
   --game-indigo-1: var(--ios-indigo-900);
   --game-indigo-ink: #ffffff;
@@ -189,6 +212,19 @@
     animation-play-state: paused;
   }
 
+  /* Les éclats de diamant du prisme scintillent (épopée § 6), chacun à son
+     heure (`animation-delay` posé par la pièce) ; hors de la fenêtre, ils se
+     taisent comme la flamme. */
+  [data-game-sparkle] {
+    transform-origin: 50% 50%;
+    transform-box: fill-box;
+    animation: gameTwinkle 2.4s ease-in-out infinite;
+  }
+
+  [data-game-offscreen] [data-game-sparkle] {
+    animation-play-state: paused;
+  }
+
   [data-game-shockwave='css'] {
     animation: gameShockwave 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) both;
   }
@@ -218,6 +254,18 @@
   }
   100% {
     transform: translateX(130px);
+  }
+}
+
+@keyframes gameTwinkle {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.6);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
   }
 }
 

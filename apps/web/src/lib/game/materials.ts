@@ -13,8 +13,12 @@
 export const GAME_BADGE_MATERIALS = ['copper', 'bronze', 'silver', 'gold', 'platinum', 'obsidian', 'prism'] as const;
 export type GameMaterial = (typeof GAME_BADGE_MATERIALS)[number];
 
-/** Les peintures de plus : métal des pièces, fond de la pièce, indigo de la marque, feu. */
-export const GAME_PAINTS = [...GAME_BADGE_MATERIALS, 'coin-silver', 'coin-silver-in', 'coin-gold', 'indigo', 'flame'] as const;
+/**
+ * Les peintures de plus : métal et champ des pièces (l'argent, l'or PUR centre
+ * compris, l'or mêlé de diamant du prisme — épopée § 6), le diamant des
+ * cabochons, l'indigo de la marque, le feu.
+ */
+export const GAME_PAINTS = [...GAME_BADGE_MATERIALS, 'coin-silver', 'coin-silver-in', 'coin-gold', 'coin-gold-in', 'coin-diamond-in', 'diamond', 'indigo', 'flame'] as const;
 export type GamePaint = (typeof GAME_PAINTS)[number];
 
 export type PaintStop = { readonly offset: number; readonly color: string };
@@ -31,6 +35,9 @@ const OFFSETS: Readonly<Record<GamePaint, readonly number[]>> = {
   'coin-silver': [0, 0.45, 1],
   'coin-silver-in': [0, 1],
   'coin-gold': [0, 0.5, 1],
+  'coin-gold-in': [0, 0.55, 1],
+  'coin-diamond-in': [0, 0.3, 0.62, 1],
+  diamond: [0, 0.5, 1],
   indigo: [0, 1],
   flame: [0, 0.55, 1],
 };
@@ -42,12 +49,18 @@ export type PaintAxis = { readonly x1: number; readonly y1: number; readonly x2:
 
 const DIAGONAL: PaintAxis = { x1: 0, y1: 0, x2: 1, y2: 1 };
 
-/** Le sens de la lumière : en diagonale presque partout, du bas vers le haut pour le feu, inversé dans le creux de la pièce. */
+const HOLLOW: PaintAxis = { x1: 1, y1: 0, x2: 0, y2: 1 };
+const COIN_FIELDS: readonly GamePaint[] = ['coin-silver-in', 'coin-gold-in', 'coin-diamond-in'];
+
+/** Le sens de la lumière : en diagonale presque partout, du bas vers le haut pour le feu, inversé dans le creux (le champ) de la pièce. */
 export const paintAxis = (paint: GamePaint): PaintAxis => {
   if (paint === 'flame') return { x1: 0, y1: 1, x2: 0, y2: 0 };
-  if (paint === 'coin-silver-in') return { x1: 1, y1: 0, x2: 0, y2: 1 };
+  if (COIN_FIELDS.includes(paint)) return HOLLOW;
   return DIAGONAL;
 };
+
+/** La tranche IRISÉE du prisme : le spectre à contre-sens du métal, pour que la cannelure chatoie sur le bord. */
+export const IRIS_AXIS: PaintAxis = HOLLOW;
 
 /** L'encre qu'on grave sur une matière : toujours plus sombre qu'elle (plus claire sur l'obsidienne). */
 export const inkToken = (paint: GamePaint): string => `var(--game-${paint}-ink)`;
