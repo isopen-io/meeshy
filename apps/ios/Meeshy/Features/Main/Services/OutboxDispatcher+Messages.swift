@@ -41,9 +41,9 @@ extension OutboxDispatcher {
         serverId: String,
         conversationId: String
     ) async {
-        let persistence = await DependencyContainer.shared.messagePersistence
+        let store = await persistence()
         do {
-            _ = try await persistence.applyEvent(
+            _ = try await store.applyEvent(
                 localId: clientMessageId,
                 event: .serverAck(serverId: serverId, at: Date())
             )
@@ -68,40 +68,24 @@ extension OutboxDispatcher {
     /// multi-destinataires COPIE les pièces jointes du message porté par
     /// l'origine, jamais un transfert (voir `ShareFanoutOriginResolver`).
     ///
-    /// Sortie anticipée sur `item.copyAttachmentsFromClientMessageId == nil`
-    /// (round 1 de revue, Minor) : un message ORDINAIRE — l'écrasante
-    /// majorité — ne paie plus une lecture GRDB sur la clé `""` dont le
-    /// résultat était de toute façon ignoré.
+    /// Un message ordinaire sort tôt, sans lecture GRDB. L'origine non encore
+    /// acquittée lève `OutboxDeferralError.waitingForFanoutOrigin` — erreur
+    /// TYPÉE, que `OutboxFlusher` replanifie SANS consommer `attempts`, borné
+    /// par `OutboxFlusher.fanoutOriginWaitTimeout`.
     ///
-    /// L'origine non encore acquittée lève `OutboxDeferralError
-    /// .waitingForFanoutOrigin` — erreur TYPÉE, pas un `NSError` générique —
-    /// pour qu'`OutboxFlusher` la reconnaisse (`isWaitingForFanoutOrigin`) et
-    /// replanifie la ligne SANS consommer `attempts`, borné par
-    /// `OutboxFlusher.fanoutOriginWaitTimeout` : partir maintenant livrerait
-    /// un message VIDE de pièces jointes, mais un simple `NSError` (round 1
-    /// précédent) épuisait le budget de tentatives en ~30s — exactement le
-    /// délai qu'un upload photo/vidéo sur réseau médiocre dépasse en usage
-    /// nominal.
-    ///
-    /// **`item.copyAttachmentsFromServerMessageId` court-circuite la
-    /// résolution GRDB quand il est déjà connu** (défaut bloquant corrigé) :
-    /// une origine servie par l'extension de partage n'a JAMAIS de ligne
-    /// locale (l'extension poste en REST sans dépendance SDK), donc
-    /// `resolveServerId(for: originClientMessageId)` résout `nil` pour
-    /// TOUJOURS dans ce cas — la ligne se reporterait indéfiniment jusqu'à
-    /// épuiser son budget. `SharePendingSendConsumer` lit alors l'identifiant
-    /// serveur déjà écrit sur la fiche (`PendingTarget.serverMessageId`) et
-    /// le transmet ici tel quel. Une origine partie par l'app (chemin
-    /// existant, non régressé) ne pose jamais ce champ : la résolution
-    /// GRDB ci-dessous s'applique alors normalement.
+    /// `item.copyAttachmentsFromServerMessageId` court-circuite la résolution
+    /// GRDB quand il est connu : une origine servie par l'extension de partage
+    /// n'a JAMAIS de ligne locale, donc la résolution rendrait `nil` pour
+    /// toujours et la ligne se reporterait jusqu'à épuisement.
     func resolveCopyAttachmentsFromMessageId(for item: OfflineQueueItem) async throws -> String? {
         guard let originClientMessageId = item.copyAttachmentsFromClientMessageId else { return nil }
         let resolvedServerId: String?
         if let known = item.copyAttachmentsFromServerMessageId, !known.isEmpty {
             resolvedServerId = known
         } else {
-            resolvedServerId = try? await DependencyContainer.shared.messagePersistence
-                .resolveServerId(for: originClientMessageId)
+            resolvedServerId = (await bestEffort("outbox.resolveFanoutOrigin", category: .messages) {
+                try await persistence().resolveServerId(for: originClientMessageId)
+            }) ?? nil
         }
         let fanout = ShareFanoutOriginResolver.resolve(
             copyAttachmentsFromClientMessageId: originClientMessageId,
@@ -117,6 +101,40 @@ extension OutboxDispatcher {
         }
     }
 
+    /// Un rejeu qui échoue s'écrit sur la ligne GRDB : sans cela, une bulle
+    /// posée hors ligne restait `.sending` jusqu'à l'épuisement du budget, que
+    /// seul un `ConversationViewModel` vivant ou l'ouverture de la conversation
+    /// finissait par voir. Un report (`OutboxDeferralError`) et une annulation
+    /// ne sont pas des échecs d'envoi : la ligne n'est pas touchée.
+    func dispatchSendMessageRecordingFailure(_ record: OutboxRecord) async throws {
+        do {
+            try await dispatchSendMessage(record)
+        } catch {
+            guard OutboxDispatcher.persistsReplayFailure(error) else { throw error }
+            let localId = record.messageLocalId ?? record.clientMessageId
+            await bestEffort("outbox.sendFailed", category: .messages) {
+                try await persistence().applyEvent(localId: localId, event: .sendFailed(error))
+            }
+            throw error
+        }
+    }
+
+    static func persistsReplayFailure(_ error: any Error) -> Bool {
+        if error is OutboxDeferralError || error is CancellationError { return false }
+        return true
+    }
+
+    /// Nettoyage best-effort des fichiers déjà téléversés : un échec est
+    /// bénin, `OutboxFlusher.cleanupLocalFiles(for:)` les reprend à la fin de
+    /// la ligne (appliquée ou épuisée).
+    func removeReplayedFiles(_ paths: [String], kind: String) {
+        for path in paths {
+            do { try FileManager.default.removeItem(atPath: path) } catch {
+                logger.warning("\(kind, privacy: .public) dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     func dispatchSendMessage(_ record: OutboxRecord) async throws {
         if record.id.hasPrefix("ofq_") {
             let item: OfflineQueueItem
@@ -128,34 +146,18 @@ extension OutboxDispatcher {
                 return
             }
 
-            // Multi-track audio offline replay. The canonical field is
-            // `localAudioPaths` (array); legacy rows may still carry only
-            // `localAudioPath` (scalar). Both are resolved so the dispatcher
-            // handles every row shape. Each track is uploaded via TUS
-            // independently; missing or failed tracks are skipped
-            // (best-effort). All uploaded ids go out in a single
-            // `message:send-with-attachments` socket event.
+            // Rejeu audio multi-pistes : `localAudioPaths` est le champ
+            // canonique, les anciennes lignes ne portent que `localAudioPath`.
             let pendingAudioPaths: [String] = {
                 if let many = item.localAudioPaths, !many.isEmpty { return many }
                 if let one = item.localAudioPath, !one.isEmpty { return [one] }
                 return []
             }()
 
-            // Round 1 de revue (Important 3) : `sendWithAttachmentsAsync` —
-            // donc les deux branches socket ci-dessous (rejeu audio/média
-            // hors-ligne) — n'a AUCUN moyen de transmettre
-            // `copyAttachmentsFromMessageId`. Le handler gateway
-            // `handleMessageSendWithAttachments` ne le lit pas non plus (seul
-            // `message:send`, le path texte, le fait —
-            // `SocketMessageSendWithAttachmentsSchema` côté gateway ne
-            // déclare pas le champ, Zod le supprimerait en silence). Aucune
-            // cible non-origine ne porte de média local aujourd'hui
-            // (`SharePendingSendConsumer.enqueue` ne pose
-            // `copyAttachmentsFromClientMessageId` QUE sur les lignes SANS
-            // média local) : cette combinaison n'arrive jamais en pratique,
-            // mais rien ne l'empêchait STRUCTURELLEMENT, et le champ aurait
-            // disparu EN SILENCE. Échoue fort plutôt que de laisser partir un
-            // message vide de la promesse de copie.
+            // Le canal socket `message:send-with-attachments` ne transmet pas
+            // la copie de pièces (le schéma gateway ne déclare pas le champ,
+            // Zod le supprimerait en silence) : cette combinaison échoue fort
+            // plutôt que de laisser partir un message vide de sa promesse.
             let hasLocalMediaToReplay = !pendingAudioPaths.isEmpty || !(item.localMediaPaths?.isEmpty ?? true)
             if hasLocalMediaToReplay, let unsupportedOriginId = item.copyAttachmentsFromClientMessageId {
                 throw NSError(
@@ -210,16 +212,7 @@ extension OutboxDispatcher {
 
                 let serverId = try await replayUploadedAttachments(item, uploadedIds: uploadedIds, kind: "audio")
 
-                // Best-effort cleanup of uploaded tracks. Failure here is
-                // benign — skipped (failed-but-present) track files are
-                // reclaimed by `OutboxFlusher.cleanupLocalFiles(for:)` when
-                // the outbox record terminates (applied or exhausted), which
-                // now sweeps both `localAudioPath` and `localAudioPaths`.
-                for path in uploadedPaths {
-                    do { try FileManager.default.removeItem(atPath: path) } catch {
-                        logger.warning("audio dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
+                removeReplayedFiles(uploadedPaths, kind: "audio")
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
@@ -282,11 +275,7 @@ extension OutboxDispatcher {
 
                 let serverId = try await replayUploadedAttachments(item, uploadedIds: uploadedIds, kind: "media")
 
-                for path in uploadedPaths {
-                    do { try FileManager.default.removeItem(atPath: path) } catch {
-                        logger.warning("media dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                    }
-                }
+                removeReplayedFiles(uploadedPaths, kind: "media")
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
@@ -304,7 +293,7 @@ extension OutboxDispatcher {
 
             let request = Self.textReplayRequest(
                 for: item, copyAttachmentsFromMessageId: copyAttachmentsFromMessageId)
-            let response = try await MessageService.shared.send(
+            let response = try await messageService.send(
                 conversationId: item.conversationId, request: request
             )
             // Reconcile the optimistic clientMessageId durably (GRDB row +
@@ -352,7 +341,7 @@ extension OutboxDispatcher {
                 attachmentIds: item.attachmentIds,
                 clientMessageId: clientMessageId
             )
-            let response = try await MessageService.shared.send(
+            let response = try await messageService.send(
                 conversationId: item.conversationId, request: request
             )
             await reconcileSuccessfulMessageSend(
@@ -455,7 +444,7 @@ extension OutboxDispatcher {
     /// socket sinon (lieu et sticker rejoués sous les mêmes clés que le REST).
     func replayUploadedAttachments(_ item: OfflineQueueItem, uploadedIds: [String], kind: String) async throws -> String {
         if let request = Self.protectedMediaReplayRequest(for: item, uploadedIds: uploadedIds) {
-            return try await MessageService.shared.send(conversationId: item.conversationId, request: request).id
+            return try await messageService.send(conversationId: item.conversationId, request: request).id
         }
         let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
             conversationId: item.conversationId,

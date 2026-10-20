@@ -147,6 +147,7 @@ extension ConversationView {
         // eux perdrait la protection sans qu'aucun message ne parte, et le
         // popup relance ce même tap sur un état qu'il doit retrouver intact.
         let protection = viewModel.captureArmedProtection(replyingTo: replyId)
+        let relation = MessageRelation.legacy(replyToId: replyId, storyReplyToId: storyReplyId, storyReference: storyRef, forwardedFromId: nil, forwardedFromConversationId: nil, attachmentReplyTo: replyAnchor)
 
         if attachments.isEmpty {
             // Text-only send: clear UI immediately
@@ -162,7 +163,7 @@ extension ConversationView {
             HapticFeedback.light()
             Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
             Task {
-                let ok = await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, protection: protection, originalLanguage: lang, location: place, attachmentReplyTo: replyAnchor)
+                let ok = await viewModel.send(OutgoingMessage(conversationId: ConversationID(viewModel.conversationId), content: text, relation: relation, attachments: .none, protection: protection, originalLanguage: lang, location: place)).isAccepted
                 restorePlaceTile(place, sent: ok)
             }
             return
@@ -442,18 +443,15 @@ extension ConversationView {
                             voiceNoteTranscriber.discard(attachmentId: att.id)
                         }
                     }
-                    let ok = await viewModel.sendMessage(
+                    let ok = await viewModel.send(OutgoingMessage(
+                        conversationId: ConversationID(viewModel.conversationId),
                         content: send.group.messageContent,
-                        replyToId: send.group.carriesReply ? replyId : nil,
-                        storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
-                        storyReplyReference: send.group.carriesReply ? storyRef : nil,
-                        attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds,
-                        localAttachments: localAttachments.isEmpty ? nil : localAttachments,
+                        relation: send.group.carriesReply ? relation : .none,
+                        attachments: OutgoingAttachments(ids: uploadedIds.isEmpty ? nil : uploadedIds, previews: localAttachments.isEmpty ? nil : localAttachments),
                         protection: protection,
                         originalLanguage: lang,
-                        existingTempId: send.tempId,
-                        attachmentReplyTo: send.group.carriesReply ? replyAnchor : nil
-                    )
+                        reusedClientMessageId: MessageID(send.tempId)
+                    )).isAccepted
                     anySuccess = anySuccess || ok
                 } catch {
                     Logger.messages.error("Group upload failed (\(String(describing: send.group.kind))): \(error.localizedDescription)")
@@ -467,8 +465,7 @@ extension ConversationView {
                     // `retryExhausted`. Les fichiers déjà uploadés avant
                     // l'échec seront ré-uploadés au rejeu (le dedup message
                     // par clientMessageId côté gateway évite tout doublon).
-                    _ = try? await viewModel.messagePersistence.applyEvent(
-                        localId: send.tempId, event: .sendFailed(error))
+                    await viewModel.recordSendFailure(tempId: send.tempId, error: error)
                     // #10006 — le refus d'une pièce d'INVITÉ est définitif :
                     // l'outbox le rejouerait en vain. La bulle dit pourquoi.
                     if let refusal = error as? GuestAttachmentRefusal {
@@ -510,27 +507,29 @@ extension ConversationView {
             // au lieu d'en créer une nouvelle, donc la bulle ne bouge pas et
             // n'apparaît pas une seconde fois.
             if let textGroup = textGroupPlan {
-                let ok = await viewModel.sendMessage(
+                let ok = await viewModel.send(OutgoingMessage(
+                    conversationId: ConversationID(viewModel.conversationId),
                     content: textGroup.text ?? "",
-                    replyToId: textGroup.carriesReply ? replyId : nil,
-                    storyReplyToId: textGroup.carriesReply ? storyReplyId : nil,
-                    storyReplyReference: textGroup.carriesReply ? storyRef : nil,
+                    relation: textGroup.carriesReply ? relation : .none,
+                    attachments: .none,
                     protection: protection,
                     originalLanguage: lang,
-                    existingTempId: textTempId,
-                    location: place,
-                    attachmentReplyTo: textGroup.carriesReply ? replyAnchor : nil
-                )
+                    reusedClientMessageId: textTempId.map { MessageID($0) },
+                    location: place
+                )).isAccepted
                 restorePlaceTile(place, sent: ok)
                 anySuccess = anySuccess || ok
             } else if place != nil {
-                let ok = await viewModel.sendMessage(
+                let ok = await viewModel.send(OutgoingMessage(
+                    conversationId: ConversationID(viewModel.conversationId),
                     content: "",
+                    relation: .none,
+                    attachments: .none,
                     protection: protection,
                     originalLanguage: lang,
-                    existingTempId: textTempId,
+                    reusedClientMessageId: textTempId.map { MessageID($0) },
                     location: place
-                )
+                )).isAccepted
                 restorePlaceTile(place, sent: ok)
                 anySuccess = anySuccess || ok
             }
@@ -788,7 +787,7 @@ extension ConversationView {
         viewModel.stopTypingEmission()
         HapticFeedback.light()
         Task {
-            await viewModel.sendMessage(content: text, originalLanguage: lang)
+            _ = await viewModel.send(OutgoingMessage(conversationId: ConversationID(viewModel.conversationId), content: text, relation: .none, attachments: .none, originalLanguage: lang))
         }
     }
 

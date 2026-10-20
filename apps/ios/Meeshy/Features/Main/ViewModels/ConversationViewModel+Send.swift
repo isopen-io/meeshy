@@ -203,6 +203,7 @@ extension ConversationViewModel {
     }
 
     @discardableResult
+    @available(*, deprecated, message: "Construire un OutgoingMessage et appeler send(_:)")
     /// `attachmentReplyTo` — l'ANCRE de la pièce citée (#6164, moitié ÉCRITURE).
     ///
     /// Elle n'a de sens qu'avec `replyToId` : la garde serveur
@@ -598,56 +599,32 @@ extension ConversationViewModel {
         let failedMsg = messages[idx]
         guard failedMsg.deliveryStatus == .failed else { return }
 
-        // Media-carrying failed messages (image/video/audio/file) must
-        // replay through the durable outbox: it alone still holds the real,
-        // already-uploaded attachment ids (the displayed `Message.attachments`
-        // carry the pre-upload LOCAL placeholder ids, never reconciled after
-        // the fact). A direct `sendMessage(content:replyToId:)` below only
-        // knows content + replyToId, so a captioned media resend would land
-        // on the server as text-only, and an uncaptioned one would be
-        // rejected outright by `sendMessage`'s empty-content guard — leaving
-        // the bubble stuck mid-clock (state already flipped .failed →
-        // .queued with nothing left to advance it). Resetting the existing
-        // outbox row + an immediate drain mirrors the reaction retry pattern
-        // above (`OutboxFlusher` otherwise only runs at boot / foreground).
         guard failedMsg.attachments.isEmpty else {
-            do {
-                try await offlineQueue.retryByClientMessageId(messageId)
-                // Mirror the text-only path below: flip .failed → .queued so
-                // the retry band disappears immediately instead of lingering
-                // for the entire upload + dispatch duration (BubbleFailedRetryBar
-                // only clears once the message leaves the .failed state).
-                // Gated on the reset succeeding — if the outbox row couldn't be
-                // found/reset, nothing is actually going to be resent, so the
-                // message must stay visibly .failed.
-                await sendCoordinator.markRetrying(localId: messageId)
-            } catch {
-                Logger.messages.error("retryMessage outbox reset failed: \(error.localizedDescription)")
-            }
-            await OutboxFlushTrigger.flushNow()
+            await resetOutboxRowForRetry(messageId: messageId)
             return
         }
 
         // Resend IN PLACE — no delete + reinsert, so the bubble never flashes
         // "message supprimé". `.retry` transitions the EXISTING row .failed →
-        // .queued (resets the retry budget) while preserving its content and
-        // position: the orange retry band disappears and the bubble shows the
-        // sending indicator immediately. `sendMessage` then re-drives the fast
-        // (socket-first) send reusing the SAME clientMessageId — Phase 4 §6.2,
-        // so the gateway dedup contract `(conversationId, clientMessageId)`
-        // catches a prior attempt that DID reach the server (lost ACK). Its
-        // optimistic insert harmlessly no-ops on the existing row (PK conflict,
-        // swallowed by the insert's own catch), and the serverAck reconciles it
-        // .queued → .sent. The local id of a Phase 4 optimistic message IS its
-        // clientMessageId (no legacy temp_/offline_/retry_ prefix), so passing
-        // `messageId` straight through as `existingTempId` is correct.
-        // Preserve the message's ORIGINAL language identity across a retry —
-        // omitting it here would let it fall through `sendMessage`'s
-        // `originalLanguage ?? Self.composeLanguage(for:preferred:)` fallback
-        // (re-detected from the resent content) and silently rewrite a
-        // non-French message's language on every retry (Prisme violation).
+        // .queued (resets the retry budget) and keeps its position; the send
+        // then re-drives the fast path reusing the SAME clientMessageId
+        // (Phase 4 §6.2), so the gateway dedup `(conversationId,
+        // clientMessageId)` catches a prior attempt that DID reach the server.
         await sendCoordinator.markRetrying(localId: messageId)
-        let outgoing = OutgoingMessage(
+        let succeeded = await send(retryOutgoing(of: failedMsg, messageId: messageId)).isAccepted
+        // #4042 — un retry RÉUSSI fait disparaître la ligne outbox D'ORIGINE
+        // (même clientMessageId) que `SyncPillViewModel` surface tant qu'elle
+        // reste `.failed`/`.exhausted`.
+        if succeeded {
+            await offlineQueue.clearSendMessageRow(clientMessageId: messageId)
+        }
+    }
+
+    /// Ce que le renvoi d'un message en échec rejoue : son contenu, sa langue
+    /// d'ORIGINE (le Prisme ne se réécrit pas à chaque retry), sa relation —
+    /// réponse ou transfert — et son lieu.
+    private func retryOutgoing(of failedMsg: Message, messageId: String) -> OutgoingMessage {
+        OutgoingMessage(
             conversationId: ConversationID(conversationId),
             content: failedMsg.content,
             relation: .legacy(
@@ -663,17 +640,21 @@ extension ConversationViewModel {
             reusedClientMessageId: MessageID(messageId),
             location: failedMsg.location
         )
-        let succeeded = await send(outgoing).isAccepted
-        // #4042 — un retry RÉUSSI doit faire disparaître la ligne outbox
-        // D'ORIGINE (créée par le PREMIER échec) : `sendMessage` réutilise
-        // le MÊME clientMessageId (Phase 4 §6.2), donc c'est la même ligne
-        // que `SyncPillViewModel` continue de surfacer tant qu'elle reste
-        // `.failed`/`.exhausted` en base — ce chemin texte-seul ne la
-        // touchait jamais jusqu'ici (repro : retry réussi, entrée SyncPill
-        // qui persiste indéfiniment).
-        if succeeded {
-            await offlineQueue.clearSendMessageRow(clientMessageId: messageId)
+    }
+
+    /// Un message média en échec rejoue par l'outbox durable : elle seule
+    /// retient les vrais ids de pièces déjà téléversées (le `Message` affiché
+    /// ne porte que les ids LOCAUX d'avant l'upload). La ligne locale ne passe
+    /// `.queued` que si la réinitialisation a réussi — sinon rien ne partira,
+    /// et la bulle doit rester visiblement en échec.
+    private func resetOutboxRowForRetry(messageId: String) async {
+        do {
+            try await offlineQueue.retryByClientMessageId(messageId)
+            await sendCoordinator.markRetrying(localId: messageId)
+        } catch {
+            Logger.messages.error("retryMessage outbox reset failed: \(error.localizedDescription)")
         }
+        await OutboxFlushTrigger.flushNow()
     }
 
     func removeFailedMessage(messageId: String) {

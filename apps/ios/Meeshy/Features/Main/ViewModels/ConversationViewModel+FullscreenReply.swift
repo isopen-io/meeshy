@@ -46,12 +46,13 @@ extension ConversationViewModel {
               !carrier.isViewOnce, !carrier.isBlurred, !carrier.isEncrypted
         else { return false }
 
-        return await sendMessage(
+        return await send(OutgoingMessage(
+            conversationId: ConversationID(conversationId),
             content: trimmed,
-            replyToId: carrier.id,
-            originalLanguage: language,
-            attachmentReplyTo: QuotedAttachmentSend(attachmentId: piece.id)
-        )
+            relation: .reply(to: MessageID(carrier.id), citing: QuotedAttachmentSend(attachmentId: piece.id)),
+            attachments: .none,
+            originalLanguage: language
+        )).isAccepted
     }
 
     /// La CITATION que la barre du plein écran peint au-dessus de sa rangée de
