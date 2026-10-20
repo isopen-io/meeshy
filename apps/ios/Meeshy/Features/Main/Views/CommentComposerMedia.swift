@@ -56,7 +56,8 @@ enum CommentMediaUploader {
 enum CommentSendTrace {
     static func log(_ message: @autoclosure () -> String) {
         #if DEBUG
-        MeeshyLog.logger(.commentSend).debug("[CommentSend] \(message(), privacy: .public)")
+        let text = message()
+        MeeshyLog.logger(.commentSend).debug("[CommentSend] \(text, privacy: .public)")
         #endif
     }
 }
