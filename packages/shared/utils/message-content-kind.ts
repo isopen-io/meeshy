@@ -9,6 +9,7 @@
 import { MESSAGE_EFFECT_FLAGS } from '../types/message-effect-flags.js';
 import { messageTypeFromMimeTypes } from './attachment-message-type.js';
 import { CAPTURE_NOTICE_KIND } from './capture-notice.js';
+import { sharedTranslationServerReadsMessage } from './shared-translation-eligibility.js';
 import { isContactCardAttachment } from './vcard.js';
 
 export type MessageContentKind =
@@ -18,7 +19,7 @@ export type MessageContentKind =
 export type MessageContentFlags = {
   readonly viewOnce: boolean;
   readonly blurred: boolean;
-  /** Chiffré de bout en bout, ou chiffré sous un régime non déclaré : le serveur ne lit pas le clair (fermé par défaut). */
+  /** Le serveur ne lit pas le clair : `sharedTranslationServerReadsMessage` en fait foi (casse pliée, régime inconnu ⇒ chiffré). */
   readonly encrypted: boolean;
   readonly ephemeral: boolean;
   /** Identifiant client `cid_…` : le serveur ne connaît pas encore ce message. */
@@ -61,7 +62,6 @@ export type MessageContentSubject = {
 
 const { EPHEMERAL, BLURRED, VIEW_ONCE, EPHEMERAL_AFTER_READ } = MESSAGE_EFFECT_FLAGS;
 const CALL_KINDS: ReadonlySet<unknown> = new Set(['call', 'call-live']);
-const SERVER_READABLE_MODES: ReadonlySet<string> = new Set(['server', 'hybrid']);
 const WEB_ADDRESS = /(?<![@\w])https?:\/\/\S/i;
 
 const recordOf = (value: unknown): Readonly<Record<string, unknown>> =>
@@ -98,7 +98,11 @@ function flagsOf(message: MessageContentSubject, metadata: Readonly<Record<strin
   return {
     viewOnce: message.isViewOnce === true || pieces.some((piece) => piece.isViewOnce === true) || (bits & VIEW_ONCE) !== 0,
     blurred: message.isBlurred === true || pieces.some((piece) => piece.isBlurred === true) || (bits & BLURRED) !== 0,
-    encrypted: message.encryptionMode === 'e2ee' || (message.isEncrypted === true && !SERVER_READABLE_MODES.has(message.encryptionMode ?? '')),
+    encrypted: !sharedTranslationServerReadsMessage({
+      conversationEncryptionMode: null,
+      messageIsEncrypted: message.isEncrypted,
+      messageEncryptionMode: message.encryptionMode,
+    }),
     ephemeral: present(message.expiresAt) || duration > 0 || (bits & (EPHEMERAL | EPHEMERAL_AFTER_READ)) !== 0,
     optimistic: message.id.startsWith('cid_'),
     failed: message.failed === true,

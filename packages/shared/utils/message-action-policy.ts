@@ -4,16 +4,20 @@
  * `admitConversationWriteFor`, qui font foi : elle n'offre jamais ce qu'ils
  * refusent, et peut offrir MOINS (E2EE, vue unique, message système) — tenu
  * par `action-policy-parity.test.ts` (passerelle) sur `fixtures/action-policy/`.
- * Rôle de plateforme par `globalRoleLevel` (inconnu ⇒ 0, AUDIT et ANALYST sous
- * MODERATOR) ; rang de conversation plié, inconnu ⇒ 0. En E2EE : ni édition,
- * traduction sur l'appareil, services qui lisent le clair ABSENTS. Transférer,
- * copier, enregistrer : `contentExitLaw`.
+ * Rôle de plateforme comparé EXACTEMENT, comme la passerelle (AUDIT, ANALYST,
+ * inconnu et minuscules ne modèrent pas) ; rang de conversation exact, inconnu
+ * ⇒ 0. Réagir n'est pas écrire : `ReactionService.addReaction` ne lit ni rang
+ * d'écriture, ni canal d'annonces, ni règle des mineurs. E2EE au sens de
+ * `sharedTranslationServerReadsMessage` (régime inconnu ⇒ chiffré) : ni édition
+ * ni transfert, traduction sur l'appareil, services qui lisent le clair ABSENTS.
+ * Transférer, copier, enregistrer : `contentExitLaw`.
  */
 
-import { GLOBAL_ROLE_HIERARCHY, MEMBER_ROLE_HIERARCHY, WRITE_PERMISSION_HIERARCHY, globalRoleLevel } from '../types/role-types.js';
+import { MEMBER_ROLE_HIERARCHY, WRITE_PERMISSION_HIERARCHY, isGlobalAdmin } from '../types/role-types.js';
 import { contentExitLaw, type ContentExitLaw } from './content-exit-law.js';
 import { GLOBAL_CONVERSATION_TYPE } from './global-minor-restriction.js';
 import { messageContentKind, type MessageContentKind, type MessageContentShape, type MessageContentSubject } from './message-content-kind.js';
+import { sharedTranslationServerReadsMessage } from './shared-translation-eligibility.js';
 
 /** 24 heures, bornes incluses — la fenêtre d'édition de l'AUTEUR (`messageEditAdmission.ts`). */
 export const MESSAGE_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -37,6 +41,7 @@ export type ActionViewer = {
   /** `User.id` pour un inscrit ; `Participant.id` pour un invité. */
   readonly id: string;
   readonly participantId?: string | null;
+  /** Un lecteur qui porte `isAnonymous` est un invité, quel que soit `hasAccount` (fermé par défaut). */
   readonly hasAccount: boolean;
   readonly isAnonymous: boolean;
   /** `User.role`, en majuscules. */
@@ -55,6 +60,8 @@ export type MessageActionSubject = MessageContentSubject & {
   /** `User.id` de l'auteur ; absent pour un invité. */
   readonly authorUserId?: string | null;
   readonly createdAt?: Instant | null;
+  /** Épinglé : le geste devient « Désépingler ». */
+  readonly pinnedAt?: Instant | null;
   /** Avis de capture : le lecteur a écrit le message qu'il nomme — l'hôte le sait, la loi ne lit rien. */
   readonly capturedMessageIsMine?: boolean | null;
 };
@@ -63,7 +70,7 @@ export type MessageActionInput = { readonly message: MessageActionSubject; reado
 
 export type MessageActionId =
   | 'retry' | 'reply' | 'openLink' | 'copyLink' | 'openInMaps' | 'copyAddress' | 'saveContact' | 'viewResults'
-  | 'edit' | 'copy' | 'forward' | 'translate' | 'save' | 'transcribe' | 'sentiment' | 'report' | 'pin'
+  | 'edit' | 'copy' | 'forward' | 'translate' | 'save' | 'transcribe' | 'sentiment' | 'report' | 'pin' | 'unpin'
   | 'remove' | 'deleteForEveryone' | 'deleteForMe' | 'discard';
 
 export type MessageActionGroupName = 'primary' | 'organize' | 'more' | 'moderation' | 'destructive';
@@ -75,6 +82,8 @@ export type EditVerdict = { readonly asModerator: boolean; readonly windowEndsAt
 
 export type TranslateVerdict = 'served-switch' | 'device' | null;
 
+export type PinVerdict = 'pin' | 'unpin' | null;
+
 export type ServerFeatureAbsence = 'e2ee-server-feature-absent';
 
 export type MessageActionVerdicts = {
@@ -83,10 +92,11 @@ export type MessageActionVerdicts = {
   readonly deleteForMe: boolean;
   /** Retrait par un tiers modérateur : un motif est exigé, l'auteur en est prévenu. */
   readonly remove: { readonly reasonRequired: true } | null;
-  readonly pin: boolean;
+  readonly pin: PinVerdict;
   readonly report: boolean;
-  /** Un message vivant (ni supprimé, ni expiré, ni optimiste) et le droit d'écrire. */
+  /** Un message vivant, non système, un membre actif d'une conversation ouverte — sans le droit d'écrire. */
   readonly canReact: boolean;
+  /** Le droit d'écrire en plus (`admitConversationWriteFor`). */
   readonly canReply: boolean;
   readonly translate: TranslateVerdict;
   /** `null` : le service n'existe pas dans ce mode (voir `serverFeatureAbsence`). */
@@ -108,15 +118,24 @@ const MEMBER_RANKS: ReadonlyMap<string, number> = new Map(Object.entries(MEMBER_
 const SAVEABLE_KINDS: ReadonlySet<MessageContentKind> = new Set(['image', 'video', 'audio', 'file', 'multi']);
 const WRITE_RANKS: ReadonlyMap<string, number> = new Map(Object.entries(WRITE_PERMISSION_HIERARCHY));
 const NOTICE_KINDS: ReadonlySet<MessageContentKind> = new Set(['system', 'call']);
+/** Un lieu, un sondage, un sticker : leur texte n'en porte pas la structure (`metadata`). */
+const EDITABLE_KINDS: ReadonlySet<MessageContentKind> = new Set(['text', 'link', 'image', 'video', 'audio', 'file', 'contact', 'multi']);
+/** `PRIVILEGED_GLOBAL_ROLES` et `PLATFORM_STAFF_ROLES` de la passerelle, comparés EXACTEMENT. */
+const PLATFORM_MODERATOR_ROLES: ReadonlySet<string> = new Set(['MODERATOR', 'ADMIN', 'BIGBOSS']);
 
 const msOf = (instant: Instant | null | undefined): number =>
   instant == null ? Number.NaN : (instant instanceof Date ? instant.getTime() : new Date(instant).getTime());
 
-export const platformModerates = (viewer: ActionViewer): boolean =>
-  globalRoleLevel(viewer.platformRole ?? '') >= GLOBAL_ROLE_HIERARCHY.MODERATOR;
+export const platformModerates = (viewer: ActionViewer): boolean => PLATFORM_MODERATOR_ROLES.has(viewer.platformRole ?? '');
 
-export const platformAdministers = (viewer: ActionViewer): boolean =>
-  globalRoleLevel(viewer.platformRole ?? '') >= GLOBAL_ROLE_HIERARCHY.ADMIN;
+/** `isGlobalAdmin`, comme `actsWithCreatorRights` de la passerelle. */
+export const platformAdministers = (viewer: ActionViewer): boolean => isGlobalAdmin(viewer.platformRole ?? '');
+
+export const viewerIsRegistered = (viewer: ActionViewer): boolean => viewer.hasAccount && !viewer.isAnonymous;
+
+/** Le régime de la CONVERSATION retire-t-il au serveur le clair ? Même loi que la traduction partagée. */
+export const conversationIsEndToEnd = (conversation: ActionConversation): boolean =>
+  !sharedTranslationServerReadsMessage({ conversationEncryptionMode: conversation.encryptionMode, messageIsEncrypted: false, messageEncryptionMode: null });
 
 export const conversationIsClosed = (conversation: ActionConversation): boolean =>
   conversation.isActive === false || conversation.closedAt != null;
@@ -143,6 +162,8 @@ export function viewerCanWrite(conversation: ActionConversation, viewer: ActionV
 
 type Context = MessageActionInput & {
   readonly content: MessageContentShape;
+  readonly registered: boolean;
+  readonly notice: boolean;
   readonly exit: ContentExitLaw;
   readonly e2ee: boolean;
   readonly gone: boolean;
@@ -158,13 +179,16 @@ function contextOf(input: MessageActionInput): Context {
   const { flags, kind } = content;
   const { message, viewer } = input;
   const gone = kind === 'deleted' || msOf(message.expiresAt) <= input.now;
-  const isAuthor = viewer.hasAccount && message.authorUserId != null && message.authorUserId === viewer.id;
-  const participantId = viewer.participantId ?? (viewer.hasAccount ? null : viewer.id);
+  const registered = viewerIsRegistered(viewer);
+  const isAuthor = registered && message.authorUserId != null && message.authorUserId === viewer.id;
+  const participantId = viewer.participantId ?? (registered ? null : viewer.id);
   return {
     ...input,
     content,
+    registered,
+    notice: NOTICE_KINDS.has(kind),
     exit: contentExitLaw(message),
-    e2ee: flags.encrypted || input.conversation.encryptionMode === 'e2ee',
+    e2ee: flags.encrypted || conversationIsEndToEnd(input.conversation),
     gone,
     live: !gone && !flags.optimistic && !flags.failed,
     isAuthor,
@@ -177,7 +201,7 @@ function contextOf(input: MessageActionInput): Context {
 /** `admitMessageEdit` — auteur 24 h, rôle global au-delà ou sur autrui — plus les refus propres au client. */
 function editVerdict(ctx: Context): EditVerdict | null {
   const { flags } = ctx.content;
-  const offered = ctx.live && ctx.viewer.hasAccount && ctx.hasText && !ctx.e2ee && !flags.viewOnce && !flags.captureNotice;
+  const offered = ctx.live && ctx.registered && ctx.hasText && EDITABLE_KINDS.has(ctx.content.kind) && !ctx.e2ee && !flags.viewOnce;
   if (!offered || conversationIsClosed(ctx.conversation)) return null;
   if (ctx.conversation.type === GLOBAL_CONVERSATION_TYPE && ctx.viewer.isDeclaredMinor) return null;
   if (!ctx.isAuthor) return ctx.viewer.isActiveMember && platformModerates(ctx.viewer) ? { asModerator: true, windowEndsAt: null } : null;
@@ -189,33 +213,44 @@ function editVerdict(ctx: Context): EditVerdict | null {
 
 type DeleteVerdict = { readonly forEveryone: boolean; readonly remove: boolean };
 
-/** `admitMessageDelete` : l'auteur sans fenêtre ; un tiers privilégié retire, jamais en direct ; l'auteur du capturé retire l'avis. */
+/**
+ * `admitMessageDelete` : l'auteur sans fenêtre ; un tiers privilégié retire, jamais en direct ; l'auteur du capturé
+ * retire l'avis. Plus strict : un avis système ou un résumé d'appel ne s'efface pas pour tous (`deleteOfferOf` du web).
+ */
 function deleteVerdict(ctx: Context): DeleteVerdict {
   const { viewer } = ctx;
-  if (!ctx.live || !viewer.hasAccount) return { forEveryone: false, remove: false };
   const { captureNotice } = ctx.content.flags;
+  if (!ctx.live || !ctx.registered || (ctx.notice && !captureNotice)) return { forEveryone: false, remove: false };
   if (ctx.isAuthor) return { forEveryone: !captureNotice, remove: false };
   const privileged = memberRankOf(viewer) >= PRIVILEGED_CONVERSATION_RANK || platformModerates(viewer);
   if (privileged) return { forEveryone: false, remove: MODERATED_TYPES.has(ctx.conversation.type) };
   return { forEveryone: captureNotice && ctx.message.capturedMessageIsMine === true && viewer.isActiveMember, remove: false };
 }
 
+/** `refusesMinorPin` et `refusesContentGesture` de `messages-pin.ts` ; plus strict sur les avis et la vue unique. */
+function pinVerdict(ctx: Context): PinVerdict {
+  const { conversation, viewer } = ctx;
+  const minorInGlobal = conversation.type === GLOBAL_CONVERSATION_TYPE && viewer.isDeclaredMinor;
+  const pinnable = ctx.live && ctx.registered && viewer.isActiveMember && !ctx.notice && !ctx.content.flags.viewOnce && !minorInGlobal;
+  if (!pinnable) return null;
+  return ctx.message.pinnedAt != null ? 'unpin' : 'pin';
+}
+
 function verdictsOf(ctx: Context): MessageActionVerdicts {
   const { kind, flags } = ctx.content;
-  const { exit } = ctx;
+  const { exit, notice } = ctx;
   const deletion = deleteVerdict(ctx);
-  const notice = NOTICE_KINDS.has(kind);
-  const speaks = ctx.live && !notice && viewerCanWrite(ctx.conversation, ctx.viewer);
+  const reacts = ctx.live && !notice && ctx.viewer.isActiveMember && ctx.viewer.canSendMessages && !conversationIsClosed(ctx.conversation);
   const serverFeature = (applies: boolean): boolean | null => (ctx.e2ee ? null : applies && ctx.live && ctx.readable);
   return {
     edit: editVerdict(ctx),
     deleteForEveryone: deletion.forEveryone,
-    deleteForMe: ctx.viewer.hasAccount && !flags.optimistic,
+    deleteForMe: ctx.registered && !flags.optimistic,
     remove: deletion.remove ? { reasonRequired: true } : null,
-    pin: ctx.live && ctx.viewer.hasAccount && ctx.viewer.isActiveMember && !notice && !flags.viewOnce,
-    report: ctx.live && ctx.viewer.hasAccount && !notice && !ctx.isMine,
-    canReact: speaks,
-    canReply: speaks && !flags.viewOnce,
+    pin: pinVerdict(ctx),
+    report: ctx.live && ctx.registered && !notice && !ctx.isMine,
+    canReact: reacts,
+    canReply: reacts && !flags.viewOnce && viewerCanWrite(ctx.conversation, ctx.viewer),
     translate: ctx.hasText && ctx.readable && ctx.live ? (ctx.e2ee ? 'device' : 'served-switch') : null,
     transcribe: serverFeature(kind === 'audio'),
     sentiment: serverFeature(ctx.hasText),
@@ -257,7 +292,7 @@ function groupsOf(ctx: Context, verdicts: MessageActionVerdicts): MessageActionG
   ];
   return {
     primary: candidates.slice(0, MAX_PRIMARY_ACTIONS),
-    organize: when(verdicts.pin, 'pin'),
+    organize: verdicts.pin === null ? [] : [verdicts.pin],
     more: [...candidates.slice(MAX_PRIMARY_ACTIONS), ...when(verdicts.sentiment === true, 'sentiment'), ...when(verdicts.report, 'report')],
     moderation: when(verdicts.remove !== null, 'remove'),
     destructive,

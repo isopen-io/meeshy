@@ -1,10 +1,14 @@
 /**
  * PARITÉ (#11205) — les vecteurs de la loi des actions partagée
- * (`packages/shared/fixtures/action-policy/`) rejoués contre `admitMessageEdit`,
- * `admitMessageDelete` et `actorHasMinimumRole`, qui font foi, avec des doubles
- * qui rendent les lignes du vecteur. INCLUSION toujours (le client n'offre
- * jamais ce que la passerelle refuse) ; ÉGALITÉ sauf où le vecteur déclare
- * `clientStricter`. Aucun code de production n'est touché.
+ * (`packages/shared/fixtures/action-policy/`) rejoués contre ce qui fait foi :
+ * `admitMessageEdit`, `admitMessageDelete`, `ReactionService.addReaction`, les
+ * gardes de `messages-pin.ts` (`refusesMinorInConversationOfType`,
+ * `refusesContentGesture`) et `actorHasMinimumRole`, avec des doubles qui rendent
+ * les lignes du vecteur. INCLUSION toujours (le client n'offre jamais ce que la
+ * passerelle refuse) ; ÉGALITÉ pour modifier, supprimer et réagir sauf où le
+ * vecteur déclare `clientStricter`. L'épingle n'est tenue qu'en inclusion : la
+ * loi la refuse en plus sur les avis, la vue unique et les invités. Aucun code
+ * de production n'est touché.
  *
  * @jest-environment node
  */
@@ -14,13 +18,16 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from '@jest/globals';
 
+import { ReactionService } from '../../../../services/ReactionService';
+import { refusesContentGesture } from '../../../../services/messaging/captureNoticeVisibility';
+import { refusesMinorInConversationOfType } from '../../../../services/messaging/globalMinorGate';
 import { admitMessageDelete, type DeleteAdmissionReader } from '../../../../services/messaging/messageDeleteAdmission';
 import { admitMessageEdit, type EditAdmissionReader } from '../../../../services/messaging/messageEditAdmission';
 import { actorHasMinimumRole } from '../../../../utils/conversation-authority';
 import type { ConversationActionInput, ConversationActions } from '@meeshy/shared/utils/conversation-action-policy';
 import type { ActionViewer, MessageActionInput, MessageActions } from '@meeshy/shared/utils/message-action-policy';
 
-type MessageVector = { readonly _label: string; readonly clientStricter?: readonly ('edit' | 'delete')[]; readonly input: MessageActionInput; readonly expected: MessageActions };
+type MessageVector = { readonly _label: string; readonly clientStricter?: readonly ('edit' | 'delete' | 'react')[]; readonly input: MessageActionInput; readonly expected: MessageActions };
 
 type ConversationVector = { readonly _label: string; readonly input: ConversationActionInput; readonly expected: ConversationActions };
 
@@ -32,6 +39,8 @@ const vectorsOf = <T>(name: string): readonly T[] =>
 const CONVERSATION_ID = '65f0000000000000000000c1';
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
+const birthDateOf = (viewer: ActionViewer, now: number): Date | null => (viewer.isDeclaredMinor ? new Date(now - 15 * YEAR_MS) : null);
+
 /** Les lignes que la base rendrait pour ce lecteur : un invité n'a pas de `User`, donc aucune ligne par `userId`. */
 function membershipOf(viewer: ActionViewer) {
   return viewer.hasAccount && viewer.isActiveMember
@@ -42,7 +51,7 @@ function membershipOf(viewer: ActionViewer) {
 function editReader(vector: MessageVector): EditAdmissionReader {
   const { viewer, now } = vector.input;
   return {
-    user: { findUnique: async () => (viewer.hasAccount ? { role: viewer.platformRole, birthDate: viewer.isDeclaredMinor ? new Date(now - 15 * YEAR_MS) : null } : null) },
+    user: { findUnique: async () => (viewer.hasAccount ? { role: viewer.platformRole, birthDate: birthDateOf(viewer, now) } : null) },
     participant: { findFirst: async () => membershipOf(viewer) },
   };
 }
@@ -55,6 +64,27 @@ function deleteReader(vector: MessageVector): DeleteAdmissionReader {
     conversation: { findUnique: async () => ({ type: conversation.type }) },
     message: { findUnique: async () => ({ senderId: message.capturedMessageIsMine === true ? (viewer.participantId ?? 'part-viewer') : 'part-someone-else' }) },
   };
+}
+
+/** La ligne que `addReaction` relit, et une réaction déjà posée : la passerelle juge, puis rend sans rien écrire. */
+function reactionReader(vector: MessageVector) {
+  const { message, conversation, viewer } = vector.input;
+  const participantId = viewer.participantId ?? viewer.id;
+  const row = {
+    id: message.id,
+    conversationId: CONVERSATION_ID,
+    senderId: message.senderId ?? null,
+    deletedAt: message.deletedAt == null ? null : new Date(message.deletedAt),
+    messageType: message.messageType ?? 'text',
+    sender: { userId: message.authorUserId ?? null },
+    conversation: {
+      isActive: conversation.isActive,
+      closedAt: conversation.closedAt == null ? null : new Date(conversation.closedAt),
+      participants: viewer.isActiveMember ? [{ id: participantId, userId: viewer.hasAccount ? viewer.id : null }] : [],
+    },
+  };
+  const posted = { id: 'reaction-1', messageId: message.id, participantId, emoji: '👍', createdAt: new Date(0), updatedAt: new Date(0) };
+  return { participantId, prisma: { message: { findUnique: async () => row }, reaction: { findFirst: async () => posted } } };
 }
 
 const messageVectors = vectorsOf<MessageVector>('message-actions');
@@ -102,6 +132,35 @@ describe('parité des actions sur un message — admitMessageEdit / admitMessage
     if (deleteForEveryone) expect([admission.admitted, admission.byModeration === true]).toEqual([true, false]);
     if (removes) expect([admission.admitted, admission.byModeration === true]).toEqual([true, true]);
     if (!vector.clientStricter?.includes('delete')) expect(admission.admitted).toBe(deleteForEveryone || removes);
+  });
+});
+
+describe('parité des actions sur un message — ReactionService.addReaction et les gardes de l’épingle', () => {
+  it('les vecteurs couvrent une réaction sans droit d’écrire et une épingle refusée au mineur de Global', () => {
+    expect(messageVectors.some((vector) => vector.expected.verdicts.canReact && !vector.expected.verdicts.canReply)).toBe(true);
+    expect(messageVectors.some((vector) => vector.input.conversation.type === 'global' && vector.input.viewer.isDeclaredMinor && vector.expected.verdicts.pin === null)).toBe(true);
+  });
+
+  it.each(messageVectors.map((vector) => [vector._label, vector] as const))('réagir : %s', async (_label, vector) => {
+    const { participantId, prisma } = reactionReader(vector);
+    const admitted = await new ReactionService(prisma as never, null)
+      .addReaction({ messageId: vector.input.message.id, participantId, emoji: '👍' })
+      .then(() => true, () => false);
+    const offered = vector.expected.verdicts.canReact;
+
+    if (offered) expect(admitted).toBe(true);
+    if (!vector.clientStricter?.includes('react')) expect(admitted).toBe(offered);
+  });
+
+  it.each(messageVectors.map((vector) => [vector._label, vector] as const))('épingler : %s', async (_label, vector) => {
+    const { message, conversation, viewer, now } = vector.input;
+    if (vector.expected.verdicts.pin === null) return;
+    const minorRefused = await refusesMinorInConversationOfType(
+      { user: { findUnique: async () => ({ birthDate: birthDateOf(viewer, now) }) } } as never,
+      { conversationType: conversation.type, userId: viewer.hasAccount ? viewer.id : null, now: new Date(now) },
+    );
+
+    expect([message.deletedAt ?? null, minorRefused, refusesContentGesture({ messageType: message.messageType ?? null, metadata: message.metadata })]).toEqual([null, false, false]);
   });
 });
 

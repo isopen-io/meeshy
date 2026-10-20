@@ -1,9 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
 import { describe, expect, it } from 'vitest';
 
-import { conversationActionsFor, type ConversationActionInput, type ConversationActions } from './conversation-action-policy';
+import { conversationActionsFor } from './conversation-action-policy';
 import type { ActionConversation, ActionViewer } from './message-action-policy';
 
 const viewer = (overrides: Partial<ActionViewer> = {}): ActionViewer => ({
@@ -80,21 +77,5 @@ describe('conversationActionsFor — rôles de plateforme et de conversation (#1
   it('un lecteur à la fois inscrit et anonyme se lit comme un invité', () => {
     const actions = actionsOf({ viewer: { isAnonymous: true } });
     expect([actions.hide, actions.report, actions.call]).toEqual([false, false, false]);
-  });
-});
-
-type ConversationVector = { readonly _label: string; readonly input: ConversationActionInput; readonly expected: ConversationActions };
-
-const vectors: readonly ConversationVector[] = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../fixtures/action-policy/conversation-actions.vectors.json', import.meta.url)), 'utf-8'),
-).vectors;
-
-describe('vecteurs : conversation-actions', () => {
-  it('le fichier porte des cas, jamais zéro (leçon 257)', () => {
-    expect(vectors.length).toBeGreaterThan(20);
-  });
-
-  it.each(vectors.map((vector) => [vector._label, vector] as const))('%s', (_label, vector) => {
-    expect(conversationActionsFor(vector.input)).toEqual(vector.expected);
   });
 });

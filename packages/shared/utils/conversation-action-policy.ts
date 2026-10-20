@@ -6,7 +6,9 @@
  * `direct` n'a pas d'autorité (ses rangs sont un ordre d'arrivée) ; Global ne se
  * renomme, ne se quitte ni ne se supprime pour tous, et seuls ADMIN/BIGBOSS y
  * invitent ; une conversation terminée ne se modifie plus ; un type inconnu
- * n'ouvre rien qui en dépende. L'appel suit `canStartCall`.
+ * n'ouvre rien qui en dépende. L'appel suit `canStartCall` ; un lecteur
+ * `isAnonymous` est un invité ; le badge suit `conversationIsEndToEnd`, la loi
+ * qui retire les services aux messages.
  */
 
 import { MEMBER_ROLE_HIERARCHY } from '../types/role-types.js';
@@ -14,8 +16,10 @@ import { canStartCall } from './call-permission.js';
 import { GLOBAL_CONVERSATION_TYPE } from './global-minor-restriction.js';
 import {
   conversationIsClosed,
+  conversationIsEndToEnd,
   memberRankOf,
   platformAdministers,
+  viewerIsRegistered,
   type ActionConversation,
   type ActionViewer,
 } from './message-action-policy.js';
@@ -54,6 +58,7 @@ export function conversationActionsFor({ conversation, viewer }: ConversationAct
   const authority = AUTHORITY_TYPES.has(conversation.type);
   const global = conversation.type === GLOBAL_CONVERSATION_TYPE;
   const moderates = rank >= MEMBER_ROLE_HIERARCHY.moderator;
+  const registered = viewerIsRegistered(viewer);
   const callable =
     open &&
     viewer.isActiveMember &&
@@ -62,19 +67,19 @@ export function conversationActionsFor({ conversation, viewer }: ConversationAct
       viewerIsCreator: (viewer.conversationRole ?? '').toLowerCase() === 'creator',
       viewerConversationRole: viewer.conversationRole,
       viewerPlatformRole: viewer.platformRole,
-      viewerIsGuest: !viewer.hasAccount || viewer.isAnonymous,
+      viewerIsGuest: !registered,
     });
   return {
     rename: open && authority && moderates,
     invite: open && (global ? viewer.isActiveMember && platformAdministers(viewer) : authority && moderates),
     leave: open && authority && viewer.isActiveMember,
-    deleteForAll: authority && rank >= MEMBER_ROLE_HIERARCHY.admin,
-    hide: viewer.hasAccount,
-    report: viewer.hasAccount,
+    deleteForAll: open && authority && rank >= MEMBER_ROLE_HIERARCHY.admin,
+    hide: registered,
+    report: registered,
     manageMembers: open && MANAGED_TYPES.has(conversation.type) && moderates,
     adminOpen: platformAdministers(viewer),
     call: callable,
     videoCall: callable,
-    e2eeBadge: conversation.encryptionMode === 'e2ee',
+    e2eeBadge: conversationIsEndToEnd(conversation),
   };
 }

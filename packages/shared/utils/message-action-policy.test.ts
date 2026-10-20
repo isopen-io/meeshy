@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -9,7 +6,6 @@ import {
   messageActionsFor,
   type ActionConversation,
   type ActionViewer,
-  type MessageActionInput,
   type MessageActionSubject,
 } from './message-action-policy';
 
@@ -213,21 +209,5 @@ describe('messageActionsFor — ce que la passerelle accorde sans le droit d’�
   it('un lecteur à la fois inscrit et anonyme se lit comme un invité (fermé par défaut)', () => {
     const { verdicts } = actions({ message: { senderId: 'part-other', authorUserId: 'user-viewer' }, viewer: { isAnonymous: true } });
     expect([verdicts.edit, verdicts.deleteForEveryone, verdicts.deleteForMe, verdicts.report, verdicts.pin]).toEqual([null, false, false, false, null]);
-  });
-});
-
-type ActionVector = { readonly _label: string; readonly input: MessageActionInput; readonly expected: ReturnType<typeof messageActionsFor> };
-
-const vectors: readonly ActionVector[] = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../fixtures/action-policy/message-actions.vectors.json', import.meta.url)), 'utf-8'),
-).vectors;
-
-describe('vecteurs : message-actions', () => {
-  it('le fichier porte des cas, jamais zéro (leçon 257)', () => {
-    expect(vectors.length).toBeGreaterThan(20);
-  });
-
-  it.each(vectors.map((vector) => [vector._label, vector] as const))('%s', (_label, vector) => {
-    expect(messageActionsFor(vector.input)).toEqual(vector.expected);
   });
 });

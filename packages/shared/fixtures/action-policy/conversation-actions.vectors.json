@@ -1,5 +1,5 @@
 {
-  "$format": "Générés en EXÉCUTANT conversationActionsFor (packages/shared/utils), jamais écrits à la main. { _label, input, expected, clientStricter? } — clientStricter nomme les verdicts (edit, delete) où le client refuse plus que la passerelle : le test de parité n'y exige que l'inclusion.",
+  "$format": "Générés en EXÉCUTANT conversationActionsFor (packages/shared/utils) sur le plan de __tests__/action-policy/action-policy-vectors-law.ts, jamais écrits à la main. { _label, input, expected, clientStricter? } — clientStricter nomme les verdicts (edit, delete, react) où le client refuse plus que la passerelle : le test de parité n'y exige que l'inclusion.",
   "vectors": [
     {
       "_label": "direct-membre",
@@ -2470,7 +2470,44 @@
         "rename": false,
         "invite": false,
         "leave": false,
-        "deleteForAll": true,
+        "deleteForAll": false,
+        "hide": true,
+        "report": true,
+        "manageMembers": false,
+        "adminOpen": false,
+        "call": false,
+        "videoCall": false,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "groupe-clos-admin-ne-supprime-plus-pour-tous",
+      "input": {
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": "2026-10-19T00:00:00.000Z",
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "admin",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": false,
+        "deleteForAll": false,
         "hide": true,
         "report": true,
         "manageMembers": false,
@@ -2507,7 +2544,7 @@
         "rename": false,
         "invite": false,
         "leave": false,
-        "deleteForAll": true,
+        "deleteForAll": false,
         "hide": true,
         "report": true,
         "manageMembers": false,
@@ -2552,6 +2589,154 @@
         "call": true,
         "videoCall": true,
         "e2eeBadge": true
+      }
+    },
+    {
+      "_label": "groupe-e2ee-en-majuscules-porte-le-badge",
+      "input": {
+        "conversation": {
+          "type": "group",
+          "encryptionMode": "E2EE",
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": true,
+        "deleteForAll": false,
+        "hide": true,
+        "report": true,
+        "manageMembers": false,
+        "adminOpen": false,
+        "call": true,
+        "videoCall": true,
+        "e2eeBadge": true
+      }
+    },
+    {
+      "_label": "groupe-regime-inconnu-porte-le-badge",
+      "input": {
+        "conversation": {
+          "type": "group",
+          "encryptionMode": "signal_v3",
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": true,
+        "deleteForAll": false,
+        "hide": true,
+        "report": true,
+        "manageMembers": false,
+        "adminOpen": false,
+        "call": true,
+        "videoCall": true,
+        "e2eeBadge": true
+      }
+    },
+    {
+      "_label": "groupe-chiffrement-serveur-sans-badge",
+      "input": {
+        "conversation": {
+          "type": "group",
+          "encryptionMode": "server",
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": true,
+        "deleteForAll": false,
+        "hide": true,
+        "report": true,
+        "manageMembers": false,
+        "adminOpen": false,
+        "call": true,
+        "videoCall": true,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "groupe-inscrit-et-anonyme-se-lit-comme-un-invite",
+      "input": {
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": true,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": true,
+        "deleteForAll": false,
+        "hide": false,
+        "report": false,
+        "manageMembers": false,
+        "adminOpen": false,
+        "call": false,
+        "videoCall": false,
+        "e2eeBadge": false
       }
     }
   ]
