@@ -1,0 +1,356 @@
+/* LA CÉRÉMONIE DE LA FRAPPE (#11177, épopée § 7) — la scène plein écran où des
+   milliers d'étincelles de ta lumière tissent un cercle, où Mee et Meo y sèment
+   la poussière, puis frappent. Maquette validée : `docs/product/epopee/frappe-ceremonie.html`.
+
+   UNE FORGE N'A PAS DE SCHÉMA : la scène est une illustration de nuit, la même
+   en clair et en sombre (comme les matières de `game.css`). Ses couleurs sont
+   déclarées ICI, sur la scène : les calques les lisent par `var()`, et le
+   canevas des particules les lit une fois à l'ouverture (`getComputedStyle`) —
+   le code n'écrit aucune couleur. La palette d'une édition se pose par
+   `data-edition` (argent, or, prisme).
+
+   Rien ici ne bouge seul : la scène écrit `transform` et `opacity` à chaque
+   image (`components/game/mint-ceremony.tsx`), et sous « réduire les
+   animations » elle ne joue qu'un fondu. */
+
+[data-game-ceremony] {
+  --ceremony-bg-0: #2a2014;
+  --ceremony-bg-1: #120d09;
+  --ceremony-bg-2: #06050a;
+  --ceremony-orb-0: #fffbe6;
+  --ceremony-orb-1: #ffd27a;
+  --ceremony-orb-2: rgba(255, 190, 90, 0);
+  --ceremony-orb-ink: #e9d9b0;
+  --ceremony-weave-0: #fff6dc;
+  --ceremony-weave-1: #ffe6a6;
+  --ceremony-weave-2: #ffd27a;
+  --ceremony-iris-0: #ff8fb1;
+  --ceremony-iris-1: #ffb36b;
+  --ceremony-iris-2: #ffd36b;
+  --ceremony-iris-3: #8ff0c4;
+  --ceremony-iris-4: #8fc8ff;
+  --ceremony-iris-5: #a99bff;
+  --ceremony-iris-6: #e39bff;
+  --ceremony-silver-0: #eef1f6;
+  --ceremony-silver-1: #c9cfda;
+  --ceremony-silver-2: #ffffff;
+  --ceremony-silver-3: #dfe4ec;
+  --ceremony-gold-0: #ffd36b;
+  --ceremony-gold-1: #f2b136;
+  --ceremony-gold-2: #ffe7a3;
+  --ceremony-diamond-0: #f4fbff;
+  --ceremony-diamond-1: #dff3ff;
+  --ceremony-spark-0: #ffe3a0;
+  --ceremony-spark-1: #ffffff;
+  --ceremony-ash: #9aa0ad;
+  --ceremony-steel-0: #d6dbe5;
+  --ceremony-steel-1: #7d8392;
+  --ceremony-anvil-0: #70778a;
+  --ceremony-anvil-1: #2c2f37;
+  --ceremony-anvil-top-0: #a9afbd;
+  --ceremony-anvil-top-1: #5b6070;
+  --ceremony-die-0: #5d6270;
+  --ceremony-die-1: #c9cfdb;
+  --ceremony-die-2: #6d7280;
+  --ceremony-wood-0: #6b4423;
+  --ceremony-wood-1: #a8743f;
+  --ceremony-glow-0: rgba(255, 240, 200, 0.75);
+  --ceremony-glow-1: rgba(255, 214, 140, 0.3);
+  --ceremony-glow-2: rgba(255, 200, 120, 0);
+  --ceremony-flash-0: #ffffff;
+  --ceremony-flash-1: rgba(255, 250, 230, 0.85);
+  --ceremony-flash-2: rgba(255, 240, 200, 0);
+  --ceremony-ring: rgba(255, 236, 180, 0.95);
+  --ceremony-ray: rgba(255, 214, 107, 0.55);
+  --ceremony-tchak: #ffcf5c;
+  --ceremony-sign: #ffe7a8;
+  --ceremony-sign-sub: #cdbd8e;
+  --ceremony-say: #f3eaff;
+  --ceremony-hint: rgba(255, 255, 255, 0.42);
+  --ceremony-glory: #8ff0bd;
+  --ceremony-shade: rgba(0, 0, 0, 0.45);
+  --ceremony-ombre-0: rgba(8, 6, 18, 0.97);
+  --ceremony-ombre-1: rgba(8, 6, 18, 0.86);
+  --ceremony-ombre-2: rgba(8, 6, 18, 0);
+
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: hidden;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+[data-game-ceremony][data-edition='gold'] {
+  --ceremony-weave-0: #fff1c2;
+  --ceremony-weave-1: #ffd96b;
+  --ceremony-weave-2: #ffc24d;
+  --ceremony-glow-0: rgba(255, 226, 140, 0.85);
+  --ceremony-glow-1: rgba(255, 190, 70, 0.35);
+  --ceremony-glow-2: rgba(255, 170, 40, 0);
+}
+
+[data-game-ceremony][data-edition='prism'] {
+  --ceremony-bg-0: #211b42;
+  --ceremony-bg-1: #0b0918;
+  --ceremony-bg-2: #040309;
+  --ceremony-orb-0: #ffffff;
+  --ceremony-orb-1: #d9c8ff;
+  --ceremony-orb-2: rgba(160, 120, 255, 0);
+  --ceremony-glow-0: rgba(255, 255, 255, 0.8);
+  --ceremony-glow-1: rgba(195, 160, 255, 0.35);
+  --ceremony-glow-2: rgba(140, 200, 255, 0);
+  --ceremony-sign: #efe4ff;
+}
+
+[data-game-ceremony] > [data-ceremony-backdrop] {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(80% 55% at 50% 45%, var(--ceremony-bg-0) 0%, var(--ceremony-bg-1) 62%, var(--ceremony-bg-2) 100%);
+}
+
+[data-ceremony-scene] {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 360px;
+  height: 640px;
+  transform-origin: 0 0;
+}
+
+[data-ceremony-scene] > *,
+[data-ceremony-layer] > * {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+[data-ceremony-layer] {
+  position: absolute;
+  inset: 0;
+}
+
+[data-ceremony-canvas] {
+  width: 360px;
+  height: 640px;
+}
+
+[data-ceremony-orb] {
+  left: 150px;
+  top: 66px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--ceremony-orb-0) 0%, var(--ceremony-orb-1) 36%, var(--ceremony-orb-2) 70%);
+}
+
+[data-ceremony-orb-label] {
+  left: 100px;
+  top: 128px;
+  width: 160px;
+  text-align: center;
+  font: 600 11px system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  color: var(--ceremony-orb-ink);
+}
+
+[data-ceremony-anvil-top] {
+  left: 104px;
+  top: 543px;
+  width: 152px;
+  height: 10px;
+  border-radius: 4px;
+  background: linear-gradient(var(--ceremony-anvil-top-0), var(--ceremony-anvil-top-1));
+}
+
+[data-ceremony-anvil] {
+  left: 112px;
+  top: 550px;
+  width: 136px;
+  height: 46px;
+  background: linear-gradient(var(--ceremony-anvil-0), var(--ceremony-anvil-1));
+  clip-path: polygon(0 0, 100% 0, 82% 100%, 18% 100%);
+}
+
+[data-ceremony-glow] {
+  width: 240px;
+  height: 240px;
+  border-radius: 50%;
+  opacity: 0;
+  background: radial-gradient(circle, var(--ceremony-glow-0) 0%, var(--ceremony-glow-1) 35%, var(--ceremony-glow-2) 68%);
+}
+
+[data-ceremony-coin] {
+  width: 150px;
+  height: 150px;
+  transform-origin: 75px 75px;
+  perspective: 700px;
+  opacity: 0;
+}
+
+[data-ceremony-coin-3d] {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+[data-ceremony-face] {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+[data-ceremony-face='reverse'] {
+  transform: rotateY(180deg);
+}
+
+[data-ceremony-die] {
+  width: 26px;
+  height: 50px;
+  border-radius: 4px;
+  opacity: 0;
+  transform-origin: 13px 50px;
+  background: linear-gradient(90deg, var(--ceremony-die-0), var(--ceremony-die-1) 45%, var(--ceremony-die-2));
+  box-shadow: 0 2px 5px var(--ceremony-shade);
+}
+
+[data-ceremony-actor] {
+  width: 92px;
+  height: 92px;
+  transform-origin: 46px 46px;
+}
+
+[data-ceremony-actor] > [data-ceremony-pose] {
+  position: absolute;
+  inset: 0;
+}
+
+[data-ceremony-hammer] {
+  width: 8px;
+  height: 100px;
+  transform-origin: 4px 100px;
+  opacity: 0;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--ceremony-wood-0), var(--ceremony-wood-1) 50%, var(--ceremony-wood-0));
+}
+
+[data-ceremony-hammer] > span {
+  position: absolute;
+  left: -17px;
+  top: -14px;
+  width: 42px;
+  height: 22px;
+  border-radius: 5px;
+  background: linear-gradient(var(--ceremony-steel-0), var(--ceremony-steel-1));
+  box-shadow: inset 0 -3px 0 var(--ceremony-shade);
+}
+
+[data-ceremony-flash] {
+  width: 360px;
+  height: 640px;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 70%, var(--ceremony-flash-0) 0%, var(--ceremony-flash-1) 22%, var(--ceremony-flash-2) 62%);
+}
+
+[data-ceremony-ring] {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 3px solid var(--ceremony-ring);
+  opacity: 0;
+  box-sizing: border-box;
+}
+
+[data-ceremony-rays] {
+  width: 330px;
+  height: 330px;
+  border-radius: 50%;
+  opacity: 0;
+  background: repeating-conic-gradient(var(--ceremony-ray) 0 8deg, transparent 8deg 20deg);
+  -webkit-mask: radial-gradient(circle, #000 0%, #000 26%, transparent 70%);
+  mask: radial-gradient(circle, #000 0%, #000 26%, transparent 70%);
+}
+
+[data-game-ceremony][data-edition='prism'] [data-ceremony-rays] {
+  background: repeating-conic-gradient(
+    var(--ceremony-iris-0) 0 7deg,
+    var(--ceremony-iris-2) 7deg 14deg,
+    var(--ceremony-iris-3) 14deg 21deg,
+    var(--ceremony-iris-4) 21deg 28deg,
+    var(--ceremony-iris-5) 28deg 35deg,
+    transparent 35deg 45deg
+  );
+}
+
+[data-ceremony-tchak] {
+  left: 60px;
+  width: 240px;
+  text-align: center;
+  font: 900 28px system-ui, sans-serif;
+  color: var(--ceremony-tchak);
+  opacity: 0;
+  text-shadow: 0 2px 0 var(--ceremony-shade);
+}
+
+[data-ceremony-sign] {
+  left: 20px;
+  top: 150px;
+  width: 320px;
+  text-align: center;
+  font: 600 15px system-ui, sans-serif;
+  color: var(--ceremony-sign);
+  opacity: 0;
+}
+
+[data-ceremony-sign] > small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ceremony-sign-sub);
+}
+
+[data-ceremony-say] {
+  left: 16px;
+  top: 600px;
+  width: 328px;
+  text-align: center;
+  font: italic 14px/1.35 system-ui, sans-serif;
+  color: var(--ceremony-say);
+  opacity: 0;
+}
+
+[data-ceremony-ombre] {
+  width: 230px;
+  height: 230px;
+  border-radius: 50%;
+  opacity: 0;
+  background: radial-gradient(circle, var(--ceremony-ombre-0) 0%, var(--ceremony-ombre-1) 42%, var(--ceremony-ombre-2) 72%);
+}
+
+[data-ceremony-glory] {
+  left: 100px;
+  width: 160px;
+  text-align: center;
+  font: 800 13px system-ui, sans-serif;
+  color: var(--ceremony-glory);
+  opacity: 0;
+  white-space: nowrap;
+}
+
+[data-game-ceremony] > [data-ceremony-hint] {
+  position: absolute;
+  right: 14px;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  font: 11px system-ui, sans-serif;
+  color: var(--ceremony-hint);
+}
+
+[data-ceremony-scene] *,
+[data-game-ceremony] > * {
+  pointer-events: none;
+}
