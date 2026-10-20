@@ -48,6 +48,7 @@ extension SharedAVPlayerManager {
             position: outgoing.currentTime().seconds,
             duration: outgoing.currentItem?.duration.seconds ?? .nan,
             isResumable: Self.isResumable)
+        audioTracks.restore(of: outgoing)
         StoryMediaLoader.shared.returnPlayer(outgoing, for: url)
         guard let rewind else {
             // Préroulé là où il est (#9702) : ses tampons sont pleins au

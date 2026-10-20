@@ -55,7 +55,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     private func applyMuteState() {
-        player?.isMuted = effectiveMuted
+        if let player { audioTracks.apply(to: player, wantsMuted: effectiveMuted) }
         closeStretchOnMuteChange()
         // Lever le son d'une vidéo qui joue, c'est lancer un son (#11039).
         if isPlaying, !effectiveMuted { MediaSessionCoordinator.shared.activateContentPlayback(.audible) }
@@ -139,6 +139,8 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
+    /// Les pistes audio suivent le mute effectif (#11282).
+    let audioTracks = AudioTrackActivator()
     private var watchStartTime: Date?
 
     /// Guards `applyResumePositionIfAvailable()` against firing on every
@@ -674,7 +676,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         // Sync immédiat de l'état de mute effectif sur le nouveau player. Sans
         // ça, un user qui mute en fullscreen puis ouvre une nouvelle vidéo
         // entend le son revenir alors que l'icône mute reste activée.
-        player.isMuted = effectiveMuted
+        bindAudioTracks(to: player)
         if let item = player.currentItem { engineItems.insert(ObjectIdentifier(item)) }
         applyLoop(to: player)
         // La tête d'un lecteur adopté n'est pas à zéro (#10354) : le visionnage
@@ -840,6 +842,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         }
         timeObserver = nil
         cancellables.removeAll()
+        audioTracks.release()
         engineItems.removeAll()
         seekGeneration &+= 1
         seekInFlight = false
