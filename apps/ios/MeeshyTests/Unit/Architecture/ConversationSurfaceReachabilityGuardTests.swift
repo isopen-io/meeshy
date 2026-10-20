@@ -922,7 +922,7 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
             src.components(separatedBy: "viewModel.captureArmedProtection(replyingTo: replyId)").count - 1, 1,
             "Une seule saisie par tap : deux saisies rendraient la seconde vide."
         )
-        let envois = src.components(separatedBy: "viewModel.sendMessage(").count - 1
+        let envois = src.components(separatedBy: "viewModel.send(OutgoingMessage(").count - 1
         let servis = src.components(separatedBy: "protection: protection").count - 1
         XCTAssertGreaterThanOrEqual(
             servis, envois - 1,
