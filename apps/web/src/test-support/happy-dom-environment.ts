@@ -59,7 +59,10 @@ const withoutChildPageNavigation = (options?: RegisterOptions): RegisterOptions 
   },
 });
 
+let claims = 0;
+
 export const ensureHappyDomRegistered = (options?: RegisterOptions): void => {
+  claims += 1;
   if (!GlobalRegistrator.isRegistered) {
     GlobalRegistrator.register(withoutChildPageNavigation(options));
   }
@@ -99,8 +102,19 @@ function installNodePortrait(prototype: object): void {
   });
 }
 
+const SCHEDULER_TURNS = 2;
+
+const letSchedulerRun = async (): Promise<void> => {
+  for (let turn = 0; turn < SCHEDULER_TURNS; turn += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+};
+
 export const releaseHappyDomIfRegistered = async (): Promise<void> => {
-  if (GlobalRegistrator.isRegistered) {
+  if (!GlobalRegistrator.isRegistered) return;
+  const claimed = claims;
+  await letSchedulerRun();
+  if (claims === claimed && GlobalRegistrator.isRegistered) {
     await GlobalRegistrator.unregister();
   }
 };

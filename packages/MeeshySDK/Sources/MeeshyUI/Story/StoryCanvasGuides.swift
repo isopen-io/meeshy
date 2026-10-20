@@ -80,6 +80,25 @@ enum StoryAlignmentSnap {
     }
 }
 
+// MARK: - Out-Of-Bounds Pulse
+
+nonisolated struct StoryOutOfBoundsStroke: Equatable {
+    let opacity: Double
+    let lineWidth: CGFloat
+}
+
+nonisolated enum StoryOutOfBoundsPulse {
+    static func animation(reduceMotion: Bool) -> Animation? {
+        guard !reduceMotion else { return nil }
+        return Animation.easeInOut(duration: 0.6).repeatForever(autoreverses: true)
+    }
+
+    static func stroke(pulse: Bool, reduceMotion: Bool) -> StoryOutOfBoundsStroke {
+        let prominent = pulse || reduceMotion
+        return StoryOutOfBoundsStroke(opacity: prominent ? 0.9 : 0.5, lineWidth: prominent ? 2.5 : 1.5)
+    }
+}
+
 // MARK: - Safe Zone Overlay
 
 struct SafeZoneOverlay: View {
@@ -106,7 +125,7 @@ struct SafeZoneOverlay: View {
                     .position(x: rect.midX, y: rect.minY - 10)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: isDragging)
+        .meeshyAnimation(.easeInOut(duration: 0.2), value: isDragging)
         .allowsHitTesting(false)
     }
 }
@@ -133,7 +152,7 @@ struct AlignmentGuidesOverlay: View {
             }
         }
         .allowsHitTesting(false)
-        .animation(.easeInOut(duration: 0.12), value: dragPosition)
+        .meeshyAnimation(.easeInOut(duration: 0.12), value: dragPosition)
     }
 
     private func activeTargets(_ targets: [CGFloat], near value: CGFloat) -> [CGFloat] {
@@ -153,16 +172,20 @@ struct OutOfBoundsWarningOverlay: View {
     let isOutOfBounds: Bool
 
     @State private var pulse: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
 
     var body: some View {
         let rect = StorySafeZone.denormalizedRect(in: canvasSize)
+        let reduceMotion = MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+        let stroke = StoryOutOfBoundsPulse.stroke(pulse: pulse, reduceMotion: reduceMotion)
 
         ZStack {
             if isOutOfBounds {
                 RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .strokeBorder(
-                        Color.red.opacity(pulse ? 0.9 : 0.5),
-                        lineWidth: pulse ? 2.5 : 1.5
+                        Color.red.opacity(stroke.opacity),
+                        lineWidth: stroke.lineWidth
                     )
                     .frame(width: rect.width, height: rect.height)
                     .position(x: rect.midX, y: rect.midY)
@@ -172,10 +195,7 @@ struct OutOfBoundsWarningOverlay: View {
                             pulse = false
                         }
                     }
-                    .animation(
-                        .easeInOut(duration: 0.6).repeatForever(autoreverses: true),
-                        value: pulse
-                    )
+                    .meeshyAnimation(StoryOutOfBoundsPulse.animation(reduceMotion: reduceMotion), value: pulse)
                     .transition(.opacity)
 
                 HStack(spacing: MeeshySpacing.xs) {

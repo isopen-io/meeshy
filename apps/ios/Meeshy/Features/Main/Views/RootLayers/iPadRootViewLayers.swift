@@ -24,6 +24,7 @@ struct iPadEnvironmentLayer: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environmentObject(router)
+            .modifier(PublishesSceneNavigation(router: router, role: .main))
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
             .meeshyConversationList(conversationViewModel)
@@ -210,13 +211,7 @@ struct iPadSheetsLayer: ViewModifier {
             // #10947 — un partage relayé par l'extension (sans session, ou vers
             // une conversation chiffrée) rouvre ICI l'écran de partage unique.
             .shareRelayPresenter(consumer: ShareRelayConsumer.shared, router: router)
-            .sheet(isPresented: $showNewConversation) {
-                NewConversationView()
-                    .environmentObject(statusViewModel)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-                    .closesForConversationOpening(.sheet)
-            }
+            .modifier(NewConversationSheetHost(isPresented: $showNewConversation, statusViewModel: statusViewModel))
             // Aperçu de conversation (appui long / tirage sur un toast). La
             // feuille crée un environnement neuf : réinjecter ce que la
             // `ConversationView` réutilisée lit.
