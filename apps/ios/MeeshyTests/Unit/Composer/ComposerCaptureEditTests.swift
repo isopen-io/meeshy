@@ -389,7 +389,7 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(session.openFamily, .filters, "et laisse la bande")
         session.toggleEditTool(.crop)
         XCTAssertNil(session.openFamily, "rallumer Crop replie la bande pour montrer ses proportions")
-        XCTAssertEqual(session.editPanels, [], "les proportions se posent sur la scène (#10930)")
+        XCTAssertEqual(session.editPanels, [.presets], "les proportions retiennent leur bande sous la scène")
         session.cancelEditing()
         XCTAssertEqual(session.activeEditTools, [])
     }

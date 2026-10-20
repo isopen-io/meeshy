@@ -168,18 +168,23 @@ nonisolated enum ComposerCropPreset: CaseIterable, Hashable, Sendable {
     }
 }
 
-/// **Les formats se posent SUR la scène** (#10930, porteur 2026-10-18), au
-/// bas du cadre, entre les deux crochets du bas — la lecture d'une vidéo est
-/// montée en haut depuis le 2026-10-20.
+/// **Les formats, sur une bande pleine largeur juste SOUS la scène** (porteur
+/// 2026-10-20 : « les rails d'outils doivent être le moins coupés possible et
+/// on doit les laisser aller soit hors viewport soit hors cadre de la
+/// scène »). Ni le cadre ni ses crochets ne la coupent : elle va d'un bord de
+/// l'écran à l'autre, dans la place que le panneau `.presets` retient sous la
+/// scène, et défile au-delà.
 nonisolated enum ComposerEditPresetsLayout {
 
+    /// La scène est centrée dans son conteneur (`ComposerEditScene.area` est
+    /// symétrique, `rect` centre) : la largeur de l'écran est donc le double de
+    /// son milieu.
     static func frame(scene: CGRect) -> CGRect {
-        let cible = MeeshyControlSize.tapTarget
-        let espace = ComposerEditPlaybackLayout.spacing
-        let gauche = scene.minX + cible + espace
-        let droite = scene.maxX - cible - espace
-        let hauteur = ComposerEditScene.presetsHeight
-        let milieu = scene.maxY - ComposerEditPlaybackLayout.margin - cible / 2
-        return CGRect(x: gauche, y: milieu - hauteur / 2, width: max(0, droite - gauche), height: hauteur)
+        CGRect(x: 0, y: scene.maxY + ComposerEditScene.gap,
+               width: max(0, scene.midX * 2), height: ComposerEditScene.presetsHeight)
     }
+
+    /// Le retrait de tête des bandes défilantes : la première case s'aligne sur
+    /// le bord du contenu, la dernière peut sortir de l'écran.
+    static let leadingInset: CGFloat = MeeshySpacing.mdPlus
 }

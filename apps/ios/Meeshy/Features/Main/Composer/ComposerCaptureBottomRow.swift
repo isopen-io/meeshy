@@ -171,15 +171,28 @@ struct ComposerCaptureBottomRow: View {
                     mediaTrack { ComposerSoundTrack(session: session, url: trimClip.url) }
                 }
             case .presets, .band, .none:
-                // Les proportions se posent SUR la scène (#10930).
+                // Les proportions : leur place est retenue sous la scène, leur
+                // bande pleine largeur s'y pose (`ComposerEditPresetsLayout`).
                 EmptyView()
             }
         }
-        ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
-                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) { famille in
-            session.toggleFamily(famille)
+        // **Le rail entier, ou qui défile — jamais un libellé coupé** (porteur
+        // 2026-10-20) : à son idéal s'il tient, sinon il défile jusqu'aux bords.
+        ViewThatFits(in: .horizontal) {
+            editRail
+            ScrollView(.horizontal, showsIndicators: false) {
+                editRail.padding(.horizontal, ComposerEditPresetsLayout.leadingInset)
+            }
         }
         .frame(height: ComposerEditScene.toolsRow)
+    }
+
+    private var editRail: some View {
+        ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
+                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) },
+                         fitsLabels: true) { famille in
+            session.toggleFamily(famille)
+        }
     }
 
     /// **La famille ouverte, au niveau de son rail** (#10311) : Filtres · Effets

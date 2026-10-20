@@ -86,10 +86,12 @@ nonisolated enum ComposerEditTools {
         isShown(tool, active: active, familyOpen: familyOpen) ? active.subtracting([tool]) : active.union([tool])
     }
 
-    /// L'ordre des panneaux sous la scène, de haut en bas : le spectre, puis la
-    /// coupe, au plus près des outils. Les proportions n'en sont plus : elles
-    /// se posent SUR la scène, à gauche de la lecture (#10930).
-    static let panelOrder: [ComposerEditTool] = [.sound, .trim]
+    /// L'ordre des panneaux sous la scène, de haut en bas : les proportions,
+    /// le spectre, puis la coupe, au plus près des outils. Les proportions
+    /// retiennent leur bande SOUS la scène (porteur 2026-10-20 : « les rails
+    /// d'outils doivent être le moins coupés possible ») : aucun crochet ne
+    /// les coupe, et elles défilent jusqu'aux bords de l'écran.
+    static let panelOrder: [ComposerEditTool] = [.crop, .sound, .trim]
 
     /// Les panneaux sous la scène : la bande d'une famille ouverte, sinon un par
     /// outil actif — **sauf le son quand la coupe est montrée** (#10356) : il se
