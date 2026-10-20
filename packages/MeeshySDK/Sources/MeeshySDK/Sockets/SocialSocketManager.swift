@@ -369,77 +369,31 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     }
 
     public func addCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
-        guard let socket else { throw CommentReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("comment:reaction-add", ["commentId": commentId, "postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: CommentReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: CommentReactionError.serverError(message))
-                    return
-                }
-                continuation.resume(returning: Self.decodeCommentReactionAck(data, decoder: self.decoder, commentId: commentId, postId: postId, emoji: emoji, action: "add"))
-            }
-        }
+        try await emitCommentReaction(.commentReactionAdd, commentId: commentId, postId: postId, emoji: emoji, action: "add")
     }
 
     public func removeCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
+        try await emitCommentReaction(.commentReactionRemove, commentId: commentId, postId: postId, emoji: emoji, action: "remove")
+    }
+
+    private func emitCommentReaction(
+        _ event: SocketEvent, commentId: String, postId: String, emoji: String, action: String
+    ) async throws -> SocketCommentReactionUpdateEvent {
         guard let socket else { throw CommentReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("comment:reaction-remove", ["commentId": commentId, "postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: CommentReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: CommentReactionError.serverError(message))
-                    return
-                }
-                continuation.resume(returning: Self.decodeCommentReactionAck(data, decoder: self.decoder, commentId: commentId, postId: postId, emoji: emoji, action: "remove"))
-            }
-        }
+        let ack = await socket.emitWithAck(
+            event, ["commentId": commentId, "postId": postId, "emoji": emoji] as [String: Any],
+            as: SocketCommentReactionUpdateEvent.self, payloadAt: .data, timingOutAfter: 10, decoder: decoder
+        )
+        return try Self.commentReactionEvent(from: ack, commentId: commentId, postId: postId, emoji: emoji, action: action)
     }
 
     public func requestCommentReactionSync(commentId: String) async throws -> SocketCommentReactionSyncEvent {
         guard let socket else { throw CommentReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("comment:reaction-request-sync", ["commentId": commentId]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: CommentReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: CommentReactionError.serverError(message))
-                    return
-                }
-                let event: SocketCommentReactionSyncEvent
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: data)
-                    event = try self.decoder.decode(SocketCommentReactionSyncEvent.self, from: jsonData)
-                } catch {
-                    // L'appelant ne reçoit qu'un `.malformedResponse` : sans
-                    // ce log, la cause réelle du désaccord de schéma est perdue.
-                    Logger.socket.error("comment reaction sync ACK undecodable: \(error.localizedDescription, privacy: .public)")
-                    continuation.resume(throwing: CommentReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
-            }
-        }
+        let ack = await socket.emitWithAck(
+            .commentReactionRequestSync, ["commentId": commentId] as [String: Any],
+            as: SocketCommentReactionSyncEvent.self, payloadAt: .data, timingOutAfter: 10, decoder: decoder
+        )
+        return try Self.commentReactionSyncEvent(from: ack)
     }
 
     // MARK: - Post Reaction Emission
@@ -460,108 +414,120 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         }
     }
 
-    /// Décode l'ACK d'une réaction post. Contrat aligné (gateway `PostReactionHandler`) :
+    /// Lit l'ACK d'une réaction post. Contrat aligné (gateway `PostReactionHandler`) :
     /// `data` == l'`updateEvent` du broadcast `post:reaction-added/-removed`.
     /// TOLÉRANT : si le shape de l'ACK dérive (success==true mais champs inattendus), on
     /// synthétise un événement minimal au lieu de jeter `malformedResponse` — l'agrégation
     /// autoritaire arrive via le broadcast et tous les appelants ignorent ce retour
     /// (`_ = try await …`). Évite l'ancien bug où chaque réaction socket échouait.
-    nonisolated static func decodePostReactionAck(
-        _ data: [String: Any], decoder: JSONDecoder, postId: String, emoji: String, action: String
-    ) -> SocketPostReactionUpdateEvent {
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: data)
-            return try decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData)
-        } catch {
+    nonisolated static func postReactionEvent(
+        from ack: SocketAck<SocketPostReactionUpdateEvent>, postId: String, emoji: String, action: String
+    ) throws -> SocketPostReactionUpdateEvent {
+        switch ack {
+        case .accepted(let event):
+            return event
+        case .undecodable(let reason):
             // Reconstruction minimale depuis les paramètres : l'UI reste juste
             // sur l'essentiel mais perd les champs enrichis du serveur.
-            Logger.socket.error("post reaction event undecodable, rebuilding a minimal event: \(error.localizedDescription, privacy: .public)")
+            Logger.socket.error("post reaction event undecodable, rebuilding a minimal event: \(reason, privacy: .public)")
+            return SocketPostReactionUpdateEvent(
+                postId: postId, userId: "", emoji: emoji, action: action,
+                aggregation: SocketPostReactionAggregation(emoji: emoji, count: 0), timestamp: nil)
+        case .acceptedWithoutPayload:
+            throw PostReactionError.serverError("unknown error")
+        case .refused(let refusal):
+            throw postReactionAckFailure(refusal)
+        case .timedOut:
+            throw PostReactionError.timeout
         }
-        return SocketPostReactionUpdateEvent(
-            postId: postId, userId: "", emoji: emoji, action: action,
-            aggregation: SocketPostReactionAggregation(emoji: emoji, count: 0), timestamp: nil)
     }
 
-    /// Décode l'ACK d'une réaction commentaire (même contrat/tolérance que `decodePostReactionAck`).
-    nonisolated static func decodeCommentReactionAck(
-        _ data: [String: Any], decoder: JSONDecoder, commentId: String, postId: String, emoji: String, action: String
-    ) -> SocketCommentReactionUpdateEvent {
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: data)
-            return try decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData)
-        } catch {
-            Logger.socket.error("comment reaction event undecodable, rebuilding a minimal event: \(error.localizedDescription, privacy: .public)")
+    /// Lit l'ACK d'une réaction commentaire (même contrat/tolérance que `postReactionEvent`).
+    nonisolated static func commentReactionEvent(
+        from ack: SocketAck<SocketCommentReactionUpdateEvent>, commentId: String, postId: String, emoji: String, action: String
+    ) throws -> SocketCommentReactionUpdateEvent {
+        switch ack {
+        case .accepted(let event):
+            return event
+        case .undecodable(let reason):
+            Logger.socket.error("comment reaction event undecodable, rebuilding a minimal event: \(reason, privacy: .public)")
+            return SocketCommentReactionUpdateEvent(
+                commentId: commentId, postId: postId, userId: "", emoji: emoji, action: action,
+                aggregation: SocketCommentReactionAggregation(emoji: emoji, count: 0, userIds: [], hasCurrentUser: false),
+                timestamp: nil)
+        case .acceptedWithoutPayload:
+            throw CommentReactionError.serverError("unknown error")
+        case .refused(let refusal):
+            throw CommentReactionError.serverError(refusal.message ?? "unknown error")
+        case .timedOut:
+            throw CommentReactionError.timeout
         }
-        return SocketCommentReactionUpdateEvent(
-            commentId: commentId, postId: postId, userId: "", emoji: emoji, action: action,
-            aggregation: SocketCommentReactionAggregation(emoji: emoji, count: 0, userIds: [], hasCurrentUser: false),
-            timestamp: nil)
+    }
+
+    nonisolated static func commentReactionSyncEvent(
+        from ack: SocketAck<SocketCommentReactionSyncEvent>
+    ) throws -> SocketCommentReactionSyncEvent {
+        switch ack {
+        case .accepted(let event):
+            return event
+        case .undecodable(let reason):
+            // L'appelant ne reçoit qu'un `.malformedResponse` : sans
+            // ce log, la cause réelle du désaccord de schéma est perdue.
+            Logger.socket.error("comment reaction sync ACK undecodable: \(reason, privacy: .public)")
+            throw CommentReactionError.malformedResponse
+        case .acceptedWithoutPayload:
+            throw CommentReactionError.serverError("unknown error")
+        case .refused(let refusal):
+            throw CommentReactionError.serverError(refusal.message ?? "unknown error")
+        case .timedOut:
+            throw CommentReactionError.timeout
+        }
+    }
+
+    nonisolated static func postReactionSyncEvent(
+        from ack: SocketAck<SocketPostReactionSyncEvent>
+    ) throws -> SocketPostReactionSyncEvent {
+        switch ack {
+        case .accepted(let event):
+            return event
+        case .undecodable(let reason):
+            Logger.socket.error("post reaction sync ACK undecodable: \(reason, privacy: .public)")
+            throw PostReactionError.malformedResponse
+        case .acceptedWithoutPayload:
+            throw PostReactionError.serverError("unknown error")
+        case .refused(let refusal):
+            throw PostReactionError.serverError(refusal.message ?? "unknown error")
+        case .timedOut:
+            throw PostReactionError.timeout
+        }
     }
 
     public func addPostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent {
-        guard let socket else { throw PostReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("post:reaction-add", ["postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: PostReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    continuation.resume(throwing: Self.postReactionAckFailure(response))
-                    return
-                }
-                continuation.resume(returning: Self.decodePostReactionAck(data, decoder: self.decoder, postId: postId, emoji: emoji, action: "add"))
-            }
-        }
+        try await emitPostReaction(.postReactionAdd, postId: postId, emoji: emoji, action: "add")
     }
 
     public func removePostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent {
+        try await emitPostReaction(.postReactionRemove, postId: postId, emoji: emoji, action: "remove")
+    }
+
+    private func emitPostReaction(
+        _ event: SocketEvent, postId: String, emoji: String, action: String
+    ) async throws -> SocketPostReactionUpdateEvent {
         guard let socket else { throw PostReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("post:reaction-remove", ["postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: PostReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    continuation.resume(throwing: Self.postReactionAckFailure(response))
-                    return
-                }
-                continuation.resume(returning: Self.decodePostReactionAck(data, decoder: self.decoder, postId: postId, emoji: emoji, action: "remove"))
-            }
-        }
+        let ack = await socket.emitWithAck(
+            event, ["postId": postId, "emoji": emoji] as [String: Any],
+            as: SocketPostReactionUpdateEvent.self, payloadAt: .data, timingOutAfter: 10, decoder: decoder
+        )
+        return try Self.postReactionEvent(from: ack, postId: postId, emoji: emoji, action: action)
     }
 
     public func requestPostReactionSync(postId: String) async throws -> SocketPostReactionSyncEvent {
         guard let socket else { throw PostReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("post:reaction-request-sync", ["postId": postId]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: PostReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: PostReactionError.serverError(message))
-                    return
-                }
-                let event: SocketPostReactionSyncEvent
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: data)
-                    event = try self.decoder.decode(SocketPostReactionSyncEvent.self, from: jsonData)
-                } catch {
-                    Logger.socket.error("post reaction sync ACK undecodable: \(error.localizedDescription, privacy: .public)")
-                    continuation.resume(throwing: PostReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
-            }
-        }
+        let ack = await socket.emitWithAck(
+            .postReactionRequestSync, ["postId": postId] as [String: Any],
+            as: SocketPostReactionSyncEvent.self, payloadAt: .data, timingOutAfter: 10, decoder: decoder
+        )
+        return try Self.postReactionSyncEvent(from: ack)
     }
 
     // MARK: - Event Handlers

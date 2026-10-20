@@ -871,10 +871,8 @@ extension StoryViewModel {
         // se termine (ou qu'on annule) déclenche. Elle partirait NUE, en
         // parallèle du drain de fond qui détient peut-être encore l'item :
         // exactement la double publication que la phase ferme au premier tap.
-        mutateUpload(id: id) {
-            $0.progress = 0
-            $0.phase = .preparing
-        }
+        mutateUpload(id: id) { $0.phase = .preparing }
+        uploadProgress.forget(id: id)
         // Le VM détient DÉJÀ la revendication (cas nominal du retry après un
         // commit partiel : elle lui est conservée parce que lui seul sait où
         // reprendre). Re-revendiquer refuserait sa propre claim et figerait la

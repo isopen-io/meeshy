@@ -1643,7 +1643,7 @@ final class StoryViewModelTests: XCTestCase {
 
     // MARK: - Background Publishing
 
-    func test_publishStoryInBackground_setsActiveUpload() async {
+    func test_publishStoryInBackground_setsActiveUpload() async throws {
         mockAPI.authToken = "token"
         mockPostService.createStoryResult = .success(Self.makeStoryAPIPost())
 
@@ -1655,7 +1655,8 @@ final class StoryViewModelTests: XCTestCase {
         )
 
         XCTAssertNotNil(sut.activeUpload)
-        XCTAssertEqual(sut.activeUpload?.progress, 0)
+        let id = try XCTUnwrap(sut.activeUpload?.id)
+        XCTAssertEqual(sut.uploadProgress.fraction(for: id), 0)
     }
 
     func test_publishStoryInBackground_closesComposer() async {
