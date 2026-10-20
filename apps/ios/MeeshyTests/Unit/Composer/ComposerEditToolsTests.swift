@@ -2,6 +2,7 @@ import AVFoundation
 import CoreMedia
 import XCTest
 import UIKit
+import SwiftUI
 import MeeshyUI
 @testable import Meeshy
 
@@ -51,9 +52,70 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: [.sound]))
     }
 
+    /// **Témoin de COMPORTEMENT, sur l'écran rendu** (recette iPhone 2026-10-20 :
+    /// Recadrer ou Filtres ouverts, (x) et « Terminé » restaient affichés).
+    func test_theRenderedChrome_hidesDone_whileAnEditElementIsShown() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        let ecran = RenderedScreen(ComposerCaptureChrome(session: session, size: .fullScreen,
+                                                         onDisarm: {}, onValidateSegments: {}))
+        defer { ecran.dismount() }
+        let termine = ComposerCaptureCopy.done
+        XCTAssertTrue(Self.settles { ecran.labels.contains(termine) }, "à l'entrée, « Terminé » est là : \(ecran.labels)")
+        session.toggleEditTool(.crop)
+        XCTAssertTrue(Self.settles { !ecran.labels.contains(termine) }, "Recadrer ouvert : \(ecran.labels)")
+        session.toggleEditTool(.crop)
+        XCTAssertTrue(Self.settles { ecran.labels.contains(termine) }, "Recadrer refermé : \(ecran.labels)")
+        session.toggleFamily(.filters)
+        XCTAssertTrue(Self.settles { !ecran.labels.contains(termine) }, "Filtres ouverts : \(ecran.labels)")
+    }
+
+    /// Le même témoin, à travers LE montage de la barre de conversation
+    /// (`ComposerViewfinder` → `ComposerCaptureMount`), là où la recette l'a vu.
+    func test_theMountedViewfinder_hidesDone_whileCropIsOpen() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        let montage = ComposerCaptureMount(session: session, size: .constant(.card), offersSizeToggle: false,
+                                           onDisarm: {}, onDeliver: { _ in }) {
+            Color.black
+                .ignoresSafeArea()
+                .anchorPreference(key: ComposerSceneCameraFrameKey.self, value: .bounds) { $0 }
+        }
+        let ecran = RenderedScreen(montage)
+        defer { ecran.dismount() }
+        let termine = ComposerCaptureCopy.done
+        XCTAssertTrue(Self.settles { ecran.labels.contains(termine) }, "à l'entrée : \(ecran.labels)")
+        session.toggleEditTool(.crop)
+        XCTAssertTrue(Self.settles { !ecran.labels.contains(termine) }, "Recadrer ouvert : \(ecran.labels)")
+    }
+
+    /// **Le toucher qui ferme l'alerte n'atteint pas la prise** (recette iPhone
+    /// 2026-10-20 : « Abandonner » touché, les outils se cachaient derrière).
+    func test_aTapThatClosesTheAlert_doesNotReachTheTake() throws {
+        let maintenant = Date(timeIntervalSinceReferenceDate: 1_000)
+        XCTAssertTrue(ComposerCaptureTapRule.belongsToAnAlert(presented: true, closedAt: nil, now: maintenant))
+        XCTAssertTrue(ComposerCaptureTapRule.belongsToAnAlert(presented: false, closedAt: maintenant.addingTimeInterval(-0.1),
+                                                              now: maintenant), "la levée qui ferme l'alerte")
+        XCTAssertFalse(ComposerCaptureTapRule.belongsToAnAlert(presented: false, closedAt: maintenant.addingTimeInterval(-1),
+                                                               now: maintenant), "un toucher d'après en est un vrai")
+        XCTAssertFalse(ComposerCaptureTapRule.belongsToAnAlert(presented: false, closedAt: nil, now: maintenant))
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("ComposerCaptureTapRule.belongsToAnAlert(presented: confirmsDiscard"),
+                      "le toucher de la nappe consulte la règle")
+    }
+
+    private static func settles(_ condition: () -> Bool) -> Bool {
+        let fin = Date().addingTimeInterval(3)
+        while Date() < fin {
+            if condition() { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        return condition()
+    }
+
     func test_theTopRow_followsTheLaw_andThePlayback_isAlwaysMountedForAVideo() throws {
         let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("if showsTopRow { topRow }"), "(x) et « Terminé » suivent la loi")
+        XCTAssertTrue(chrome.contains("topRow.opacity(showsTopRow ? 1 : 0)"), "(x) et « Terminé » suivent la loi")
         XCTAssertTrue(chrome.contains("ComposerEditTools.showsTopRow(familyOpen: session.openFamily != nil, shownTools: session.shownEditTools)"))
         XCTAssertTrue(chrome.contains("if !finishing, session.offersEditPlayback { editPlayback }"),
                       "lecture et volume ne dépendent ni du chrome ni d'un outil")

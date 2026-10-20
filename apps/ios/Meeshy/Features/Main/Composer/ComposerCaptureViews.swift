@@ -165,6 +165,8 @@ struct ComposerCaptureChrome: View {
     /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
     @State private var focusMark: ComposerCaptureFocusMark?
     @State private var confirmsDiscard = false
+    /// L'instant où l'alerte s'est fermée — sa levée ne touche pas la prise.
+    @State private var alertClosedAt: Date?
     /// Ce que la confirmation abandonne, fixé à la question : la prise en
     /// retouche, ou le viseur (#9781).
     @State private var discardsTake = false
@@ -268,7 +270,12 @@ struct ComposerCaptureChrome: View {
                 .transition(.opacity)
             }
             VStack(spacing: 0) {
-                if showsTopRow { topRow }
+                // Toujours montée, jamais retirée de l'arbre : une rangée insérée
+                // et retirée au gré des outils peut rester peinte le temps d'une
+                // transition, et porte la croix qui présente l'alerte.
+                topRow.opacity(showsTopRow ? 1 : 0)
+                    .allowsHitTesting(showsTopRow)
+                    .accessibilityHidden(!showsTopRow)
                 Spacer(minLength: 0)
                 // En retouche, le bas suit le chrome (#10930) : la prise garde
                 // tout l'écran, les outils se posent par-dessus.
@@ -295,6 +302,9 @@ struct ComposerCaptureChrome: View {
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editChromeShown)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
+        .adaptiveOnChange(of: confirmsDiscard) { _, montree in
+            if !montree { alertClosedAt = Date() }
+        }
         .alert(ComposerSceneCameraCopy.discardTitle(photo: discardsPhoto), isPresented: $confirmsDiscard) {
             Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) { confirmDiscard() }
             Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) {}
@@ -331,7 +341,6 @@ struct ComposerCaptureChrome: View {
             saveState: session.takeSaveState,
             onSave: { session.saveTakeToPhotos() })
         .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeil))
-        .transition(.opacity)
     }
 
     /// **Lecture et volume d'une vidéo, en haut à droite sous « Terminé »,
@@ -508,7 +517,9 @@ struct ComposerCaptureChrome: View {
     private func tapGesture(origin: CGPoint) -> some Gesture {
         SpatialTapGesture(count: 1, coordinateSpace: .global).onEnded { toucher in
             guard !session.pinchSpoilsGestures, session.holdStartedAt == nil,
-                  !ComposerCaptureTapRule.followsAHold(holdEndedAt, now: Date()) else { return }
+                  !ComposerCaptureTapRule.followsAHold(holdEndedAt, now: Date()),
+                  !ComposerCaptureTapRule.belongsToAnAlert(presented: confirmsDiscard, closedAt: alertClosedAt,
+                                                           now: Date()) else { return }
             let geste = ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: context)
             guard geste != .toggleEditChrome else { return session.perform(geste, item: nil) }
             switch session.tapAction(context: context) {
