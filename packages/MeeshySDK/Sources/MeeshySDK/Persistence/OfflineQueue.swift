@@ -169,9 +169,9 @@ public actor OfflineQueue {
 
     /// Wires the outbox pool used for SQLite persistence.
     /// Must be called once at boot before any `enqueue` calls.
-    public func configure(pool: any DatabaseWriter) {
+    public func configure(pool: any DatabaseWriter) async {
         outboxPool = pool
-        Task { await self.refreshPendingCount() }
+        await refreshPendingCount()
     }
 
     private init() {
