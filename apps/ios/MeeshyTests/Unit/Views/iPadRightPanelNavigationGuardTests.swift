@@ -390,25 +390,6 @@ final class iPadRightColumnAndHandoffTests: XCTestCase {
         XCTAssertEqual(placement.panelRoutes, [.progression, .progressionConcept(.league), .gamePage(.league)])
     }
 
-    // MARK: - Poignée des colonnes
-
-    func test_columnRatio_followsTheFingerFromTheDragStart() {
-        // 100 pt sur 1000 pt de large : dix points de pourcentage, quel que soit le nombre d'événements du geste.
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 100, width: 1000), 0.48, accuracy: 0.0001)
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 100, width: 1000), 0.48, accuracy: 0.0001)
-    }
-
-    func test_columnRatio_staysWithinItsBounds() {
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 900, width: 1000), iPadColumnRatio.maximum)
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: -900, width: 1000), iPadColumnRatio.minimum)
-    }
-
-    func test_columnRatio_ignoresAZeroWidthWindow() {
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 40, width: 0), 0.38)
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: .nan, width: 1000), 0.38)
-        XCTAssertEqual(iPadColumnRatio.clamped(.nan), iPadColumnRatio.minimum)
-    }
-
     func test_handoff_recordsTheLatestStack() {
         let handoff = RootNavigationHandoff()
         XCTAssertEqual(handoff.routes, [])
