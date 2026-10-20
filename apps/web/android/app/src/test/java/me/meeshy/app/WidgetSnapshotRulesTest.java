@@ -7,6 +7,8 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.Test;
 
 /**
@@ -114,5 +116,55 @@ public class WidgetSnapshotRulesTest {
     public void aBigCountIsShortened() {
         assertEquals("7", WidgetSnapshotRules.countLabel(7));
         assertEquals("99+", WidgetSnapshotRules.countLabel(250));
+    }
+
+    private static WidgetSnapshotRules.Snapshot published(int unread) {
+        return new WidgetSnapshotRules.Snapshot(true, unread, Arrays.asList(
+            new WidgetSnapshotRules.Row("a", "Nom a", "N", "Salut", 1760000000000L, 2, false, false, false, 0xFF6366F1, null),
+            new WidgetSnapshotRules.Row("b", "Nom b", "N", "Salut", 1760000000000L, 1, false, false, false, 0xFF6366F1, null)),
+            Collections.emptyList());
+    }
+
+    private static Map<String, String> push(String unreadCount) {
+        Map<String, String> data = new HashMap<>();
+        data.put("type", "new_message");
+        if (unreadCount != null) data.put("unreadCount", unreadCount);
+        return data;
+    }
+
+    @Test
+    public void aPushCarriesTheUnreadTotalOnlyAsANonNegativeInteger() {
+        assertEquals(Integer.valueOf(3), WidgetSnapshotRules.unreadOf(push("3")));
+        assertEquals(Integer.valueOf(0), WidgetSnapshotRules.unreadOf(push("0")));
+        assertNull(WidgetSnapshotRules.unreadOf(push(null)));
+        assertNull(WidgetSnapshotRules.unreadOf(push("")));
+        assertNull(WidgetSnapshotRules.unreadOf(push("-1")));
+        assertNull(WidgetSnapshotRules.unreadOf(push("2.5")));
+        assertNull(WidgetSnapshotRules.unreadOf(push("trois")));
+        assertNull(WidgetSnapshotRules.unreadOf(push("99999999999")));
+        assertNull(WidgetSnapshotRules.unreadOf(null));
+    }
+
+    @Test
+    public void aPushedTotalReplacesThePublishedOneAndKeepsTheRows() {
+        WidgetSnapshotRules.Snapshot pushed = WidgetSnapshotRules.withPushedUnread(published(2), 5);
+        assertTrue(pushed.published);
+        assertEquals(5, pushed.unread);
+        assertEquals(2, pushed.conversations.size());
+        assertEquals(2, WidgetSnapshotRules.withPushedUnread(published(2), null).unread);
+    }
+
+    @Test
+    public void aPushedTotalNeverShowsUpWhileNothingIsPublished() {
+        WidgetSnapshotRules.Snapshot pushed = WidgetSnapshotRules.withPushedUnread(WidgetSnapshotRules.NONE, 4);
+        assertFalse(pushed.published);
+        assertEquals(0, pushed.unread);
+    }
+
+    @Test
+    public void theWidgetReadOverlayStillAppliesOverThePushedTotal() {
+        WidgetSnapshotRules.Snapshot shown = WidgetSnapshotRules.withReadOverlay(
+            WidgetSnapshotRules.withPushedUnread(published(2), 5), Collections.singletonList("a"));
+        assertEquals(4, shown.unread);
     }
 }
