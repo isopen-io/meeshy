@@ -130,12 +130,19 @@ const written = (rows: readonly HTMLElement[]) =>
     return visual instanceof HTMLElement && (visual.style.transform !== '' || visual.style.opacity !== '');
   });
 
-const countRectReads = async (run: () => Promise<void>): Promise<number> => {
+/**
+ * Les lectures de géométrie des RANGÉES, comptées PAR PASSE : chaque passe
+ * commence par lire la boîte du défileur, qui ouvre un nouveau compte. (La
+ * scène se rejoue d'elle-même pendant son entrée — plusieurs passes tiennent
+ * dans l'attente du témoin.)
+ */
+const rectReadsPerPass = async (run: () => Promise<void>): Promise<readonly number[]> => {
   const proto = HTMLElement.prototype;
   const original = proto.getBoundingClientRect;
-  let reads = 0;
+  const passes: number[] = [];
   proto.getBoundingClientRect = function (this: HTMLElement) {
-    if (this.hasAttribute('data-row')) reads += 1;
+    if (this.dataset.testid === 'frame') passes.push(0);
+    if (this.hasAttribute('data-row') && passes.length > 0) passes[passes.length - 1] = (passes.at(-1) ?? 0) + 1;
     return original.call(this);
   };
   try {
@@ -143,7 +150,7 @@ const countRectReads = async (run: () => Promise<void>): Promise<number> => {
   } finally {
     proto.getBoundingClientRect = original;
   }
-  return reads;
+  return passes;
 };
 
 describe('useScene — la passe est bornée aux rangées visibles (+ la marge)', () => {
@@ -164,7 +171,7 @@ describe('useScene — la passe est bornée aux rangées visibles (+ la marge)',
       const visual = row.firstElementChild;
       if (visual instanceof HTMLElement) visual.removeAttribute('style');
     }
-    const reads = await countRectReads(async () => {
+    const passes = await rectReadsPerPass(async () => {
       act(() => {
         frame.dispatchEvent(new Event('scroll'));
       });
@@ -172,7 +179,8 @@ describe('useScene — la passe est bornée aux rangées visibles (+ la marge)',
     });
     expect(written(rows).length).toBeLessThanOrEqual(VISIBLE + OVERSCAN_ROWS);
     expect(written(rows.slice(VISIBLE + OVERSCAN_ROWS))).toEqual([]);
-    expect(reads).toBeLessThanOrEqual(VISIBLE + OVERSCAN_ROWS);
+    expect(passes.length).toBeGreaterThan(0);
+    expect(Math.max(...passes)).toBeLessThanOrEqual(VISIBLE + OVERSCAN_ROWS);
   });
 
   test('une rangée qui SORT de l’ensemble est rendue à l’identité, une fois', async () => {

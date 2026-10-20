@@ -19,8 +19,8 @@ describe('planReorderFlip — la loi pure', () => {
   test('une rangée passée de 300 à 0 reçoit son écart ; une rangée restée en place, rien', () => {
     const plan = planReorderFlip({
       before: new Map([
-        ['a', 0],
-        ['f', 300],
+        ['a', { top: 0, bottom: 60 }],
+        ['f', { top: 300, bottom: 360 }],
       ]),
       after: new Map([
         ['f', { top: 0, bottom: 60 }],
@@ -40,8 +40,17 @@ describe('planReorderFlip — la loi pure', () => {
 
   test('une rangée qui finit HORS de la fenêtre ne s’anime pas — rien d’invisible ne travaille', () => {
     const plan = planReorderFlip({
-      before: new Map([['a', 540]]),
+      before: new Map([['a', { top: 540, bottom: 600 }]]),
       after: new Map([['a', { top: 600, bottom: 660 }]]),
+      viewport,
+    });
+    expect(plan).toEqual([]);
+  });
+
+  test('une rangée qui était HORS de la fenêtre avant (dans la marge) ne s’anime pas — elle ne traverse pas l’écran', () => {
+    const plan = planReorderFlip({
+      before: new Map([['a', { top: 1270, bottom: 1330 }]]),
+      after: new Map([['a', { top: 440, bottom: 500 }]]),
       viewport,
     });
     expect(plan).toEqual([]);
@@ -49,7 +58,7 @@ describe('planReorderFlip — la loi pure', () => {
 
   test('un écart sous le demi-pixel n’est pas un déplacement', () => {
     const plan = planReorderFlip({
-      before: new Map([['a', 60.2]]),
+      before: new Map([['a', { top: 60.2, bottom: 120.2 }]]),
       after: new Map([['a', { top: 60, bottom: 120 }]]),
       viewport,
     });

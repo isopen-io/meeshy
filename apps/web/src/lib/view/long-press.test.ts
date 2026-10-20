@@ -143,6 +143,41 @@ describe('useLongPress — la pression se voit, l’ouverture se sent', () => {
     expect(cues).toEqual([]);
   });
 
+  test('Android : le contextmenu émis pendant la tenue n’ouvre pas une seconde fois, ne vibre pas deux fois', async () => {
+    const { row, cues, opened } = mount();
+    pointer(row, 'pointerdown');
+    await wait(LONG_PRESS_MS + 40);
+    pointer(row, 'pointercancel');
+    act(() => {
+      row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(opened.length).toBe(1);
+    expect(cues).toEqual(['medium']);
+  });
+
+  test('après un appui long RELÂCHÉ (sur le voile du menu), un clic droit rouvre — rien ne reste avalé', async () => {
+    const { row, cues, opened } = mount();
+    pointer(row, 'pointerdown');
+    await wait(LONG_PRESS_MS + 40);
+    act(() => {
+      document.body.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
+    });
+    act(() => {
+      row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
+    });
+    expect(opened.length).toBe(2);
+    expect(cues).toEqual(['medium', 'medium']);
+  });
+
+  test('un clic droit (hors de toute tenue) ouvre, et vibre une fois', () => {
+    const { row, cues, opened } = mount();
+    act(() => {
+      row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
+    });
+    expect(opened.length).toBe(1);
+    expect(cues).toEqual(['medium']);
+  });
+
   test('pointercancel (le défilement prend la main) retire data-pressing', () => {
     const { row } = mount();
     pointer(row, 'pointerdown');

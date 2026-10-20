@@ -1,0 +1,26 @@
+/*
+ * UN APPUI LONG SE VOIT PENDANT L'ATTENTE (#11207) — `lib/view/long-press.ts`.
+ *
+ * `data-pressing` est posé par `useLongPress` sur l'élément tenu, de
+ * `pointerdown` à l'ouverture ou à l'annulation. L'élément s'enfonce à 0,97,
+ * comme une rangée iOS sous le doigt avant son menu contextuel.
+ *
+ * `scale`, JAMAIS `transform` : la scène de la Lentille réécrit le `transform`
+ * du premier enfant des rangées à chaque image, le balayage d'une rangée pose
+ * `translate`, et une remontée en tête anime le `transform` du `<li>`
+ * (`lib/view/list-reorder-flip.ts`). Les propriétés individuelles se composent
+ * sans se connaître.
+ *
+ * Le délai (90 ms) laisse passer un simple toucher sans clignoter. Aucune
+ * transition au RELÂCHER : l'attribut est retiré avant que l'ancre du menu ne
+ * soit mesurée, et l'aperçu clone la rangée à sa taille réelle.
+ *
+ * Sous `prefers-reduced-motion`, rien ne bouge : la vibration et le menu
+ * restent les seuls retours.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  [data-pressing] {
+    scale: 0.97;
+    transition: scale 260ms cubic-bezier(0.2, 0, 0, 1) 90ms;
+  }
+}

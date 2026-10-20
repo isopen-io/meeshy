@@ -5,17 +5,22 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react';
 
+import { impact } from './haptics';
+
 /**
  * LE GESTE D'OUVERTURE DU MENU DU MESSAGE (#5814) — miroir
  * `MessageListView.swift:348` (`LongPressGesture(minimumDuration: 0.35,
- * maximumDistance: 6)`), DURÉE adaptée à 500 ms (le critère de fin de #5814,
- * « pointerdown ≥ 500 ms »), `maximumDistance` repris tel quel.
+ * maximumDistance: 6)`), durée ET tolérance reprises telles quelles depuis
+ * #11207 (D-209) : les 500 ms du critère de #5814 faisaient attendre le web
+ * une demi-seconde là où iOS ouvre en 0,35 s. UN seul seuil pour tous les
+ * consommateurs (menu du message, avatar, sélecteur d'emoji, visionneuse,
+ * disque du Flux, fiche de contact).
  *
  * `pressReducer` est une machine PURE, testable sans DOM ni minuteur réel —
  * le hook plus bas ne fait qu'y BRANCHER un `setTimeout`, jamais l'inverse.
  */
 
-export const LONG_PRESS_MS = 500;
+export const LONG_PRESS_MS = 350;
 export const LONG_PRESS_MAX_DISTANCE_PX = 6;
 
 export type PressState =
@@ -98,6 +103,33 @@ export function isContextMenuKey(event: { readonly key: string; readonly shiftKe
 }
 
 /**
+ * LA PRESSION SE VOIT PENDANT L'ATTENTE (#11207). `data-pressing` est posé sur
+ * l'élément tenu dès `pointerdown` ; `styles/press-feedback.css` le presse à
+ * 0,97 (coupé sous `prefers-reduced-motion`). Il est retiré AVANT la mesure de
+ * l'ancre : l'aperçu du menu clone la rangée à sa taille réelle, jamais
+ * pressée.
+ */
+export const PRESSING_ATTRIBUTE = 'data-pressing';
+
+const HELD_CONTEXTMENU_GRACE_MS = 300;
+
+/**
+ * Avale le `contextmenu` du doigt qui vient d'ouvrir, jusqu'à ce qu'il se
+ * lève. Écouté sur la FENÊTRE : le menu ouvert couvre la rangée, et le
+ * relâcher tombe sur son voile, jamais sur l'élément qui a ouvert.
+ */
+const swallowHeldContextMenu = (until: { current: number }): void => {
+  until.current = Number.POSITIVE_INFINITY;
+  const settle = (event: Event): void => {
+    window.removeEventListener('pointerup', settle, true);
+    window.removeEventListener('pointercancel', settle, true);
+    until.current = event.type === 'pointercancel' ? Date.now() + HELD_CONTEXTMENU_GRACE_MS : 0;
+  };
+  window.addEventListener('pointerup', settle, true);
+  window.addEventListener('pointercancel', settle, true);
+};
+
+/**
  * LE HOOK — vit UNE FOIS dans l'hôte (`thread.tsx`), jamais une instance par
  * rangée virtualisée (§ 5 étape 5 de la spécification) : chaque gestionnaire
  * lit `event.currentTarget`, jamais une référence figée à un élément — la
@@ -106,12 +138,22 @@ export function isContextMenuKey(event: { readonly key: string; readonly shiftKe
  * `keydown` répond à `ContextMenu` (la touche dédiée) et `Shift+F10` — les
  * DEUX déclencheurs clavier du menu contextuel, comme `contextmenu` en
  * répond au clic droit.
+ *
+ * L'OUVERTURE SE SENT, UNE FOIS : `impact('medium')` (`haptics.ts`), le retour
+ * d'iOS à l'ouverture d'un menu contextuel. Un appui tenu au doigt sur Android
+ * émet AUSSI `contextmenu` pendant la tenue (vers 500 ms, avant ou juste
+ * après un `pointercancel` selon le moteur) : tant que le doigt qui a ouvert
+ * est posé — et `HELD_CONTEXTMENU_GRACE_MS` après son `pointercancel` —, il
+ * est avalé au lieu d'ouvrir, et de vibrer, une seconde fois. Le RELÂCHER
+ * lève l'avalement aussitôt : un clic droit qui suit un appui long ouvre.
  */
 export function useLongPress(options: {
   readonly onOpen: (anchor: LongPressAnchor) => void;
 }) {
   const stateRef = useRef<PressState>({ phase: 'idle' });
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressedRef = useRef<HTMLElement | null>(null);
+  const swallowContextMenuUntil = useRef(0);
   /**
    * LES SIX GESTIONNAIRES SONT STABLES (revue #5814) — ils sont étalés sur
    * CHAQUE rangée montée, et l'écran du fil se re-rend à chaque tick d'horloge
@@ -123,31 +165,38 @@ export function useLongPress(options: {
   const onOpenRef = useRef(options.onOpen);
   onOpenRef.current = options.onOpen;
 
-  const clearTimer = useCallback(() => {
+  const release = useCallback(() => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    pressedRef.current?.removeAttribute(PRESSING_ATTRIBUTE);
+    pressedRef.current = null;
   }, []);
 
   const open = useCallback(
     (target: HTMLElement) => {
-      clearTimer();
+      release();
       stateRef.current = { phase: 'open' };
+      impact('medium');
       onOpenRef.current({ element: target, rect: target.getBoundingClientRect() });
     },
-    [clearTimer],
+    [release],
   );
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0 || !claims(event)) return;
     const target = event.currentTarget;
+    release();
     stateRef.current = { phase: 'pressing', x: event.clientX, y: event.clientY, at: Date.now() };
-    clearTimer();
+    target.setAttribute(PRESSING_ATTRIBUTE, '');
+    pressedRef.current = target;
     timerRef.current = setTimeout(() => {
-      if (stateRef.current.phase === 'pressing') open(target);
+      if (stateRef.current.phase !== 'pressing') return;
+      swallowHeldContextMenu(swallowContextMenuUntil);
+      open(target);
     }, LONG_PRESS_MS);
-  }, [clearTimer, open]);
+  }, [release, open]);
 
   const onPointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     if (stateRef.current.phase !== 'pressing') return;
@@ -155,18 +204,19 @@ export function useLongPress(options: {
     const dy = event.clientY - stateRef.current.y;
     if (Math.sqrt(dx * dx + dy * dy) > LONG_PRESS_MAX_DISTANCE_PX) {
       stateRef.current = { phase: 'cancelled' };
-      clearTimer();
+      release();
     }
-  }, [clearTimer]);
+  }, [release]);
 
   const onPointerUp = useCallback(() => {
     if (stateRef.current.phase === 'pressing') stateRef.current = { phase: 'idle' };
-    clearTimer();
-  }, [clearTimer]);
+    release();
+  }, [release]);
 
   const onContextMenu = useCallback((event: ReactMouseEvent<HTMLElement>) => {
     if (!claims(event)) return;
     event.preventDefault();
+    if (Date.now() < swallowContextMenuUntil.current) return;
     open(event.currentTarget);
   }, [open]);
 
