@@ -17,19 +17,14 @@ struct CropOverlayView: View {
     var onInteraction: () -> Void = {}
 
     private let handleSize: CGFloat = 24
-    private let handleHitArea: CGFloat = 44
-    private let minCropSize: CGFloat = 56
+    private let handleHitArea: CGFloat = MeeshyControlSize.tapTarget
+    let minCropSize: CGFloat = 56
 
     @State private var isDragging = false
     @State private var activeHandle: CropHandle = .none
     @State private var lastTranslation: CGSize = .zero
 
-    enum CropHandle {
-        case none
-        case topLeft, topRight, bottomLeft, bottomRight
-        case top, bottom, left, right
-        case center
-    }
+    typealias CropHandle = CropOverlayHandle
 
     var body: some View {
         ZStack {
@@ -41,6 +36,7 @@ struct CropOverlayView: View {
                 .fill(Color.black.opacity(0.6), style: FillStyle(eoFill: true))
             }
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
 
             Image(uiImage: image)
                 .resizable()
@@ -52,8 +48,11 @@ struct CropOverlayView: View {
                         .frame(width: cropRect.width, height: cropRect.height)
                         .position(x: cropRect.midX, y: cropRect.midY)
                 )
+                .accessibilityHidden(true)
 
             CropFrameView(rect: cropRect)
+                .accessibilityHidden(true)
+            cropFrameElement
             cropHandles
         }
         .contentShape(Rectangle())
@@ -114,6 +113,9 @@ struct CropOverlayView: View {
                 .frame(width: handleSize, height: handleSize)
                 .shadow(color: .black.opacity(0.5), radius: 2)
         }
+        .cropAccessibility(label: Self.handleLabel(handle), value: handleValue(handle)) { direction in
+            applyAccessibilityStep(handle, direction)
+        }
         .position(position)
     }
 
@@ -134,6 +136,9 @@ struct CropOverlayView: View {
                 .fill(Color.white)
                 .frame(width: isHorizontal ? 30 : 4, height: isHorizontal ? 4 : 30)
                 .shadow(color: .black.opacity(0.5), radius: 2)
+        }
+        .cropAccessibility(label: Self.handleLabel(handle), value: handleValue(handle)) { direction in
+            applyAccessibilityStep(handle, direction)
         }
         .position(position)
     }
@@ -162,82 +167,14 @@ struct CropOverlayView: View {
     }
 
     private func updateCropRect(with translation: CGSize, handle: CropHandle) {
-        var newRect = cropRect
-
-        switch handle {
-        case .none:
-            return
-        case .center:
-            newRect.origin.x += translation.width
-            newRect.origin.y += translation.height
-        case .topLeft:
-            if let ratio = aspectRatio {
-                let diagonal = min(translation.width, translation.height)
-                newRect.origin.x += diagonal
-                newRect.origin.y += diagonal / ratio
-                newRect.size.width -= diagonal
-                newRect.size.height -= diagonal / ratio
-            } else {
-                newRect.origin.x += translation.width
-                newRect.origin.y += translation.height
-                newRect.size.width -= translation.width
-                newRect.size.height -= translation.height
-            }
-        case .topRight:
-            if let ratio = aspectRatio {
-                let change = max(translation.width, -translation.height)
-                newRect.origin.y -= change / ratio
-                newRect.size.width += change
-                newRect.size.height += change / ratio
-            } else {
-                newRect.origin.y += translation.height
-                newRect.size.width += translation.width
-                newRect.size.height -= translation.height
-            }
-        case .bottomLeft:
-            if let ratio = aspectRatio {
-                let change = max(-translation.width, translation.height)
-                newRect.origin.x -= change
-                newRect.size.width += change
-                newRect.size.height += change / ratio
-            } else {
-                newRect.origin.x += translation.width
-                newRect.size.width -= translation.width
-                newRect.size.height += translation.height
-            }
-        case .bottomRight:
-            if let ratio = aspectRatio {
-                let change = max(translation.width, translation.height)
-                newRect.size.width += change
-                newRect.size.height += change / ratio
-            } else {
-                newRect.size.width += translation.width
-                newRect.size.height += translation.height
-            }
-        case .top:
-            newRect.origin.y += translation.height
-            newRect.size.height -= translation.height
-        case .bottom:
-            newRect.size.height += translation.height
-        case .left:
-            newRect.origin.x += translation.width
-            newRect.size.width -= translation.width
-        case .right:
-            newRect.size.width += translation.width
-        }
-
-        if newRect.width >= minCropSize && newRect.height >= minCropSize {
-            cropRect = newRect
-        }
+        let next = CropGeometry.resized(cropRect, handle: handle, translation: translation,
+                                        aspectRatio: aspectRatio, minSize: minCropSize)
+        guard next != cropRect else { return }
+        cropRect = next
     }
 
     private func constrainCropRect() {
-        var constrained = cropRect
-        constrained.size.width = max(minCropSize, min(constrained.width, imageDisplayRect.width))
-        constrained.size.height = max(minCropSize, min(constrained.height, imageDisplayRect.height))
-        constrained.origin.x = max(imageDisplayRect.minX, min(constrained.origin.x, imageDisplayRect.maxX - constrained.width))
-        constrained.origin.y = max(imageDisplayRect.minY, min(constrained.origin.y, imageDisplayRect.maxY - constrained.height))
-
+        let constrained = CropGeometry.constrained(cropRect, to: imageDisplayRect, minSize: minCropSize)
         withAnimation(.easeOut(duration: 0.2)) {
             cropRect = constrained
         }

@@ -33,6 +33,10 @@ public struct KeyframeMarkerView: View, Equatable {
         self.onDragDelta = onDragDelta
     }
 
+    static var editLabel: String {
+        String(localized: "story.timeline.a11y.keyframe.edit", bundle: .module)
+    }
+
     public var accessibilityComposed: String {
         String(format: String(localized: "story.timeline.a11y.keyframe", bundle: .module),
                String(format: "%.2fs", absoluteTime))
@@ -54,6 +58,9 @@ public struct KeyframeMarkerView: View, Equatable {
             )
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityComposed)
+            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])
+            .accessibilityAction { onTap() }
+            .accessibilityAction(named: Text(Self.editLabel)) { onLongPress() }
     }
 }
 
