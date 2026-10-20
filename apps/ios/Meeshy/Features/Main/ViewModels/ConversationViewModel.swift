@@ -537,6 +537,7 @@ class ConversationViewModel: ObservableObject {
     let networkMonitor: NetworkMonitorProviding
     let offlineQueue: OfflineMessageQueueing
     let sendCoordinator: any ConversationSendCoordinatorProviding
+    let translationSource: any ConversationTranslationSourcing
     /// #8303 — les flammes-œil vues pendant la visite, et ce que la sortie en fait.
     var afterReadVisit = AfterReadVisit()
     let afterReadConsumer: AfterReadConsumptionProviding
@@ -631,7 +632,8 @@ class ConversationViewModel: ObservableObject {
         afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared,
         protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared,
         receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared,
-        sendCoordinator: (any ConversationSendCoordinatorProviding)? = nil
+        sendCoordinator: (any ConversationSendCoordinatorProviding)? = nil,
+        translationSource: (any ConversationTranslationSourcing)? = nil
     ) {
         self.receivedMediaAutoSaver = receivedMediaAutoSaver
         self.afterReadConsumer = afterReadConsumer
@@ -661,6 +663,7 @@ class ConversationViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
         self.offlineQueue = offlineQueue
         self.sendCoordinator = sendCoordinator ?? ConversationSendCoordinator(conversationId: conversationId, messageService: messageService, messageSocket: messageSocket, offlineQueue: offlineQueue, persistence: dependencies.persistence)
+        self.translationSource = translationSource ?? ConversationTranslationSource(persistence: dependencies.persistence)
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
         self.startupDependencies = dependencies

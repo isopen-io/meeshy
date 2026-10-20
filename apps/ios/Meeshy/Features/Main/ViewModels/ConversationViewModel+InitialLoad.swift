@@ -771,63 +771,6 @@ extension ConversationViewModel {
         from records: [MessageRecord],
         forceOverwrite: Bool = false
     ) {
-        let decoder = JSONDecoder()
-        for record in records {
-            let msgId = record.serverId ?? record.localId
-            guard let data = record.attachmentsJson,
-                  let attachments = try? decoder.decode([MeeshyMessageAttachment].self, from: data)
-            else { continue }
-
-            for att in attachments {
-                // Hydrate transcription
-                if let t = att.transcription {
-                    let segments = (t.segments ?? []).map(MessageTranscriptionSegment.init)
-                    let transcription = MessageTranscription(
-                        attachmentId: att.id,
-                        text: t.text,
-                        language: t.language,
-                        confidence: t.confidence,
-                        durationMs: t.durationMs,
-                        segments: segments,
-                        speakerCount: t.speakerCount
-                    )
-                    if forceOverwrite || messageTranscriptions[msgId] == nil {
-                        messageTranscriptions[msgId] = transcription
-                    }
-                    if forceOverwrite || messageTranscriptionsByAttachment[att.id] == nil {
-                        messageTranscriptionsByAttachment[att.id] = transcription
-                    }
-                }
-
-                // Hydrate audio translations
-                if let translations = att.audioTranslations, !translations.isEmpty {
-                    var audios: [MessageTranslatedAudio] = []
-                    for (lang, trans) in translations {
-                        let segments = (trans.segments ?? []).map(MessageTranscriptionSegment.init)
-                        audios.append(MessageTranslatedAudio(
-                            attachmentId: att.id,
-                            language: lang,
-                            url: trans.url,
-                            transcription: trans.transcription,
-                            durationMs: trans.durationMs,
-                            format: trans.format,
-                            cloned: trans.cloned,
-                            quality: trans.quality,
-                            voiceModelId: trans.voiceModelId,
-                            ttsModel: trans.ttsModel,
-                            segments: segments
-                        ))
-                    }
-                    if !audios.isEmpty {
-                        if forceOverwrite || messageTranslatedAudios[msgId] == nil {
-                            messageTranslatedAudios[msgId] = audios
-                        }
-                        if forceOverwrite || messageTranslatedAudiosByAttachment[att.id] == nil {
-                            messageTranslatedAudiosByAttachment[att.id] = audios
-                        }
-                    }
-                }
-            }
-        }
+        applyAudioMetadata(AttachmentAudioMetadata.entries(fromRecords: records), forceOverwrite: forceOverwrite)
     }
 }
