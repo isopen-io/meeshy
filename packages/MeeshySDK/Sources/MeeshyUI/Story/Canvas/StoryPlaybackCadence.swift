@@ -41,10 +41,19 @@ enum StoryPlaybackCadence {
         return carriesTimedContent(slide) ? .high : .low
     }
 
-    nonisolated static func frameRateRange(for tier: StoryPlaybackCadenceTier) -> CAFrameRateRange {
-        switch tier {
-        case .high: return CAFrameRateRange(minimum: 60, maximum: 120, preferred: 60)
-        case .low: return CAFrameRateRange(minimum: 10, maximum: 30, preferred: 30)
+    /// La plage du lien de lecture pour un palier d'horloge, sur un appareil de
+    /// tier `mediaTier` (#11281). Le palier haut d'un appareil faible vise 30 Hz
+    /// (bas) ou 60 Hz (moyen) plutôt qu'une plage que sa puce ne tient pas : une
+    /// cadence stable vaut mieux qu'une cadence haute qui saccade. `high` et
+    /// `pro` gardent la plage historique ; le palier immobile ne dépend pas de
+    /// l'appareil. Sans tier, la plage historique.
+    nonisolated static func frameRateRange(for tier: StoryPlaybackCadenceTier,
+                                           mediaTier: DeviceMediaTier = .high) -> CAFrameRateRange {
+        switch (tier, mediaTier) {
+        case (.low, _): return CAFrameRateRange(minimum: 10, maximum: 30, preferred: 30)
+        case (.high, .low): return CAFrameRateRange(minimum: 30, maximum: 60, preferred: 30)
+        case (.high, .mid): return CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+        case (.high, .high), (.high, .pro): return CAFrameRateRange(minimum: 60, maximum: 120, preferred: 60)
         }
     }
 

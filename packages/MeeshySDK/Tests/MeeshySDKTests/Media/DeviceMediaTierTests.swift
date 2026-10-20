@@ -154,7 +154,7 @@ struct DeviceMediaTierTests {
         #expect(AppleChip.m2.performanceClass == AppleChip.a16.performanceClass)
         #expect(AppleChip.m3.performanceClass == AppleChip.a17.performanceClass)
         #expect(AppleChip.future.performanceClass >= AppleChip.m5.performanceClass)
-        #expect(AppleChip.unknown.performanceClass == nil)
+        #expect(AppleChip.unknown.performanceClass == AppleChip.legacy.performanceClass)
     }
 
     // MARK: - Le simulateur, l'ordre des tiers
