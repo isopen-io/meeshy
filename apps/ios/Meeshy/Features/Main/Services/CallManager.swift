@@ -117,24 +117,18 @@ final class CallManager: ObservableObject {
             // Synchrone (setCallActive est nonisolated) → pas de reorder de Task.
             MediaSessionCoordinator.shared.setCallActive(active)
 
-            // Au DÉMARRAGE d'un appel (transition inactif→actif uniquement) : couper
-            // tout média en cours (voice notes, vidéo, story). L'appel VoIP prend la
-            // main sur l'audio. Placé APRÈS setCallActive → le stop est call-aware (la
-            // session reste à l'appel, aucun teardown). Évite le média orphelin qui
-            // resterait « muet définitivement » au raccrochage : plus rien à réactiver,
-            // le prochain tap utilisateur reconfigure proprement la session.
+            // Au DÉMARRAGE d'un appel : les ENREGISTREURS s'arrêtent — un vocal en
+            // cours capturait l'appel (arrivé par le socket, sans interruption
+            // système).
             if active && !oldValue.isActive {
-                // AVANT stopAll() : celui-ci détruit le lecteur (`player = nil`,
-                // `isPlaying = false`), or la suspension doit capturer si la
-                // lecture était en cours pour décider de la reprise. `@Published`
-                // émettant en `willSet`, un abonné différé par `.receive(on:)`
-                // lirait déjà `false` — d'où ce push synchrone.
-                ConversationAudioCoordinator.shared.suspendForSystemCall()
-                PlaybackCoordinator.shared.stopAll()
-                // Les ENREGISTREURS aussi : un vocal en cours capturait l'appel
-                // (arrivé par le socket, sans interruption système).
                 RecorderCallGuard.shared.stopAllForCall()
             }
+            // Les LECTEURS suivent la loi de la sonnerie (#11063) : un appel entrant
+            // qui sonne les baisse, décroché il les interrompt (reprise au
+            // raccrochage), refusé il rend le volume ; un appel sortant les
+            // interrompt aussitôt. Synchrone, APRÈS setCallActive : l'arrêt est
+            // call-aware, et la suspension des vocaux lit l'état d'avant l'arrêt.
+            CallRingPlayback.apply(CallRingPlaybackLaw.effect(from: oldValue, to: callState))
 
             // Retour au repos : rendre les surfaces système au lecteur de vocaux.
             //

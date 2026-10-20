@@ -36,7 +36,7 @@ import MeeshyUI
 /// > désormais l'inventaire pour que le quatrième naisse gardé.
 
 @MainActor
-final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer {
+final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer, InterruptiblePlayer {
     @Published var isPlaying = false
     @Published var progress: Double = 0
     @Published var currentTime: TimeInterval = 0
@@ -100,6 +100,11 @@ final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer {
         case .none:
             break
         }
+    }
+
+    /// Un appel Meeshy décroché : pause marquée « interrompue », reprise au raccrochage (#11063).
+    func interruptForCall() {
+        handleSessionEvent(.interruptionBegan)
     }
 
     private func resumePlayback() {
