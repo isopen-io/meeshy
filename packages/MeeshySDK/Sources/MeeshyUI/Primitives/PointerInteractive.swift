@@ -1,6 +1,6 @@
 import SwiftUI
 
-public enum MeeshyPointerShape: Shape, Equatable, Sendable {
+nonisolated public enum MeeshyPointerShape: Shape, Equatable, Sendable {
     case roundedRect(cornerRadius: CGFloat)
     case capsule
     case circle
