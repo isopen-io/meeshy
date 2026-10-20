@@ -173,14 +173,14 @@ final class ConversationSendCoordinatorTests: XCTestCase {
     func test_recordFailure_onSendingRow_persistsQueuedStateWithLastError() async throws {
         let pool = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: pool)
-        let actor = MessagePersistenceActor(dbWriter: pool)
-        try await actor.insertOptimistic(SendingRowFixture.record(localId: "cid_row", conversationId: Self.conversationId))
+        let store = MessagePersistenceActor(dbWriter: pool)
+        try await store.insertOptimistic(SendingRowFixture.record(localId: "cid_row", conversationId: Self.conversationId))
         let sut = ConversationSendCoordinator(
             conversationId: Self.conversationId,
             messageService: MockMessageService(),
             messageSocket: MockMessageSocket(),
             offlineQueue: FakeOfflineMessageQueue(),
-            persistence: actor,
+            persistence: store,
             recorder: SendErrorRecorderSpy()
         )
 
@@ -194,14 +194,14 @@ final class ConversationSendCoordinatorTests: XCTestCase {
     func test_acknowledge_onSendingRow_persistsSentState() async throws {
         let pool = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: pool)
-        let actor = MessagePersistenceActor(dbWriter: pool)
-        try await actor.insertOptimistic(SendingRowFixture.record(localId: "cid_ack", conversationId: Self.conversationId))
+        let store = MessagePersistenceActor(dbWriter: pool)
+        try await store.insertOptimistic(SendingRowFixture.record(localId: "cid_ack", conversationId: Self.conversationId))
         let sut = ConversationSendCoordinator(
             conversationId: Self.conversationId,
             messageService: MockMessageService(),
             messageSocket: MockMessageSocket(),
             offlineQueue: FakeOfflineMessageQueue(),
-            persistence: actor,
+            persistence: store,
             recorder: SendErrorRecorderSpy()
         )
 
