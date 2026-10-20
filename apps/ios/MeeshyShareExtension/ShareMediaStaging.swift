@@ -100,6 +100,14 @@ nonisolated enum ShareMediaStaging {
         return "application/octet-stream"
     }
 
+    /// L'extension garde le TYPE du fichier : celle de la source d'abord, celle
+    /// du MIME quand la source n'en porte pas (un fichier temporaire du
+    /// système peut n'en avoir aucune).
+    static func fileExtension(sourceExtension: String, mime: String) -> String {
+        if !sourceExtension.isEmpty { return sourceExtension.lowercased() }
+        return UTType(mimeType: mime)?.preferredFilenameExtension ?? "bin"
+    }
+
     // MARK: - Copie
 
     /// Copie `source` vers `destination` par tranches, et renvoie le nombre
@@ -157,7 +165,7 @@ nonisolated enum ShareMediaStaging {
             throw ShareMediaStagingError.insufficientFreeSpace(needed: needed, free: freeBytes)
         }
 
-        let ext = source.pathExtension.isEmpty ? "bin" : source.pathExtension.lowercased()
+        let ext = fileExtension(sourceExtension: source.pathExtension, mime: mime)
         let directory = mediaRoot.appendingPathComponent(shareId, isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
