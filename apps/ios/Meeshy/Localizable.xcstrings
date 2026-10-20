@@ -407,7 +407,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ clic sur vos liens"
+            "value": "%@ clic sur tes liens"
           }
         },
         "it": {
@@ -736,7 +736,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Série de %@ jour"
+            "value": "Flamme de %@ jour"
           }
         },
         "it": {
@@ -21570,7 +21570,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cosmétiques débloqués"
+            "value": "Parures offertes"
           }
         },
         "it": {
@@ -21617,7 +21617,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une étoile s’allume tous les dix fragments d’étoile collectés. Chacune débloque un cosmétique de profil, sans avantage de jeu."
+            "value": "Dans le ciel de tes aïeux, dix fragments d’étoile allument une étoile. Chacune t’offre une parure de profil, sans avantage de jeu."
           }
         },
         "it": {
@@ -21805,7 +21805,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %@ fragment d’étoile pour la prochaine étoile"
+            "value": "%@ fragment d’étoile jusqu’à la prochaine étoile"
           }
         },
         "it": {
@@ -21852,7 +21852,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %@ fragments d’étoile pour la prochaine étoile"
+            "value": "%@ fragments d’étoile jusqu’à la prochaine étoile"
           }
         },
         "it": {
@@ -21993,7 +21993,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Constellation"
+            "value": "Le ciel des aïeux"
           }
         },
         "it": {
@@ -22040,7 +22040,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta constellation et ses cosmétiques se montrent selon le réglage de la vitrine."
+            "value": "Ton ciel et ses parures se montrent selon le réglage de tes trophées."
           }
         },
         "it": {
@@ -26059,7 +26059,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Badges"
+            "value": "Médailles"
           }
         },
         "it": {
@@ -26388,7 +26388,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Série (jours)"
+            "value": "Flamme (jours)"
           }
         },
         "it": {
@@ -26482,7 +26482,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Demain, ta série passe à %lld. Rien ne presse : reviens quand tu veux."
+            "value": "Demain, ta Flamme brûlera depuis %lld jours. Rien ne presse : reviens quand tu veux."
           }
         },
         "it": {
@@ -27556,7 +27556,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Série"
+            "value": "Flamme"
           }
         },
         "it": {
@@ -27650,7 +27650,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prochain succès"
+            "value": "Prochain haut fait"
           }
         },
         "it": {
@@ -27697,7 +27697,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez pour voir ce succès en grand."
+            "value": "Touche pour voir ce haut fait en grand."
           }
         },
         "it": {
@@ -147434,7 +147434,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Série de jours actifs, vers le prochain jalon"
+            "value": "Ta Flamme, vers son prochain jalon"
           }
         },
         "it": {
@@ -149925,7 +149925,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publiez une story, un post, un réel ou lancez une conversation : chaque famille tenue en même temps multiplie vos étincelles."
+            "value": "Publie une story, un post, un réel ou lance une conversation : chaque famille tenue en même temps multiplie tes étincelles."
           }
         },
         "it": {
@@ -149984,7 +149984,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tenez une famille de plus en même temps pour déclencher le multiplicateur."
+            "value": "Tiens une famille de plus en même temps pour déclencher le multiplicateur."
           }
         },
         "it": {
@@ -150043,7 +150043,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos élans"
+            "value": "Tes élans"
           }
         },
         "it": {
@@ -150102,7 +150102,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune activité comptée pour l’instant. Envoyez un message, publiez une story… votre premier badge tombe dès la première action."
+            "value": "Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste."
           }
         },
         "it": {
@@ -150361,7 +150361,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Premier succès"
+            "value": "Premier haut fait"
           }
         },
         "it": {
@@ -150420,7 +150420,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Envoyez un message — le premier tombe tout de suite."
+            "value": "Envoie un message : le premier s’accomplit tout de suite."
           }
         },
         "it": {
@@ -150479,7 +150479,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dernier succès"
+            "value": "Dernier haut fait"
           }
         },
         "it": {
@@ -150538,7 +150538,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Revoir la célébration de ce succès"
+            "value": "Revoir le signe des aïeux de ce haut fait"
           }
         },
         "it": {
@@ -150974,7 +150974,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %lld avant le palier %lld"
+            "value": "%lld jusqu’au palier %lld"
           }
         },
         "it": {
@@ -151021,7 +151021,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %lld étincelles avant le niveau %lld"
+            "value": "%lld étincelles jusqu’au niveau %lld"
           }
         },
         "it": {
@@ -151068,7 +151068,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %lld jours avant le jalon de %lld"
+            "value": "%lld jours jusqu’au jalon de %lld"
           }
         },
         "it": {
@@ -151115,7 +151115,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore 1 jour avant le jalon de %lld"
+            "value": "1 jour jusqu’au jalon de %lld"
           }
         },
         "it": {
@@ -151493,7 +151493,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Succès"
+            "value": "Hauts faits"
           }
         },
         "it": {
@@ -151540,7 +151540,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Badges"
+            "value": "Médailles"
           }
         },
         "it": {
@@ -151777,7 +151777,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune série en cours"
+            "value": "Aucune Flamme allumée"
           }
         },
         "it": {
@@ -151875,13 +151875,13 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "Record : %lld jour"
+                  "value": "Ta plus longue Flamme : %lld jour"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "Record : %lld jours"
+                  "value": "Ta plus longue Flamme : %lld jours"
                 }
               }
             }
@@ -151955,7 +151955,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record : 1 jour"
+            "value": "Ta plus longue Flamme : 1 jour"
           }
         },
         "it": {
@@ -204356,7 +204356,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ clics sur vos liens"
+            "value": "%@ clics sur tes liens"
           }
         },
         "it": {
@@ -204403,7 +204403,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Série de %@ jours"
+            "value": "Flamme de %@ jours"
           }
         },
         "it": {
@@ -205067,7 +205067,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vos prochains gestes rapportent %lld fois plus."
+            "value": "Tes prochains gestes rapportent %lld fois plus."
           }
         },
         "it": {
@@ -205226,7 +205226,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": ", plus votre assise"
+            "value": ", plus ton assise"
           }
         },
         "it": {
@@ -205528,7 +205528,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record de Meeshes : %lld"
+            "value": "%lld frappées depuis toujours"
           }
         },
         "it": {
@@ -205575,7 +205575,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record de Meeshes : 1"
+            "value": "1 frappée depuis toujours"
           }
         },
         "it": {
@@ -205601,13 +205601,13 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "Encore %lld étincelle avant une Meesh."
+                  "value": "%lld étincelle jusqu’à ta prochaine Meesh."
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "Encore %lld étincelles avant une Meesh."
+                  "value": "%lld étincelles jusqu’à ta prochaine Meesh."
                 }
               }
             }
@@ -235911,7 +235911,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce qui compte"
+            "value": "Ce qu’elle suit"
           }
         },
         "it": {
@@ -236146,7 +236146,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %@ pour la prochaine étoile : %@, au seuil de %@."
+            "value": "%@ jusqu’à la prochaine étoile : %@, au seuil de %@."
           }
         },
         "it": {
@@ -236193,7 +236193,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les sept étoiles sont allumées : ce badge est au Prisme."
+            "value": "Les sept étoiles sont allumées : cette médaille est au Prisme."
           }
         },
         "it": {
@@ -236334,7 +236334,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prochaine étoile · encore %@"
+            "value": "Prochaine étoile · %@ de plus"
           }
         },
         "it": {
@@ -236428,7 +236428,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Comprendre les badges"
+            "value": "Comprendre les médailles"
           }
         },
         "it": {
@@ -236475,7 +236475,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les badges"
+            "value": "Les médailles"
           }
         },
         "it": {
@@ -236522,7 +236522,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque badge compte UN geste précis : un message vocal, une story, une amitié nouée… Il y en a vingt, rangés en cinq familles."
+            "value": "Chaque médaille suit UN geste précis : un message vocal, une story, une amitié nouée… Il y en a vingt, rangées en cinq familles."
           }
         },
         "it": {
@@ -236569,7 +236569,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque badge monte sur sept paliers. À chaque seuil franchi, il change de matière et allume une étoile de plus."
+            "value": "Chaque médaille gravit sept paliers. À chaque seuil franchi, elle change de matière et allume une étoile de plus."
           }
         },
         "it": {
@@ -236663,7 +236663,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frapper une Meesh n’éteint plus aucun badge. Un badge éteint auparavant reste une empreinte qui dit ce qu’il manque pour le rallumer."
+            "value": "Frapper une Meesh n’éteint plus aucune médaille. Une médaille éteinte auparavant reste une empreinte qui dit ce qu’il manque pour la rallumer."
           }
         },
         "it": {
@@ -236710,7 +236710,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les vingt badges, par famille"
+            "value": "Les vingt médailles, par famille"
           }
         },
         "it": {
@@ -236757,7 +236757,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touche un badge : sa fiche dit ce qui compte pour lui, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile."
+            "value": "Touche une médaille : sa fiche dit ce qu’elle suit, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile."
           }
         },
         "it": {
@@ -237227,7 +237227,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un gel de Flamme"
+            "value": "Une Veilleuse pour ta Flamme"
           }
         },
         "it": {
@@ -237321,7 +237321,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ cumulées · record %2$@"
+            "value": "%1$@ cet Âge · %2$@ en tout"
           }
         },
         "it": {
@@ -237359,13 +237359,13 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%lld étincelle convertible"
+                  "value": "%lld étincelle de ta lumière"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "%lld étincelles convertibles"
+                  "value": "%lld étincelles de ta lumière"
                 }
               }
             }
@@ -237750,7 +237750,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record de niveau %@"
+            "value": "Ta plus haute lumière : niveau %@"
           }
         },
         "it": {
@@ -237809,7 +237809,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Convertibles"
+            "value": "Ta lumière"
           }
         },
         "it": {
@@ -237868,7 +237868,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record d’étincelles : %@"
+            "value": "%@ reçues depuis toujours"
           }
         },
         "it": {
@@ -237927,7 +237927,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record d’étincelles"
+            "value": "Reçues depuis toujours"
           }
         },
         "it": {
@@ -238045,7 +238045,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record de niveau"
+            "value": "Au plus haut"
           }
         },
         "it": {
@@ -238104,7 +238104,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record de niveau : %@"
+            "value": "Ta plus haute lumière : niveau %@"
           }
         },
         "it": {
@@ -238586,7 +238586,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Braise"
+            "value": "Étincelle"
           }
         },
         "it": {
@@ -238680,7 +238680,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Lumière"
+            "value": "Clarté"
           }
         },
         "it": {
@@ -240701,7 +240701,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Facile"
+            "value": "Acte I"
           }
         },
         "it": {
@@ -240748,7 +240748,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Moyenne"
+            "value": "Acte II"
           }
         },
         "it": {
@@ -240795,7 +240795,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Difficile"
+            "value": "Acte III"
           }
         },
         "it": {
@@ -240842,7 +240842,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Or"
+            "value": "Acte d’or"
           }
         },
         "it": {
@@ -242205,7 +242205,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mission du jour"
+            "value": "Un acte du rêve"
           }
         },
         "it": {
@@ -242252,7 +242252,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pas assez d’étincelles pour frapper une Meesh."
+            "value": "Ta lumière ne compte pas encore assez d’étincelles pour frapper une Meesh."
           }
         },
         "it": {
@@ -242299,7 +242299,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette Meesh entrerait dans une réserve que ton rang n’ouvre pas encore."
+            "value": "Cette Meesh entrerait dans un contenant de ton Héritage que ton rang n’ouvre pas encore."
           }
         },
         "it": {
@@ -242405,7 +242405,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as déjà deux gels en réserve : c’est le maximum."
+            "value": "Deux Veilleuses gardent déjà ta Flamme : c’est le plus possible."
           }
         },
         "it": {
@@ -242499,7 +242499,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette mission n’existe plus : l’écran se remet à jour."
+            "value": "Cet acte n’existe plus : l’écran se remet à jour."
           }
         },
         "it": {
@@ -242546,7 +242546,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as déjà changé une mission aujourd’hui."
+            "value": "Tu as déjà changé un acte aujourd’hui."
           }
         },
         "it": {
@@ -242593,7 +242593,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette mission ne peut pas être changée."
+            "value": "Cet acte ne peut pas être changé."
           }
         },
         "it": {
@@ -242640,7 +242640,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les missions s’ouvrent au niveau 5."
+            "value": "Tes aïeux t’envoient leurs rêves dès le niveau 5."
           }
         },
         "it": {
@@ -242687,7 +242687,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termine d’abord les missions du jour pour ouvrir le coffre."
+            "value": "Réalise d’abord les trois actes du rêve : l’Offrande apparaîtra."
           }
         },
         "it": {
@@ -242828,7 +242828,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Protéger la Flamme"
+            "value": "Veiller sur ta Flamme"
           }
         },
         "it": {
@@ -242875,7 +242875,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@ %% par jour de série sur les récompenses de mission, jusqu’à +%@ %%."
+            "value": "Chaque jour de Flamme nourrit tes rêves : +%@ %% d’étincelles par acte, jusqu’à +%@ %%."
           }
         },
         "it": {
@@ -242922,7 +242922,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gels en réserve : %@ / %@"
+            "value": "Veilleuses : %@ / %@"
           }
         },
         "it": {
@@ -242969,7 +242969,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hors ligne : les gels et le rallumage reprendront avec la connexion."
+            "value": "Hors ligne : les Veilleuses et le rallumage reprendront avec la connexion."
           }
         },
         "it": {
@@ -243016,7 +243016,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réserve pleine : un gel couvre un jour manqué, tu n’en as pas besoin d’un de plus."
+            "value": "Tes Veilleuses sont au complet : une Veilleuse garde ta Flamme allumée un jour d’absence, tu n’en as pas besoin d’une de plus."
           }
         },
         "it": {
@@ -243063,7 +243063,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Acheter un gel · %@"
+            "value": "Prendre une Veilleuse · %@"
           }
         },
         "it": {
@@ -243298,7 +243298,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es au sommet."
+            "value": "Ta lumière brille à son sommet."
           }
         },
         "it": {
@@ -243439,7 +243439,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %@ avant le niveau %@"
+            "value": "%@ jusqu’au niveau %@"
           }
         },
         "it": {
@@ -243486,7 +243486,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gloire %@"
+            "value": "%@ de gloire"
           }
         },
         "it": {
@@ -243533,7 +243533,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trésor"
+            "value": "Héritage"
           }
         },
         "it": {
@@ -243580,7 +243580,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Garde tes Meeshes : elles remplissent ton trésor"
+            "value": "Garde tes Meeshes : elles forment ton Héritage"
           }
         },
         "it": {
@@ -243627,7 +243627,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %@ pour %@"
+            "value": "%@ jusqu’au %@"
           }
         },
         "it": {
@@ -243721,7 +243721,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pas de série"
+            "value": "Flamme à allumer"
           }
         },
         "it": {
@@ -243768,7 +243768,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ · +%@ %% sur les missions"
+            "value": "%@ · +%@ %% sur tes rêves"
           }
         },
         "it": {
@@ -243956,7 +243956,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un gel la protège"
+            "value": "Une Veilleuse la garde"
           }
         },
         "it": {
@@ -244661,7 +244661,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir mon niveau"
+            "value": "Voir ma lumière"
           }
         },
         "it": {
@@ -244708,7 +244708,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir les missions"
+            "value": "Voir mon rêve"
           }
         },
         "it": {
@@ -244802,7 +244802,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir les Meeshes"
+            "value": "Voir mes Meeshes"
           }
         },
         "it": {
@@ -244990,7 +244990,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir le palier suivant"
+            "value": "Voir l’état suivant de ma lumière"
           }
         },
         "it": {
@@ -245037,7 +245037,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvrir ma première mission"
+            "value": "Ouvrir mon premier rêve"
           }
         },
         "it": {
@@ -245225,7 +245225,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir mon trésor"
+            "value": "Voir mon Héritage"
           }
         },
         "it": {
@@ -245272,7 +245272,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir mes missions"
+            "value": "Voir mon rêve"
           }
         },
         "it": {
@@ -245366,7 +245366,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir la mission la plus facile"
+            "value": "Voir le premier acte"
           }
         },
         "it": {
@@ -245413,7 +245413,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir mon niveau"
+            "value": "Voir la Renaissance"
           }
         },
         "it": {
@@ -245460,7 +245460,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton premier niveau est gagné."
+            "value": "Ta lumière grandit : premier niveau franchi."
           }
         },
         "it": {
@@ -245507,7 +245507,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles remplissent l’anneau : quand il est plein, tu montes d’un niveau."
+            "value": "Tes étincelles nourrissent ta lumière : quand l’anneau est plein, elle gagne un niveau."
           }
         },
         "it": {
@@ -245554,7 +245554,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %@ pour le niveau %@."
+            "value": "%@ jusqu’au niveau %@."
           }
         },
         "it": {
@@ -245601,7 +245601,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau %@ : encore %@ pour le suivant."
+            "value": "Niveau %@ · %@ jusqu’au suivant."
           }
         },
         "it": {
@@ -245648,7 +245648,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu entres dans %@ !"
+            "value": "Ta lumière brille en %@ !"
           }
         },
         "it": {
@@ -245695,7 +245695,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les paliers jalonnent ta route : dix niveaux chacun jusqu’au 100, puis cent."
+            "value": "Ta lumière traverse vingt états : un tous les dix niveaux jusqu’au 100, puis un par centaine."
           }
         },
         "it": {
@@ -245742,7 +245742,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le palier suivant s’ouvre au niveau %@."
+            "value": "Son prochain état s’éveille au niveau %@."
           }
         },
         "it": {
@@ -245789,7 +245789,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es au dernier palier."
+            "value": "Ta lumière a atteint son dernier état."
           }
         },
         "it": {
@@ -245836,7 +245836,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Palier %@ atteint."
+            "value": "Ta lumière brille en %@."
           }
         },
         "it": {
@@ -245883,7 +245883,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les missions sont débloquées."
+            "value": "Tes aïeux t’envoient ton premier rêve."
           }
         },
         "it": {
@@ -245930,7 +245930,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trois missions par jour, et un coffre à ouvrir quand elles sont faites."
+            "value": "Chaque nuit, un rêve en trois actes. Réalise-les, et l’Offrande apparaît."
           }
         },
         "it": {
@@ -245977,7 +245977,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre ta première mission."
+            "value": "Commence par le premier acte."
           }
         },
         "it": {
@@ -246024,7 +246024,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes missions du jour t’attendent."
+            "value": "Le rêve de cette nuit t’attend."
           }
         },
         "it": {
@@ -246071,7 +246071,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frapper coûte %@, sans te faire perdre un niveau, et rapporte +%@ de Gloire."
+            "value": "Frapper fige %@ de ta lumière dans une pièce, sans te faire perdre un niveau, et tu gagnes +%@ de gloire."
           }
         },
         "it": {
@@ -246165,7 +246165,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frappe maintenant, ou grimpe d’abord."
+            "value": "Frappe maintenant, ou laisse d’abord grandir ta lumière."
           }
         },
         "it": {
@@ -246212,7 +246212,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une Meesh se frappe pour %@."
+            "value": "Une Meesh fige %@ de ta lumière."
           }
         },
         "it": {
@@ -246306,7 +246306,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La frappe a dépensé tes étincelles convertibles : ton niveau baisse d’autant, ton rang jamais."
+            "value": "Une part de ta lumière s’est figée dans la pièce : ton niveau a baissé d’autant, ton rang jamais."
           }
         },
         "it": {
@@ -246353,7 +246353,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes prochaines étincelles te font monter : regarde ta progression."
+            "value": "Ce que tu as reçu reste reçu : chaque nouvelle étincelle fait regrandir ta lumière."
           }
         },
         "it": {
@@ -246400,7 +246400,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Première Meesh frappée : ta Gloire grandit."
+            "value": "Première Meesh frappée : ta gloire grandit."
           }
         },
         "it": {
@@ -246494,7 +246494,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Plus on en frappe, plus la suivante coûte."
+            "value": "Plus on en frappe, plus la suivante fige de lumière."
           }
         },
         "it": {
@@ -246541,7 +246541,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La prochaine coûte %@."
+            "value": "La prochaine fige %@ de ta lumière."
           }
         },
         "it": {
@@ -246588,7 +246588,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La prochaine Meesh coûte %@."
+            "value": "La prochaine Meesh fige %@."
           }
         },
         "it": {
@@ -246635,7 +246635,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nouveau rang : %@."
+            "value": "On t’appelle désormais %@."
           }
         },
         "it": {
@@ -246682,7 +246682,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta Gloire a passé un seuil, et elle ne redescend pas."
+            "value": "Ta gloire a grandi : le monde te donne un nouveau nom, qui ne recule jamais."
           }
         },
         "it": {
@@ -246729,7 +246729,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %@ de Gloire pour la division suivante. Immortalise ce moment."
+            "value": "%@ de gloire jusqu’à la marche suivante. Immortalise ce moment."
           }
         },
         "it": {
@@ -246823,7 +246823,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es %@."
+            "value": "On t’appelle %@."
           }
         },
         "it": {
@@ -246870,7 +246870,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton trésor atteint le palier %@."
+            "value": "Ton Héritage change de contenant : voici ton %@."
           }
         },
         "it": {
@@ -246917,7 +246917,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton trésor est visible sur ton profil."
+            "value": "Ton Héritage se voit sur ton profil."
           }
         },
         "it": {
@@ -246964,7 +246964,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Garde %@ de plus pour le palier suivant, ou dépense."
+            "value": "Garde %@ de plus pour le contenant suivant, ou dépense-les."
           }
         },
         "it": {
@@ -247058,7 +247058,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trésor : palier %@."
+            "value": "Héritage : %@."
           }
         },
         "it": {
@@ -247152,7 +247152,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Elle s’éteint à minuit si tu ne fais aucun geste : %@ de série à sauver."
+            "value": "Elle s’éteint à minuit si tu ne fais aucun geste : %@ de Flamme à sauver."
           }
         },
         "it": {
@@ -247199,7 +247199,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fais une mission facile, ou achète un gel."
+            "value": "Réalise le premier acte, ou prends une Veilleuse."
           }
         },
         "it": {
@@ -247340,7 +247340,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Bonus de Flamme repart à zéro."
+            "value": "Ce qu’elle ajoutait à tes rêves repart de zéro."
           }
         },
         "it": {
@@ -247622,7 +247622,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu étais parti %@ : ton rang, ton trésor et ta Gloire sont restés là où tu les as laissés."
+            "value": "Tu étais parti %@ : ton rang, ton Héritage et ta gloire t’ont attendu."
           }
         },
         "it": {
@@ -247669,7 +247669,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Commence par la mission la plus facile du jour."
+            "value": "Commence par le premier acte du rêve."
           }
         },
         "it": {
@@ -247716,7 +247716,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bon retour : commence par la mission la plus facile."
+            "value": "Bon retour : commence par le premier acte."
           }
         },
         "it": {
@@ -247763,7 +247763,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau 100 : le Prestige s’ouvre !"
+            "value": "Niveau 100 : ta lumière peut renaître !"
           }
         },
         "it": {
@@ -247810,7 +247810,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Prestige remet ton niveau à 1 et te donne une étoile et un trophée. Il est facultatif."
+            "value": "En renaissant, ta lumière redevient Étincelle et ta légende entre dans un nouvel Âge, avec un trophée de tes aïeux. La renaissance est facultative."
           }
         },
         "it": {
@@ -247857,7 +247857,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passe en Prestige, ou continue de monter."
+            "value": "Renais, ou laisse ta lumière grandir encore."
           }
         },
         "it": {
@@ -247904,7 +247904,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continue de monter autant que tu veux."
+            "value": "Laisse ta lumière grandir autant que tu veux."
           }
         },
         "it": {
@@ -247951,7 +247951,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Prestige s’ouvre."
+            "value": "La Renaissance s’ouvre."
           }
         },
         "it": {
@@ -248092,7 +248092,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fais ton premier geste, je compte tes étincelles."
+            "value": "Fais ton premier geste : je guette tes premières étincelles."
           }
         },
         "it": {
@@ -248186,7 +248186,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les étincelles font le niveau : elles remplissent ton anneau."
+            "value": "Tes étincelles forment ta lumière : elles remplissent ton anneau."
           }
         },
         "it": {
@@ -248280,7 +248280,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vingt paliers, et des niveaux que ton rang ouvre."
+            "value": "Vingt états de ta lumière, et des niveaux que ton rang ouvre."
           }
         },
         "it": {
@@ -248374,7 +248374,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les missions s’ouvrent au niveau 5."
+            "value": "Au niveau 5, tes aïeux t’envoient ton premier rêve."
           }
         },
         "it": {
@@ -248421,7 +248421,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque jour, trois missions et un coffre."
+            "value": "Chaque nuit, un rêve en trois actes, et une Offrande."
           }
         },
         "it": {
@@ -248468,7 +248468,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fais-les pour ouvrir le coffre et nourrir ta Flamme."
+            "value": "Réalise-les pour faire apparaître l’Offrande et nourrir ta Flamme."
           }
         },
         "it": {
@@ -248609,7 +248609,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque jour de série ajoute 2 %% à tes récompenses de mission, jusqu’à 50 %%. Un gel couvre un jour manqué."
+            "value": "Chaque jour de Flamme ajoute 2 %% d’étincelles à tes rêves, jusqu’à 50 %%. Une Veilleuse la garde allumée un jour d’absence."
           }
         },
         "it": {
@@ -248703,7 +248703,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "À partir de 1 221 étincelles, on frappe une Meesh."
+            "value": "À partir de 1 221 étincelles de ta lumière, on frappe une Meesh."
           }
         },
         "it": {
@@ -248750,7 +248750,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La frappe dépense des étincelles convertibles : ton niveau baisse d’autant, ton rang jamais, et chaque frappe ajoute de la Gloire."
+            "value": "Frapper fige une part de ta lumière dans la pièce : ton niveau baisse d’autant, ton rang jamais, et chaque frappe t’apporte de la gloire."
           }
         },
         "it": {
@@ -248797,7 +248797,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La Gloire donne le rang."
+            "value": "Ta gloire te donne ton nom : ton rang."
           }
         },
         "it": {
@@ -248891,7 +248891,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frapper, battre des records, décrocher des succès : tout ajoute de la Gloire."
+            "value": "Frapper, réaliser tes rêves, accomplir des hauts faits : tout fait grandir ta gloire."
           }
         },
         "it": {
@@ -248985,7 +248985,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque geste rapporte"
+            "value": "Chaque geste fait jaillir des étincelles"
           }
         },
         "it": {
@@ -249032,7 +249032,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Écrire, parler, publier, réagir, inviter : chaque action utile donne des étincelles. Une publication rapporte selon qui peut la voir : public, communauté ou amis. Les limites comptent tes gestes, jamais tes étincelles : bonus, Flamme et événements augmentent ce que chaque geste rapporte."
+            "value": "Écrire, parler, publier, réagir, inviter : chaque vrai échange fait jaillir des étincelles. Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis. Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste."
           }
         },
         "it": {
@@ -249079,7 +249079,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les étincelles font le niveau"
+            "value": "Les étincelles forment ta lumière"
           }
         },
         "it": {
@@ -249126,7 +249126,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton niveau se lit sur tes étincelles convertibles : la frappe les dépense, donc le fait baisser. Un million d’étincelles pour le niveau 100, et une étape par dizaine : sans elle, le niveau attend. Vingt paliers. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent."
+            "value": "Ensemble, tes étincelles forment ta lumière, et ton niveau se lit sur elle : une frappe en fige une part, donc le fait baisser. Un million d’étincelles pour le niveau 100, et une épreuve tous les dix niveaux : tant qu’elle n’est pas réussie, ta lumière attend. Vingt états. Les niveaux montent jusqu’à 499 ; le rang Ambassadeur ouvre jusqu’à 1 000, et le rang Oracle les ouvre sans limite. Chaque niveau demande un peu plus que le précédent."
           }
         },
         "it": {
@@ -249220,7 +249220,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une Meesh se frappe à la main, avec tes étincelles convertibles. Les dix premières coûtent 1 221 étincelles, puis le prix monte de 30 % toutes les dix frappes."
+            "value": "Une Meesh se frappe à la main : une part de ta lumière s’y fige. Pour les dix premières, cette part est de 1 221 étincelles, puis elle grandit de 30 % toutes les dix frappes."
           }
         },
         "it": {
@@ -249267,7 +249267,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frapper fait baisser le niveau"
+            "value": "Frapper fige ta lumière"
           }
         },
         "it": {
@@ -249314,7 +249314,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La frappe dépense des étincelles convertibles : ton niveau baisse d’autant, ton rang jamais, et chaque frappe ajoute de la Gloire. Ton record d’étincelles reste, à titre indicatif. Aucun badge ne s’éteint ni ne redescend."
+            "value": "La part figée quitte ta lumière : ton niveau baisse d’autant, ton rang jamais, et chaque frappe fait grandir ta gloire. Ce que tu as reçu reste reçu. Aucune médaille ne s’éteint ni ne redescend."
           }
         },
         "it": {
@@ -249361,7 +249361,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le rang ne baisse jamais"
+            "value": "Le rang ne recule jamais"
           }
         },
         "it": {
@@ -249408,7 +249408,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque frappe, chaque record, chaque succès ajoute de la Gloire. La Gloire donne le rang."
+            "value": "Chaque frappe, chaque niveau atteint pour la première fois, chaque haut fait fait grandir ta gloire. La gloire te donne ton rang."
           }
         },
         "it": {
@@ -249455,7 +249455,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le trésor se garde ou se dépense"
+            "value": "L’Héritage se garde ou se dépense"
           }
         },
         "it": {
@@ -249502,7 +249502,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Garder ses Meeshes fait monter le trésor. Les dépenser protège la Flamme ou offre des cosmétiques."
+            "value": "Garder ses Meeshes fait grandir l’héritage, de la Bourse à la Réserve. Les dépenser veille sur la Flamme ou offre des parures."
           }
         },
         "it": {
@@ -249596,7 +249596,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trois missions, un coffre, une Flamme qui grandit tant qu’on revient."
+            "value": "Un rêve en trois actes chaque nuit, une Offrande, une Flamme qui grandit tant qu’on revient."
           }
         },
         "it": {
@@ -249643,7 +249643,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "On garde une trace"
+            "value": "Les aïeux se manifestent"
           }
         },
         "it": {
@@ -249690,7 +249690,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque grand moment se photographie avec Mee et Meo dans le carnet de progression."
+            "value": "À chaque évolution, tes aïeux se manifestent : chaque signe s’immortalise en photo avec Mee et Meo dans ta Chronique."
           }
         },
         "it": {
@@ -249925,7 +249925,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prochaine Meesh · n° %@"
+            "value": "La Meesh n° %@"
           }
         },
         "it": {
@@ -250066,7 +250066,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Missions du jour"
+            "value": "Le rêve de cette nuit"
           }
         },
         "it": {
@@ -250113,7 +250113,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau %@."
+            "value": "Au niveau 5, tes aïeux t’envoient chaque nuit un rêve en trois actes, et une Offrande. Tu es au niveau %@."
           }
         },
         "it": {
@@ -250160,7 +250160,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jour du Prisme : une des missions se joue dans une autre langue que la tienne."
+            "value": "Jour du Prisme : un des actes se joue dans une autre langue que la tienne."
           }
         },
         "it": {
@@ -250207,7 +250207,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Heure du Prisme : %@ – %@ — tes missions comptent double."
+            "value": "Heure du Prisme : %@ – %@ — chaque acte compte double."
           }
         },
         "it": {
@@ -250254,7 +250254,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hors ligne : changer une mission ou ouvrir le coffre reprendra en ligne."
+            "value": "Hors ligne : changer un acte ou ouvrir l’Offrande reprendra en ligne."
           }
         },
         "it": {
@@ -250348,7 +250348,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Faite"
+            "value": "Réalisé"
           }
         },
         "it": {
@@ -250771,7 +250771,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changer la mission « %1$@ » contre %2$@"
+            "value": "Changer l’acte « %1$@ » contre %2$@"
           }
         },
         "it": {
@@ -250818,7 +250818,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coffre du jour"
+            "value": "L’Offrande"
           }
         },
         "it": {
@@ -250865,7 +250865,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termine les missions du jour pour l’ouvrir."
+            "value": "Réalise les trois actes du rêve pour la faire apparaître."
           }
         },
         "it": {
@@ -251053,7 +251053,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvrir le coffre"
+            "value": "Ouvrir l’Offrande"
           }
         },
         "it": {
@@ -251100,7 +251100,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reviens demain pour le prochain."
+            "value": "Une nouvelle Offrande t’attend au bout du prochain rêve."
           }
         },
         "it": {
@@ -251147,7 +251147,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Carnet de progression"
+            "value": "La Chronique"
           }
         },
         "it": {
@@ -251194,7 +251194,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton carnet est vide. Les grands moments — un rang, une première Meesh, une Flamme de 7 jours — se photographient avec Mee et Meo, et la photo reste sur ton appareil."
+            "value": "Ta Chronique attend sa première page. À chaque signe de tes aïeux (un rang, une première Meesh, une Flamme de 7 jours), Mee et Meo t’invitent à immortaliser le moment, et la photo reste sur ton appareil."
           }
         },
         "it": {
@@ -251617,7 +251617,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le carnet n’a pas pu retirer cette photo."
+            "value": "La Chronique n’a pas pu retirer cette photo."
           }
         },
         "it": {
@@ -251993,7 +251993,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Carnet de progression"
+            "value": "La Chronique"
           }
         },
         "it": {
@@ -253121,7 +253121,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Palier %@"
+            "value": "Ta lumière en %@"
           }
         },
         "it": {
@@ -253215,7 +253215,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nouveau tour"
+            "value": "Nouvel Âge"
           }
         },
         "it": {
@@ -253309,7 +253309,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prestige %@"
+            "value": "Renaissance %@"
           }
         },
         "it": {
@@ -253544,7 +253544,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trésor"
+            "value": "Héritage"
           }
         },
         "it": {
@@ -253685,7 +253685,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gardée au carnet de progression."
+            "value": "Gardée dans ta Chronique."
           }
         },
         "it": {
@@ -253732,7 +253732,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le carnet n’est pas disponible sur cet appareil : la photo n’a pas été gardée."
+            "value": "La Chronique n’est pas disponible sur cet appareil : la photo n’a pas été gardée."
           }
         },
         "it": {
@@ -254108,7 +254108,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Succès"
+            "value": "Haut fait"
           }
         },
         "it": {
@@ -254155,7 +254155,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Succès de"
+            "value": "Haut fait de"
           }
         },
         "it": {
@@ -254202,7 +254202,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mission menée par"
+            "value": "Rêve réalisé par"
           }
         },
         "it": {
@@ -254296,7 +254296,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Succès de %@"
+            "value": "Haut fait de %@"
           }
         },
         "it": {
@@ -254343,7 +254343,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mission menée par %@"
+            "value": "Rêve réalisé par %@"
           }
         },
         "it": {
@@ -254437,7 +254437,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mission accomplie"
+            "value": "Rêve réalisé"
           }
         },
         "it": {
@@ -254484,7 +254484,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mission"
+            "value": "Rêve"
           }
         },
         "it": {
@@ -255189,7 +255189,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prix de base %1$@ · %2$@ %% au niveau %3$@"
+            "value": "Pièce entière %1$@ · %2$@ %% au niveau %3$@"
           }
         },
         "it": {
@@ -255248,7 +255248,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu dois encore %@ étincelles : la frappe reprendra une fois la dette réglée."
+            "value": "Une ombre voile %@ étincelles de ta lumière : tes prochaines étincelles la dissiperont, puis tu pourras frapper."
           }
         },
         "it": {
@@ -255283,7 +255283,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une dette d’étincelles bloque la frappe : tes prochains gains la règlent d’abord."
+            "value": "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont. Tant qu’elle est là, on ne frappe pas."
           }
         },
         "en": {
@@ -257258,7 +257258,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Prestige s’offre au niveau %@ : il est facultatif, tu peux continuer à monter."
+            "value": "La renaissance s’offre au niveau %@ : elle est facultative, ta lumière peut aussi grandir encore."
           }
         },
         "it": {
@@ -257634,7 +257634,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les paliers du trésor"
+            "value": "Les contenants de l’Héritage"
           }
         },
         "it": {
@@ -257681,7 +257681,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Garde tes Meeshes : le trésor se remplit, de la bourse à la réserve royale."
+            "value": "Garde tes Meeshes : ton Héritage grandit, de la Bourse à la Réserve royale."
           }
         },
         "it": {
@@ -257963,7 +257963,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les huit ligues"
+            "value": "Les huit cercles de la joute"
           }
         },
         "it": {
@@ -258010,7 +258010,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque semaine, tu joues dans ta ligue : les sept premiers montent d’une gemme."
+            "value": "Chaque semaine, tu entres dans ta joute : les sept premiers gravissent le cercle suivant."
           }
         },
         "it": {
@@ -258198,7 +258198,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record · le meilleur"
+            "value": "Sommet · le meilleur"
           }
         },
         "it": {
@@ -258433,7 +258433,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coupe de ligue"
+            "value": "Coupe de joute"
           }
         },
         "it": {
@@ -258480,7 +258480,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coupe de saison"
+            "value": "Coupe du voyage"
           }
         },
         "it": {
@@ -258527,7 +258527,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trophée de Prestige"
+            "value": "Trophée de renaissance"
           }
         },
         "it": {
@@ -258668,7 +258668,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Plus un succès est rare, plus son liseré est précieux."
+            "value": "Plus un haut fait est rare, plus son liseré est précieux."
           }
         },
         "it": {
@@ -259138,7 +259138,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les ligues s’ouvrent au niveau 10."
+            "value": "La joute s’ouvre au niveau 10."
           }
         },
         "it": {
@@ -259185,7 +259185,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La ligue publique est réservée aux comptes dont la majorité est vérifiée."
+            "value": "La joute publique est réservée aux comptes dont la majorité est vérifiée."
           }
         },
         "it": {
@@ -259232,7 +259232,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accepte d’abord de rejoindre la ligue publique."
+            "value": "Accepte d’abord de rejoindre la joute publique."
           }
         },
         "it": {
@@ -259279,7 +259279,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce pseudonyme n’est pas valable : 3 à 20 lettres, chiffres, points, tirets ou tirets bas."
+            "value": "Ce nom de joute n’est pas valable : 3 à 20 lettres, chiffres, points, tirets ou tirets bas."
           }
         },
         "it": {
@@ -259326,7 +259326,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce pseudonyme est déjà pris."
+            "value": "Ce nom de joute est déjà pris."
           }
         },
         "it": {
@@ -259373,7 +259373,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce pseudonyme n’est pas permis : ni un nom réservé, ni ton nom."
+            "value": "Ce nom de joute n’est pas permis : ni un nom réservé, ni ton nom."
           }
         },
         "it": {
@@ -259420,7 +259420,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le duo s’ouvre au niveau 20, pour vous deux."
+            "value": "L’alliance s’ouvre au niveau 20, pour vous deux."
           }
         },
         "it": {
@@ -259467,7 +259467,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le duo se joue avec un ami accepté."
+            "value": "L’alliance se fait avec un ami accepté."
           }
         },
         "it": {
@@ -259514,7 +259514,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’un de vous a déjà un duo cette semaine."
+            "value": "L’un de vous a déjà une alliance cette semaine."
           }
         },
         "it": {
@@ -259561,7 +259561,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce duo n’existe plus : l’écran se remet à jour."
+            "value": "Cette alliance n’existe plus : l’écran se remet à jour."
           }
         },
         "it": {
@@ -259608,7 +259608,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce geste n’a pas de sens pour ce duo."
+            "value": "Ce geste n’a pas de sens pour cette alliance."
           }
         },
         "it": {
@@ -259655,7 +259655,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune saison n’est ouverte pour l’instant."
+            "value": "Aucun voyage n’est en cours pour l’instant."
           }
         },
         "it": {
@@ -259702,7 +259702,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette étape n’existe pas."
+            "value": "Cette halte n’existe pas."
           }
         },
         "it": {
@@ -259749,7 +259749,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette étape n’est pas encore atteinte."
+            "value": "Cette halte n’est pas encore atteinte."
           }
         },
         "it": {
@@ -259843,7 +259843,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as déjà le Sceau de cette saison."
+            "value": "Tu as déjà le Sceau de ce voyage."
           }
         },
         "it": {
@@ -259890,7 +259890,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Prestige s’ouvre au niveau 100."
+            "value": "La Renaissance s’ouvre au niveau 100."
           }
         },
         "it": {
@@ -259937,7 +259937,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as déjà posé les cinq étoiles du Prestige."
+            "value": "Ta légende a déjà vécu ses cinq renaissances."
           }
         },
         "it": {
@@ -259984,7 +259984,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le prix a changé depuis l’affichage : rien n’a été dépensé. Vérifie le nouveau prix, puis frappe à nouveau."
+            "value": "La part de lumière à figer a changé entre-temps : rien n’a été pris. Relis-la, puis frappe à nouveau."
           }
         },
         "it": {
@@ -260031,7 +260031,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ne plus participer à la ligue entre amis"
+            "value": "Ne plus participer à la joute des amis"
           }
         },
         "it": {
@@ -260125,7 +260125,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ligue entre amis"
+            "value": "Joute des amis"
           }
         },
         "it": {
@@ -260407,7 +260407,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ vers %2$@"
+            "value": "%1$@ jusqu’à %2$@"
           }
         },
         "it": {
@@ -260454,7 +260454,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ vers le %2$@"
+            "value": "%1$@ jusqu’au niveau %2$@"
           }
         },
         "it": {
@@ -260783,7 +260783,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "ligue %1$@ %2$@"
+            "value": "joute de %1$@ · %2$@"
           }
         },
         "it": {
@@ -261089,7 +261089,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Missions du jour : %1$@ sur %2$@"
+            "value": "Rêve : %1$@ sur %2$@"
           }
         },
         "it": {
@@ -261148,7 +261148,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison %@"
+            "value": "Voyage %@"
           }
         },
         "it": {
@@ -261207,7 +261207,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vitrine"
+            "value": "Trophées"
           }
         },
         "it": {
@@ -261301,7 +261301,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu n’es pas dans la ligue publique. Ta ligue entre amis reste ouverte."
+            "value": "Tu n’es pas dans la joute publique. Ta Joute des amis reste ouverte."
           }
         },
         "it": {
@@ -261348,7 +261348,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es dans la ligue publique."
+            "value": "Tu es dans la joute publique."
           }
         },
         "it": {
@@ -261395,7 +261395,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es dans la ligue publique sous le nom %@."
+            "value": "Tu es dans la joute publique sous le nom %@."
           }
         },
         "it": {
@@ -261442,7 +261442,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ligue publique"
+            "value": "Joute publique"
           }
         },
         "it": {
@@ -261771,7 +261771,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Masque le jeu partout sur cet appareil, ferme ta vitrine, ton rang, ton trésor et ton Atlas à tous les autres, et te retire de la ligue publique. Tes étincelles et tes trophées sont gardés."
+            "value": "Masque le jeu partout sur cet appareil, ferme tes trophées, ton rang, ton Héritage et ton Atlas à tous les autres, et te retire de la joute publique. Tes étincelles et tes trophées sont gardés."
           }
         },
         "it": {
@@ -261865,7 +261865,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Afficher les célébrations"
+            "value": "Afficher les signes des aïeux"
           }
         },
         "it": {
@@ -261912,7 +261912,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les cartes de Mee et Meo et les propositions de photo qui apparaissent sur Progression. Ce réglage vaut pour cet appareil seulement."
+            "value": "Les cartes de Mee et Meo et les signes des aïeux qui apparaissent sur Progression. Ce réglage vaut pour cet appareil seulement."
           }
         },
         "it": {
@@ -262100,7 +262100,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ligue %@"
+            "value": "Joute %@"
           }
         },
         "it": {
@@ -262147,7 +262147,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nouveau Prestige"
+            "value": "Renaissance"
           }
         },
         "it": {
@@ -262194,7 +262194,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison terminée"
+            "value": "Voyage accompli"
           }
         },
         "it": {
@@ -262241,7 +262241,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Montée de ligue"
+            "value": "Cercle gravi"
           }
         },
         "it": {
@@ -262523,7 +262523,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prestige %@."
+            "value": "Renaissance %@."
           }
         },
         "it": {
@@ -262570,7 +262570,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton niveau repart à 1 : une nouvelle boucle commence."
+            "value": "Ta lumière redevient Étincelle : ton niveau repart à 1."
           }
         },
         "it": {
@@ -262617,7 +262617,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une étoile sur ton anneau, un trophée numéroté et %@ de Gloire. Ton rang ne baisse jamais."
+            "value": "Ta légende entre dans un nouvel Âge, avec un trophée numéroté et %@ de gloire. Ton rang ne recule jamais."
           }
         },
         "it": {
@@ -262664,7 +262664,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prestige %@ !"
+            "value": "Renaissance %@ !"
           }
         },
         "it": {
@@ -262758,7 +262758,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Range-la à ta façon, et choisis qui la voit."
+            "value": "Range-le à ta façon, et choisis qui le voit."
           }
         },
         "it": {
@@ -262805,7 +262805,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ rejoint ta vitrine. Un trophée ne rapporte rien : il se garde et se montre."
+            "value": "%@ rejoint tes trophées. Un trophée ne rapporte rien : il se garde et se montre."
           }
         },
         "it": {
@@ -262899,7 +262899,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fin de la saison %@."
+            "value": "Fin du voyage %@."
           }
         },
         "it": {
@@ -262946,7 +262946,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La prochaine saison commence bientôt."
+            "value": "Le prochain voyage part bientôt."
           }
         },
         "it": {
@@ -262993,7 +262993,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es allé jusqu’à l’étape %@ sur 40. Rien n’est perdu : ton niveau et ton rang ne bougent pas."
+            "value": "Tu es allé jusqu’à la halte %@ sur 40. Rien n’est perdu : ton niveau et ton rang ne bougent pas."
           }
         },
         "it": {
@@ -263040,7 +263040,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu gagnes la coupe de saison, un badge daté et %@ de Gloire."
+            "value": "Tu gagnes la coupe du voyage, une médaille datée et %@ de gloire."
           }
         },
         "it": {
@@ -263087,7 +263087,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La saison %@ se termine."
+            "value": "Le voyage %@ s’achève."
           }
         },
         "it": {
@@ -263134,7 +263134,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison %@ terminée : parcours complet !"
+            "value": "Voyage %@ accompli : tu es allé au bout !"
           }
         },
         "it": {
@@ -263181,7 +263181,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison %@ : étapes gratuites."
+            "value": "Voyage %@ : des haltes gratuites."
           }
         },
         "it": {
@@ -263228,7 +263228,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ étapes t’attendent, de quoi gagner une coupe de saison."
+            "value": "%@ haltes t’attendent, et au bout, la coupe du voyage."
           }
         },
         "it": {
@@ -263275,7 +263275,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Huit semaines et un thème. Les missions du jour et le duo donnent des étoiles, et chaque étape est gratuite."
+            "value": "Huit semaines en terre de langue. Chaque acte réalisé et chaque alliance te font avancer de quelques pas, et chaque halte est gratuite."
           }
         },
         "it": {
@@ -263322,7 +263322,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Huit semaines, un thème : %@. Les missions du jour et le duo donnent des étoiles, et chaque étape est gratuite."
+            "value": "Huit semaines en terre de langue : %@. Chaque acte réalisé et chaque alliance te font avancer de quelques pas, et chaque halte est gratuite."
           }
         },
         "it": {
@@ -263369,7 +263369,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La saison %@ commence !"
+            "value": "Le voyage %@ commence !"
           }
         },
         "it": {
@@ -263416,7 +263416,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Retour en ligue %@."
+            "value": "Retour dans la joute %@."
           }
         },
         "it": {
@@ -263510,7 +263510,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Remonte dès cette semaine : %@ pour monter."
+            "value": "Remonte dès cette semaine : %@ jusqu’au cercle suivant."
           }
         },
         "it": {
@@ -263557,7 +263557,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les 5 derniers de chaque groupe descendent. Ce n’est pas grave : les étincelles repartent de zéro et rien d’autre ne baisse."
+            "value": "Les 5 derniers de chaque joute redescendent. Ce n’est pas grave : les étincelles repartent de zéro et rien d’autre ne baisse."
           }
         },
         "it": {
@@ -263604,7 +263604,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu redescends en ligue %@."
+            "value": "Tu redescends dans la joute %@."
           }
         },
         "it": {
@@ -263651,7 +263651,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Montée : ligue %@."
+            "value": "Cercle gravi : joute %@."
           }
         },
         "it": {
@@ -263745,7 +263745,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as fini à la place %1$@ de la ligue %2$@ : les 7 premiers montent."
+            "value": "Tu as fini à la place %1$@ de la joute %2$@ : les 7 premiers gravissent le cercle suivant."
           }
         },
         "it": {
@@ -263792,7 +263792,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu montes en ligue %@ !"
+            "value": "Tu gravis le cercle : joute %@ !"
           }
         },
         "it": {
@@ -263839,7 +263839,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ligue %1$@ : %2$@ pour monter."
+            "value": "Joute %1$@ · %2$@ jusqu’au cercle suivant."
           }
         },
         "it": {
@@ -263886,7 +263886,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es déjà au sommet des ligues."
+            "value": "Tu es déjà au plus haut cercle des joutes."
           }
         },
         "it": {
@@ -263933,7 +263933,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %@ pour monter cette semaine."
+            "value": "%@ jusqu’au cercle suivant cette semaine."
           }
         },
         "it": {
@@ -263980,7 +263980,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque semaine, tu te mesures à 29 autres joueurs. Les 7 premiers montent, les 5 derniers descendent, et les étincelles repartent de zéro."
+            "value": "Chaque semaine, tu te mesures à 29 autres héros. Les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent, et les étincelles repartent de zéro."
           }
         },
         "it": {
@@ -264027,7 +264027,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bienvenue en ligue %@ !"
+            "value": "Bienvenue dans la joute %@ !"
           }
         },
         "it": {
@@ -264121,7 +264121,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir ma vitrine"
+            "value": "Voir mes trophées"
           }
         },
         "it": {
@@ -264168,7 +264168,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir la saison"
+            "value": "Voir mon voyage"
           }
         },
         "it": {
@@ -264215,7 +264215,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Voir ma ligue"
+            "value": "Voir ma joute"
           }
         },
         "it": {
@@ -264638,7 +264638,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prestige %@ ! Une étoile de plus sur ton anneau."
+            "value": "Renaissance %@ ! Ta légende entre dans un nouvel Âge."
           }
         },
         "it": {
@@ -264685,7 +264685,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continuer à monter"
+            "value": "Continuer à briller"
           }
         },
         "it": {
@@ -264732,7 +264732,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passer en Prestige"
+            "value": "Renaître"
           }
         },
         "it": {
@@ -264779,7 +264779,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bonne nouvelle : ta ligue (niveau 10) et ton duo (niveau 20) restent ouverts, car ils lisent ton record de niveau."
+            "value": "Bonne nouvelle : ta joute (niveau 10) et ton alliance (niveau 20) restent ouvertes, car elles lisent ta plus haute lumière."
           }
         },
         "it": {
@@ -264826,7 +264826,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton consentement à la ligue publique reste enregistré : tu retrouves ta ligue au niveau 10."
+            "value": "Ton accord pour la joute publique reste enregistré : tu retrouves ta joute au niveau 10."
           }
         },
         "it": {
@@ -264873,7 +264873,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce qui reste : ton record d’étincelles, ton record de niveau, ton rang, ta Gloire, tes Meeshes, ta Flamme et tes trophées."
+            "value": "Ce qui reste : tes étincelles reçues depuis toujours, ta plus haute lumière, ton rang, ta gloire, tes Meeshes, ta Flamme et tes trophées."
           }
         },
         "it": {
@@ -264920,7 +264920,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce qui repart : ton niveau (à 1) et tes étincelles convertibles (à 0)."
+            "value": "Ce qui repart : ton niveau (à 1) et les étincelles de ta lumière (à 0)."
           }
         },
         "it": {
@@ -264967,7 +264967,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passer en Prestige %@ ?"
+            "value": "Commencer ta Renaissance %@ ?"
           }
         },
         "it": {
@@ -265014,7 +265014,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton niveau repart à 1 et tes étincelles convertibles à 0 ; ton record d’étincelles et ton record de niveau sont conservés. En échange : une étoile sur ton anneau, un trophée numéroté et %@ de Gloire. Ton rang ne baisse jamais."
+            "value": "En renaissant, ta lumière redevient Étincelle : ton niveau repart à 1 et tes étincelles à 0. Ce que tu as reçu depuis toujours et ta plus haute lumière restent gravés. Tes aïeux t’offrent un nouvel Âge, un trophée numéroté et %@ de gloire. Ton rang ne recule jamais."
           }
         },
         "it": {
@@ -265061,7 +265061,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as atteint le niveau 100 : tu peux passer en Prestige, ou continuer à monter."
+            "value": "Niveau 100 : ta lumière peut renaître, ou grandir encore."
           }
         },
         "it": {
@@ -265108,7 +265108,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as les cinq étoiles : le sommet du sommet."
+            "value": "Ta légende a vécu ses cinq renaissances : le sommet du sommet."
           }
         },
         "it": {
@@ -265155,7 +265155,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Prestige s’ouvre au niveau 100. Tu es au niveau %@."
+            "value": "La Renaissance s’ouvre au niveau 100. Tu es au niveau %@."
           }
         },
         "it": {
@@ -265202,7 +265202,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étoiles : %1$@ sur %2$@"
+            "value": "Renaissances : %1$@ sur %2$@"
           }
         },
         "it": {
@@ -265249,7 +265249,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prestige"
+            "value": "Renaissance"
           }
         },
         "it": {
@@ -265954,7 +265954,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trésor et Flamme"
+            "value": "Héritage et Flamme"
           }
         },
         "it": {
@@ -266048,7 +266048,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vitrine de trophées"
+            "value": "Trophées"
           }
         },
         "it": {
@@ -266095,7 +266095,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un visiteur ne voit que le mois d’obtention, jamais la date exacte. « Moi seul » ferme la vitrine à tous les autres."
+            "value": "Un visiteur ne voit que le mois d’obtention, jamais la date exacte. « Moi seul » cache tes trophées à tous les autres."
           }
         },
         "it": {
@@ -266142,7 +266142,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Qui voit ta vitrine"
+            "value": "Qui voit tes trophées"
           }
         },
         "it": {
@@ -266377,7 +266377,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta vitrine est vide. Les coupes de ligue, de saison, de Prestige et de Flamme s’y rangent à mesure que tu les gagnes."
+            "value": "Tes trophées t’attendent. Les coupes de joute et de voyage, les trophées de Renaissance et de Flamme s’y rangent à mesure que tu les gagnes."
           }
         },
         "it": {
@@ -266424,7 +266424,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vitrine de trophées"
+            "value": "Tes trophées"
           }
         },
         "it": {
@@ -266518,7 +266518,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "PRESTIGE %@"
+            "value": "RENAISSANCE %@"
           }
         },
         "it": {
@@ -266565,7 +266565,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "SAISON %@"
+            "value": "VOYAGE %@"
           }
         },
         "it": {
@@ -266659,7 +266659,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ — ligue %2$@, %3$@"
+            "value": "%1$@ — joute %2$@, %3$@"
           }
         },
         "it": {
@@ -266800,7 +266800,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trophée de Prestige %@"
+            "value": "Trophée de Renaissance %@"
           }
         },
         "it": {
@@ -266847,7 +266847,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coupe de la saison %@"
+            "value": "Coupe du voyage %@"
           }
         },
         "it": {
@@ -266894,7 +266894,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ — ligue %2$@, semaine du %3$@"
+            "value": "%1$@ — joute %2$@, semaine du %3$@"
           }
         },
         "it": {
@@ -267035,7 +267035,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nouveau pseudonyme"
+            "value": "Nouveau nom de joute"
           }
         },
         "it": {
@@ -267082,7 +267082,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton pseudonyme"
+            "value": "Ton nom de joute"
           }
         },
         "it": {
@@ -267176,7 +267176,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as le Sceau de cette saison."
+            "value": "Tu as le Sceau de ce voyage."
           }
         },
         "it": {
@@ -267270,7 +267270,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Sceau est purement décoratif : un objet à collectionner toutes les %@ étapes, qui ne change rien au jeu."
+            "value": "Le Sceau est purement décoratif : un objet à collectionner toutes les %@ haltes, qui ne change rien au jeu."
           }
         },
         "it": {
@@ -267317,7 +267317,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rangée Sceau"
+            "value": "Le Sceau du voyage"
           }
         },
         "it": {
@@ -267364,7 +267364,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune saison n’est ouverte pour l’instant. La prochaine commence bientôt."
+            "value": "Aucun voyage n’est en cours pour l’instant. Le prochain part bientôt."
           }
         },
         "it": {
@@ -267411,7 +267411,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La saison %1$@ ouvre le %2$@."
+            "value": "Le voyage %1$@ part le %2$@."
           }
         },
         "it": {
@@ -267458,7 +267458,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Parcours terminé : une coupe, un badge daté et %@ de Gloire."
+            "value": "Voyage accompli : une coupe, une médaille datée et %@ de gloire."
           }
         },
         "it": {
@@ -267505,7 +267505,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réclamer l’étape %@"
+            "value": "Réclamer la halte %@"
           }
         },
         "it": {
@@ -267552,7 +267552,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La coupe de saison"
+            "value": "La coupe du voyage"
           }
         },
         "it": {
@@ -267599,7 +267599,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un gel de Flamme"
+            "value": "Une Veilleuse pour ta Flamme"
           }
         },
         "it": {
@@ -267834,7 +267834,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étape %@"
+            "value": "Halte %@"
           }
         },
         "it": {
@@ -267881,7 +267881,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Parcours gratuit"
+            "value": "Chemin gratuit"
           }
         },
         "it": {
@@ -267928,7 +267928,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étape %1$@ sur %2$@"
+            "value": "Halte %1$@ sur %2$@"
           }
         },
         "it": {
@@ -267975,7 +267975,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %@ pour l’étape suivante"
+            "value": "%@ jusqu’à la halte suivante"
           }
         },
         "it": {
@@ -268022,7 +268022,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les missions du jour et le duo donnent des étoiles : %@ étoiles ouvrent une étape. Tout le parcours est gratuit."
+            "value": "Chaque acte réalisé et chaque alliance te font avancer de quelques pas : %@ pas mènent à la halte suivante. Tout le voyage est gratuit."
           }
         },
         "it": {
@@ -268069,7 +268069,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ étoiles"
+            "value": "%@ pas"
           }
         },
         "it": {
@@ -268116,7 +268116,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ étoile"
+            "value": "%@ pas"
           }
         },
         "it": {
@@ -268210,7 +268210,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison %1$@ · semaine %2$@ sur %3$@"
+            "value": "Voyage %1$@ · semaine %2$@ sur %3$@"
           }
         },
         "it": {
@@ -268257,7 +268257,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison"
+            "value": "Voyage"
           }
         },
         "it": {
@@ -268445,7 +268445,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le duo de la semaine s’est terminé sans aboutir."
+            "value": "L’alliance de la semaine s’est terminée sans aboutir."
           }
         },
         "it": {
@@ -268492,7 +268492,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Duo quitté. Un nouveau duo s’ouvre la semaine prochaine."
+            "value": "Alliance quittée. Une nouvelle alliance s’ouvre la semaine prochaine."
           }
         },
         "it": {
@@ -268539,7 +268539,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Duo réussi cette semaine."
+            "value": "Alliance réussie cette semaine."
           }
         },
         "it": {
@@ -268586,7 +268586,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doublée si vous finissez chacun votre part."
+            "value": "Doublée si chacun réalise sa part."
           }
         },
         "it": {
@@ -268868,7 +268868,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quitter le duo"
+            "value": "Quitter l’alliance"
           }
         },
         "it": {
@@ -269056,7 +269056,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ t’invite à la mission en duo de la semaine."
+            "value": "%@ te propose une alliance pour la semaine."
           }
         },
         "it": {
@@ -269150,7 +269150,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il te faut un ami accepté pour jouer en duo."
+            "value": "Il te faut un ami accepté pour faire alliance."
           }
         },
         "it": {
@@ -269291,7 +269291,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisis un ami : si vous finissez chacun votre part dans la semaine, la récompense est doublée."
+            "value": "Choisis un ami pour faire alliance : si chacun réalise sa part dans la semaine, la récompense double."
           }
         },
         "it": {
@@ -269338,7 +269338,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La mission en duo s’ouvre au niveau %1$@, pour vous deux. Tu es au niveau %2$@."
+            "value": "L’alliance s’ouvre au niveau %1$@, pour vous deux. Tu es au niveau %2$@."
           }
         },
         "it": {
@@ -269385,7 +269385,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mission en duo"
+            "value": "Alliance"
           }
         },
         "it": {
@@ -269573,7 +269573,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ligue entre amis"
+            "value": "Joute des amis"
           }
         },
         "it": {
@@ -269902,7 +269902,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es au sommet des ligues."
+            "value": "Tu es au plus haut cercle des joutes."
           }
         },
         "it": {
@@ -269949,7 +269949,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu montes si tu gardes ta place."
+            "value": "Tu gravis le cercle suivant si tu gardes ta place."
           }
         },
         "it": {
@@ -269996,7 +269996,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Encore %@ pour monter"
+            "value": "%@ jusqu’au cercle suivant"
           }
         },
         "it": {
@@ -270184,7 +270184,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rang %1$@ sur %2$@"
+            "value": "Place %1$@ sur %2$@"
           }
         },
         "it": {
@@ -270278,7 +270278,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce pseudonyme n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret."
+            "value": "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret."
           }
         },
         "it": {
@@ -270372,7 +270372,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Changer de pseudonyme"
+            "value": "Changer de nom de joute"
           }
         },
         "it": {
@@ -270419,7 +270419,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton pseudonyme est tiré au sort : ni ton nom, ni ton identifiant. Il change à chaque saison."
+            "value": "Ton nom de joute est tiré au sort : ni ton nom, ni ton identifiant. Il change à chaque voyage."
           }
         },
         "it": {
@@ -270466,7 +270466,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "3 à 20 caractères. Ni ton nom, ni ton identifiant. Laisse vide : un pseudonyme t’est tiré au sort."
+            "value": "3 à 20 caractères. Ni ton nom, ni ton identifiant. Laisse vide : un nom de joute t’est tiré au sort."
           }
         },
         "it": {
@@ -270513,7 +270513,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pseudonyme de ligue (facultatif)"
+            "value": "Nom de joute (facultatif)"
           }
         },
         "it": {
@@ -270560,7 +270560,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quitter la ligue publique"
+            "value": "Quitter la joute publique"
           }
         },
         "it": {
@@ -270654,7 +270654,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu peux retirer ton accord à tout moment, d’un geste, ici ou dans les réglages. Tes données de ligue sont supprimées au plus tard 4 semaines après."
+            "value": "Tu peux retirer ton accord à tout moment, d’un geste, ici ou dans les réglages. Tes données de joute sont supprimées au plus tard 4 semaines après."
           }
         },
         "it": {
@@ -270748,7 +270748,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Comment on te place : selon les étincelles que tu gagnes, avec des joueurs d’activité comparable."
+            "value": "Comment on te place : selon les étincelles qui jaillissent de tes gestes, avec des héros d’activité semblable."
           }
         },
         "it": {
@@ -270795,7 +270795,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Qui le voit : jusqu’à 29 autres joueurs de ta ligue, que tu ne connais pas. Aucun nom, aucune photo, aucune langue."
+            "value": "Qui le voit : jusqu’à 29 autres héros de ta joute, que tu ne connais pas. Aucun nom, aucune photo, aucune langue."
           }
         },
         "it": {
@@ -270842,7 +270842,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce que les autres voient : ton pseudonyme, ta ligue et ton total d’étincelles de la semaine, mis à jour une fois par jour à 4 h."
+            "value": "Ce que les autres voient : ton nom de joute, ta joute et ton total d’étincelles de la semaine, mis à jour une fois par jour à 4 h."
           }
         },
         "it": {
@@ -270889,7 +270889,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rejoindre la ligue publique"
+            "value": "Rejoindre la joute publique"
           }
         },
         "it": {
@@ -270936,7 +270936,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La ligue publique n’est pas ouverte pour ton compte. La ligue entre amis, elle, l’est toujours."
+            "value": "La joute publique n’est pas ouverte pour ton compte. La Joute des amis, elle, l’est toujours."
           }
         },
         "it": {
@@ -270983,7 +270983,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La ligue s’ouvre au niveau %1$@ : chaque semaine, tu te mesures à 29 autres joueurs d’activité comparable. Tu es au niveau %2$@."
+            "value": "La joute s’ouvre au niveau %1$@ : chaque semaine, tu te mesures à 29 héros de lumière semblable. Tu es au niveau %2$@."
           }
         },
         "it": {
@@ -271171,7 +271171,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ma ligue"
+            "value": "Ma joute"
           }
         },
         "it": {
@@ -271594,7 +271594,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ligue"
+            "value": "Joute"
           }
         },
         "it": {
@@ -271688,7 +271688,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu peux passer en Prestige"
+            "value": "Ta lumière peut renaître"
           }
         },
         "it": {
@@ -271735,7 +271735,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prestige"
+            "value": "Renaissance"
           }
         },
         "it": {
@@ -272017,7 +272017,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vitrine de trophées"
+            "value": "Trophées"
           }
         },
         "it": {
@@ -272111,7 +272111,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune saison ouverte pour le moment"
+            "value": "Aucun voyage en cours pour le moment"
           }
         },
         "it": {
@@ -272158,7 +272158,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étape %1$@ sur %2$@"
+            "value": "Halte %1$@ sur %2$@"
           }
         },
         "it": {
@@ -272205,7 +272205,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison %@"
+            "value": "Voyage %@"
           }
         },
         "it": {
@@ -272252,7 +272252,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Classement de la semaine"
+            "value": "La joute de la semaine"
           }
         },
         "it": {
@@ -272346,7 +272346,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ligue"
+            "value": "Joute"
           }
         },
         "it": {
@@ -273309,7 +273309,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une invitation à un duo, le résultat de ta ligue, une étape de saison : au plus une notification de jeu par jour."
+            "value": "Une proposition d’alliance, le résultat de ta joute, une halte de voyage : au plus une notification de jeu par jour."
           }
         },
         "en": {
@@ -273991,7 +273991,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Classement de la ligue"
+            "value": "Les places de la joute"
           }
         },
         "it": {
@@ -274038,7 +274038,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Parcours de la saison"
+            "value": "Le chemin du voyage"
           }
         },
         "it": {
@@ -274085,7 +274085,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Page du Prestige"
+            "value": "Page de la renaissance"
           }
         },
         "it": {
@@ -274226,7 +274226,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tous les badges"
+            "value": "Toutes les médailles"
           }
         },
         "it": {
@@ -274320,7 +274320,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tous les succès"
+            "value": "Tous les hauts faits"
           }
         },
         "it": {
@@ -274508,7 +274508,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record de niveau : %@"
+            "value": "Au plus haut : niveau %@"
           }
         },
         "it": {
@@ -274696,7 +274696,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gels : %1$@ / %2$@"
+            "value": "Veilleuses : %1$@ / %2$@"
           }
         },
         "it": {
@@ -275260,7 +275260,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "+%@ de Gloire"
+            "value": "+%@ de gloire"
           }
         },
         "it": {
@@ -275307,7 +275307,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mission personnelle"
+            "value": "Acte personnel"
           }
         },
         "it": {
@@ -275448,7 +275448,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record"
+            "value": "Au plus haut"
           }
         },
         "it": {
@@ -275589,7 +275589,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étincelles convertibles"
+            "value": "Étincelles"
           }
         },
         "it": {
@@ -275636,7 +275636,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Record de Meeshes"
+            "value": "Frappées depuis toujours"
           }
         },
         "it": {
@@ -275730,7 +275730,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "En poche"
+            "value": "Tu as"
           }
         },
         "it": {
@@ -275777,7 +275777,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coûte"
+            "value": "Il faut"
           }
         },
         "it": {
@@ -275824,7 +275824,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Restera"
+            "value": "Après"
           }
         },
         "it": {
@@ -276012,7 +276012,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prochain palier du trésor"
+            "value": "Contenant suivant"
           }
         },
         "it": {
@@ -276153,7 +276153,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Série"
+            "value": "Flamme"
           }
         },
         "it": {
@@ -276200,7 +276200,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bonus sur les missions"
+            "value": "Bonus sur tes rêves"
           }
         },
         "it": {
@@ -276294,7 +276294,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gels en réserve"
+            "value": "Veilleuses"
           }
         },
         "it": {
@@ -276341,7 +276341,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prix d’un gel"
+            "value": "Prix d’une Veilleuse"
           }
         },
         "it": {
@@ -276811,7 +276811,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étapes"
+            "value": "Haltes"
           }
         },
         "it": {
@@ -277328,7 +277328,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau"
+            "value": "La Lumière"
           }
         },
         "it": {
@@ -277375,7 +277375,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton niveau montre le chemin que tu as parcouru sur Meeshy."
+            "value": "Ta lumière dit le chemin que tu as parcouru sur Meeshy."
           }
         },
         "it": {
@@ -277422,7 +277422,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles remplissent l’anneau : plein, tu montes d’un niveau."
+            "value": "Tes étincelles nourrissent l’anneau : plein, ta lumière gagne un niveau."
           }
         },
         "it": {
@@ -277469,7 +277469,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fais les missions du jour : elles rapportent beaucoup d’étincelles."
+            "value": "Réalise le rêve de chaque nuit : ses actes font jaillir beaucoup d’étincelles."
           }
         },
         "it": {
@@ -277516,7 +277516,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Garde ta Flamme allumée : elle augmente tes récompenses."
+            "value": "Garde ta Flamme allumée : elle nourrit tes rêves."
           }
         },
         "it": {
@@ -277610,7 +277610,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Convertibles, elles font ton niveau ; leur record, ton potentiel."
+            "value": "Tes étincelles forment ta lumière ; son éclat, c’est ton niveau."
           }
         },
         "it": {
@@ -277657,7 +277657,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque geste utile en rapporte : écrire, parler, publier, réagir."
+            "value": "Chaque vrai échange en fait jaillir : écrire, parler, publier, réagir."
           }
         },
         "it": {
@@ -277704,7 +277704,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publie, commente, réagis : chaque famille de gestes a son barème."
+            "value": "Publie, commente, réagis : chaque geste fait jaillir les siennes."
           }
         },
         "it": {
@@ -277798,7 +277798,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meeshes"
+            "value": "L’Héritage"
           }
         },
         "it": {
@@ -277845,7 +277845,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La Meesh est la pièce rare de Meeshy : elle se garde ou se dépense."
+            "value": "Les Meeshes que tu gardes forment l’héritage que tu laisses à ta lignée."
           }
         },
         "it": {
@@ -277892,7 +277892,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu la frappes avec tes convertibles. Son prix monte par paliers."
+            "value": "Frapper une Meesh fige une part de ta lumière dans une pièce."
           }
         },
         "it": {
@@ -277939,7 +277939,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Garde tes Meeshes pour faire monter ton trésor."
+            "value": "Garde tes Meeshes : ton héritage passe d’un contenant au suivant."
           }
         },
         "it": {
@@ -277986,7 +277986,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dépense-les pour protéger ta Flamme ou changer une mission."
+            "value": "Dépense-les pour veiller sur ta Flamme ou changer un acte de ton rêve."
           }
         },
         "it": {
@@ -278033,7 +278033,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gloire"
+            "value": "Le Rang"
           }
         },
         "it": {
@@ -278080,7 +278080,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La Gloire donne ton rang, et ton rang ne baisse jamais."
+            "value": "Ta gloire te donne ton nom, et ce nom ne recule jamais."
           }
         },
         "it": {
@@ -278127,7 +278127,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque frappe, chaque record et chaque succès en ajoute."
+            "value": "Frappes, nouveaux niveaux et hauts faits font grandir ta gloire."
           }
         },
         "it": {
@@ -278174,7 +278174,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frappe une Meesh : chaque frappe ajoute de la Gloire."
+            "value": "Frappe une Meesh : chaque frappe fait grandir ta gloire."
           }
         },
         "it": {
@@ -278221,7 +278221,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bats tes records et décroche des succès."
+            "value": "Porte ta lumière plus haut que jamais et accomplis des hauts faits."
           }
         },
         "it": {
@@ -278268,7 +278268,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Flamme"
+            "value": "La Flamme"
           }
         },
         "it": {
@@ -278315,7 +278315,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta Flamme compte tes jours d’affilée et augmente tes gains de mission."
+            "value": "Ta Flamme dit tes jours d’affilée, et elle nourrit tes rêves."
           }
         },
         "it": {
@@ -278362,7 +278362,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un geste par jour la fait grandir. Un gel couvre un jour manqué."
+            "value": "Un geste par jour l’entretient ; une Veilleuse la garde un jour."
           }
         },
         "it": {
@@ -278456,7 +278456,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Garde un gel en réserve pour les jours sans."
+            "value": "Garde une Veilleuse pour les jours sans."
           }
         },
         "it": {
@@ -278503,7 +278503,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Missions du jour"
+            "value": "Le Rêve"
           }
         },
         "it": {
@@ -278550,7 +278550,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les missions te donnent un but chaque jour, et des étincelles en plus."
+            "value": "Chaque nuit, tes aïeux t’envoient un rêve à réaliser."
           }
         },
         "it": {
@@ -278597,7 +278597,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trois missions par jour. Quand elles sont faites, tu ouvres le coffre."
+            "value": "Trois actes par rêve. Quand ils sont réalisés, l’Offrande apparaît."
           }
         },
         "it": {
@@ -278644,7 +278644,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Commence par la mission la plus facile."
+            "value": "Commence par l’acte le plus facile."
           }
         },
         "it": {
@@ -278691,7 +278691,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une mission ne te plaît pas ? Change-la, une fois par jour."
+            "value": "Un acte ne te plaît pas ? Change-le, une fois par jour."
           }
         },
         "it": {
@@ -278738,7 +278738,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ligue"
+            "value": "La Joute"
           }
         },
         "it": {
@@ -278785,7 +278785,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La ligue te mesure chaque semaine à 29 autres joueurs."
+            "value": "Chaque semaine, la joute te mesure à 29 autres héros."
           }
         },
         "it": {
@@ -278832,7 +278832,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles de la semaine font ton rang ; les premiers montent."
+            "value": "Tes étincelles de la semaine font ta place ; les premiers montent."
           }
         },
         "it": {
@@ -278973,7 +278973,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison"
+            "value": "Le Voyage"
           }
         },
         "it": {
@@ -279020,7 +279020,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La saison est un parcours de huit semaines, avec une coupe au bout."
+            "value": "Le voyage dure huit semaines en terre de langue, avec une coupe au bout."
           }
         },
         "it": {
@@ -279067,7 +279067,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les missions et le duo donnent des étoiles, qui ouvrent les étapes."
+            "value": "Chaque acte réalisé te fait avancer de quelques pas, de halte en halte."
           }
         },
         "it": {
@@ -279114,7 +279114,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Finis tes missions du jour pour gagner des étoiles."
+            "value": "Réalise les actes de ton rêve pour avancer de quelques pas."
           }
         },
         "it": {
@@ -279161,7 +279161,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Joue en duo avec un ami : la récompense est doublée."
+            "value": "Fais alliance avec un ami : la récompense double."
           }
         },
         "it": {
@@ -279208,7 +279208,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prestige"
+            "value": "La Renaissance"
           }
         },
         "it": {
@@ -279255,7 +279255,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Prestige récompense ceux qui atteignent le niveau 100."
+            "value": "La renaissance s’offre à ceux dont la lumière atteint le niveau 100."
           }
         },
         "it": {
@@ -279302,7 +279302,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton niveau repart à 1. Tu gagnes une étoile, un trophée et de la Gloire."
+            "value": "Ta lumière redevient Étincelle et ta légende entre dans un nouvel Âge."
           }
         },
         "it": {
@@ -279349,7 +279349,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Monte jusqu’au niveau 100."
+            "value": "Porte ta lumière jusqu’au niveau 100."
           }
         },
         "it": {
@@ -279396,7 +279396,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Passe en Prestige quand tu veux : rien ne t’y oblige."
+            "value": "Renais quand tu veux : rien ne t’y oblige."
           }
         },
         "it": {
@@ -279678,7 +279678,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Badges"
+            "value": "Médailles"
           }
         },
         "it": {
@@ -279725,7 +279725,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un badge montre ce que tu fais le plus sur Meeshy."
+            "value": "Une médaille montre ce que tu pratiques le plus sur Meeshy."
           }
         },
         "it": {
@@ -279772,7 +279772,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Répète un geste : son badge change de matière, du cuivre au prisme."
+            "value": "Répète un geste : sa médaille change de matière, du cuivre au prisme."
           }
         },
         "it": {
@@ -279866,7 +279866,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un badge éteint se rallume : rien n’est perdu."
+            "value": "Une médaille éteinte se rallume : rien n’est perdu."
           }
         },
         "it": {
@@ -280148,7 +280148,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Succès"
+            "value": "Hauts faits"
           }
         },
         "it": {
@@ -280195,7 +280195,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un succès marque un moment rare de ton histoire sur Meeshy."
+            "value": "Un haut fait marque un moment rare de ta légende."
           }
         },
         "it": {
@@ -280242,7 +280242,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il se décroche d’un coup, quand tu réunis ce qu’il demande."
+            "value": "Il s’accomplit d’un coup, quand tu réunis ce qu’il demande."
           }
         },
         "it": {
@@ -280289,7 +280289,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Explore l’application : certains succès se cachent."
+            "value": "Explore l’application : certains hauts faits se cachent."
           }
         },
         "it": {
@@ -280336,7 +280336,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les plus rares ajoutent le plus de Gloire."
+            "value": "Les plus rares font le plus grandir ta gloire."
           }
         },
         "it": {
@@ -280383,7 +280383,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vitrine"
+            "value": "Trophées"
           }
         },
         "it": {
@@ -280430,7 +280430,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta vitrine expose les trophées que tu as gagnés."
+            "value": "Tes trophées gardent la trace de tes victoires."
           }
         },
         "it": {
@@ -280524,7 +280524,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Finis en haut de ta ligue pour gagner une coupe."
+            "value": "Finis en haut de ta joute pour gagner une coupe."
           }
         },
         "it": {
@@ -280571,7 +280571,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Termine une saison ou passe en Prestige."
+            "value": "Achève un voyage ou renais."
           }
         },
         "it": {
@@ -280618,7 +280618,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Atlas"
+            "value": "L’Atlas"
           }
         },
         "it": {
@@ -281088,7 +281088,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coffre fermé"
+            "value": "Offrande voilée"
           }
         },
         "it": {
@@ -281135,7 +281135,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coffre prêt"
+            "value": "Offrande prête"
           }
         },
         "it": {
@@ -281182,7 +281182,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coffre ouvert"
+            "value": "Offrande ouverte"
           }
         },
         "it": {
@@ -281605,7 +281605,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mon rang et mes Meeshes"
+            "value": "Mon rang et mon héritage"
           }
         },
         "it": {
@@ -281793,7 +281793,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est un joueur de ton groupe. Tu ne vois que son pseudonyme et ses étincelles de la semaine."
+            "value": "C’est un héros de ta joute. Tu ne vois que son nom de joute et ses étincelles de la semaine."
           }
         },
         "it": {
@@ -281840,7 +281840,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un badge montre combien de fois tu as fait un geste."
+            "value": "Une médaille montre combien de fois tu as fait un geste."
           }
         },
         "it": {
@@ -281887,7 +281887,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Refais ce geste : à chaque palier, le badge change de matière."
+            "value": "Refais ce geste : à chaque seuil, la médaille change de matière."
           }
         },
         "it": {
@@ -281934,7 +281934,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un succès marque un moment rare de ton histoire sur Meeshy."
+            "value": "Un haut fait marque un moment rare de ta légende."
           }
         },
         "it": {
@@ -281981,7 +281981,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réunis ce qu’il demande : il se décroche d’un coup."
+            "value": "Réunis ce qu’il demande : il s’accomplit d’un coup."
           }
         },
         "it": {
@@ -282169,7 +282169,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Finis en haut de ta ligue, termine une saison, passe en Prestige ou tiens ta Flamme."
+            "value": "Finis en haut de ta joute, achève un voyage, renais ou tiens ta Flamme."
           }
         },
         "it": {
@@ -282310,7 +282310,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une étape de saison est une récompense gratuite sur le parcours."
+            "value": "Une halte du voyage t’offre un présent gratuit sur le chemin."
           }
         },
         "it": {
@@ -282357,7 +282357,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gagne des étoiles avec les missions et le duo, puis réclame l’étape."
+            "value": "Avance de quelques pas avec les actes de ton rêve et l’alliance, puis réclame la halte."
           }
         },
         "it": {
@@ -282404,7 +282404,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Sceau est un objet à collectionner. Il ne change rien au jeu."
+            "value": "Le Sceau du voyage est un objet à collectionner. Il ne change rien au jeu."
           }
         },
         "it": {
@@ -282451,7 +282451,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prends-le avec tes Meeshes pendant la saison."
+            "value": "Prends-le avec tes Meeshes pendant le voyage."
           }
         },
         "it": {
@@ -282498,7 +282498,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La gemme dit dans quelle ligue tu joues cette semaine."
+            "value": "La gemme dit dans quel cercle tu joutes cette semaine."
           }
         },
         "it": {
@@ -282545,7 +282545,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Finis parmi les premiers de ton groupe pour monter d’une ligue."
+            "value": "Finis parmi les premiers de ta joute pour gravir le cercle suivant."
           }
         },
         "it": {
@@ -282592,7 +282592,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une étoile de Prestige se pose sur ton anneau de niveau, pour toujours."
+            "value": "Chaque renaissance ouvre un nouvel Âge, gravé pour toujours sur ton anneau de niveau."
           }
         },
         "it": {
@@ -282639,7 +282639,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Atteins le niveau 100, puis passe en Prestige."
+            "value": "Porte ta lumière au niveau 100, puis renais."
           }
         },
         "it": {
@@ -282686,7 +282686,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton blason montre ton rang. Un rang ne baisse jamais."
+            "value": "Ton blason montre ton rang, le nom que le monde te donne. Il ne recule jamais."
           }
         },
         "it": {
@@ -282733,7 +282733,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gagne de la Gloire : frappe des Meeshes, bats tes records, décroche des succès."
+            "value": "Fais grandir ta gloire : frappe des Meeshes, porte ta lumière plus haut que jamais, accomplis des hauts faits."
           }
         },
         "it": {
@@ -282780,7 +282780,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La forme de ta Flamme grandit avec ta série de jours."
+            "value": "La forme de ta Flamme grandit avec tes jours d’affilée."
           }
         },
         "it": {
@@ -282827,7 +282827,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Plus elle est grande, plus tes récompenses de mission augmentent."
+            "value": "Plus elle est grande, plus elle nourrit tes rêves."
           }
         },
         "it": {
@@ -282874,7 +282874,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un gel protège ta Flamme : il couvre un jour où tu n’as rien fait."
+            "value": "Une Veilleuse garde ta Flamme allumée un jour où tu n’as rien fait."
           }
         },
         "it": {
@@ -282921,7 +282921,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Achète-le avec tes Meeshes, ou trouve-le dans le coffre du jour."
+            "value": "Prends-la avec tes Meeshes, ou trouve-la dans l’Offrande."
           }
         },
         "it": {
@@ -282968,7 +282968,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une mission est un petit but à atteindre aujourd’hui."
+            "value": "Un acte est un petit but à réaliser aujourd’hui, dans le rêve de cette nuit."
           }
         },
         "it": {
@@ -283015,7 +283015,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Elle rapporte des étincelles et te rapproche du coffre du jour."
+            "value": "Il fait jaillir des étincelles et te rapproche de l’Offrande."
           }
         },
         "it": {
@@ -283062,7 +283062,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le coffre du jour s’ouvre quand tes missions sont faites."
+            "value": "L’Offrande apparaît quand les trois actes du rêve sont réalisés."
           }
         },
         "it": {
@@ -283109,7 +283109,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Des étincelles selon tes missions, de la Gloire, parfois une prime en étincelles, un fragment d’étoile ou un gel."
+            "value": "Un présent voilé : des étincelles selon les actes de ton rêve, de la gloire, parfois une prime en étincelles, un fragment d’étoile ou une Veilleuse."
           }
         },
         "it": {
@@ -283156,7 +283156,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La Meesh est la pièce rare de Meeshy. Chaque pièce porte son numéro."
+            "value": "La Meesh, c’est ta lumière figée dans une pièce numérotée. Chaque pièce porte son numéro."
           }
         },
         "it": {
@@ -283203,7 +283203,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frappe-la avec tes étincelles convertibles dès que tu en as assez."
+            "value": "Frappe-la avec ta lumière dès qu’elle suffit : une part s’y fige."
           }
         },
         "it": {
@@ -283250,7 +283250,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’anneau montre ton niveau : il se remplit avec tes étincelles convertibles."
+            "value": "L’anneau montre ton niveau : ta lumière le remplit."
           }
         },
         "it": {
@@ -283297,7 +283297,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gagne des étincelles : quand l’anneau est plein, tu montes d’un niveau."
+            "value": "Fais jaillir des étincelles : quand l’anneau est plein, ta lumière gagne un niveau."
           }
         },
         "it": {
@@ -283344,7 +283344,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton trésor grandit avec les Meeshes que tu gardes."
+            "value": "Ton héritage grandit avec les Meeshes que tu gardes."
           }
         },
         "it": {
@@ -283391,7 +283391,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Garde tes Meeshes au lieu de les dépenser pour atteindre le palier suivant."
+            "value": "Garde tes Meeshes au lieu de les dépenser : ton héritage passe au contenant suivant."
           }
         },
         "it": {
@@ -283485,7 +283485,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque geste rapporte des étincelles. Plusieurs familles actives déclenchent un élan."
+            "value": "Chaque geste fait jaillir des étincelles. Plusieurs familles actives déclenchent un élan."
           }
         },
         "it": {
@@ -283532,7 +283532,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dix niveaux font un palier. Chaque palier a son nom et sa couleur."
+            "value": "Vingt états : un tous les dix niveaux jusqu’à 100, puis un par centaine, et la Singularité dès 1000."
           }
         },
         "it": {
@@ -283579,7 +283579,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce sont toutes tes étincelles du moment, celles que la frappe dépense. Elles font ton niveau : une frappe en retire le prix, et ton niveau baisse d’autant."
+            "value": "C’est ta lumière : les étincelles que tu as. Elle fait ton niveau, et une frappe en fige une part."
           }
         },
         "it": {
@@ -283626,7 +283626,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce sont les étincelles qu’il te manque pour monter d’un niveau."
+            "value": "Ce sont les étincelles qui mènent ta lumière au niveau suivant."
           }
         },
         "it": {
@@ -283673,7 +283673,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est ton record de niveau : le plus haut niveau que tu as atteint."
+            "value": "C’est ta plus haute lumière : le plus haut niveau que tu as atteint."
           }
         },
         "it": {
@@ -283720,7 +283720,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "+25 % sur tes gestes tant que ton niveau est 7 niveaux ou plus sous ton record de niveau."
+            "value": "+25 % sur tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière."
           }
         },
         "it": {
@@ -283767,7 +283767,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est le prix de ta prochaine Meesh, en étincelles. Il monte toutes les dix frappes."
+            "value": "C’est la part de ta lumière que ta prochaine Meesh figera. Les règles disent comment elle se calcule."
           }
         },
         "it": {
@@ -283814,7 +283814,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce sont les étincelles qu’il te manque pour frapper ta prochaine Meesh."
+            "value": "Ce sont les étincelles qui manquent à ta lumière pour frapper ta prochaine Meesh."
           }
         },
         "it": {
@@ -283861,7 +283861,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as assez d’étincelles : tu peux frapper une Meesh dans sa fiche."
+            "value": "Ta lumière suffit : tu peux frapper une Meesh dans la fiche de l’Héritage."
           }
         },
         "it": {
@@ -283908,7 +283908,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes prochains gestes rapportent ce nombre de fois plus d’étincelles."
+            "value": "Tes prochains gestes font jaillir ce nombre de fois plus d’étincelles."
           }
         },
         "it": {
@@ -284002,7 +284002,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque frappe ajoute cette Gloire à ton rang."
+            "value": "Chaque frappe fait grandir ta gloire d’autant."
           }
         },
         "it": {
@@ -284049,7 +284049,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est ton record de Meeshes : toutes celles que tu as frappées depuis le début."
+            "value": "Ce sont toutes les Meeshes que tu as frappées depuis toujours."
           }
         },
         "it": {
@@ -284096,7 +284096,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La Gloire s’additionne et ne redescend jamais. Elle donne ton rang."
+            "value": "Ta gloire grandit et ne recule jamais. Elle te donne ton rang."
           }
         },
         "it": {
@@ -284143,7 +284143,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est la Gloire qu’il te manque pour le rang suivant."
+            "value": "C’est la gloire qui te mène au rang suivant."
           }
         },
         "it": {
@@ -284190,7 +284190,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est le nombre de jours d’affilée où tu as fait au moins un geste."
+            "value": "C’est le nombre de jours d’affilée où ta Flamme a brûlé : au moins un geste chaque jour."
           }
         },
         "it": {
@@ -284237,7 +284237,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est ta plus longue série de jours."
+            "value": "C’est ta plus longue Flamme."
           }
         },
         "it": {
@@ -284284,7 +284284,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il dit si ta Flamme est allumée, en danger, protégée ou éteinte."
+            "value": "Il dit si ta Flamme brûle, vacille, est gardée par une Veilleuse ou s’est éteinte."
           }
         },
         "it": {
@@ -284331,7 +284331,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trois missions par jour. Une fois faites, elles ouvrent le coffre."
+            "value": "Trois actes par rêve. Une fois réalisés, ils font apparaître l’Offrande."
           }
         },
         "it": {
@@ -284378,7 +284378,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est ta place parmi les joueurs de ton groupe, cette semaine."
+            "value": "C’est ta place parmi les héros de ta joute, cette semaine."
           }
         },
         "it": {
@@ -284472,7 +284472,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les premiers montent, les derniers descendent, les autres restent."
+            "value": "Les premiers gravissent le cercle suivant, les derniers redescendent, les autres restent."
           }
         },
         "it": {
@@ -284519,7 +284519,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce sont les étincelles qu’il te manque pour entrer dans la zone de montée."
+            "value": "Ce sont les étincelles qui te mènent dans la zone de montée."
           }
         },
         "it": {
@@ -284566,7 +284566,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La semaine de ligue se ferme dimanche soir. Le classement est alors figé."
+            "value": "La joute de la semaine se ferme dimanche soir. Les places sont alors figées."
           }
         },
         "it": {
@@ -284660,7 +284660,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une saison dure huit semaines et porte un numéro."
+            "value": "Un voyage dure huit semaines et porte un numéro."
           }
         },
         "it": {
@@ -284707,7 +284707,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est la semaine en cours, sur les huit de la saison."
+            "value": "C’est la semaine en cours, sur les huit du voyage."
           }
         },
         "it": {
@@ -284754,7 +284754,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce sont les étapes que tu as ouvertes sur le parcours de la saison."
+            "value": "Ce sont les haltes que tu as atteintes sur le chemin du voyage."
           }
         },
         "it": {
@@ -284801,7 +284801,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les étoiles se gagnent avec les missions et le duo. Elles ouvrent les étapes."
+            "value": "Les pas se gagnent avec les actes de ton rêve et l’alliance. Quatre pas mènent à la halte suivante."
           }
         },
         "it": {
@@ -284848,7 +284848,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est la Gloire que tu gagnes en passant en Prestige."
+            "value": "C’est la gloire que tes aïeux t’offrent quand tu renais."
           }
         },
         "it": {
@@ -284942,7 +284942,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est le nombre de badges obtenus, sur tous ceux qui existent."
+            "value": "C’est le nombre de médailles obtenues, sur toutes celles qui existent."
           }
         },
         "it": {
@@ -285036,7 +285036,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce sont les succès décrochés, sur tous ceux qui existent."
+            "value": "Ce sont les hauts faits accomplis, sur tous ceux qui existent."
           }
         },
         "it": {
@@ -285083,7 +285083,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est le nombre de trophées rangés dans ta vitrine."
+            "value": "C’est le nombre de trophées rangés sur ton étagère."
           }
         },
         "it": {
@@ -285130,7 +285130,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu choisis qui voit ta vitrine : tout le monde, tes amis, ou toi seul."
+            "value": "Tu choisis qui voit tes trophées : tout le monde, tes amis, ou toi seul."
           }
         },
         "it": {
@@ -285365,7 +285365,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C’est ce qu’il te restera après ce geste."
+            "value": "C’est ce que tu garderas après ce geste."
           }
         },
         "it": {
@@ -287245,7 +287245,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "De 10 à 100, chaque dizaine de niveaux demande une étape simple."
+            "value": "De 10 à 100, tous les dix niveaux, tes aïeux demandent une épreuve simple."
           }
         },
         "it": {
@@ -287292,7 +287292,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fais l’étape : si tes étincelles y sont déjà, le niveau monte d’un coup."
+            "value": "Réussis l’épreuve : si ta lumière y est déjà, le niveau monte d’un coup."
           }
         },
         "it": {
@@ -287339,7 +287339,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étape du niveau %@ : %@"
+            "value": "Épreuve du niveau %@ : %@"
           }
         },
         "it": {
@@ -287386,7 +287386,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "faite"
+            "value": "réussie"
           }
         },
         "it": {
@@ -287527,7 +287527,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "accomplir une mission du jour"
+            "value": "réaliser un rêve"
           }
         },
         "it": {
@@ -287574,7 +287574,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "accomplir %@ missions du jour"
+            "value": "réaliser %@ rêves"
           }
         },
         "it": {
@@ -287715,7 +287715,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles ouvrent déjà la suite : %@ pour passer le niveau %@."
+            "value": "Ta lumière ouvre déjà la suite : %@ pour passer le niveau %@."
           }
         },
         "it": {
@@ -289548,7 +289548,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison %@ · terminée"
+            "value": "Voyage %@ · terminé"
           }
         },
         "it": {
@@ -289595,7 +289595,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison %@ · en cours"
+            "value": "Voyage %@ · en cours"
           }
         },
         "it": {
@@ -289642,7 +289642,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La saison est ouverte : ton parcours s’affiche dès qu’elle est relue."
+            "value": "Le voyage est en cours : ton chemin s’affiche dès qu’il est relu."
           }
         },
         "it": {
@@ -289830,7 +289830,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Parcours terminé : la coupe de saison est à toi."
+            "value": "Voyage accompli : la coupe du voyage est à toi."
           }
         },
         "it": {
@@ -289877,7 +289877,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Parcours non terminé : la coupe de saison n’a pas été gagnée."
+            "value": "Voyage inachevé : la coupe du voyage n’a pas été gagnée."
           }
         },
         "it": {
@@ -289924,7 +289924,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sceau de la saison obtenu."
+            "value": "Sceau du voyage obtenu."
           }
         },
         "it": {
@@ -289971,7 +289971,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu n’as pas joué cette saison."
+            "value": "Tu n’as pas fait ce voyage."
           }
         },
         "it": {
@@ -290018,7 +290018,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rang final : %@"
+            "value": "Place finale : %@"
           }
         },
         "it": {
@@ -290065,7 +290065,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Total de la semaine : %@"
+            "value": "Étincelles de la semaine : %@"
           }
         },
         "it": {
@@ -290206,7 +290206,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu n’avais pas de place en ligue cette semaine-là."
+            "value": "Tu n’avais pas de place en joute cette semaine-là."
           }
         },
         "it": {
@@ -290347,7 +290347,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seul ton résultat est gardé : les autres membres du groupe ne se relisent pas."
+            "value": "Seul ton résultat est gardé : les autres héros de la joute ne se relisent pas."
           }
         },
         "it": {
@@ -290441,7 +290441,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réalisation du jour"
+            "value": "Rêve réalisé"
           }
         },
         "it": {
@@ -290629,7 +290629,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Palier de niveau"
+            "value": "État de lumière"
           }
         },
         "it": {
@@ -290676,7 +290676,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Palier du trésor"
+            "value": "Contenant de l’Héritage"
           }
         },
         "it": {
@@ -290864,7 +290864,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le carnet occupe %@."
+            "value": "La Chronique occupe %@."
           }
         },
         "it": {
@@ -291710,7 +291710,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau %1$@ : tu as fait %2$@ sur les %3$@ de ce niveau. Il en reste %4$@ pour le niveau %5$@."
+            "value": "Ta lumière brille au niveau %1$@ : %2$@ sur les %3$@ de ce niveau, %4$@ jusqu’au niveau %5$@."
           }
         },
         "it": {
@@ -291757,7 +291757,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau %1$@ : il reste %2$@ pour le niveau %3$@."
+            "value": "Ta lumière brille au niveau %1$@ : %2$@ jusqu’au niveau %3$@."
           }
         },
         "it": {
@@ -291804,7 +291804,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as %1$@ convertibles, soit %2$@. La Meesh n° %3$@ coûte %4$@ : il manque %5$@."
+            "value": "Ta lumière compte %1$@, soit %2$@. La Meesh n° %3$@ en figera %4$@ : il manque %5$@."
           }
         },
         "it": {
@@ -291851,7 +291851,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as %1$@ convertibles, soit %2$@ : assez pour la Meesh n° %3$@, qui coûte %4$@."
+            "value": "Ta lumière compte %1$@, soit %2$@ : assez pour frapper la Meesh n° %3$@, qui en figera %4$@."
           }
         },
         "it": {
@@ -291898,7 +291898,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as %1$@ convertibles : elles couvrent la Meesh n° %2$@, qui coûte %3$@."
+            "value": "Ta lumière compte %1$@ : de quoi frapper la Meesh n° %2$@, qui en figera %3$@."
           }
         },
         "it": {
@@ -291945,7 +291945,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu as %1$@ convertibles. La Meesh n° %2$@ coûte %3$@ : il manque %4$@."
+            "value": "Ta lumière compte %1$@. La Meesh n° %2$@ en figera %3$@ : il manque %4$@."
           }
         },
         "it": {
@@ -292004,7 +292004,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu gardes %1$@. Depuis le début, tu en as frappé %2$@."
+            "value": "Ton héritage garde %1$@. Depuis toujours, tu en as frappé %2$@."
           }
         },
         "it": {
@@ -292051,7 +292051,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu ne gardes aucune Meesh. Depuis le début, tu en as frappé %@."
+            "value": "Ton héritage ne garde aucune Meesh. Depuis toujours, tu en as frappé %@."
           }
         },
         "it": {
@@ -292098,7 +292098,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La Meesh n° %1$@ coûte %2$@ : il te manque %3$@."
+            "value": "La Meesh n° %1$@ figera %2$@ de ta lumière : il manque %3$@."
           }
         },
         "it": {
@@ -292145,7 +292145,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu peux frapper la Meesh n° %1$@ : elle coûte %2$@."
+            "value": "Tu peux frapper la Meesh n° %1$@ : elle figera %2$@ de ta lumière."
           }
         },
         "it": {
@@ -292192,7 +292192,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es %1$@ avec %2$@ de Gloire. Il en manque %3$@ pour %4$@."
+            "value": "On t’appelle %1$@, avec %2$@ de gloire : %3$@ de plus jusqu’à %4$@."
           }
         },
         "it": {
@@ -292239,7 +292239,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es %1$@ avec %2$@ de Gloire : c’est le rang le plus haut."
+            "value": "On t’appelle %1$@, avec %2$@ de gloire : c’est le plus haut rang."
           }
         },
         "it": {
@@ -292333,7 +292333,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta Flamme tient depuis %1$@ : tes missions rapportent %2$@ %% de plus. Gels en réserve : %3$@."
+            "value": "Ta Flamme brûle depuis %1$@ : elle nourrit tes rêves de %2$@ %% de plus. Veilleuses : %3$@."
           }
         },
         "it": {
@@ -292380,7 +292380,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta Flamme de %@ est en danger : fais un geste avant minuit pour la garder."
+            "value": "Ta Flamme de %@ vacille : fais un geste avant minuit pour la garder."
           }
         },
         "it": {
@@ -292427,7 +292427,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un gel protège ta Flamme de %@ : fais un geste aujourd’hui pour la continuer."
+            "value": "Une Veilleuse garde ta Flamme de %@ : fais un geste aujourd’hui pour la nourrir."
           }
         },
         "it": {
@@ -292521,7 +292521,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta série est de %1$@. Ton record est de %2$@."
+            "value": "Ta Flamme brûle depuis %1$@. Ta plus longue Flamme : %2$@."
           }
         },
         "it": {
@@ -292568,7 +292568,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Missions faites : %1$@ sur %2$@. Il en reste %3$@ pour ouvrir le coffre."
+            "value": "Le rêve de cette nuit : %1$@ sur %2$@ actes, et %3$@ à réaliser pour voir l’Offrande."
           }
         },
         "it": {
@@ -292615,7 +292615,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Missions faites : %1$@ sur %2$@. Le coffre est prêt : ouvre-le."
+            "value": "Le rêve de cette nuit : %1$@ sur %2$@ actes. L’Offrande est là : ouvre-la."
           }
         },
         "it": {
@@ -292662,7 +292662,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Missions faites : %1$@ sur %2$@. Le coffre est ouvert : reviens demain."
+            "value": "Le rêve de cette nuit : %1$@ sur %2$@ actes. L’Offrande est ouverte : un nouveau rêve viendra cette nuit."
           }
         },
         "it": {
@@ -292709,7 +292709,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu n’as pas encore de place en ligue cette semaine. La ligue entre amis reste ouverte."
+            "value": "Tu n’as pas encore de place dans la joute cette semaine. La Joute des amis reste ouverte."
           }
         },
         "it": {
@@ -292756,7 +292756,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ligue %1$@ : rang %2$@ sur %3$@ avec %4$@ cette semaine."
+            "value": "Joute de %1$@ : place %2$@ sur %3$@, avec %4$@ cette semaine."
           }
         },
         "it": {
@@ -292850,7 +292850,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu te maintiens : il manque %@ pour la zone de montée."
+            "value": "Tu tiens ta place : %@ jusqu’à la zone de montée."
           }
         },
         "it": {
@@ -292897,7 +292897,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu es dans la zone de descente : il manque %@ pour la zone de montée."
+            "value": "Tu es dans la zone de descente : %@ jusqu’à la zone de montée."
           }
         },
         "it": {
@@ -292944,7 +292944,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison %1$@, semaine %2$@ sur %3$@ : étape %4$@ sur %5$@. Il manque %6$@ pour l’étape suivante."
+            "value": "Voyage %1$@, semaine %2$@ sur %3$@ : halte %4$@ sur %5$@, et %6$@ jusqu’à la suivante."
           }
         },
         "it": {
@@ -292991,7 +292991,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Saison %1$@, semaine %2$@ sur %3$@ : parcours terminé, les %4$@ étapes sont ouvertes."
+            "value": "Voyage %1$@, semaine %2$@ sur %3$@ : voyage accompli, les %4$@ haltes sont atteintes."
           }
         },
         "it": {
@@ -293038,7 +293038,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Élan ×%1$@ en cours, avec %2$@ : tes prochains gestes rapportent %1$@ fois plus."
+            "value": "Élan ×%1$@ en cours, avec %2$@ : tes prochains gestes font jaillir %1$@ fois plus d’étincelles."
           }
         },
         "it": {
@@ -293132,7 +293132,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Badges obtenus : %1$@ sur %2$@. Il en reste %3$@ à allumer."
+            "value": "Médailles obtenues : %1$@ sur %2$@, et %3$@ à allumer."
           }
         },
         "it": {
@@ -293179,7 +293179,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Défis franchis : %1$@ sur %2$@. Il en reste %3$@ à franchir."
+            "value": "Défis franchis : %1$@ sur %2$@, et %3$@ à franchir."
           }
         },
         "it": {
@@ -293226,7 +293226,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Succès décrochés : %1$@ sur %2$@. Il en reste %3$@ à décrocher."
+            "value": "Hauts faits accomplis : %1$@ sur %2$@, et %3$@ à accomplir."
           }
         },
         "it": {
@@ -293320,7 +293320,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%1$@ dans ta vitrine. Visible par : %2$@."
+            "value": "%1$@ sur ton étagère. Visible par : %2$@."
           }
         },
         "it": {
@@ -293461,7 +293461,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étincelles convertibles"
+            "value": "Ta lumière"
           }
         },
         "it": {
@@ -293508,7 +293508,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Convertibles"
+            "value": "Ta lumière"
           }
         },
         "it": {
@@ -293555,7 +293555,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Niveau %1$@ dans %2$@"
+            "value": "%2$@ jusqu’au %1$@"
           }
         },
         "it": {
@@ -293602,7 +293602,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meesh n° %1$@ : il manque %2$@"
+            "value": "%2$@ jusqu’à la Meesh n° %1$@"
           }
         },
         "it": {
@@ -293649,7 +293649,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Assez pour une Meesh"
+            "value": "Assez de lumière pour une Meesh"
           }
         },
         "it": {
@@ -293743,7 +293743,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il manque pour le niveau %@"
+            "value": "Jusqu’au niveau %@"
           }
         },
         "it": {
@@ -293790,7 +293790,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il manque pour la Meesh n° %@"
+            "value": "Jusqu’à la Meesh n° %@"
           }
         },
         "it": {
@@ -293837,7 +293837,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il manque pour %@"
+            "value": "Jusqu’à %@"
           }
         },
         "it": {
@@ -293884,7 +293884,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il manque pour la zone de montée"
+            "value": "Jusqu’à la zone de montée"
           }
         },
         "it": {
@@ -293931,7 +293931,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il manque %1$@ pour la Meesh n° %2$@."
+            "value": "Il manque %1$@ à ta lumière pour frapper la Meesh n° %2$@."
           }
         },
         "it": {
@@ -293978,7 +293978,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il manque %@ pour acheter un gel."
+            "value": "Il manque %@ pour prendre une Veilleuse."
           }
         },
         "it": {
@@ -294072,7 +294072,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il manque %@ pour changer cette mission."
+            "value": "Il manque %@ pour changer cet acte."
           }
         },
         "it": {
@@ -294119,7 +294119,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il manque %@ pour prendre le Sceau."
+            "value": "Il manque %@ pour prendre le Sceau du voyage."
           }
         },
         "it": {
@@ -294260,7 +294260,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu en es à %@ pour cette étape"
+            "value": "Tu en es à %@ pour cette épreuve"
           }
         },
         "it": {
@@ -294307,7 +294307,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles convertibles sont ta seule valeur réelle : ce sont elles qui paient une Meesh."
+            "value": "C’est ta lumière : les étincelles qui frappent une Meesh."
           }
         },
         "it": {
@@ -294448,7 +294448,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton niveau est le chiffre au centre de ton anneau. Il se lit sur tes étincelles convertibles : 10 000 pour le niveau 10, un million pour le niveau 100. Frapper une Meesh les dépense, donc fait baisser ton niveau ; ton record d’étincelles reste, à titre indicatif."
+            "value": "Ton niveau est le chiffre au centre de ton anneau. Il se lit sur ta lumière : 10 000 étincelles pour le niveau 10, un million pour le niveau 100. Frapper une Meesh en fige une part, donc fait baisser ton niveau ; ce que tu as reçu reste reçu."
           }
         },
         "it": {
@@ -294495,7 +294495,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il ouvre les missions au niveau 5, la ligue au 10, le duo au 20 et le Prestige au 100. De 10 à 100, chaque dizaine demande aussi une étape. Frapper une Meesh fait baisser ton niveau, mais la ligue et le duo, une fois ouverts, le restent."
+            "value": "Ta lumière ouvre le rêve au niveau 5, la joute au 10, l’alliance au 20 et la renaissance au 100. Tous les dix niveaux, de 10 à 100, tes aïeux demandent une épreuve. Frapper une Meesh fige une part de ta lumière et fait baisser ton niveau, mais la joute et l’alliance, une fois ouvertes, le restent."
           }
         },
         "it": {
@@ -294542,7 +294542,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles convertibles sont ta seule valeur réelle : elles font ton niveau, et la frappe y prend son prix. Ton record d’étincelles, tout ce que tu as cumulé, dit ton potentiel."
+            "value": "Chaque vrai échange fait jaillir des étincelles : ensemble, elles forment ta lumière. Plus elle grandit, plus elle brille, et son éclat, c’est ton niveau."
           }
         },
         "it": {
@@ -294589,7 +294589,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pour frapper une Meesh, regarde tes étincelles convertibles : ce sont elles qui doivent atteindre le prix. Une frappe en retire son prix, et ton niveau baisse d’autant."
+            "value": "Ta lumière frappe les Meeshes de ton héritage. Frapper une Meesh en fige une part dans la pièce : ta lumière, donc ton niveau, baisse d’autant. Ce que tu as reçu reste reçu."
           }
         },
         "it": {
@@ -294636,7 +294636,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une Meesh est une pièce que tu frappes toi-même. Chaque pièce porte son numéro : une sur cent est en or, une sur mille en prisme."
+            "value": "Une Meesh, c’est ta lumière figée dans une pièce numérotée, que tu frappes toi-même. Une sur cent est d’or, une sur mille de prisme."
           }
         },
         "it": {
@@ -294683,7 +294683,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Garde tes Meeshes : elles remplissent ton trésor, visible sur ton profil. Ou dépense-les : un gel pour ta Flamme, une mission à changer, le Sceau de la saison. Chaque frappe ajoute aussi de la Gloire."
+            "value": "Garde tes Meeshes : elles remplissent ton héritage, de la Bourse à la Réserve, visible sur ton profil. Ou dépense-les : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage. Chaque frappe fait aussi grandir ta gloire."
           }
         },
         "it": {
@@ -294730,7 +294730,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La Gloire est un compteur qui ne redescend jamais. Elle donne ton rang, parmi onze."
+            "value": "Ta gloire grandit et ne recule jamais. Elle te donne ton rang, parmi onze : de Murmure à Légende, puis le Mythe."
           }
         },
         "it": {
@@ -294777,7 +294777,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton rang se montre sur ton blason et sur ton profil. Il ouvre aussi les niveaux : jusqu’à 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle."
+            "value": "Ton rang se montre sur ton blason et sur ton profil. Il ouvre aussi ta lumière : jusqu’au niveau 499 sous Ambassadeur, 1000 dès Ambassadeur, sans limite dès Oracle."
           }
         },
         "it": {
@@ -294824,7 +294824,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta Flamme est ta série de jours : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant."
+            "value": "Ta Flamme est le feu que tes aïeux te confient : elle grandit chaque jour où tu fais au moins un geste, et change de forme en grandissant, de la Braise au Soleil."
           }
         },
         "it": {
@@ -294871,7 +294871,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque jour de série ajoute 2 % à tes récompenses de mission, jusqu’à 50 %. Un gel couvre un jour manqué. Éteinte, elle se rallume avec des Meeshes pendant 48 h."
+            "value": "Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Une Veilleuse la garde un jour d’absence. Éteinte, elle se rallume avec des Meeshes pendant 48 h."
           }
         },
         "it": {
@@ -294918,7 +294918,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque jour, trois missions : de petits buts à atteindre dans la journée. Un coffre les accompagne."
+            "value": "Chaque nuit, un rêve en trois actes : de petits buts à réaliser dans la journée, de plus en plus riches en gloire. L’Offrande l’accompagne."
           }
         },
         "it": {
@@ -294965,7 +294965,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre une mission pour voir où tu en es. Tu peux en changer une par jour avec une Meesh. Les trois faites, ouvre le coffre : des étincelles, de la Gloire, parfois une prime, un fragment d’étoile ou un gel."
+            "value": "Ouvre un acte pour voir où tu en es. Tu peux en changer un par jour avec une Meesh. Les trois réalisés, ouvre l’Offrande : des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse."
           }
         },
         "it": {
@@ -295012,7 +295012,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La ligue est un classement de la semaine, dans un groupe de 30 joueurs d’activité comparable. Il y a huit ligues."
+            "value": "La joute est le classement de la semaine : trente héros de lumière semblable s’y mesurent sous leur nom de joute. Il y a huit cercles, du Quartz au Prisme."
           }
         },
         "it": {
@@ -295059,7 +295059,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Regarde ta place et ta zone : les 7 premiers montent d’une ligue, les 5 derniers descendent. Tout repart de zéro chaque lundi. La ligue publique demande ton accord ; la ligue entre amis est toujours ouverte."
+            "value": "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. Tout repart de zéro chaque lundi. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte."
           }
         },
         "it": {
@@ -295106,7 +295106,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une saison est un parcours de huit semaines, avec un thème et des étapes gratuites."
+            "value": "Un voyage dure huit semaines, dans une terre de langue, avec quarante haltes et leurs présents gratuits."
           }
         },
         "it": {
@@ -295153,7 +295153,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gagne des étoiles, puis réclame chaque étape ouverte : des étincelles, un fragment d’étoile, un gel. Le parcours fini donne la coupe de saison. Le Sceau est un objet à collectionner, pris avec des Meeshes."
+            "value": "Avance de quelques pas, puis réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes."
           }
         },
         "it": {
@@ -295200,7 +295200,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le Prestige est un nouveau tour, offert au niveau 100. Il est facultatif et se fait cinq fois au plus."
+            "value": "La renaissance ouvre un nouvel Âge de ta légende, offert au niveau 100, quand ta lumière est devenue Galaxie. Elle est facultative : cinq renaissances au plus mènent au Sixième Âge."
           }
         },
         "it": {
@@ -295247,7 +295247,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Au niveau 100, choisis : passer en Prestige, ou continuer à monter. Passer remet ton niveau à 1 et tes étincelles convertibles à 0. Tu gardes ton record d’étincelles, ton record de niveau, ton rang, ta Gloire, tes Meeshes, ta Flamme et tes trophées."
+            "value": "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro. Tu gardes tes étincelles reçues depuis toujours, ta plus haute lumière, ton rang, ta gloire, tes Meeshes, ta Flamme et tes trophées."
           }
         },
         "it": {
@@ -295341,7 +295341,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque. Tant que l’élan tient, chaque geste rapporte plus."
+            "value": "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque. Tant que l’élan tient, chaque geste fait jaillir plus d’étincelles."
           }
         },
         "it": {
@@ -295388,7 +295388,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un badge compte un geste précis : un message vocal, une story, une amitié nouée. Il y en a vingt."
+            "value": "Une médaille suit un geste précis : un message vocal, une story, une amitié nouée. Il y en a vingt."
           }
         },
         "it": {
@@ -295435,7 +295435,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touche un badge pour voir ce qui compte, sa matière et ce qu’il manque pour la prochaine étoile. Une frappe n’éteint aucun badge."
+            "value": "Touche une médaille pour voir ce qu’elle suit, sa matière et ce qu’il manque pour la prochaine étoile. Une frappe n’éteint aucune médaille."
           }
         },
         "it": {
@@ -295576,7 +295576,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un succès est une distinction qui se décroche une seule fois, avec sa date et sa rareté."
+            "value": "Un haut fait est une distinction qui s’accomplit une seule fois, avec sa date et sa rareté."
           }
         },
         "it": {
@@ -295623,7 +295623,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ouvre un succès pour lire ce qu’il demande. Décroché, il ajoute de la Gloire : plus il est rare, plus il en ajoute."
+            "value": "Ouvre un haut fait pour lire ce qu’il demande. Accompli, il fait grandir ta gloire : plus il est rare, plus elle grandit."
           }
         },
         "it": {
@@ -295670,7 +295670,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta vitrine est l’étagère de tes trophées : coupes de ligue, de saison, de Prestige et de Flamme."
+            "value": "L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme."
           }
         },
         "it": {
@@ -295717,7 +295717,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Range tes trophées dans l’ordre que tu veux et choisis qui voit ta vitrine : tout le monde, tes amis ou toi seul. Un trophée ne rapporte rien : il se montre."
+            "value": "Range tes trophées dans l’ordre que tu veux et choisis qui les voit : tout le monde, tes amis ou toi seul. Un trophée ne rapporte rien : il se montre."
           }
         },
         "it": {
@@ -295764,7 +295764,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’Atlas est ton passeport des langues : un tampon par langue dans laquelle tu as vraiment échangé."
+            "value": "L’Atlas est ton passeport des langues : les terres que ta voix a traversées, un tampon par langue vraiment échangée."
           }
         },
         "it": {
@@ -295858,7 +295858,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le chiffre de ton anneau, lu sur tes étincelles convertibles. Il ouvre les missions (niveau 5), la ligue (10), le duo (20) et le Prestige (100). Il monte quand ces étincelles atteignent le seuil suivant, et baisse quand une frappe les dépense. Le Prestige le remet à 1."
+            "value": "Le chiffre de ton anneau, lu sur ta lumière. Il ouvre le rêve (niveau 5), la joute (10), l’alliance (20) et la renaissance (100). Il monte quand ta lumière atteint le seuil suivant, et baisse quand une frappe en fige une part. La renaissance le remet à 1."
           }
         },
         "it": {
@@ -295905,7 +295905,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tes étincelles convertibles sont ta seule valeur réelle : elles font ton niveau et paient une Meesh. Ton record d’étincelles, tout ce que tu as cumulé, dit ton potentiel. Chaque geste utile en rapporte."
+            "value": "Chaque vrai échange fait jaillir des étincelles ; ensemble, elles forment ta lumière. Ta lumière fait ton niveau et frappe les Meeshes. Les étincelles reçues depuis toujours restent reçues."
           }
         },
         "it": {
@@ -295952,7 +295952,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La pièce rare de Meeshy, numérotée, que tu frappes avec tes étincelles convertibles. Garde-la pour remplir ton trésor, ou dépense-la : gel de Flamme, mission à changer, Sceau de saison. Le prix monte de 30 % toutes les dix frappes."
+            "value": "La pièce rare de Meeshy, numérotée : une part de ta lumière s’y fige quand tu la frappes. Garde-la pour ton héritage, ou dépense-la : une Veilleuse pour ta Flamme, un acte à changer, le Sceau du voyage. La part figée grandit de 30 % toutes les dix frappes."
           }
         },
         "it": {
@@ -295999,7 +295999,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un compteur qui ne redescend jamais et qui donne ton rang. Elle se gagne en frappant, en atteignant un niveau pour la première fois, en décrochant un succès, en montant de ligue, en finissant une saison. Ton rang ouvre les niveaux au-delà de 499."
+            "value": "Ta gloire grandit et ne recule jamais : elle te donne ton rang. Elle grandit quand tu frappes, quand ta lumière atteint un niveau pour la première fois, quand tu accomplis un haut fait, quand tu gravis un cercle de joute, quand tu achèves un voyage. Ton rang ouvre ta lumière au-delà du niveau 499."
           }
         },
         "it": {
@@ -296046,7 +296046,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ta série de jours d’affilée avec au moins un geste. Chaque jour ajoute 2 % à tes récompenses de mission, jusqu’à 50 %. Un gel couvre un jour manqué ; éteinte, elle se rallume avec des Meeshes pendant 48 h."
+            "value": "Le feu que tes aïeux te confient, entretenu chaque jour par au moins un geste. Chaque jour de Flamme ajoute 2 % aux étincelles de tes rêves, jusqu’à 50 %. Une Veilleuse la garde un jour d’absence ; éteinte, elle se rallume avec des Meeshes pendant 48 h."
           }
         },
         "it": {
@@ -296093,7 +296093,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trois buts par jour, ouverts au niveau 5. Chaque mission faite rapporte des étincelles ; les trois faites ouvrent le coffre du jour. Tu peux changer une mission par jour avec une Meesh."
+            "value": "Chaque nuit, tes aïeux t’envoient un rêve en trois actes, ouvert au niveau 5. Chaque acte réalisé fait jaillir des étincelles ; les trois réalisés font apparaître l’Offrande. Tu peux changer un acte par jour avec une Meesh."
           }
         },
         "it": {
@@ -296140,7 +296140,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un classement de la semaine, ouvert au niveau 10, dans un groupe de 30 joueurs. Tes étincelles de la semaine font ta place : les 7 premiers montent d’une ligue, les 5 derniers descendent, et tout repart de zéro le lundi. La ligue entre amis est toujours ouverte."
+            "value": "Le classement de la semaine, ouvert au niveau 10 : trente héros s’y mesurent sous leur nom de joute. Tes étincelles de la semaine font ta place : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent, et tout repart de zéro le lundi. La Joute des amis reste toujours ouverte."
           }
         },
         "it": {
@@ -296187,7 +296187,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un parcours de huit semaines et de 40 étapes gratuites. Les missions du jour et le duo donnent des étoiles ; les étoiles ouvrent les étapes, que tu réclames une à une. Le parcours fini donne la coupe de saison."
+            "value": "Un voyage de huit semaines en terre de langue, avec 40 haltes gratuites. Les actes de ton rêve et l’alliance te font avancer de quelques pas ; quatre pas mènent à la halte suivante, que tu réclames une à une. Le voyage fini donne la coupe du voyage."
           }
         },
         "it": {
@@ -296234,7 +296234,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un nouveau tour, facultatif, offert au niveau 100, cinq fois au plus. Ton niveau repart à 1 et tes étincelles convertibles à 0 ; ton record d’étincelles et ton record de niveau sont conservés. Tu gagnes une étoile sur ton anneau, un trophée numéroté et de la Gloire. Ton rang, tes Meeshes et ta Flamme restent."
+            "value": "Une renaissance facultative, offerte au niveau 100, cinq fois au plus. Ton niveau repart à 1 et ta lumière à zéro : elle redevient Étincelle, et ta légende entre dans un nouvel Âge. Tes étincelles reçues depuis toujours et ta plus haute lumière restent. Tes aïeux t’offrent un trophée numéroté et de la gloire. Ton rang, tes Meeshes et ta Flamme restent."
           }
         },
         "it": {
@@ -296281,7 +296281,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un multiplicateur d’étincelles. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci : contenu, commentaires, conversations, outils, lien social. Tant qu’il tient, chaque geste rapporte plus."
+            "value": "Un multiplicateur d’étincelles. Il s’allume quand tu es actif dans plusieurs familles de gestes ces jours-ci : contenu, commentaires, conversations, outils, lien social. Tant qu’il tient, chaque geste fait jaillir plus d’étincelles."
           }
         },
         "it": {
@@ -296328,7 +296328,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vingt badges, un par geste précis. Chacun monte sur sept paliers, du cuivre au prisme, à force de refaire son geste. Une frappe n’en éteint aucun et n’en fait redescendre aucun."
+            "value": "Vingt médailles, une par geste précis. Chacune gravit sept paliers, du cuivre au prisme, à force de refaire son geste. Une frappe n’en éteint aucune et n’en fait redescendre aucune."
           }
         },
         "it": {
@@ -296422,7 +296422,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Des distinctions rares, décrochées d’un coup quand tu réunis ce qu’elles demandent. Chaque succès ajoute de la Gloire : plus il est rare, plus il en ajoute."
+            "value": "Des distinctions rares, accomplies d’un coup quand tu réunis ce qu’elles demandent. Chaque haut fait fait grandir ta gloire : plus il est rare, plus elle grandit."
           }
         },
         "it": {
@@ -296469,7 +296469,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’étagère de tes trophées : coupes de ligue, de saison, de Prestige et de Flamme. Un trophée ne rapporte rien : il se garde et se montre. Tu choisis l’ordre et qui la voit."
+            "value": "L’étagère de tes trophées : coupes de joute et de voyage, trophées de renaissance et de Flamme. Un trophée ne rapporte rien : il se garde et se montre. Tu choisis l’ordre et qui les voit."
           }
         },
         "it": {
@@ -296563,7 +296563,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il s’ouvre quand les missions du jour sont faites. Dedans : des étincelles selon tes missions, de la Gloire, parfois une prime en étincelles, un fragment d’étoile ou un gel."
+            "value": "Elle apparaît quand les trois actes du rêve sont réalisés. C’est un présent voilé : des étincelles selon tes actes, de la gloire, parfois une prime en étincelles, un fragment d’étoile ou une Veilleuse."
           }
         },
         "it": {
@@ -296610,7 +296610,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les Meeshes que tu gardes. Il a six paliers, visibles sur ton profil. Il grandit quand tu gardes tes Meeshes et baisse quand tu les dépenses."
+            "value": "Les Meeshes que tu gardes pour ta lignée. Six contenants, de la Bourse à la Réserve, visibles sur ton profil. L’héritage grandit quand tu gardes tes Meeshes et baisse quand tu les dépenses."
           }
         },
         "it": {
@@ -296657,7 +296657,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "De 10 à 100, chaque dizaine de niveaux demande une étape simple : frapper une Meesh, finir des missions, tenir une Flamme, atteindre un rang. Sans elle, le niveau attend ; faite, il monte d’un coup."
+            "value": "De 10 à 100, tous les dix niveaux, tes aïeux demandent une épreuve simple : frapper une Meesh, réaliser des rêves, tenir une Flamme, atteindre un rang. Tant qu’elle n’est pas réussie, ta lumière attend ; réussie, le niveau monte d’un coup."
           }
         },
         "it": {
@@ -296704,7 +296704,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "+25 % sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ton record de niveau. Il s’arrête dès que l’écart retombe à 6."
+            "value": "+25 % sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière. Il s’arrête dès que l’écart retombe à 6."
           }
         },
         "it": {
@@ -296751,7 +296751,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une mission de la semaine à faire avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun finit sa part, la récompense est doublée. Elle donne aussi des étoiles de saison."
+            "value": "Une fois par semaine, une alliance avec un ami accepté, ouverte au niveau 20 pour vous deux. Si chacun réalise sa part, la récompense double. Elle fait aussi avancer ton voyage de quelques pas."
           }
         },
         "it": {
@@ -296798,7 +296798,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Coffre du jour"
+            "value": "L’Offrande"
           }
         },
         "it": {
@@ -296845,7 +296845,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trésor"
+            "value": "L’Héritage"
           }
         },
         "it": {
@@ -296892,7 +296892,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étapes des niveaux"
+            "value": "Les épreuves"
           }
         },
         "it": {
@@ -296986,7 +296986,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mission en duo"
+            "value": "L’Alliance"
           }
         },
         "it": {
@@ -298419,7 +298419,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Frapper coûte %@ : ton niveau baisse d’autant, et tu gagnes +%@ de Gloire."
+            "value": "Frapper fige %@ de ta lumière dans une pièce : ton niveau baisse d’autant, et tu gagnes +%@ de gloire."
           }
         },
         "en": {
