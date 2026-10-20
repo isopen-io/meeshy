@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Button Position (stored as normalized 0-1 values)
 public struct ButtonPosition: Equatable, Sendable {

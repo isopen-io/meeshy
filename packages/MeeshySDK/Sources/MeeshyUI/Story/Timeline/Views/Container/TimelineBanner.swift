@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Ce que la timeline a besoin d'ANNONCER, sans rien savoir de la façon dont
 /// c'est affiché.

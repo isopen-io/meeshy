@@ -100,10 +100,9 @@ final class SharedPipEngine {
         pendingPipLayer = playerLayer
         guard pipCreationTask == nil else { return }
         pipCreationTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: SharedAVPlayerManager.deferredPipDelay)
             // Annulée par `teardown()`, la tâche ne touche plus à rien : une
             // demande neuve a peut-être déjà pris sa place.
-            guard let self, !Task.isCancelled else { return }
+            guard await cancellableSleep(for: SharedAVPlayerManager.deferredPipDelay), let self else { return }
             self.pipCreationTask = nil
             guard let layer = self.pendingPipLayer else { return }
             self.pendingPipLayer = nil

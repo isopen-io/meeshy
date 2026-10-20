@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Pastille de mood (atome de présentation partagé)
 
