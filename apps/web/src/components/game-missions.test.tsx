@@ -86,9 +86,9 @@ describe('changer de mission', () => {
 
   test('avant le changement : les Meeshes en poche, son prix et ce qui restera (#9705)', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props({ balance: 3 })} />));
-    expect(page).toContain('En poche 3 Meeshes');
-    expect(page).toContain('Coûte 1 Meesh');
-    expect(page).toContain('Restera 2 Meeshes');
+    expect(page).toContain('Tu as 3 Meeshes');
+    expect(page).toContain('Il faut 1 Meesh');
+    expect(page).toContain('Après 2 Meeshes');
   });
 
   test('sans Meesh : le changement n’est pas offert, et la ligne dit combien il manque', () => {
@@ -134,7 +134,7 @@ describe('le coffre', () => {
   test('fermé tant que les missions ne sont pas finies, avec ce qu’il attend', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props()} />));
     expect(page).toContain('Termine les missions du jour');
-    expect(page).toMatch(/Faites \d \/ 3/);
+    expect(page).toMatch(/Actes réalisés \d \/ 3/);
   });
 
   const done = (patch: Parameters<typeof gameBlockFixture>[0] = {}) => {

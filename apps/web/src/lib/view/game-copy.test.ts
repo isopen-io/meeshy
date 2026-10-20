@@ -284,16 +284,16 @@ describe('les étapes des niveaux se disent dans les sept langues (#9706)', () =
   test('en français : le compte, la Flamme et le rang se disent', () => {
     expect(steps.map((step) => levelStepWhat(step, 'fr'))).toEqual([
       'frapper ta première Meesh',
-      'accomplir une mission du jour',
+      'réaliser un rêve',
       'atteindre le rang Écho',
       'tenir une Flamme de 7 jours',
-      'accomplir 10 missions du jour',
+      'réaliser 10 rêves',
       'atteindre le rang Voix',
       'frapper 5 Meeshes',
       'atteindre le rang Conteur',
       'tenir une Flamme de 30 jours',
       'atteindre le rang Passeur',
     ]);
-    expect(levelHeldLine(steps[0]!, 'fr')).toBe('Tes étincelles ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
+    expect(levelHeldLine(steps[0]!, 'fr')).toBe('Ta lumière ouvre déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
   });
 });

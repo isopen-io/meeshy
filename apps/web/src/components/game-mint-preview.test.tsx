@@ -126,16 +126,16 @@ describe('une frappe possible', () => {
 describe('avant le geste, ce que la frappe dépense (#9705)', () => {
   test('les points en poche, le prix, et ce qui restera', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview {...props({ score: 5000, debitablePoints: 5000 })} />));
-    expect(page).toContain('En poche 5 000 étincelles');
-    expect(page).toContain('Coûte 1 221 étincelles');
-    expect(page).toContain('Restera 3 779 étincelles');
+    expect(page).toContain('Tu as 5 000 étincelles');
+    expect(page).toContain('Il faut 1 221 étincelles');
+    expect(page).toContain('Après 3 779 étincelles');
   });
 
   test('TOUT est dépensable (porteur 2026-10-16) : plus de « points à convertir », une seule poche — le manque se dit en étincelles, pour SA Meesh', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview {...props({ score: 600, debitablePoints: 600 })} />));
-    expect(page).toContain('En poche 600 étincelles');
+    expect(page).toContain('Tu as 600 étincelles');
     expect(page).not.toMatch(/convertir/i);
-    expect(page).toContain('Il manque 621 étincelles pour la Meesh n° 4.');
+    expect(page).toContain('Il manque 621 étincelles à ta lumière pour frapper la Meesh n° 4.');
   });
 });
 
@@ -147,7 +147,7 @@ describe('une frappe pas encore possible : pas de bouton grisé', () => {
   });
 
   test('ce qu’il manque, en une ligne, et le prix de la prochaine', () => {
-    expect(text(html)).toContain('Il manque 621 étincelles pour la Meesh n° 4.');
+    expect(text(html)).toContain('Il manque 621 étincelles à ta lumière pour frapper la Meesh n° 4.');
     expect(text(html)).not.toContain('Restera');
     expect(html).toMatch(/data-game-mint-price=""[^>]*>1\s221\sétincelles</);
   });

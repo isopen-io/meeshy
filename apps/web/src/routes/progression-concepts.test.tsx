@@ -518,7 +518,7 @@ describe('la carte montre d’abord ce qui demande une action', () => {
 
   test('coffre prêt : en tête de la carte des Missions', () => {
     const ready = withGame((game) => ({ ...game, chest: { ...game.chest, status: 'ready' } }));
-    expect(firstChip(ready, 'missions')).toBe('Coffre prêt');
+    expect(firstChip(ready, 'missions')).toBe('Offrande prête');
     expect(urgent(ready)).toContain('missions');
   });
 

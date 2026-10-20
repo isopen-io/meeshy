@@ -61,21 +61,21 @@ const inLanguage = (language: InterfaceLanguage): void => {
 
 describe('le compte du porteur : trois chiffres, trois phrases', () => {
   test('le niveau dit ce qui est fait dans CE niveau, et ce qu’il reste pour le suivant', () => {
-    expect(state('level')).toBe('Niveau 27 : tu as fait 4 199 étincelles sur les 5 500 de ce niveau. Il en reste 1 301 pour le niveau 28.');
+    expect(state('level')).toBe('Ta lumière brille au niveau 27 : 4 199 étincelles sur les 5 500 de ce niveau, 1 301 jusqu’au niveau 28.');
   });
 
   test('les étincelles n’ont plus qu’une poche, et « il manque » vise la Meesh, pas le niveau', () => {
     expect(state('points')).toBe(
-      'Tu as 77 099 étincelles convertibles. La Meesh n° 79 coûte 7 662 étincelles : il manque 1 839 étincelles.',
+      'Ta lumière compte 77 099 étincelles. La Meesh n° 79 en figera 7 662 étincelles : il manque 1 839 étincelles.',
     );
   });
 
   test('les Meeshes disent le solde gardé, les frappes faites et ce que la prochaine demande', () => {
-    expect(state('meesh')).toBe('Tu gardes 3 Meeshes. Depuis le début, tu en as frappé 78. La Meesh n° 79 coûte 7 662 étincelles : il te manque 1 839 étincelles.');
+    expect(state('meesh')).toBe('Ton héritage garde 3 Meeshes. Depuis toujours, tu en as frappé 78. La Meesh n° 79 figera 7 662 étincelles de ta lumière : il manque 1 839 étincelles.');
   });
 
   test('1 301 et 1 839 ne se confondent plus : chacun porte sa cible', () => {
-    expect(state('level')).toContain('1 301 pour le niveau 28');
+    expect(state('level')).toContain('1 301 jusqu’au niveau 28');
     expect(state('level')).not.toContain('1 839');
     expect(state('points')).toContain('1 839 étincelles');
     expect(state('points')).not.toContain('1 301');
@@ -92,14 +92,14 @@ describe('le niveau', () => {
   test('devant un ancien serveur, le reste garde sa cible', () => {
     const { level } = before;
     if (level.nextThreshold === null) throw new Error('la fixture d’avant n’est pas au sommet');
-    expect(state('level', before)).toContain(`pour le niveau ${level.level + 1}`);
+    expect(state('level', before)).toContain(`jusqu’au niveau ${level.level + 1}`);
   });
 });
 
 describe('les points', () => {
   test('assez pour frapper : la phrase le dit, sans « il manque »', () => {
     const rich: EngagementWithGame = { ...playing, meesh: { ...wallet, debitablePoints: 1_244 } };
-    expect(state('points', rich)).toBe('Tu as 12 440 étincelles convertibles : assez pour la Meesh n° 4, qui coûte 1 221 étincelles.');
+    expect(state('points', rich)).toBe('Ta lumière compte 12 440 étincelles : assez pour frapper la Meesh n° 4, qui en figera 1 221 étincelles.');
   });
 
   test('sans porte-monnaie servi, plus aucun solde « à convertir » : une seule poche, le manque vise la Meesh', () => {
@@ -114,17 +114,17 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
   test('une Flamme en danger dit quoi faire, et avant quand', () => {
     const risky = withFacts({ streak: 6, lastActiveDay: '2026-10-04' });
     expect(risky.game?.flame.status).toBe('at-risk');
-    expect(state('flame', risky)).toBe('Ta Flamme de 6 jours est en danger : fais un geste avant minuit pour la garder.');
+    expect(state('flame', risky)).toBe('Ta Flamme de 6 jours vacille : fais un geste avant minuit pour la garder.');
   });
 
   test('une Flamme allumée dit depuis quand, et ce qu’elle rapporte', () => {
     expect(playing.game?.flame.status).toBe('lit');
-    expect(state('flame', playing)).toContain('Ta Flamme tient depuis 6 jours');
+    expect(state('flame', playing)).toContain('Ta Flamme brûle depuis 6 jours');
     expect(state('flame', playing)).toContain('12 % de plus');
   });
 
   test('les missions disent combien sont faites et ce qu’il reste pour le coffre', () => {
-    expect(state('missions', playing)).toBe('Missions faites : 1 sur 3. Il en reste 2 pour ouvrir le coffre.');
+    expect(state('missions', playing)).toBe('Le rêve de cette nuit : 1 sur 3 actes, et 2 à réaliser pour voir l’Offrande.');
   });
 
   test('avant le niveau 5, les missions disent où elles s’ouvrent et où tu en es', () => {
@@ -137,7 +137,7 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
     const current = playing.game?.league?.current;
     if (current === null || current === undefined) throw new Error('la fixture est placée en ligue');
     const line = state('league', playing);
-    expect(line).toContain(`rang ${current.rank} sur ${current.groupSize}`);
+    expect(line).toContain(`place ${current.rank} sur ${current.groupSize}`);
     expect(line).toContain('410 étincelles cette semaine');
     expect(line).toMatch(/zone de montée/);
   });
@@ -146,9 +146,9 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
     const season = playing.game?.season;
     if (season === null || season === undefined) throw new Error('la fixture sert une saison');
     const line = state('season', playing);
-    expect(line).toContain(`Saison ${season.number}, semaine ${season.week} sur 8`);
-    expect(line).toContain(`étape ${season.steps} sur ${season.stepsTotal}`);
-    expect(line).toMatch(/Il manque \d+ étoiles? pour l’étape suivante/);
+    expect(line).toContain(`Voyage ${season.number}, semaine ${season.week} sur 8`);
+    expect(line).toContain(`halte ${season.steps} sur ${season.stepsTotal}`);
+    expect(line).toMatch(/\d+ pas jusqu’à la suivante/);
   });
 
   test('le Prestige dit où il s’ouvre et où tu en es', () => {

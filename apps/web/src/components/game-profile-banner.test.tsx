@@ -63,7 +63,7 @@ describe('au début de la bannière : le nom du palier au-dessus du cercle, les 
     const start = host.querySelector('[data-profile-banner-level]');
     const name = start?.querySelector('[data-profile-banner-level-name]');
     const ring = start?.querySelector('[data-game-level="12"]');
-    expect(words(name)).toBe('Braise');
+    expect(words(name)).toBe('Étincelle');
     expect(ring !== null && ring !== undefined).toBe(true);
     expect(((name?.compareDocumentPosition(ring as Node) ?? 0) & 4) !== 0).toBe(true);
     expect((start?.getAttribute('class') ?? '').split(/\s+/)).toContain('flex-col');
@@ -102,7 +102,7 @@ describe('au début de la bannière : le nom du palier au-dessus du cercle, les 
     const host = await mount(<GameProfileBanner standing={standing({ points: null, glory: null, pointsToNext: null, progress: null })} />);
     expect(host.querySelector('[data-profile-banner-points]') === null).toBe(true);
     expect(host.querySelector('[data-profile-banner-glory]') === null).toBe(true);
-    expect(words(host.querySelector('[data-profile-banner-level-name]'))).toBe('Braise');
+    expect(words(host.querySelector('[data-profile-banner-level-name]'))).toBe('Étincelle');
     expect(host.querySelector('[data-profile-banner-level] [data-game-level="12"]') !== null).toBe(true);
   });
 });
@@ -153,8 +153,8 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
     expect(level.startsWith('Niveau 12, palier Braise')).toBe(true);
     expect(level).toContain('976 étincelles');
     expect(level).not.toContain('Gloire');
-    expect(level).toContain('record de niveau 12');
-    expect(level.endsWith(', encore 624 vers le 13')).toBe(true);
+    expect(level).toContain('ta plus haute lumière : niveau 12');
+    expect(level.endsWith(', 624 jusqu’au niveau 13')).toBe(true);
     expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe(`Murmure V, Gloire ${formatCount(41_250, 'fr')}`);
   });
 

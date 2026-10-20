@@ -81,7 +81,7 @@ describe('la proposition au niveau 100', () => {
     await click(host.querySelector('[data-game-prestige-go]'));
     const plain = (value: string): string => value.replace(/\s/g, ' ');
     const rows = plain(text(host.querySelector('[data-game-prestige-values]')?.innerHTML ?? ''));
-    expect(rows).toContain(plain(`Convertibles ${formatCount(props().score, 'fr')} étincelles → 0 étincelle`));
+    expect(rows).toContain(plain(`Ta lumière ${formatCount(props().score, 'fr')} étincelles → 0 étincelle`));
     expect(rows).toContain('Niveau 100 → 1');
     expect(rows).toContain('Étoiles 1 → 2');
     expect(rows).toContain(plain(`Gloire +${formatCount(GLORY_POINTS.prestige, 'fr')}`));

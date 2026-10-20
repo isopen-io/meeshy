@@ -126,20 +126,20 @@ describe('les étapes des niveaux (#9706)', () => {
   test('la prochaine étape se dit sous la marche, à faire, et se touche', () => {
     const page = html({ missionsDone: 0 });
     expect(page).toContain('data-game-level-step="todo"');
-    expect(text(page)).toContain('Étape du niveau 20 : accomplir une mission du jour');
+    expect(text(page)).toContain('Épreuve du niveau 20 : réaliser un rêve');
     expect(page).toContain('data-detail="levelstep:20"');
   });
 
   test('une étape déjà faite se coche', () => {
     const page = html({ missionsDone: 1 });
     expect(page).toContain('data-game-level-step="done"');
-    expect(text(html({ score: 100 * 25 * 25, levelRecord: 25 }))).toContain('Étape du niveau 30 : atteindre le rang Écho');
+    expect(text(html({ score: 100 * 25 * 25, levelRecord: 25 }))).toContain('Épreuve du niveau 30 : atteindre le rang Écho');
   });
 
   test('les points sont là, l’étape manque : le niveau attend, et la ligne dit pourquoi au lieu de « encore 0 point »', () => {
     const page = html({ score: 100 * 15 * 15, mintedLifetime: 0, levelRecord: 9 });
     expect(page).toContain('data-game-level-held=""');
-    expect(text(page)).toContain('Tes étincelles ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
+    expect(text(page)).toContain('Ta lumière ouvre déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
     expect(text(page)).not.toContain('Encore 0');
   });
 
