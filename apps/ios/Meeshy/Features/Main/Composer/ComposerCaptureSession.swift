@@ -75,9 +75,8 @@ final class ComposerCaptureSession: ObservableObject {
     /// Les outils de retouche actifs — Crop, Trim, Son, ensemble (#9754) ;
     /// vide hors retouche.
     @Published var activeEditTools: Set<ComposerEditTool> = []
-    /// **Le chrome de la retouche, posé par-dessus la prise** (#10930) : caché
-    /// à l'entrée, montré par le glissé vers le haut, caché par le glissé vers
-    /// le bas.
+    /// **Le chrome de la retouche, par-dessus la prise** (#10930) : montré à
+    /// l'entrée ; glissé vers le bas ou haut, ou toucher sur la prise, le bascule.
     @Published var editChromeShown = false
     /// Le son de la prise en retouche : gain et muet (#9754).
     @Published var takeSound = ComposerTakeSound()

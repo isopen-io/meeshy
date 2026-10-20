@@ -48,11 +48,13 @@ nonisolated enum ComposerEditTools {
         }
     }
 
-    /// **Rien n'est actif à l'entrée** (#10930, porteur 2026-10-18 : « par
-    /// défaut prendre tout l'écran lors de l'édition après la prise »). La
-    /// prise remplit le viewport ; ses outils attendent le glissé vers le haut.
+    /// **L'entrée allume ce que le glissé vers le haut allumait** (#10930,
+    /// retour porteur 2026-10-20 : « rien ne fonctionne »). La prise remplit
+    /// toujours le viewport — aucun de ces outils ne la réduit — mais ses
+    /// contrôles s'y posent d'emblée : cachés derrière un glissé que rien
+    /// n'annonçait, aucun n'était atteignable.
     static func initial(_ take: ComposerEditTake) -> Set<ComposerEditTool> {
-        []
+        revealed(take)
     }
 
     /// **Ce que le glissé vers le haut allume** (#10930) : « la barre de trim

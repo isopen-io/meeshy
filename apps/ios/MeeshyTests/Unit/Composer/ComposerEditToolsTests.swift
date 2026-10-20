@@ -31,12 +31,16 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertEqual(ComposerEditTools.offered(.audio), [.trim, .sound], "un son ne se recadre pas")
     }
 
-    /// **#10930 — on entre en plein écran, sans outil** (porteur 2026-10-18) :
-    /// la prise remplit le viewport et aucun chrome d'outil ne la couvre.
-    func test_initial_nothingIsActiveOnEntry_theTakeFillsTheScreen() {
-        XCTAssertEqual(ComposerEditTools.initial(.photo), [])
-        XCTAssertEqual(ComposerEditTools.initial(.video(hasAudio: true)), [])
-        XCTAssertEqual(ComposerEditTools.initial(.audio), [])
+    /// **#10930 — les outils sont là dès l'entrée** (retour porteur 2026-10-20 :
+    /// « les contrôleurs de l'édition ne fonctionnent pas — rien ne
+    /// fonctionne »). Cachés derrière un glissé que rien n'annonce, aucun
+    /// contrôle n'était atteignable : l'entrée allume ce que le glissé
+    /// allumait, par-dessus une prise qui garde le viewport entier.
+    func test_initial_theCutIsSelectedOnEntry_likeTheSwipeUpWould() {
+        XCTAssertEqual(ComposerEditTools.initial(.photo), ComposerEditTools.revealed(.photo))
+        XCTAssertEqual(ComposerEditTools.initial(.video(hasAudio: true)), [.trim, .sound])
+        XCTAssertEqual(ComposerEditTools.initial(.video(hasAudio: false)), [.trim])
+        XCTAssertEqual(ComposerEditTools.initial(.audio), [.trim, .sound])
     }
 
     /// **#10930 — le glissé vers le haut montre la barre de coupe, « Couper »
@@ -116,16 +120,13 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(chrome.contains("session.showsCropBrackets, let aspect = session.editAspect"))
     }
 
-    func test_aPhoto_opensFullScreen_andCropsOnlyOnceRevealed() {
+    func test_aPhoto_opensFullScreen_withItsToolsReachable_andCropsOnTap() {
         let photo = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
         photo.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
-        XCTAssertFalse(photo.editChromeShown, "#10930 : la photo prend tout l'écran, sans chrome")
+        XCTAssertTrue(photo.editChromeShown, "#10930 : les outils se posent sur la photo dès l'entrée")
         XCTAssertFalse(photo.showsCropBrackets)
-        XCTAssertFalse(photo.editFramesScene)
-        XCTAssertEqual(photo.editPanels, [])
-        photo.revealEditChrome()
-        XCTAssertTrue(photo.editChromeShown)
         XCTAssertFalse(photo.editFramesScene, "montrer les outils ne réduit pas la photo")
+        XCTAssertEqual(photo.editPanels, [])
         photo.toggleEditTool(.crop)
         XCTAssertTrue(photo.showsCropBrackets)
         XCTAssertTrue(photo.editFramesScene, "recadrer réduit la photo pour libérer ses bords")
@@ -133,21 +134,21 @@ final class ComposerEditToolsTests: XCTestCase {
         photo.hideEditChrome()
         XCTAssertFalse(photo.showsCropBrackets)
         XCTAssertFalse(photo.editFramesScene, "le chrome caché, la photo reprend l'écran")
+        photo.revealEditChrome()
+        XCTAssertTrue(photo.showsCropBrackets, "les outils reviennent comme on les a laissés")
         photo.toggleEditTool(.trim)
         XCTAssertEqual(photo.editTools, [.crop], "une photo ne se coupe pas")
     }
 
     // MARK: - (3) Les outils d'une vidéo, ensemble et chacun pour soi
 
-    func test_aVideo_opensFullScreen_andTheSwipeUpShowsTheCut() async {
+    func test_aVideo_opensFullScreen_withTheCutSelected() async {
         let (session, _) = await videoSession()
-        XCTAssertEqual(session.activeEditTools, [], "#10930 : la vidéo prend tout l'écran")
-        XCTAssertEqual(session.editPanels, [])
-        XCTAssertFalse(session.showsCropBrackets)
-        session.revealEditChrome()
+        XCTAssertTrue(session.editChromeShown, "#10930 : les outils sont atteignables dès l'entrée")
         XCTAssertEqual(session.activeEditTools, [.trim, .sound], "« Couper » sélectionné, son spectre dessus")
         XCTAssertEqual(session.editPanels, [.trim])
-        XCTAssertFalse(session.editFramesScene, "la coupe se pose par-dessus la vidéo")
+        XCTAssertFalse(session.showsCropBrackets)
+        XCTAssertFalse(session.editFramesScene, "la coupe se pose par-dessus la vidéo, qui garde l'écran")
         session.toggleEditTool(.crop)
         XCTAssertTrue(session.editFramesScene)
         XCTAssertEqual(session.editPanels, [.trim])
@@ -197,6 +198,29 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertEqual(ComposerEditSwipe.outcome(translationY: -seuil), .reveal)
         XCTAssertEqual(ComposerEditSwipe.outcome(translationY: seuil), .hide)
         XCTAssertEqual(ComposerEditSwipe.outcome(translationY: seuil / 2), .none, "une hésitation ne décide rien")
+    }
+
+    /// **#10930 — un toucher sur la prise montre ou cache ses outils**, comme
+    /// dans la visionneuse : en retouche, il visait un objectif qui se repose
+    /// et ne faisait RIEN — le geste universel était mort.
+    func test_aTapOnTheTake_togglesItsTools() {
+        let retouche = ComposerCaptureGestureContext(editing: true)
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: retouche),
+                       .toggleEditChrome)
+        let photo = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        photo.perform(.toggleEditChrome, item: nil)
+        XCTAssertFalse(photo.editChromeShown, "hors retouche, rien à montrer")
+        photo.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        photo.perform(.toggleEditChrome, item: nil)
+        XCTAssertFalse(photo.editChromeShown, "le toucher rend tout l'écran à la photo")
+        photo.perform(.toggleEditChrome, item: nil)
+        XCTAssertTrue(photo.editChromeShown, "le suivant rend les outils")
+    }
+
+    func test_theSceneTap_isRoutedThroughTheTable_inEditing() throws {
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: context)"),
+                      "le toucher de la nappe consulte la table avant de viser")
     }
 
     /// **#10930 — les formats se posent sur la scène**, à gauche de la pause et

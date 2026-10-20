@@ -253,7 +253,7 @@ struct ComposerCaptureChrome: View {
             }
             // **Lecture et son, en bas à droite de la vidéo** (#10356) : posés
             // sur la scène, ils quittent la bande et ne lui prennent rien. Ils
-            // paraissent avec le chrome, au glissé vers le haut (#10930).
+            // suivent le chrome (#10930).
             if !finishing, session.editChromeShown, session.offersEditPlayback, let aspect = session.editAspect {
                 GeometryReader { proxy in
                     let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
@@ -318,8 +318,8 @@ struct ComposerCaptureChrome: View {
                     onSave: { session.saveTakeToPhotos() })
                 .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeil))
                 Spacer(minLength: 0)
-                // En retouche, le bas n'existe qu'au glissé vers le haut (#10930) :
-                // la prise garde tout l'écran, les outils se posent par-dessus.
+                // En retouche, le bas suit le chrome (#10930) : la prise garde
+                // tout l'écran, les outils se posent par-dessus.
                 if !session.phase.isEditing || session.editChromeShown {
                     ComposerCaptureBottomRow(session: session, context: context)
                         .allowsHitTesting(!finishing)
@@ -506,6 +506,8 @@ struct ComposerCaptureChrome: View {
         SpatialTapGesture(count: 1, coordinateSpace: .global).onEnded { toucher in
             guard !session.pinchSpoilsGestures, session.holdStartedAt == nil,
                   !ComposerCaptureTapRule.followsAHold(holdEndedAt, now: Date()) else { return }
+            let geste = ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: context)
+            guard geste != .toggleEditChrome else { return session.perform(geste, item: nil) }
             switch session.tapAction(context: context) {
             case .photo: session.perform(.photoToEdit, item: nil)
             case .focus: focus(at: toucher.location, origin: origin)

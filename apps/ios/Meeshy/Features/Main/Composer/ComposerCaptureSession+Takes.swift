@@ -94,6 +94,8 @@ extension ComposerCaptureSession {
             guard let item else { return }
             look = ComposerLookStripRule.look(of: item, combinedWith: look)
             HapticFeedback.light()
+        case .toggleEditChrome:
+            editChromeShown ? hideEditChrome() : revealEditChrome()
         case .none, .focus, .zoom, .steerTake, .close, .openFamily, .reframe:
             return
         }
