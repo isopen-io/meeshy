@@ -2,7 +2,7 @@ import XCTest
 @testable import MeeshyUI
 
 /// Deep links & join flow lane (2026-07-20 audit backlog, item P3) —
-/// `JoinFlowViewModel` used to assign hardcoded French error strings directly
+/// `JoinFlowViewModel` (désormais `JoinFlowCopy`) used to assign hardcoded French error strings directly
 /// to its `@Published` state (`errorMessage`), bypassing the i18n catalog
 /// entirely — an English/Spanish/German/Portuguese user would see raw French
 /// error copy regardless of their configured language. It now routes through
@@ -38,6 +38,8 @@ final class JoinFlowLocalizationTests: XCTestCase {
         "joinFlow.error.tooManyUsers",
         "joinFlow.error.joinFailed",
         "joinFlow.error.unexpected",
+        "joinFlow.success.joined",
+        "joinFlow.success.conversationFallback",
     ]
 
     // MARK: - Catalog completeness (proves the keys exist and are translated,
@@ -87,15 +89,15 @@ final class JoinFlowLocalizationTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_joinFlowViewModel_errorsRouteThroughCatalog_notRawFrenchLiterals() throws {
-        let source = try sdkSource("Sources/MeeshyUI/JoinFlow/JoinFlowViewModel.swift")
+    func test_joinFlowCopy_errorsRouteThroughCatalog_notRawFrenchLiterals() throws {
+        let source = try sdkSource("Sources/MeeshyUI/JoinFlow/JoinFlowCopy.swift")
 
-        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.linkNotFound", defaultValue: "Ce lien de conversation est introuvable", bundle: .module)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.unknown", defaultValue: "Erreur inconnue", bundle: .module)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.loadFailed", defaultValue: "Impossible de charger les informations du lien", bundle: .module)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.tooManyUsers", defaultValue: "Trop d'utilisateurs connectes", bundle: .module)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.joinFailed", defaultValue: "Erreur lors de la connexion", bundle: .module)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.unexpected", defaultValue: "Erreur inattendue", bundle: .module)"#))
+        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.linkNotFound", defaultValue: "Ce lien de conversation est introuvable", bundle: bundle)"#))
+        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.unknown", defaultValue: "Erreur inconnue", bundle: bundle)"#))
+        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.loadFailed", defaultValue: "Impossible de charger les informations du lien", bundle: bundle)"#))
+        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.tooManyUsers", defaultValue: "Trop d'utilisateurs connectes", bundle: bundle)"#))
+        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.joinFailed", defaultValue: "Erreur lors de la connexion", bundle: bundle)"#))
+        XCTAssertTrue(source.contains(#"String(localized: "joinFlow.error.unexpected", defaultValue: "Erreur inattendue", bundle: bundle)"#))
 
         // Regression guard: the old bare-literal assignments must be gone —
         // if this fails, someone reverted to hardcoded, non-localized copy.
