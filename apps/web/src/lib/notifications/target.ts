@@ -171,6 +171,14 @@ export const PROGRESSION_SECTION_PARAM = 'section';
 const GAME_MISSION_TYPES: ReadonlySet<string> = new Set(['game_mission_window']);
 const MISSIONS_SECTION: NotificationTarget = { route: 'progression', search: { [PROGRESSION_SECTION_PARAM]: 'missions' } };
 
+/**
+ * UNE PUBLICATION RETIRÉE PAR LA MODÉRATION (#11150) n'existe plus : sa
+ * notification n'ouvre rien (le push atterrit sur la cloche). Un MESSAGE
+ * retiré ouvre sa conversation, un COMMENTAIRE la publication qui le portait.
+ * Le push n'a pas `contentType` : la passerelle le recopie dans `postType`.
+ */
+const REMOVED_PUBLICATIONS: ReadonlySet<string> = new Set(['post', 'reel', 'story']);
+
 const SECURITY_TYPES: ReadonlySet<string> = new Set([
   'security_alert',
   'login_new_device',
@@ -217,6 +225,7 @@ function hinted(route: string): PushTapTarget | null {
  * puis la déduction par type — la seule qui devine.
  */
 export function resolveTarget(input: NotificationTargetInput): PushTapTarget | null {
+  if (present(input.type) === 'content_removed' && REMOVED_PUBLICATIONS.has(present(input.contentType ?? input.postType).toLowerCase())) return null;
   const postId = present(input.postId);
   if (postId !== '' && MOOD_TYPES.has(present(input.type))) return { route: 'mood', params: { post: postId } };
   if (postId !== '') return { route: socialSurface(input), params: { post: postId } };

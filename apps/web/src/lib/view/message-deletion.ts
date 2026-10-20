@@ -15,10 +15,12 @@ import { isMineOf } from './message';
  * Un message système émis par le lecteur (l'avis de capture, #9641) ne se
  * retire pas, un message déjà supprimé non plus.
  *
- * CE QUE CETTE LOI N'OFFRE PAS, alors que le serveur l'admettrait : retirer
- * le message d'un autre au titre d'un rôle de conversation ou d'un rôle
- * global. Le fil du web ne connaît ni l'un ni l'autre ; l'offre reste celle de
- * l'auteur, comme iOS.
+ * « RETIRER » (#11150) — le message d'un AUTRE, par qui modère la conversation
+ * (`moderatesConversation`, `content-removal.ts` : rôle de conversation ou de
+ * plateforme, jamais en direct). L'hôte le décide et le remet en `moderates` ;
+ * le retrait demande un motif, et l'auteur en est prévenu. Une sélection qui
+ * mêle les miens et ceux des autres se retire en entier : la passerelle ignore
+ * le motif sur les messages de l'auteur.
  *
  * L'offre vaut pour TOUS les messages visés ou pour aucun : un seul message
  * d'un autre dans la sélection retire « pour tous » au lot entier, comme
@@ -27,22 +29,21 @@ import { isMineOf } from './message';
  * « POUR MOI » demande un compte (`routes/user-deletions.ts` refuse la
  * session anonyme) et un message que le serveur connaît.
  */
-export type DeleteViewer = { readonly id: string; readonly hasAccount: boolean };
+export type DeleteViewer = { readonly id: string; readonly hasAccount: boolean; readonly moderates?: boolean };
 
-export type DeleteOffer = { readonly forEveryone: boolean; readonly forMe: boolean };
+export type DeleteOffer = { readonly forEveryone: boolean; readonly forMe: boolean; readonly remove: boolean };
 
 type DeletableMessage = Pick<Message, 'id' | 'senderId' | 'deletedAt' | 'messageType'>;
 
-const NOTHING: DeleteOffer = { forEveryone: false, forMe: false };
+const NOTHING: DeleteOffer = { forEveryone: false, forMe: false, remove: false };
 
 const knownToServer = (message: DeletableMessage): boolean => !message.id.startsWith('cid_');
 
 export function deleteOfferOf(messages: readonly DeletableMessage[], viewer: DeleteViewer): DeleteOffer {
   if (messages.length === 0 || !viewer.hasAccount || !messages.every(knownToServer)) return NOTHING;
-  return {
-    forEveryone: messages.every((m) => isMineOf(m as Message, viewer.id) && m.deletedAt == null && m.messageType !== 'system'),
-    forMe: true,
-  };
+  const live = messages.every((m) => m.deletedAt == null && m.messageType !== 'system');
+  const forEveryone = live && messages.every((m) => isMineOf(m as Message, viewer.id));
+  return { forEveryone, forMe: true, remove: live && !forEveryone && viewer.moderates === true };
 }
 
-export const offersDeletion = (offer: DeleteOffer): boolean => offer.forEveryone || offer.forMe;
+export const offersDeletion = (offer: DeleteOffer): boolean => offer.forEveryone || offer.forMe || offer.remove;

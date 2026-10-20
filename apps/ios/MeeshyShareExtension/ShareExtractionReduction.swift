@@ -10,7 +10,42 @@ nonisolated struct ShareStagingResult: Sendable {
     let outcome: Result<ShareStagedMedia, ShareMediaStagingError>
 }
 
+/// Ce qu'un fournisseur a rendu : un morceau de texte, un fichier copié (ou
+/// son échec), ou rien.
+nonisolated enum ShareLoadOutcome: Sendable {
+    case payload(ShareProviderPayload)
+    case staged(ShareStagingResult)
+    case nothing
+}
+
+/// Ce que l'écran reçoit : le texte composé et les fichiers copiés.
+nonisolated struct ShareGathered: Sendable {
+    let content: String?
+    let media: [ShareStagedMedia]
+    let failure: ShareMediaStagingError?
+}
+
 nonisolated enum ShareExtractionReduction {
+
+    /// `outcomes` est dans l'ordre des fournisseurs : c'est lui qui fait foi,
+    /// jamais l'ordre d'arrivée des callbacks.
+    static func gathered(from outcomes: [ShareLoadOutcome]) -> ShareGathered {
+        let payloads = outcomes.compactMap { outcome -> ShareProviderPayload? in
+            guard case .payload(let payload) = outcome else { return nil }
+            return payload
+        }
+        let results = outcomes.compactMap { outcome -> ShareStagingResult? in
+            guard case .staged(let result) = outcome else { return nil }
+            return result
+        }
+        let text = content(from: payloads)
+        let staged = staging(from: results)
+        return ShareGathered(
+            content: ShareSender.composeContent(text: text.text, url: text.url),
+            media: staged.media,
+            failure: staged.failure
+        )
+    }
 
     static func content(from payloads: [ShareProviderPayload]) -> (text: String?, url: URL?) {
         let texts = payloads.compactMap { payload -> String? in

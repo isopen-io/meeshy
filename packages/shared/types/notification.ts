@@ -617,6 +617,22 @@ export interface ContactRecentlyActiveNotificationMetadata extends BaseNotificat
   readonly userId: string;
 }
 
+/** Le contenu qu'un retrait par la modération a visé (#11149). */
+export type RemovedContentType = 'message' | 'post' | 'reel' | 'story' | 'comment';
+
+/**
+ * Metadata de `content_removed` (#11149) — adressée à l'AUTEUR seul. Le motif
+ * voyage ; ni le contenu retiré ni l'identité de celui qui l'a retiré.
+ */
+export interface ContentRemovedNotificationMetadata extends BaseNotificationMetadata {
+  readonly contentType: RemovedContentType;
+  readonly contentId: string;
+  readonly conversationId?: string;
+  readonly conversationTitle?: string;
+  readonly postId?: string;
+  readonly reason: string;
+}
+
 /**
  * Metadata des notifications du JEU (#9490). `gameSection` dit où le toucher mène dans la
  * Progression ; rien d'autre ne voyage que ce que le destinataire sait déjà de LUI : jamais
@@ -678,6 +694,7 @@ export type NotificationMetadata =
   | LoginNewDeviceNotificationMetadata
   | ContactJoinedNotificationMetadata
   | ContactRecentlyActiveNotificationMetadata
+  | ContentRemovedNotificationMetadata
   | GameDuoNotificationMetadata
   | GameLeagueResultNotificationMetadata
   | GameSeasonStepNotificationMetadata

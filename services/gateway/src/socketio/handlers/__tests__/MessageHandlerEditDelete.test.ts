@@ -179,6 +179,7 @@ function makePrisma(overrides: Record<string, unknown> = {}): jest.Mocked<Prisma
       findMany: jest.fn(),
       findFirst: jest.fn(),
     },
+    adminAuditLog: { create: jest.fn(async () => ({ id: 'audit-1' })) },
     message: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
@@ -1142,11 +1143,19 @@ describe('MessageHandler — handleMessageDelete', () => {
     attachments?: { id: string; mimeType?: string | null }[];
     content?: string | null;
     messageType?: string;
+    conversationType?: string;
+    reason?: string;
   } = {}) {
     const {
       senderUserId = USER_ID, memberRole, globalRole, attachments = [],
-      content = 'trois petits mots', messageType = 'text',
+      content = 'trois petits mots', messageType = 'text', conversationType = 'group',
+      reason = senderUserId === USER_ID ? undefined : 'Propos hors charte',
     } = overrides;
+    mockValidateSocketEvent.mockReturnValue({
+      success: true,
+      data: reason === undefined ? { messageId: VALID_MSG_ID } : { messageId: VALID_MSG_ID, reason },
+    });
+    (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({ type: conversationType, title: 'Les Amis' });
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValueOnce({
       id: VALID_MSG_ID,
       conversationId: VALID_CONV_ID,
@@ -1329,6 +1338,47 @@ describe('MessageHandler — handleMessageDelete', () => {
     await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
 
     expect(callback).toHaveBeenCalledWith({ success: true, data: { messageId: VALID_MSG_ID } });
+  });
+
+  it('#11149 — exige un motif du tiers, et ne supprime rien sans lui', async () => {
+    setupSuccessfulDelete({ senderUserId: 'other-user', memberRole: 'admin', reason: '  ' });
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, code: 'MODERATION_REASON_REQUIRED' }));
+    expect(deps.prisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it('#11149 — refuse le tiers dans une conversation directe, même BIGBOSS', async () => {
+    setupSuccessfulDelete({ senderUserId: 'other-user', globalRole: 'BIGBOSS', conversationType: 'direct' });
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: expect.stringContaining('not authorized') }));
+    expect(deps.prisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it('#11149 — admet le créateur, et journalise REMOVE_CONTENT avec le motif', async () => {
+    setupSuccessfulDelete({ senderUserId: 'other-user', memberRole: 'creator', reason: 'Spam répété' });
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+
+    expect(callback).toHaveBeenCalledWith({ success: true, data: { messageId: VALID_MSG_ID } });
+    expect(deps.prisma.adminAuditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: 'REMOVE_CONTENT', entity: 'Message', entityId: VALID_MSG_ID, adminId: USER_ID, userId: 'other-user',
+        metadata: JSON.stringify({ reason: 'Spam répété', via: 'app' }),
+      }),
+    });
+  });
+
+  it("#11149 — l'auteur supprime sans motif et sans trace d'audit", async () => {
+    setupSuccessfulDelete({ senderUserId: USER_ID, conversationType: 'direct' });
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+
+    expect(callback).toHaveBeenCalledWith({ success: true, data: { messageId: VALID_MSG_ID } });
+    expect(deps.prisma.adminAuditLog.create).not.toHaveBeenCalled();
   });
 
   it('returns unauthorized when user has no delete permission', async () => {
@@ -1588,6 +1638,8 @@ describe('MessageHandler — handleMessageDelete', () => {
       role: 'admin',
       user: { role: 'USER' },
     });
+    (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({ type: 'group' });
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: { messageId: VALID_MSG_ID, reason: 'Hors charte' } });
     (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({ id: VALID_MSG_ID });
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValueOnce({ createdAt: new Date('2024-06-01') });
     (deps.prisma.conversation.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });

@@ -59,3 +59,16 @@ describe('postMenuEntries', () => {
     expect(postMenuEntries(base)).not.toContain('edit');
   });
 });
+
+describe('« Retirer » une publication d’un autre (#11150)', () => {
+  test('la modération de plateforme la voit sur la publication d’un autre, avant « Signaler »', () => {
+    expect(postMenuEntries({ ...base, viewerModerates: true })).toEqual(['open', 'copyText', 'share', 'save', 'remove', 'report']);
+  });
+
+  test('jamais sur la sienne, jamais sans session, jamais sans le rôle', () => {
+    expect(postMenuEntries({ ...base, authorId: 'u-me', viewerModerates: true })).not.toContain('remove');
+    expect(postMenuEntries({ ...base, viewerId: null, viewerModerates: true })).not.toContain('remove');
+    expect(postMenuEntries(base)).not.toContain('remove');
+  });
+});
+

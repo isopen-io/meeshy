@@ -41,6 +41,8 @@ struct ConversationScrollState {
     var videosToPreview: [URL] = []
     /// « Éditer » sur une pièce en attente : toutes les pièces en scènes (#9126).
     var retouchSeries: ConversationRetouchSeries? = nil
+    /// « Éditer » sur une pièce en attente : la retouche de la caméra (#11133).
+    var pieceToRetouch: ComposerRetouchPiece? = nil
     var audioToEdit: PendingAudioEdit? = nil
     // "Éditer" from the recent-media strip — edited BEFORE staging (the edited
     // output goes through the camera-capture pipeline, never the original).

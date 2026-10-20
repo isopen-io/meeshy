@@ -20,6 +20,7 @@ import {
 } from '../services/messaging/messageEditAdmission';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../services/messaging/conversationWriteAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
+import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../services/messaging/messageRemovalEffects';
 import { applyMessageEditEffects } from '../services/messaging/messageEditEffects';
 import {
@@ -501,7 +502,7 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       //     donnait à lire une permission inexistante.
       // Le rôle global se lit désormais en BASE et non dans le jeton : un rôle
       // révoqué depuis l'émission du jeton ne supprime plus.
-      const { admitted: canDelete, actorParticipantId } = await admitMessageDelete({
+      const { admitted: canDelete, actorParticipantId, byModeration } = await admitMessageDelete({
         prisma,
         deleterUserId: userId,
         message: {
@@ -515,6 +516,10 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
 
       if (!canDelete) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer ce message');
+      }
+      const moderationReason = byModeration ? moderationReasonOf(request.body) : null;
+      if (byModeration && moderationReason === null) {
+        return sendBadRequest(reply, MODERATION_REASON_MESSAGE, { code: MODERATION_REASON_REQUIRED });
       }
 
       // Supprimer les attachments et leurs fichiers physiques
@@ -570,6 +575,15 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
         metadata: message.metadata,
         removedByParticipantId: actorParticipantId ?? null,
       });
+      if (moderationReason !== null) {
+        await completeModeratedMessageRemoval({ prisma }, {
+          actorUserId: userId,
+          authorUserId: message.sender?.userId,
+          messageId: message.id,
+          conversationId: message.conversationId,
+          reason: moderationReason,
+        });
+      }
 
       // Diffuser la suppression via Socket.IO (room + aperçu de liste + file
       // de livraison hors ligne — voir broadcastMessageMutation)
