@@ -129,7 +129,7 @@
     "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift::BubbleAttachmentView.body": 114,
     "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift::BubbleContent.init": 308,
     "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift::BubbleQuotedReply.quotedBody": 105,
-    "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift::BubbleStandardLayout.body": 238,
+    "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift::BubbleStandardLayout.body": 227,
     "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift::BubbleStandardLayout.contentStackBody": 165,
     "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleSystemViews.swift::BubbleJoinNoticeView.body": 93,
     "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift::CallBubbleView.bubbleCluster": 92,
@@ -417,7 +417,7 @@
     "type": 1500
   },
   "types": {
-    "Meeshy::BubbleStandardLayout": 1675,
+    "Meeshy::BubbleStandardLayout": 1664,
     "Meeshy::CallFrameRenderer": 2583,
     "Meeshy::CallManager": 6678,
     "Meeshy::CallView": 3381,
