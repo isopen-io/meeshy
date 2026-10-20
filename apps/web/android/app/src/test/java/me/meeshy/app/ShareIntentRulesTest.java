@@ -79,4 +79,14 @@ public class ShareIntentRulesTest {
         assertFalse(ShareIntentRules.isForeignContent("content", "me.meeshy.app", "me.meeshy.app"));
         assertFalse(ShareIntentRules.isForeignContent("content", null, "me.meeshy.app"));
     }
+
+    @Test
+    public void aCopyIsKeptSkippedOrEndsTheShareLikeThePwa() {
+        // Le service worker de la PWA (sw-share-target.js, filesOf) : un fichier vide
+        // n'occupe pas de place, le premier qui ferait depasser arrete le partage (#11142).
+        assertEquals(ShareIntentRules.CopyVerdict.KEEP, ShareIntentRules.verdictOf(1));
+        assertEquals(ShareIntentRules.CopyVerdict.SKIP, ShareIntentRules.verdictOf(0));
+        assertEquals(ShareIntentRules.CopyVerdict.SKIP, ShareIntentRules.verdictOf(ShareIntentRules.UNREADABLE));
+        assertEquals(ShareIntentRules.CopyVerdict.STOP, ShareIntentRules.verdictOf(ShareIntentRules.OVER_BUDGET));
+    }
 }
