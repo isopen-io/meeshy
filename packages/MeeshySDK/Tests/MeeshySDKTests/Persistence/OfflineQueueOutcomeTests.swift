@@ -245,6 +245,46 @@ final class OfflineQueueOutcomeTests: XCTestCase {
             "retryItem MUST schedule nextAttemptAt for immediate retry")
     }
 
+    func test_retryItem_replaysTheStoryAndForwardRelationOfAnOnlineFailure() async throws {
+        let relations: [MessageRelation] = [
+            .storyReply(to: StoryID("s1"), reference: nil),
+            .forward(of: MessageID("m9"), from: ConversationID("c9"))
+        ]
+        for relation in relations {
+            let item = OutgoingMessage(
+                conversationId: ConversationID("conv-relation-\(UUID().uuidString)"),
+                content: "relance",
+                relation: relation,
+                attachments: OutgoingAttachments(ids: nil, previews: nil),
+                originalLanguage: nil,
+                location: nil
+            ).retryQueueItem(context: SendAttemptContext(
+                clientMessageId: MessageID("cid_relation_\(UUID().uuidString)"),
+                startedAt: Date(),
+                intent: .none,
+                language: "fr",
+                reusesExistingRow: false
+            ))
+            let outboxId = "ofq_\(item.id)"
+            try await queue.enqueue(item)
+            try await pool.write { db in
+                try db.execute(sql: "UPDATE outbox SET status = ?, attempts = 5 WHERE id = ?",
+                               arguments: [OutboxStatus.exhausted.rawValue, outboxId])
+            }
+
+            try await queue.retryItem(outboxId)
+
+            let record = try await pool.read { db in try OutboxRecord.fetchOne(db, key: outboxId) }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let replayed = try decoder.decode(OfflineQueueItem.self, from: try XCTUnwrap(record).payload)
+            XCTAssertEqual(replayed.storyReplyToId, relation.storyReplyToId)
+            XCTAssertEqual(replayed.forwardedFromId, relation.forwardedFromId)
+            XCTAssertEqual(replayed.forwardedFromConversationId, relation.forwardedFromConversationId)
+            XCTAssertNotNil(relation.storyReplyToId ?? relation.forwardedFromId)
+        }
+    }
+
     // MARK: - retryItem — throws when missing
 
     func test_retryItem_throwsItemNotFound_whenMissing() async throws {

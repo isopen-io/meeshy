@@ -117,16 +117,26 @@ struct OutgoingMessageWireTests {
         #expect(forward.conversationId == "c1")
     }
 
-    @Test func retryQueueItem_dropsStoryAndForward_resolvedLanguage() {
+    @Test func retryQueueItem_carriesStoryAndForward_resolvedLanguage() {
         let story = makeMessage(relation: .storyReply(to: StoryID("s1"), reference: nil))
             .retryQueueItem(context: makeContext())
         let forward = makeMessage(relation: .forward(of: MessageID("m9"), from: ConversationID("c9")))
             .retryQueueItem(context: makeContext())
 
-        #expect(story.storyReplyToId == nil, "défaut connu, figé tel quel : l'item de relance perd le lien de story")
-        #expect(forward.forwardedFromId == nil)
+        #expect(story.storyReplyToId == "s1")
+        #expect(forward.forwardedFromId == "m9")
+        #expect(forward.forwardedFromConversationId == "c9")
         #expect(story.originalLanguage == "fr")
         #expect(story.clientMessageId == "cid_1")
+    }
+
+    @Test func socketFallbackEligible_refusesAForward() {
+        let forward = makeMessage(relation: .forward(of: MessageID("m9"), from: ConversationID("c9")))
+        let story = makeMessage(relation: .storyReply(to: StoryID("s1"), reference: nil))
+
+        #expect(!forward.socketFallbackEligible(intent: .none, hasPendingEffects: false))
+        #expect(!forward.socketFirstEligible(connected: true, isEncrypted: false, intent: .none, hasPendingEffects: false))
+        #expect(story.socketFallbackEligible(intent: .none, hasPendingEffects: false))
     }
 
     @Test func socketFirstEligible_falseForEachSpecialProperty() {
