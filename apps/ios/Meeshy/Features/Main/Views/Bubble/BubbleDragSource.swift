@@ -19,6 +19,11 @@ nonisolated enum BubbleDragPolicy {
         offer.offers(.share) && !offer.isEncrypted
     }
 
+    static func source(for message: Message, servedText: String?, isRegularWidth: Bool, standalone: Bool) -> BubbleDragSource? {
+        guard isRegularWidth, !standalone else { return nil }
+        return source(for: message, servedText: servedText)
+    }
+
     static func source(for message: Message, servedText: String?) -> BubbleDragSource? {
         guard message.messageSource == .user, !message.isDeleted, mayLeave(message.exitOffer) else { return nil }
         if let piece = MessagePieceTarget.pieces(of: message).first {
@@ -49,6 +54,30 @@ nonisolated enum BubbleDragPolicy {
         let fallback: UTType = kind == .video ? .movie : .image
         guard let resolved = UTType(mimeType: mimeType), resolved.conforms(to: fallback) else { return fallback.identifier }
         return resolved.identifier
+    }
+}
+
+nonisolated enum BubbleDragScratch {
+
+    static let directoryPrefix = "BubbleDrag-"
+    static let staleAfter: TimeInterval = 600
+
+    static func purge(
+        in base: URL = FileManager.default.temporaryDirectory,
+        olderThan age: TimeInterval = 0,
+        now: Date = Date(),
+        fileManager: FileManager = .default
+    ) {
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        let entries = (try? fileManager.contentsOfDirectory(at: base, includingPropertiesForKeys: keys)) ?? []
+        entries
+            .filter { $0.lastPathComponent.hasPrefix(directoryPrefix) }
+            .filter { entry in
+                guard age > 0 else { return true }
+                let modified = (try? entry.resourceValues(forKeys: Set(keys)))?.contentModificationDate
+                return modified.map { now.timeIntervalSince($0) > age } ?? true
+            }
+            .forEach { try? fileManager.removeItem(at: $0) }
     }
 }
 
@@ -87,7 +116,8 @@ nonisolated enum BubbleDragItemProvider {
     }
 
     private static func copy(_ cached: URL, named name: String) throws -> URL {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("BubbleDrag-\(UUID().uuidString)", isDirectory: true)
+        BubbleDragScratch.purge(olderThan: BubbleDragScratch.staleAfter)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("\(BubbleDragScratch.directoryPrefix)\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let destination = directory.appendingPathComponent(name)
         try FileManager.default.copyItem(at: cached, to: destination)

@@ -24,8 +24,10 @@ final class BubbleDragSourceTests: XCTestCase {
     }
 
     private func message(_ content: String = "", effects: MessageEffects = .none, expiresAt: Date? = nil,
-                         attachments: [MessageAttachment] = [], isEncrypted: Bool = false) -> Message {
-        Message(id: "m1", conversationId: "c1", senderId: "u2", content: content, expiresAt: expiresAt,
+                         attachments: [MessageAttachment] = [], isEncrypted: Bool = false,
+                         source: Message.MessageSource = .user, deletedAt: Date? = nil) -> Message {
+        Message(id: "m1", conversationId: "c1", senderId: "u2", content: content,
+                messageSource: source, deletedAt: deletedAt, expiresAt: expiresAt,
                 effects: effects, isEncrypted: isEncrypted, attachments: attachments)
     }
 
@@ -51,8 +53,13 @@ final class BubbleDragSourceTests: XCTestCase {
         XCTAssertFalse(BubbleDragPolicy.mayLeave(message(attachments: [photo(isBlurred: true)]).exitOffer))
     }
 
-    func test_mayLeave_timedEphemeral_isFalse() {
+    func test_mayLeave_expiresAtWithoutEphemeralFlag_failsClosed() {
         XCTAssertFalse(BubbleDragPolicy.mayLeave(message("x", expiresAt: Date().addingTimeInterval(300)).exitOffer))
+    }
+
+    func test_mayLeave_timedFlame_isFalse() {
+        let flame = MessageEffects(flags: .ephemeral, ephemeralDuration: 300)
+        XCTAssertFalse(BubbleDragPolicy.mayLeave(message("x", effects: flame, expiresAt: Date().addingTimeInterval(300)).exitOffer))
     }
 
     func test_mayLeave_afterReadFlame_isFalse() {
@@ -107,6 +114,74 @@ final class BubbleDragSourceTests: XCTestCase {
 
     func test_source_emptyTextNoMedia_isNil() {
         XCTAssertNil(BubbleDragPolicy.source(for: message("  "), servedText: "  "))
+    }
+
+    func test_source_deletedMessage_isNil() {
+        XCTAssertNil(BubbleDragPolicy.source(for: message("salut", deletedAt: Date()), servedText: "salut"))
+    }
+
+    func test_source_systemMessage_isNil() {
+        XCTAssertNil(BubbleDragPolicy.source(for: message("salut", source: .system), servedText: "salut"))
+    }
+
+    func test_source_gated_regularWidthNotStandalone_dragsTheText() {
+        XCTAssertEqual(BubbleDragPolicy.source(for: message("salut"), servedText: nil, isRegularWidth: true, standalone: false), .text("salut"))
+    }
+
+    func test_source_gated_compactWidth_isNil() {
+        XCTAssertNil(BubbleDragPolicy.source(for: message("salut"), servedText: nil, isRegularWidth: false, standalone: false))
+    }
+
+    func test_source_gated_standalone_isNil() {
+        XCTAssertNil(BubbleDragPolicy.source(for: message("salut"), servedText: nil, isRegularWidth: true, standalone: true))
+    }
+
+    func test_source_gated_systemMessage_isNil_evenRegularWidth() {
+        XCTAssertNil(BubbleDragPolicy.source(for: message("salut", source: .system), servedText: nil, isRegularWidth: true, standalone: false))
+    }
+
+    // MARK: - Le nettoyage des copies temporaires
+
+    private func scratchBase() throws -> URL {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("scratch-test-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base
+    }
+
+    private func makeDrag(_ name: String, in base: URL, modified: Date) throws -> URL {
+        let directory = base.appendingPathComponent(name, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: directory.appendingPathComponent("f.bin"))
+        try FileManager.default.setAttributes([.modificationDate: modified], ofItemAtPath: directory.path)
+        return directory
+    }
+
+    func test_scratchPurge_withAge_removesOnlyStaleBubbleDragDirectories() throws {
+        let base = try scratchBase()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let now = Date()
+        let stale = try makeDrag("BubbleDrag-old", in: base, modified: now.addingTimeInterval(-3_600))
+        let fresh = try makeDrag("BubbleDrag-new", in: base, modified: now.addingTimeInterval(-10))
+        let foreign = try makeDrag("Other-old", in: base, modified: now.addingTimeInterval(-3_600))
+        BubbleDragScratch.purge(in: base, olderThan: BubbleDragScratch.staleAfter, now: now)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stale.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fresh.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: foreign.path))
+    }
+
+    func test_scratchPurge_withoutAge_removesEveryBubbleDragDirectory_andNothingElse() throws {
+        let base = try scratchBase()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let now = Date()
+        let fresh = try makeDrag("BubbleDrag-new", in: base, modified: now)
+        let foreign = try makeDrag("Other", in: base, modified: now)
+        BubbleDragScratch.purge(in: base)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fresh.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: foreign.path))
+    }
+
+    func test_scratchPurge_missingBase_doesNotCrash() {
+        BubbleDragScratch.purge(in: FileManager.default.temporaryDirectory.appendingPathComponent("absent-\(UUID().uuidString)"))
     }
 
     // MARK: - Le fournisseur

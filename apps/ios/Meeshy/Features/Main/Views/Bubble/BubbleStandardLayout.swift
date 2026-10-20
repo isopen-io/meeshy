@@ -462,8 +462,8 @@ struct BubbleStandardLayout: View {
                     }
                 }
                 // Les effets se posent sur LA BULLE (largeur intrinsèque du ZStack), avant l'overlay de réactions.
-                .modifier(BubbleDragSourceModifier(source: horizontalSizeClass == .regular && !standalone
-                    ? BubbleDragPolicy.source(for: message, servedText: content.text?.raw) : nil))
+                .modifier(BubbleDragSourceModifier(source: BubbleDragPolicy.source(for: message, servedText: content.text?.raw,
+                    isRegularWidth: horizontalSizeClass == .regular, standalone: standalone)))
                 .messageEffects(message.effects)
                 // Reactions sit at the BOTTOM corner of the bubble, sur le
                 // cote OPPOSE au bord d'ecran. Une bulle recue (a gauche)
