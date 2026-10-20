@@ -252,16 +252,13 @@ struct CommentsSheetView: View {
                                     onDeleteComment: { target in
                                         Task { await deleteComment(target) }
                                     },
+                                    onRemoveComment: { target, reason in
+                                        Task { await deleteComment(target, reason: reason) }
+                                    },
                                     onEditComment: { target in
                                         beginEditComment(target)
                                     },
-                                    onRequestTranslation: { target in
-                                        let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
-                                        Task {
-                                            try? await PostService.shared.requestCommentTranslation(
-                                                postId: post.id, commentId: target.id, targetLanguage: lang)
-                                        }
-                                    },
+                                    onRequestTranslation: { requestTranslation(of: $0) },
                                     moodEmoji: moodEmojiResolver?(comment.authorId),
                                     storyState: storyRingResolver?(comment.authorId) ?? .none,
                                     presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
@@ -878,7 +875,16 @@ struct CommentsSheetView: View {
     /// Retrait optimiste immédiat (racine + ses réponses chargées, ou réponse
     /// avec décrément du compteur du parent) puis appel API. Rollback complet
     /// du snapshot si l'API échoue. Miroir du flux optimiste d'envoi.
-    private func deleteComment(_ comment: FeedComment) async {
+    /// Demande la traduction d'un commentaire vers la langue préférée du lecteur.
+    private func requestTranslation(of target: FeedComment) {
+        let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
+        Task {
+            try? await PostService.shared.requestCommentTranslation(
+                postId: post.id, commentId: target.id, targetLanguage: lang)
+        }
+    }
+
+    private func deleteComment(_ comment: FeedComment, reason: String? = nil) async {
         let previousComments = liveComments
         let previousReplies = repliesMap
         let previousExpanded = expandedThreads
@@ -910,14 +916,14 @@ struct CommentsSheetView: View {
         }
 
         do {
-            try await PostService.shared.deleteComment(postId: post.id, commentId: comment.id)
+            try await PostService.shared.deleteComment(postId: post.id, commentId: comment.id, reason: reason)
             // Invalidation locale par réécriture : sans elle, la version cachée
             // ressuscitait le commentaire supprimé à la prochaine ouverture
             // (sheet, détail, overlay story lisent la même clé).
             if comment.parentId == nil, let current = liveComments {
                 try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)")
             }
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main)))
         } catch {
             liveComments = previousComments
             repliesMap = previousReplies
