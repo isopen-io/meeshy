@@ -7,26 +7,12 @@ import { conversationActionsFor, type ConversationActionInput, type Conversation
 import type { ActionConversation, ActionViewer } from './message-action-policy';
 
 const viewer = (overrides: Partial<ActionViewer> = {}): ActionViewer => ({
-  id: 'user-viewer',
-  participantId: 'part-viewer',
-  hasAccount: true,
-  isAnonymous: false,
-  platformRole: 'USER',
-  conversationRole: 'member',
-  isActiveMember: true,
-  canSendMessages: true,
-  isDeclaredMinor: false,
-  ...overrides,
+  id: 'user-viewer', participantId: 'part-viewer', hasAccount: true, isAnonymous: false, platformRole: 'USER',
+  conversationRole: 'member', isActiveMember: true, canSendMessages: true, isDeclaredMinor: false, ...overrides,
 });
 
 const conversation = (overrides: Partial<ActionConversation> = {}): ActionConversation => ({
-  type: 'group',
-  encryptionMode: null,
-  isActive: true,
-  closedAt: null,
-  isAnnouncementChannel: false,
-  defaultWriteRole: 'everyone',
-  ...overrides,
+  type: 'group', encryptionMode: null, isActive: true, closedAt: null, isAnnouncementChannel: false, defaultWriteRole: 'everyone', ...overrides,
 });
 
 const actionsOf = (parts: { conversation?: Partial<ActionConversation>; viewer?: Partial<ActionViewer> } = {}) =>

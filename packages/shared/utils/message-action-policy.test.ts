@@ -17,36 +17,17 @@ const NOW = Date.parse('2026-10-20T12:00:00Z');
 const HOUR = 60 * 60 * 1000;
 
 const viewer = (overrides: Partial<ActionViewer> = {}): ActionViewer => ({
-  id: 'user-viewer',
-  participantId: 'part-viewer',
-  hasAccount: true,
-  isAnonymous: false,
-  platformRole: 'USER',
-  conversationRole: 'member',
-  isActiveMember: true,
-  canSendMessages: true,
-  isDeclaredMinor: false,
-  ...overrides,
+  id: 'user-viewer', participantId: 'part-viewer', hasAccount: true, isAnonymous: false, platformRole: 'USER',
+  conversationRole: 'member', isActiveMember: true, canSendMessages: true, isDeclaredMinor: false, ...overrides,
 });
 
 const conversation = (overrides: Partial<ActionConversation> = {}): ActionConversation => ({
-  type: 'group',
-  encryptionMode: null,
-  isActive: true,
-  closedAt: null,
-  isAnnouncementChannel: false,
-  defaultWriteRole: 'everyone',
-  ...overrides,
+  type: 'group', encryptionMode: null, isActive: true, closedAt: null, isAnnouncementChannel: false, defaultWriteRole: 'everyone', ...overrides,
 });
 
 const message = (overrides: Partial<MessageActionSubject> = {}): MessageActionSubject => ({
-  id: '65f000000000000000000001',
-  senderId: 'part-author',
-  authorUserId: 'user-author',
-  content: 'Bonjour à tous',
-  messageType: 'text',
-  createdAt: new Date(NOW - HOUR).toISOString(),
-  ...overrides,
+  id: '65f000000000000000000001', senderId: 'part-author', authorUserId: 'user-author', content: 'Bonjour à tous',
+  messageType: 'text', createdAt: new Date(NOW - HOUR).toISOString(), ...overrides,
 });
 
 const mine = { senderId: 'part-viewer', authorUserId: 'user-viewer' } as const;

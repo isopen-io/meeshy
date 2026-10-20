@@ -59,6 +59,11 @@ describe('messageContentKind — le TYPE de contenu, dérivé en un site (#11205
     expect(messageContentKind(message(overrides)).flags[flag]).toBe(true);
   });
 
+  it('un chiffrement que le serveur lit (server, hybrid) n’est pas du bout en bout', () => {
+    expect(messageContentKind(message({ isEncrypted: true, encryptionMode: 'server' })).flags.encrypted).toBe(false);
+    expect(messageContentKind(message({ isEncrypted: true, encryptionMode: 'hybrid' })).flags.encrypted).toBe(false);
+  });
+
   it('un avis de capture reste un message système', () => {
     expect(messageContentKind(message({ messageType: 'system', metadata: { kind: 'content-capture' } })).kind).toBe('system');
   });
