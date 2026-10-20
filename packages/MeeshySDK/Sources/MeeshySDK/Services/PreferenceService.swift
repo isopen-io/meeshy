@@ -67,7 +67,7 @@ public extension PreferenceServiceProviding {
     func persistConversationPreferences(conversationId: String, prefs: APIConversationPreferences) async {}
 }
 
-public final class PreferenceService: PreferenceServiceProviding, @unchecked Sendable {
+public final class PreferenceService: PreferenceServiceProviding, Sendable {
     public static let shared = PreferenceService()
     private let api: APIClientProviding
 

@@ -92,7 +92,7 @@ public extension EngagementProgressProviding {
     }
 }
 
-public final class EngagementProgressService: EngagementProgressProviding, @unchecked Sendable {
+public final class EngagementProgressService: EngagementProgressProviding, Sendable {
     public static let shared = EngagementProgressService()
     private let api: APIClientProviding
 

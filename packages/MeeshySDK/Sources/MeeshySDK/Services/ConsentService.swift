@@ -14,7 +14,7 @@ public enum ConsentServiceError: Error, Equatable {
 /// d'un consentement (#4348), celle que nomme le refus de
 /// `PATCH /me/preferences/application` depuis #4180. Le serveur horodate :
 /// aucune date ne part du client.
-public final class ConsentService: ConsentServiceProviding, @unchecked Sendable {
+public final class ConsentService: ConsentServiceProviding, Sendable {
     public static let shared = ConsentService()
     private let api: APIClientProviding
 

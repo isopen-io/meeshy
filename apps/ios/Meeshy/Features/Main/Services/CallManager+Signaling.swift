@@ -18,7 +18,21 @@ extension CallManager {
 
     func setupSocketListeners() {
         let socket = MessageSocketManager.shared
+        observeSignalingConnection(socket)
+        observeIncomingOffers(socket)
+        observeTranscription(socket)
+        observeNegotiation(socket)
+        observeTermination(socket)
+        observeCallErrors(socket)
+        observeSocketReconnect(socket)
+        observeAnsweredElsewhere(socket)
+        observeRemoteMedia(socket)
+        observeForcedLeave(socket)
+        observeIceServerRefresh(socket)
+        observeRemoteQuality(socket)
+    }
 
+    private func observeSignalingConnection(_ socket: MessageSocketManager) {
         // EXIGENCE №1 — degraded-signaling indicator. This subscription has NO
         // power over the call lifecycle (media is P2P; `didReconnect` re-joins
         // and resyncs); it only drives the discreet CallView banner.
@@ -52,12 +66,16 @@ extension CallManager {
                 }
             }
             .store(in: &cancellables)
+    }
 
+    private func observeIncomingOffers(_ socket: MessageSocketManager) {
         socket.callOfferReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.handleCallOffer(event) }
             .store(in: &cancellables)
+    }
 
+    private func observeTranscription(_ socket: MessageSocketManager) {
         socket.callTranslatedSegmentReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -71,7 +89,6 @@ extension CallManager {
                 self.transcriptionService.receiveTranslatedSegment(segment)
             }
             .store(in: &cancellables)
-
         // Signal de présence transcription : le pair a activé/fermé son
         // panneau → indicateur d'invitation sur l'icône captions. PAS de
         // garde isShowingOverlay ici — le signal doit précisément atteindre
@@ -97,7 +114,6 @@ extension CallManager {
                 self.toggleTranscription()
             }
             .store(in: &cancellables)
-
         // Un pair peut quitter l'appel (raccroché, crash, coupure) panneau
         // OUVERT, sans jamais émettre `{active: false}` — son entrée
         // survivrait dans `listeningPeers` pour le reste de l'appel et ce
@@ -114,7 +130,9 @@ extension CallManager {
                 self.toggleTranscription()
             }
             .store(in: &cancellables)
+    }
 
+    private func observeNegotiation(_ socket: MessageSocketManager) {
         // ⚠️ Crash SIGTRAP (≤ build 1175) — ces `.sink` sont implicitement @MainActor
         // (CallManager est @MainActor + SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor).
         // Les livrer sur `DispatchQueue.global` faisait échouer l'assertion
@@ -132,7 +150,6 @@ extension CallManager {
                 self.handleSignalOffer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
-
         socket.callAnswerReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -141,7 +158,6 @@ extension CallManager {
                 self.handleRemoteAnswer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
-
         socket.callICECandidateReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -154,7 +170,9 @@ extension CallManager {
                 self.handleRemoteICECandidate(callId: event.callId, candidate: candidate, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
+    }
 
+    private func observeTermination(_ socket: MessageSocketManager) {
         socket.callEnded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -163,7 +181,6 @@ extension CallManager {
                 self.handleRemoteEnd(callId: event.callId, rawReason: event.reason)
             }
             .store(in: &cancellables)
-
         // Audit P1-25 — surface missed calls explicitly. The gateway emits
         // both `call:ended` and `call:missed` for ringing-timeout scenarios;
         // listening here lets future UX (banner, badge) react to missed
@@ -179,7 +196,9 @@ extension CallManager {
                 }
             }
             .store(in: &cancellables)
+    }
 
+    private func observeCallErrors(_ socket: MessageSocketManager) {
         // Audit WS — `call:error` était décodé (MessageSocketManager.callError)
         // mais n'avait AUCUN abonné : un rejet serveur d'opération d'appel émis
         // hors de l'ACK `call:initiate` (ex. salle pleine, conversation fermée,
@@ -192,73 +211,30 @@ extension CallManager {
                 let message = CallRefusalMessage.localized(forCode: event.code) ?? event.message
                     ?? String(localized: "call.error.generic", defaultValue: "Erreur lors de l'appel", bundle: .main)
                 Logger.calls.error("call:error received: code=\(event.code ?? "?") message=\(message)")
-                // Call-scoping guard: RATE_LIMIT_EXCEEDED/TARGET_NOT_FOUND/etc. below
-                // were each hardened one prod incident at a time, but none of them
-                // (nor any future code) can be call-scoped without this — `CallError`
-                // carries no callId at all until now. An error naming a DIFFERENT call
-                // than the one currently active must never affect this device's
-                // healthy call (e.g. a stale relay failure from a call that already
-                // ended, or cross-talk from a duplicate-device session). Errors with
-                // no callId (emit sites not yet call-scoped server-side, or pre-call
-                // failures like auth) fall through to the existing per-code handling.
-                if let errorCallId = event.callId, errorCallId != self.currentCallId {
-                    Logger.calls.warning("call:error for a different call (\(errorCallId, privacy: .public) vs current \(self.currentCallId ?? "nil", privacy: .public)) — ignoring")
-                    return
-                }
-                // INVALID_SIGNAL is a per-message relay rejection (a malformed or
-                // non-WebRTC signal type), NOT a call-fatal operation error. It
-                // must never tear down a healthy WebRTC call nor surface a user
-                // toast — defense in depth against a stray app-level signal ever
-                // reaching the strict gateway schema again.
-                if event.code == "INVALID_SIGNAL" {
-                    return
-                }
-                // [Audit prod 2026-07-02, C2] RATE_LIMIT_EXCEEDED is throttling
-                // of ONE event (gateway cap `socket:call:ice` = 50 per 5 s; a
-                // legitimate ICE-gathering flush emits 15-25 candidates per
-                // millisecond) — dropping a candidate degrades nothing (ICE is
-                // redundant by design). Treating it as fatal killed a live call
-                // 382 ms after connection (callId 6a461199…935c, prod).
-                if event.code == "RATE_LIMIT_EXCEEDED" {
-                    Logger.calls.warning("call:error RATE_LIMIT_EXCEEDED — non-fatal, dropping throttled event")
-                    return
-                }
-                // [Chaos-test prod 2026-07-02, EXIGENCE №1] TARGET_NOT_FOUND is
-                // a TRANSIENT relay failure: the peer momentarily has no socket
-                // in the call room (socket churn, re-join in flight after a
-                // gateway restart). The P2P media is untouched — tearing down
-                // here killed a healthy call while the peer re-joined seconds
-                // later. ICE candidates are redundant by design and the answer
-                // path has its own bounded retry; dropping the failed relay is
-                // safe.
-                if event.code == "TARGET_NOT_FOUND" {
-                    Logger.calls.warning("call:error TARGET_NOT_FOUND — transient relay failure, keeping the call")
-                    return
-                }
-                // CALL_ENDED is terminal-state reconciliation, NOT a user error:
-                // the gateway rejected a late emit (join/signal/end) because the
-                // call already ended — a benign race with the normal end fanout
-                // (#12). Route through the canonical remote-end path (dedup on
-                // .ended + correct Recents reason) instead of toasting "already
-                // ended" and calling failCall, which would flag a healthy end as
-                // a failure. Idempotent: handleRemoteEnd no-ops if already ended.
-                if event.code == "CALL_ENDED" {
+                let disposition = CallErrorDisposition.resolve(
+                    code: event.code,
+                    errorCallId: event.callId,
+                    currentCallId: self.currentCallId,
+                    isTransientDuringResume: CallResumePolicy.isTransientDuringResume(
+                        code: event.code, isResuming: self.isResumingCall
+                    ),
+                    callIsActive: self.callState.isActive
+                )
+                switch disposition {
+                case .ignore:
+                    Logger.calls.warning("call:error ignored (code=\(event.code ?? "?", privacy: .public), callId=\(event.callId ?? "nil", privacy: .public))")
+                case .reconcileEnd(let callId):
                     Logger.calls.info("call:error CALL_ENDED — reconciling to ended (benign terminal race, #12)")
-                    if let endCallId = event.callId ?? self.currentCallId {
-                        self.handleRemoteEnd(callId: endCallId)
-                    }
-                    return
-                }
-                if CallResumePolicy.isTransientDuringResume(code: event.code, isResuming: self.isResumingCall) { return }
-                FeedbackToastManager.shared.showError(message)
-                // Ne teardown que si un appel est réellement en vol (ringing →
-                // reconnecting). Une erreur hors-appel ne fait qu'afficher le toast.
-                if self.callState.isActive {
-                    self.failCall(message)
+                    self.handleRemoteEnd(callId: callId)
+                case .surface(let endsCall):
+                    FeedbackToastManager.shared.showError(message)
+                    if endsCall { self.failCall(message) }
                 }
             }
             .store(in: &cancellables)
+    }
 
+    private func observeSocketReconnect(_ socket: MessageSocketManager) {
         // Audit P1-30 — on Socket.IO reconnect, re-emit `call:join` so the
         // gateway puts us back in the call's room. Without this rejoin, ICE
         // continued via NWPathMonitor restart but every gateway-relayed
@@ -319,21 +295,12 @@ extension CallManager {
                         MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)
                         Logger.calls.info("Socket reconnect — re-syncing video state to peer (effectiveVideoOn=\(effectiveVideoOn))")
                     }
-                    // Re-sync audio mute state. The gateway resets per-participant
-                    // media state when a socket disconnects; the peer defaults to
-                    // assuming our mic is live, which is wrong if we were muted.
-                    // Always emit (even when !isMuted) to overwrite any stale state.
+                    // Toujours émettre, même non muet : écrase l'état périmé du pair.
                     MessageSocketManager.shared.emitCallToggleAudio(callId: callId, enabled: !self.isMuted)
                     Logger.calls.info("Socket reconnect — re-syncing audio mute state to peer (isMuted=\(self.isMuted))")
                     self.screenShare.announceIfSharing()
-                    // Request fresh TURN credentials after reconnect. The socket may
-                    // have been down long enough for our credentials to approach
-                    // expiry (the periodic refresh only fires at 80% of the TTL,
-                    // leaving a window of vulnerability for the remaining 20%).
-                    // Cancel the periodic scheduler first so the
-                    // old deadline doesn't fire while the fresh response is in flight,
-                    // causing duplicate requests. The response re-arms the scheduler
-                    // at the new TTL via `call:ice-servers-refreshed`.
+                    // Identifiants TURN frais : le scheduler périodique est annulé
+                    // d'abord ; `call:ice-servers-refreshed` le réarme au nouveau TTL.
                     self.turnRefreshTask?.cancel()
                     self.turnRefreshTask = nil
                     self.requestFreshTurnCredentials(callId: callId)
@@ -341,7 +308,9 @@ extension CallManager {
                 }
             }
             .store(in: &cancellables)
+    }
 
+    private func observeAnsweredElsewhere(_ socket: MessageSocketManager) {
         // Audit P1-27 — fired when another device of the same user answered.
         // Dismiss the local ringing UI with .answeredElsewhere so CallKit
         // displays "Answered on another device" in Recents.
@@ -359,7 +328,9 @@ extension CallManager {
                 self.endCallInternal(reason: .remote)
             }
             .store(in: &cancellables)
+    }
 
+    private func observeRemoteMedia(_ socket: MessageSocketManager) {
         // P0-3 — the peer toggled its camera (call:media-toggled). The gateway
         // routes this to the OTHER participant only (socket.to(room)), so every
         // event we receive reflects the REMOTE peer's video state. Drives the
@@ -371,9 +342,10 @@ extension CallManager {
                 guard event.callId == self.currentCallId, !self.isGroupMeshMediaToggle(event) else { return }
                 switch event.mediaType {
                 case "video", "screen":
-                    self.isRemoteVideoEnabled = event.mediaType == "screen"
+                    let videoEnabled = event.mediaType == "screen"
                         ? self.screenShare.applyRemoteScreenShare(enabled: event.enabled)
                         : self.screenShare.applyRemoteCamera(enabled: event.enabled)
+                    self.remoteMedia = self.remoteMedia.applying(.video(videoEnabled))
                     // C7 — la caméra du pair fait basculer `isVideoUIActive`, donc
                     // l'éligibilité au PiP système. `AVPictureInPictureVideoCall-
                     // ViewController` exige `.videoChat` : sans cette ré-application
@@ -392,24 +364,25 @@ extension CallManager {
                     self.pip.setRemoteVideoMuted(!self.isRemoteVideoEnabled)
                     Logger.calls.info("Remote \(event.mediaType) \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
                 case "audio":
-                    self.isRemoteAudioEnabled = event.enabled
+                    self.remoteMedia = self.remoteMedia.applying(.audio(event.enabled))
                     Logger.calls.info("Remote audio \(event.enabled ? "enabled" : "muted") (callId=\(event.callId))")
                 default:
                     break
                 }
             }
             .store(in: &cancellables)
-
         socket.callScreenCaptureAlert
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
                 guard event.callId == self.currentCallId else { return }
-                self.isRemoteScreenCapturing = event.isCapturing
+                self.remoteMedia = self.remoteMedia.applying(.screenCapture(event.isCapturing))
                 Logger.calls.info("Remote screen capture \(event.isCapturing ? "started" : "stopped") (callId=\(event.callId))")
             }
             .store(in: &cancellables)
+    }
 
+    private func observeForcedLeave(_ socket: MessageSocketManager) {
         socket.callForcedLeave
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -429,7 +402,9 @@ extension CallManager {
                 self.endCallInternal(reason: .remote)
             }
             .store(in: &cancellables)
+    }
 
+    private func observeIceServerRefresh(_ socket: MessageSocketManager) {
         socket.callIceServersRefreshed
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -447,7 +422,9 @@ extension CallManager {
                 }
             }
             .store(in: &cancellables)
+    }
 
+    private func observeRemoteQuality(_ socket: MessageSocketManager) {
         // Gateway emits call:quality-alert when the REMOTE peer's RTT or
         // packet loss exceeds thresholds. Surface this as a transient indicator
         // so the UI can show "Your contact is experiencing network issues" —
@@ -457,7 +434,7 @@ extension CallManager {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, self.currentCallId == event.callId else { return }
-                self.isRemoteQualityDegraded = true
+                self.remoteMedia = self.remoteMedia.applying(.qualityDegraded(true))
                 Logger.calls.info("Remote quality degraded: metric=\(event.metric) value=\(event.value) (callId=\(event.callId))")
                 self.scheduleRemoteQualityReset()
             }
@@ -469,7 +446,8 @@ extension CallManager {
         remoteQualityResetTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(QualityThresholds.remoteQualityResetSeconds))
             guard !Task.isCancelled else { return }
-            self?.isRemoteQualityDegraded = false
+            guard let self else { return }
+            self.remoteMedia = self.remoteMedia.applying(.qualityDegraded(false))
         }
     }
 
