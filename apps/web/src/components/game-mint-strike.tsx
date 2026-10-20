@@ -4,7 +4,6 @@ import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { MintScene } from '@/components/game';
 import { registerStrikeStage } from '@/lib/game/strike-gate';
-import { formatCount, gameText } from '@/lib/view/game-copy';
 
 /**
  * MEE ET MEO FRAPPENT UNE MEESH (#9537, conception V) — la scène de la frappe,
@@ -51,7 +50,6 @@ export function MintStrike({ size, strikeKey, next, confirmed = null }: MintStri
       face={coin === null ? 'obverse' : 'reverse'}
       edition={shown.edition}
       number={shown.number}
-      numberLabel={gameText('game.mint.number_label', { number: formatCount(shown.number) })}
       playKey={strikeKey}
     />
   );

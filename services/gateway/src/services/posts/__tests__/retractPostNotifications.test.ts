@@ -44,6 +44,7 @@ interface NotificationRow {
   readonly postId: string | null;
   /** `metadata.repostId` — posé par `post_repost` seulement. */
   readonly repostId?: string;
+  readonly type?: string;
 }
 
 let rows: NotificationRow[] = [];
@@ -84,8 +85,11 @@ function seed(seeded: NotificationRow[]): void {
   rows = [...seeded];
   runCommandRaw.mockImplementation(async (command: any) => {
     const clauses: Array<Record<string, { $in?: string[] }>> | undefined = command?.filter?.$or;
+    const excludedType: string | undefined = command?.filter?.type?.$ne;
     const matched = rows.filter(
-      (row) => clauses === undefined || clauses.some((clause) => matchesClause(row, clause))
+      (row) =>
+        (excludedType === undefined || row.type !== excludedType) &&
+        (clauses === undefined || clauses.some((clause) => matchesClause(row, clause)))
     );
     const batch = matched.slice(0, command?.batchSize ?? matched.length);
     return {
@@ -140,6 +144,7 @@ describe('retractPostNotifications', () => {
       expect.objectContaining({
         find: 'Notification',
         filter: {
+          type: { $ne: 'content_removed' },
           $or: [
             { 'context.postId': { $in: [POST_ID] } },
             { 'metadata.repostId': { $in: [POST_ID] } },
@@ -182,6 +187,19 @@ describe('retractPostNotifications', () => {
       { id: 'n-commentaire', userId: COMMENTER_ID, pushSent: true },
       { id: 'n-ami', userId: FRIEND_ID, pushSent: true },
     ]);
+  });
+
+  it('garde la notification qui explique à l\'auteur le retrait de son contenu', async () => {
+    seed([
+      notification('n-like', AUTHOR_ID, POST_ID),
+      { id: 'n-retrait', userId: AUTHOR_ID, postId: POST_ID, type: 'content_removed' },
+    ]);
+
+    const count = await retractPostNotifications(prisma, [POST_ID], announcer);
+
+    expect(count).toBe(1);
+    expect(deleteMany).toHaveBeenCalledWith({ where: { id: { in: ['n-like'] } } });
+    expect(rows.map((row) => row.id)).toEqual(['n-retrait']);
   });
 
   it('ne touche pas les notifications d\'un AUTRE post', async () => {
@@ -291,6 +309,7 @@ describe('retractPostNotifications', () => {
     expect(runCommandRaw).toHaveBeenCalledWith(
       expect.objectContaining({
         filter: {
+          type: { $ne: 'content_removed' },
           $or: [
             { 'context.postId': { $in: [POST_ID, OTHER_POST_ID] } },
             { 'metadata.repostId': { $in: [POST_ID, OTHER_POST_ID] } },

@@ -51,9 +51,9 @@ describe('les tables couvrent le catalogue partagé, sans trou ni vide', () => {
 describe('les phrases de palier', () => {
   const progress = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
 
-  test('un axe à 42 sur un palier 50 : « Encore 8 avant le palier 50 »', () => {
+  test('un axe à 42 sur un palier 50 : « 8 jusqu’au palier 50 »', () => {
     const messages = progress.axes.find((a) => a.axisKey === 'content.text_message');
-    expect(messages && nextStepLabel(messages)).toBe('Encore 8 avant le palier 50');
+    expect(messages && nextStepLabel(messages)).toBe('8 jusqu’au palier 50');
   });
 
   test('une échelle complète le dit, sans palier inventé', () => {

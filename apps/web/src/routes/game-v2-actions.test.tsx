@@ -104,7 +104,7 @@ describe('le consentement à la ligue', () => {
     await act(async () => actions().consent.run({ consent: true, pseudonym: 'Aigrette-77' }));
     await settle();
     expect(gameOf(cached()).league?.access).toBe('consent-required');
-    expect(actions().consent.error).toBe('Ce pseudonyme est déjà pris.');
+    expect(actions().consent.error).toBe('Ce nom de joute est déjà pris.');
   });
 
   test('quitter la ligue retire le classement du cache : les pseudonymes des autres ne restent pas sur l’appareil', async () => {
@@ -170,7 +170,7 @@ describe('la saison', () => {
     await act(async () => actions().claimStep.run(4));
     await settle();
     expect(gameOf(cached()).season?.claimedSteps).toEqual([1, 2, 3]);
-    expect(actions().claimStep.error).toBe('Cette étape est déjà réclamée.');
+    expect(actions().claimStep.error).toBe('Cette halte est déjà réclamée.');
   });
 
   test('réclamer avec succès : l’étape reste marquée, le geste porte le numéro d’étape', async () => {
@@ -217,6 +217,6 @@ describe('la vitrine, la visibilité, le Prestige', () => {
     await act(async () => refusedRun.actions().prestige.run());
     await settle();
     expect(gameOf(refusedRun.cached()).level.level).toBe(100);
-    expect(refusedRun.actions().prestige.error).toBe('Le Prestige s’ouvre au niveau 100.');
+    expect(refusedRun.actions().prestige.error).toBe('La Renaissance s’ouvre au niveau 100.');
   });
 });

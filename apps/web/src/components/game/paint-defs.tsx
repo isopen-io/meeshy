@@ -1,5 +1,5 @@
 import { GAME_BIRD_BOX, birdCutFilter, birdEngraveFilter, gameBirdMarkup, gameBirdPlacement, type GameBirdKey } from '@/lib/game/birds';
-import { paintAxis, paintId, paintStops, type GamePaint } from '@/lib/game/materials';
+import { IRIS_AXIS, paintAxis, paintId, paintStops, type GamePaint } from '@/lib/game/materials';
 
 import '@/styles/game.css';
 
@@ -15,9 +15,11 @@ type Props = {
   readonly paints: readonly GamePaint[];
   /** Ajoute le dégradé du reflet (`${uid}-sheen`) : un trait blanc qui s'efface sur ses bords. */
   readonly sheen?: boolean;
+  /** Ajoute le spectre à contre-sens (`${uid}-iris`) : la tranche irisée du prisme (épopée § 6). */
+  readonly iris?: boolean;
 };
 
-export function PaintDefs({ uid, paints, sheen = false }: Props) {
+export function PaintDefs({ uid, paints, sheen = false, iris = false }: Props) {
   return (
     <>
       {paints.map((paint) => {
@@ -30,6 +32,13 @@ export function PaintDefs({ uid, paints, sheen = false }: Props) {
           </linearGradient>
         );
       })}
+      {iris ? (
+        <linearGradient id={`${uid}-iris`} x1={IRIS_AXIS.x1} y1={IRIS_AXIS.y1} x2={IRIS_AXIS.x2} y2={IRIS_AXIS.y2}>
+          {paintStops('prism').map((stop) => (
+            <stop key={stop.offset} offset={stop.offset} stopColor={stop.color} />
+          ))}
+        </linearGradient>
+      ) : null}
       {sheen ? (
         <linearGradient id={`${uid}-sheen`} x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="var(--game-glint)" stopOpacity="0" />

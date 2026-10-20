@@ -82,7 +82,7 @@ describe('la plaque complète', () => {
 
   test('la formule de la famille, dans la langue de l’interface', () => {
     const plate = authorPlateOf(achievement('legendary'), author('atabeth'), 'fr');
-    expect(plate).toMatchObject({ family: 'achievement', finish: 'emboss', metal: 'gold', caption: 'Succès de', name: '@atabeth', monogram: 'AT', label: 'Succès de @atabeth' });
+    expect(plate).toMatchObject({ family: 'achievement', finish: 'emboss', metal: 'gold', caption: 'Haut fait de', name: '@atabeth', monogram: 'AT', label: 'Haut fait de @atabeth' });
     expect(authorPlateOf({ kind: 'rank', rank: 'voix', division: 2, mythic: null }, author('atabeth'), 'en')?.caption).toBe('Rank reached by');
     expect(authorPlateOf({ kind: 'mission', templateKey: 'send_voice', target: 3 }, author('atabeth'), 'de')?.caption).toBe('Mission erfüllt von');
   });

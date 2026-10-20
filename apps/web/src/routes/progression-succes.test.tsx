@@ -61,7 +61,7 @@ describe('les succès proposent la carte', () => {
     await settle();
     const dialog = host.querySelector('[role="dialog"]');
     expect(dialog).not.toBeNull();
-    expect(dialog?.textContent).toContain('Succès débloqué');
+    expect(dialog?.textContent).toContain('Haut fait accompli');
     await click(host.querySelector('[data-photo-close]'));
     await settle();
     expect(host.querySelector('[role="dialog"]')).toBeNull();
