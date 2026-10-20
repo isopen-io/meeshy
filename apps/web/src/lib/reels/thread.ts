@@ -126,6 +126,16 @@ export function holdReelThread(params: {
   return thread.every((post, index) => post === composed[index]) ? composed : thread;
 }
 
+/**
+ * **UN RÉEL RETIRÉ QUITTE LA PILE SUR-LE-CHAMP** (#11156) — supprimé par son
+ * auteur ou retiré par la modération depuis le menu « … » : l'écran le cache
+ * avant la réponse, et le rend si la passerelle refuse. La même pile revient
+ * quand rien n'est caché.
+ */
+export function withoutHiddenReels(thread: readonly FeedPost[], hidden: ReadonlySet<string>): readonly FeedPost[] {
+  return hidden.size === 0 ? thread : thread.filter((post) => !hidden.has(post.id));
+}
+
 export function activeIndexOf(params: { readonly scrollTop: number; readonly pageHeight: number; readonly count: number }): number {
   const { scrollTop, pageHeight, count } = params;
   if (pageHeight <= 0 || count <= 0) return 0;

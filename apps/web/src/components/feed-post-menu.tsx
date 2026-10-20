@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 
 import type { EditPostOutcome } from '@/lib/api/publication-actions';
+import type { FeedCardModel } from '@/lib/feed/card-model';
 import type { ReportReason } from '@/lib/api/reports';
 import type { DraftStore } from '@/lib/send/draft-store';
 import type { PostToggleKind } from '@/lib/feed/interactions';
@@ -216,5 +217,45 @@ export function FeedPostMenu({
         </Suspense>
       ) : null}
     </>
+  );
+}
+
+/**
+ * **LE « ⋯ » D'UNE PUBLICATION, DEPUIS SON MODÈLE** — le SEUL passage du
+ * modèle de carte aux props du menu : la carte du fil (post et réel) et la
+ * barre haute du plein écran des Réels (#11156) le montent toutes deux, aucune
+ * ne recopie l'aiguillage (texte original, studio, signet).
+ */
+export function ModelPostMenu({
+  model,
+  isDetail,
+  tone,
+  menu,
+  onShare,
+  onGesture,
+}: {
+  readonly model: FeedCardModel;
+  readonly isDetail: boolean;
+  readonly tone: 'card' | 'overlay';
+  readonly menu: PostMenuHost;
+  readonly onShare?: ((postId: string) => void) | undefined;
+  readonly onGesture?: ((postId: string, kind: PostToggleKind) => void) | undefined;
+}) {
+  return (
+    <FeedPostMenu
+      postId={model.id}
+      authorId={model.author.id}
+      authorName={model.author.name}
+      text={model.text?.full}
+      originalText={model.text?.original}
+      originalLanguage={model.text?.originalLanguage}
+      bookmarked={model.viewer.bookmarked}
+      studioEditable={model.repostOf === undefined && (model.scene !== undefined || model.media.length > 0)}
+      isDetail={isDetail}
+      tone={tone}
+      menu={menu}
+      onShare={onShare}
+      onGesture={onGesture}
+    />
   );
 }

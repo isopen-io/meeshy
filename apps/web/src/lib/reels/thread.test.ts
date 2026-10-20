@@ -15,6 +15,7 @@ import {
   reelDisplayOf,
   reelVisitorState,
   shouldLoadMoreReels,
+  withoutHiddenReels,
 } from './thread';
 
 /**
@@ -283,5 +284,18 @@ describe('reelVisitorState', () => {
 
   test('`/reels` sans identifiant invite à rejoindre, jamais « contenu indisponible »', () => {
     expect(reelVisitorState({ count: 0, hasSeed: false, seedRefused: false })).toBe('invite');
+  });
+});
+
+describe('withoutHiddenReels — un réel retiré quitte la pile sur-le-champ (#11156)', () => {
+  const reel = (id: string): FeedPost => ({ id, type: 'POST', createdAt: '2026-09-13T11:55:00.000Z' });
+
+  test('le réel caché disparaît, l’ordre des autres est gardé', () => {
+    expect(withoutHiddenReels([reel('a'), reel('b'), reel('c')], new Set(['b'])).map((post) => post.id)).toEqual(['a', 'c']);
+  });
+
+  test('rien de caché : la MÊME pile, sans recomposition', () => {
+    const thread = [reel('a')];
+    expect(withoutHiddenReels(thread, new Set())).toBe(thread);
   });
 });

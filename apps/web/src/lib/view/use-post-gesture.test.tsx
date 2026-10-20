@@ -398,6 +398,33 @@ describe('usePostGesture — une suppression CONFIRMÉE prévient l’hôte (#75
     await laisserPasser();
     expect(deleted).toEqual(['p-gone']);
   });
+
+  test('RETIRER (#11156) : `onDeleting` prévient l’hôte AVANT la réponse, et sa défaite ne sert pas quand le retrait est confirmé', async () => {
+    const journal: string[] = [];
+    function RemoveHarness() {
+      const { menu } = usePostGesture({
+        onDeleting: (postId) => {
+          journal.push(`hide:${postId}`);
+          return () => journal.push(`undo:${postId}`);
+        },
+        onDeleted: (postId) => journal.push(`gone:${postId}`),
+      });
+      return <button type="button" data-remove onClick={() => menu.onRemove?.('p-mod', 'Contenu violent')} />;
+    }
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<RemoveHarness />);
+    });
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('[data-remove]')!.click();
+    });
+    expect(journal).toEqual(['hide:p-mod']);
+    await laisserPasser();
+    expect(journal).toEqual(['hide:p-mod', 'gone:p-mod']);
+  });
 });
 
 /**

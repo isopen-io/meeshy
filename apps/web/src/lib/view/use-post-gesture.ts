@@ -109,6 +109,12 @@ export function usePostGesture(options?: {
    * déjà par le registre des caisses.
    */
   readonly onDeleted?: (postId: string) => void;
+  /**
+   * LE RETRAIT PART (#11156) — l'écran qui tient sa PROPRE pile (les Réels)
+   * en ôte la publication sur-le-champ et rend la fonction qui la remet,
+   * appelée seulement si la passerelle refuse.
+   */
+  readonly onDeleting?: (postId: string) => () => void;
 }): {
   readonly announcement: string;
   readonly onGesture: (postId: string, kind: PostToggleKind) => void;
@@ -129,8 +135,10 @@ export function usePostGesture(options?: {
   /* Une RÉFÉRENCE, pas une dépendance du `menu` mémoïsé : un hôte qui passe
      une flèche en ligne ne doit pas refabriquer le menu à chaque rendu. */
   const onDeletedRef = useRef(options?.onDeleted);
+  const onDeletingRef = useRef(options?.onDeleting);
   useEffect(() => {
     onDeletedRef.current = options?.onDeleted;
+    onDeletingRef.current = options?.onDeleting;
   });
   const viewerId = useStore(sessionStore, (s) => (s.session.status === 'authenticated' ? s.session.user.id : null));
   const viewerIsAdministrator = useAdministrationRank();
@@ -194,6 +202,14 @@ export function usePostGesture(options?: {
    */
   const menu = useMemo<PostMenuHost>(() => {
     const say = (key: MenuNotice) => announce(translate(currentInterfaceLanguage(), key));
+    const removeOptimistically = (postId: string, reason: string | undefined, [done, failed]: readonly [MenuNotice, MenuNotice]): void => {
+      const undo = onDeletingRef.current?.(postId);
+      void deletePostAction(postId, reason).then((outcome) => {
+        say(outcome === 'done' ? done : failed);
+        if (outcome === 'done') onDeletedRef.current?.(postId);
+        else undo?.();
+      });
+    };
     return {
       viewerId,
       viewerIsAdministrator,
@@ -214,18 +230,8 @@ export function usePostGesture(options?: {
           say(outcome === 'done' ? 'feed.post.edited' : outcome === 'busy' ? 'feed.post.edit_busy' : 'feed.post.edit_failed');
           return outcome;
         }),
-      onDelete: (postId: string) => {
-        void deletePostAction(postId).then((outcome) => {
-          say(outcome === 'done' ? 'feed.post.deleted' : 'feed.post.delete_failed');
-          if (outcome === 'done') onDeletedRef.current?.(postId);
-        });
-      },
-      onRemove: (postId: string, reason: string) => {
-        void deletePostAction(postId, reason).then((outcome) => {
-          say(outcome === 'done' ? 'moderation.remove.done' : 'moderation.remove.failed');
-          if (outcome === 'done') onDeletedRef.current?.(postId);
-        });
-      },
+      onDelete: (postId: string) => removeOptimistically(postId, undefined, ['feed.post.deleted', 'feed.post.delete_failed']),
+      onRemove: (postId: string, reason: string) => removeOptimistically(postId, reason, ['moderation.remove.done', 'moderation.remove.failed']),
       onReportOpen: (postId: string) => readingTelemetry.recordV2(negativeOf(postId, 'report_open')),
       onReport: (postId, reason) => {
         void reportPostAction(postId, reason).then((outcome) => {
