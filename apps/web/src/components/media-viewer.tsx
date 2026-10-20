@@ -503,11 +503,13 @@ export default function MediaViewer({
      que la visionneuse le tient inerte, « Partager » ouvrirait une feuille
      qu'aucun doigt ni aucune touche n'atteint. Elle lève l'inertie le temps de
      la feuille (modale elle-même : le reste est inerte par `showModal`) et la
-     rétablit à sa fermeture. DÉCLARÉ AVANT l'effet d'ouverture : au démontage,
-     les nettoyages courent dans l'ordre — celui-ci remet l'inertie, celui de
-     l'ouverture la retire, et `#root` ne reste jamais inerte derrière nous. */
+     rétablit à sa fermeture. DÉCLARÉ AVANT l'effet d'ouverture, et de la MÊME
+     nature (mise en page) : au démontage, les nettoyages courent dans l'ordre —
+     celui-ci remet l'inertie, celui de l'ouverture la retire, et `#root` ne
+     reste jamais inerte derrière nous. Un passif ici, différé par Preact après
+     le nettoyage de mise en page de l'ouverture, la REMETTRAIT pour toujours. */
   const sendSheetOpen = useSendSheetOpen();
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!sendSheetOpen) return;
     const root = document.getElementById('root');
     root?.removeAttribute('inert');
@@ -517,7 +519,12 @@ export default function MediaViewer({
   // #root INERT le temps de l'ouverture — même dispositif que le clone du
   // menu de message (`message-menu.tsx:380-391`), porté ICI au NIVEAU DE LA
   // COUCHE plutôt qu'à un aperçu cloné.
-  useEffect(() => {
+  // EFFET DE MISE EN PAGE (#11100) : Preact diffère le nettoyage d'un `useEffect`
+  // démonté à l'après-peinture — la couche quittait le DOM en laissant `#root`
+  // INERTE et le focus au `<body>` (des centaines de ms sous charge). Posé et
+  // levé dans le commit qui insère et retire la couche, comme son entrée
+  // d'historique (`useBackDismiss`, #6319).
+  useLayoutEffect(() => {
     const root = document.getElementById('root');
     const previousOverflow = document.body.style.overflow;
     root?.setAttribute('inert', '');
