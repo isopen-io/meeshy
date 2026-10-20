@@ -261,7 +261,7 @@ public struct PlayerBannerView: View {
                     .monospacedDigit()
                     .foregroundColor(Self.detailColor(palette: palette, overBackdrop: hasBackdrop))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.7)
+                    .minimumScaleFactor(0.6)
             }
         }
         .frame(minWidth: 44, maxWidth: .infinity, alignment: .leading)

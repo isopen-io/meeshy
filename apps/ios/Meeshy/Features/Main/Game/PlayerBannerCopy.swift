@@ -18,7 +18,7 @@ enum PlayerBannerCopy {
         PlayerBannerView.Texts(
             points: GameText.bannerPoints(points: GameCopy.formatCount(banner.score)),
             missing: banner.pointsToNext.map {
-                GameText.bannerMissing(points: GameCopy.formatCount($0), level: GameCopy.formatCount(banner.nextLevel ?? banner.level + 1))
+                GameText.bannerMissing(points: GameCopy.compactCount($0), level: GameCopy.formatCount(banner.nextLevel ?? banner.level + 1))
             },
             meeshes: banner.meeshes.map { GameCopy.formatCount($0) },
             place: banner.league.map { GameText.bannerPlace(count: $0.place) },
@@ -32,12 +32,12 @@ enum PlayerBannerCopy {
         )
     }
 
-    /// « encore 466 vers Voix I », ou « Gloire 990 000 » quand il n'y a plus de marche.
+    /// « 5 543 vers Passeur II », ou « Gloire 990 k » quand il n'y a plus de marche.
     static func gloryMissing(_ rank: GamePlayerBanner.Rank) -> String {
         guard let next = rank.next, let missing = rank.gloryMissing else {
-            return GameText.bannerGloryTotal(points: GameCopy.formatCount(rank.glory))
+            return GameText.bannerGloryTotal(points: GameCopy.compactCount(rank.glory))
         }
-        return GameText.bannerGloryMissing(points: GameCopy.formatCount(missing),
+        return GameText.bannerGloryMissing(points: GameCopy.compactCount(missing),
                                            rank: GameCopy.rankLabel(next.rank, division5: next.shownDivision))
     }
 

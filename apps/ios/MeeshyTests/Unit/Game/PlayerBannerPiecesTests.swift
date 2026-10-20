@@ -105,14 +105,22 @@ final class PlayerBannerPiecesTests: XCTestCase {
     func test_theGloryTexts_sayTheRank_andWhatRemainsTowardTheNext() {
         let texts = PlayerBannerCopy.texts(for: full)
         XCTAssertEqual(texts.rank, GameCopy.rankLabel(.voix, division5: .ii))
-        XCTAssertEqual(texts.gloryMissing,
-                       GameText.bannerGloryMissing(points: GameCopy.formatCount(466), rank: GameCopy.rankLabel(.voix, division5: .i)))
+        XCTAssertEqual(texts.gloryMissing, GameText.bannerGloryMissing(points: GameCopy.compactCount(466), rank: GameCopy.rankLabel(.voix, division5: .i)))
+        XCTAssertFalse((texts.gloryMissing ?? "").localizedCaseInsensitiveContains("encore"), "X vers Y, sans « encore »")
+    }
+
+    func test_towardTheNextRank_theGloryTextNamesIt() {
+        let banner = GamePlayerBanner(level: 12, tier: .lueur, progress: 0.4, score: 900, nextLevel: 13, pointsToNext: 200,
+                                      rank: .init(rank: .voix, division: .i, glory: 2900, progress: 0.9, gloryMissing: 100,
+                                                  next: GloryStep(rank: .conteur, division: .iii, division5: .v, minGlory: 3000)))
+        XCTAssertEqual(PlayerBannerCopy.texts(for: banner).gloryMissing,
+                       GameText.bannerGloryMissing(points: GameCopy.compactCount(100), rank: GameCopy.rankLabel(.conteur, division5: .v)))
     }
 
     func test_atTheTopOfTheLadder_theGloryTotalReplacesWhatRemains() {
         let top = GamePlayerBanner(level: 12, tier: .lueur, progress: 0.4, score: 900, nextLevel: 13, pointsToNext: 200,
                                    rank: .init(rank: .legende, division: .i, glory: 990_000, progress: 1, gloryMissing: nil, next: nil))
-        XCTAssertEqual(PlayerBannerCopy.texts(for: top).gloryMissing, GameText.bannerGloryTotal(points: GameCopy.formatCount(990_000)))
+        XCTAssertEqual(PlayerBannerCopy.texts(for: top).gloryMissing, GameText.bannerGloryTotal(points: GameCopy.compactCount(990_000)))
     }
 
     func test_theBannerReadsTheGloryFromTheServedBlock() throws {
@@ -122,6 +130,12 @@ final class PlayerBannerPiecesTests: XCTestCase {
         XCTAssertEqual(rank.glory, 1700)
         XCTAssertEqual(rank.progress, 0.6)
         XCTAssertEqual(rank.gloryMissing, 466)
+    }
+
+    func test_aBigFigure_isCompact_aSmallOneStaysWhole() {
+        XCTAssertEqual(GameCopy.compactCount(5_443), GameCopy.formatCount(5_443))
+        XCTAssertEqual(GameCopy.compactCount(12_000), 12_000.formatted(.number.notation(.compactName).precision(.fractionLength(0...1))))
+        XCTAssertLessThan(GameCopy.compactCount(10_563).count, GameCopy.formatCount(10_563).count)
     }
 
     func test_trophiesAndSeason_leaveTheCompactRow() {

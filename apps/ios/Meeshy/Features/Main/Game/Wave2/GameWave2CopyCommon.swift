@@ -81,12 +81,12 @@ extension GameText {
     /// Ce qu'il reste nomme le niveau visé (#10540) : « encore 1 301 vers le 28 », jamais « encore 1 301 » à côté
     /// d'un total de points.
     static func bannerMissing(points: String, level: String) -> String {
-        String(localized: "game2.banner.missing", defaultValue: "encore \(points) vers le \(level)", bundle: .main)
+        String(localized: "game2.banner.missing", defaultValue: "\(points) vers le \(level)", bundle: .main)
     }
 
-    /// « encore 466 vers Voix I » — ce qui manque au rang suivant (#11125).
+    /// « 466 vers Voix I » — ce qui manque au rang suivant (#11125).
     static func bannerGloryMissing(points: String, rank: String) -> String {
-        String(localized: "game2.banner.glory.missing", defaultValue: "encore \(points) vers \(rank)", bundle: .main)
+        String(localized: "game2.banner.glory.missing", defaultValue: "\(points) vers \(rank)", bundle: .main)
     }
 
     /// « Gloire 990 000 » — au sommet, le total remplace ce qui manque.

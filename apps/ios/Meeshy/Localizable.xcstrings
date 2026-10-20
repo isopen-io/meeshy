@@ -260195,13 +260195,13 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "باقٍ %1$@ نحو %2$@"
+            "value": "%1$@ نحو %2$@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "noch %1$@ bis %2$@"
+            "value": "%1$@ bis %2$@"
           }
         },
         "en": {
@@ -260213,25 +260213,25 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "faltan %1$@ para %2$@"
+            "value": "%1$@ hacia %2$@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "encore %1$@ vers %2$@"
+            "value": "%1$@ vers %2$@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "ancora %1$@ verso %2$@"
+            "value": "%1$@ verso %2$@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "faltam %1$@ para %2$@"
+            "value": "%1$@ rumo a %2$@"
           }
         }
       }
@@ -260242,13 +260242,13 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "باقٍ %1$@ نحو المستوى %2$@"
+            "value": "%1$@ نحو المستوى %2$@"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "noch %1$@ bis Level %2$@"
+            "value": "%1$@ bis Level %2$@"
           }
         },
         "en": {
@@ -260260,25 +260260,25 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "faltan %1$@ hacia el %2$@"
+            "value": "%1$@ hacia el %2$@"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "encore %1$@ vers le %2$@"
+            "value": "%1$@ vers le %2$@"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "ancora %1$@ verso il %2$@"
+            "value": "%1$@ verso il %2$@"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "faltam %1$@ rumo ao %2$@"
+            "value": "%1$@ rumo ao %2$@"
           }
         }
       }
