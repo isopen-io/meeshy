@@ -1212,6 +1212,24 @@
         "source": "Mesure du 2026-10-13 par build local (#10540, `vite build` puis `node scripts/measure-weight.mjs`, gzip -9 par fichier) : 26,73 Ko pour les SEPT fichiers, de 3,61 Ko (en) a 4,21 Ko (ar), contre 12,24 estimes. Le carnet gagne « Chaque concept, en clair » : 42 cles, les 40 `game.rules.concept.*` et ses deux titres -- un nom et une phrase complete (ce que c est, a quoi ca sert, comment ca se gagne, comment s en servir) pour les quinze concepts de Progression et pour le coffre, le tresor, les etapes des niveaux, le Vent arriere et la mission en duo --, pour qu aucun concept affiche ne soit absent des regles (demande du porteur) ; les regles 2, 3 et 4 disent les deux soldes de points. Ces phrases ne se relisent pas depuis la partie `concept` : le carnet ne la charge pas (#9542), et la lui faire charger couterait ~8 Ko par lecteur pour en lire le quart. Un lecteur n en telecharge qu UN (~3,9 Ko), et seulement s il ouvre le carnet. Plafond = ceil(26,73) + 1 = 28, meme regle que les releves precedents. PRECEDENT : Estimation du 2026-10-08 (#9639), sans build local (directive : builds lourds en CI) : les 7 cles `game.rules.badges.*` (la section badges du carnet, que visent tous les liens « Comprendre les badges ») dans les sept langues ajoutent 2,43 Ko gzip -9 aux SOURCES ; au ratio built/source mesure (10,18 / 12,02), +2,06 Ko = 12,24 Ko ; plafond = ceil(12,24) + 1 = 14, a remplacer par la mesure de la CI. PRECEDENT : Mesure du 2026-10-07 par la CI (`bun run build` puis `node scripts/measure-weight.mjs`, job Quality (bun), run 37593972086, tete b1b60b9b5a ; gzip -9 par fichier) : 10,18 Ko pour les SEPT fichiers du carnet des regles et de son atlas (`catalog-game-rules-<l>.ts`, 58 cles `game.rules.*`), de 1,34 Ko (en) a 1,66 Ko (ar). Charges avec la seule page « Comment ca marche » (`/me/progression/regles`) ; un lecteur n'en telecharge qu'UN, et seulement s'il ouvre le carnet. Arrondi au Ko SUPERIEUR (11) + 1 Ko de marge."
       }
     },
+    "interface_catalogs_game_frappe": {
+      "pattern": "^assets/catalog-game-frappe-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 5,
+        "status": "MESUREE PAR BUILD LOCAL (#11177) -- A CONFIRMER PAR LA CI",
+        "source": "Mesure du 2026-10-21 par build local (#11177, `bun run build` puis gzip -9 par fichier) : 3,67 Ko pour les SEPT fichiers de la cinquieme partie du catalogue du jeu (`catalog-game-frappe-<l>.ts`, 16 cles `game.frappe.*` : ta lumiere, le tchak, les aieux qui se manifestent, la phrase de Mee a la fete et au refus), de 0,50 a 0,56 Ko. Chargee par la ceremonie de la frappe elle-meme, au toucher (`components/game/mint-ceremony.tsx`), jamais avec un ecran : un lecteur n en telecharge qu UN, et seulement quand il frappe. Plafond = ceil(3,67) + 1 = 5."
+      }
+    },
+    "mint_ceremony": {
+      "pattern": "^assets/mint-ceremony-[A-Za-z0-9_-]+\\.(js|css)$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 11,
+        "status": "MESUREE PAR BUILD LOCAL (#11177) -- A CONFIRMER PAR LA CI",
+        "source": "Mesure du 2026-10-21 par build local (#11177, `bun run build` puis gzip -9) : 9,39 Ko, dont 7,45 Ko de script (la scene plein ecran de la frappe, ses particules et l image de chaque instant) et 1,94 Ko de feuille (`styles/game-ceremony.css`, les couleurs de la forge). Charge par le seul `import()` de `components/game-mint-strike.tsx`, precharge au montage d une scene de frappe : `dynamic_only` garde la porte, aucun ecran ne le paie avant le premier geste. Plafond = ceil(9,39) + 1 = 11."
+      }
+    },
     "conversations": {
       "pattern": "^assets/conversations-[A-Za-z0-9_-]{7}\\.js$",
       "kb": {
