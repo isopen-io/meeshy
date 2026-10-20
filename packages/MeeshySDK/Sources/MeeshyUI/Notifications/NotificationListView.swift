@@ -92,7 +92,7 @@ public struct NotificationListView: View {
             }
 
             if viewModel.unreadCount > 0 {
-                Text("\(viewModel.unreadCount) non lue\(viewModel.unreadCount > 1 ? "s" : "")")
+                Text(NotificationListCopy.unreadLabel(count: viewModel.unreadCount))
                     .font(.system(size: MeeshyFont.footnoteSize))
                     .foregroundColor(brandColor)
                     .padding(.bottom, MeeshySpacing.xs)
