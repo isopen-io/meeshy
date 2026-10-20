@@ -329,8 +329,9 @@ describe('nextPosition / previousPosition', () => {
 
 /**
  * LE GLISSÉ CHANGE D'AUTEUR (#11198) — parité iOS : le cube passe au groupe
- * voisin, qu'on soit au début ou au milieu du groupe courant, et y entre à sa
- * première story non vue (le critère de fin de l'issue, dans les deux sens).
+ * voisin, qu'on soit au début ou au milieu du groupe courant. En AVANT il entre
+ * à sa première story non vue (`landOnNextGroup`), en ARRIÈRE à sa dernière
+ * story (`landOnPreviousGroup`).
  */
 describe('nextGroupPosition / previousGroupPosition — le glissé change d’auteur', () => {
   const groups = groupForPlayback(
@@ -351,8 +352,8 @@ describe('nextGroupPosition / previousGroupPosition — le glissé change d’au
     expect(nextGroupPosition(groups, { groupIndex: at('a'), storyIndex: 0 }, NOW)).toEqual({ groupIndex: at('b'), storyIndex: 1 });
   });
 
-  test('l’auteur précédent s’ouvre lui aussi à son entrée, pas à sa dernière story', () => {
-    expect(previousGroupPosition(groups, { groupIndex: at('b'), storyIndex: 1 }, NOW)).toEqual({ groupIndex: at('a'), storyIndex: 0 });
+  test('l’auteur précédent s’ouvre à sa DERNIÈRE story, comme `landOnPreviousGroup` d’iOS', () => {
+    expect(previousGroupPosition(groups, { groupIndex: at('b'), storyIndex: 1 })).toEqual({ groupIndex: at('a'), storyIndex: 1 });
   });
 
   test('un auteur entièrement vu s’ouvre à sa première story non expirée', () => {
@@ -361,13 +362,13 @@ describe('nextGroupPosition / previousGroupPosition — le glissé change d’au
 
   test('aux bords de la liste, aucun voisin — le cube résiste', () => {
     expect(nextGroupPosition(groups, { groupIndex: at('c'), storyIndex: 1 }, NOW)).toBeNull();
-    expect(previousGroupPosition(groups, { groupIndex: at('a'), storyIndex: 1 }, NOW)).toBeNull();
+    expect(previousGroupPosition(groups, { groupIndex: at('a'), storyIndex: 1 })).toBeNull();
   });
 
   test('la portée « un seul groupe » ne laisse aucun voisin', () => {
     const mine = scopeToSingleGroup(groups, 'b2');
     expect(nextGroupPosition(mine, { groupIndex: 0, storyIndex: 1 }, NOW)).toBeNull();
-    expect(previousGroupPosition(mine, { groupIndex: 0, storyIndex: 1 }, NOW)).toBeNull();
+    expect(previousGroupPosition(mine, { groupIndex: 0, storyIndex: 1 })).toBeNull();
   });
 });
 

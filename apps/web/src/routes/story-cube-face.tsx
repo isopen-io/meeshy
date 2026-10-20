@@ -74,7 +74,7 @@ function neighbourAt(groups: readonly StoryPlaybackGroup[], target: StoryPlaybac
   };
 }
 
-/** Les auteurs voisins, chacun à son ENTRÉE (`nextGroupPosition` / `previousGroupPosition`). */
+/** Les auteurs voisins, chacun là où le cube l'y posera (`nextGroupPosition` / `previousGroupPosition`). */
 export function storyCubeNeighbours(params: {
   readonly groups: readonly StoryPlaybackGroup[];
   readonly position: StoryPlaybackPosition | null;
@@ -84,7 +84,7 @@ export function storyCubeNeighbours(params: {
   if (position === null) return { next: null, previous: null };
   return {
     next: neighbourAt(groups, nextGroupPosition(groups, position, now)),
-    previous: neighbourAt(groups, previousGroupPosition(groups, position, now)),
+    previous: neighbourAt(groups, previousGroupPosition(groups, position)),
   };
 }
 

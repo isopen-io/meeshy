@@ -441,10 +441,9 @@ export function previousPosition(
  * expirée, sinon première non expirée. `null` ⇒ aucun voisin dans ce sens
  * (bord de la liste, portée « un seul groupe ») : la carte résiste.
  *
- * Le RECUL entre lui aussi à l'entrée — et non à la dernière story comme
- * `landOnPreviousGroup` d'iOS : l'issue #11198 fixe « l'entrée de l'auteur à
- * sa première story non vue », dans les deux sens. Le tap sur le bord gauche
- * garde, lui, {@link previousPosition} (la dernière story du groupe d'avant).
+ * Le RECUL se pose sur la DERNIÈRE story de l'auteur d'avant — exactement
+ * `landOnPreviousGroup` d'iOS (`StoryViewerPosition.previousGroupLanding`) : le
+ * même lecteur, le même geste, la même arrivée sur les deux plateformes.
  */
 export function nextGroupPosition(
   groups: readonly StoryPlaybackGroup[],
@@ -457,9 +456,11 @@ export function nextGroupPosition(
 export function previousGroupPosition(
   groups: readonly StoryPlaybackGroup[],
   position: StoryPlaybackPosition,
-  now: number,
 ): StoryPlaybackPosition | null {
-  return groupEntryAt(groups, position.groupIndex - 1, now);
+  const groupIndex = position.groupIndex - 1;
+  const group = groupIndex >= 0 ? groups[groupIndex] : undefined;
+  if (group === undefined) return null;
+  return { groupIndex, storyIndex: Math.max(0, group.stories.length - 1) };
 }
 
 function groupEntryAt(groups: readonly StoryPlaybackGroup[], groupIndex: number, now: number): StoryPlaybackPosition | null {
