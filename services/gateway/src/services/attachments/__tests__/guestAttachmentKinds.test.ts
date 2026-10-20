@@ -105,18 +105,20 @@ describe('invité de World Wide — ce qui est refusé, avec un code stable', ()
 
   it('juge un texte au plafond sans geler la passerelle — ni un tableau par caractère, ni une seconde de boucle bloquée', () => {
     const atCeiling = Buffer.alloc(GUEST_ATTACHMENT_MAX_BYTES, 'é la vie est belle\n');
-    const fastest = (work: () => unknown): number =>
-      Math.min(
-        ...[0, 1, 2].map(() => {
-          const started = performance.now();
-          work();
-          return performance.now() - started;
-        }),
-      );
-    const decodeOnly = fastest(() => new TextDecoder('utf-8').decode(atCeiling));
+    const elapsed = (work: () => unknown): number => {
+      const started = performance.now();
+      work();
+      return performance.now() - started;
+    };
+    const rounds = Array.from({ length: 7 }, () => ({
+      decode: elapsed(() => new TextDecoder('utf-8').decode(atCeiling)),
+      classify: elapsed(() => classifyForWorld('text/plain', atCeiling, 'long.txt')),
+    }));
+    const decodeOnly = Math.min(...rounds.map((round) => round.decode));
+    const classified = Math.min(...rounds.map((round) => round.classify));
 
     expect(classifyForWorld('text/plain', atCeiling, 'long.txt')).toEqual({ allowed: true });
-    expect(fastest(() => classifyForWorld('text/plain', atCeiling, 'long.txt'))).toBeLessThan(decodeOnly * 4);
+    expect(classified).toBeLessThan(decodeOnly * 4);
   });
 
   it.each([

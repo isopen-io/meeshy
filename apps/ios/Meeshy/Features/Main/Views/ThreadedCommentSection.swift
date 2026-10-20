@@ -65,12 +65,8 @@ struct ThreadedCommentSection: View {
     /// « Retirer » s'offre sur le commentaire d'un AUTRE, à la modération de la
     /// plateforme seulement (`ContentRemovalPolicy`, #11151).
     private func removeHandler(for c: FeedComment) -> ((String) -> Void)? {
-        guard let onRemoveComment,
-              ContentRemovalPolicy.mayRemovePublication(
-                authoredByViewer: c.authorId == AuthManager.shared.currentUser?.id,
-                platformRole: AuthManager.shared.currentUser?.role
-              ) else { return nil }
-        return { onRemoveComment(c, $0) }
+        guard let onRemoveComment else { return nil }
+        return ContentRemovalOffer.comment(c) { onRemoveComment(c, $0) }
     }
 
     /// Même éligibilité que `deleteHandler` : l'item « Modifier » n'apparaît
