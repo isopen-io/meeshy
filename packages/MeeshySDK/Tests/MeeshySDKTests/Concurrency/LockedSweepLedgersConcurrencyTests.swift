@@ -51,4 +51,31 @@ final class LockedSweepLedgersConcurrencyTests: XCTestCase {
 
         XCTAssertNil(ledger.listing(on: .feed, postId: "post-0", position: nil))
     }
+
+    func test_cancel_afterConcurrentRegister_cancelsEveryRegisteredTask() async {
+        let dispatches = OutboxInflightDispatches()
+        let tasks = (0..<100).map { _ in Task<Void, Error> { try await Task.sleep(nanoseconds: 60_000_000_000) } }
+        await withTaskGroup(of: Void.self) { group in
+            for (index, task) in tasks.enumerated() {
+                group.addTask { dispatches.register(task, for: "row-\(index)") }
+            }
+        }
+
+        (0..<100).forEach { dispatches.cancel("row-\($0)") }
+
+        XCTAssertTrue(tasks.allSatisfy(\.isCancelled))
+    }
+
+    func test_unregister_foreignTask_leavesTheRegisteredOneCancellable() {
+        let dispatches = OutboxInflightDispatches()
+        let registered = Task<Void, Error> { try await Task.sleep(nanoseconds: 60_000_000_000) }
+        let foreign = Task<Void, Error> { try await Task.sleep(nanoseconds: 60_000_000_000) }
+        defer { registered.cancel(); foreign.cancel() }
+        dispatches.register(registered, for: "row")
+
+        dispatches.unregister(foreign, for: "row")
+        dispatches.cancel("row")
+
+        XCTAssertTrue(registered.isCancelled)
+    }
 }
