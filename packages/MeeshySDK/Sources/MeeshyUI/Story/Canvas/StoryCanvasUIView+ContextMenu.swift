@@ -343,8 +343,8 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         let preview = UITargetedPreview(view: overlay, parameters: params)
 
         // Remove the temporary overlay after the menu's lift animation.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            overlay.removeFromSuperview()
+        Task { @MainActor [weak overlay] in
+            if await cancellableSleep(for: .milliseconds(500)) { overlay?.removeFromSuperview() }
         }
         return preview
     }

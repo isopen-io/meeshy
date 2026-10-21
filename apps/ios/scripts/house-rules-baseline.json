@@ -1,7 +1,7 @@
 {
   "rules": {
     "anyview": 96,
-    "async-after": 98,
+    "async-after": 76,
     "autocapitalization": 0,
     "available-floor": 0,
     "corner-radius-modifier": 0,
