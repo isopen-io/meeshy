@@ -106,7 +106,7 @@ struct GameElementSheet: View {
         }
         // Une fois la feuille posée : un focus donné pendant sa montée se perd.
         .task { @MainActor in
-            try? await Task.sleep(nanoseconds: 350_000_000)
+            try? await Task.sleep(for: .milliseconds(350))
             nameFocused = true
         }
         // Un conteneur qui porte un identifiant se déclare conteneur : sinon l'identifiant recouvre ceux de ses éléments.

@@ -60,19 +60,19 @@ struct GameRulesPage: View {
     /// la mise en page doit exister avant qu'on y défile.
     private func focus(on proxy: ScrollViewProxy) async {
         if let focusedSection {
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            try? await Task.sleep(for: .milliseconds(250))
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
                 proxy.scrollTo(Self.sectionID(focusedSection), anchor: Self.focusAnchor)
             }
             return
         }
         guard let focusedRule else { return }
-        try? await Task.sleep(nanoseconds: 250_000_000)
+        try? await Task.sleep(for: .milliseconds(250))
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
             proxy.scrollTo(Self.rowID(focusedRule), anchor: Self.focusAnchor)
             highlighted = focusedRule
         }
-        try? await Task.sleep(nanoseconds: 1_600_000_000)
+        try? await Task.sleep(for: .milliseconds(1600))
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) { highlighted = nil }
     }
 
