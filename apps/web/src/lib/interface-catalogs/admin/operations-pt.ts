@@ -43,7 +43,7 @@ const f = {
   'admin.ops.action.backup': 'Iniciar o backup',
   'admin.ops.action.image-prune': 'Limpar o Docker',
   'admin.ops.action.backup.body': 'Um backup completo do banco e dos volumes deste ambiente começa agora. No máximo um a cada 6 horas.',
-  'admin.ops.action.image-prune.body': 'As imagens Docker não usadas e o cache de build são removidos para liberar o disco; os contêineres em execução e os volumes não são tocados. No máximo uma limpeza por hora.',
+  'admin.ops.action.image-prune.body': 'As imagens Docker sem uso com mais de uma semana e o cache de build são removidos para liberar o disco; os contêineres em execução e os volumes não são tocados. A limpeza abrange a máquina inteira: num servidor compartilhado, também atinge as imagens da produção. No máximo uma limpeza por hora.',
   'admin.ops.action.confirmType': 'Digite «{name}» para confirmar',
   'admin.ops.action.reason': 'Motivo (opcional)',
   'admin.ops.action.cancel': 'Cancelar',

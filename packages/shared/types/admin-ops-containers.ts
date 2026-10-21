@@ -22,7 +22,7 @@ const byteCount = z.number().int().nonnegative();
 const isoInstant = z.iso.datetime();
 
 export const OPS_CONTAINERS_MAX = 64;
-/** Le plafond de lecture de `state/containers.json` : 64 conteneurs bien remplis tiennent sous 64 Ko. */
+/** Le plafond de lecture de `state/containers.json` ; le runner publie sous 240 Ko, quitte à retirer les derniers conteneurs. */
 export const OPS_CONTAINERS_FILE_MAX_BYTES = 256 * 1024;
 
 export const CONTAINER_STATES = ['created', 'running', 'paused', 'restarting', 'removing', 'exited', 'dead'] as const;

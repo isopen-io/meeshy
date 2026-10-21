@@ -40,6 +40,7 @@ import re
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 ACTIONS = ("backup", "image-prune")
@@ -103,12 +104,21 @@ class Paths:
 def write_json_atomic(path, payload):
     directory = os.path.dirname(path)
     os.makedirs(directory, mode=0o755, exist_ok=True)
-    temporary = os.path.join(directory, ".%s.tmp" % os.path.basename(path))
-    with open(temporary, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, separators=(",", ":"))
-        handle.write("\n")
-    os.chmod(temporary, 0o644)
-    os.replace(temporary, path)
+    # Un temporaire UNIQUE : deux passages concurrents (timer et demande) n'ecrivent
+    # jamais dans le meme fichier, et un echec ne laisse pas de demi-publication.
+    descriptor, temporary = tempfile.mkstemp(prefix=".%s." % os.path.basename(path), suffix=".tmp", dir=directory)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"))
+            handle.write("\n")
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
 
 
 def empty_state():
@@ -250,6 +260,9 @@ def docker_usage():
 # packages/shared/types/admin-ops-containers.ts : chaque champ est NORMALISE ici,
 # car la passerelle rejette le fichier entier au premier champ hors schema.
 CONTAINERS_MAX = 64
+# Sous le plafond de lecture de la passerelle (256 Ko, OPS_CONTAINERS_FILE_MAX_BYTES).
+CONTAINERS_FILE_BUDGET = 240 * 1024
+COMPOSE_WORKING_DIR = "com.docker.compose.project.working_dir"
 CONTAINER_STATES = ("created", "running", "paused", "restarting", "removing", "exited", "dead")
 CONTAINER_HEALTHS = ("healthy", "unhealthy", "starting")
 DOCKER_INSTANT_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
@@ -375,42 +388,67 @@ def docker_json(args, check=True):
     return result.stdout
 
 
+def stats_rows(output):
+    rows = {}
+    for line in output.splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict) and isinstance(row.get("ID"), str):
+            rows[row["ID"]] = row
+    return rows
+
+
+def within_budget(containers):
+    # Un fichier hors plafond serait rejete EN ENTIER par la passerelle : on retire
+    # plutot les derniers conteneurs, et on le dit.
+    kept = list(containers)
+    while kept and len(json.dumps({"measuredAt": "", "containers": kept}, separators=(",", ":"))) > CONTAINERS_FILE_BUDGET:
+        kept.pop()
+    if len(kept) < len(containers):
+        log("containers: %d conteneur(s) hors budget, non publies" % (len(containers) - len(kept)))
+    return kept
+
+
 def containers_usage(paths):
     ids = [line.strip() for line in docker_json(
-        ["ps", "-a", "-q", "--no-trunc", "--filter", "label=com.docker.compose.project.working_dir=%s" % paths.compose_dir],
+        ["ps", "-a", "-q", "--no-trunc", "--filter", "label=%s=%s" % (COMPOSE_WORKING_DIR, paths.compose_dir)],
     ).splitlines() if line.strip()][:CONTAINERS_MAX]
     if not ids:
         return {"measuredAt": iso(now_utc()), "containers": []}
-    details = json.loads(docker_json(["inspect"] + ids) or "[]")
+    # Un conteneur retire entre `ps` et `inspect` fait sortir inspect en erreur, mais il imprime les autres.
+    inspected = json.loads(docker_json(["inspect"] + ids, check=False) or "[]")
+    # Le filtre de `ps` est revérifié sur CHAQUE conteneur : rien d'un autre environnement ne se publie.
+    details = [
+        d for d in inspected
+        if isinstance(d, dict) and ((d.get("Config") or {}).get("Labels") or {}).get(COMPOSE_WORKING_DIR) == paths.compose_dir
+    ]
     image_ids = sorted({d.get("Image") for d in details if isinstance(d.get("Image"), str)})
     # Une image retiree fait sortir `image inspect` en erreur, mais il imprime les autres.
     images = json.loads(docker_json(["image", "inspect"] + image_ids, check=False) or "[]") if image_ids else []
     image_dates = {image.get("Id"): docker_instant(image.get("Created")) for image in images if isinstance(image, dict)}
     running = [d.get("Id") for d in details if (d.get("State") or {}).get("Status") == "running"]
-    stats_by_id = {}
-    if running:
-        for line in docker_json(["stats", "--no-stream", "--no-trunc", "--format", "{{json .}}"] + running).splitlines():
-            if line.strip():
-                row = json.loads(line)
-                stats_by_id[row.get("ID")] = row
-    containers = [container_of(detail, image_dates, stats_by_id) for detail in details if isinstance(detail, dict)]
+    stats_by_id = stats_rows(docker_json(["stats", "--no-stream", "--no-trunc", "--format", "{{json .}}"] + running, check=False)) if running else {}
+    containers = [container_of(detail, image_dates, stats_by_id) for detail in details]
     containers.sort(key=lambda c: (c["service"] or c["name"], c["name"]))
-    return {"measuredAt": iso(now_utc()), "containers": containers}
+    return {"measuredAt": iso(now_utc()), "containers": within_budget(containers)}
 
 
 def publish_docker_usage(paths):
     status = 0
-    try:
-        write_json_atomic(paths.docker_file, docker_usage())
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
-        log("docker-df: echec (%s)" % type(error).__name__)
-        status = 1
     # Les deux publications sont independantes : un echec de l'une ne retient pas
     # l'autre, et une collecte ratee garde la derniere publication (rien n'est ecrit).
+    # Les conteneurs d'abord : `system df` peut durer, leur mesure reste fraiche.
     try:
         write_json_atomic(paths.containers_file, containers_usage(paths))
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         log("containers: echec (%s)" % type(error).__name__)
+        status = 1
+    try:
+        write_json_atomic(paths.docker_file, docker_usage())
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        log("docker-df: echec (%s)" % type(error).__name__)
         status = 1
     return status
 

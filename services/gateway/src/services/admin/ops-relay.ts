@@ -163,12 +163,22 @@ const isLiveRun = (run: ServerOperationRun | null | undefined, now: Date): boole
 export type SubmitResult =
   | { readonly kind: 'queued'; readonly accepted: ServerOperationAccepted }
   | { readonly kind: 'refused'; readonly status: 503; readonly code: 'OPS_RELAY_UNAVAILABLE' }
+  | { readonly kind: 'refused'; readonly status: 503; readonly code: 'AUDIT_UNAVAILABLE' }
   | { readonly kind: 'refused'; readonly status: 409; readonly code: 'OPERATION_IN_PROGRESS' }
   | { readonly kind: 'refused'; readonly status: 409; readonly code: 'OPERATION_COOLDOWN'; readonly availableAt: string };
 
 export type OpsRelay = {
   readonly settings: OpsSettings;
-  readonly submit: (input: { readonly operation: ServerOperation; readonly requestedBy: string }) => Promise<SubmitResult>;
+  /**
+   * `beforeDeposit` (#11441, #10459 point 3) — appelé une fois les délais et la file vérifiés,
+   * JUSTE AVANT le dépôt, dans la section sérialisée : la trace d'une demande acceptée est
+   * écrite AVANT qu'elle n'existe, et un `false` (journal indisponible) n'en dépose aucune.
+   */
+  readonly submit: (input: {
+    readonly operation: ServerOperation;
+    readonly requestedBy: string;
+    readonly beforeDeposit?: (requestId: string) => Promise<boolean>;
+  }) => Promise<SubmitResult>;
   readonly status: () => Promise<ServerOperationStatus>;
   readonly containers: () => Promise<OpsContainersView>;
 };
@@ -190,7 +200,11 @@ export function createOpsRelay(options: OpsRelayOptions): OpsRelay {
     return next;
   };
 
-  const submitNow = async (operation: ServerOperation, requestedBy: string): Promise<SubmitResult> => {
+  const submitNow = async (
+    operation: ServerOperation,
+    requestedBy: string,
+    beforeDeposit?: (requestId: string) => Promise<boolean>,
+  ): Promise<SubmitResult> => {
     const requestsDir = settings.requestsDir;
     if (!requestsDir || !(await isWritableDirectory(requestsDir))) {
       return { kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' };
@@ -216,6 +230,9 @@ export function createOpsRelay(options: OpsRelayOptions): OpsRelay {
     const body = JSON.stringify(request);
     if (Buffer.byteLength(body) > OPS_REQUEST_FILE_MAX_BYTES) {
       return { kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' };
+    }
+    if (beforeDeposit !== undefined && !(await beforeDeposit(request.id))) {
+      return { kind: 'refused', status: 503, code: 'AUDIT_UNAVAILABLE' };
     }
     const temporary = path.join(requestsDir, `.${request.id}.json.tmp`);
     try {
@@ -249,7 +266,7 @@ export function createOpsRelay(options: OpsRelayOptions): OpsRelay {
 
   return {
     settings,
-    submit: ({ operation, requestedBy }) => serialized(() => submitNow(operation, requestedBy)),
+    submit: ({ operation, requestedBy, beforeDeposit }) => serialized(() => submitNow(operation, requestedBy, beforeDeposit)),
     status,
     containers: async () => {
       const published = await readContainers(settings.stateDir);

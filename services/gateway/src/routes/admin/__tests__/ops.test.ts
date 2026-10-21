@@ -2,7 +2,7 @@
  * Les routes d'opérations serveur de l'administration (#10384–#10386) :
  * - GET /host-metrics : BIGBOSS et ADMIN, l'instantané de la sonde ;
  * - GET /status : BIGBOSS et ADMIN, l'état publié par le runner ;
- * - POST /:operation : BIGBOSS seul, confirmation nommée, délai, audit.
+ * - POST /:operation : BIGBOSS et ADMIN, confirmation nommée, délai, audit avant dépôt.
  *
  * Les réponses traversent le vrai sérialiseur (`app.inject`) : un témoin assert
  * sur ce que la réponse DIT, jamais sur le seul statut.
@@ -173,7 +173,7 @@ describe('POST /:operation', () => {
     await app.close();
   });
 
-  it.each(['MODERATOR', 'AUDIT', 'USER'])('refuse 403 à un %s, sans rien déposer, et JOURNALISE la tentative (#10459)', async (role) => {
+  it.each(['MODERATOR', 'AUDIT'])('refuse 403 à un %s, sans rien déposer, et JOURNALISE la tentative (#10459)', async (role) => {
     const { app, audit, dirs } = await buildApp({ role });
     expect((await post(app, 'backup', { confirm: 'backup' })).statusCode).toBe(403);
     expect(readdirSync(dirs!.requests)).toEqual([]);
@@ -181,6 +181,42 @@ describe('POST /:operation', () => {
     const entry = (audit.mock.calls[0][0] as { data: Record<string, unknown> }).data;
     expect(entry).toMatchObject({ action: 'SERVER_OPERATION_REFUSED', adminId: ACTOR_ID, entity: 'Server', entityId: 'staging' });
     expect(JSON.parse(entry.metadata as string)).toEqual({ operation: 'backup', environment: 'staging', code: 'FORBIDDEN' });
+    await app.close();
+  });
+
+  it.each(['ANALYST', 'USER'])('refuse 403 à un %s sans rien journaliser : il n’entre pas dans l’administration', async (role) => {
+    const { app, audit } = await buildApp({ role });
+    expect((await post(app, 'backup', { confirm: 'backup' })).statusCode).toBe(403);
+    expect(audit).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('cinquante refus répétés du même acteur ne laissent qu’UNE trace (aucune amplification d’écritures)', async () => {
+    const { app, audit } = await buildApp({ role: 'MODERATOR' });
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      expect((await post(app, 'backup', { confirm: 'backup' })).statusCode).toBe(403);
+    }
+    expect(audit).toHaveBeenCalledTimes(1);
+    await post(app, 'image-prune', { confirm: 'image-prune' });
+    expect(audit).toHaveBeenCalledTimes(2);
+    await app.close();
+  });
+
+  it('un User-Agent démesuré est gardé tronqué à 256 caractères', async () => {
+    const { app, audit } = await buildApp();
+    await app.inject({ method: 'POST', url: '/backup', payload: { confirm: 'backup' }, headers: { 'user-agent': 'u'.repeat(16 * 1024) } });
+    const entry = (audit.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+    expect(entry.userAgent).toBe('u'.repeat(256));
+    await app.close();
+  });
+
+  it('journal indisponible : 503 AUDIT_UNAVAILABLE et AUCUNE demande déposée (fail-closed)', async () => {
+    const { app, audit, dirs } = await buildApp();
+    audit.mockRejectedValueOnce(new Error('mongo down'));
+    const res = await post(app, 'backup', { confirm: 'backup' });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe('AUDIT_UNAVAILABLE');
+    expect(readdirSync(dirs!.requests)).toEqual([]);
     await app.close();
   });
 

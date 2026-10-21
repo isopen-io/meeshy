@@ -44,7 +44,7 @@ const f = {
   'admin.ops.action.backup': 'Lancer la sauvegarde',
   'admin.ops.action.image-prune': 'Nettoyer Docker',
   'admin.ops.action.backup.body': 'Une sauvegarde complète de la base et des volumes de cet environnement part maintenant. Au plus une toutes les 6 heures.',
-  'admin.ops.action.image-prune.body': 'Les images Docker inutilisées et le cache de construction sont supprimés pour libérer le disque ; les conteneurs en marche et les volumes ne sont pas touchés. Au plus un nettoyage par heure.',
+  'admin.ops.action.image-prune.body': 'Les images Docker inutilisées de plus d’une semaine et le cache de construction sont supprimés pour libérer le disque ; les conteneurs en marche et les volumes ne sont pas touchés. Le nettoyage porte sur toute la machine : sur un hôte partagé, il touche aussi les images de la production. Au plus un nettoyage par heure.',
   'admin.ops.action.confirmType': 'Tapez « {name} » pour confirmer',
   'admin.ops.action.reason': 'Motif (facultatif)',
   'admin.ops.action.cancel': 'Annuler',
