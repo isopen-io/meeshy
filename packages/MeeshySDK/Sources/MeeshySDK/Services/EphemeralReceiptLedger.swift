@@ -43,7 +43,7 @@ public extension EphemeralReceiptRecording {
 /// l'extension de notification et l'application partagent la MÊME première
 /// réception : la NSE voit le message avant l'application quand celle-ci est
 /// fermée, et c'est bien cette arrivée-là qui démarre le décompte.
-public final class EphemeralReceiptLedger: EphemeralReceiptRecording, @unchecked Sendable {
+public final class EphemeralReceiptLedger: EphemeralReceiptRecording, Sendable {
 
     /// Le groupe partagé par l'application et ses extensions.
     public static let appGroupSuiteName = "group.me.meeshy.apps"
@@ -64,37 +64,41 @@ public final class EphemeralReceiptLedger: EphemeralReceiptRecording, @unchecked
     /// ne peut plus servir à personne et le registre doit rester borné.
     private static let retention: TimeInterval = 7 * 24 * 3600
 
-    private let defaults: UserDefaults
-    private let lock = NSLock()
+    private let defaults: Locked<UserDefaults>
 
     public init(defaults: UserDefaults? = nil) {
-        self.defaults = defaults
-            ?? UserDefaults(suiteName: Self.appGroupSuiteName)
+        let resolved = defaults
+            ?? UserDefaults(suiteName: EphemeralReceiptLedger.appGroupSuiteName)
             ?? .standard
+        self.defaults = Locked(uncheckedState: resolved)
     }
 
     public func firstReception(of messageId: String) -> Date? {
-        lock.lock(); defer { lock.unlock() }
-        guard let stamp = stored()[messageId] else { return nil }
-        return Date(timeIntervalSince1970: stamp)
+        defaults.read { suite -> Date? in
+            guard let stamp = EphemeralReceiptLedger.stored(in: suite)[messageId] else { return nil }
+            return Date(timeIntervalSince1970: stamp)
+        }
     }
 
     @discardableResult
     public func noteReception(of messageId: String, at date: Date) -> Date {
-        lock.lock(); defer { lock.unlock() }
-        var table = stored()
-        if let existing = table[messageId] {
-            return Date(timeIntervalSince1970: existing)
+        defaults.read { suite -> Date in
+            var table = EphemeralReceiptLedger.stored(in: suite)
+            if let existing = table[messageId] {
+                return Date(timeIntervalSince1970: existing)
+            }
+            let stamp = date.timeIntervalSince1970
+            table[messageId] = stamp
+            EphemeralReceiptLedger.write(EphemeralReceiptLedger.prune(table, now: date), to: suite)
+            return Date(timeIntervalSince1970: stamp)
         }
-        table[messageId] = date.timeIntervalSince1970
-        write(prune(table, now: date))
-        return date
     }
 
     public func destruction(of messageId: String) -> Date? {
-        lock.lock(); defer { lock.unlock() }
-        guard let stamp = storedDestructions()[messageId] else { return nil }
-        return Date(timeIntervalSince1970: stamp)
+        defaults.read { suite -> Date? in
+            guard let stamp = EphemeralReceiptLedger.storedDestructions(in: suite)[messageId] else { return nil }
+            return Date(timeIntervalSince1970: stamp)
+        }
     }
 
     /// Grave la mort d'un message — appelé quand il est DÉTRUIT (`message:expired`
@@ -114,39 +118,39 @@ public final class EphemeralReceiptLedger: EphemeralReceiptRecording, @unchecked
     /// bornée par la même rétention de 7 jours que les réceptions, largement
     /// au-delà du plus long éphémère du produit (24 h).
     public func noteDestruction(of messageId: String, at date: Date) {
-        lock.lock(); defer { lock.unlock() }
+        defaults.read { suite -> Void in
+            var deaths = EphemeralReceiptLedger.storedDestructions(in: suite)
+            if deaths[messageId] == nil {
+                deaths[messageId] = date.timeIntervalSince1970
+                EphemeralReceiptLedger.writeDestructions(EphemeralReceiptLedger.prune(deaths, now: date), to: suite)
+            }
 
-        var deaths = storedDestructions()
-        if deaths[messageId] == nil {
-            deaths[messageId] = date.timeIntervalSince1970
-            writeDestructions(prune(deaths, now: date))
+            var receipts = EphemeralReceiptLedger.stored(in: suite)
+            guard receipts.removeValue(forKey: messageId) != nil else { return }
+            EphemeralReceiptLedger.write(receipts, to: suite)
         }
-
-        var receipts = stored()
-        guard receipts.removeValue(forKey: messageId) != nil else { return }
-        write(receipts)
     }
 
     // MARK: - Stockage
 
-    private func stored() -> [String: TimeInterval] {
-        defaults.dictionary(forKey: Self.storageKey) as? [String: TimeInterval] ?? [:]
+    private static func stored(in defaults: UserDefaults) -> [String: TimeInterval] {
+        defaults.dictionary(forKey: storageKey) as? [String: TimeInterval] ?? [:]
     }
 
-    private func write(_ table: [String: TimeInterval]) {
-        defaults.set(table, forKey: Self.storageKey)
+    private static func write(_ table: [String: TimeInterval], to defaults: UserDefaults) {
+        defaults.set(table, forKey: storageKey)
     }
 
-    private func storedDestructions() -> [String: TimeInterval] {
-        defaults.dictionary(forKey: Self.destructionsKey) as? [String: TimeInterval] ?? [:]
+    private static func storedDestructions(in defaults: UserDefaults) -> [String: TimeInterval] {
+        defaults.dictionary(forKey: destructionsKey) as? [String: TimeInterval] ?? [:]
     }
 
-    private func writeDestructions(_ table: [String: TimeInterval]) {
-        defaults.set(table, forKey: Self.destructionsKey)
+    private static func writeDestructions(_ table: [String: TimeInterval], to defaults: UserDefaults) {
+        defaults.set(table, forKey: destructionsKey)
     }
 
-    private func prune(_ table: [String: TimeInterval], now: Date) -> [String: TimeInterval] {
-        let floor = now.timeIntervalSince1970 - Self.retention
+    private static func prune(_ table: [String: TimeInterval], now: Date) -> [String: TimeInterval] {
+        let floor = now.timeIntervalSince1970 - retention
         return table.filter { $0.value >= floor }
     }
 }
