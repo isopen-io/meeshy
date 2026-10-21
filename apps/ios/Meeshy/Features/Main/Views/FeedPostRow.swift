@@ -73,7 +73,7 @@ struct FeedPostRow: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     var body: some View {
         // On iPad/Mac (regular width) the feed lives in a narrow column where a
