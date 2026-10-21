@@ -4,7 +4,7 @@
  *
  * - determinePublicUrl fallback (lines 122-124)
  * - normalizeAudio: success, ffmpeg failure, read/write errors, M4A container
- * - maybeTranscodeVideo: all branches (lines 280-311)
+ * - transcodeVideoRendition (ex-maybeTranscodeVideo): all branches
  * - uploadFile video branch: generateVideoThumbnail + transcoded path (lines 421-439)
  * - uploadEncryptedFile video branch: generateVideoThumbnailFromBuffer (line 556)
  *
@@ -98,6 +98,16 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { UploadProcessor, type FileToUpload } from '../../../services/attachments/UploadProcessor';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SIGNATURE_BYTES_BY_MIME_TYPE } from '../../../services/attachments/__tests__/signature-fixtures';
+import { transcodeVideoRendition } from '../../../services/attachments/media-renditions';
+import { runFfmpeg } from '../../../services/attachments/ffmpeg-run';
+
+// Le transcodage vit dans la fabrique de rendus (#11260), partagée avec le
+// chemin résumable : ces branches se jouent désormais contre elle.
+const maybeTranscodeVideo = (
+  filePath: string,
+  metadata: { width?: number; height?: number; bitrate?: number; videoCodec?: string },
+  fileSize: number
+) => transcodeVideoRendition({ uploadBasePath: '/test/uploads', runFfmpeg }, { relPath: filePath, metadata, fileSize });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -292,14 +302,14 @@ describe('UploadProcessor – extra coverage', () => {
 
   describe('maybeTranscodeVideo', () => {
     it('returns null when VIDEO_TRANSCODE is not "true"', async () => {
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 1000);
       expect(r).toBeNull();
     });
 
     it('returns null when planVideoTranscode returns null', async () => {
       process.env.VIDEO_TRANSCODE = 'true';
       mockPlanVideoTranscode.mockReturnValueOnce(null);
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 1000);
       expect(r).toBeNull();
     });
 
@@ -307,7 +317,7 @@ describe('UploadProcessor – extra coverage', () => {
       process.env.VIDEO_TRANSCODE = 'true';
       process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES = '500';
       mockPlanVideoTranscode.mockReturnValueOnce({ scale: '1280:-1' });
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 1000);
       expect(r).toBeNull();
     });
 
@@ -319,7 +329,7 @@ describe('UploadProcessor – extra coverage', () => {
         process.nextTick(() => proc.emit('error', new Error('no ffmpeg')));
         return proc;
       });
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 100);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 100);
       expect(r).toBeNull();
       expect(mockFsUnlink).toHaveBeenCalled();
     });
@@ -333,7 +343,7 @@ describe('UploadProcessor – extra coverage', () => {
         return proc;
       });
       mockFsStat.mockResolvedValueOnce({ size: 0 });
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 1000);
       expect(r).toBeNull();
     });
 
@@ -346,7 +356,7 @@ describe('UploadProcessor – extra coverage', () => {
         return proc;
       });
       mockFsStat.mockResolvedValueOnce({ size: 2000 }); // >= original 1000
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 1000);
       expect(r).toBeNull();
     });
 
@@ -359,7 +369,7 @@ describe('UploadProcessor – extra coverage', () => {
         return proc;
       });
       mockFsStat.mockResolvedValueOnce({ size: 400 }); // < original 1000
-      const r = await (processor as any).maybeTranscodeVideo('test/v.mp4', {}, 1000);
+      const r = await maybeTranscodeVideo('test/v.mp4', {}, 1000);
       expect(r).not.toBeNull();
       expect(r!.mimeType).toBe('video/mp4');
       expect(r!.fileSize).toBe(400);
@@ -391,7 +401,7 @@ describe('UploadProcessor – extra coverage', () => {
         .mockResolvedValueOnce({ width: 1280, height: 720, duration: 5000, fps: 30, videoCodec: 'h264', bitrate: 3000 })
         .mockResolvedValueOnce({ width: 1280, height: 720, duration: 5000, fps: 30, videoCodec: 'h264', bitrate: 1500 });
 
-      const file = makeFile({ size: 102400 });
+      const file = makeFile({ buffer: Buffer.alloc(102400, 1), size: 102400 });
       await processor.uploadFile(file, USER_ID, false, MSG_ID);
 
       // extractMetadata called twice: initial + re-probe after transcode
@@ -413,7 +423,7 @@ describe('UploadProcessor – extra coverage', () => {
         .mockResolvedValueOnce({ width: 1280, height: 720 })
         .mockRejectedValueOnce(new Error('re-probe failed'));
 
-      const file = makeFile({ size: 102400 });
+      const file = makeFile({ buffer: Buffer.alloc(102400, 1), size: 102400 });
       // Should not throw even when re-probe fails
       const result = await processor.uploadFile(file, USER_ID, false, MSG_ID);
       expect(result).toBeDefined();
@@ -456,7 +466,7 @@ describe('UploadProcessor – extra coverage', () => {
       mockPlanVideoTranscode.mockReturnValueOnce({ scale: '1280:-1' });
       mockBuildVideoTranscodeArgs.mockReturnValueOnce(['-i', 'in.mp4', 'out.mp4']);
 
-      const p = (processor as any).maybeTranscodeVideo('test/v.mp4', {}, 10000);
+      const p = maybeTranscodeVideo('test/v.mp4', {}, 10000);
 
       // Advance time past the 5-minute timeout
       jest.advanceTimersByTime(5 * 60 * 1000 + 1);
@@ -476,7 +486,7 @@ describe('UploadProcessor – extra coverage', () => {
         process.nextTick(() => proc.emit('close', 1)); // non-zero exit
         return proc;
       });
-      const r = await (processor as any).maybeTranscodeVideo('v.mp4', {}, 100);
+      const r = await maybeTranscodeVideo('v.mp4', {}, 100);
       expect(r).toBeNull(); // maybeTranscodeVideo catches rejection
     });
   });

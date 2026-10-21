@@ -78,8 +78,13 @@ export function useThreadCompose(params: {
   readonly send: ReturnType<typeof useSend>['send'];
   /** La région vivante du fil : l'issue d'une édition s'y dit (#10581). */
   readonly announce?: (message: string) => void;
+  /** RÉPONDRE À CE MESSAGE EST-IL POSSIBLE D'ICI ? (#11372) — la loi du menu
+   * (`webRepliesToMessage`), relue à CHAQUE rendu : une citation armée par le
+   * menu, le résumé, la visionneuse ou RESTAURÉE du brouillon ne monte que si
+   * elle l'admet. Jamais en bout en bout : le web ne chiffre pas. */
+  readonly replyable: (message: Message) => boolean;
 }): ThreadComposeState {
-  const { store, scope, conversationId, messages, readerLanguages, send } = params;
+  const { store, scope, conversationId, messages, readerLanguages, send, replyable } = params;
 
   /* LE MODE ÉDITION (#10581) — armer une réponse en sort : le composeur
      revient avec sa citation, on ne répond pas depuis le champ d'édition. */
@@ -127,7 +132,13 @@ export function useThreadCompose(params: {
     [setDraftReplyTarget, cancelEdit],
   );
 
-  const quotedMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
+  /* LE POINT D'ENTRÉE UNIQUE DE LA CITATION (#11372) — toutes les portes
+     posent `replyTarget`, la restauration du brouillon comprise
+     (`useThreadDraft`) ; c'est ICI qu'elle devient une citation, et la loi la
+     juge au moment où elle monte. Un régime encore inconnu la retient ; la
+     conversation lue en clair la rend, sans que le brouillon l'ait perdue. */
+  const found = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
+  const quotedMessage = found !== undefined && replyable(found) ? found : undefined;
   const replyToMessage = useMemo(
     () => (quotedMessage === undefined ? undefined : withAttachmentReply(quotedMessage, replyPiece)),
     [quotedMessage, replyPiece],
