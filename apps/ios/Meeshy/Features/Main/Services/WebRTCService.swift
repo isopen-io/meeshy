@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import os
+import MeeshySDK
 
 // MARK: - WebRTC Service Delegate
 
@@ -400,8 +401,7 @@ final class WebRTCService {
         // correctly skips the tick without exiting the loop.
         qualityMonitorTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(interval))
-                if Task.isCancelled { break }
+                guard await cancellableSleep(for: .seconds(interval)), !Task.isCancelled else { break }
                 guard let self else { return }
                 guard let stats = await self.client.getStats() else { continue }
                 let previous = self.lastStats
@@ -809,8 +809,7 @@ extension WebRTCService: WebRTCClientDelegate {
         disconnectDebounceTask?.cancel()
         disconnectDebounceTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            try? await Task.sleep(for: .seconds(QualityThresholds.disconnectDebounceSeconds))
-            if Task.isCancelled { return }
+            guard await cancellableSleep(for: .seconds(QualityThresholds.disconnectDebounceSeconds)), !Task.isCancelled else { return }
             guard self.connectionState == .disconnected else { return }
             Logger.webrtc.info("disconnect debounce elapsed — escalating to reconnect")
             self.delegate?.webRTCServiceDidDisconnect(self)

@@ -80,7 +80,7 @@ extension CallManager {
         endCall()
 
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.endAndAnswerPendingHandoffSeconds))
+            _ = await cancellableSleep(for: .seconds(QualityThresholds.endAndAnswerPendingHandoffSeconds))
             guard let self else { return }
             // The waiting call may have been ended, answered elsewhere, or
             // replaced by a newer incoming call while we were asleep — only

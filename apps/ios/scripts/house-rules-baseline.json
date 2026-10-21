@@ -16,9 +16,9 @@
     "observed-theme-singleton": 16,
     "onchange-single": 0,
     "plural-s": 0,
-    "sleep-nanoseconds": 98,
+    "sleep-nanoseconds": 25,
     "status-bar-hidden": 0,
-    "try-sleep": 218,
+    "try-sleep": 51,
     "uiscreen-main": 1,
     "unchecked-sendable": 128,
     "viewmodel-shared": 588

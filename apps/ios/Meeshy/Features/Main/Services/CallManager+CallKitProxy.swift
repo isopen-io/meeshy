@@ -246,7 +246,7 @@ class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sendable {
         // speaker toggle would silently fall back to earpiece. Defer by
         // ~200ms so the engine is up by the time we override.
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(200))
+            _ = await cancellableSleep(for: .milliseconds(200))
             self?.manager?.applySpeakerRoute()
         }
         let outputs = audioSession.currentRoute.outputs

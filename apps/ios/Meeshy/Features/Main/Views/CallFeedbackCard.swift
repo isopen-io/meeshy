@@ -31,8 +31,7 @@ struct CallFeedbackCard: View {
         .accessibilityElement(children: .contain)
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: viewModel.pendingRating)
         .task(id: prompt.callId) {
-            try? await Task.sleep(for: CallFeedbackViewModel.idleTimeout)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: CallFeedbackViewModel.idleTimeout), !Task.isCancelled else { return }
             viewModel.expire()
         }
     }

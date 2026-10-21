@@ -365,8 +365,7 @@ struct LocationPickerView: View {
                     // pas une nouvelle requête, la liste ne doit pas se rouvrir.
                     guard requête != viewModel.selectedName else { return }
                     searchTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 300_000_000)
-                        guard !Task.isCancelled else { return }
+                        guard await cancellableSleep(for: .milliseconds(300)), !Task.isCancelled else { return }
                         viewModel.search(query: requête)
                     }
                 }
@@ -802,8 +801,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         // `isGeocoding`/`addressString`, donc `objectWillChange` — SwiftUI exige
         // que ces émissions restent sur le main.
         geocodeTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(300)), !Task.isCancelled else { return }
             self?.reverseGeocode(coordinate)
         }
     }

@@ -122,8 +122,7 @@ extension CallManager {
     private func scheduleSdpOfferTimeout(callId: String) {
         sdpOfferTimeoutTask?.cancel()
         sdpOfferTimeoutTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds))
-            guard let self, !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds)), let self, !Task.isCancelled else { return }
             guard case .connecting = self.callState, self.currentCallId == callId else { return }
             Logger.calls.error("SDP offer timeout for call: \(callId)")
             // The peer is still waiting on an answer that will never come —

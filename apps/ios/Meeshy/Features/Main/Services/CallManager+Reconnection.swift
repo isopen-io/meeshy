@@ -139,8 +139,7 @@ extension CallManager {
                   case .reconnecting(let currentAfterChain) = self.callState, currentAfterChain == attempt
             else { return }
             if backoffSeconds > 0 {
-                try? await Task.sleep(for: .seconds(backoffSeconds))
-                guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
+                guard await cancellableSleep(for: .seconds(backoffSeconds)), !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
             }
             guard let offer = await self.webRTCService.performICERestart() else {
                 // The call may have ended (or a newer reconnect cycle already
@@ -187,8 +186,7 @@ extension CallManager {
         let refreshDelay = CallReliabilityPolicy.turnRefreshDelay(ttl: ttl)
         Logger.calls.info("TURN credential refresh scheduled in \(Int(refreshDelay))s (TTL=\(Int(ttl))s)")
         turnRefreshTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(refreshDelay))
-            guard !Task.isCancelled, let self, self.callState.isActive,
+            guard await cancellableSleep(for: .seconds(refreshDelay)), !Task.isCancelled, let self, self.callState.isActive,
                   let callId = self.currentCallId else { return }
             self.requestFreshTurnCredentials(callId: callId)
         }
@@ -212,8 +210,7 @@ extension CallManager {
     private func armTurnRefreshWatchdog(callId: String) {
         turnRefreshWatchdogTask?.cancel()
         turnRefreshWatchdogTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.turnRefreshRetryTimeoutSeconds))
-            guard !Task.isCancelled, let self, self.callState.isActive,
+            guard await cancellableSleep(for: .seconds(QualityThresholds.turnRefreshRetryTimeoutSeconds)), !Task.isCancelled, let self, self.callState.isActive,
                   self.currentCallId == callId else { return }
             self.turnRefreshRetryAttempt += 1
             guard CallReliabilityPolicy.turnRefreshShouldRetry(attempt: self.turnRefreshRetryAttempt) else {

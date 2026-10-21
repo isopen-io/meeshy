@@ -223,7 +223,7 @@ final class ConversationMediaHubViewModel: ObservableObject {
         }
         let delay = debounce
         searchTask = Task { [weak self] in
-            if delay > .zero { try? await Task.sleep(for: delay) }
+            if delay > .zero { _ = await cancellableSleep(for: delay) }
             guard !Task.isCancelled else { return }
             await self?.runSearch(trimmed)
         }

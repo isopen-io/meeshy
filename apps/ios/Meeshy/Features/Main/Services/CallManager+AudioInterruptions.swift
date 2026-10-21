@@ -209,7 +209,7 @@ extension CallManager {
             rtc.unlockForConfiguration()
         }
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.mediaServicesResetSpeakerDelaySeconds))
+            _ = await cancellableSleep(for: .seconds(QualityThresholds.mediaServicesResetSpeakerDelaySeconds))
             self?.applySpeakerRoute()
         }
     }

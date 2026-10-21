@@ -70,8 +70,7 @@ extension CallManager {
         guard analyticsSnapshotTask == nil else { return }
         analyticsSnapshotTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(QualityThresholds.analyticsSnapshotIntervalSeconds))
-                guard !Task.isCancelled, let self else { return }
+                guard await cancellableSleep(for: .seconds(QualityThresholds.analyticsSnapshotIntervalSeconds)), !Task.isCancelled, let self else { return }
                 // Un autre appel a remplacé celui-ci sans passer par le cancel
                 // (défensif) : cette task ne parle plus pour personne.
                 guard self.currentCallId == callId else { return }
@@ -296,7 +295,7 @@ extension CallManager {
             ? QualityThresholds.callEndRetryableSettleSeconds
             : QualityThresholds.callEndSettleSeconds
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(settleDelay))
+            _ = await cancellableSleep(for: .seconds(settleDelay))
             guard let self else { return }
             guard self.settleToken == token else { return }
             if case .ended = self.callState {

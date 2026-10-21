@@ -36,8 +36,7 @@ struct CallsTab: View {
         .task { await viewModel.loadCalls() }
         .task(id: viewModel.searchQuery) {
             if viewModel.isSearching {
-                try? await Task.sleep(for: Self.searchDebounceDuration)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: Self.searchDebounceDuration), !Task.isCancelled else { return }
             }
             await viewModel.applySearch()
         }

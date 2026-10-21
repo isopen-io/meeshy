@@ -224,8 +224,7 @@ struct StoryGestureOverlayView: View {
                                 // lecture ET les contrôleurs.
                                 isResumingTap = false
                                 holdArmingTask = Task { @MainActor in
-                                    try? await Task.sleep(for: .milliseconds(Int(holdThresholdSeconds * 1000)))
-                                    if Task.isCancelled { return }
+                                    guard await cancellableSleep(for: .milliseconds(Int(holdThresholdSeconds * 1000))), !Task.isCancelled else { return }
                                     if isComposerEngaged { return }
                                     // Garde contre le wake-up Task après un
                                     // backgrounding : si l'app est sortie

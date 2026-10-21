@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshyUI
+import MeeshySDK
 
 /// Hôte de la pilule de section — le SEUL endroit qui tient l'état de la loi
 /// d'activité de défilement pour la liste (arbitrage LWS-6/I-063bis).
@@ -148,7 +149,7 @@ struct SectionScrollPillHost: View {
         guard delayMs > 0 else { return }
         probeScheduled = true
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(delayMs * 1_000_000))
+            _ = await cancellableSleep(for: .milliseconds(delayMs))
             probeScheduled = false
             let now = Self.timestamp()
             // `.tick` ne réarme JAMAIS l'état — il ne fait que rendre la main

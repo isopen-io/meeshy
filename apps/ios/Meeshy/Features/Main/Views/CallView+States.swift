@@ -74,8 +74,7 @@ extension CallView {
         }
         .task {
             sdpOfferSlow = false
-            try? await Task.sleep(nanoseconds: sdpOfferSlowSeconds * 1_000_000_000)
-            if !Task.isCancelled {
+            if await cancellableSleep(for: .seconds(sdpOfferSlowSeconds)), !Task.isCancelled {
                 withAnimation(.easeInOut(duration: 0.3)) { sdpOfferSlow = true }
                 UIAccessibility.post(
                     notification: .announcement,

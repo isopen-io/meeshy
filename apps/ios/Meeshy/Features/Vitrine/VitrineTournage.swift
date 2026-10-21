@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import MeeshySDK
 
 /// Ce qui a libéré l'action d'une scène filmée.
 nonisolated enum VitrineClap: Equatable, Sendable {
@@ -23,7 +24,7 @@ enum VitrineTournage {
         let limite = ContinuousClock.now + repli
         while !FileManager.default.fileExists(atPath: go.path) {
             guard ContinuousClock.now < limite else { return .repli }
-            try? await Task.sleep(for: pas)
+            _ = await cancellableSleep(for: pas)
         }
         return .donne
     }
