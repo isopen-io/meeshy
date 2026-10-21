@@ -51,7 +51,12 @@ public nonisolated struct StoryFilterProcessor {
     /// the fully-filtered image back toward the original via a dissolve, so
     /// the slider behaves identically for all eight effects.
     public static func filtered(_ ciImage: CIImage, _ filter: StoryFilter, intensity: Float) -> CIImage {
-        let clamped = max(0, min(1, intensity))
+        StoryRenderingContext.inLinearLight(ciImage) { lineaire in
+            look(lineaire, filter, intensity: max(0, min(1, intensity)))
+        }
+    }
+
+    private static func look(_ ciImage: CIImage, _ filter: StoryFilter, intensity clamped: Float) -> CIImage {
         guard let fullyFiltered = fullEffect(filter, on: ciImage) else { return ciImage }
         // `dissolveTransition.time` 0 = original, 1 = filtered.
         if clamped >= 0.999 { return fullyFiltered }

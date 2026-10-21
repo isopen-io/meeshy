@@ -22,6 +22,21 @@ extension StoryRenderingContext {
         ciContext.createCGImage(image, from: extent, format: .RGBA8, colorSpace: outputColorSpace(preserving: source))
     }
 
+    /// **L'espace où un look se calcule : la lumière LINÉAIRE** (sRGB étendu
+    /// linéaire, celui d'un `CIContext()` par défaut). Le contexte du domaine
+    /// travaille en Display P3 ENCODÉ (gamma) — juste pour composer, faux pour
+    /// filtrer : une température, une exposition ou un fondu appliqués aux
+    /// valeurs encodées agissent plus faiblement (« cool » sur un bleu saturé
+    /// tombait sous le seuil visible du lecteur). Chaque étage de look entre
+    /// donc en lumière linéaire et en ressort : l'aperçu, la vignette et
+    /// l'export gardent la force qu'ils avaient avant la convergence.
+    public nonisolated static func inLinearLight(_ image: CIImage, _ stage: (CIImage) -> CIImage) -> CIImage {
+        guard let lineaire = CGColorSpace(name: CGColorSpace.extendedLinearSRGB),
+              let entree = image.matchedFromWorkingSpace(to: lineaire) else { return stage(image) }
+        let sortie = stage(entree)
+        return sortie.matchedToWorkingSpace(from: lineaire) ?? sortie
+    }
+
     /// **La source d'une chaîne, redressée par Core Image** : l'orientation
     /// EXIF de l'enveloppe `UIImage` est appliquée par `CIImage.oriented(_:)`,
     /// dans le graphe — le bitmap cuit est `.up` et `CanvasImageOrientation`

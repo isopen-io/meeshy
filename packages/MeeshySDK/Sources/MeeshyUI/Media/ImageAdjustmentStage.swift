@@ -18,6 +18,10 @@ nonisolated enum ImageAdjustmentStage {
 
     static func apply(_ input: CIImage, _ adjustments: ImageAdjustments, extent: CGRect) -> CIImage {
         guard !adjustments.isNeutral else { return input }
+        return StoryRenderingContext.inLinearLight(input) { stages($0, adjustments, extent: extent) }
+    }
+
+    private static func stages(_ input: CIImage, _ adjustments: ImageAdjustments, extent: CGRect) -> CIImage {
         var result = input
 
         if abs(adjustments.exposure) > 0.001 {

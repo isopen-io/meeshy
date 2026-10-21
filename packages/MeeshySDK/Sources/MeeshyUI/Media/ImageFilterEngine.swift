@@ -232,6 +232,11 @@ public nonisolated final class ImageFilterEngine: Sendable {
     // MARK: - Filter stage
 
     private func applyFilter(_ input: CIImage, filter: ImageFilter) -> CIImage {
+        guard filter != .original else { return input }
+        return StoryRenderingContext.inLinearLight(input) { filterStage($0, filter: filter) }
+    }
+
+    private func filterStage(_ input: CIImage, filter: ImageFilter) -> CIImage {
         switch filter {
         case .original:
             return input
@@ -272,6 +277,11 @@ public nonisolated final class ImageFilterEngine: Sendable {
     // MARK: - Effect stage
 
     private func applyEffect(_ input: CIImage, effect: ImageEffect, extent: CGRect) -> CIImage {
+        guard effect != .none else { return input }
+        return StoryRenderingContext.inLinearLight(input) { effectStage($0, effect: effect, extent: extent) }
+    }
+
+    private func effectStage(_ input: CIImage, effect: ImageEffect, extent: CGRect) -> CIImage {
         switch effect {
         case .none:
             return input
