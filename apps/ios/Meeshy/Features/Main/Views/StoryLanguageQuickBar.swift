@@ -127,7 +127,7 @@ struct StoryLanguageQuickBar: View {
             onSelect(language.id)
         } label: {
             Text(language.flag)
-                .font(.system(size: MeeshyFont.titleSize))
+                .font(MeeshyFont.emoji(MeeshyFont.titleSize))
                 .opacity(isActive ? 1 : 0.55)
                 .overlay(alignment: .bottom) {
                     Capsule()
