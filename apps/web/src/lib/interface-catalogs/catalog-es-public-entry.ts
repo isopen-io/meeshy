@@ -33,6 +33,17 @@ const esPublicEntry = {
   'magicLink.offline': 'Sin conexión. Comprueba tu red y vuelve a intentarlo.',
   'magicLink.submit': 'Recibir el enlace',
   'magicLink.submit.busy': 'Enviando…',
+  'magicLink.flowTitle': 'Iniciar sesión con correo',
+  'magicLink.validating': 'Verificando el enlace…',
+  'magicLink.invalid.title': 'Enlace no válido o caducado',
+  'magicLink.invalid.body': 'Un enlace de acceso caduca a los 10 minutos y solo sirve una vez.',
+  'magicLink.requestNew': 'Solicitar un enlace nuevo',
+  'magicLink.backToLogin': 'Volver al inicio de sesión',
+  'magicLink.retry': 'Reintentar',
+  'magicLink.resend': 'Reenviar',
+  'magicLink.resend.label': 'Reenviar el enlace',
+  'magicLink.cancel': 'Cancelar',
+  'magicLink.linkExpired': 'Enlace caducado, solicita uno nuevo',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default esPublicEntry;
