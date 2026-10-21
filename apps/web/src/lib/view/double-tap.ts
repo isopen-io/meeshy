@@ -148,10 +148,16 @@ export function mediaOpenerOf(target: EventTarget | null): HTMLElement | null {
 /**
  * CE QU'UN DOUBLE TOUCHER PEUT RÉAGIR — ce que la capsule « + » offre
  * (`thread-modes.tsx`) : ni un message supprimé, ni un éphémère échu, ni un
- * envoi encore local (`cid_…`, que la passerelle ne connaît pas).
+ * envoi encore local (`cid_…`, que la passerelle ne connaît pas), ni un
+ * message système (`ReactionService.addReaction` le refuse). C'est la même loi
+ * qui monte, ou non, le rail du menu de l'appui long (#11206).
  */
-export function doubleTapReactable(message: Pick<Message, 'id'> & Parameters<typeof protectionOf>[0], now: number): boolean {
+export function doubleTapReactable(
+  message: Pick<Message, 'id'> & Partial<Pick<Message, 'messageType'>> & Parameters<typeof protectionOf>[0],
+  now: number,
+): boolean {
   if (message.id.startsWith('cid_')) return false;
+  if (message.messageType === 'system') return false;
   const protection = protectionOf(message, now);
   return protection !== 'deleted' && protection !== 'expired';
 }
