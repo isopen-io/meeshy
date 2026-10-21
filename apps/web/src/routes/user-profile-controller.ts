@@ -203,8 +203,10 @@ export function useProfileController(username: string, language: InterfaceLangua
   const livePresence = useStore(presenceStore, (state) => (person === undefined ? undefined : state.byUser[person.id]));
   useMinute();
   const servedPresence = view.data?.presence ?? null;
+  /* … et jamais sur SA PROPRE fiche (décision porteur 2026-10-21, #11412). */
+  const ownProfile = person !== undefined && person.id === viewerId;
   const presence =
-    relation.kind === 'blocked' || servedPresence === null
+    relation.kind === 'blocked' || servedPresence === null || ownProfile
       ? null
       : profilePresenceLine(livePresence ?? servedPresence, new Date(), language);
   /* L'HUMEUR DU MOMENT (#10528) — lue dans le corpus que le rail a déjà chargé

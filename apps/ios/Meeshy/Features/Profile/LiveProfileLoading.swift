@@ -19,9 +19,9 @@ final class LiveProfileLoading: ProfileLoading {
     }
 
     func storeProfile(_ user: MeeshyUser, lookupKey: String) async {
-        try? await CacheCoordinator.shared.profiles.save([user], for: user.id)
+        await bestEffort("liveProfileLoading.profiles.save", category: .cache) { try await CacheCoordinator.shared.profiles.save([user], for: user.id) }
         if lookupKey != user.id {
-            try? await CacheCoordinator.shared.profiles.save([user], for: lookupKey)
+            await bestEffort("liveProfileLoading.profiles.save.2", category: .cache) { try await CacheCoordinator.shared.profiles.save([user], for: lookupKey) }
         }
         await CacheCoordinator.shared.profiles.touch(for: user.id)
         await SearchIndex.shared.indexUsers([user])
@@ -36,7 +36,7 @@ final class LiveProfileLoading: ProfileLoading {
     }
 
     func storeStats(_ stats: UserStats, userId: String) async {
-        try? await CacheCoordinator.shared.profileStats.save([stats], for: userId)
+        await bestEffort("liveProfileLoading.profileStats.save", category: .cache) { try await CacheCoordinator.shared.profileStats.save([stats], for: userId) }
     }
 
     func sharedConversations(with userId: String, currentUserId: String) async throws -> [MeeshyConversation] {

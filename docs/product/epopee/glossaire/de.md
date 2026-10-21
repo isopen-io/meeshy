@@ -57,7 +57,7 @@ Le ton : on **tutoie** (`du`, `dein`), jamais `Sie`/`Ihr` ; on écrit pour un en
 | Licht | dein Licht, le fil entier | un état du niveau (→ **Klarheit**) |
 | Truhe | la quatrième réserve de l'Erbe | la Truhe des Tages (→ **die Gabe**) |
 | Schatz | la cinquième réserve de l'Erbe | le concept entier (→ **das Erbe**) |
-| Stern | le ciel : l'état Stern, le Himmel der Ahnen, les Sternfragmente, les sept étoiles d'une médaille | la Wiedergeburt (→ **Zeitalter**), la Reise (→ **Schritte**) |
+| Stern | le ciel : l'état Stern, le Himmel der Ahnen, les Sternfragmente, les sept étoiles d'une médaille | la Wiedergeburt (→ **Zeitalter**), la Reise (→ **Schritte**), le libellé des paliers d'une médaille (→ **Stufen**) |
 | Etappe | les étapes de l'accueil seulement (`game.guide.step_of`, `game.rules.section_steps`) | le seuil des dix niveaux (→ **Prüfung**), la Reise (→ **Rast**) |
 | Schritt | les pas du Voyage | une épreuve (→ **Prüfung**), une étape de l'accueil (→ **Etappe**) |
 | Stufe | un palier de médaille ou de défi, une marche du rang (V à I) | un état de la lumière (→ **Gestalt**), un contenant de l'Erbe (→ **Behältnis**) |

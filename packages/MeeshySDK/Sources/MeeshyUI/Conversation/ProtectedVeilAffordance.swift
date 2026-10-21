@@ -16,7 +16,7 @@ import MeeshySDK
 ///
 /// Un flou nu se lit « contenu masqué » : il ne dit pas que le regarder le
 /// DÉTRUIT. Le voile d'une vue unique porte donc son libellé en clair —
-/// « Vue unique · touchez pour afficher » — à parité avec web-v2. Le toucher
+/// « Vue unique · touchez pour afficher » — à parité avec le web. Le toucher
 /// est le consentement ; c'est lui qui appelle `/consume`, chez l'hôte.
 ///
 /// Composant de SDK : il ne connaît ni message, ni réseau, ni singleton. Il

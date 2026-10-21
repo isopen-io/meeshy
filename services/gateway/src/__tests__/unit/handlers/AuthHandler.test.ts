@@ -47,6 +47,7 @@ import { AuthHandler } from '../../../socketio/handlers/AuthHandler';
 import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import { CallAlreadyEndedError } from '../../../services/CallService';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { PRESENCE_AWAY_GRACE_MS } from '../../../socketio/presence-foreground';
 
 // ─── Factories ─────────────────────────────────────────────────────────────────
 
@@ -254,6 +255,35 @@ describe('handleTokenAuthentication', () => {
     await handler.handleTokenAuthentication(socket);
     expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.AUTHENTICATED, expect.objectContaining({ success: true }));
     delete process.env.JWT_SECRET;
+  });
+
+  // #10575 — iOS et Android rejouent leur `presence:app-state` pendant que
+  // l'authentification court : l'arrière-plan déclaré avant l'enregistrement
+  // est retenu, l'annonce « en ligne » de la première socket est suivie du
+  // départ après la grâce, et ses pongs ne datent plus rien.
+  it('retient un arrière-plan déclaré avant l’enregistrement de la socket', async () => {
+    jest.useFakeTimers();
+    process.env.JWT_SECRET = 'test-secret';
+    const socket = makeSocket();
+    socket.handshake.auth.token = 'Bearer my.jwt.token';
+    const user = makeUser();
+    (jwt.verify as jest.MockedFunction<any>).mockReturnValue({ userId: user.id, sid: LIVE_SID });
+    const services = makeServices();
+    const handler = makeHandler(makePrisma({ user }), services);
+
+    await handler.handleAppState(socket, { foreground: false });
+    await handler.handleTokenAuthentication(socket);
+    expect(handler.isPresent(user.id)).toBe(false);
+    await jest.advanceTimersByTimeAsync(PRESENCE_AWAY_GRACE_MS);
+
+    expect(services.maintenanceService.updateUserOnlineStatus.mock.calls).toEqual([
+      [user.id, true, true],
+      [user.id, false, true],
+    ]);
+    handler.handleEnginePong(socket);
+    expect(services.statusService.noteHeartbeat).not.toHaveBeenCalled();
+    delete process.env.JWT_SECRET;
+    jest.useRealTimers();
   });
 
   it('emits ERROR on jwt.verify failure', async () => {

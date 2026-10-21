@@ -294,6 +294,31 @@ final class ImagineWorkshopTests: XCTestCase {
         }
     }
 
+    // MARK: - « Post en tête » se VOIT sans défiler (#11477, recette 2026-10-21)
+
+    /// Pour une réponse, les trois modes remplissaient la rangée et la bascule
+    /// « Post en tête » finissait coupée au bord (« ✓ Pos… ») : le choix
+    /// d'afficher le post existait sans se voir. Elle se pose hors du défilement
+    /// des modes, à leur suite ; les modes, eux, défilent.
+    func test_compositionBar_aReplyPinsThePostToggle_besideTheScrollingModes() {
+        let modes: [PostCommentCardMode] = [.threadToHere, .postRootAndReply, .chosenReplies]
+        let layout = MessageCardCompositionBar.layout(modes: modes, offersPostToggle: true)
+        XCTAssertEqual(layout.scrollingModes, modes)
+        XCTAssertTrue(layout.pinsPostToggle)
+    }
+
+    func test_compositionBar_aFirstLevelComment_showsItsTwoModes_withoutAPinnedToggle() {
+        let layout = MessageCardCompositionBar.layout(modes: [.postAndComment, .commentAlone], offersPostToggle: false)
+        XCTAssertEqual(layout.scrollingModes, [.postAndComment, .commentAlone])
+        XCTAssertFalse(layout.pinsPostToggle)
+    }
+
+    func test_compositionBar_aSingleMode_offersNoModeChip_onlyTheToggle() {
+        let layout = MessageCardCompositionBar.layout(modes: [.threadToHere], offersPostToggle: true)
+        XCTAssertEqual(layout.scrollingModes, [])
+        XCTAssertTrue(layout.pinsPostToggle)
+    }
+
     // MARK: - Les puces de composition se LISENT (#9686, recette 2026-10-08)
 
     /// La puce sélectionnée peignait un texte clair sur un verre teinté pâle — le

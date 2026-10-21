@@ -260,11 +260,9 @@ struct ConversationView: View {
         viewModel.topActiveMembersList(accentColor: accentColor)
     }
 
-    var isCurrentUserAdminOrMod: Bool {
-        let convRole = conversation?.currentUserRole?.uppercased() ?? ""
-        let platformRole = AuthManager.shared.currentUser?.role?.uppercased() ?? ""
-        let modRoles: Set<String> = ["ADMIN", "MODERATOR", "BIGBOSS"]
-        return modRoles.contains(convRole) || modRoles.contains(platformRole)
+    /// #11214 — le lecteur et la conversation tels que la loi des actions les lit ; un seul site.
+    var menuAuthority: ConversationMenuAuthority {
+        ConversationMenuAuthority.make(conversation: liveConversation, currentUser: AuthManager.shared.currentUser, guest: anonymousSession)
     }
 
     /// « Retirer » le message d'un AUTRE (#11151) — créateur compris, jamais en direct.
@@ -376,7 +374,7 @@ struct ConversationView: View {
             .modifier(ConversationBodyCovers(
                 viewModel: viewModel, composerState: $composerState, scrollState: $scrollState,
                 overlayState: $overlayState, conversation: conversation, accentColor: accentColor,
-                isDark: isDark, isGuest: anonymousSession != nil, isAdminOrMod: isCurrentUserAdminOrMod,
+                isDark: isDark, authority: menuAuthority,
                 mediaSaveCoordinator: mediaSaveCoordinator, onReply: { triggerReply(for: $0) },
                 actions: messageActions))
             .modifier(ConversationBodySheets(
@@ -394,7 +392,7 @@ struct ConversationView: View {
             .modifier(ConversationBodyOverlayMenu(
                 overlayState: $overlayState, focalFullscreenPlace: $focalFullscreenPlace,
                 focalShareFileItem: $focalShareFileItem, viewModel: viewModel, frameTracker: frameTracker,
-                accentColor: accentColor, isDirect: isDirect, isAdminOrMod: isCurrentUserAdminOrMod,
+                accentColor: accentColor, isDirect: isDirect, authority: menuAuthority,
                 mediaSaveCoordinator: mediaSaveCoordinator, actions: messageActions,
                 threadLanguage: { overlayThreadLanguage(for: $0) },
                 pieceOverlay: { pieceOverlayContent(for: $0) },
@@ -623,7 +621,7 @@ struct ConversationView: View {
             ),
             isHeaderExpanded: composerState.showOptions,
             readingMode: readingModeController.mode,
-            isAdminOrMod: isCurrentUserAdminOrMod,
+            authority: menuAuthority,
             messageActions: messageActions,
             actions: ConversationMessageListActions(
                 toggleSelection: { toggleMessageSelection($0) },
@@ -645,8 +643,7 @@ struct ConversationView: View {
             requestDelete: { requestDeleteMessage($0) },
             edit: { beginEdit($0) },
             export: { beginMessageExport($0, quick: $1) },
-            compose: { composerState.composeMediaTarget = ComposerSeedTarget(message: $0) },
-            canRemove: { canRemoveMessage($0) }
+            compose: { composerState.composeMediaTarget = ComposerSeedTarget(message: $0) }
         )
     }
 

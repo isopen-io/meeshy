@@ -264,9 +264,18 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             return XCTFail("scrollToBottom introuvable dans l'hôte")
         }
         let body = String(code[start.lowerBound...].prefix(600))
+        // La déclaration passe par UN geste partagé, qui annule aussi la
+        // libération différée d'un saut précédent.
         XCTAssertTrue(
-            body.contains("isIntentionalProgrammaticScroll = true"),
+            body.contains("beginIntentionalProgrammaticScroll()"),
             "scrollToBottom doit se déclarer INTENTIONNEL — sans ce drapeau, le verrou de scène annule chaque frame de l'animation et le bouton « aller au dernier message » ne fait rien"
+        )
+        guard let geste = code.range(of: "func beginIntentionalProgrammaticScroll() {") else {
+            return XCTFail("beginIntentionalProgrammaticScroll introuvable dans l'hôte")
+        }
+        XCTAssertTrue(
+            String(code[geste.upperBound...].prefix(200)).contains("isIntentionalProgrammaticScroll = true"),
+            "le geste partagé pose le drapeau que le verrou de scène lit"
         )
     }
 

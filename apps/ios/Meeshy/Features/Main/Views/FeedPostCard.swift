@@ -842,14 +842,14 @@ struct FeedPostCard: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 // Original author
                 HStack(spacing: MeeshySpacing.sm) {
-                    MeeshyAvatar(
+                    LivePresence { MeeshyAvatar(
                         name: repost.author,
                         context: .postComment,
                         accentColor: repost.authorColor,
                         avatarURL: repost.authorAvatarURL,
                         presenceState: PresenceManager.shared.knownPresenceState(for: repost.authorId),
                         ring: repost.authorRing
-                    )
+                    ) }
 
                     Text(repost.author)
                         .font(.footnote.weight(.semibold))

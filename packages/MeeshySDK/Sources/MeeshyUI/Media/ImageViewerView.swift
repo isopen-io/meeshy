@@ -79,12 +79,9 @@ public struct ImageViewerView: View {
         .frame(maxWidth: maxWidth, maxHeight: maxHeight)
         .clipShape(RoundedRectangle(cornerRadius: context.cornerRadius))
         .contentShape(RoundedRectangle(cornerRadius: context.cornerRadius))
-        .onTapGesture {
-            if !context.isEditable {
-                showFullscreen = true
-                HapticFeedback.light()
-            }
-        }
+        .onTapGesture { openFullscreen() }
+        .accessibilityAddTraits(context.isEditable ? [] : .isButton)
+        .accessibilityAction(named: Text(String(localized: "media.image.open.a11y", bundle: .module))) { openFullscreen() }
         .fullScreenCover(isPresented: $showFullscreen) {
             ImageFullscreen(
                 imageUrl: imageURL,
@@ -95,6 +92,12 @@ public struct ImageViewerView: View {
             .contentExitGate(exitGate)
             .captureShield(isCaptureShielded)
         }
+    }
+
+    private func openFullscreen() {
+        guard !context.isEditable else { return }
+        showFullscreen = true
+        HapticFeedback.light()
     }
 
     // MARK: - Image Content
@@ -316,7 +319,7 @@ public struct ImageFullscreen: View {
                 .transition(.opacity)
             }
         }
-        .statusBar(hidden: true)
+        .statusBarHidden(true)
         .onAppear { viewStartTime = Date() }
         .onDisappear { reportImageViewed() }
         .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })

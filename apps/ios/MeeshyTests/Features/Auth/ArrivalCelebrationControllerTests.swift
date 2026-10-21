@@ -183,4 +183,16 @@ final class ArrivalCelebrationMotionTests: XCTestCase {
     func test_fireworks_afterTheShow_drawNothing() {
         XCTAssertTrue(ArrivalFireworks.sparks(at: ArrivalFireworks.showDuration + 1, burstCount: 4, sparksPerBurst: 10).isEmpty)
     }
+
+    func test_fireworks_isOver_onlyOnceTheLastBurstHasFaded() {
+        XCTAssertFalse(ArrivalFireworks.isOver(at: 0))
+        XCTAssertFalse(ArrivalFireworks.isOver(at: ArrivalFireworks.showDuration - 0.01))
+        XCTAssertTrue(ArrivalFireworks.isOver(at: ArrivalFireworks.showDuration))
+        XCTAssertTrue(ArrivalFireworks.isOver(at: ArrivalFireworks.showDuration + 30))
+    }
+
+    func test_fireworks_pausedClockFreezesOnAnEmptyFrame() {
+        XCTAssertTrue(ArrivalFireworks.sparks(at: ArrivalFireworks.showDuration).isEmpty,
+                      "une horloge en pause fige la dernière image : elle doit être vide")
+    }
 }

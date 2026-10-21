@@ -266,7 +266,7 @@ describe('la place et l’appareil (#10161)', () => {
 describe('à rattraper', () => {
   const game = gameBlockFixture({ mintedLifetime: 21, flameRecord: 8, streak: 6 });
   const keptStart = kept(startMoment(), '2026-09-01T10:00:00.000Z');
-  const keptFirst = kept(meeshMoment({ number: 1, edition: 'silver' }), '2026-09-02T10:00:00.000Z');
+  const keptFirst = kept(meeshMoment({ number: 1 }), '2026-09-02T10:00:00.000Z');
   const catchUp = (host: ParentNode) => Array.from(host.querySelectorAll('[data-carnet-catch-up]')).map((e) => e.getAttribute('data-carnet-catch-up'));
 
   test('sans bloc du jeu en cache : aucune section', async () => {

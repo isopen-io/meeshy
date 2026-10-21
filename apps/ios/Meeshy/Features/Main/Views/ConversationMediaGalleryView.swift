@@ -402,7 +402,7 @@ struct ConversationMediaGalleryView: View {
         // suit le clavier est la couche de saisie, par son padding explicite.
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .observingKeyboardTransition($replyKeyboard)
-        .statusBar(hidden: true)
+        .statusBarHidden(true)
         .onAppear {
             // Filet de sécurité : `scrollPosition(id:)` honore la valeur initiale
             // posée en `init`, mais une présentation qui recycle un état

@@ -4,7 +4,8 @@ import MeeshySDK
 
 public struct JoinFlowScreen<ViewModel: JoinFlowModeling>: View {
     @ObservedObject private var viewModel: ViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
 
     let isSignedIn: Bool

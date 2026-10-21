@@ -157,11 +157,12 @@ public enum GameMintCeremony {
 
     private static func isGrand(_ edition: MeeshEdition) -> Bool { edition != .silver }
 
-    private static func particles(_ edition: MeeshEdition, strikes: Int, modest: Bool) -> MintCeremonyParticles {
+    /// Les poussières suivent le DESSIN (`look`, #11483) ; les gerbes, la LOI (`edition`).
+    private static func particles(_ edition: MeeshEdition, look: MeeshEdition, strikes: Int, modest: Bool) -> MintCeremonyParticles {
         let finalBurst = isGrand(edition) ? 420 : 320
         return MintCeremonyParticles(
             weave: half(weave, modest),
-            dust: (dustOf[edition] ?? []).map { MintCeremonyDust(from: $0.from, material: $0.material, count: half($0.count, modest)) },
+            dust: (dustOf[look] ?? []).map { MintCeremonyDust(from: $0.from, material: $0.material, count: half($0.count, modest)) },
             bursts: (0..<strikes).map { half($0 == strikes - 1 ? finalBurst : 120, modest) },
             puff: half(puff, modest)
         )
@@ -180,7 +181,7 @@ public enum GameMintCeremony {
         }
     }
 
-    private static func normalPlan(_ edition: MeeshEdition, answeredAtMs: Int, modest: Bool) -> MintCeremonyPlan {
+    private static func normalPlan(_ edition: MeeshEdition, look: MeeshEdition, answeredAtMs: Int, modest: Bool) -> MintCeremonyPlan {
         let grand = isGrand(edition)
         let firstStrike = max(strikeReadyMs, answeredAtMs)
         let blows = strikes(edition, firstMs: firstStrike)
@@ -204,16 +205,16 @@ public enum GameMintCeremony {
         ]
         if grand { phases[.ancestors] = span(last + 500, last + 1000) }
         return MintCeremonyPlan(edition: edition, mode: .normal, grand: grand,
-                                particles: particles(edition, strikes: blows.count, modest: modest),
+                                particles: particles(edition, look: look, strikes: blows.count, modest: modest),
                                 phases: phases, strikes: blows, refusal: nil, endMs: glory.toMs + 150)
     }
 
     /// Les phases que le refus laisse : celles qui avaient commencé, jamais la frappe ni ce qui la suit.
     private static let refusedAway: Set<MintCeremonyPhase> = [.strikes, .engrave, .dieOff, .reveal, .ancestors, .celebrate, .flight, .glory]
 
-    private static func refusedPlan(_ edition: MeeshEdition, answeredAtMs: Int, modest: Bool) -> MintCeremonyPlan {
+    private static func refusedPlan(_ edition: MeeshEdition, look: MeeshEdition, answeredAtMs: Int, modest: Bool) -> MintCeremonyPlan {
         let atMs = max(refusalEarliestMs, answeredAtMs)
-        let woven = normalPlan(edition, answeredAtMs: max(atMs, strikeReadyMs), modest: modest)
+        let woven = normalPlan(edition, look: look, answeredAtMs: max(atMs, strikeReadyMs), modest: modest)
         let rewind = span(atMs, atMs + min(rewindMaxMs, atMs - emit.fromMs))
         let sayMs = atMs + 1300
         let phases = woven.phases.filter { phase, span in span.fromMs < atMs && !refusedAway.contains(phase) }
@@ -240,13 +241,18 @@ public enum GameMintCeremony {
     }
 
     /// Le déroulé de la cérémonie. Une fonction pure : mêmes entrées, mêmes instants, sur toutes les plateformes.
-    /// - Parameter answeredAtMs: l'instant où la passerelle a répondu (confirmé ou refusé) ; `nil` : à temps.
-    public static func plan(edition: MeeshEdition, mode: MintCeremonyMode, answeredAtMs: Double? = nil,
-                            modest: Bool = false) -> MintCeremonyPlan {
+    /// - Parameters:
+    ///   - edition: la LOI de la pièce (`GameMint.edition(forNumber:)`) : les coups, les aïeux, la nuit du prisme.
+    ///   - look: le DESSIN de la pièce (`GameMint.displayEdition(forNumber:)`, #11483) : la matière des poussières ;
+    ///     `nil` : celui de la loi. Le n° 247, frappé après le n° 100, se frappe d'un seul coup dans la poussière d'or.
+    ///   - answeredAtMs: l'instant où la passerelle a répondu (confirmé ou refusé) ; `nil` : à temps.
+    public static func plan(edition: MeeshEdition, look: MeeshEdition? = nil, mode: MintCeremonyMode,
+                            answeredAtMs: Double? = nil, modest: Bool = false) -> MintCeremonyPlan {
         let answered = sanitize(answeredAtMs)
+        let look = look ?? edition
         switch mode {
-        case .normal: return normalPlan(edition, answeredAtMs: answered, modest: modest)
-        case .refused: return refusedPlan(edition, answeredAtMs: answered, modest: modest)
+        case .normal: return normalPlan(edition, look: look, answeredAtMs: answered, modest: modest)
+        case .refused: return refusedPlan(edition, look: look, answeredAtMs: answered, modest: modest)
         case .reduced: return reducedPlan(edition, answeredAtMs: answered)
         }
     }

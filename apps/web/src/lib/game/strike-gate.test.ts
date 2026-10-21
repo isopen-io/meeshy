@@ -143,6 +143,19 @@ describe('la réponse de la passerelle', () => {
     expect(await settled(gate.opened())).toBe(true);
   });
 
+  test('qui apprend le début d’une frappe attend la fin de CETTE frappe, jamais celle d’avant (#11482)', async () => {
+    const { gate } = stagedGate();
+    const ends: Promise<void>[] = [];
+    gate.onAnswer((answer) => {
+      if (answer.kind === 'pending') ends.push(gate.opened());
+    });
+    gate.begin();
+    expect(ends).toHaveLength(1);
+    expect(await settled(ends[0] ?? Promise.resolve())).toBe(false);
+    gate.settle();
+    expect(await settled(ends[0] ?? Promise.reject(new Error('aucune frappe')))).toBe(true);
+  });
+
   test('un abonné qui arrive tard lit la réponse déjà venue', () => {
     const { gate } = stagedGate();
     gate.begin();

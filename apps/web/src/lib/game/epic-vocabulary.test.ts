@@ -118,6 +118,95 @@ describe('le lexique partagé de l’épopée', () => {
   });
 });
 
+/**
+ * L'angle mort de `game.fact.stars` (#11173) : le libellé d'un fait du Voyage ou de la Renaissance vit sous
+ * `game.fact.*`, hors des familles `game.season.*` et `game.prestige.*` que le motif de l'étoile gardait — « Étoiles »
+ * y a survécu à toute la vague. Les deux faits sont désormais sous ce motif, dans chaque langue.
+ */
+const STAR_OF: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'Étoiles',
+  en: 'Stars',
+  es: 'Estrellas',
+  de: 'Sterne',
+  it: 'Stelle',
+  pt: 'Estrelas',
+  ar: 'النجوم',
+};
+
+describe('les faits du Voyage et de la Renaissance ne disent jamais « étoile »', () => {
+  for (const vocabulary of vocabularies) {
+    test(`${vocabulary.language} : la garde voit une étoile sur le fait des pas comme sur celui des renaissances`, () => {
+      const star = STAR_OF[vocabulary.language];
+      const caught = bannedWordsIn(vocabulary, { 'game.fact.strides': star, 'game.fact.rebirths': star }).map((violation) => violation.key);
+      expect({ language: vocabulary.language, caught: [...new Set(caught)].sort() }).toEqual({
+        language: vocabulary.language,
+        caught: ['game.fact.rebirths', 'game.fact.strides'],
+      });
+    });
+  }
+});
+
+/**
+ * LES MÉDAILLES MONTENT DES PALIERS, PAS DES ÉTOILES (#11444 choix 8, #11484) — « étoile » est réservé au ciel des
+ * aïeux : le libellé des paliers d'une médaille (`game.badge.stars_label`) est sous le motif de l'étoile, dans chaque
+ * langue. LA SÉRIE D'UNE CONVERSATION NE S'APPELLE PAS FLAMME (#11444 choix 7) : sous 🔥, la durée seule.
+ */
+const FLAME_STREAK_OF: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'Flamme de 4 jours',
+  en: '4-day Flame',
+  es: 'Llama de 4 días',
+  de: 'Flamme seit 4 Tagen',
+  it: 'Fiamma di 4 giorni',
+  pt: 'Chama de 4 dias',
+  ar: 'لهب 4 أيام',
+};
+
+/** Le mot des paliers d'une médaille, celui que chaque glossaire donne au seuil d'une médaille (#11484). */
+const TIERS_OF: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'Paliers',
+  en: 'Marks',
+  es: 'Escalones',
+  de: 'Stufen',
+  it: 'Gradini',
+  pt: 'Patamares',
+  ar: 'العتبات',
+};
+
+describe('les paliers des médailles et la série d’une conversation ne reprennent pas un mot réservé', () => {
+  for (const vocabulary of vocabularies) {
+    test(`${vocabulary.language} : la garde voit une étoile sur les paliers d’une médaille`, () => {
+      const caught = bannedWordsIn(vocabulary, { 'game.badge.stars_label': STAR_OF[vocabulary.language] }).map((violation) => violation.key);
+      expect({ language: vocabulary.language, caught: [...new Set(caught)] }).toEqual({ language: vocabulary.language, caught: ['game.badge.stars_label'] });
+    });
+
+    test(`${vocabulary.language} : la garde voit la Flamme sur la série d’une conversation`, () => {
+      const caught = bannedWordsIn(vocabulary, {
+        'engagement.pill.streak.one': FLAME_STREAK_OF[vocabulary.language],
+        'engagement.pill.streak.other': FLAME_STREAK_OF[vocabulary.language],
+      }).map((violation) => violation.key);
+      expect({ language: vocabulary.language, caught: [...new Set(caught)].sort() }).toEqual({
+        language: vocabulary.language,
+        caught: ['engagement.pill.streak.one', 'engagement.pill.streak.other'],
+      });
+    });
+
+    test(`${vocabulary.language} : le titre de l’échelle d’une médaille dit le mot des paliers, jamais « tier », « livelli » ni « níveis »`, () => {
+      const title = vocabulary.names['game.badge.ladder_title'] ?? '';
+      expect({ language: vocabulary.language, says: title.toLocaleLowerCase(vocabulary.language).includes(TIERS_OF[vocabulary.language].toLocaleLowerCase(vocabulary.language)) }).toEqual({
+        language: vocabulary.language,
+        says: true,
+      });
+    });
+
+    test(`${vocabulary.language} : les paliers d’une médaille portent leur nom canonique`, () => {
+      expect({ language: vocabulary.language, name: vocabulary.names['game.badge.stars_label'] ?? null }).toEqual({
+        language: vocabulary.language,
+        name: TIERS_OF[vocabulary.language],
+      });
+    });
+  }
+});
+
 describe('aucune valeur du jeu ne porte un mot banni, dans aucune langue posée', () => {
   for (const vocabulary of vocabularies) {
     test(`${vocabulary.language} : aucun mot banni`, async () => {

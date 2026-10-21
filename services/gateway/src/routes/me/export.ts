@@ -242,7 +242,7 @@ const packsExportSchema = {
         },
       },
     },
-    // #10632 — les packs ACHETÉS en Meeshes : domaine, slug, prix payé, date.
+    // #10632, #11272 — les packs POSSÉDÉS : domaine, slug, voie (purchase|game|grant|event), raison, prix payé (0 hors achat), date.
     ownerships: {
       type: 'array',
       items: {
@@ -250,6 +250,8 @@ const packsExportSchema = {
         properties: {
           domain: { type: 'string', nullable: true },
           slug: { type: 'string' },
+          source: { type: 'string' },
+          reference: { type: 'string', nullable: true },
           priceMeeshes: { type: 'integer' },
           acquiredAt: { type: 'string' },
         },

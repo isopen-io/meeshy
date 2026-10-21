@@ -162,7 +162,7 @@ extension ConversationMediaGalleryView {
     private func transportDurationLabel(_ texte: String) -> some View {
         Text(texte)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
-            .foregroundColor(MeeshyColors.mediaChromeTertiary)
+            .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             .lineLimit(1)
             .fixedSize()
             .padding(.trailing, MediaGalleryStage.gutter)

@@ -136,17 +136,20 @@ public struct MeeshyMoodBadge: View {
                 // qu'elle recouvre. Avec, sa cible fait au moins 44 pt.
                 .overlay {
                     if let onTap {
-                        Color.clear
-                            .frame(
-                                width: Self.hitDiameter(diameter: diameter),
-                                height: Self.hitDiameter(diameter: diameter)
-                            )
-                            .contentShape(Circle())
-                            .onTapGesture {
-                                HapticFeedback.light()
-                                let frame = geo.frame(in: .global)
-                                onTap(CGPoint(x: frame.midX, y: frame.midY))
-                            }
+                        Button {
+                            HapticFeedback.light()
+                            let frame = geo.frame(in: .global)
+                            onTap(CGPoint(x: frame.midX, y: frame.midY))
+                        } label: {
+                            Color.clear
+                                .frame(
+                                    width: Self.hitDiameter(diameter: diameter),
+                                    height: Self.hitDiameter(diameter: diameter)
+                                )
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
+                        .accessibilityLabel(String(localized: "avatar.a11y.mood", defaultValue: "humeur \(emoji)", bundle: .module))
                     }
                 }
                 // `.task` et non `.onAppear` : une seule séquence par identité

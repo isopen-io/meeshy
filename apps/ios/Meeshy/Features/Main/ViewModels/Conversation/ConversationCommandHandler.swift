@@ -6,7 +6,7 @@ import os
 
 @MainActor
 protocol ConversationCommandProviding: AnyObject {
-    func canDeleteForEveryone(_ message: Message, window: TimeInterval) -> Bool
+    func canDeleteForEveryone(_ message: Message) -> Bool
     func consumeViewOnce(messageId: String, serverId: String) async -> Bool
     func markAsReceived()
     func consumeReactionToken() -> Bool
@@ -106,9 +106,10 @@ final class ConversationCommandHandler: ConversationCommandProviding {
 
     // MARK: - Message Actions
 
-    func canDeleteForEveryone(_ message: Message, window: TimeInterval = 2 * 3600) -> Bool {
-        guard message.isMe else { return false }
-        return Date().timeIntervalSince(message.createdAt) <= window
+    /// `admitMessageDelete` (#11214) : l'auteur supprime pour tous SANS fenêtre —
+    /// la passerelle n'en impose aucune, la fenêtre de 2 h n'existait qu'ici.
+    func canDeleteForEveryone(_ message: Message) -> Bool {
+        message.isMe && message.deletedAt == nil
     }
 
     func consumeViewOnce(messageId: String, serverId: String) async -> Bool {

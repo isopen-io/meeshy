@@ -32,6 +32,7 @@ import { GuestLinkWatch, refuseExpiredGuestLink, refuseRevokedGuest } from './gu
 import { accountIsDeleted, type DeletedAccountReader } from '../../services/auth/account-deleted';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
 import { LIVE_CALL_PARTICIPATION } from '../../services/calls/liveCallParticipations';
+import { PresenceForeground } from '../presence-foreground';
 
 const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
@@ -115,6 +116,9 @@ export class AuthHandler {
   /** #10437, #10440, #10443 — la relecture du lien et de la participation de chaque socket invité. */
   private readonly guestLinkWatch: GuestLinkWatch;
 
+  /** #10575 — présent tant qu'une socket est au premier plan (`presence-foreground.ts`). */
+  private readonly foreground: PresenceForeground;
+
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
     this.guestLinkWatch = new GuestLinkWatch(deps.prisma);
@@ -130,6 +134,30 @@ export class AuthHandler {
     this.forceCleanupCallParticipant = deps.forceCleanupCallParticipant;
     this.absorbAlreadyEndedCallLeave = deps.absorbAlreadyEndedCallLeave;
     this.now = deps.now ?? (() => new Date());
+    this.foreground = new PresenceForeground({
+      socketsOf: (userKey) => this.userSockets.get(userKey),
+      announceAway: (userKey) => this.announcePresence(userKey, false),
+      announceBack: (userKey) => this.announcePresence(userKey, true),
+      logger,
+    });
+  }
+
+  /** La présence RUNTIME d'un id (userId, ou participantId d'un invité) : une socket au premier plan. */
+  isPresent(userKey: string): boolean {
+    return this.foreground.isPresent(userKey);
+  }
+
+  /** `presence:app-state` (#10575) — une charge sans booléen ne déclare rien. */
+  async handleAppState(socket: Socket, data?: { foreground?: unknown }): Promise<void> {
+    if (typeof data?.foreground !== 'boolean') return;
+    this.foreground.noteAppState(socket.id, this.socketToUser.get(socket.id), data.foreground);
+  }
+
+  private announcePresence(userKey: string, isOnline: boolean): void {
+    const announce = this.connectedUsers.get(userKey)?.isAnonymous
+      ? this.maintenanceService.updateAnonymousOnlineStatus(userKey, isOnline, true)
+      : this.maintenanceService.updateUserOnlineStatus(userKey, isOnline, true);
+    announce.catch((error) => logger.error('presence foreground announce failed', { userId: userKey, isOnline, error }));
   }
 
   async handleTokenAuthentication(socket: Socket): Promise<void> {
@@ -636,6 +664,7 @@ export class AuthHandler {
   private _registerUser(key: string, user: SocketUser, socket: Socket): boolean {
     const existingSockets = this.userSockets.get(user.id);
     const isFirstSocket = (existingSockets?.size ?? 0) === 0;
+    const wasPresent = this.foreground.isPresent(user.id);
 
     this.connectedUsers.set(key, user);
     this.socketToUser.set(socket.id, key);
@@ -643,6 +672,7 @@ export class AuthHandler {
     const userSocketsSet = existingSockets ?? new Set<string>();
     userSocketsSet.add(socket.id);
     this.userSockets.set(user.id, userSocketsSet);
+    this.foreground.noteSocketAdded(user.id, wasPresent);
 
     logger.info('user authenticated', { userId: user.id, isAnonymous: user.isAnonymous });
     return isFirstSocket;
@@ -650,17 +680,22 @@ export class AuthHandler {
 
   async handleDisconnection(socket: Socket): Promise<void> {
     const userIdOrToken = this.socketToUser.get(socket.id);
-    if (!userIdOrToken) return;
+    if (!userIdOrToken) {
+      this.foreground.forgetSocket(socket.id);
+      return;
+    }
     logger.debug('socket disconnected', { socketId: socket.id, userId: userIdOrToken });
 
     const user = this.connectedUsers.get(userIdOrToken);
     const isAnonymous = user?.isAnonymous || false;
 
+    const wasPresent = this.foreground.isPresent(userIdOrToken);
     const socketSet = this.userSockets.get(userIdOrToken);
     if (socketSet) {
       socketSet.delete(socket.id);
     }
     this.socketToUser.delete(socket.id);
+    this.foreground.noteSocketRemoved(socket.id, userIdOrToken, wasPresent);
 
     const remainingSockets = this.userSockets.get(userIdOrToken);
     const hasRemainingSockets = remainingSockets && remainingSockets.size > 0;
@@ -840,7 +875,7 @@ export class AuthHandler {
 
     try {
       const user = this.connectedUsers.get(userIdOrToken);
-      if (!user) return;
+      if (!user || this.foreground.isHidden(socket.id)) return;
 
       // Throttled 60s inside StatusService — a passive-connected socket keeps
       // lastActiveAt fresh (at most one DB write per minute) so it stays
@@ -870,7 +905,8 @@ export class AuthHandler {
     if (!userIdOrToken) return;
 
     const user = this.connectedUsers.get(userIdOrToken);
-    if (!user) return;
+    // Une socket CACHÉE (#10575) ne prouve pas qu'on est là : son pong ne rafraîchit rien.
+    if (!user || this.foreground.isHidden(socket.id)) return;
 
     try {
       this.statusService.noteHeartbeat(userIdOrToken, user.isAnonymous);

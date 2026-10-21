@@ -22,8 +22,13 @@ struct GameMintPreviewView: View {
     let minting: Bool
     let error: String?
     let celebration: MintCelebration?
+    /// La dernière frappe réglée par la passerelle : ce que la cérémonie attend pour frapper (#11177).
+    var settlement: GameMintSettlement? = nil
     let onMint: () -> Void
     var haptics: GameHapticsProviding = GameHaptics.shared
+
+    /// La cérémonie de la frappe en cours, posée au toucher (#11177).
+    @State private var ceremony: MintCeremonyRequest?
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var mint: GameMintPreview { game.mint }
@@ -47,7 +52,7 @@ struct GameMintPreviewView: View {
                     bundle: .main
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .foregroundStyle(MeeshyColors.brandPrimary)
                 .accessibilityAddTraits(.updatesFrequently)
                 .accessibilityIdentifier("game.mint.celebration")
             }
@@ -72,8 +77,10 @@ struct GameMintPreviewView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("game.mint.hero")
         .adaptiveOnChange(of: celebration?.key) { _, key in
-            if key != nil { haptics.play(GameHapticPattern.strike) }
+            // La cérémonie vibre elle-même à chaque coup : la scène de la bande ne double pas sa frappe.
+            if key != nil, ceremony == nil { haptics.play(GameHapticPattern.strike) }
         }
+        .modifier(MintCeremonyCover(request: $ceremony, answer: ceremony?.answer(settlement) ?? .pending))
     }
 
     // MARK: - La bande de la scène
@@ -95,7 +102,7 @@ struct GameMintPreviewView: View {
     private func line(_ said: ProgressionFactText, font: Font, identifier: String) -> some View {
         Text(said.text)
             .font(font)
-            .foregroundColor(theme.textPrimary)
+            .foregroundStyle(theme.textPrimary)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -112,12 +119,18 @@ struct GameMintPreviewView: View {
             busyTitle: String(localized: "game.mint.minting", defaultValue: "Frappe en cours…", bundle: .main),
             detail: glory.text,
             busy: minting, disabled: !online, identifier: minting ? "game.mint.minting" : "game.mint.action",
-            action: onMint
+            action: strike
         )
         .modifier(GameFactsTag(glory.facts))
         if !online {
             GameNote(text: String(localized: "game.mint.offline", defaultValue: "Hors ligne : la frappe reprendra avec la connexion.", bundle: .main))
         }
+    }
+
+    /// LE TOUCHER : la cérémonie part aussitôt (optimiste), et la frappe part vers la passerelle avec elle.
+    private func strike() {
+        MintCeremonyLaunch.begin($ceremony, with: MintCeremonyRequest(edition: mint.edition, number: mint.number, settled: settlement))
+        onMint()
     }
 
     // MARK: - La phrase de Mee
@@ -130,7 +143,7 @@ struct GameMintPreviewView: View {
             Text(said.text)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .italic()
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)

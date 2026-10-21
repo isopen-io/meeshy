@@ -367,7 +367,7 @@ struct MediaComposerDoor: View {
             Button(action: onDismiss) {
                 Text(MediaComposerCopy.cancel)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.lg)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())

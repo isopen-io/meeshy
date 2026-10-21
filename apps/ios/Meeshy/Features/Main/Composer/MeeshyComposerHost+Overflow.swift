@@ -97,7 +97,7 @@ extension MeeshyComposerHost {
         } face: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: ComposerControlMetrics.visualDiameter,
                        height: ComposerControlMetrics.visualDiameter)
                 // Teinté du plateau, comme la croix qu'il encadre (#8370).

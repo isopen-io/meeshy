@@ -65,6 +65,13 @@ class PatternRules(unittest.TestCase):
         ("anyview", "AnyView(Text(\"a\"))\nreturn AnyView(b)\n", "myAnyView(x)\nAnyViewish\n"),
         ("idiom", "UIDevice.current.userInterfaceIdiom\nuserInterfaceIdiom == .pad\n", "userInterfaceIdiomX\n"),
         ("plural-s", 'n > 1 ? "s" : ""\nn>1 ?"s":""\n', 'n > 1 ? "x" : ""\nn > 1 ? "s" : "t"\n'),
+        ("foreground-color", ".foregroundColor(.white)\nText(a).foregroundColor(MeeshyColors.x)\n", "text.foregroundColor = base\n[.foregroundColor: UIColor.white]\n.foregroundStyle(Color.white)\n"),
+        ("corner-radius-modifier", "Box()\n    .cornerRadius(8)\nRectangle().cornerRadius(1)\n", "ComposerTriggerOutline.cornerRadius(inner: 8)\nRoundedRectangle(cornerRadius: 8)\n.glassCard(cornerRadius: 12)\n"),
+        ("status-bar-hidden", ".statusBar(hidden: true)\n.statusBar(hidden: flag)\n", ".statusBarHidden(true)\n"),
+        ("autocapitalization", ".autocapitalization(.none)\n.autocapitalization(.words)\n", ".textInputAutocapitalization(.never)\n"),
+        ("disable-autocorrection", ".disableAutocorrection(true)\n.disableAutocorrection(false)\n", ".autocorrectionDisabled(true)\n"),
+        ("onchange-single", ".onChange(of: x) { v in\n.onChange(of: x) { _ in f() }\n", ".onChange(of: x) { _, v in\n.onChange(of: x, initial: true) { old, new in\n.adaptiveOnChange(of: x) { _, v in\n"),
+        ("onchange-single", ".onChange(of: order) { memory.order = $0 }\n.onChange(of: x, perform: f)\n", ".onChange(of: x) { _, v in\n"),
     )
 
     def test_each_rule_counts_its_occurrences_and_ignores_lookalikes(self):
@@ -134,9 +141,72 @@ class Exclusions(unittest.TestCase):
         self.assertEqual(count("logger-subsystem", 'Logger(subsystem: "a", category: "b")\n', logger), 0)
         self.assertEqual(count("idiom", "UIDevice.current.userInterfaceIdiom\n", reporter), 0)
 
+    def test_onchange_backport_keeps_the_deprecated_form(self):
+        backport = "packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveOnChange.swift"
+        src = ".onChange(of: value) { newValue in\n"
+        self.assertEqual(count("onchange-single", src, backport), 0)
+        self.assertEqual(count("onchange-single", src), 1)
+
     def test_same_code_elsewhere_counts(self):
         self.assertEqual(count("logger-subsystem", 'Logger(subsystem: "a", category: "b")\n'), 1)
         self.assertEqual(count("idiom", "UIDevice.current.userInterfaceIdiom\n"), 1)
+
+
+class ScopedRules(unittest.TestCase):
+    SRC = "_ = Foo.shared\nlet b = AuthManager.shared.user\n"
+
+    def test_viewmodel_shared_counts_in_files_named_viewmodel(self):
+        for rel in (
+            "apps/ios/Meeshy/Features/X/FooViewModel.swift",
+            "apps/ios/Meeshy/Features/X/FooViewModel+Loading.swift",
+            "packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityListViewModel.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("viewmodel-shared", self.SRC, rel), 2)
+
+    def test_viewmodel_shared_ignores_other_files_whatever_their_folder(self):
+        for rel in (
+            "apps/ios/Meeshy/Features/Sample.swift",
+            "apps/ios/Meeshy/Features/Main/ViewModels/Helper.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("viewmodel-shared", self.SRC, rel), 0)
+
+    def test_viewmodel_shared_ignores_lookalikes(self):
+        src = "x.sharedInstance\nisShared\n// Foo.shared\n"
+        self.assertEqual(count("viewmodel-shared", src, "apps/ios/Meeshy/Features/X/FooViewModel.swift"), 0)
+
+
+class ObservedThemeSingleton(unittest.TestCase):
+    HITS = (
+        "@ObservedObject private var theme = ThemeManager.shared\n",
+        "@StateObject var theme = ThemeManager.shared\n",
+        "@ObservedObject private var theme: ThemeManager = .shared\n",
+        "@ObservedObject\n    private var theme = ThemeManager.shared\n",
+    )
+    MISSES = (
+        "@Environment(\\.colorScheme) private var colorScheme\n",
+        "private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }\n",
+        "@Environment(\\.theme) var theme\n",
+        "let m = ThemeManager.shared.mode\n",
+        "@ObservedObject var theme: ThemeManager\n",
+        "@ObservedObject private var vm = FooViewModel.shared\n",
+    )
+
+    def test_each_observing_form_counts_once(self):
+        for src in self.HITS:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-theme-singleton", src), 1)
+
+    def test_lookalikes_do_not_count(self):
+        for src in self.MISSES:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-theme-singleton", src), 0)
+
+    def test_app_entry_point_is_exempt(self):
+        src = self.HITS[0]
+        self.assertEqual(count("observed-theme-singleton", src, "apps/ios/Meeshy/MeeshyApp.swift"), 0)
+        self.assertEqual(count("observed-theme-singleton", src), 1)
 
 
 class Scope(unittest.TestCase):

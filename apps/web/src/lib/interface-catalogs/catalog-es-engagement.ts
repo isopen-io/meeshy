@@ -4,8 +4,8 @@
  * catalogue `catalog-es.ts`, qu'il RÉPAND.
  */
 const esEngagement = {
-  'engagement.pill.streak.one': 'Llama de {count} día',
-  'engagement.pill.streak.other': 'Llama de {count} días',
+  'engagement.pill.streak.one': '{count} día',
+  'engagement.pill.streak.other': '{count} días',
   'engagement.pill.points.one': '{total} chispa, {today} hoy',
   'engagement.pill.points.other': '{total} chispas, {today} hoy',
   'engagement.pill.total.one': '{total} chispa ganada en esta conversación',

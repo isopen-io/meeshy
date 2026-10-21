@@ -92,7 +92,7 @@ extension ConversationListViewModel {
                 case .expired, .empty:
                     break
                 }
-                try? await CacheCoordinator.shared.stories.save(storyGroups, for: StoryViewModel.storiesCacheKey)
+                await bestEffort("conversationListViewModelStoryPrefetch.stories.save", category: .cache) { try await CacheCoordinator.shared.stories.save(storyGroups, for: StoryViewModel.storiesCacheKey) }
                 Logger.messages.info("[ConversationListVM] Stories prefetched: \(storyGroups.count) groups, \(uniqueImageURLs.count) images, \(uniqueVideoURLs.count) videos")
             } catch {
                 Logger.messages.error("[ConversationListVM] Story prefetch failed: \(error.localizedDescription)")

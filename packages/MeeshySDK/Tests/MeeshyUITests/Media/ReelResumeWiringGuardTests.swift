@@ -27,8 +27,8 @@ final class ReelResumeWiringGuardTests: XCTestCase {
     }
 
     func test_recycle_keepsTheHeadByTheLaw_neverRewindsUnconditionally() throws {
-        let recycle = try body(of: "private func recycle(",
-                               in: source("Sources/MeeshyUI/Media/SharedAVPlayerManager.swift"))
+        let recycle = try body(of: "func recycle(",
+                               in: source("Sources/MeeshyUI/Media/SharedAVPlayerManager+Preroll.swift"))
         XCTAssertTrue(recycle.contains("PlaybackResumeLaw.recycledHead("),
                       "le lecteur rendu au pool garde sa position quand elle est reprenable")
         XCTAssertFalse(recycle.contains("seek(to: .zero"),

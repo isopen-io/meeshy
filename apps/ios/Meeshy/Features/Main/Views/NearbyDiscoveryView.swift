@@ -78,7 +78,7 @@ struct SeeNearbyContextMenu: ViewModifier {
 /// le squelette n'apparaît qu'au démarrage à froid — quand il n'y a réellement
 /// rien.
 struct NearbyDiscoveryView: View {
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @StateObject private var viewModel: NearbyDiscoveryViewModel
     @State private var selectedPostId: String?
     /// #10483 — un post listé ou épinglé ici est un affichage de la surface
@@ -144,7 +144,7 @@ struct NearbyDiscoveryView: View {
         .animation(.easeInOut(duration: 0.2), value: viewModel.mode)
         .animation(.easeInOut(duration: 0.2), value: viewModel.section)
         .task { await viewModel.load() }
-        .onChange(of: selectedPostId) { postId in
+        .adaptiveOnChange(of: selectedPostId) { _, postId in
             if let postId { impressions.record(postId) }
         }
         .onDisappear { Task { await impressions.flushNow() } }

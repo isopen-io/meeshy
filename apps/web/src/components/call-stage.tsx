@@ -1,4 +1,4 @@
-import { lazy, Suspense, useId, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
@@ -7,6 +7,7 @@ import { StreamVideo } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
+import { useFlip } from '@/lib/use-flip';
 import { useTileDrag, type TileOffset } from '@/components/use-tile-drag';
 import { useTilePinch } from '@/components/use-tile-pinch';
 import type { MineAction } from '@/lib/calls/call-controls';
@@ -102,6 +103,9 @@ type StageProps = {
   readonly self: SelfView;
 };
 
+/** Le tempo d'un changement de coin : celui de l'ancienne transition. */
+const SELF_TILE_FLIP_MS = 300;
+
 const cornerTop = { top: 'calc(env(safe-area-inset-top) + 4.5rem)' } as const;
 
 const TILE_CORNER_SAID: Readonly<Record<SelfTileCorner, `callControls.selfTile.corner.${SelfTileCorner}`>> = {
@@ -144,8 +148,8 @@ function PeerMuted({ where }: { readonly where: 'main' | 'corner' }) {
 function SelfRowSlot({ group, row, tile, children }: { readonly group: SelfControlGroup; readonly row: SelfRow; readonly tile: { readonly x: number; readonly y: number }; readonly children: ReactNode }) {
   return (
     <div
-      className="absolute z-20 flex justify-center transition-[left,top] duration-200 motion-reduce:transition-none"
-      style={{ left: row.x - tile.x, top: row.y - tile.y, width: row.width, height: row.height }}
+      className="absolute top-0 left-0 z-20 flex justify-center transition-[translate] duration-200 motion-reduce:transition-none"
+      style={{ translate: `${row.x - tile.x}px ${row.y - tile.y}px`, width: row.width, height: row.height }}
       data-call-self-row={group}
       data-call-self-row-side={row.side}
     >
@@ -227,6 +231,13 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
     onClickCapture: both(pinch.onClickCapture, drag.onClickCapture),
     onWheel: pinch.onWheel,
   };
+  const cornerFrame = useRef<HTMLDivElement>(null);
+  useFlip(cornerFrame, {
+    key: cornerShown ? `${corner}:${size.width}x${size.height}:${offset === null ? 'rest' : 'held'}` : null,
+    held: offset !== null,
+    duration: SELF_TILE_FLIP_MS,
+    easing: 'ease-out',
+  });
   const tileBox = offset === null ? rest : { ...rest, x: rest.x + offset.dx, y: rest.y + offset.dy };
   const onArrow = (event: KeyboardEvent<HTMLButtonElement>): void => {
     const next = swapped ? null : cornerAfterArrow(corner, event.key);
@@ -268,7 +279,8 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
       ) : null}
       {cornerShown ? (
         <div
-          className={`absolute z-10 ${offset === null ? 'transition-[left,top,transform,width,height] duration-300 ease-out motion-reduce:transition-none' : ''}`}
+          ref={cornerFrame}
+          className="absolute z-10"
           style={{ ...cornerPlace(corner, size), width: size.width, height: size.height, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
           data-call-corner-frame=""
           data-call-self-tile-corner={corner}

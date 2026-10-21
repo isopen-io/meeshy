@@ -176,7 +176,8 @@ struct CallLinkConfirmationSheet: View {
     let onCall: () -> Void
     let onCancel: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     var body: some View {
         VStack(spacing: MeeshySpacing.lg) {

@@ -231,7 +231,7 @@ struct CommentsSheetView: View {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
                             ForEach(topLevel) { comment in
-                                ThreadedCommentSection(
+                                LivePresence { ThreadedCommentSection(
                                     comment: comment,
                                     replies: repliesMap[comment.id] ?? [],
                                     isExpanded: expandedThreads.contains(comment.id),
@@ -261,14 +261,14 @@ struct CommentsSheetView: View {
                                     onRequestTranslation: { requestTranslation(of: $0) },
                                     moodEmoji: moodEmojiResolver?(comment.authorId),
                                     storyState: storyRingResolver?(comment.authorId) ?? .none,
-                                    presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
+                                    presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),
                                     replyMoodResolver: { moodEmojiResolver?($0) },
                                     replyStoryResolver: { storyRingResolver?($0) ?? .none },
-                                    replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
+                                    replyPresenceResolver: { PresenceManager.shared.knownPresenceState(for: $0) },
                                     hasMoreReplies: expandedThreads.contains(comment.id) && (repliesHasMore[comment.id] ?? false),
                                     onLoadMoreReplies: { await loadMoreReplies(commentId: comment.id) },
                                     highlightedCommentId: highlightedCommentId
-                                )
+                                ) }
                                 .background(
                                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                         .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
@@ -582,7 +582,7 @@ struct CommentsSheetView: View {
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
             maxSelectionCount: MAX_POST_MEDIA,
-            matching: .any(of: [.images, .videos]),
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current,
             photoLibrary: .shared()
         )
         .fileImporter(
@@ -896,7 +896,7 @@ struct CommentsSheetView: View {
                 repliesMap[parentId] = existing
                 // Met à jour le cache d'aperçu pour ne pas réafficher la réponse
                 // supprimée à la ré-ouverture du post.
-                try? await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)")
+                await bestEffort("feedCommentsSheet.comments.pruneDeletedReply", category: .cache) { try await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)") }
             }
             var current = liveComments ?? post.comments
             if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
@@ -921,7 +921,7 @@ struct CommentsSheetView: View {
             // ressuscitait le commentaire supprimé à la prochaine ouverture
             // (sheet, détail, overlay story lisent la même clé).
             if comment.parentId == nil, let current = liveComments {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)")
+                await bestEffort("feedCommentsSheet.comments.pruneDeletedComment", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)") }
             }
             FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main)))
         } catch {

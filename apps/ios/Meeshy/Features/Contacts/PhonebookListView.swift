@@ -15,7 +15,7 @@ struct PhonebookListView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     @State private var invitationTarget: PhonebookInvitation?
     @State private var isOfferingPhone = false
@@ -40,15 +40,20 @@ struct PhonebookListView: View {
     // MARK: - Header (sync + filters)
 
     private var header: some View {
-        VStack(spacing: MeeshySpacing.smPlus) {
-            HStack(spacing: MeeshySpacing.smPlus) {
+        VStack(spacing: MeeshySpacing.smPlus - MeeshyTapTarget.inset(forVisualSide: 38)) {
+            HStack(spacing: MeeshySpacing.smPlus - MeeshyTapTarget.inset(forVisualSide: 38)) {
                 ContactsSearchField(
                     placeholder: String(localized: "contacts.phonebook.search-placeholder", defaultValue: "Rechercher dans le répertoire", bundle: .main),
                     query: $viewModel.searchQuery
                 )
                 syncButton
             }
-            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(EdgeInsets(
+                top: 0,
+                leading: MeeshySpacing.lg,
+                bottom: 0,
+                trailing: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: 38)
+            ))
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.sm) {
@@ -59,7 +64,12 @@ struct PhonebookListView: View {
                 .padding(.horizontal, MeeshySpacing.lg)
             }
         }
-        .padding(.vertical, MeeshySpacing.sm)
+        .padding(EdgeInsets(
+            top: MeeshySpacing.sm - MeeshyTapTarget.inset(forVisualSide: 38),
+            leading: 0,
+            bottom: MeeshySpacing.sm,
+            trailing: 0
+        ))
     }
 
     /// Synchronisation explicite : relit le carnet de l'appareil et le renvoie.
@@ -78,6 +88,7 @@ struct PhonebookListView: View {
             }
             .frame(width: 38, height: 38)
             .background(Circle().fill(MeeshyColors.indigo500))
+            .meeshyTapTarget()
         }
         .disabled(viewModel.isSyncing)
         .accessibilityLabel(String(localized: "contacts.phonebook.sync-a11y", defaultValue: "Synchroniser le répertoire", bundle: .main))
@@ -116,7 +127,7 @@ struct PhonebookListView: View {
                 ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.visibleContacts) { contact in
-                        DirectoryPersonRow(
+                        LivePresence { DirectoryPersonRow(
                             name: contact.resolvedName,
                             subtitle: contact.subtitle,
                             avatarURL: contact.matchedUser?.avatar,
@@ -129,7 +140,7 @@ struct PhonebookListView: View {
                             isDark: colorScheme == .dark,
                             onAction: { contact.isOnMeeshy ? open(contact) : invite(contact) }
                         )
-                        .equatable()
+                        .equatable() }
                     }
 
                     if viewModel.showsPlatformResults {
@@ -169,7 +180,7 @@ struct PhonebookListView: View {
                     .padding(.vertical, MeeshySpacing.sm)
             } else {
                 ForEach(viewModel.platformResults) { user in
-                    DirectoryPersonRow(
+                    LivePresence { DirectoryPersonRow(
                         name: user.displayName.flatMap { $0.isEmpty ? nil : $0 } ?? user.username,
                         subtitle: "@\(user.username)",
                         avatarURL: user.avatar,
@@ -179,7 +190,7 @@ struct PhonebookListView: View {
                         isDark: colorScheme == .dark,
                         onAction: { openPlatformUser(user) }
                     )
-                    .equatable()
+                    .equatable() }
                 }
             }
         }

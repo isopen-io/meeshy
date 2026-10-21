@@ -1,5 +1,5 @@
 import type { GameMintPreview as MintPreview } from '@meeshy/shared/types/game';
-import { meeshEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
+import { meeshDisplayEdition, meeshEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { GameBird } from '@/components/game';
 import { MintStrike } from '@/components/game-mint-strike';
@@ -20,7 +20,8 @@ import { GAME_BRAND, GAME_ERROR, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, 
  * Aucun calcul (ni « Restera », ni niveau d'après, ni prix de base) : il vit dans les règles. Quand la frappe n'est pas
  * possible, aucun bouton grisé (directive du porteur) : ce qu'il manque, ou ce qui la ferme (l'Ombre, un rang). La
  * frappe confirmée par la passerelle retourne la pièce sur son revers numéroté ; le lecteur d'écran entend « Meesh n° 4
- * frappée, argent » (le dessin est décoratif).
+ * frappée, argent » (le dessin est décoratif). La phrase nomme l'édition DESSINÉE (`meeshDisplayEdition`, #11483) :
+ * « Meesh n° 247 frappée, or » — un texte qui nomme l'édition d'une pièce montrée parle comme le dessin.
  *
  * Chaque chiffre porte son identité (`data-fact`, `data-facts`) : un fait ne paraît qu'une fois par écran.
  */
@@ -97,7 +98,7 @@ export function GameMintPreview(props: GameMintPreviewProps) {
 
       {celebration === null ? null : (
         <p role="status" className="text-body font-bold" style={{ color: GAME_BRAND }}>
-          {gameText('game.mint.minted_line', { number: formatCount(celebration.number), edition: editionName(celebration.edition) })}
+          {gameText('game.mint.minted_line', { number: formatCount(celebration.number), edition: editionName(meeshDisplayEdition(celebration.number)) })}
         </p>
       )}
 

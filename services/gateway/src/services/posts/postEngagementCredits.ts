@@ -90,10 +90,9 @@ export function reclaimContentCredits(
   prisma: PrismaClient,
   userId: string,
   source: string,
-  options: { readonly withinClawback?: boolean } = {},
   recorder: PostEngagementRecorder = new EngagementService(prisma),
 ): void {
-  recorder.reclaimSource(userId, source, options).catch((error: unknown) => {
+  recorder.reclaimSource(userId, source).catch((error: unknown) => {
     log.warn('engagement reclaim failed', { source, error });
   });
 }
@@ -164,20 +163,37 @@ export function reclaimableContentOperation(type: string | null | undefined): En
 }
 
 /**
- * Reprise anti-abus : un contenu lourd retiré dans la fenêtre du barème rend
- * ses points à son AUTEUR, quel que soit celui qui le retire — publier puis
- * supprimer en boucle ne doit rien rapporter, et un contenu retiré pour
- * modération non plus.
+ * La fenêtre de reprise d'une publication supprimée (décision porteur
+ * 2026-10-21, #11467) : publiée depuis MOINS d'un mois, elle rend ses points ;
+ * au-delà, les étincelles restent acquises.
+ */
+export const PUBLICATION_RECLAIM_WINDOW_DAYS = 30;
+
+const PUBLICATION_RECLAIM_WINDOW_MS = PUBLICATION_RECLAIM_WINDOW_DAYS * 86_400_000;
+
+/** `true` tant que la publication a moins de trente jours au moment du retrait. */
+export const publicationStillReclaimable = (publishedAt: Date, now: Date = new Date()): boolean =>
+  now.getTime() - publishedAt.getTime() < PUBLICATION_RECLAIM_WINDOW_MS;
+
+/**
+ * Reprise anti-abus : une publication retirée moins d'un mois après sa
+ * publication rend ses points à son AUTEUR, quel que soit celui qui la retire
+ * (l'auteur, un modérateur, la console) — publier puis supprimer en boucle ne
+ * doit rien rapporter, et un contenu retiré pour modération non plus. Au-delà
+ * d'un mois, rien n'est repris : ni le crédit de publication, ni les points du
+ * post.
  */
 export function reclaimRemovedContent(
   prisma: PrismaClient,
-  post: { readonly id: string; readonly authorId: string; readonly type?: string | null },
+  post: { readonly id: string; readonly authorId: string; readonly type?: string | null; readonly createdAt: Date },
   recorder: PostEngagementRecorder = new EngagementService(prisma),
 ): void {
+  // Sans date de publication lisible, rien n'est repris : les étincelles restent
+  // acquises plutôt que de faire échouer la suite des effets du retrait.
+  if (!(post.createdAt instanceof Date) || !publicationStillReclaimable(post.createdAt)) return;
   // Tout ce que la publication a rapporté à son auteur, hors mémoire par
-  // contenu — une publication légère, l'axe outil, une republication — dans la
-  // MÊME fenêtre que la mémoire (#9584) : la règle d'âge reste celle du barème.
-  reclaimContentCredits(prisma, post.authorId, creditSource.post(post.id), { withinClawback: true }, recorder);
+  // contenu — une publication légère, l'axe outil, une republication (#9584).
+  reclaimContentCredits(prisma, post.authorId, creditSource.post(post.id), recorder);
   const operationKey = reclaimableContentOperation(post.type);
   if (!operationKey) return;
   recorder.reclaimContent(post.authorId, operationKey, post.id).catch((error: unknown) => {
