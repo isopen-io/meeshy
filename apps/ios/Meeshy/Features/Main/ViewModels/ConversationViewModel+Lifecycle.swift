@@ -33,6 +33,7 @@ import os
 struct ConversationDependencies {
     let dbPool: any DatabaseWriter
     let persistence: MessagePersistenceActor
+    var collaborators: ConversationCollaborators? = nil
 
     @MainActor
     static var live: ConversationDependencies {
