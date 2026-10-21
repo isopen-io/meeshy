@@ -530,7 +530,7 @@ class ConversationViewModel: ObservableObject {
         self.sendCoordinator = sendCoordinator ?? ConversationSendCoordinator(conversationId: conversationId, messageService: messageService, messageSocket: messageSocket, offlineQueue: offlineQueue, persistence: dependencies.persistence)
         self.translationSource = translationSource ?? ConversationTranslationSource(persistence: dependencies.persistence)
         self.historyLoader = historyLoader ?? ConversationHistoryLoader(conversationId: conversationId, messageService: messageService, persistence: dependencies.persistence)
-        self.collaborators = dependencies.collaborators ?? ConversationCollaborators(persistence: dependencies.persistence, syncEngine: syncEngine)
+        self.collaborators = dependencies.collaborators ?? ConversationCollaborators(persistence: dependencies.persistence, syncEngine: syncEngine, messageService: messageService)
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
         self.startupDependencies = dependencies

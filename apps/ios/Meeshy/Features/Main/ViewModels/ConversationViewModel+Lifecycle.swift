@@ -364,30 +364,25 @@ extension ConversationViewModel {
                 guard changedId == targetId else { return }
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    let cached = await CacheCoordinator.shared.messages.load(for: targetId)
-                    switch cached {
-                    case .fresh(let data, _), .stale(let data, _):
-                        // Update delivery counters on existing own-message records via GRDB;
-                        // the store observation surfaces the changes to `messages` automatically.
-                        // Batché : 1 transaction + 1 refresh pour la rafale,
-                        // au lieu de N awaits → N notifications → N relectures.
-                        let persistence = self.messagePersistence
-                        let updates = DeliveryCounterReconciliation.updates(own: self.messages, fresh: data)
-                        if !updates.isEmpty {
-                            try? await persistence.updateDeliveryCounters(updates)
-                        }
-                        // Surface any messages in the cache that aren't yet in GRDB —
-                        // never a dead ephemeral, never without its protection (#7552).
-                        let incoming = CachedThreadSurfacing.rows(
-                            data,
-                            present: Set(self.messages.map(\.id))
-                        )
-                        if !incoming.isEmpty {
-                            await self.messagePersistence.bufferIncoming(incoming)
-                            self.prefetchRecentMedia()
-                        }
-                    case .expired, .empty:
-                        break
+                    guard let data = await self.collaborators.cacheReader.cachedThread(id: targetId) else { return }
+                    // Update delivery counters on existing own-message records via GRDB;
+                    // the store observation surfaces the changes to `messages` automatically.
+                    // Batché : 1 transaction + 1 refresh pour la rafale,
+                    // au lieu de N awaits → N notifications → N relectures.
+                    let persistence = self.messagePersistence
+                    let updates = DeliveryCounterReconciliation.updates(own: self.messages, fresh: data)
+                    if !updates.isEmpty {
+                        try? await persistence.updateDeliveryCounters(updates)
+                    }
+                    // Surface any messages in the cache that aren't yet in GRDB —
+                    // never a dead ephemeral, never without its protection (#7552).
+                    let incoming = CachedThreadSurfacing.rows(
+                        data,
+                        present: Set(self.messages.map(\.id))
+                    )
+                    if !incoming.isEmpty {
+                        await self.messagePersistence.bufferIncoming(incoming)
+                        self.prefetchRecentMedia()
                     }
                 }
             }
@@ -400,19 +395,10 @@ extension ConversationViewModel {
     /// isn't cached yet, the fallback constants kick in.
     private func hydrateCurrentConversationFromCache() {
         let convId = conversationId
+        let reader = collaborators.cacheReader
         Task { [weak self] in
-            let cached = await CacheCoordinator.shared.conversations.load(for: "list")
-            guard let self else { return }
-            let list: [MeeshyConversation]
-            switch cached {
-            case .fresh(let data, _), .stale(let data, _):
-                list = data
-            case .expired, .empty:
-                return
-            }
-            if let match = list.first(where: { $0.id == convId }) {
-                self.currentConversation = match
-            }
+            guard let match = await reader.currentConversation(id: convId) else { return }
+            self?.currentConversation = match
         }
     }
 }
