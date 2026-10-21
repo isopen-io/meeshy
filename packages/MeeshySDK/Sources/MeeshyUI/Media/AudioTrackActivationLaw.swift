@@ -19,7 +19,9 @@ import AVFoundation
 ///   et l'état voulu se pose à l'instant où il l'est ;
 /// - au mute, la sortie se coupe AVANT que la piste ne s'éteigne ; au démute, la
 ///   piste se rallume SOUS la sortie encore muette, puis la sortie s'ouvre — le
-///   son revient sans coupure ni claquement.
+///   son revient sans coupure ni claquement ;
+/// - la sortie déjà dans l'état voulu ne dit rien des pistes : elles se
+///   réconcilient quand même, la sortie, elle, ne se réécrit pas.
 ///
 /// Argumenté, non mesuré : le gain en décodage et en énergie se lit sur
 /// Instruments (Energy Log, charge du fil média) sur appareil.
@@ -65,9 +67,13 @@ public nonisolated enum AudioTrackActivationLaw {
     }
 
     /// Les gestes pour passer de l'état du lecteur (`playerIsMuted`) à l'état
-    /// voulu. Rien ne change : aucun geste.
+    /// voulu. La sortie déjà juste : seules les pistes se réconcilient (un
+    /// lecteur rendu par le pool, une sortie écrite en direct par une surface),
+    /// sans geste réel quand elles le sont aussi (`writes` est idempotente).
     public static func steps(playerIsMuted: Bool, wantsMuted: Bool) -> [Step] {
-        guard playerIsMuted != wantsMuted else { return [] }
+        guard playerIsMuted != wantsMuted else {
+            return [wantsMuted ? .disableAudioTracks : .enableAudioTracks]
+        }
         return wantsMuted ? [.silencePlayer, .disableAudioTracks] : [.enableAudioTracks, .soundPlayer]
     }
 }

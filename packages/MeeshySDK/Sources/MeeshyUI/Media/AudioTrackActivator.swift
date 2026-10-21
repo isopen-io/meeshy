@@ -12,6 +12,10 @@ import Combine
 public final class AudioTrackActivator {
     private var cancellables = Set<AnyCancellable>()
 
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au
+    // démontage d'une vue hors tâche. Garde : MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+
     public init() {}
 
     /// Amène le lecteur à l'état voulu, dans l'ordre de la loi.
