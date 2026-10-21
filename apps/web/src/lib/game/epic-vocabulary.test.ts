@@ -161,6 +161,17 @@ const FLAME_STREAK_OF: Readonly<Record<InterfaceLanguage, string>> = {
   ar: 'لهب 4 أيام',
 };
 
+/** Le mot des paliers d'une médaille, celui que chaque glossaire donne au seuil d'une médaille (#11484). */
+const TIERS_OF: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'Paliers',
+  en: 'Marks',
+  es: 'Escalones',
+  de: 'Stufen',
+  it: 'Gradini',
+  pt: 'Patamares',
+  ar: 'العتبات',
+};
+
 describe('les paliers des médailles et la série d’une conversation ne reprennent pas un mot réservé', () => {
   for (const vocabulary of vocabularies) {
     test(`${vocabulary.language} : la garde voit une étoile sur les paliers d’une médaille`, () => {
@@ -182,7 +193,7 @@ describe('les paliers des médailles et la série d’une conversation ne repren
     test(`${vocabulary.language} : les paliers d’une médaille portent leur nom canonique`, () => {
       expect({ language: vocabulary.language, name: vocabulary.names['game.badge.stars_label'] ?? null }).toEqual({
         language: vocabulary.language,
-        name: expect.any(String),
+        name: TIERS_OF[vocabulary.language],
       });
     });
   }
