@@ -8,7 +8,8 @@ import MeeshyUI
 /// session arrive (`GuestConversationContainer`).
 struct WorldGuestEntryView: View {
     @StateObject private var viewModel: WorldGuestEntryViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @FocusState private var nameFocused: Bool
