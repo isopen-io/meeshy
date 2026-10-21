@@ -376,7 +376,7 @@ describe('configuration et codecs de la négociation (#11319)', () => {
     const { peer, fake } = link({ video: true });
     await withCodecCapabilities(() => peer.offer());
     expect(fake.calls).toContain('codecs:video:video/H264,video/VP8,video/VP9,video/rtx');
-    expect(fake.calls).toContain('codecs:audio:audio/opus,audio/red');
+    expect(fake.calls).toContain('codecs:audio:audio/opus,audio/red,audio/G722');
   });
 
   test('un navigateur sans setCodecPreferences négocie par défaut sans erreur', async () => {
