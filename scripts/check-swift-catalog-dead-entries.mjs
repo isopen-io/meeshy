@@ -535,7 +535,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // MessagesEndpoint.bulkDeleteForMe trouvent leur appelant iOS — MessageService.hideForMe et le plan de sélection
 // ForMeSelectionPlan (« Supprimer pour moi »). Valeur MESURÉE en CI (Quality, run 119150128073) et en local en
 // diffant deadEntries() entre origin/dev et la branche de #11421, puis sur la fusion avec #11441 (325).
-const BASELINE_DEAD_ENTRIES = 323;
+// 323 -> 324 (#11510, 2026-10-21) : `AdminEndpoint.conversationsByConversationIdAttachments`
+// (`GET /api/v1/admin/conversations/:conversationId/attachments`), les pièces d'une conversation en lecture
+// souveraine, au curseur et par genre. Le web l'appelle (onglet Médias de la lecture d'administration,
+// `lib/api/admin-conversations.ts`) ; l'app iOS n'a pas d'écran d'administration des conversations — entrée
+// PRÉMATURÉE, pas un faux mort (#5427). Valeur MESURÉE le 2026-10-21 en local.
+const BASELINE_DEAD_ENTRIES = 324;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

@@ -126,6 +126,8 @@ const f = {
   'admin.audit.action.ADMIN_INVITATION_STATUS_SET.explain': 'Un administrador cambió el estado de una solicitud de contacto entre dos miembros.',
   'admin.audit.action.ADMIN_CONVERSATION_MESSAGES_VIEWED': 'Mensajes de conversación leídos',
   'admin.audit.action.ADMIN_CONVERSATION_MESSAGES_VIEWED.explain': 'Lectura soberana del contenido de una conversación, con motivo escrito.',
+  'admin.audit.action.ADMIN_CONVERSATION_ATTACHMENTS_VIEWED': 'Archivos de una conversación leídos',
+  'admin.audit.action.ADMIN_CONVERSATION_ATTACHMENTS_VIEWED.explain': 'Lectura soberana de los adjuntos de una conversación, página a página, con motivo escrito; los adjuntos protegidos siguen velados.',
   'admin.audit.action.ADMIN_CONVERSATION_UPDATED': 'Conversación editada',
   'admin.audit.action.ADMIN_CONVERSATION_UPDATED.explain': 'Un administrador modificó los ajustes de una conversación.',
   'admin.audit.action.ADMIN_CONVERSATION_MEMBER_ROLE_CHANGED': 'Rol de participante cambiado',

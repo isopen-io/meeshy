@@ -1,0 +1,20 @@
+## Les pièces d'une conversation se lisent au curseur, par genre, sous LA projection de la lecture souveraine — jamais en remontant le fil (2026-10-21, #11510)
+
+**Statut** : Accepté.
+
+**Contexte** : #11457 a livré l'onglet « Médias » de la lecture d'une conversation en administration. Ses pièces venaient des pages de messages déjà lues (30 par page) et sa prise du bas remontait le fil pour trouver les plus anciennes : sur une conversation de milliers de messages pauvre en médias, beaucoup de pages — chacune une lecture journalisée — pour quelques vignettes.
+
+**Décision** :
+1. **Une route dédiée**, `GET /api/v1/admin/conversations/:conversationId/attachments` (`routes/admin/conversation-attachments-sovereign.ts`), sous le MÊME régime que la lecture des messages : `canManageConversations` + `requireAdminRank()`, motif écrit sauf pour le rang souverain (`requireReasonUnlessSovereign`), une ligne `AdminAuditLog` par page (`ADMIN_CONVERSATION_ATTACHMENTS_VIEWED`, entité `Conversation`).
+2. **La projection n'est pas recopiée, elle est APPELÉE** : `servedAttachment` (`sovereign-message-projection.ts`) et `messageContentIsProtected` (`media-protection.ts`). Une pièce protégée par ses drapeaux OU par ceux de son message reste LISTÉE et rend son voile — ni `fileUrl`, ni vignette, ni `thumbHash`, ni variantes, ni transcription, ni pistes ; `fileName` n'est ni servi ni chargé. Un porteur absent vaut protégé.
+3. **Le porteur voyage réduit** à ce qu'un index affiche : identifiant, horloge, expéditeur (résolu en `User.id`, le brut à côté) et verdict `isProtected`. Aucun texte, aucune traduction : le fil est la seule surface qui les sert.
+4. **Pagination par la loi partagée** (`utils/cursor-pagination.ts`) sur l'ordre TOTAL `(createdAt desc, id desc)` de la pièce, `limit ≤ 100`, défaut 60. Un curseur illisible est REFUSÉ en 400 `INVALID_CURSOR` : un défilement infini ne peut pas réparer son jeton, et re-servir la première page en silence peindrait deux fois ce qu'il a déjà peint.
+5. **Le genre est une clause de requête**, `kind=visual|audio|document|contact`, dérivée de la partition UNIQUE `clauseDeTypeDuGenre` (`routes/conversations/messages-media-kinds.ts`), celle de l'index de membre et de `attachmentKindOf` côté web. La route n'exclut PAS la vue unique (l'index de membre le fait) : en administration, constater qu'un média existe n'ouvre pas son contenu, et c'est la projection qui voile.
+6. **Le web** (`apps/web/src/routes/admin-conversation-reading-media.tsx`) lit cette route en défilement infini, par puces de genre, sous le motif déjà validé ; le décodeur (`lib/api/admin-conversations.ts`) retire une seconde fois les secrets d'une pièce `isProtected` quoi que la charge porte, et ÉCARTE une pièce retenue sans drapeau de pièce (message chiffré, à vue unique, expiré) — aucune tuile ne saurait la voiler, le fil en dit le constat. « Voir dans le fil » remonte le fil page par page jusqu'au message qui porte la pièce.
+
+**Alternatives rejetées** :
+- *Garder les pages du fil* : c'est le coût que l'issue mesure, et chaque page est une lecture journalisée de texte qu'on ne voulait pas lire.
+- *Une projection propre à la route* : deux énoncés de la même protection divergent au premier champ ajouté (cycles 123 à 126).
+- *Re-servir la première page sur un curseur illisible* (le choix de `/notifications`) : juste pour un flux qu'on reprend, faux pour une pellicule qu'on complète.
+
+**Conséquences** : manifeste des routes et catalogues TS/Swift régénérés (entrée Swift PRÉMATURÉE, baseline du cliquet relevée à 324 : l'app iOS n'a pas d'écran d'administration des conversations). La recette au navigateur (`check-admin-souverain.mjs`) sert la route depuis le corpus. Android natif gelé. Le lot passe par `auditeur-adversarial` avant fusion (critère de l'issue).

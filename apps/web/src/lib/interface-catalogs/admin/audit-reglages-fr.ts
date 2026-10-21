@@ -129,6 +129,8 @@ const f = {
   'admin.audit.action.ADMIN_INVITATION_STATUS_SET.explain': 'Le statut d’une demande de contact entre deux membres a été changé par un administrateur.',
   'admin.audit.action.ADMIN_CONVERSATION_MESSAGES_VIEWED': 'Messages d’une conversation lus',
   'admin.audit.action.ADMIN_CONVERSATION_MESSAGES_VIEWED.explain': 'Lecture souveraine du contenu d’une conversation, sur motif écrit.',
+  'admin.audit.action.ADMIN_CONVERSATION_ATTACHMENTS_VIEWED': 'Médias d’une conversation lus',
+  'admin.audit.action.ADMIN_CONVERSATION_ATTACHMENTS_VIEWED.explain': 'Lecture souveraine des pièces jointes d’une conversation, page par page, sur motif écrit ; les pièces protégées restent voilées.',
   'admin.audit.action.ADMIN_CONVERSATION_UPDATED': 'Conversation modifiée',
   'admin.audit.action.ADMIN_CONVERSATION_UPDATED.explain': 'Les réglages d’une conversation ont été modifiés par un administrateur.',
   'admin.audit.action.ADMIN_CONVERSATION_MEMBER_ROLE_CHANGED': 'Rôle d’un participant modifié',

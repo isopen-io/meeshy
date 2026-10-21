@@ -124,6 +124,8 @@ const f = {
   'admin.audit.action.ADMIN_INVITATION_STATUS_SET.explain': 'The status of a contact request between two members was changed by an administrator.',
   'admin.audit.action.ADMIN_CONVERSATION_MESSAGES_VIEWED': 'Conversation messages read',
   'admin.audit.action.ADMIN_CONVERSATION_MESSAGES_VIEWED.explain': 'Sovereign read of a conversation’s content, on a written reason.',
+  'admin.audit.action.ADMIN_CONVERSATION_ATTACHMENTS_VIEWED': 'Conversation media read',
+  'admin.audit.action.ADMIN_CONVERSATION_ATTACHMENTS_VIEWED.explain': 'Sovereign read of a conversation’s attachments, page by page, on a written reason; protected attachments stay veiled.',
   'admin.audit.action.ADMIN_CONVERSATION_UPDATED': 'Conversation edited',
   'admin.audit.action.ADMIN_CONVERSATION_UPDATED.explain': 'A conversation’s settings were edited by an administrator.',
   'admin.audit.action.ADMIN_CONVERSATION_MEMBER_ROLE_CHANGED': 'Participant role changed',

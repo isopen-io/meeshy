@@ -88,8 +88,10 @@ import { AdminConversationReadingMedia } from './admin-conversation-reading-medi
  * `keepReadingInPlace`) et l'atterrissage en bas (`useThreadOpenScroll`) sont ceux
  * de `routes/thread.tsx`, jamais une copie. Les pages, servies par offset en
  * `createdAt DESC`, vivent dans UNE requête infinie et se recousent par
- * `mergeAdminThreadPages`. L'onglet « Médias » tire ses pièces des mêmes pages
- * (`admin-conversation-reading-media.tsx`).
+ * `mergeAdminThreadPages`. L'onglet « Médias » lit sa PROPRE route au curseur
+ * (`GET /admin/conversations/:id/attachments`, #11510), sous le même motif —
+ * `admin-conversation-reading-media.tsx` — et « Voir dans le fil » remonte le fil
+ * jusqu'au message qui porte la pièce.
  *
  * ## RIEN DE CE QUI EST LU ICI NE TOUCHE LE DISQUE
  *
@@ -199,7 +201,12 @@ export function AdminConversationReading({
   /** La lecture est armée : un motif validé, ou le rang souverain qui n'en écrit pas. */
   const armee = motif !== null || souverain;
   const [tab, setTab] = useState<ReadingTab>('thread');
-  /** Le message qu'un geste de l'onglet Médias a désigné — rejoint une fois le fil revenu à l'écran. */
+  /** L'onglet Médias a été OUVERT une fois : il reste monté derrière le fil, sa pellicule ne se relit pas à chaque retour. */
+  const [mediaOpened, setMediaOpened] = useState(false);
+  useEffect(() => {
+    if (tab === 'media') setMediaOpened(true);
+  }, [tab]);
+  /** Le message qu'un geste de l'onglet Médias a désigné — rejoint une fois le fil revenu à l'écran et le message chargé. */
   const [pendingJump, setPendingJump] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [expiredIds, setExpiredIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -319,12 +326,27 @@ export function AdminConversationReading({
   );
 
   /* « Voir dans le fil » depuis l'onglet Médias : le saut attend que le fil soit revenu
-     à l'écran, sans quoi le virtualiseur d'un panneau caché ne mesure rien. */
+     à l'écran, sans quoi le virtualiseur d'un panneau caché ne mesure rien. Et depuis
+     #11510 la pellicule ne vient plus des pages du fil : une pièce peut être bien plus
+     ancienne que ce qui est chargé. Le fil REMONTE alors page par page jusqu'au message
+     — un « Voir dans le fil » qui ne mènerait nulle part serait le contrôle sans effet
+     que la loi 4 interdit — et renonce quand le fil est épuisé ou en échec. */
+  const threadHasNextPage = thread.hasNextPage;
+  const threadIsFetchingNextPage = thread.isFetchingNextPage;
+  const threadIsFetchNextPageError = thread.isFetchNextPageError;
   useEffect(() => {
     if (tab !== 'thread' || pendingJump === null) return;
-    setPendingJump(null);
-    jumpToMessage(pendingJump);
-  }, [tab, pendingJump, jumpToMessage]);
+    if (placed.some((p) => p.message.id === pendingJump)) {
+      setPendingJump(null);
+      jumpToMessage(pendingJump);
+      return;
+    }
+    if (!threadHasNextPage || threadIsFetchNextPageError) {
+      setPendingJump(null);
+      return;
+    }
+    if (!threadIsFetchingNextPage) fetchOlder();
+  }, [tab, pendingJump, placed, jumpToMessage, threadHasNextPage, threadIsFetchingNextPage, threadIsFetchNextPageError, fetchOlder]);
 
   const showInThread = useCallback((messageId: string) => {
     setTab('thread');
@@ -529,17 +551,21 @@ export function AdminConversationReading({
         <OlderLoadIndicator state={older.state} onRetry={older.retry} />
       </div>
 
-      {tab === 'media' ? (
-        <AdminConversationReadingMedia
-          messages={messages}
-          protectedIds={protectedIds}
-          language={language}
-          readerLanguages={readerLanguages}
-          viewerId={viewer.id ?? ''}
-          state={olderState}
-          onLoadOlder={fetchOlder}
-          onShowInThread={showInThread}
-        />
+      {/* LA PELLICULE RESTE MONTÉE une fois ouverte, comme le fil : sa requête (une ligne
+          d'audit par page) ne se rejoue pas à chaque aller-retour entre les onglets. */}
+      {mediaOpened ? (
+        <div className="flex min-h-0 flex-1 flex-col" hidden={tab !== 'media'} data-admin-reading-media-panel>
+          <AdminConversationReadingMedia
+            conversationId={conversationId}
+            reason={motif}
+            deps={deps}
+            enabled={armee}
+            language={language}
+            readerLanguages={readerLanguages}
+            viewerId={viewer.id ?? ''}
+            onShowInThread={showInThread}
+          />
+        </div>
       ) : null}
     </div>
   );

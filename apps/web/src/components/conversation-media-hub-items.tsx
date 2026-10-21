@@ -81,10 +81,14 @@ export function MediaTile({
   const [failedThumb, setFailedThumb] = useState<string | null>(null);
   const masked = maskedAttachment(attachment);
   const isVideo = attachment.mimeType.startsWith('video/');
-  const thumb =
-    attachment.thumbnailUrl !== undefined && attachment.thumbnailUrl !== ''
+  /* Une pièce MASQUÉE ne résout aucune adresse — et une pièce servie SANS URL
+     (la lecture souveraine voile en retirant `fileUrl`, #11510) ne doit pas
+     faire tomber la tuile : sans adresse, pas de vignette, jamais une exception. */
+  const thumb = masked
+    ? undefined
+    : typeof attachment.thumbnailUrl === 'string' && attachment.thumbnailUrl !== ''
       ? attachmentSrc(attachment.thumbnailUrl)
-      : !isVideo && attachment.fileUrl !== ''
+      : !isVideo && typeof attachment.fileUrl === 'string' && attachment.fileUrl !== ''
         ? attachmentSrc(attachment.fileUrl)
         : undefined;
   const placeholder = masked ? undefined : thumbHashPlaceholder(attachment.thumbHash);

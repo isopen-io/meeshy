@@ -93,6 +93,7 @@ export const AUDIT_ACTIONS = {
   // ── Échanges ───────────────────────────────────────────────────────────────
   ADMIN_INVITATION_STATUS_SET: entry('accounts', 'handshake', 'warning'),
   ADMIN_CONVERSATION_MESSAGES_VIEWED: entry('conversations', 'eye', 'info', true),
+  ADMIN_CONVERSATION_ATTACHMENTS_VIEWED: entry('conversations', 'eye', 'info', true),
   ADMIN_CONVERSATION_UPDATED: entry('conversations', 'pencilSimple', 'neutral'),
   ADMIN_CONVERSATION_MEMBER_ROLE_CHANGED: entry('conversations', 'shieldCheck', 'brand'),
   ADMIN_CONVERSATION_MEMBER_REMOVED: entry('conversations', 'userMinus', 'danger'),
