@@ -314,9 +314,6 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     }
 }
 
-/// La cible du `CADisplayLink` — elle ne retient pas le lecteur, et coupe le lien
-/// si le lecteur est parti sans `stop()` (un lien vivant tiendrait 30 réveils par
-/// seconde pour rien).
 /// **L'amplification qu'on règle pendant que le son joue** (#10360) : le fil
 /// principal l'écrit, le fil audio la lit à chaque tampon — un verrou sans
 /// attente, le temps d'un `Float`.
