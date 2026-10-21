@@ -100,9 +100,6 @@ extension StoryCanvasUIView {
             guard !bgKind.isVisualMedia, let hex = slide.effects.background else { return nil }
             return Self.parseBackgroundHex(hex)
         }()
-        // Le composer glisse ses curseurs de look sur le fond : la cuisson y
-        // quitte le fil principal (#9873). La lecture garde le repeint synchrone.
-        backgroundLayer.bakesLookOffMainThread = mode == .edit
         backgroundLayer.configure(
             kind: bgKind,
             transform: bgTransform,

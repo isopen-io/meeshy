@@ -13,6 +13,11 @@ import UIKit
 /// `.up` à chaque cran. La chaîne est désormais une fonction `CIImage → CIImage`
 /// (`StoryBackgroundLook.ciImage`) que l'aperçu et l'export rendent par le même
 /// `StoryRenderingContext.shared` (loi 6 : le player est l'aperçu).
+///
+/// `@MainActor` : `CanvasImageOrientation` et `StorySlideRenderer` vivent dans
+/// MeeshyUI, isolé MainActor par défaut (SE-0466) — la cible de test, elle,
+/// reste `nonisolated`.
+@MainActor
 final class StoryLookRenderParityTests: XCTestCase {
 
     // MARK: - Fabriques

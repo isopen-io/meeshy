@@ -17,15 +17,43 @@ import MeeshySDK
 ///
 /// Le cache suit l'INSTANCE d'image, son identifiant et les VALEURS : un
 /// glissement qui revient sur une valeur déjà vue ne refait aucun rendu, et un
-/// bitmap remplacé ne resservira jamais le look de l'ancien.
+/// bitmap remplacé ne resservira jamais le look de l'ancien. L'adresse d'une
+/// instance libérée peut être rendue à la suivante : chaque entrée garde donc un
+/// lien FAIBLE vers sa source, et n'est servie qu'à cette même instance vivante
+/// (`SceneThumbnailCache`, même règle).
 public nonisolated enum StoryLookBake {
 
-    nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
-        let cache = NSCache<NSString, UIImage>()
-        cache.countLimit = 40
-        cache.totalCostLimit = 40 * 1024 * 1024
-        return cache
-    }()
+    private nonisolated final class Entry {
+        weak var source: UIImage?
+        let baked: UIImage
+        init(source: UIImage, baked: UIImage) {
+            self.source = source
+            self.baked = baked
+        }
+    }
+
+    // unchecked: NSCache est documenté thread-safe ; une entrée ne porte qu'un lien faible et un
+    // bitmap immuable — le repeint sur place (MainActor) et la boucle du curseur la partagent.
+    private nonisolated final class Entries: @unchecked Sendable {
+        let storage: NSCache<NSString, Entry> = {
+            let cache = NSCache<NSString, Entry>()
+            cache.countLimit = 40
+            cache.totalCostLimit = 40 * 1024 * 1024
+            return cache
+        }()
+    }
+
+    private static let entries = Entries()
+
+    /// Le bitmap cuit sous `key` — seulement s'il vient de CETTE instance.
+    static func cached(_ key: NSString, source: UIImage) -> UIImage? {
+        guard let entry = entries.storage.object(forKey: key), entry.source === source else { return nil }
+        return entry.baked
+    }
+
+    static func store(_ baked: UIImage, for key: NSString, source: UIImage, cost: Int) {
+        entries.storage.setObject(Entry(source: source, baked: baked), forKey: key, cost: cost)
+    }
 
     /// L'image elle-même, à l'identique, quand il n'y a ni filtre ni réglage
     /// actif ; sinon le bitmap cuit, `.up`, à la même échelle et à la même
@@ -37,13 +65,13 @@ public nonisolated enum StoryLookBake {
               let source = StoryRenderingContext.orientedSource(of: image),
               source.extent.width >= 1, source.extent.height >= 1 else { return image }
         let cle = key(image, filter: filter, intensity: intensity, adjustments: reglages, imageId: imageId)
-        if let cached = cache.object(forKey: cle) { return cached }
+        if let deja = cached(cle, source: image) { return deja }
 
         let chaine = StoryBackgroundLook.ciImage(source, filter: filter, intensity: intensity, adjustments: reglages)
         guard let cuit = StoryRenderingContext.shared.bitmap(chaine, from: source.extent,
                                                              preserving: image.cgImage?.colorSpace) else { return image }
         let rendu = UIImage(cgImage: cuit, scale: image.scale, orientation: .up)
-        cache.setObject(rendu, forKey: cle, cost: cuit.bytesPerRow * cuit.height)
+        store(rendu, for: cle, source: image, cost: cuit.bytesPerRow * cuit.height)
         return rendu
     }
 
@@ -60,8 +88,8 @@ public nonisolated enum StoryLookBake {
     public static func ready(_ request: StoryLookBakeRequest) -> UIImage? {
         let reglages = request.adjustments.flatMap { $0.activeCount > 0 ? $0 : nil }
         guard request.filter != nil || reglages != nil else { return request.image }
-        return cache.object(forKey: key(request.image, filter: request.filter, intensity: request.intensity,
-                                        adjustments: reglages, imageId: request.imageId))
+        return cached(key(request.image, filter: request.filter, intensity: request.intensity,
+                          adjustments: reglages, imageId: request.imageId), source: request.image)
     }
 
     /// Une clé DÉTERMINISTE : l'instance, l'identifiant de l'appelant, le

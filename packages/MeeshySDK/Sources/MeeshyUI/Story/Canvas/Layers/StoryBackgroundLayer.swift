@@ -179,14 +179,14 @@ public final class StoryBackgroundLayer: CALayer {
     /// d'un fond image, posés en composition sur l'item d'un fond vidéo.
     @MainActor public private(set) var activeAdjustments: ImageAdjustments?
     /// Le bitmap BRUT du dernier stamp final et sa clé de filtre — ce qu'un
-    /// changement de rendu seul (filtre, réglages) repeint en place, sans
-    /// repasser par le chargement ni par le ThumbHash.
-    @MainActor var stampedSource: (image: UIImage, imageId: String?)?
-    /// **Le canvas INTERACTIF lève ce drapeau** (#9873) : un changement de
-    /// rendu seul (curseur de filtre, d'intensité, de réglage) se cuit alors
-    /// HORS du fil principal, le bitmap affiché restant à l'écran jusqu'au
-    /// suivant (`StoryBackgroundLayer+Look`). Baissé — lecteur, export,
-    /// instantanés —, le repeint reste synchrone.
+    /// changement de rendu seul (filtre, réglages) repeint en place. Une autre
+    /// source rend caduque toute cuisson en vol (#9873).
+    @MainActor var stampedSource: (image: UIImage, imageId: String?)? { didSet { liveLookStorage?.supersede() } }
+    /// **Le canvas du COMPOSER lève ce drapeau** (#9873, `StoryComposerCanvasView`) :
+    /// un changement de rendu seul (curseur de filtre, d'intensité, de réglage)
+    /// se cuit alors HORS du fil principal, le bitmap affiché restant jusqu'au
+    /// suivant (`StoryBackgroundLayer+Look`). Baissé — lecteur et son prefetcher,
+    /// export, instantanés —, le repeint reste synchrone.
     @MainActor public var bakesLookOffMainThread = false
     /// L'outil de cuisson hors du fil principal, monté au premier glissé.
     @MainActor var liveLookStorage: StoryLiveLook?
@@ -237,7 +237,6 @@ public final class StoryBackgroundLayer: CALayer {
     @MainActor
     func stampFinalImage(_ image: UIImage, imageId: String?, on img: CALayer?) {
         stampedSource = (image, imageId)
-        liveLookStorage?.supersede()
         stampDisplay(StoryBackgroundLook.image(image, filter: activeFilter, intensity: activeFilterIntensity,
                                                adjustments: activeAdjustments, imageId: imageId), on: img)
     }
@@ -607,7 +606,6 @@ extension StoryBackgroundLayer {
         avPlayerLooper = nil
         contentLayer = nil
         stampedSource = nil
-        liveLookStorage?.supersede()
         backgroundVideoLookTask?.cancel()
         backgroundVideoLookTask = nil
         appliedBackgroundVideoLook = nil

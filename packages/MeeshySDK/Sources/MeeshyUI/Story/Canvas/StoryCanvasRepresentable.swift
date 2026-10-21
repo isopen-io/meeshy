@@ -276,6 +276,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // décoration qui déclare un mouvement le JOUE pendant qu'on compose,
         // comme la vidéo et le son juste au-dessus et juste en dessous.
         view.playsStickerMotionInEditMode = true
+        // Les curseurs de look du composer repeignent le fond HORS du fil
+        // principal (#9873). Le prefetcher du lecteur, lui aussi en `.edit`, non.
+        view.backgroundLayer.bakesLookOffMainThread = true
         view.onItemModified = { modified in
             DispatchQueue.main.async { self.slide = modified }
         }
