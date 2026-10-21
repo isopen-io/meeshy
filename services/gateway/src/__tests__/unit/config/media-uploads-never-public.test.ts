@@ -57,6 +57,7 @@ const DEPLOIEMENTS = [
 
 const CONFS_NGINX = [
   path.resolve(INFRA_DIR, 'nginx', 'static-files.conf'),
+  path.resolve(INFRA_DIR, 'nginx', 'static-files.staging.conf'),
   path.resolve(COMPOSE_DIR, 'config', 'nginx', 'static-files.conf'),
 ] as const;
 

@@ -101,20 +101,17 @@ nonisolated enum ComposerInlineEditing {
     /// que la loi 4 bannit.
     ///
     /// **Une IMAGE se recadre, d'abord** — l'ordre des décisions de la vue
-    /// `2d`. Deux images le servent : le FOND IMAGE d'une pièce retouchée
-    /// (#9136), où il se cuit dans la pièce rendue, et l'image POSÉE (#9499),
-    /// dont le calque, le lecteur web et la vignette lisent la borne. Un fond
-    /// hors retouche ne l'offre pas — le lecteur ne recadre pas un fond — ni une
-    /// vidéo, dont le player ne lit pas encore la borne (#9153) : ce seraient
-    /// des contrôles sans effet.
+    /// `2d`. L'image POSÉE le sert (#9499) : son calque, le lecteur web et la
+    /// vignette lisent la borne. Un fond ne l'offre pas — le lecteur ne recadre
+    /// pas un fond — ni une vidéo, dont le player ne lit pas encore la borne
+    /// (#9153) : ce seraient des contrôles sans effet.
     ///
     /// **Les RÉGLAGES vont à tout média qui les PEINT** — l'image posée
     /// (#9175), la vidéo dont le player peint les trames (#9169), et le fond,
     /// image ou vidéo, que sa couche peint par `StoryBackgroundLook` (#9496).
     /// Les EFFETS (#9498) vont à l'IMAGE, posée ou fond : ils suivent le filtre.
     static func sections(for family: ComposerInlineFamily,
-                         hasTrimmableSource: Bool,
-                         retouching: Bool = false) -> [ComposerObjectEditorSection] {
+                         hasTrimmableSource: Bool) -> [ComposerObjectEditorSection] {
         let servies = ComposerObjectEditorRail.entries(for: family.sceneKind,
                                                        hasTrimmableSource: hasTrimmableSource,
                                                        offersFilter: !family.isVideo,
@@ -126,8 +123,7 @@ nonisolated enum ComposerInlineEditing {
                 case .tool:           return true
                 }
             }
-        let recadre = family == .image || (retouching && family == .background(isVideo: false))
-        return (recadre ? [.media(.crop)] : []) + servies
+        return (family == .image ? [.media(.crop)] : []) + servies
     }
 
     /// **Une demande d'édition, sur la scène, devient l'édition en place.** La
@@ -137,10 +133,9 @@ nonisolated enum ComposerInlineEditing {
                       family: ComposerInlineFamily,
                       onSceneSurface: Bool,
                       requested: ComposerObjectEditorSection?,
-                      hasTrimmableSource: Bool,
-                      retouching: Bool = false) -> ComposerInlineEdit? {
+                      hasTrimmableSource: Bool) -> ComposerInlineEdit? {
         guard onSceneSurface else { return nil }
-        let servies = sections(for: family, hasTrimmableSource: hasTrimmableSource, retouching: retouching)
+        let servies = sections(for: family, hasTrimmableSource: hasTrimmableSource)
         return ComposerInlineEdit(objectId: objectId,
                                   family: family,
                                   openSection: requested.flatMap { servies.contains($0) ? $0 : nil })

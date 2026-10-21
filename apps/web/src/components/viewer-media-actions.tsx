@@ -4,6 +4,7 @@ import { recordEmojiUsage, topEmojis } from '@/lib/emoji-usage';
 import { appQueryClient } from '@/lib/api/query-client';
 import { translate } from '@/lib/i18n-catalog';
 import { fetchPiece, savePiece, type NoticeKey } from '@/lib/media/save-piece';
+import { servedMediaFile } from '@/lib/media/served-media';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
@@ -146,7 +147,7 @@ function ActionRail({
           announce(fetched.notice === 'media.viewer.offline' ? fetched.notice : 'media.viewer.compose_failed');
           return;
         }
-        offerStudioSeed(new File([fetched.blob], fetched.fileName, { type: page.attachment.mimeType }));
+        offerStudioSeed(servedMediaFile(fetched.blob, fetched.fileName, { type: page.attachment.mimeType }));
         onClose();
         navigate(href('storyCompose'));
       })

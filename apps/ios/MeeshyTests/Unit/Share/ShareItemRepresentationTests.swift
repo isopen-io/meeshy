@@ -62,6 +62,23 @@ final class ShareItemRepresentationTests: XCTestCase {
         )
     }
 
+    /// #11430 : Safari, YouTube et les réseaux sociaux remettent le lien d'une
+    /// page ET sa vignette dans le même fournisseur. C'est le lien qui part.
+    func test_choose_aWebLinkWithItsThumbnail_isTheLink_inAnyOrder() {
+        XCTAssertEqual(ShareItemRepresentation.choose(from: ["public.url", "public.jpeg"]), .link)
+        XCTAssertEqual(ShareItemRepresentation.choose(from: ["public.png", "public.url"]), .link)
+        XCTAssertEqual(ShareItemRepresentation.choose(from: ["public.url", "public.plain-text", "public.image"]), .link)
+    }
+
+    /// Une URL de FICHIER annonce aussi `public.url` : avec elle, c'est le
+    /// média qui part (Google Photos), jamais un chemin.
+    func test_choose_aFileURLWithItsMedia_staysTheMedia() {
+        XCTAssertEqual(
+            ShareItemRepresentation.choose(from: ["public.file-url", "public.url", "public.heic"]),
+            .media(typeIdentifier: "public.heic")
+        )
+    }
+
     func test_choose_aFileURLAlone_loadsTheFileNeverTheLink() {
         XCTAssertEqual(ShareItemRepresentation.choose(from: ["public.file-url", "public.url"]), .fileURL)
     }
