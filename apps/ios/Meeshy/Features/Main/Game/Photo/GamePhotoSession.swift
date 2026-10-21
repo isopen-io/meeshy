@@ -389,7 +389,7 @@ final class GamePhotoSession: ObservableObject {
         send(.kept(outcome == .kept))
         switch outcome {
         case .kept:
-            notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.kept", defaultValue: "Gardée au carnet de progression.", bundle: .main))
+            notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.kept", defaultValue: "Gardée dans ta Chronique.", bundle: .main))
         case .noSpace:
             notice = PhotoNotice(
                 tone: .error,
@@ -397,7 +397,7 @@ final class GamePhotoSession: ObservableObject {
                 action: .saveToLibrary
             )
         case .unavailable:
-            notice = PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.keep_failed", defaultValue: "Le carnet n’est pas disponible sur cet appareil : la photo n’a pas été gardée.", bundle: .main))
+            notice = PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.keep_failed", defaultValue: "La Chronique n’est pas disponible sur cet appareil : la photo n’a pas été gardée.", bundle: .main))
         }
     }
 

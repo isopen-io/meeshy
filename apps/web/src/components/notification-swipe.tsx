@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 
+import { impact } from '@/lib/view/haptics';
 import { GlyphSvg } from '@/components/glyph';
 import { NOTIFICATIONS_GLYPHS } from '@/components/glyphs-notifications';
 import {
@@ -28,11 +29,6 @@ import {
  */
 
 type Start = { readonly id: number; readonly x: number; readonly y: number; readonly direction: 'ltr' | 'rtl' };
-
-const vibrate = (ms: number): void => {
-  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
-  navigator.vibrate(ms);
-};
 
 const directionOf = (element: Element): 'ltr' | 'rtl' => {
   const view = element.ownerDocument.defaultView;
@@ -94,7 +90,7 @@ export function NotificationSwipe({
     current.current = next;
     setOffset(next);
     const armed = notificationSwipeCommits(next);
-    if (armed && !crossed.current) vibrate(10);
+    if (armed && !crossed.current) impact('light');
     crossed.current = armed;
   }, []);
 
@@ -106,7 +102,7 @@ export function NotificationSwipe({
       const deletes = engaged.current && notificationSwipeCommits(current.current);
       reset();
       if (!deletes) return;
-      vibrate(20);
+      impact('medium');
       onDelete();
     },
     [onDelete, reset],

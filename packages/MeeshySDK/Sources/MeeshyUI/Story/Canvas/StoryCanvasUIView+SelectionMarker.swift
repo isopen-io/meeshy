@@ -156,7 +156,7 @@ extension StoryCanvasUIView {
         calque.alignmentMode = .center
         calque.backgroundColor = UIColor(white: 0.043, alpha: 0.75).cgColor
         calque.cornerRadius = 5
-        calque.contentsScale = UIScreen.main.scale
+        calque.contentsScale = traitCollection.storyCanvasDisplayScale
         return calque
     }
 

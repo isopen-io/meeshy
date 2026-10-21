@@ -187,12 +187,12 @@ enum GameAtlasCopy {
 
     static func title(_ family: GameRulesAtlas.Family) -> String {
         switch family {
-        case .tiers: String(localized: "game.atlas.tiers.title", defaultValue: "Les 20 paliers", bundle: .main)
+        case .tiers: String(localized: "game.atlas.tiers.title", defaultValue: "Les 20 états de ta lumière", bundle: .main)
         case .coin: String(localized: "game.atlas.coin.title", defaultValue: "La Meesh : avers et revers", bundle: .main)
-        case .treasury: String(localized: "game.atlas.treasury.title", defaultValue: "Les paliers du trésor", bundle: .main)
+        case .treasury: String(localized: "game.atlas.treasury.title", defaultValue: "Les contenants de l’Héritage", bundle: .main)
         case .ranks: String(localized: "game.atlas.ranks.title", defaultValue: "Les blasons des rangs", bundle: .main)
         case .flames: String(localized: "game.atlas.flames.title", defaultValue: "Les cinq Flammes", bundle: .main)
-        case .leagues: String(localized: "game.atlas.leagues.title", defaultValue: "Les huit ligues", bundle: .main)
+        case .leagues: String(localized: "game.atlas.leagues.title", defaultValue: "Les huit cercles de la joute", bundle: .main)
         case .medals: String(localized: "game.atlas.medals.title", defaultValue: "Les médailles", bundle: .main)
         case .trophies: String(localized: "game.atlas.trophies.title", defaultValue: "Les trophées", bundle: .main)
         case .rarities: String(localized: "game.atlas.rarities.title", defaultValue: "Les raretés", bundle: .main)
@@ -202,23 +202,23 @@ enum GameAtlasCopy {
     static func line(_ family: GameRulesAtlas.Family) -> String {
         switch family {
         case .tiers:
-            String(localized: "game.atlas.tiers.line", defaultValue: "Vingt paliers, de l’étincelle à la singularité : ton anneau change à chacun.", bundle: .main)
+            String(localized: "game.atlas.tiers.line", defaultValue: "Vingt états, de l’Étincelle à la Singularité : ton anneau change à chacun.", bundle: .main)
         case .coin:
             String(localized: "game.atlas.coin.line", defaultValue: "Chaque Meesh est numérotée : une pièce d’or tous les cent, un prisme tous les mille.", bundle: .main)
         case .treasury:
-            String(localized: "game.atlas.treasury.line", defaultValue: "Garde tes Meeshes : le trésor se remplit, de la bourse à la réserve royale.", bundle: .main)
+            String(localized: "game.atlas.treasury.line", defaultValue: "Garde tes Meeshes : ton Héritage grandit, de la Bourse à la Réserve royale.", bundle: .main)
         case .ranks:
-            String(localized: "game.atlas.ranks.line", defaultValue: "La Gloire fait monter ton rang. Il ne redescend jamais, même quand tu frappes.", bundle: .main)
+            String(localized: "game.atlas.ranks.line", defaultValue: "Ta gloire fait grandir ton rang. Il ne recule jamais, même quand tu frappes.", bundle: .main)
         case .flames:
             String(localized: "game.atlas.flames.line", defaultValue: "Un jour de plus et ta Flamme grandit : de la braise jusqu’au soleil.", bundle: .main)
         case .leagues:
-            String(localized: "game.atlas.leagues.line", defaultValue: "Chaque semaine, tu joues dans ta ligue : les sept premiers montent d’une gemme.", bundle: .main)
+            String(localized: "game.atlas.leagues.line", defaultValue: "Chaque semaine, tu entres dans ta joute : les sept premiers gravissent le cercle suivant.", bundle: .main)
         case .medals:
             String(localized: "game.atlas.medals.line", defaultValue: "Sept matières, du cuivre au prisme : plus tu répètes un geste, plus la médaille brille.", bundle: .main)
         case .trophies:
             String(localized: "game.atlas.trophies.line", defaultValue: "Un trophée se reçoit à un moment précis, et il ne s’éteint jamais.", bundle: .main)
         case .rarities:
-            String(localized: "game.atlas.rarities.line", defaultValue: "Plus un succès est rare, plus son liseré est précieux.", bundle: .main)
+            String(localized: "game.atlas.rarities.line", defaultValue: "Plus un haut fait est rare, plus son liseré est précieux.", bundle: .main)
         }
     }
 
@@ -233,9 +233,9 @@ enum GameAtlasCopy {
 
     static func shape(_ shape: GameRulesAtlas.MedalShape) -> String {
         switch shape {
-        case .accumulation: String(localized: "game.atlas.medals.accumulation", defaultValue: "Accumulation", bundle: .main)
-        case .record: String(localized: "game.atlas.medals.record", defaultValue: "Record", bundle: .main)
-        case .collection: String(localized: "game.atlas.medals.collection", defaultValue: "Collection", bundle: .main)
+        case .accumulation: String(localized: "game.atlas.medals.accumulation", defaultValue: "Accumulation · combien de fois", bundle: .main)
+        case .record: String(localized: "game.atlas.medals.record", defaultValue: "Sommet · le meilleur", bundle: .main)
+        case .collection: String(localized: "game.atlas.medals.collection", defaultValue: "Collection · à réunir", bundle: .main)
         }
     }
 
@@ -244,9 +244,9 @@ enum GameAtlasCopy {
     static func trophy(_ plate: GameRulesAtlas.TrophyPlate) -> String {
         switch plate {
         case .leagueGold, .leagueSilver, .leagueBronze:
-            String(localized: "game.atlas.trophy.league", defaultValue: "Coupe de ligue", bundle: .main)
-        case .season: String(localized: "game.atlas.trophy.season", defaultValue: "Coupe de saison", bundle: .main)
-        case .prestige: String(localized: "game.atlas.trophy.prestige", defaultValue: "Trophée de Prestige", bundle: .main)
+            String(localized: "game.atlas.trophy.league", defaultValue: "Coupe de joute", bundle: .main)
+        case .season: String(localized: "game.atlas.trophy.season", defaultValue: "Coupe du voyage", bundle: .main)
+        case .prestige: String(localized: "game.atlas.trophy.prestige", defaultValue: "Trophée de renaissance", bundle: .main)
         case .flame: String(localized: "game.atlas.trophy.flame", defaultValue: "Trophée de Flamme", bundle: .main)
         }
     }
@@ -289,18 +289,18 @@ enum GameAtlasCopy {
 
     private static var prestigeLine: String {
         let level = GameCopy.formatCount(GameLevels.prestigeLevel)
-        return String(localized: "game.atlas.tiers.prestige", defaultValue: "Le Prestige s’offre au niveau \(level) : il est facultatif, tu peux continuer à monter.", bundle: .main)
+        return String(localized: "game.atlas.tiers.prestige", defaultValue: "La renaissance s’offre au niveau \(level) : elle est facultative, ta lumière peut aussi grandir encore.", bundle: .main)
     }
 
     private static var firstPassGloryLine: String {
         let perLevel = GameCopy.formatCount(GameGlory.points.firstLevel)
         let upTo = GameCopy.formatCount(GameLevels.legacyMaxLevel)
         let perDecade = GameCopy.formatCount(GameGlory.points.levelDecade)
-        return String(localized: "game.atlas.tiers.glory", defaultValue: "Gloire du premier passage : \(perLevel) par niveau jusqu’au \(upTo), puis \(perDecade) tous les dix niveaux.", bundle: .main)
+        return String(localized: "game.atlas.tiers.glory", defaultValue: "La gloire du premier passage : \(perLevel) par niveau jusqu’au \(upTo), puis \(perDecade) tous les dix niveaux.", bundle: .main)
     }
 
     /// Mythe est un rang à part : cent places, aux cent premiers qui atteignent 1 000 000 de Gloire (#9636).
     static var mythRank: String {
-        String(localized: "game.atlas.ranks.myth", defaultValue: "Les 100 premiers à atteindre 1 000 000 de Gloire", bundle: .main)
+        String(localized: "game.atlas.ranks.myth", defaultValue: "Les 100 premiers à atteindre 1 000 000 de gloire", bundle: .main)
     }
 }

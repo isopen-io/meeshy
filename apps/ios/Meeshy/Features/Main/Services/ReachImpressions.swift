@@ -7,7 +7,8 @@ import MeeshyUI
 
 /// Règle de comptage du porteur (2026-10-13) : un contenu se compte CHAQUE fois
 /// qu'il est listé, mécaniquement ou réellement — aucun dédoublonnage, ni dans
-/// le temps ni par montage. Ce qui ne compte pas, c'est un re-rendu : SwiftUI
+/// le temps ni par montage — hors deux vues qui montrent le MÊME contenu au même
+/// endroit (`ReachPresence`, #11037). Ce qui ne compte pas, c'est un re-rendu : SwiftUI
 /// réévalue un `body` sans que rien n'apparaisse, et seul `onAppear` dit
 /// qu'une vue est entrée à l'écran.
 ///
@@ -18,32 +19,94 @@ import MeeshyUI
 struct ReachImpressionModifier: ViewModifier {
     let postId: String?
     let recountsOnChange: Bool
+    /// #11037 — partagée par les vues qui montrent le MÊME contenu au même
+    /// endroit logique (les deux rangées du rail) ; `nil` : chaque apparition compte.
+    let presence: ReachPresence?
     let record: @MainActor (String) -> Void
+
+    @State private var held: String?
 
     func body(content: Content) -> some View {
         content
-            .onAppear { count(postId) }
+            .onAppear { show(postId) }
+            .onDisappear { hide() }
             .adaptiveOnChange(of: postId) { _, newValue in
                 guard recountsOnChange else { return }
-                count(newValue)
+                hide()
+                show(newValue)
             }
     }
 
-    private func count(_ id: String?) {
+    private func show(_ id: String?) {
         guard let id, !id.isEmpty else { return }
-        record(id)
+        guard let presence else { return record(id) }
+        held = id
+        if presence.appeared(id) { record(id) }
+    }
+
+    private func hide() {
+        guard let presence, let id = held else { return }
+        held = nil
+        presence.disappeared(id)
+    }
+}
+
+/// Un AFFICHAGE, pas une apparition de vue (#11037). La grande rangée du rail
+/// et sa rangée épinglée montrent les mêmes anneaux : pendant le fondu du
+/// défilement les deux sont montées, et la rangée épinglée se monte et se
+/// démonte à chaque passage du seuil. Mesuré en production (2026-10-19) :
+/// 12 % des impressions répétées du rail arrivaient moins de 2 s après la
+/// précédente, pour le même lecteur et la même story.
+///
+/// Un contenu ne compte qu'en entrant à l'écran alors qu'aucune vue ne le
+/// montre déjà, et pas s'il revient moins de `rejoinGrace` après en être sorti.
+/// Un vrai retour reste un nouvel affichage : la règle du porteur (2026-10-13)
+/// compte chaque affichage des autres lecteurs.
+@MainActor
+final class ReachPresence {
+    nonisolated deinit {}
+
+    static let rejoinGrace: TimeInterval = 2
+
+    private let clock: @MainActor () -> Date
+    private var holders: [String: Int] = [:]
+    private var leftAt: [String: Date] = [:]
+
+    init(clock: @escaping @MainActor () -> Date = { Date() }) {
+        self.clock = clock
+    }
+
+    /// Une vue commence à montrer `id` ; vrai si c'est un nouvel affichage.
+    func appeared(_ id: String) -> Bool {
+        let held = holders[id, default: 0]
+        holders[id] = held + 1
+        guard held == 0 else { return false }
+        let now = clock()
+        leftAt = leftAt.filter { now.timeIntervalSince($0.value) < Self.rejoinGrace }
+        return leftAt[id] == nil
+    }
+
+    /// Une vue cesse de montrer `id`.
+    func disappeared(_ id: String) {
+        guard let held = holders[id] else { return }
+        guard held == 1 else {
+            holders[id] = held - 1
+            return
+        }
+        holders[id] = nil
+        leftAt[id] = clock()
     }
 }
 
 extension View {
-    /// Compte une impression de `postId` à chaque apparition de la vue.
-    /// `nil` (aucun contenu à compter) ne compte rien.
+    /// Compte une impression de `postId` à chaque apparition (`nil` : rien) ;
+    /// avec une `presence`, seule l'entrée du contenu à l'écran compte.
     func countsImpression(
         of postId: String?,
-        recountsOnChange: Bool = true,
+        recountsOnChange: Bool = true, presence: ReachPresence? = nil,
         _ record: @escaping @MainActor (String) -> Void
     ) -> some View {
-        modifier(ReachImpressionModifier(postId: postId, recountsOnChange: recountsOnChange, record: record))
+        modifier(ReachImpressionModifier(postId: postId, recountsOnChange: recountsOnChange, presence: presence, record: record))
     }
 }
 
@@ -62,6 +125,8 @@ enum SharedImpressionBatchers {
     static let moodAvatar = ImpressionBatcher(source: "status", surface: .moodAvatar)
     /// L'humeur peinte sur un anneau du rail des stories.
     static let moodRail = ImpressionBatcher(source: "status", surface: .storyRail)
+    /// #11037 — ce que le rail montre, ses deux rangées confondues.
+    static let railPresence = ReachPresence()
 
     /// Le rail quitte l'écran : ses deux files partent.
     static func flushRail() async {

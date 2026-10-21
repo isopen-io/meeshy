@@ -9,7 +9,7 @@ struct GlobalSearchView: View {
     @StateObject private var viewModel = GlobalSearchViewModel()
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.meeshyConversationList) var conversationListViewModel
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
     // Présentée en fullScreenCover : hérite des EnvironmentValues, PAS des
     // EnvironmentObject. Cf. SocialChromeEnvironment.swift.
     @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
@@ -33,11 +33,7 @@ struct GlobalSearchView: View {
                 resultsList
             }
         }
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isSearchFieldFocused = true
-            }
-        }
+        .onAppear(after: .milliseconds(100)) { isSearchFieldFocused = true }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -212,7 +208,7 @@ struct GlobalSearchView: View {
                         AnyShapeStyle(Color.clear)
                     )
                     .frame(height: 2)
-                    .cornerRadius(1)
+                    .clipShape(RoundedRectangle(cornerRadius: 1))
             }
         }
         .frame(maxWidth: .infinity)
@@ -500,11 +496,13 @@ struct GlobalSearchView: View {
 
     private var messagesResultsList: some View {
         ForEach(Array(viewModel.messageResults.enumerated()), id: \.element.id) { index, result in
-            messageResultRow(result)
-                .staggeredAppear(index: index, baseDelay: 0.03)
-                .onTapGesture {
-                    handleMessageTap(result)
-                }
+            Button {
+                handleMessageTap(result)
+            } label: {
+                messageResultRow(result)
+            }
+            .buttonStyle(MeeshyPointerButtonStyle())
+            .staggeredAppear(index: index, baseDelay: 0.03)
         }
     }
 
@@ -561,24 +559,26 @@ struct GlobalSearchView: View {
 
     private var conversationsResultsList: some View {
         ForEach(Array(viewModel.conversationResults.enumerated()), id: \.element.id) { index, result in
-            conversationResultRow(result)
-                .staggeredAppear(index: index, baseDelay: 0.03)
-                .onTapGesture {
-                    handleConversationTap(result)
-                }
+            Button {
+                handleConversationTap(result)
+            } label: {
+                conversationResultRow(result)
+            }
+            .buttonStyle(MeeshyPointerButtonStyle())
+            .staggeredAppear(index: index, baseDelay: 0.03)
         }
     }
 
     private func conversationResultRow(_ result: GlobalSearchConversationResult) -> some View {
         let label = conversationResultAccessibilityLabel(result)
         return HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: result.name,
                 context: .conversationList,
                 avatarURL: result.avatar,
                 presenceState: result.type == .direct ? result.conversation.participantUserId.map { PresenceManager.shared.presenceState(for: $0) } : nil,
                 ring: result.type == .direct ? result.conversation.participantRing : nil
-            )
+            ) }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack {
@@ -697,13 +697,19 @@ struct GlobalSearchView: View {
 
     private var usersResultsList: some View {
         ForEach(Array(viewModel.userResults.enumerated()), id: \.element.id) { index, result in
-            userResultRow(result)
-                .staggeredAppear(index: index, baseDelay: 0.03)
-                .onTapGesture {
-                    viewModel.noteUserResultTapped(result.id, position: index)
-                    handleUserTap(result)
-                }
+            Button {
+                viewModel.noteUserResultTapped(result.id, position: index)
+                handleUserTap(result)
+            } label: {
+                liveUserResultRow(result)
+            }
+            .buttonStyle(MeeshyPointerButtonStyle())
+            .staggeredAppear(index: index, baseDelay: 0.03)
         }
+    }
+
+    private func liveUserResultRow(_ result: GlobalSearchUserResult) -> some View {
+        LivePresence { userResultRow(result) }
     }
 
     private func userResultRow(_ result: GlobalSearchUserResult) -> some View {

@@ -38,6 +38,12 @@ struct MessageReactionsDetailView: View {
                     },
                     onExpandFullPicker: { showFullEmojiPicker = true }
                 )
+                .anchoredPicker(isPresented: $showFullEmojiPicker) {
+                    EmojiFullPickerSheet(
+                        style: isDark ? .dark : .light,
+                        onReact: { emoji in onReact(emoji); showFullEmojiPicker = false }
+                    )
+                }
                 .frame(maxWidth: .infinity)
                 Divider().opacity(0.4)
             }
@@ -82,12 +88,6 @@ struct MessageReactionsDetailView: View {
             }
         }
         .onAppear { Task { await loadReactionDetails() } }
-        .sheet(isPresented: $showFullEmojiPicker) {
-            EmojiFullPickerSheet(
-                style: isDark ? .dark : .light,
-                onReact: { emoji in onReact?(emoji); showFullEmojiPicker = false }
-            )
-        }
     }
 
     private var filteredReactionUsers: [ReactionUserItem] {
@@ -153,13 +153,13 @@ struct MessageReactionsDetailView: View {
 
     private func reactionUserRow(_ item: ReactionUserItem) -> some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: item.username,
                 context: .userListItem,
                 accentColor: contactColor,
                 avatarURL: item.avatar,
                 presenceState: PresenceManager.shared.presenceState(for: item.userId)
-            )
+            ) }
             // Avatar duplicates the username text below — hide it so the
             // combined row reads once (name, emoji, when) instead of twice.
             .accessibilityHidden(true)

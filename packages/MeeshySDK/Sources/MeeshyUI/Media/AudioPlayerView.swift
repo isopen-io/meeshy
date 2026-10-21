@@ -5,57 +5,6 @@ import os
 import UIKit
 import MeeshySDK
 
-// MARK: - Audio Player View
-
-extension AudioPlayerView {
-    /// Pure helper testable : retourne la taille formatée (« 850 KB ») ou ""
-    /// quand `fileSize` est 0 (inconnu).
-    nonisolated public static func formattedNeedsDownloadLabel(fileSize: Int) -> String {
-        guard fileSize > 0 else { return "" }
-        return AudioPlayerView.formatBytes(Int64(fileSize))
-    }
-
-    /// Pure helper testable : retourne « 398 KB / 850 KB » ou un fallback
-    /// quand un des deux côtés est inconnu.
-    nonisolated public static func formattedDownloadingLabel(
-        downloadedBytes: Int64,
-        totalBytes: Int64,
-        fallbackFileSize: Int
-    ) -> String {
-        let total: Int64 = totalBytes > 0 ? totalBytes : Int64(fallbackFileSize)
-        if total <= 0 && downloadedBytes <= 0 { return "" }
-        let left = AudioPlayerView.formatBytes(downloadedBytes)
-        let right = total > 0 ? AudioPlayerView.formatBytes(total) : "?"
-        return "\(left) / \(right)"
-    }
-
-    /// Delegates to the single SDK-wide `formatMediaFileSize` helper so the
-    /// audio play-button label, the download badges (image/video) and the
-    /// upload progress bar always render the exact same string for the same
-    /// byte count. Previously this used its own binary (1024-based)
-    /// `ByteCountFormatter` while the app's `AttachmentDownloader.fmt` used a
-    /// decimal (1000-based) one — despite a comment claiming they matched.
-    nonisolated public static func formatBytes(_ bytes: Int64) -> String {
-        formatMediaFileSize(bytes)
-    }
-}
-
-/// The progress an audio bubble renders, resolved once and shared by the
-/// waveform tint, the percentage chip and the elapsed timecode.
-/// `isLive` distinguishes a playing engine (full accent) from a persisted
-/// at-rest position (attenuated accent).
-nonisolated public struct AudioProgressDisplay: Sendable, Equatable {
-    public let fraction: Double
-    public let elapsed: TimeInterval
-    public let isLive: Bool
-
-    public init(fraction: Double, elapsed: TimeInterval, isLive: Bool) {
-        self.fraction = fraction
-        self.elapsed = elapsed
-        self.isLive = isLive
-    }
-}
-
 public struct AudioPlayerView: View {
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
@@ -923,78 +872,16 @@ public struct AudioPlayerView: View {
     }
 
     // MARK: - Right Chips Column (speed + progress, stacked vertically)
-    /// Colonne droite du widget : chip vitesse en haut (alignée avec la
-    /// waveform), chip pourcentage juste en dessous (alignée avec timeRow).
-    /// Le tap sur la chip pourcentage ouvre la vue plein écran — l'ancienne
-    /// icône `arrow.up.left.and.arrow.down.right` a été supprimée du timeRow,
-    /// le pourcentage qui n'était qu'un libellé devient l'affordance.
     private var rightChipsColumn: some View {
-        VStack(alignment: .trailing, spacing: context.isCompact ? 3 : 4) {
-            speedChip
-            percentageChip
-        }
-    }
-
-    private var speedChip: some View {
-        let isDefault = player.speed == .x1_0
-        let chipBg: Color = isDefault
-            ? (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-            : accent.opacity(0.85)
-        let chipFg: Color = isDefault
-            ? (isDark ? .white.opacity(0.55) : .black.opacity(0.45))
-            : .white
-        return Button {
-            player.cycleSpeed()
-            HapticFeedback.light()
-        } label: {
-            Text(player.speed.label)
-                .font(.system(size: context.isCompact ? 9 : 10, weight: .bold, design: .monospaced))
-                .foregroundColor(chipFg)
-                .padding(.horizontal, context.isCompact ? 7 : 8)
-                .padding(.vertical, context.isCompact ? 2 : 3)
-                .background(Capsule().fill(chipBg))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "media.audio.speed.cycle",
-                                   defaultValue: "Vitesse de lecture \(player.speed.label)",
-                                   bundle: .module))
-    }
-
-    private var percentageChip: some View {
-        let pct = Int(displayedProgress.fraction * 100)
-        let isStarted = pct > 0
-        let chipBg: Color = isStarted
-            ? accent.opacity(0.85)
-            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-        let chipFg: Color = isStarted
-            ? .white
-            : (isDark ? .white.opacity(0.55) : .black.opacity(0.45))
-        let label = Text("\(pct)%")
-            .font(.system(size: context.isCompact ? 9 : 10, weight: .heavy, design: .monospaced))
-            .foregroundColor(chipFg)
-            .padding(.horizontal, context.isCompact ? 7 : 8)
-            .padding(.vertical, context.isCompact ? 2 : 3)
-            .background(Capsule().fill(chipBg))
-            .contentTransition(.numericText())
-            .animation(.easeInOut(duration: 0.15), value: pct)
-
-        return Group {
-            if let onFullscreen = onFullscreen {
-                Button {
-                    HapticFeedback.light()
-                    onFullscreen()
-                } label: { label }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.audio.open.fullscreen",
-                                           defaultValue: "Ouvrir en plein écran, lecture \(pct)%",
-                                           bundle: .module))
-                .accessibilityHint(String(localized: "media.audio.open.fullscreen.hint",
-                                          defaultValue: "Affiche la vue plein écran avec les options de sauvegarde",
-                                          bundle: .module))
-            } else {
-                label
-            }
-        }
+        AudioPlayerChipsColumn(
+            speed: player.speed,
+            progressFraction: displayedProgress.fraction,
+            isCompact: context.isCompact,
+            isDark: isDark,
+            accent: accent,
+            onCycleSpeed: { player.cycleSpeed() },
+            onFullscreen: onFullscreen
+        )
     }
 
     // MARK: - Context Actions
@@ -1023,40 +910,17 @@ public struct AudioPlayerView: View {
 
     // MARK: - Language Selector
     private var languageSelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                audioLanguagePill(flag: "\u{1F50A}", code: "orig", label: String(localized: "media.audio.original", defaultValue: "Original", bundle: .module),
-                                  isSelected: selectedAudioLanguage == "orig")
-
-                ForEach(translatedAudios, id: \.id) { audio in
-                    let lang = DetectedLanguage.find(code: audio.targetLanguage)
-                    audioLanguagePill(
-                        flag: lang?.flag ?? "\u{1F310}",
-                        code: audio.targetLanguage,
-                        label: lang?.name ?? audio.targetLanguage,
-                        isSelected: selectedAudioLanguage.lowercased() == audio.targetLanguage.lowercased()
-                    )
-                }
+        AudioLanguageStrip(
+            translatedAudios: translatedAudios,
+            selectedAudioLanguage: selectedAudioLanguage,
+            isDark: isDark,
+            accent: accent,
+            onSelect: { code in
+                switchToLanguage(code)
+                externalLanguage?.wrappedValue = code == "orig" ? nil : code
+                HapticFeedback.light()
             }
-            .padding(.horizontal, MeeshySpacing.sm)
-        }
-    }
-
-    private func audioLanguagePill(flag: String, code: String, label: String, isSelected: Bool) -> some View {
-        Button {
-            switchToLanguage(code)
-            externalLanguage?.wrappedValue = code == "orig" ? nil : code
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: MeeshySpacing.xxs) {
-                Text(flag).font(.system(size: MeeshyFont.smallSize))
-                Text(label).font(.system(size: MeeshyFont.captionSize, weight: isSelected ? .bold : .medium))
-            }
-            .foregroundColor(isSelected ? .white : (isDark ? .white.opacity(0.55) : .black.opacity(0.45)))
-            .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(Capsule().fill(isSelected ? accent : (isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.04))))
-        }
+        )
     }
 
     // MARK: - Helpers

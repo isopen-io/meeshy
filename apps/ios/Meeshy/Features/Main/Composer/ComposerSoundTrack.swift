@@ -49,24 +49,28 @@ extension ComposerCaptureCopy {
     }
 }
 
-/// **La lecture et le son de la prise, en bas à droite de la SCÈNE** (#10356,
-/// porteur 2026-10-12) : la pause à gauche, le muet à droite. Leur rangée se
-/// pose au bas de la vidéo retouchée, et s'écarte du crochet du coin quand les
-/// équerres sont posées : aucune cible n'en couvre une autre.
+/// **La lecture et le volume, en haut à droite, sous « Terminé »** (porteur
+/// 2026-10-20 : « le bouton play/pause et volume faut mettre en haut du cadre
+/// en dessous de Terminé […] toujours visibles »). La pause à gauche, le
+/// volume à droite, sur une bande à eux : posés au coin bas de la scène, ils
+/// tombaient sur le rail des outils dès que la vidéo occupait l'écran — et une
+/// scène recadrée commence sous cette bande, ses crochets restent libres.
 nonisolated enum ComposerEditPlaybackLayout {
     static let spacing: CGFloat = MeeshySpacing.xs
     static let margin: CGFloat = MeeshySpacing.sm
+
+    /// La hauteur que la bande retient sous la rangée haute.
+    static var band: CGFloat { MeeshyControlSize.tapTarget + ComposerEditScene.gap }
 
     static func buttonCount(hasAudio: Bool) -> Int {
         hasAudio ? 2 : 1
     }
 
-    static func frame(scene: CGRect, hasAudio: Bool, clearsBrackets: Bool) -> CGRect {
+    static func frame(container: CGSize, hasAudio: Bool) -> CGRect {
         let cote = MeeshyControlSize.tapTarget
         let nombre = CGFloat(buttonCount(hasAudio: hasAudio))
         let largeur = nombre * cote + (nombre - 1) * spacing
-        let droite = scene.maxX - (clearsBrackets ? cote + spacing : margin)
-        return CGRect(x: max(scene.minX, droite - largeur), y: scene.maxY - margin - cote,
+        return CGRect(x: container.width - ComposerEditScene.margin - largeur, y: ComposerEditScene.topBand,
                       width: largeur, height: cote)
     }
 }
@@ -204,7 +208,7 @@ struct ComposerSoundTrack: View {
             guard !releve.isEmpty else { return }
             let pas = width / CGFloat(releve.count)
             for (index, valeur) in releve.enumerated() {
-                let hauteur = max(2, CGFloat(valeur) * Self.height * echelle)
+                let hauteur = max(2, CGFloat(WaveformScale.displayHeight(rms: valeur)) * Self.height * echelle)
                 chemin.addRect(CGRect(x: CGFloat(index) * pas, y: (Self.height - hauteur) / 2,
                                       width: max(1, pas - 1), height: hauteur))
             }

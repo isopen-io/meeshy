@@ -411,27 +411,9 @@ struct iPadLeftColumnHeader: View {
 
 // MARK: - iPad Resizable Handle
 
-/// La part de la largeur que prend la colonne gauche de l'iPad.
-enum iPadColumnRatio {
-    static let minimum: CGFloat = 0.30
-    static let maximum: CGFloat = 0.50
-
-    /// La part après un glissement de `translation` points depuis `start`. Une largeur nulle — la fenêtre en cours
-    /// de redimensionnement — ne déplace rien : la division rendrait une part qui n'est pas un nombre.
-    static func dragged(from start: CGFloat, translation: CGFloat, width: CGFloat) -> CGFloat {
-        guard width > 0, translation.isFinite else { return clamped(start) }
-        return clamped(start + translation / width)
-    }
-
-    static func clamped(_ ratio: CGFloat) -> CGFloat {
-        guard ratio.isFinite else { return minimum }
-        return min(maximum, max(minimum, ratio))
-    }
-}
-
 struct iPadResizableHandle: View {
-    @Binding var ratio: CGFloat
-    let screenWidth: CGFloat
+    @Binding var ratio: Double
+    let windowWidth: CGFloat
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -439,10 +421,8 @@ struct iPadResizableHandle: View {
     /// La part de la colonne AU DÉBUT du geste. `value.translation` se mesure depuis ce début : l'ajouter à une
     /// part déjà déplacée par l'événement précédent comptait le même déplacement à chaque image, et la poignée
     /// filait devant le doigt.
-    @State private var dragStartRatio: CGFloat?
+    @State private var dragStartRatio: Double?
 
-    private let minRatio = iPadColumnRatio.minimum
-    private let maxRatio = iPadColumnRatio.maximum
     private let handleWidth: CGFloat = 20
 
     var body: some View {
@@ -458,6 +438,7 @@ struct iPadResizableHandle: View {
         }
         .frame(width: handleWidth)
         .contentShape(Rectangle())
+        .meeshyColumnResizePointer()
         .gesture(
             // minimumDistance > tap-wobble so an accidental tap near the divider
             // never starts a resize (and never swallows a nearby tap sequence).
@@ -466,8 +447,8 @@ struct iPadResizableHandle: View {
                     isDragging = true
                     let start = dragStartRatio ?? ratio
                     dragStartRatio = start
-                    ratio = iPadColumnRatio.dragged(
-                        from: start, translation: value.translation.width, width: screenWidth)
+                    ratio = ColumnWidthLaw.dragged(
+                        from: start, translation: value.translation.width, windowWidth: windowWidth)
                 }
                 .onEnded { _ in
                     isDragging = false
@@ -477,14 +458,14 @@ struct iPadResizableHandle: View {
         .ignoresSafeArea()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "root.ipad.resizable_handle.label", defaultValue: "Séparateur de colonnes", bundle: .main))
-        .accessibilityValue(String(format: String(localized: "root.ipad.resizable_handle.value_format", defaultValue: "%d pour cent", bundle: .main), Int(ratio * 100)))
-        .accessibilityHint(String(localized: "root.ipad.resizable_handle.hint", defaultValue: "Ajuste la largeur de la colonne de gauche entre 30% et 50%", bundle: .main))
+        .accessibilityValue(String(format: String(localized: "root.ipad.resizable_handle.value_points", defaultValue: "%d points", bundle: .main), Int(ColumnWidthLaw.width(ratio: ratio, windowWidth: windowWidth))))
+        .accessibilityHint(String(format: String(localized: "root.ipad.resizable_handle.hint_width", defaultValue: "Ajuste la largeur de la colonne de gauche entre %d et %d points", bundle: .main), Int(ColumnWidthLaw.minimumWidth), Int(ColumnWidthLaw.maximumWidth)))
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment:
-                ratio = min(maxRatio, ratio + 0.02)
+                ratio = ColumnWidthLaw.stepped(ratio, by: 1, windowWidth: windowWidth)
             case .decrement:
-                ratio = max(minRatio, ratio - 0.02)
+                ratio = ColumnWidthLaw.stepped(ratio, by: -1, windowWidth: windowWidth)
             @unknown default:
                 break
             }

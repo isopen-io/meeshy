@@ -34,6 +34,8 @@ nonisolated enum ComposerCaptureAction: Equatable, Sendable {
     case select
     case openFamily
     case reframe
+    /// En retouche, un toucher sur la prise montre ou cache ses outils (#10930).
+    case toggleEditChrome
 
     /// Une photo part : sur un déclencheur, le second toucher d'un double l'est déjà.
     var takesAPhoto: Bool { self == .photoToEdit || self == .photoToGallery }
@@ -166,7 +168,7 @@ nonisolated enum ComposerCaptureGesture {
         case .filmToGallery:
             return String(localized: "composer.capture.a11y.videoToGallery", defaultValue: "Vidéo vers la galerie",
                           bundle: .main)
-        case .none, .zoom, .steerTake, .close, .select, .openFamily, .reframe:
+        case .none, .zoom, .steerTake, .close, .select, .openFamily, .reframe, .toggleEditChrome:
             return nil
         }
     }
@@ -231,6 +233,7 @@ nonisolated enum ComposerCaptureGesture {
     private static func editing(zone: ComposerCaptureZone, gesture: ComposerCaptureGestureKind) -> ComposerCaptureAction {
         switch (zone, gesture) {
         case (.scene, .drag), (.scene, .pinch): return .reframe
+        case (.scene, .tap): return .toggleEditChrome
         case (.otherThumbnail, .tap): return .select
         case (.rail, .tap): return .openFamily
         default: return .none

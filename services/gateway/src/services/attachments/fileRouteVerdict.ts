@@ -48,6 +48,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { carrierMessageStillServesBytes } from './carrierMessageLifecycle';
 import { attachmentIsReaderBound } from './signedAttachmentUrls';
+import { prefixRange } from '../../utils/prefix-range';
 
 /**
  * `readerBound` (#9600) : TOUS les porteurs vivants de ce fichier sont des
@@ -79,6 +80,25 @@ export const VIEW_ONCE_ATTACHMENT_CACHE = 'private, no-store';
  * d'autres octets, d'où `immutable` en plus du cache long (#9478).
  */
 export const ORDINARY_ATTACHMENT_BY_ID_CACHE = 'private, max-age=31536000, immutable';
+
+/**
+ * L'UUID d'un envoi dans le dernier segment de la clé (`<nom>_<uuid>.<ext>`,
+ * ses miniatures et variantes) : `UploadProcessor.generateFilePath` et
+ * `tus-handler` ne réécrivent jamais une telle clé.
+ */
+const WRITE_ONCE_KEY = /_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:[_.][^/]*)?$/i;
+
+/**
+ * Le cache d'un fichier servi PAR CHEMIN (#11265) : une clé écrite une seule
+ * fois ne désigne jamais d'autres octets, son cache long devient `immutable`
+ * comme celui de l'identifiant. Seul le cache ORDINAIRE s'allonge — une vue
+ * unique, un éphémère ou un avatar à adresse stable gardent le leur.
+ */
+export function immutableWhenWriteOnce(storageKey: string, cacheControl: string): string {
+  return cacheControl === ORDINARY_ATTACHMENT_CACHE && WRITE_ONCE_KEY.test(storageKey)
+    ? ORDINARY_ATTACHMENT_BY_ID_CACHE
+    : cacheControl;
+}
 
 const TRANSLATED_TRACK = /^translated\/([0-9a-f]{24})_[^/]+$/;
 const RESPONSIVE_VARIANT = /^(.+)_\d+w\.webp$/;
@@ -146,7 +166,7 @@ async function ownerRowsOf(storageKey: string, prisma: FileRouteVerdictPrisma): 
   const variant = RESPONSIVE_VARIANT.exec(storageKey);
   if (!variant) return [];
   return prisma.messageAttachment.findMany({
-    where: { OR: [{ filePath: variant[1] }, { filePath: { startsWith: `${variant[1]}.` } }] },
+    where: { OR: [{ filePath: variant[1] }, { filePath: prefixRange(`${variant[1]}.`) }] },
     select: OWNER_SELECT,
   });
 }

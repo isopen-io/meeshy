@@ -57,13 +57,13 @@ describe('les missions du jour', () => {
   });
 
   test('une mission faite se dit faite', () => {
-    expect(page).toContain('Faite');
+    expect(page).toContain('Réalisé');
   });
 
   test('la difficulté se lit', () => {
-    expect(page).toContain('Facile');
-    expect(page).toContain('Moyenne');
-    expect(page).toContain('Difficile');
+    expect(page).toContain('Acte I');
+    expect(page).toContain('Acte II');
+    expect(page).toContain('Acte III');
   });
 
   test('l’Heure du Prisme se dit, avec ses bornes', () => {
@@ -73,7 +73,7 @@ describe('les missions du jour', () => {
   test('la mission Or annonce sa Gloire', () => {
     const game = gameBlockFixture();
     const gold = { ...game.missions, items: [...game.missions.items.slice(0, 2), { ...game.missions.items[2]!, difficulty: 'gold' as const, glory: 40 }] };
-    expect(text(renderToStaticMarkup(<GameMissions {...props({}, { missions: gold })} />))).toContain('+40 Gloire');
+    expect(text(renderToStaticMarkup(<GameMissions {...props({}, { missions: gold })} />))).toContain('+40 de gloire');
   });
 });
 
@@ -84,11 +84,11 @@ describe('changer de mission', () => {
     expect(text(html)).toContain('Changer · 1 Meesh');
   });
 
-  test('avant le changement : les Meeshes en poche, son prix et ce qui restera (#9705)', () => {
+  test('avant le changement : les Meeshes en poche et son prix — jamais ce qui restera (#9705, #11178)', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props({ balance: 3 })} />));
-    expect(page).toContain('En poche 3 Meeshes');
-    expect(page).toContain('Coûte 1 Meesh');
-    expect(page).toContain('Restera 2 Meeshes');
+    expect(page).toContain('Tu as 3 Meeshes');
+    expect(page).toContain('Il faut 1 Meesh');
+    expect(page).not.toContain('2 Meeshes');
   });
 
   test('sans Meesh : le changement n’est pas offert, et la ligne dit combien il manque', () => {
@@ -124,17 +124,17 @@ describe('changer de mission', () => {
   });
 
   test('l’échec se lit sous les missions', () => {
-    const html = renderToStaticMarkup(<GameMissions {...props({}, { errors: { reroll: 'Tu as déjà changé une mission aujourd’hui.' } })} />);
+    const html = renderToStaticMarkup(<GameMissions {...props({}, { errors: { reroll: 'Tu as déjà changé un acte aujourd’hui.' } })} />);
     expect(html).toContain('role="alert"');
-    expect(text(html)).toContain('déjà changé une mission');
+    expect(text(html)).toContain('déjà changé un acte');
   });
 });
 
 describe('le coffre', () => {
   test('fermé tant que les missions ne sont pas finies, avec ce qu’il attend', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props()} />));
-    expect(page).toContain('Termine les missions du jour');
-    expect(page).toMatch(/Faites \d \/ 3/);
+    expect(page).toContain('Réalise les trois actes du rêve');
+    expect(page).toMatch(/Actes réalisés \d \/ 3/);
   });
 
   const done = (patch: Parameters<typeof gameBlockFixture>[0] = {}) => {
@@ -145,7 +145,7 @@ describe('le coffre', () => {
   test('prêt : un bouton, une seule façon de l’ouvrir', () => {
     const html = renderToStaticMarkup(<GameMissions {...done()} />);
     expect(html.match(/data-game-chest-open/g)).toHaveLength(1);
-    expect(text(html)).toContain('Ouvrir le coffre');
+    expect(text(html)).toContain('Ouvrir l’Offrande');
   });
 
   test('le toucher ouvre', async () => {
@@ -184,9 +184,9 @@ describe('le coffre', () => {
     );
     expect(html.match(/data-game-reward/g)).toHaveLength(5);
     const page = text(html);
-    expect(page).toContain('+208 Gloire');
+    expect(page).toContain('+208 de gloire');
     expect(page).toMatch(/\+2[  ]?083 étincelles/);
-    expect(page).toMatch(/Prime\s:\s\+244\sétincelles, un cinquième de Meesh/);
+    expect(page).toMatch(/Présent\s:\s\+244\sétincelles, un cinquième de Meesh/);
     expect(page).toContain('Un fragment d’étoile');
     expect(html).not.toContain('data-game-chest-today');
   });
@@ -207,10 +207,10 @@ describe('le coffre', () => {
 describe('avant le niveau 5', () => {
   test('les missions se disent verrouillées, avec la marche à franchir', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props({ score: 100, levelRecord: null, missions: [] })} />));
-    expect(page).toContain('Les missions s’ouvrent au niveau 5');
+    expect(page).toContain('Au niveau 5, tes aïeux t’envoient chaque nuit un rêve');
     expect(page).toContain('Requis 5');
     expect(page).toMatch(/Il manque \d+ niveaux?/);
-    expect(page).not.toContain('Ouvrir le coffre');
+    expect(page).not.toContain('Ouvrir l’Offrande');
   });
 });
 
@@ -238,9 +238,9 @@ describe('le minuteur des missions du jour', () => {
 
   test('passé minuit : « Manquée » pour celles qui restaient, « Terminée » pour celle qui était faite, plus de décompte', () => {
     const html = at(new Date(2026, 9, 6, 0, 0));
-    expect(text(card(html, 'm-medium'))).toContain('Manquée');
-    expect(text(card(html, 'm-hard'))).toContain('Manquée');
-    expect(text(card(html, 'm-easy'))).toContain('Terminée');
+    expect(text(card(html, 'm-medium'))).toContain('Manqué');
+    expect(text(card(html, 'm-hard'))).toContain('Manqué');
+    expect(text(card(html, 'm-easy'))).toContain('Réalisé');
     expect(html).not.toContain('data-game-mission-timer');
   });
 
@@ -254,7 +254,7 @@ describe('le minuteur des missions du jour', () => {
     const html = renderToStaticMarkup(<GameMissions {...base} missions={{ ...base.missions, dayKey: 'demain' }} now={new Date(2026, 9, 9)} />);
     expect(html).toContain('data-game-reroll');
     expect(html).not.toContain('data-game-mission-timer');
-    expect(text(html)).not.toContain('Manquée');
+    expect(text(html)).not.toContain('Manqué');
   });
 });
 
@@ -309,13 +309,13 @@ describe('la mission personnelle du jour', () => {
 
   test('la plage passée sans la faire : « Manquée », plus de minuteur', () => {
     const html = view('2026-10-06T20:00:00.000Z');
-    expect(html).toContain('Manquée');
+    expect(html).toContain('Manqué');
     expect(html).not.toContain('Se termine dans');
   });
 
   test('faite : « Terminée », y compris une fois la plage passée', () => {
-    expect(view('2026-10-06T18:45:00.000Z', { completedAt: '2026-10-06T18:40:00.000Z', progress: 5, state: 'completed' })).toContain('Terminée');
-    expect(view('2026-10-06T23:00:00.000Z', { completedAt: '2026-10-06T18:40:00.000Z', progress: 5, state: 'completed' })).toContain('Terminée');
+    expect(view('2026-10-06T18:45:00.000Z', { completedAt: '2026-10-06T18:40:00.000Z', progress: 5, state: 'completed' })).toContain('Réalisé');
+    expect(view('2026-10-06T23:00:00.000Z', { completedAt: '2026-10-06T18:40:00.000Z', progress: 5, state: 'completed' })).toContain('Réalisé');
   });
 
   test('un titre, un avancement, une récompense : comme les missions du jour', () => {
@@ -339,7 +339,7 @@ describe('la mission personnelle du jour', () => {
 
   test('sans horloge injectée, la carte lit l’heure : une plage d’hier est manquée', () => {
     const html = text(renderToStaticMarkup(<GameMissions {...personal({ startsAt: '2020-01-01T18:00:00.000Z', endsAt: '2020-01-01T20:00:00.000Z' })} now={undefined} />));
-    expect(html).toContain('Manquée');
+    expect(html).toContain('Manqué');
   });
 
   describe('le minuteur ne coûte rien hors écran', () => {

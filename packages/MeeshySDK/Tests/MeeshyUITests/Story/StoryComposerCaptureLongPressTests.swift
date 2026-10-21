@@ -43,12 +43,12 @@ final class StoryComposerCaptureLongPressTests: XCTestCase {
     ]
 
     private func canvasSource() throws -> String {
-        try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
+        try ComposerSourceGuard.source("StoryComposerBlankCanvasStarters.swift")
     }
 
     private func startersBody() throws -> String {
         try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "var blankCanvasStarters:", in: try canvasSource()),
+            ComposerSourceGuard.functionBody(named: "var body:", in: try canvasSource()),
             "Les amorces de page blanche ont disparu."
         )
     }
@@ -370,8 +370,13 @@ final class StoryComposerCaptureLongPressTests: XCTestCase {
             ComposerSourceGuard.functionBody(named: "private var blankCanvasCaptureLongPress:", in: code))
 
         XCTAssertEqual(
-            count("showCameraCapture = true", in: longPress), 1,
+            count("onOpenCamera()", in: longPress), 1,
             "Un second chemin de capture doublerait le cover et sa fermeture."
+        )
+        let host = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
+        XCTAssertEqual(
+            count("onOpenCamera: { showCameraCapture = true }", in: host), 1,
+            "Les amorces lèvent le drapeau du composer par UNE closure, la même pour la capsule et l'appui long."
         )
     }
 }

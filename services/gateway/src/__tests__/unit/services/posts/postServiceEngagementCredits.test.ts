@@ -59,6 +59,7 @@ function makePrisma(row: Record<string, unknown> = {}) {
     repostOfId: null,
     originalRepostOfId: null,
     media: [],
+    createdAt: new Date(),
     ...row,
   };
   const prisma: any = {
@@ -229,6 +230,6 @@ describe('reprise anti-abus — PostService.deletePost', () => {
     await settle();
 
     expect(mockReclaimContent).toHaveBeenCalledWith(AUTHOR_ID, 'content.story', POST_ID);
-    expect(mockReclaimSource).toHaveBeenCalledWith(AUTHOR_ID, `post:${POST_ID}`, { withinClawback: true });
+    expect(mockReclaimSource).toHaveBeenCalledWith(AUTHOR_ID, `post:${POST_ID}`);
   });
 });

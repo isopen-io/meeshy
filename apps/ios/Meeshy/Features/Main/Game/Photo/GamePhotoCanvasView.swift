@@ -174,9 +174,10 @@ struct GamePhotoEmblem: View {
             LevelRingView(level: level, progress: 1, tier: tier)
         case .levelHundred(let prestige):
             LevelRingView(level: 100, progress: 1, tier: .galaxie, prestige: prestige)
-        case .meesh(let number, let edition):
+        case .meesh(let number, _):
+            // La pièce se dessine dans son édition d'AFFICHAGE (#11483) : le n° 247, frappé après le n° 100, est d'or.
             MeeshCoinView(face: .reverse(number: number, year: Calendar.current.component(.year, from: Date())),
-                          edition: edition, figures: nil)
+                          edition: GameMint.displayEdition(forNumber: number), figures: nil)
         case .treasury:
             MeeshCoinView(face: .obverse, edition: .silver, figures: nil)
         case .flame(let form, _):
@@ -185,7 +186,7 @@ struct GamePhotoEmblem: View {
             TrophyView(material: trophyMaterial, label: moment.kicker.uppercased())
         case .mission:
             // La plaque de la coupe est courte (≈ 12 signes) : « Mission accomplie » n'y tient pas.
-            TrophyView(material: trophyMaterial, label: String(localized: "game.photo.trophy.mission", defaultValue: "Mission", bundle: .main).uppercased())
+            TrophyView(material: trophyMaterial, label: String(localized: "game.photo.trophy.mission", defaultValue: "Rêve", bundle: .main).uppercased())
         case .trophy(let key):
             if let view = GameTrophyPresentation.of(key: key) {
                 TrophyView(material: view.material, label: view.plate, figures: view.kind == .prestige ? GameFigures.standard : nil)

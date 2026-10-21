@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
@@ -46,8 +46,14 @@ export const previewSheetDragOutcome = (translationY: number): 'close' | 'none' 
 
 const CORNER = 22;
 
+/* EFFETS DE MISE EN PAGE (#11108, jumelle de #11100) : Preact diffère le
+   nettoyage d'un `useEffect` démonté à l'après-peinture — la feuille quittait
+   le DOM en laissant `#root` INERTE et isolé, le focus au `<body>`. L'inertie
+   et le focus se posent et se lèvent dans le commit qui insère et retire la
+   feuille. `useInertBackdrop` est appelé AVANT `useFocusInside` : au démontage,
+   l'inertie tombe d'abord, et le focus peut revenir sur ce qui a ouvert. */
 function useInertBackdrop(): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.getElementById('root');
     if (root === null) return;
     const held = root.hasAttribute('inert');
@@ -61,7 +67,7 @@ function useInertBackdrop(): void {
 }
 
 function useFocusInside(body: { readonly current: HTMLElement | null }): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     body.current?.focus({ preventScroll: true });
     return () => previous?.focus({ preventScroll: true });

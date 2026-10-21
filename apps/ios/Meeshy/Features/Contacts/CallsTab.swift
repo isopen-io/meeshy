@@ -240,13 +240,13 @@ private struct CallJournalRow: View, Equatable {
             HStack(spacing: MeeshySpacing.mdPlus) {
                 Button(action: onTap) {
                     HStack(spacing: MeeshySpacing.mdPlus) {
-                        MeeshyAvatar(
+                        LivePresence { MeeshyAvatar(
                             name: name,
                             context: .userListItem,
                             accentColor: color,
                             avatarURL: record.avatarURL,
-                            presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
-                        )
+                            presenceState: record.peer.flatMap { PresenceManager.shared.knownPresenceState(for: $0.userId) }
+                        ) }
 
                         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(name)
@@ -325,7 +325,7 @@ private struct CallJournalRow: View, Equatable {
     private var directionIcon: String {
         switch record.directionKind {
         case .outgoing: return "arrow.up.right"
-        case .incoming, .missed: return "arrow.down.left"
+        case .incoming, .missed, .unknown: return "arrow.down.left"
         }
     }
 

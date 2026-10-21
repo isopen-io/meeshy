@@ -301,7 +301,7 @@ final class OutboxContentCaptureDeclarer: ContentCaptureDeclaring {
     nonisolated deinit {}
 
     private let readSettleDelay: Duration
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "content-capture")
+    private let logger = MeeshyLog.logger(.contentCapture)
 
     init(readSettleDelay: Duration = .milliseconds(1500)) {
         self.readSettleDelay = readSettleDelay

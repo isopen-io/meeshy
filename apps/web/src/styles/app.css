@@ -32,6 +32,7 @@
 @import './admin.css';
 @import './glass.css';
 @import './ui.css';
+@import './press-feedback.css';
 
 /* Le schema SOMBRE est le defaut de la table (`:root, :root.dark`) ; le clair
    s'obtient par la classe `.light`. La variante ci-dessous sert les rares cas
@@ -571,19 +572,18 @@
  * revient. `cubic-bezier(0.22, 1.2, 0.36, 1)` en est la lecture CSS — le
  * troisieme point passe au-dessus de 1, c'est lui qui porte le depassement.
  *
- * La grille `0fr -> 1fr` anime la HAUTEUR sans qu'aucune valeur fixe ne soit
- * devinee : le contenu reste mesure par lui-meme, et rien ne se coupe quand la
- * taille de police change (Dynamic Type, zoom navigateur).
- *
- * `prefers-reduced-motion` la coupe : une animation qui EXPLIQUE ne doit pas
- * etre une animation qu'on subit. */
+ * Le bloc a sa hauteur reelle des le premier rendu (Dynamic Type, zoom) ; seule
+ * son ENTREE se joue, en `opacity` et `transform` (#11314), sans mise en page
+ * par image. `prefers-reduced-motion` la coupe. */
+@keyframes signupSpringIn { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+
 .signup-spring {
-  transition: grid-template-rows 320ms cubic-bezier(0.22, 1.2, 0.36, 1);
+  animation: signupSpringIn 320ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .signup-spring {
-    transition: none;
+    animation: none;
   }
 }
 

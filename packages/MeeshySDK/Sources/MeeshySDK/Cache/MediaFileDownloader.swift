@@ -46,9 +46,9 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
     private let configuration: URLSessionConfiguration
     private let cadenceInterval: TimeInterval
     private let lock = NSLock()
-    private var session: URLSession?
+    private var sessions: [MediaTransferProfile: URLSession] = [:]
     private var transfers: [ObjectIdentifier: Transfer] = [:]
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "media-file-download")
+    private let logger = MeeshyLog.logger(.mediaFileDownload, subsystem: .legacySDK)
 
     private final class Transfer {
         let continuation: CheckedContinuation<Download, Error>
@@ -101,25 +101,29 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
 
     /// Lâche la session (elle retient son délégué jusqu'à son invalidation).
     public func invalidate() {
-        let current = lock.withLock { () -> URLSession? in
-            defer { session = nil }
-            return session
+        let current = lock.withLock { () -> [URLSession] in
+            defer { sessions = [:] }
+            return Array(sessions.values)
         }
-        current?.finishTasksAndInvalidate()
+        current.forEach { $0.finishTasksAndInvalidate() }
     }
 
-    /// Télécharge `request` vers un fichier de `stagingDirectory`. Une réponse
-    /// HTTP d'erreur (404…) rend AUSSI un fichier, avec sa réponse : c'est à
-    /// l'appelant de lire le statut, puis de supprimer le fichier.
-    /// L'annulation de la `Task` appelante annule le transfert et lève
-    /// `CancellationError`.
-    public func download(_ request: URLRequest, progress: ProgressHandler? = nil) async throws -> Download {
+    /// Télécharge `request` vers un fichier de `stagingDirectory`, par la
+    /// session du `profile`. Une réponse HTTP d'erreur (404…) rend AUSSI un
+    /// fichier, avec sa réponse : c'est à l'appelant de lire le statut, puis de
+    /// supprimer le fichier. L'annulation de la `Task` appelante annule le
+    /// transfert et lève `CancellationError`.
+    public func download(
+        _ request: URLRequest,
+        profile: MediaTransferProfile = .standard,
+        progress: ProgressHandler? = nil
+    ) async throws -> Download {
         try Task.checkCancellation()
         let relay = CancellationRelay()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Download, Error>) in
-                let session = currentSession()
-                let task = session.downloadTask(with: request)
+                let transferSession = session(for: profile)
+                let task = transferSession.downloadTask(with: request)
                 let transfer = Transfer(
                     continuation: continuation,
                     progress: progress,
@@ -134,11 +138,17 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
         }
     }
 
-    private func currentSession() -> URLSession {
+    /// Une session par profil : une `URLSession` ne change pas de configuration
+    /// après sa création. Au plus quatre (deux priorités × deux réglages).
+    func session(for profile: MediaTransferProfile) -> URLSession {
         lock.withLock {
-            if let session { return session }
-            let created = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-            session = created
+            if let existing = sessions[profile] { return existing }
+            let created = URLSession(
+                configuration: profile.configured(from: configuration),
+                delegate: self,
+                delegateQueue: nil
+            )
+            sessions[profile] = created
             return created
         }
     }

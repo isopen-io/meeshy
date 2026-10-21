@@ -16,7 +16,7 @@ import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { PullIndicator } from '@/components/pull-indicator';
-import { useScene } from '@/lib/lens/scene';
+import { useListReorderFlip, useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { publicWebOrigin } from '@/lib/links/public-origin';
@@ -38,7 +38,7 @@ import { blockedIdsOf, lazyBlockedUsersQueryOptions } from '@/lib/api/blocked-pe
 import { blockTargetOf } from '@/lib/api/conversation-block-target';
 import { appQueryClient } from '@/lib/api/query-client';
 import { rowBlockAction, rowPreferenceAction } from '@/lib/api/row-intents';
-import type { RowIntent } from '@/lib/view/row-actions';
+import type { RowDetailsFocus, RowIntent } from '@/lib/view/row-actions';
 import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, NEUTRAL_SELECTION, orderConversations, selectionLabel, toggleFilter, type ListSelection } from '@/lib/lens/filters';
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
 import { authorStoryRing } from '@/lib/view/author-story-ring';
@@ -52,6 +52,8 @@ import { navigate } from '@/lib/router';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
+import { searchBarHidden, searchCommunitiesShown, useSearchBarScrolledAway } from '@/lib/view/search-bar-reveal';
+import { usePrefersReducedMotion } from '@/lib/lottie/use-reduced-motion';
 import { createDayPillRevealSubscriber } from '@/lib/view/day-pill-reveal';
 import { useLensMetaReveal } from '@/lib/view/lens-meta-reveal';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
@@ -257,6 +259,10 @@ export default function ConversationsScreen() {
   const interfaceLanguage = currentInterfaceLanguage();
   useDismissRowSwipeOnViewChange(`${selection.join(',')}\u0001${search}`);
   const frame = useRef<HTMLUListElement | null>(null);
+  /* #11036 — la barre suit le SENS du défilement ; une recherche en cours la tient. */
+  const searchBarScrolledAway = useSearchBarScrolledAway(frame);
+  const searchBarAway = searchBarHidden({ scrolledAway: searchBarScrolledAway, focused: searchFocused, query: search });
+  const searchMotionReduced = usePrefersReducedMotion();
 
   /**
    * LA RÉSERVE DE LA BARRE DE RECHERCHE (#6220) — MESURÉE, jamais supposée,
@@ -381,10 +387,15 @@ export default function ConversationsScreen() {
   const conversations = useMemo(() => withPreferenceOverrides(list.data ?? EMPTY_CONVERSATIONS, overrides), [list.data, overrides]);
   /* LA FICHE D'UNE CONVERSATION NON DIRECTE, OUVERTE DEPUIS SON AVATAR
      (#10300) — miroir de `ThemedConversationRow` (`onTap: onViewConversationInfo`).
-     `setDetailsId` est stable : les rangées mémoïsées ne se re-rendent pas. Un
+     `openDetailsOnTop` est stable : les rangées mémoïsées ne se re-rendent pas. Un
      visiteur sans compte n'ouvre aucune fiche (#10205). */
   const [detailsId, setDetailsId] = useState<string | null>(null);
-  const openDetails = useSpeaksAsGuest() ? undefined : setDetailsId;
+  const [detailsFocus, setDetailsFocus] = useState<RowDetailsFocus | undefined>(undefined);
+  const openDetailsOnTop = useCallback((id: string) => {
+    setDetailsFocus(undefined);
+    setDetailsId(id);
+  }, []);
+  const openDetails = useSpeaksAsGuest() ? undefined : openDetailsOnTop;
   const detailsConversation = detailsId === null ? undefined : conversations.find((c) => c.id === detailsId);
   /**
    * LES ENTRÉES D'iOS DU MENU D'UNE LIGNE (#10593) — Renommer ouvre la
@@ -400,6 +411,10 @@ export default function ConversationsScreen() {
   latest.current = { conversations, viewerId: viewer.id ?? '' };
   const handleRowIntent = useCallback((conversationId: string, intent: RowIntent) => {
     if (intent.kind === 'rename') return setRenameId(conversationId);
+    if (intent.kind === 'details') {
+      setDetailsFocus(intent.focus);
+      return setDetailsId(conversationId);
+    }
     if (intent.kind === 'favorite') return rowPreferenceAction(conversationId, { reaction: intent.emoji });
     if (intent.kind === 'moveTo') return rowPreferenceAction(conversationId, { categoryId: intent.categoryId });
     if (intent.intent === 'block') return setBlockId(conversationId);
@@ -499,6 +514,7 @@ export default function ConversationsScreen() {
     // volontaire — elle y est la clé qui fait ré-évaluer `new Date()`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, selection, search, viewer.id, overrides, categories, timeZone, minute]);
+  useListReorderFlip(frame, visible);
 
   /**
    * LE PLIAGE DES SECTIONS (#8694, toute section depuis #10103) — Épingles et
@@ -915,11 +931,35 @@ export default function ConversationsScreen() {
         hauteur MESURÉE en `padding-block-end` (voir `searchBarRef` ci-dessus)
         : le contenu s'arrête toujours AU-DESSUS d'elle, jamais dessous.
       */}
-      <div ref={searchBarRef} data-search-bar className="absolute inset-x-0 bottom-0 z-10 px-4 pt-2 pb-safe">
+      {/*
+        LA BARRE ESCAMOTÉE NE DONNE AUCUNE COURSE AU CADRE (#11090). Escamotée,
+        elle déborde du bas par `transform` ; posée directement dans le cadre
+        (`overflow-hidden`, un scrollport), ce débordement le rendait défilable :
+        un focus ou un `scrollIntoView` le décalait jusqu'à 82 px, et le retour de
+        la barre le ramenait à 0 — l'écran entier glissait et refermait le menu de
+        rangée ouvert. Ce calque à la taille du cadre ROGNE le débordement
+        (`overflow-clip` ne crée pas de scrollport), et le cadre reste un
+        scrollport : le préchargement paresseux des avatars sous la ligne de
+        flottaison, qui en dépend, ne change pas.
+      */}
+      <div data-search-bar-layer className="pointer-events-none absolute inset-0 z-10 overflow-clip">
+      <div
+        ref={searchBarRef}
+        data-search-bar
+        data-search-bar-away={searchBarAway ? 'true' : 'false'}
+        inert={searchBarAway}
+        className="pointer-events-auto absolute inset-x-0 bottom-0 px-4 pt-2 pb-safe"
+        style={{
+          transform: searchBarAway ? 'translateY(calc(100% + 16px))' : 'translateY(0)',
+          opacity: searchBarAway ? 0 : 1,
+          transition: searchMotionReduced ? 'none' : 'transform 250ms ease-out, opacity 250ms ease-out',
+        }}
+      >
         {/* #10924 — SES communautés au focus, ou rien ; posées AU-DESSUS de la
-          barre, hors de sa hauteur mesurée. `pointerdown` retenu : le focus
+          barre, hors de sa hauteur mesurée. #11036 — repliées dès le premier
+          caractère, pour laisser voir les résultats. `pointerdown` retenu : le focus
           reste au champ jusqu'au clic d'une carte. */}
-        {searchFocused ? <SearchCommunitiesBand language={interfaceLanguage} className="glass-prominent glass-card absolute inset-x-4 bottom-full mb-2" /> : null}
+        {searchCommunitiesShown({ focused: searchFocused, query: search }) ? <SearchCommunitiesBand language={interfaceLanguage} className="glass-prominent glass-card absolute inset-x-4 bottom-full mb-2" /> : null}
         <div
           className="glass-prominent glass-card flex items-center gap-3 px-4 py-3"
           style={{
@@ -944,6 +984,7 @@ export default function ConversationsScreen() {
             </button>
           ) : null}
         </div>
+      </div>
       </div>
       {renameConversation === undefined && blockConversation === undefined ? null : (
         <Suspense fallback={null}>
@@ -976,8 +1017,12 @@ export default function ConversationsScreen() {
           viewerId={viewer.id ?? ''}
           deps={apiDeps}
           origin={publicWebOrigin(window.location.origin)}
-          onClose={() => setDetailsId(null)}
+          onClose={() => {
+            setDetailsId(null);
+            setDetailsFocus(undefined);
+          }}
           onRequestDeparture={(kind) => requestDeparture({ conversationId: detailsConversation.id, kind, returnToList: false })}
+          focus={detailsFocus}
         />
       )}
     </div>

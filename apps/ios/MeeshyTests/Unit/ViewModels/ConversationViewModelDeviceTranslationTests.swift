@@ -393,7 +393,7 @@ final class ConversationViewModelDeviceTranslationTests: XCTestCase {
         defer { subscription.cancel() }
         let baseline = counter.count
 
-        rig.sut.isSending = true
+        rig.sut.isLoadingReactions = true
 
         XCTAssertEqual(counter.count, baseline)
     }

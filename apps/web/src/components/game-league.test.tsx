@@ -57,7 +57,7 @@ describe('une ligue ouverte', () => {
     expect(page).toContain('data-game-league-gem="jade"');
     const t = text(page);
     expect(t).toContain('Jade');
-    expect(t).toContain('Rang 8 sur 30');
+    expect(t).toContain('Place 8 sur 30');
     expect(t).toContain('Maintien');
   });
 
@@ -88,9 +88,9 @@ describe('une ligue ouverte', () => {
 
   test('l’écart à la montée se dit, et au sommet des ligues on le tait', () => {
     const near = league({ current: { ...(league().current as NonNullable<GameLeagueBlock['current']>), pointsToPromotion: 42, zone: 'safe' } });
-    expect(text(renderToStaticMarkup(<GameLeague {...props({ league: near })} />))).toContain('Encore 42 étincelles pour monter');
+    expect(text(renderToStaticMarkup(<GameLeague {...props({ league: near })} />))).toContain('42 étincelles jusqu’au cercle suivant');
     const top = league({ current: { ...(league().current as NonNullable<GameLeagueBlock['current']>), pointsToPromotion: null, league: 'prisme' } });
-    expect(text(renderToStaticMarkup(<GameLeague {...props({ league: top })} />))).toContain('Tu es au sommet des ligues.');
+    expect(text(renderToStaticMarkup(<GameLeague {...props({ league: top })} />))).toContain('Tu es au plus haut cercle des joutes.');
   });
 });
 
@@ -124,14 +124,14 @@ describe('les trois autres accès', () => {
   test('verrouillée : le niveau d’ouverture et le niveau RECORD de la personne', () => {
     const html = text(renderToStaticMarkup(<GameLeague {...props({ league: league({ access: 'locked', current: null }), levelRecord: 7 })} />));
     expect(html).toContain('s’ouvre au niveau 10');
-    expect(html).toContain('Record 7');
+    expect(html).toContain('Au plus haut 7');
     expect(html).toContain('Requis 10');
     expect(html).toContain('Il manque 3 niveaux');
     expect(html).toContain('Tu es au niveau 7');
   });
 
   test('fermée aux mineurs : la ligue entre amis, elle, reste ouverte', () => {
-    expect(text(renderToStaticMarkup(<GameLeague {...props({ league: league({ access: 'minor', current: null }) })} />))).toContain('ligue entre amis');
+    expect(text(renderToStaticMarkup(<GameLeague {...props({ league: league({ access: 'minor', current: null }) })} />))).toContain('Joute des amis');
   });
 
   test('en attente de consentement : la notice COMPLÈTE précède le geste', () => {
@@ -194,7 +194,7 @@ describe('le consentement et le pseudonyme (nom choisi ouvert)', () => {
   });
 
   test('le refus de la passerelle s’affiche sous le champ', async () => {
-    const host = await mount(<GameLeague {...asking} consent={{ pending: false, error: 'Ce pseudonyme est déjà pris.' }} />);
+    const host = await mount(<GameLeague {...asking} consent={{ pending: false, error: 'Ce nom de joute est déjà pris.' }} />);
     expect(host.textContent).toContain('déjà pris');
   });
 

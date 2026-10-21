@@ -96,7 +96,7 @@ describe('la page Saison sous un lien (#10018)', () => {
     expect(needsSeasonArchive(focus, game)).toBe(true);
     const host = await mount(<SaisonFocusBody progress={progress()} focus={focus} read={{ data: season(), error: null }} onRetry={() => undefined} actions={actions()} online />);
     expect(host.querySelector('#game-season-archive')).not.toBeNull();
-    expect(host.textContent).toContain(`Saison ${focus} · terminée`);
+    expect(host.textContent).toContain(`Voyage ${focus} · terminé`);
     expect(host.querySelector('[data-game-season-archive-cup="won"]')).not.toBeNull();
     expect(host.querySelector('[data-game-season-archive-seal]')).not.toBeNull();
     expect(host.textContent).toContain('3 récompenses réclamées');
@@ -173,7 +173,7 @@ describe('la saison à venir gardée hors ligne, le jour J (#10131)', () => {
       <SaisonFocusBody progress={progress()} focus={currentSeason + 1} read={{ data: upcomingCopy(), error: null }} onRetry={() => undefined} actions={actions()} online={false} moment={OPENING} />,
     );
     expect(host.querySelector('#game-season-opened')).not.toBeNull();
-    expect(host.textContent).toContain(`Saison ${currentSeason + 1} · en cours`);
+    expect(host.textContent).toContain(`Voyage ${currentSeason + 1} · en cours`);
     expect(host.querySelector('[data-game-season-upcoming]')).toBeNull();
   });
 
@@ -235,16 +235,16 @@ describe('l’en-tête de la page Saison sous un lien (#10132)', () => {
 
   test('une saison passée : « Saison n · terminée », pas le compteur de la saison en cours', async () => {
     const header = await page(currentSeason + 1, season());
-    expect(header).toContain(`Saison ${currentSeason + 1} · terminée`);
+    expect(header).toContain(`Voyage ${currentSeason + 1} · terminé`);
     expect(header).not.toContain(`${game.season?.steps ?? 0} / ${game.season?.stepsTotal ?? 40}`);
   });
 
   test('une saison future : « Saison n · à venir »', async () => {
-    expect(await page(currentSeason + 1, season({ status: 'upcoming', progress: null }))).toContain(`Saison ${currentSeason + 1} · à venir`);
+    expect(await page(currentSeason + 1, season({ status: 'upcoming', progress: null }))).toContain(`Voyage ${currentSeason + 1} · à venir`);
   });
 
   test('une saison future gardée hors ligne, le jour J : « Saison n · en cours »', async () => {
-    expect(await page(currentSeason + 1, season({ status: 'upcoming', progress: null }), { dayKey: '2027-02-15', minuteOfDay: 600 })).toContain(`Saison ${currentSeason + 1} · en cours`);
+    expect(await page(currentSeason + 1, season({ status: 'upcoming', progress: null }), { dayKey: '2027-02-15', minuteOfDay: 600 })).toContain(`Voyage ${currentSeason + 1} · en cours`);
   });
 
   test('sans lien, ou sur la saison en cours : le compteur d’étapes d’avant', async () => {
@@ -255,7 +255,7 @@ describe('l’en-tête de la page Saison sous un lien (#10132)', () => {
 
   test('le compte pur : chaque état de la saison du lien a sa ligne', () => {
     const current = game.season ?? null;
-    expect(seasonHeaderCount({ kind: 'past', season: season() }, current)).toBe(`Saison ${currentSeason + 1} · terminée`);
+    expect(seasonHeaderCount({ kind: 'past', season: season() }, current)).toBe(`Voyage ${currentSeason + 1} · terminé`);
     expect(seasonHeaderCount({ kind: 'loading' }, current)).toBeNull();
   });
 });
@@ -274,11 +274,11 @@ describe('la page Ligue sous un lien (#10018)', () => {
     const host = await mount(<LigueWeekFocus progress={progress()} focus="2026-10-05" read={{ data: week(), error: null }} onRetry={() => undefined} current={current} />);
     expect(host.querySelector('[data-game-league-archive="engraved"]')).not.toBeNull();
     expect(host.textContent).toContain('Jade');
-    expect(host.textContent).toContain('Rang final : 3');
+    expect(host.textContent).toContain('Place finale : 3');
     expect(host.querySelector('[data-game-league-archive-zone="promotion"]')).not.toBeNull();
     expect(host.querySelector('[data-game-league-archive-cup="bronze"]')).not.toBeNull();
     expect(host.querySelector('[data-game-standing]')).toBeNull();
-    expect(host.textContent).toContain('les autres membres du groupe ne se relisent pas');
+    expect(host.textContent).toContain('les autres héros de la joute ne se relisent pas');
   });
 
   test('une semaine purgée le dit', async () => {

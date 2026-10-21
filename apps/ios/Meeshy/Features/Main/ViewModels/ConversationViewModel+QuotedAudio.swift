@@ -29,9 +29,14 @@ extension ConversationViewModel {
     func quotedAudioItem(for reference: ReplyReference, now: Date = Date()) -> QueuedAudio? {
         guard reference.offersQuotedAudioPlayback(now: now) else { return nil }
         if let quoted = messages.first(where: { $0.id == reference.messageId }) {
-            return inWindowQuotedAudio(reference, quoted: quoted, now: now)
+            return QuotedAudioResolver.inWindow(reference, quoted: quoted, now: now) {
+                self.effectiveAudioTrackUrl(for: $0, message: $1)
+            }
         }
-        return outOfWindowQuotedAudio(reference)
+        return QuotedAudioResolver.outOfWindow(
+            reference, conversationId: conversationId,
+            readerLanguages: ConversationLanguagePreferences(user: authManager.currentUser).resolved
+        )
     }
 
     /// Joue la citation, ou met en pause / reprend si c'est déjà elle qui joue.
@@ -51,45 +56,5 @@ extension ConversationViewModel {
             conversationArtworkURL: currentConversationArtworkURL
         )
         return true
-    }
-
-    private func inWindowQuotedAudio(_ reference: ReplyReference, quoted: Message, now: Date) -> QueuedAudio? {
-        guard !quoted.isDeleted, !quoted.isViewOnce, !quoted.isBlurred, !quoted.isEncrypted else { return nil }
-        if let expiresAt = quoted.expiresAt, expiresAt <= now { return nil }
-        guard let attachment = reference.citedAttachment(among: quoted.attachments),
-              attachment.type == .audio, !attachment.isViewOnce, !attachment.isBlurred,
-              !attachment.fileUrl.isEmpty
-        else { return nil }
-        return QueuedAudio(
-            attachmentId: attachment.id,
-            messageId: quoted.id,
-            conversationId: quoted.conversationId,
-            fileUrl: effectiveAudioTrackUrl(for: attachment, message: quoted),
-            durationMs: attachment.duration ?? 0,
-            senderName: quoted.senderName ?? reference.authorName,
-            senderAvatarURL: quoted.senderAvatarURL ?? reference.authorAvatarUrl,
-            receivedAt: quoted.createdAt
-        )
-    }
-
-    private func outOfWindowQuotedAudio(_ reference: ReplyReference) -> QueuedAudio? {
-        guard let attachment = reference.quotedAttachment, attachment.type == .audio else { return nil }
-        let tracks = reference.quotedAudioTracks
-        let language = AudioTrackLanguageResolver.resolve(
-            originalLanguage: tracks?.originalLanguage ?? "",
-            preferredLanguages: ConversationLanguagePreferences(user: authManager.currentUser).resolved,
-            availableLanguages: Array((tracks?.urlsByLanguage ?? [:]).keys)
-        )
-        guard let url = reference.quotedAudioUrl(forLanguage: language) else { return nil }
-        return QueuedAudio(
-            attachmentId: attachment.id,
-            messageId: reference.messageId,
-            conversationId: conversationId,
-            fileUrl: url,
-            durationMs: attachment.duration ?? 0,
-            senderName: reference.authorName,
-            senderAvatarURL: reference.authorAvatarUrl,
-            receivedAt: Date()
-        )
     }
 }

@@ -90,10 +90,11 @@ nonisolated enum ComposerEditScene {
     /// « fit » le viewport et le chrome se pose par-dessus. `framed` — le
     /// recadrage montré — est le seul cas où elle se réduit, pour laisser ses
     /// bords aux crochets.
+    /// Une vidéo recadrée commence sous la bande de sa lecture (porteur 2026-10-20).
     static func area(container: CGSize, top: CGFloat, bottom: CGFloat, panels: [ComposerEditPanel],
-                     framed: Bool = true) -> CGRect {
+                     framed: Bool = true, playback: Bool = false) -> CGRect {
         guard framed else { return CGRect(origin: .zero, size: container) }
-        let haut = top + topBand
+        let haut = top + topBand + (playback ? ComposerEditPlaybackLayout.band : 0)
         let bas = container.height - bottom - bottomReserve(panels)
         return CGRect(x: margin, y: haut, width: max(0, container.width - margin * 2), height: max(0, bas - haut))
     }
@@ -167,19 +168,23 @@ nonisolated enum ComposerCropPreset: CaseIterable, Hashable, Sendable {
     }
 }
 
-/// **Les formats se posent SUR la scène** (#10930, porteur 2026-10-18 :
-/// « afficher les formats de base par-dessus le cadre, si c'est une vidéo à
-/// gauche des boutons pause et mute »). Leur rangée tient la ligne de la
-/// lecture, s'arrête avant elle, et laisse aux deux crochets du bas leur cible.
+/// **Les formats, sur une bande pleine largeur juste SOUS la scène** (porteur
+/// 2026-10-20 : « les rails d'outils doivent être le moins coupés possible et
+/// on doit les laisser aller soit hors viewport soit hors cadre de la
+/// scène »). Ni le cadre ni ses crochets ne la coupent : elle va d'un bord de
+/// l'écran à l'autre, dans la place que le panneau `.presets` retient sous la
+/// scène, et défile au-delà.
 nonisolated enum ComposerEditPresetsLayout {
 
-    static func frame(scene: CGRect, playback: CGRect?) -> CGRect {
-        let cible = MeeshyControlSize.tapTarget
-        let espace = ComposerEditPlaybackLayout.spacing
-        let gauche = scene.minX + cible + espace
-        let droite = (playback?.minX ?? scene.maxX - cible) - espace
-        let hauteur = ComposerEditScene.presetsHeight
-        let milieu = playback?.midY ?? scene.maxY - ComposerEditPlaybackLayout.margin - cible / 2
-        return CGRect(x: gauche, y: milieu - hauteur / 2, width: max(0, droite - gauche), height: hauteur)
+    /// La scène est centrée dans son conteneur (`ComposerEditScene.area` est
+    /// symétrique, `rect` centre) : la largeur de l'écran est donc le double de
+    /// son milieu.
+    static func frame(scene: CGRect) -> CGRect {
+        CGRect(x: 0, y: scene.maxY + ComposerEditScene.gap,
+               width: max(0, scene.midX * 2), height: ComposerEditScene.presetsHeight)
     }
+
+    /// Le retrait de tête des bandes défilantes : la première case s'aligne sur
+    /// le bord du contenu, la dernière peut sortir de l'écran.
+    static let leadingInset: CGFloat = MeeshySpacing.mdPlus
 }

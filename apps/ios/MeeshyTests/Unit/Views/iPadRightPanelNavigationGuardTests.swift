@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Gardes de source sur le panneau droit iPad.
@@ -147,8 +148,12 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     func test_iPadCovers_matchTheiPhoneForReelsStoriesAndProfileReels() throws {
         let layer = try source(of: "RootLayers/iPadRootViewLayers.swift")
         XCTAssertTrue(layer.contains("ReelOpenFailureView("), "un réel introuvable montre son échec, pas d'autres réels")
-        XCTAssertTrue(layer.contains("targetCommentId: request.targetCommentId"))
-        XCTAssertTrue(layer.contains("targetParentCommentId: request.targetParentCommentId"))
+        // Le lecteur de story se monte par le couvercle UNIQUE (#11197) : l'iPad le pose, et c'est
+        // lui qui descend une notification de réponse jusqu'à SON commentaire, pour toutes les racines.
+        XCTAssertTrue(layer.contains(".modifier(StoryReaderCover("), "l'iPad monte le lecteur par le couvercle unique")
+        let cover = try source(of: "StoryViewerContainer.swift")
+        XCTAssertTrue(cover.contains("targetCommentId: presented.targetCommentId"))
+        XCTAssertTrue(cover.contains("targetParentCommentId: presented.targetParentCommentId"))
         XCTAssertTrue(layer.contains("onOpenReel: { reel, reels in"), "un réel de profil s'ouvre dans le lecteur")
     }
 
@@ -206,7 +211,7 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     /// fond réécrivait la liste depuis l'instantané lu AVANT l'aller-retour,
     /// écrasant la liste plus récente que la synchro avait posée entre-temps.
     func test_coldConversationLink_mergesIntoTheCurrentList() throws {
-        let code = try source(of: "RootView.swift")
+        let code = try source(of: "RootView.swift") + "\n" + source(of: "RootConversationOpener.swift")
         XCTAssertFalse(code.contains("conversations.save(merged, for: \"list\")"))
         XCTAssertTrue(code.contains("conversations.mergeUpdate(for: \"list\")"))
     }
@@ -215,10 +220,15 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     /// et la rangée d'actions de l'en-tête débordaient de la colonne.
     func test_narrowLeftColumn_cardAndHeaderFitTheColumn() throws {
         let overlays = try source(of: "ConversationListView+Overlays.swift")
-        XCTAssertFalse(overlays.contains(".frame(width: 340)"))
-        XCTAssertTrue(overlays.contains(".frame(maxWidth: .infinity).frame(maxWidth: 340)"))
-        XCTAssertTrue(overlays.contains("ViewThatFits(in: .horizontal) {"))
-        XCTAssertTrue(overlays.contains("headerActions(spacing: MeeshySpacing.xs)"))
+        // L'en-tête a son fichier (`+HeaderOverlay`) : le négatif balaie les deux.
+        let header = try source(of: "ConversationListView+HeaderOverlay.swift")
+        let movedOut = try ["ConversationListView+BottomBar.swift", "ConversationListView+ChipDrag.swift",
+                            "ConversationListView+MoveToSectionMenuItems.swift"]
+            .map { try source(of: $0) }.joined(separator: "\n")
+        XCTAssertFalse((overlays + header + movedOut).contains(".frame(width: 340)"))
+        XCTAssertTrue(overlays.contains(".frame(maxWidth: .infinity).frame(maxWidth: ConversationPreviewWidthLaw.maximum)"))
+        XCTAssertTrue(header.contains("ViewThatFits(in: .horizontal) {"))
+        XCTAssertTrue(header.contains("headerActions(spacing: MeeshySpacing.xs)"))
     }
 
     func test_storyNotificationScreens_closeThePanelOnIPad() throws {
@@ -385,25 +395,6 @@ final class iPadRightColumnAndHandoffTests: XCTestCase {
         XCTAssertEqual(placement.panelRoutes, [.progression, .progressionConcept(.league), .gamePage(.league)])
     }
 
-    // MARK: - Poignée des colonnes
-
-    func test_columnRatio_followsTheFingerFromTheDragStart() {
-        // 100 pt sur 1000 pt de large : dix points de pourcentage, quel que soit le nombre d'événements du geste.
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 100, width: 1000), 0.48, accuracy: 0.0001)
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 100, width: 1000), 0.48, accuracy: 0.0001)
-    }
-
-    func test_columnRatio_staysWithinItsBounds() {
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 900, width: 1000), iPadColumnRatio.maximum)
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: -900, width: 1000), iPadColumnRatio.minimum)
-    }
-
-    func test_columnRatio_ignoresAZeroWidthWindow() {
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: 40, width: 0), 0.38)
-        XCTAssertEqual(iPadColumnRatio.dragged(from: 0.38, translation: .nan, width: 1000), 0.38)
-        XCTAssertEqual(iPadColumnRatio.clamped(.nan), iPadColumnRatio.minimum)
-    }
-
     func test_handoff_recordsTheLatestStack() {
         let handoff = RootNavigationHandoff()
         XCTAssertEqual(handoff.routes, [])
@@ -428,6 +419,18 @@ final class TemporaryMediaSweeperTests: XCTestCase {
             (name: "media-save-1234", modified: old),
         ], now: now)
         XCTAssertEqual(swept, ["composer_photo_A.jpg", "recent_C.mov"])
+    }
+
+    func test_aStagedPhotoLibraryImport_isSweptOnceExpired() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("sweep-source-\(UUID().uuidString).mov")
+        try Data("a".utf8).write(to: source)
+        let staged = try PickedMediaStaging.stage(source)
+        defer { try? FileManager.default.removeItem(at: source); PickedMediaStaging.discard(staged) }
+        let swept = TemporaryMediaSweeper.expired([
+            (name: staged.lastPathComponent, modified: now.addingTimeInterval(-8 * 24 * 3600)),
+        ], now: now)
+        XCTAssertEqual(swept, [staged.lastPathComponent], "une vidéo importée (#9870) que personne ne réclame ne reste pas dans tmp")
     }
 
     func test_sweep_removesOnlyTheExpiredFiles() throws {
@@ -506,7 +509,8 @@ final class DetachedWindowsTests: XCTestCase {
         XCTAssertTrue(list.contains("expandedSections = []"), "toutes se replient pendant le glisser")
         XCTAssertTrue(list.contains("var restored = before.union(expandedSections)"), "elles se redéplient au dépôt ou à l'annulation")
         XCTAssertTrue(list.contains("defer { endConversationDrag(expanding: sectionId) }"), "le dépôt redéplie, et ouvre la catégorie qui reçoit")
-        XCTAssertTrue(list.contains("dragOriginSectionId == group.section.id"), "la catégorie d'origine se marque")
+        let sectionHeader = try appSource("Features/Main/Views/ConversationListView+SectionHeader.swift")
+        XCTAssertTrue(sectionHeader.contains("dragOriginSectionId == section.id"), "la catégorie d'origine se marque")
         XCTAssertTrue(list.contains("publisher(for: .conversationDragDidEnd)"), "l'annulation redéplie")
         XCTAssertTrue(list.contains("if let token, token != pendingDrag?.token { return }"), "la fin d'un AUTRE glisser est ignorée")
         XCTAssertTrue(list.contains("delegate: ConversationListDragWatch(onEnter: collapseForConversationDrag)"),

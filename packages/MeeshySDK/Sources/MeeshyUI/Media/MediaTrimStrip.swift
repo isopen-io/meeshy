@@ -38,16 +38,20 @@ public struct MediaTrimStrip: View {
     private let sourceDuration: Double
     private let bounds: MediaTrimBounds
     private let waveform: [Float]
+    /// L'onde du modèle est le champ PUBLIÉ, normalisé au pic : linéaire par défaut (#9886).
+    private let waveformReading: WaveformReading
     private let accent: Color
     private let onChange: (MediaTrimBounds) -> Void
     private let onCommit: (() -> Void)?
 
+    @Environment(\.displayScale) private var displayScale
     @State private var frames: [UIImage] = []
 
     public init(content: Content,
                 sourceDuration: Double,
                 bounds: MediaTrimBounds,
                 waveform: [Float] = [],
+                waveformReading: WaveformReading = .published,
                 accent: Color = MeeshyColors.brandPrimary,
                 onChange: @escaping (MediaTrimBounds) -> Void,
                 onCommit: (() -> Void)? = nil) {
@@ -55,6 +59,7 @@ public struct MediaTrimStrip: View {
         self.sourceDuration = sourceDuration
         self.bounds = bounds
         self.waveform = waveform
+        self.waveformReading = waveformReading
         self.accent = accent
         self.onChange = onChange
         self.onCommit = onCommit
@@ -111,7 +116,7 @@ public struct MediaTrimStrip: View {
                 }
                 .overlay(alignment: .bottom) {
                     if !waveform.isEmpty {
-                        WaveformStrip(samples: waveform, tint: .white.opacity(0.75))
+                        WaveformStrip(samples: waveform, tint: .white.opacity(0.75), reading: waveformReading)
                             .frame(height: Self.hauteur * 0.34)
                     }
                 }
@@ -120,7 +125,7 @@ public struct MediaTrimStrip: View {
             if waveform.isEmpty {
                 enAttente
             } else {
-                WaveformStrip(samples: waveform, tint: accent)
+                WaveformStrip(samples: waveform, tint: accent, reading: waveformReading)
                     .background(Color.black.opacity(0.28))
             }
         }
@@ -217,23 +222,22 @@ public struct MediaTrimStrip: View {
 
     private var taskKey: String {
         switch content {
-        case .video(let url): return url.absoluteString
+        case .video(let url): return "\(url.absoluteString)|\(displayScale)"
         case .audio: return "audio"
         }
     }
 
     private func chargerLesVignettes() async {
         guard case .video(let url) = content else { return }
-        // `VideoFilmstrip` cache par URL + compte + hauteur : rouvrir la bande
+        // `VideoFilmstrip` cache par URL + compte + hauteur + échelle : rouvrir la bande
         // sur le même clip ne relance aucune extraction.
-        frames = await VideoFilmstrip.frames(url: url, count: 8, maxHeight: Self.hauteur)
+        frames = await VideoFilmstrip.frames(url: url, count: 8, maxHeight: Self.hauteur, scale: displayScale)
     }
 
     // MARK: - Les mots
 
     static func duree(_ secondes: Double) -> String {
-        let total = max(0, Int(secondes.rounded()))
-        return String(format: "%d:%02d", total / 60, total % 60)
+        DurationFormat.clock(secondes, rounding: .toNearestOrAwayFromZero)
     }
 
     static let chargementLabel = String(

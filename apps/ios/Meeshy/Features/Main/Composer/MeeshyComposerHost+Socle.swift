@@ -42,12 +42,10 @@ extension MeeshyComposerHost {
 
     var socle: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            if returnsToConversation { Spacer(); returnImageButton } else {
-                if paintedSocleZones.contains(.audience) { audienceChip }
-                Spacer()
-                if socleServesPostText { postTextButton }
-                if !socleHasNothingToPublish { publishButton }
-            }
+            if paintedSocleZones.contains(.audience) { audienceChip }
+            Spacer()
+            if socleServesPostText { postTextButton }
+            if !socleHasNothingToPublish { publishButton }
         }
         // Grand écran : la marge de la maquette iPad/Mac, alignée sur les rails.
         .padding(.horizontal, horizontalSizeClass == .regular ? ComposerRailGeometry.roomyMargin : 14)
@@ -253,7 +251,7 @@ extension MeeshyComposerHost {
         .buttonStyle(.plain)
         .accessibilityLabel(Text("composer.socle.audience", bundle: .main))
         .accessibilityValue(Text(composerVisibility.label))
-        .sheet(item: $audiencePickerMode) { mode in
+        .anchoredPicker(item: $audiencePickerMode) { mode in
             AudienceUserPickerView(mode: mode, initialSelection: composerVisibilityUserIds) { ids in
                 composerVisibilityUserIds = ids
             }

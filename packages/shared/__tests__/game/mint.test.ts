@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { MEESH_PRICE_CAP, meeshEdition, meeshPrice, previewMint } from '../../utils/game/mint.js';
+import { MEESH_PRICE_CAP, meeshDisplayEdition, meeshEdition, meeshPrice, previewMint } from '../../utils/game/mint.js';
 import { LEVEL_CAP_AMBASSADOR, LEVEL_CAP_BASE, levelThreshold } from '../../utils/game/levels.js';
 import { MEESH_MINT_COST, computeMeeshMintPlan } from '../../utils/meesh.js';
 
@@ -55,6 +55,31 @@ describe('l\'édition', () => {
     expect(meeshEdition(500)).toBe('gold');
     expect(meeshEdition(1000)).toBe('prism');
     expect(meeshEdition(2000)).toBe('prism');
+  });
+});
+
+describe('l\'édition DESSINÉE (#11483)', () => {
+  it('est la plus haute édition atteinte : le n° 247 se dessine en or, sa loi reste l\'argent', () => {
+    expect(meeshEdition(247)).toBe('silver');
+    expect(meeshDisplayEdition(247)).toBe('gold');
+  });
+
+  it('est l\'argent avant le n° 100, l\'or à partir du n° 100, le prisme à partir du n° 1000', () => {
+    expect(meeshDisplayEdition(1)).toBe('silver');
+    expect(meeshDisplayEdition(99)).toBe('silver');
+    expect(meeshDisplayEdition(100)).toBe('gold');
+    expect(meeshDisplayEdition(999)).toBe('gold');
+    expect(meeshDisplayEdition(1000)).toBe('prism');
+    expect(meeshDisplayEdition(1001)).toBe('prism');
+  });
+
+  it('ne dessine jamais une édition plus basse que sa loi', () => {
+    const order = { silver: 0, gold: 1, prism: 2 } as const;
+    for (let n = 0; n <= 3000; n += 1) expect(order[meeshDisplayEdition(n)]).toBeGreaterThanOrEqual(order[meeshEdition(n)]);
+  });
+
+  it('traite une valeur illisible comme sa loi', () => {
+    for (const n of [0, -1, -150, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) expect(meeshDisplayEdition(n)).toBe(meeshEdition(n));
   });
 });
 

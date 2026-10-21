@@ -122,7 +122,7 @@ public struct StoryExpiredContent: View {
             // Type would blow the empty-state layout). The emoji IS the reaction
             // content, so it stays labelled for VoiceOver.
             Text(emoji)
-                .font(.system(size: 64))
+                .font(MeeshyFont.emoji(64))
                 .accessibilityLabel(Text(emoji))
         case .comment:
             // Decorative counterpart to the reaction emoji — the comment excerpt

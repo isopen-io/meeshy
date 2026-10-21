@@ -16,9 +16,15 @@ public enum EngagementDispatchOutcome: Sendable, Equatable {
 public actor EngagementOutbox {
     public static let shared = EngagementOutbox()
 
-    private let db: DatabaseQueue
+    private let storage: DatabaseQueue?
+    private var db: DatabaseQueue {
+        get throws {
+            guard let storage else { throw DatabaseStorageUnavailable() }
+            return storage
+        }
+    }
     private let now: @Sendable () -> Date
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "engagement-outbox")
+    private static let logger = MeeshyLog.logger(.engagementOutbox, subsystem: .legacySDK)
 
     /// Backoff identique au pattern existant : min(60s, 2^attempts × 5s).
     private static func backoff(attempts: Int) -> TimeInterval {
@@ -27,36 +33,33 @@ public actor EngagementOutbox {
 
     public init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let path = dir.appendingPathComponent("meeshy_engagement_outbox.db").path
-        self.db = Self.makeQueue(path: path)
-        self.now = { Date() }
+        self.init(dbPath: dir.appendingPathComponent("meeshy_engagement_outbox.db").path)
     }
 
     /// Test-only / injectable init.
     public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }) {
-        self.db = Self.makeQueue(path: dbPath)
+        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), clock: clock)
+    }
+
+    init(storage opened: OpenedDatabaseQueue, clock: @escaping @Sendable () -> Date = { Date() }) {
+        self.storage = Self.prepare(opened)
         self.now = clock
     }
 
-    private static func makeQueue(path: String) -> DatabaseQueue {
-        let queue: DatabaseQueue
-        do {
-            queue = try DatabaseQueue(path: path)
-        } catch {
-            // Bascule mémoire : l'outbox fonctionne mais NE SURVIT PLUS aux
-            // relancements — toute session non dépilée est perdue au kill.
-            Self.logger.error("On-disk engagement outbox unavailable, falling back to memory (sessions will not survive relaunch): \(error.localizedDescription, privacy: .public)")
-            do {
-                queue = try DatabaseQueue()
-            } catch {
-                fatalError("[EngagementOutbox] Cannot create in-memory GRDB queue — out of memory: \(error)")
-            }
+    private static func prepare(_ opened: OpenedDatabaseQueue) -> DatabaseQueue? {
+        switch opened {
+        case .persistent:
+            break
+        case .memoryFallback(_, let diskError):
+            logger.error("On-disk engagement outbox unavailable, falling back to memory (sessions will not survive relaunch): \(diskError, privacy: .public)")
+        case .unavailable(let diskError, let memoryError):
+            logger.fault("Engagement outbox has no storage at all, sessions are dropped: disk=\(diskError, privacy: .public) memory=\(memoryError, privacy: .public)")
         }
+        guard let queue = opened.queue else { return nil }
         do {
             try createSchema(in: queue)
         } catch {
-            // Sans schéma, toutes les requêtes suivantes échoueront en cascade.
-            Self.logger.fault("Engagement outbox schema creation failed — every subsequent query will fail: \(error.localizedDescription, privacy: .public)")
+            logger.fault("Engagement outbox schema creation failed — every subsequent query will fail: \(error.localizedDescription, privacy: .public)")
         }
         return queue
     }

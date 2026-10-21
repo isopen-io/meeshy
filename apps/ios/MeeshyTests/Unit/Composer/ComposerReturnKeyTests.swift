@@ -111,7 +111,9 @@ final class ComposerReturnKeyTests: XCTestCase {
     /// Au-delà de sept mots, Retour passe à la ligne : sans Cmd+Retour, un message long ne s'envoyait pas au clavier.
     func test_commandReturn_sendsFromTheKeyboard_whateverTheLength() throws {
         let bar = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift"))
-        XCTAssertTrue(bar.contains(".keyboardShortcut(.return, modifiers: .command)"))
+        XCTAssertFalse(bar.contains(".keyboardShortcut(.return, modifiers: .command)"))
+        XCTAssertFalse(bar.contains("Button(\"\")"))
+        XCTAssertTrue(bar.contains("PublishesComposerSend(send: handleSend)"))
         XCTAssertTrue(bar.contains("let literal = literalNewlinePending") && bar.contains("literalNewline: literal)"))
     }
 }

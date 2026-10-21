@@ -7,7 +7,7 @@ import os
 /// aveugle (régressions 2026-05-22, 2026-06-09, 2026-06-11 toutes invisibles
 /// dans les logs). Couvre : choix de sous-chemin dans `configure(.video)`,
 /// résolution cache vs streaming distant, attach du player.
-let storyMediaLog = os.Logger(subsystem: "me.meeshy.app", category: "story-media")
+let storyMediaLog = MeeshyLog.logger(.storyMedia)
 
 /// Visual background of the story canvas (color/gradient/image+thumbHash/video).
 /// Lives below `itemsContainer` in `StoryCanvasUIView.rootLayer`.
@@ -179,9 +179,17 @@ public final class StoryBackgroundLayer: CALayer {
     /// d'un fond image, posés en composition sur l'item d'un fond vidéo.
     @MainActor public private(set) var activeAdjustments: ImageAdjustments?
     /// Le bitmap BRUT du dernier stamp final et sa clé de filtre — ce qu'un
-    /// changement de rendu seul (filtre, réglages) repeint en place, sans
-    /// repasser par le chargement ni par le ThumbHash.
-    @MainActor var stampedSource: (image: UIImage, imageId: String?)?
+    /// changement de rendu seul (filtre, réglages) repeint en place. Une autre
+    /// source rend caduque toute cuisson en vol (#9873).
+    @MainActor var stampedSource: (image: UIImage, imageId: String?)? { didSet { liveLookStorage?.supersede() } }
+    /// **Le canvas du COMPOSER lève ce drapeau** (#9873, `StoryComposerCanvasView`) :
+    /// un changement de rendu seul (curseur de filtre, d'intensité, de réglage)
+    /// se cuit alors HORS du fil principal, le bitmap affiché restant jusqu'au
+    /// suivant (`StoryBackgroundLayer+Look`). Baissé — lecteur et son prefetcher,
+    /// export, instantanés —, le repeint reste synchrone.
+    @MainActor public var bakesLookOffMainThread = false
+    /// L'outil de cuisson hors du fil principal, monté au premier glissé.
+    @MainActor var liveLookStorage: StoryLiveLook?
     /// La composition posée sur les items du player de fond : quel player, pour
     /// quels réglages — rien ne se refait tant que les deux sont les mêmes.
     nonisolated(unsafe) var appliedBackgroundVideoLook: (player: ObjectIdentifier, signature: String)?
@@ -229,8 +237,14 @@ public final class StoryBackgroundLayer: CALayer {
     @MainActor
     func stampFinalImage(_ image: UIImage, imageId: String?, on img: CALayer?) {
         stampedSource = (image, imageId)
-        let display = StoryBackgroundLook.image(image, filter: activeFilter, intensity: activeFilterIntensity,
-                                                adjustments: activeAdjustments, imageId: imageId)
+        stampDisplay(StoryBackgroundLook.image(image, filter: activeFilter, intensity: activeFilterIntensity,
+                                               adjustments: activeAdjustments, imageId: imageId), on: img)
+    }
+
+    /// Pose un bitmap DÉJÀ peint — par `stampFinalImage`, ou par la cuisson
+    /// hors du fil principal d'un curseur (#9873).
+    @MainActor
+    func stampDisplay(_ display: UIImage, on img: CALayer?) {
         Self.withDisabledCAActions {
             // **Le FOND porte l'orientation comme les autres couches**
             // (2026-09-05). Ce site était resté sur `.cgImage` nu au premier

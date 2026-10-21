@@ -224,15 +224,7 @@ extension StoryActionRailPlanTests {
     }
 
     private func contentSource() throws -> String {
-        try String(
-            contentsOf: URL(fileURLWithPath: #filePath)
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .deletingLastPathComponent()
-                .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift"),
-            encoding: .utf8
-        )
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
     }
 
     /// Reproduit le cas confirmé cassé : le rail doit finir par réagir à la

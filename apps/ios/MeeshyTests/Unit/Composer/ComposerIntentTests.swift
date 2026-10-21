@@ -43,8 +43,7 @@ final class ComposerIntentTests: XCTestCase {
         .draft(id: "brouillon-42"),
         .share,
         .conversationMedia(messageId: "msg-7", attachmentId: "piece-3"),
-        .socialMedia(postId: "post-9", mediaId: "media-2"),
-        .conversationDraftMedia(staged: true)
+        .socialMedia(postId: "post-9", mediaId: "media-2")
     ]
 
     private func nom(de origin: ComposerOrigin) -> String {
@@ -58,7 +57,6 @@ final class ComposerIntentTests: XCTestCase {
         case .share: return "share"
         case .conversationMedia: return "conversationMedia"
         case .socialMedia: return "socialMedia"
-        case .conversationDraftMedia: return "conversationDraftMedia"
         }
     }
 
@@ -316,10 +314,10 @@ final class ComposerIntentTests: XCTestCase {
             "Deux entrées du corpus désignent la même porte : une porte resterait sans profil éprouvé."
         )
         XCTAssertEqual(
-            noms.count, 10,
-            "Dix portes sont spécifiées (#6085 a ajouté `.socialMedia`, le média d'un post ou la "
-            + "slide d'une story ; #8416 `.conversationDraftMedia`, la retouche d'une image du fil ; "
-            + "#9298 a retiré `.conversationCapture`, restée sans porte depuis #9295). "
+            noms.count, 9,
+            "Neuf portes sont spécifiées (#6085 a ajouté `.socialMedia`, le média d'un post ou la "
+            + "slide d'une story ; #9298 a retiré `.conversationCapture`, restée sans porte depuis #9295 ; "
+            + "#11171 a retiré `.conversationDraftMedia`, restée sans porte depuis #11170). "
             + "Une porte ajoutée à `ComposerOrigin` doit entrer ici avec son profil, jamais s'ajouter "
             + "en silence."
         )
@@ -365,8 +363,7 @@ final class ComposerIntentTests: XCTestCase {
         switch origin {
         case .repost, .edit:
             return true
-        case .storyTray, .feedComposer, .moodChip, .draft, .share, .conversationMedia, .socialMedia,
-             .conversationDraftMedia:
+        case .storyTray, .feedComposer, .moodChip, .draft, .share, .conversationMedia, .socialMedia:
             return false
         }
     }
@@ -474,8 +471,7 @@ final class ComposerIntentTests: XCTestCase {
         switch origin {
         case .draft, .share, .edit:
             return true
-        case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia,
-             .conversationDraftMedia:
+        case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia:
             return false
         }
     }
@@ -644,9 +640,8 @@ final class ComposerIntentTests: XCTestCase {
 
         XCTAssertEqual(
             serviesParLeMeuble,
-            // #8416 : la retouche d'une image du fil monte le meuble, elle aussi.
             ["storyTray", "feedComposer", "moodChip", "draft", "share", "conversationMedia",
-             "socialMedia", "repost", "conversationDraftMedia"],
+             "socialMedia", "repost"],
             "Périmètre après #6085 : le tray, LE FIL, les réels, LE MOOD, le brouillon, le partage, le "
             + "média de conversation, LE MÉDIA SOCIAL (post / story) — et le REPOST. `edit` n'y figure pas parce "
             + "que le corpus l'instancie sur un format de DOCUMENT (post/réel), toujours servi par "
@@ -867,7 +862,7 @@ final class ComposerIntentTests: XCTestCase {
         // de story ne sont PAS ici : ils étaient déjà conformes, et sont devenus
         // l'option explicite d'ancrage (loi 5).
         let sites = ["ReelsViewModel", "FeedViewModel", "PostDetailView",
-                     "ProfileUserPostsList", "RootViewComponents", "FeedView"]
+                     "ProfileUserPostsViewModel", "RootViewComponents", "FeedView"]
 
         for site in sites {
             guard let enumerateur = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil) else {
@@ -875,7 +870,8 @@ final class ComposerIntentTests: XCTestCase {
             }
             var trouve = false
             for case let url as URL in enumerateur where url.lastPathComponent == "\(site).swift" {
-                let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+                // Un type découpé se lit comme son UNITÉ (`FeedViewModel+PostActions.swift`…).
+                let source = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
                 trouve = true
                 XCTAssertTrue(
                     source.contains("targetType"),

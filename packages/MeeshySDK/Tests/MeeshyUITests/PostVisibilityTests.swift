@@ -38,3 +38,22 @@ final class PostVisibilityTests: XCTestCase {
         }
     }
 }
+
+extension PostVisibilityTests {
+    @MainActor
+    func test_label_resolvesFromTheMeeshyUICatalog_inEveryLocale() throws {
+        for code in ["fr", "en", "de", "es", "pt-BR", "it", "ar"] {
+            let path = try XCTUnwrap(Bundle.module.path(forResource: code, ofType: "lproj"), code)
+            let bundle = try XCTUnwrap(Bundle(path: path), code)
+            for visibility in PostVisibility.allCases {
+                let label = visibility.label(in: bundle)
+                XCTAssertFalse(label.isEmpty, "\(visibility) \(code)")
+                XCTAssertFalse(label.hasPrefix("post.visibility."), "\(visibility) \(code)")
+            }
+        }
+        let en = try XCTUnwrap(Bundle(path: try XCTUnwrap(Bundle.module.path(forResource: "en", ofType: "lproj"))))
+        let de = try XCTUnwrap(Bundle(path: try XCTUnwrap(Bundle.module.path(forResource: "de", ofType: "lproj"))))
+        XCTAssertEqual(PostVisibility.private.label(in: en), "Private")
+        XCTAssertEqual(PostVisibility.friends.label(in: de), "Kontakte")
+    }
+}

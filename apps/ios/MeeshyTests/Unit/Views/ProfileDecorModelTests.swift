@@ -97,7 +97,11 @@ final class ProfileDecorModelTests: XCTestCase {
                 ShopPack(slug: "cadres-grec", name: "x", installed: true, price: 40, owned: false),
             ] : nil
         })
-        XCTAssertTrue(model.frames.isEmpty, "liste non lue : aucun pack de cadres n'est installé d'office")
+        // #11165 (5ffd59ef35) : deux packs de cadres sont installés d'office
+        // (haussmannien, ancestral) ; liste non lue, ce sont eux, et eux seuls.
+        let parDefaut = BannerFrameCatalog.shared.framePacks.filter(\.installedByDefault).map(\.slug)
+        XCTAssertFalse(parDefaut.isEmpty)
+        XCTAssertEqual(model.frames.map(\.pack), parDefaut, "liste non lue : les packs de cadres installés d'office")
 
         await model.load()
 
@@ -237,6 +241,36 @@ final class ProfileDecorModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(model.state.decor, decor)
+    }
+
+    // MARK: - La tuile « Image » de la bannière (#11165)
+
+    func test_bannerChoice_withAPhoto_theImageTileIsSelectedAndNoDesignIs() {
+        let aurore = ProfileDecorRef(pack: "bannieres-essentielles", item: "aurore")
+        let choice = ProfileBannerChoice(photo: "https://cdn/b.jpg", design: aurore)
+
+        XCTAssertTrue(choice.imageSelected, "la photo gagne toujours : c'est elle qui se voit (#10933)")
+        XCTAssertFalse(choice.isSelected(aurore), "un design équipé derrière la photo ne se voit pas : il n'est pas montré choisi")
+        XCTAssertTrue(choice.photoHidesDesigns)
+        XCTAssertEqual(choice.imagePreview, "https://cdn/b.jpg", "la tuile montre la bannière actuelle")
+    }
+
+    func test_bannerChoice_withoutPhoto_theEquippedDesignIsSelected() {
+        let aurore = ProfileDecorRef(pack: "bannieres-essentielles", item: "aurore")
+        let choice = ProfileBannerChoice(photo: nil, design: aurore)
+
+        XCTAssertFalse(choice.imageSelected)
+        XCTAssertTrue(choice.isSelected(aurore))
+        XCTAssertFalse(choice.photoHidesDesigns)
+        XCTAssertNil(choice.imagePreview, "sans photo, la tuile montre un glyphe d'image")
+    }
+
+    func test_bannerChoice_anEmptyPhotoIsNoPhoto() {
+        let choice = ProfileBannerChoice(photo: "", design: nil)
+
+        XCTAssertTrue(choice.imageSelected, "ni photo ni design : la tuile Image est le choix courant")
+        XCTAssertNil(choice.imagePreview)
+        XCTAssertFalse(choice.photoHidesDesigns)
     }
 
     // MARK: - La photo de bannière gagne toujours sur le design (#10933)

@@ -73,9 +73,10 @@ final class OutboxProtectedMediaReplayTests: XCTestCase {
     }
 
     func test_wiring_offlineEnqueues_receiveTheIntent() throws {
-        let source = try String(contentsOf: Self.appRoot.appendingPathComponent(
-            "Features/Main/Views/ConversationView+AttachmentHandlers.swift"), encoding: .utf8)
-        let regex = try NSRegularExpression(pattern: #"carriesReply \? replyId : nil,\s*protection: protection"#)
+        let source = try ["ConversationView+AttachmentHandlers.swift", "AttachmentGroupOutbox.swift"]
+            .map { try String(contentsOf: Self.appRoot.appendingPathComponent("Features/Main/Views/\($0)"), encoding: .utf8) }
+            .joined(separator: "\n")
+        let regex = try NSRegularExpression(pattern: #"carriesReply \? (?:replyId|replyToId) : nil,\s*protection: protection"#)
         let hits = regex.numberOfMatches(in: source, range: NSRange(source.startIndex..., in: source))
         XCTAssertEqual(hits, 4, "les quatre mises en file média (hors ligne et échec en ligne, audio et visuel) portent l'intention")
     }
@@ -110,6 +111,50 @@ final class OutboxProtectedMediaReplayTests: XCTestCase {
         let body = try json(OutboxDispatcher.textReplayRequest(for: item, copyAttachmentsFromMessageId: nil))
         XCTAssertEqual(body["forwardedFromId"] as? String, "m-src")
         XCTAssertEqual(body["forwardedAttachmentIds"] as? [String], ["p3"])
+    }
+
+    func test_textReplayRequest_ofAnOnlineFailureRetryItem_carriesStoryAndForward() throws {
+        let context = SendAttemptContext(clientMessageId: MessageID("cid_1"), startedAt: Date(),
+                                         intent: .none, language: "fr", reusesExistingRow: false)
+        let relations: [MessageRelation] = [
+            .storyReply(to: StoryID("s1"), reference: nil),
+            .forward(of: MessageID("m9"), from: ConversationID("c9"))
+        ]
+        let bodies = try relations.map { relation -> [String: Any] in
+            let item = OutgoingMessage(
+                conversationId: ConversationID("conv-1"), content: "relance", relation: relation,
+                attachments: OutgoingAttachments(ids: nil, previews: nil)
+            ).retryQueueItem(context: context)
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let persisted = try decoder.decode(OfflineQueueItem.self, from: try encoder.encode(item))
+            return try json(OutboxDispatcher.textReplayRequest(for: persisted, copyAttachmentsFromMessageId: nil))
+        }
+        XCTAssertEqual(bodies[0]["storyReplyToId"] as? String, "s1")
+        XCTAssertEqual(bodies[1]["forwardedFromId"] as? String, "m9")
+        XCTAssertEqual(bodies[1]["forwardedFromConversationId"] as? String, "c9")
+        XCTAssertEqual(bodies[0]["clientMessageId"] as? String, "cid_1")
+    }
+
+    func test_textReplayRequest_legacyRetryPayloadWithoutRelationKeys_stillReplays() throws {
+        let legacy = Data("""
+        {"id":"legacy-1","clientMessageId":"cid_legacy","conversationId":"conv-1","content":"hello",\
+        "originalLanguage":"es","replyToId":"m1","createdAt":"2026-10-01T10:00:00Z"}
+        """.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let item = try decoder.decode(OfflineQueueItem.self, from: legacy)
+
+        let body = try json(OutboxDispatcher.textReplayRequest(for: item, copyAttachmentsFromMessageId: nil))
+
+        XCTAssertEqual(body["content"] as? String, "hello")
+        XCTAssertEqual(body["originalLanguage"] as? String, "es")
+        XCTAssertEqual(body["replyToId"] as? String, "m1")
+        XCTAssertEqual(body["clientMessageId"] as? String, "cid_legacy")
+        XCTAssertNil(body["storyReplyToId"])
+        XCTAssertNil(body["forwardedFromId"])
     }
 
     // MARK: - Un envoi média ne part que complet

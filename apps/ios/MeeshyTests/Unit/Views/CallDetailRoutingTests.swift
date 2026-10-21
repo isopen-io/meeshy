@@ -131,10 +131,17 @@ final class CallDetailRoutingTests: XCTestCase {
     /// un message — épinglable, favorisable, signalable, supprimable — et le
     /// geste qui ouvre ces options est le même partout dans le fil.
     func test_conversationView_onLongPress_opensTheUsualOptions_forEveryMessage() throws {
-        let view = try source("Features/Main/Views/ConversationView.swift")
+        // La fermeture `onLongPress` vit dans la couche de la liste, extraite de l'hôte, qui lui
+        // remet `presentLongPressMenu` par `ConversationMessageListActions.presentMenu`.
+        let view = try source("Features/Main/Views/ConversationView+MessageListLayer.swift")
+        let host = try source("Features/Main/Views/ConversationView.swift")
         guard let body = closureBody(after: "onLongPress: { messageId", in: view) else {
-            XCTFail("ConversationView must define the onLongPress closure"); return
+            XCTFail("La couche de la liste must define the onLongPress closure"); return
         }
+        XCTAssertTrue(
+            host.contains("presentMenu: { presentLongPressMenu("),
+            "l'hôte remet à la liste l'unité qui présente le menu"
+        )
 
         // L'OUVERTURE a été extraite dans `presentLongPressMenu(for:cellFrame:)`
         // — la fermeture ne porte plus le littéral, elle délègue. La garde suit
@@ -142,7 +149,7 @@ final class CallDetailRoutingTests: XCTestCase {
         // protège n'est pas l'endroit où la ligne est écrite, c'est qu'aucun
         // aiguillage PAR TYPE ne se réintroduise entre le geste et le menu.
         XCTAssertTrue(
-            body.contains("presentLongPressMenu("),
+            body.contains("actions.presentMenu("),
             "l'appui long doit passer par l'unité qui présente le menu"
         )
 

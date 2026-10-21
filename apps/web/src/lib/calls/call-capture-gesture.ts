@@ -12,7 +12,8 @@
 
 export const DOUBLE_TAP_MS = 320;
 
-export const LONG_PRESS_MS = 450;
+/** Le geste qui FILME (tenir le déclencheur) — un autre geste que l’appui long des menus (`lib/view/long-press.ts`), avec son propre seuil. */
+export const CAPTURE_HOLD_MS = 450;
 
 /** Au-delà, le doigt fait défiler le carrousel : ce n'est plus un appui. */
 export const PRESS_SLOP_PX = 10;

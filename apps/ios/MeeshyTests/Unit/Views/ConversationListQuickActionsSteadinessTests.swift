@@ -119,7 +119,9 @@ final class ConversationListQuickActionsSteadinessTests: XCTestCase {
     func test_listAndTail_readTheSameBranch_andGroupingRecordsItsCorpus() throws {
         let view = try source("Meeshy/Features/Main/Views/ConversationListView.swift")
         XCTAssertTrue(view.contains("if let emptyBranch = currentEmptyBranch {"))
-        XCTAssertTrue(view.contains("Self.showsQuickActionsTail(emptyBranch: currentEmptyBranch)"))
+        XCTAssertTrue(view.contains("emptyBranch: currentEmptyBranch,"), "la liste passe la MÊME branche à sa queue")
+        let tail = try source("Meeshy/Features/Main/Views/ConversationListView+Tail.swift")
+        XCTAssertTrue(tail.contains("ConversationListView.showsQuickActionsTail(emptyBranch: emptyBranch)"))
         let rules = try source("Meeshy/Features/Main/Views/ConversationListView+SectionRules.swift")
         XCTAssertTrue(rules.contains("lastGroupedCorpusCount: conversationViewModel.groupedCorpusCount"))
         let vm = try source("Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift")

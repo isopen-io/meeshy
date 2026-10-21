@@ -25,7 +25,7 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
         XCTAssertTrue(root.contains("iPadSelectionRule.closesDetail("))
 
         let vm = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift"))
-        let drop = try XCTUnwrap(vm.range(of: "private func dropConversationLeftByMe("))
+        let drop = try XCTUnwrap(vm.range(of: "func dropConversationLeftByMe("))
         XCTAssertTrue(
             vm[drop.upperBound...].prefix(400).contains("conversationLeavesDetail.send(conversationId)"),
             "quitter, être retiré ou banni (socket) referme aussi la colonne"
@@ -36,7 +36,8 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
 
     func test_accessRevoked_leavesThroughTheRouter_notADismissThatIsANoOpOnIPad() throws {
         let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
-        let handler = try XCTUnwrap(view.range(of: ".adaptiveOnChange(of: viewModel.accessRevoked)"))
+        XCTAssertTrue(view.contains("accessRevoked: viewModel.accessRevoked"), "le cycle de vie observe la révocation")
+        let handler = try XCTUnwrap(view.range(of: "private func conversationAccessWasRevoked() {"))
         let body = String(view[handler.upperBound...].prefix(500))
         XCTAssertTrue(body.contains("router.pop()"), "le même retour que le bouton de l'en-tête — il referme la colonne iPad")
         XCTAssertTrue(body.contains("if anonymousSession != nil { dismiss() }"), "l'invité, présenté, se ferme")
@@ -61,7 +62,8 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
     /// `.task` initial restait levé — la recherche s'ouvrait dans la suivante.
     func test_openSearch_isConsumedAlsoWhenTheConversationIsAlreadyOpen() throws {
         let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
-        XCTAssertTrue(view.contains(".adaptiveOnChange(of: router.pendingOpenSearch)"))
+        XCTAssertTrue(view.contains("pendingOpenSearch: router.pendingOpenSearch"))
+        XCTAssertTrue(view.contains(".adaptiveOnChange(of: signals.pendingOpenSearch)"))
         XCTAssertTrue(view.contains("await consumePendingOpenSearch()"))
     }
 
@@ -87,7 +89,7 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
     /// disparaissait en silence.
     func test_leavingTheConversation_savesTheTrayToTheDraft() throws {
         let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
-        let leave = try XCTUnwrap(view.range(of: ".onDisappear {\n                composerText.flushPendingChange()\n"))
+        let leave = try XCTUnwrap(view.range(of: "private func conversationDidDisappear() {\n        composerText.flushPendingChange()\n"))
         XCTAssertTrue(view[leave.upperBound...].prefix(200).contains("persistDraftAttachmentsForBackground()"))
     }
 
@@ -133,5 +135,40 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
         XCTAssertFalse(MainWindowRegistry.needsActivation(.foregroundActive))
         let handler = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Services/NotificationActionHandler.swift"))
         XCTAssertTrue(handler.contains("MainWindowRegistry.shared.bringPrimaryForwardIfHidden()"))
+    }
+
+    func test_resizableHandle_declaresColumnResizePointer() throws {
+        let panels = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView+Panels.swift"))
+        let handle = try XCTUnwrap(panels.range(of: "struct iPadResizableHandle: View {"))
+        XCTAssertTrue(panels[handle.upperBound...].contains(".meeshyColumnResizePointer()"))
+    }
+
+    func test_conversationDrop_disabledAcceptsNoType() {
+        XCTAssertEqual(ComposerDropTargetModifier.acceptedTypes(isEnabled: false), [])
+        XCTAssertFalse(ComposerDropTargetModifier.acceptedTypes(isEnabled: true).isEmpty)
+    }
+
+    func test_acceptsDrops_onlyWhenTheComposerIsShown() {
+        XCTAssertTrue(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: false, isBlockedDirect: false, isClosed: false, isWriteRestricted: false, isPreview: false))
+        XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: true, isBlockedDirect: false, isClosed: false, isWriteRestricted: false, isPreview: false))
+        XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: false, isBlockedDirect: true, isClosed: false, isWriteRestricted: false, isPreview: false))
+        XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: false, isBlockedDirect: false, isClosed: true, isWriteRestricted: false, isPreview: false))
+        XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: false, isBlockedDirect: false, isClosed: false, isWriteRestricted: true, isPreview: false))
+    }
+
+    func test_acceptsDrops_neverInTheNotificationPreview() {
+        XCTAssertFalse(ComposerDropTargetModifier.acceptsDrops(
+            isSelecting: false, isBlockedDirect: false, isClosed: false, isWriteRestricted: false, isPreview: true))
+    }
+
+    func test_conversationView_hostsTheDropOnTheWholeBody_withTheComposerAllowance() throws {
+        let view = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift"))
+        XCTAssertTrue(view.contains("ComposerDropTargetModifier("))
+        XCTAssertTrue(view.contains("ingestRespectingGuestAllowance"))
     }
 }

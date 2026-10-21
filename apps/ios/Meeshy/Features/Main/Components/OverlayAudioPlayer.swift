@@ -36,7 +36,7 @@ import MeeshyUI
 /// > désormais l'inventaire pour que le quatrième naisse gardé.
 
 @MainActor
-final class OverlayAudioPlayer: ObservableObject, StoppablePlayer {
+final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer, InterruptiblePlayer {
     @Published var isPlaying = false
     @Published var progress: Double = 0
     @Published var currentTime: TimeInterval = 0
@@ -58,19 +58,24 @@ final class OverlayAudioPlayer: ObservableObject, StoppablePlayer {
     /// `.soloAmbient`, muet sur silencieux. Injectables pour les témoins.
     private let activateSession: () -> Void
     private let releaseSession: () -> Void
+    private let releaseSessionAfterPause: () -> Void
     private var holdsSession = false
+    /// Ce qu'une interruption a mis en pause (#11040, décision i).
+    private var interruptionLedger = InterruptionResumeLedger()
     private var sessionEventsCancellable: AnyCancellable?
 
     init(
         sessionEvents: AnyPublisher<MediaSessionCoordinator.Event, Never> = MediaSessionCoordinator.shared.events.eraseToAnyPublisher(),
-        activateSession: @escaping () -> Void = { MediaSessionCoordinator.shared.activatePlaybackSync(options: []) },
+        activateSession: @escaping () -> Void = { MediaSessionCoordinator.shared.activateContentPlayback(.audible) },
         releaseSession: @escaping () -> Void = {
             // `setActive(false)` est un aller-retour HAL bloquant : hors du fil principal.
             MediaSessionCoordinator.shared.deactivatePlaybackDeferred()
-        }
+        },
+        releaseSessionAfterPause: @escaping () -> Void = { MediaSessionCoordinator.shared.releaseAfterUserPause() }
     ) {
         self.activateSession = activateSession
         self.releaseSession = releaseSession
+        self.releaseSessionAfterPause = releaseSessionAfterPause
         sessionEventsCancellable = sessionEvents
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.handleSessionEvent(event) }
@@ -80,16 +85,32 @@ final class OverlayAudioPlayer: ObservableObject, StoppablePlayer {
     }
 
     /// Interruption (appel, Siri, alarme) ou casque débranché : l'aperçu se met en pause ET le dit — sinon
-    /// `isPlaying` restait vrai sur un lecteur arrêté, et le premier appui (« pause ») ne faisait rien. Pas de reprise
-    /// automatique : c'est un aperçu, l'utilisateur relance s'il le veut.
+    /// `isPlaying` restait vrai sur un lecteur arrêté, et le premier appui (« pause ») ne faisait rien. À la fin de
+    /// l'interruption, il reprend comme tous les lecteurs (#11040, décision i) — sauf si l'utilisateur l'a mis en pause
+    /// entre-temps. Sans reprise, la session se rend par le coordinateur (décision j).
     private func handleSessionEvent(_ event: MediaSessionCoordinator.Event) {
-        switch event {
-        case .interruptionBegan, .routeChangedOldDeviceUnavailable:
+        guard let signal = InterruptionResumeLedger.signal(for: event, isPlaying: isPlaying) else { return }
+        switch interruptionLedger.handle(signal) {
+        case .pause:
             avPlayer?.pause()
             if isPlaying { isPlaying = false }
-        case .interruptionEndedShouldResume, .interruptionEndedShouldNotResume, .routeChangedOther, .callEndedShouldResume:
+        case .resume:
+            guard avPlayer != nil, !MediaSessionCoordinator.shared.isCallActive else { return }
+            resumePlayback()
+        case .none:
             break
         }
+    }
+
+    /// Un appel Meeshy décroché : pause marquée « interrompue », reprise au raccrochage (#11063).
+    func interruptForCall() {
+        handleSessionEvent(.interruptionBegan)
+    }
+
+    private func resumePlayback() {
+        takeSession()
+        avPlayer?.rate = playbackRate
+        isPlaying = true
     }
 
     private func takeSession() {
@@ -97,16 +118,23 @@ final class OverlayAudioPlayer: ObservableObject, StoppablePlayer {
         holdsSession = true
     }
 
+    /// Tant que l'aperçu sonne, aucune libération de session ne passe sous lui (#11040, j).
+    var isPlayingAudibly: Bool { isPlaying }
+
     /// `Int(_:)` trappe sur une valeur non finie : un temps invalide livré pendant un changement d'item ne
     /// doit pas emporter l'app pour un pourcentage.
     var percentInt: Int { progress.isFinite ? Int(max(0, min(1, progress)) * 100) : 0 }
 
     func toggle(url: String) {
         if isPlaying {
+            _ = interruptionLedger.handle(.userPaused)
             avPlayer?.pause()
             isPlaying = false
+            // La musique que l'aperçu avait coupée reprend dans ≈ 3 s, sauf relance (#11040, j).
+            releaseSessionAfterPause()
             return
         }
+        _ = interruptionLedger.handle(.userStartedPlayback)
 
         PlaybackCoordinator.shared.willStartPlaying(external: self)
         if currentURL != url {
@@ -120,9 +148,7 @@ final class OverlayAudioPlayer: ObservableObject, StoppablePlayer {
         }
 
         // Reprise : la session a pu être rendue ou coupée (interruption) depuis la pause.
-        takeSession()
-        avPlayer?.rate = playbackRate
-        isPlaying = true
+        resumePlayback()
     }
 
     /// Cache-first: consults the audio disk cache BEFORE falling back to a
@@ -177,6 +203,7 @@ final class OverlayAudioPlayer: ObservableObject, StoppablePlayer {
     /// jumeau d'`AudioPlaybackManager.resetState` et de
     /// `SharedAVPlayerManager.cleanup`, #6977).
     func stop() {
+        _ = interruptionLedger.handle(.contentReleased)
         avPlayer?.pause()
         if let obs = timeObserver { avPlayer?.removeTimeObserver(obs) }
         timeObserver = nil
@@ -269,16 +296,24 @@ final class OverlayAudioPlayer: ObservableObject, StoppablePlayer {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.isPlaying = false
-                self?.progress = 0
-                self?.currentTime = 0
-                self?.avPlayer?.seek(to: .zero)
-            }
+            Task { @MainActor [weak self] in self?.handlePlaybackEnded() }
         }
     }
 
-    deinit {
+    /// Fin de l'aperçu : la tête revient au début pour une relance, et la session se rend — la musique que
+    /// l'aperçu avait coupée repart (#11040, décision j).
+    func handlePlaybackEnded() {
+        isPlaying = false
+        progress = 0
+        currentTime = 0
+        avPlayer?.seek(to: .zero)
+        if holdsSession {
+            holdsSession = false
+            releaseSession()
+        }
+    }
+
+    nonisolated deinit {
         if let obs = timeObserver { avPlayer?.removeTimeObserver(obs) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         NotificationCenter.default.removeObserver(self)

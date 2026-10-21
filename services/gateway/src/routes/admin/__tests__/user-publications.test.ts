@@ -6,6 +6,12 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import Fastify, { type FastifyInstance } from 'fastify';
 
+const notifier = { createNotification: jest.fn<any>().mockResolvedValue({ id: 'n1' }) };
+jest.mock('../../../services/notifications/notification-service-registry', () => ({
+  getSharedNotificationService: () => notifier,
+  setSharedNotificationService: jest.fn(),
+}));
+
 import { registerUserPublicationRoutes } from '../user-publications';
 
 const AUTHOR = '507f1f77bcf86cd799439031';
@@ -486,6 +492,42 @@ describe('troisième passe — la salle temps réel du post se vide au retrait',
     postFindMany.mockResolvedValue([row({ id: P1, visibility: 'PRIVATE', moderationHiddenAt: new Date('2026-10-11T00:00:00Z'), moderationHiddenById: ACTOR, moderationPriorVisibility: 'PUBLIC' })]);
     await moderate(app, { action: 'restore', postIds: [P1], reason: 'Erreur de modération' });
     expect(inRoom).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("une mise hors ligne depuis la fiche d'un membre le prévient (#11158)", () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const notified = () => notifier.createNotification.mock.calls.map(([call]) => (call as { userId: string; metadata: Record<string, unknown> }));
+
+  it('hors ligne : une notification content_removed par publication retirée, à leur auteur', async () => {
+    postFindMany.mockResolvedValue([row({ id: P1 }), row({ id: P2, type: 'STORY' })]);
+    const app = await buildApp('ADMIN');
+    expect((await moderate(app, { action: 'take-offline', postIds: [P1, P2], reason: 'Contenu signalé' })).statusCode).toBe(200);
+    await flush();
+    expect(notified().map((call) => [call.userId, call.metadata])).toEqual([
+      [AUTHOR, { contentType: 'post', contentId: P1, postId: P1, reason: 'Contenu signalé' }],
+      [AUTHOR, { contentType: 'story', contentId: P2, postId: P2, reason: 'Contenu signalé' }],
+    ]);
+    await app.close();
+  });
+
+  it("mettre en privé prévient l'auteur que sa publication est privée", async () => {
+    postFindMany.mockResolvedValue([row()]);
+    const app = await buildApp('ADMIN');
+    expect((await moderate(app, { action: 'make-private', postIds: [P1], reason: 'Resserrer' })).statusCode).toBe(200);
+    await flush();
+    expect(notified().map((call) => call.metadata)).toEqual([{ contentType: 'post', contentId: P1, postId: P1, reason: 'Resserrer', madePrivate: true }]);
+    await app.close();
+  });
+
+  it('remettre en ligne ne prévient personne', async () => {
+    const app = await buildApp('ADMIN');
+    postFindMany.mockResolvedValue([row({ visibility: 'PRIVATE', moderationHiddenAt: new Date('2026-10-11T00:00:00Z'), moderationHiddenById: ACTOR, moderationPriorVisibility: 'PUBLIC' })]);
+    await moderate(app, { action: 'restore', postIds: [P1], reason: 'Erreur de modération' });
+    await flush();
+    expect(postUpdateMany).toHaveBeenCalledTimes(1);
+    expect(notified()).toEqual([]);
     await app.close();
   });
 });

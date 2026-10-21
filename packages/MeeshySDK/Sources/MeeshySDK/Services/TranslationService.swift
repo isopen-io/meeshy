@@ -9,7 +9,7 @@ public protocol TranslationServiceProviding: Sendable {
     ) async throws -> TranslateResponse
 }
 
-public final class TranslationService: TranslationServiceProviding, @unchecked Sendable {
+public final class TranslationService: TranslationServiceProviding, Sendable {
     public static let shared = TranslationService()
     private let api: APIClientProviding
 

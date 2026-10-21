@@ -19,7 +19,7 @@ final class OutboxLiveActivityCoordinator {
 
     static let shared = OutboxLiveActivityCoordinator()
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "live-activity")
+    private static let logger = MeeshyLog.logger(.liveActivity)
 
     private var cancellable: AnyCancellable?
     private var running: OutboxActivityLaw.Running?

@@ -18,15 +18,29 @@ import Network
 /// en points de l'écran.
 nonisolated final class DeviceRemoteTests: XCTestCase {
 
-    static let port: UInt16 = 8100
+    /// 8100 par défaut (iproxy de l'iPhone) ; un simulateur prend un port à lui
+    /// (`TEST_RUNNER_IPHONE_REMOTE_PORT`), sans quoi il vole celui de l'iPhone.
+    static var port: UInt16 {
+        ProcessInfo.processInfo.environment["IPHONE_REMOTE_PORT"].flatMap(UInt16.init) ?? 8100
+    }
 
     func test_serve() throws {
         // Un élément qui disparaît entre sa recherche et son toucher ne
         // termine pas la session : l'échec se rapporte et la commande suivante
         // s'exécute.
         continueAfterFailure = true
-        let app = XCUIApplication()
-        app.launch()
+        // Une app qui s'anime sans cesse n'est jamais « au repos » et XCUITest
+        // attend alors sans fin avant chaque geste : `IPHONE_REMOTE_SPRINGBOARD=1`
+        // (passé en `TEST_RUNNER_IPHONE_REMOTE_SPRINGBOARD=1`) vise le tremplin,
+        // qui touche l'écran par coordonnées sans attendre Meeshy, déjà lancée.
+        let viaSpringboard = ProcessInfo.processInfo.environment["IPHONE_REMOTE_SPRINGBOARD"] == "1"
+        let app = viaSpringboard ? XCUIApplication(bundleIdentifier: "com.apple.springboard") : XCUIApplication()
+        // Lancée par XCUITest, Meeshy scelle son réseau (#10854) : une recette au simulateur
+        // face au STAGING le lève explicitement (`TEST_RUNNER_IPHONE_REMOTE_LIVE_NETWORK=1`).
+        if ProcessInfo.processInfo.environment["IPHONE_REMOTE_LIVE_NETWORK"] == "1" {
+            app.launchEnvironment["MEESHY_TEST_LIVE_NETWORK"] = "1"
+        }
+        if !viaSpringboard { app.launch() }
         let server = DeviceRemoteServer()
         try server.start(port: Self.port)
         var serving = true

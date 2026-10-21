@@ -2,6 +2,7 @@ import AVFoundation
 import CoreMedia
 import XCTest
 import UIKit
+import SwiftUI
 import MeeshyUI
 @testable import Meeshy
 
@@ -31,21 +32,365 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertEqual(ComposerEditTools.offered(.audio), [.trim, .sound], "un son ne se recadre pas")
     }
 
-    /// **#10930 — on entre en plein écran, sans outil** (porteur 2026-10-18) :
-    /// la prise remplit le viewport et aucun chrome d'outil ne la couvre.
-    func test_initial_nothingIsActiveOnEntry_theTakeFillsTheScreen() {
+    /// **Le rail est là dès l'entrée, AUCUN outil ouvert** (porteur 2026-10-20 :
+    /// « afficher immédiatement les touches d'édition » ; en vidéo, « Couper »
+    /// n'est plus présélectionné).
+    func test_initial_noToolIsOpenOnEntry() {
         XCTAssertEqual(ComposerEditTools.initial(.photo), [])
         XCTAssertEqual(ComposerEditTools.initial(.video(hasAudio: true)), [])
         XCTAssertEqual(ComposerEditTools.initial(.audio), [])
     }
 
-    /// **#10930 — le glissé vers le haut montre la barre de coupe, « Couper »
-    /// sélectionné** ; son spectre se peint dessus quand la prise a un son.
-    func test_revealed_aVideoShowsItsCut_aPhotoNothingYet() {
-        XCTAssertEqual(ComposerEditTools.revealed(.video(hasAudio: true)), [.trim, .sound])
-        XCTAssertEqual(ComposerEditTools.revealed(.video(hasAudio: false)), [.trim])
-        XCTAssertEqual(ComposerEditTools.revealed(.audio), [.trim, .sound])
-        XCTAssertEqual(ComposerEditTools.revealed(.photo), [], "une photo n'a que le recadrage, à choisir")
+    /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur
+    /// 2026-10-20) : une famille ouverte ou un outil montré les cache ; plus
+    /// rien d'ouvert, ils reviennent.
+    func test_showsTopRow_onlyWhileNoEditElementIsShown() {
+        XCTAssertTrue(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: []))
+        XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: true, shownTools: []))
+        XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: [.crop]))
+        XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: [.trim]))
+        XCTAssertFalse(ComposerEditTools.showsTopRow(familyOpen: false, shownTools: [.sound]))
+    }
+
+    /// **Témoin de COMPORTEMENT, sur l'écran rendu** (recette iPhone 2026-10-20 :
+    /// Recadrer ou Filtres ouverts, (x) et « Terminé » restaient affichés).
+    func test_theRenderedChrome_hidesDone_whileAnEditElementIsShown() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        let ecran = RenderedScreen(ComposerCaptureChrome(session: session, size: .fullScreen,
+                                                         onDisarm: {}, onValidateSegments: {}))
+        defer { ecran.dismount() }
+        let termine = ComposerCaptureCopy.done
+        XCTAssertTrue(Self.settles { ecran.labels.contains(termine) }, "à l'entrée, « Terminé » est là : \(ecran.labels)")
+        session.toggleEditTool(.crop)
+        XCTAssertTrue(Self.settles { !ecran.labels.contains(termine) }, "Recadrer ouvert : \(ecran.labels)")
+        session.toggleEditTool(.crop)
+        XCTAssertTrue(Self.settles { ecran.labels.contains(termine) }, "Recadrer refermé : \(ecran.labels)")
+        session.toggleFamily(.filters)
+        XCTAssertTrue(Self.settles { !ecran.labels.contains(termine) }, "Filtres ouverts : \(ecran.labels)")
+    }
+
+    /// Le même témoin, à travers LE montage de la barre de conversation
+    /// (`ComposerViewfinder` → `ComposerCaptureMount`), là où la recette l'a vu.
+    func test_theMountedViewfinder_hidesDone_whileCropIsOpen() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        let montage = ComposerCaptureMount(session: session, size: .constant(.card), offersSizeToggle: false,
+                                           onDisarm: {}, onDeliver: { _ in }) {
+            Color.black
+                .ignoresSafeArea()
+                .anchorPreference(key: ComposerSceneCameraFrameKey.self, value: .bounds) { $0 }
+        }
+        let ecran = RenderedScreen(montage)
+        defer { ecran.dismount() }
+        let termine = ComposerCaptureCopy.done
+        XCTAssertTrue(Self.settles { ecran.labels.contains(termine) }, "à l'entrée : \(ecran.labels)")
+        session.toggleEditTool(.crop)
+        XCTAssertTrue(Self.settles { !ecran.labels.contains(termine) }, "Recadrer ouvert : \(ecran.labels)")
+    }
+
+    /// **Le toucher qui ferme l'alerte n'atteint pas la prise** (recette iPhone
+    /// 2026-10-20 : « Abandonner » touché, les outils se cachaient derrière).
+    func test_aTapThatClosesTheAlert_doesNotReachTheTake() throws {
+        let maintenant = Date(timeIntervalSinceReferenceDate: 1_000)
+        XCTAssertTrue(ComposerCaptureTapRule.belongsToAnAlert(presented: true, closedAt: nil, now: maintenant))
+        XCTAssertTrue(ComposerCaptureTapRule.belongsToAnAlert(presented: false, closedAt: maintenant.addingTimeInterval(-0.1),
+                                                              now: maintenant), "la levée qui ferme l'alerte")
+        XCTAssertFalse(ComposerCaptureTapRule.belongsToAnAlert(presented: false, closedAt: maintenant.addingTimeInterval(-1),
+                                                               now: maintenant), "un toucher d'après en est un vrai")
+        XCTAssertFalse(ComposerCaptureTapRule.belongsToAnAlert(presented: false, closedAt: nil, now: maintenant))
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("!session.discardPrompt.swallowsTap(now: Date())"),
+                      "le toucher de la nappe consulte la question en cours")
+    }
+
+    /// **« Abandonner » abandonne la photo** (recette iPhone 2026-10-20 : la
+    /// photo restait en retouche). La question vit dans la session ; SwiftUI
+    /// peut refermer l'alerte AVANT d'appeler l'action, et l'action trouve
+    /// encore ce qu'elle abandonne.
+    func test_theDiscardAnswer_abandonsTheTake_evenWhenTheAlertClosedFirst() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        session.discardPrompt.ask(take: true, photo: true)
+        XCTAssertTrue(session.discardPrompt.isPresented)
+        session.discardPrompt.dismiss()
+        XCTAssertFalse(ComposerCaptureDiscardFlow.confirm(session), "la retouche revient viser, le viseur reste")
+        XCTAssertFalse(session.phase.isEditing, "la photo est abandonnée")
+        XCTAssertNil(session.discardPrompt.request, "la réponse consomme la question")
+    }
+
+    func test_continuing_keepsTheTake_andAViewfinderQuestion_closesTheViewfinder() {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        session.discardPrompt.ask(take: true, photo: true)
+        ComposerCaptureDiscardFlow.keep(session)
+        XCTAssertTrue(session.phase.isEditing, "« Continuer » garde la photo")
+        XCTAssertFalse(ComposerCaptureDiscardFlow.confirm(session), "une réponse sans question ne fait rien")
+        XCTAssertTrue(session.phase.isEditing)
+        let viseur = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        viseur.discardPrompt.ask(take: false, photo: false)
+        XCTAssertTrue(ComposerCaptureDiscardFlow.confirm(viseur), "une question posée au viseur le range")
+    }
+
+    func test_theTapThatClosesTheAlert_isSwallowed() {
+        var question = ComposerCaptureDiscardPrompt()
+        let maintenant = Date(timeIntervalSinceReferenceDate: 1_000)
+        question.ask(take: true, photo: true)
+        XCTAssertTrue(question.swallowsTap(now: maintenant), "pendant l'alerte")
+        _ = question.answer(now: maintenant)
+        XCTAssertTrue(question.swallowsTap(now: maintenant.addingTimeInterval(0.1)), "la levée qui la ferme")
+        XCTAssertFalse(question.swallowsTap(now: maintenant.addingTimeInterval(1)), "un toucher d'après")
+    }
+
+    // MARK: - #11133 — la même retouche pour une pièce à envoyer
+
+    private static func piece(_ kind: ComposerRetouchPiece.Kind) throws -> ComposerRetouchPiece {
+        let dossier = FileManager.default.temporaryDirectory
+        switch kind {
+        case .image:
+            let url = dossier.appendingPathComponent("piece-\(UUID().uuidString).png")
+            let image = UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400))
+            try XCTUnwrap(image.pngData()).write(to: url)
+            return ComposerRetouchPiece(attachmentId: "img", fileURL: url, mimeType: "image/png", kind: .image)
+        case .video:
+            let url = dossier.appendingPathComponent("piece-\(UUID().uuidString).mov")
+            try Data([0, 1, 2, 3]).write(to: url)
+            return ComposerRetouchPiece(attachmentId: "vid", fileURL: url, mimeType: "video/quicktime", kind: .video)
+        }
+    }
+
+    /// **Une image choisie s'ouvre dans la retouche de la caméra** : rail
+    /// visible, aucun outil ouvert — les mêmes règles que pour une prise.
+    func test_11133_anImagePiece_opensInTheCaptureRetouch() async throws {
+        let session = ConversationPieceRetouchOpening.session(gallery: MockComposerGallery())
+        let ouverte = await ConversationPieceRetouchOpening.open(try Self.piece(.image), in: session)
+        XCTAssertTrue(ouverte)
+        XCTAssertEqual(session.phase, .editing(.photo))
+        XCTAssertTrue(session.editChromeShown, "les outils sont là d'emblée")
+        XCTAssertEqual(session.activeEditTools, [], "aucun outil ouvert")
+        XCTAssertFalse(session.savePolicy().savesRenderOnFinish(alreadySaved: false),
+                       "« Terminé » ne réenregistre pas en galerie un média qui en vient")
+    }
+
+    /// **Une vidéo choisie s'ouvre par une COPIE** : « Abandonner » efface le
+    /// fichier de la retouche, jamais celui de la pièce en attente.
+    func test_11133_aVideoPiece_opensOnACopy_andAbandoningKeepsThePieceFile() async throws {
+        let piece = try Self.piece(.video)
+        let session = ConversationPieceRetouchOpening.session(
+            gallery: MockComposerGallery(),
+            loopPlayerFactory: { _ in MockComposerLoopPlayer(duration: 6, hasAudio: true) })
+        let ouverte = await ConversationPieceRetouchOpening.open(piece, in: session)
+        XCTAssertTrue(ouverte)
+        guard case .editing(.video(let url)) = session.phase else { return XCTFail("la vidéo est en retouche") }
+        XCTAssertNotEqual(url, piece.fileURL, "la retouche lit une copie")
+        session.cancelEditing()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: piece.fileURL.path), "le fichier de la pièce reste")
+    }
+
+    func test_11133_onlyAnAbandonedRetouch_removesThePiece() {
+        XCTAssertTrue(ConversationPieceRetouchOpening.abandoned(wasEditing: true, isEditing: false, settled: false),
+                      "« Abandonner » : la pièce part")
+        XCTAssertFalse(ConversationPieceRetouchOpening.abandoned(wasEditing: true, isEditing: false, settled: true),
+                       "« Terminé » a déjà remis la pièce : rien ne part")
+        XCTAssertFalse(ConversationPieceRetouchOpening.abandoned(wasEditing: false, isEditing: true, settled: false))
+    }
+
+    /// **Une disparition n'est pas une fermeture** (#11347) : SwiftUI détache puis
+    /// rattache le contenu d'un plein écran sans le détruire. La retouche
+    /// rattachée se réarme et rouvre sa vidéo — sans quoi elle restait noire,
+    /// sans croix ni « Terminé », sur une session éteinte.
+    func test_11347_aRetouchDetachedThenReattached_showsItsVideoAgain() async throws {
+        let choisie = try Self.piece(.video).fileURL
+        let session = ConversationPieceRetouchOpening.session(
+            gallery: MockComposerGallery(),
+            loopPlayerFactory: { _ in MockComposerLoopPlayer(duration: 6, hasAudio: true) })
+        var vie = ComposerCaptureCoverLife()
+        vie.detach()
+        session.disarm()
+        XCTAssertTrue(vie.attach(), "rattachée après une disparition, la retouche se réarme")
+        ComposerCaptureCoverLife.reattach(session)
+        let ouverte = await ConversationPieceRetouchOpening.open(.video(choisie), in: session)
+        XCTAssertTrue(ouverte)
+        XCTAssertNotEqual(session.stage, .off, "le montage ne peint rien sur une session éteinte")
+        guard case .editing(.video) = session.phase else { return XCTFail("la vidéo est en retouche") }
+        XCTAssertFalse(vie.attach(), "un second rattachement sans disparition ne réarme rien")
+    }
+
+    /// Détachée, la retouche ne répond pas à l'hôte : ni « Abandonner » lu
+    /// dans le désarmement, ni fermeture ; rattachée, elle répond une fois.
+    func test_11347_aDetachedRetouch_neitherSettlesNorReadsItsDisarmAsAnAbandon() {
+        var vie = ComposerCaptureCoverLife()
+        vie.detach()
+        XCTAssertFalse(vie.abandoned(wasEditing: true, isEditing: false),
+                       "le désarmement d'une disparition n'est pas « Abandonner »")
+        XCTAssertFalse(vie.settle(), "une retouche détachée ne ferme rien")
+        _ = vie.attach()
+        XCTAssertTrue(vie.abandoned(wasEditing: true, isEditing: false), "rattachée, « Abandonner » retire la pièce")
+        XCTAssertTrue(vie.settle(), "la première réponse part")
+        XCTAssertFalse(vie.settle(), "une seule réponse à l'hôte")
+        XCTAssertFalse(vie.abandoned(wasEditing: true, isEditing: false), "« Terminé » a déjà répondu")
+    }
+
+    /// **Le viseur servi seul subit le même cycle** (#11352) : ouvert clavier
+    /// levé, SwiftUI le détache puis le rattache sans le détruire. Sa session,
+    /// désarmée à la disparition, se réarme au mode que la porte a promis —
+    /// sans quoi le montage ne peignait ni l'aperçu ni une seule commande.
+    func test_11352_aViewfinderDetachedThenReattached_isArmedAgainInItsPromisedMode() {
+        let promis = ComposerViewfinderRules.sceneMode(for: .video)
+        let session = ComposerCaptureSession(stage: .armed, mode: promis)
+        var vie = ComposerCaptureCoverLife()
+        vie.detach()
+        session.disarm()
+        XCTAssertEqual(session.stage, .off, "la disparition éteint la session")
+        XCTAssertTrue(vie.attach(), "rattaché après une disparition, le viseur se réarme")
+        ComposerCaptureCoverLife.reattach(session, mode: promis)
+        XCTAssertEqual(session.stage, .armed, "le montage ne peint ni l'aperçu ni les commandes d'une session éteinte")
+        XCTAssertEqual(session.mode, .video, "la barre annonce encore le mode que la porte a promis")
+    }
+
+    /// Le viseur lit sa disparition comme la retouche (#11352) : une seule vie
+    /// partagée, jamais une mécanique jumelle — désarmé en disparaissant,
+    /// réarmé en revenant, et une prise qui ne part qu'une fois.
+    func test_11352_theViewfinderSharesTheCoverLifeOfTheRetouch() throws {
+        let viseur = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
+        XCTAssertTrue(viseur.contains("ComposerCaptureCoverLife()"), "le viseur tient la même vie que la retouche")
+        XCTAssertTrue(viseur.contains("life.detach()"), "une disparition détache le viseur sans le régler")
+        XCTAssertTrue(viseur.contains("life.attach()"), "un rattachement se reconnaît")
+        XCTAssertTrue(viseur.contains("ComposerCaptureCoverLife.reattach(capture"), "et réarme la session")
+        XCTAssertTrue(viseur.contains("life.settle()"), "une prise ne part qu'une fois, jamais d'un viseur détaché")
+        XCTAssertFalse(viseur.contains("delivered"), "aucun second drapeau « déjà rendu » à côté de la vie")
+    }
+
+    func test_11133_tappingAPendingPiece_opensTheCaptureRetouch_withoutTheCamera() throws {
+        let toucher = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationView+ComposerAttachments.swift")
+        XCTAssertTrue(toucher.contains("openPieceRetouch(attachment.id)"), "toucher une pièce ouvre la retouche de la caméra")
+        let couches = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
+        XCTAssertTrue(couches.contains("ConversationPieceRetouch(piece: piece"), "la retouche est montée")
+        let porte = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ConversationPieceRetouch.swift")
+        XCTAssertTrue(porte.contains("ComposerCaptureMount(session: session"), "le même montage que la caméra")
+        let scene = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureStage.swift")
+        XCTAssertTrue(scene.contains("!session.phase.isEditing\n            && ComposerSceneCameraSurface.shown("),
+                      "une retouche se fait même sans accès à la caméra")
+    }
+
+    /// **Un outil touché est CET outil, et il n'existe qu'une fois** (recette
+    /// iPhone 2026-10-20 : Couper et Son s'allumaient seuls, toucher Couper
+    /// éteignait Son, toucher Son allumait Recadrer). Le rail ne doit porter
+    /// qu'UNE instance de chaque outil — une copie fantôme décalée prend les
+    /// touchers de sa voisine.
+    func test_eachEditTool_isRenderedOnce_andActivatingItTogglesItAlone() async {
+        let (session, _) = await videoSession()
+        let ecran = RenderedScreen(ComposerCaptureBottomRow(session: session, context: session.gestureContext)
+                                    .frame(width: 440),
+                                   size: CGSize(width: 440, height: 400))
+        defer { ecran.dismount() }
+        XCTAssertEqual(session.activeEditTools, [], "aucun outil ouvert à l'entrée")
+        for outil in session.editTools {
+            let nom = ComposerCaptureCopy.editToolName(outil)
+            let noeuds = ecran.nodes.filter { $0.label == nom }
+            XCTAssertEqual(noeuds.count, 1, "« \(nom) » est rendu une seule fois : \(ecran.labels)")
+        }
+        XCTAssertEqual(session.activeEditTools, [], "monter le rail n'allume rien")
+    }
+
+    /// **« Un seul éditeur » vaut aussi pour la bande des récents** (porteur
+    /// 2026-10-20) : une image ou une vidéo récente se retouche avant sa pose,
+    /// dans la conversation comme dans un commentaire.
+    func test_11133_aRecentImage_opensInTheCaptureRetouch_beforeItIsStaged() async {
+        let session = ConversationPieceRetouchOpening.session(gallery: MockComposerGallery())
+        let image = UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400))
+        let ouverte = await ConversationPieceRetouchOpening.open(.image(image), in: session)
+        XCTAssertTrue(ouverte)
+        XCTAssertEqual(session.phase, .editing(.photo))
+        XCTAssertEqual(session.activeEditTools, [])
+    }
+
+    func test_11133_recentMediaEdits_openTheCaptureRetouch_inConversationAndComments() throws {
+        let couches = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
+        let commentaires = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/CommentSceneRetouch.swift")
+        for code in [couches, commentaires] {
+            XCTAssertFalse(code.contains("ConversationImageSceneEditor("), "plus de scène pour une image récente")
+            XCTAssertFalse(code.contains("ConversationVideoSceneEditor("), "plus de scène pour une vidéo récente")
+            XCTAssertTrue(code.contains("ConversationPieceRetouch(source: .image("))
+            XCTAssertTrue(code.contains("ConversationPieceRetouch(source: .video("))
+        }
+    }
+
+    // MARK: - #11170 — la feuille du fil retouche dans la même retouche
+
+    /// **La feuille de création d'un post retouche ses images et ses vidéos
+    /// dans la retouche de la caméra** (#11170, « un seul éditeur ») : une
+    /// pièce en attente, et une vidéo juste choisie avant qu'elle rejoigne la
+    /// publication. Plus aucune scène du composer n'y est montée.
+    func test_11170_theFeedSheet_retouchesItsMedia_inTheCaptureRetouch() throws {
+        let feuille = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/FeedComposerSheet.swift")
+        XCTAssertFalse(feuille.contains("ConversationImageSceneEditor("), "plus de scène pour une image en attente")
+        XCTAssertFalse(feuille.contains("ConversationVideoSceneEditor("), "plus de scène pour une vidéo")
+        XCTAssertTrue(feuille.contains("ConversationPieceRetouch(piece: piece"), "une pièce en attente se retouche")
+        XCTAssertTrue(feuille.contains("ConversationPieceRetouch(source: .video(url)"),
+                      "une vidéo juste choisie se retouche avant de rejoindre la publication")
+        XCTAssertTrue(feuille.contains("ComposerRetouchSeries.candidates(attachments: pendingAttachments"),
+                      "les mêmes pièces que la conversation : une image fixe ou une vidéo, jamais un GIF")
+        XCTAssertTrue(feuille.contains("removeSheetAttachment(id: piece.attachmentId)"),
+                      "« Abandonner » retire la pièce en attente")
+    }
+
+    /// **« Terminé » rend la pièce À SA PLACE** : une image retouchée remplace
+    /// la pièce, une vidéo retouchée remplace la vidéo ; seule une image
+    /// devenue vidéo repasse par la préparation d'une vidéo.
+    func test_11170_aRetouchedPiece_landsInItsPlace() throws {
+        let image = UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 30, height: 40))
+        let rendu = URL(fileURLWithPath: "/tmp/rendu.mp4")
+        XCTAssertEqual(FeedSheetRetouchLanding(.image(image), from: .image), .replaceImage(image))
+        XCTAssertEqual(FeedSheetRetouchLanding(.image(image), from: .video), .replaceImage(image))
+        XCTAssertEqual(FeedSheetRetouchLanding(.video(rendu), from: .video), .replaceVideo(rendu))
+        XCTAssertEqual(FeedSheetRetouchLanding(.video(rendu), from: .image), .swapForVideo(rendu))
+    }
+
+    /// **Une vidéo juste choisie s'ouvre par une COPIE** : « Abandonner »
+    /// efface la copie, jamais le fichier choisi, et rien n'est ajouté.
+    func test_11170_aChosenVideo_opensOnACopy_andAbandoningKeepsTheChosenFile() async throws {
+        let choisie = try Self.piece(.video).fileURL
+        let session = ConversationPieceRetouchOpening.session(
+            gallery: MockComposerGallery(),
+            loopPlayerFactory: { _ in MockComposerLoopPlayer(duration: 6, hasAudio: true) })
+        let ouverte = await ConversationPieceRetouchOpening.open(.video(choisie), in: session)
+        XCTAssertTrue(ouverte)
+        guard case .editing(.video(let url)) = session.phase else { return XCTFail("la vidéo est en retouche") }
+        XCTAssertNotEqual(url, choisie, "la retouche lit une copie")
+        XCTAssertFalse(session.savePolicy().savesRenderOnFinish(alreadySaved: false),
+                       "aucun enregistrement automatique en galerie")
+        session.cancelEditing()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: choisie.path), "le fichier choisi reste")
+    }
+
+    /// **Les portes de scène de la conversation ont quitté le dépôt** : la
+    /// retouche de la caméra est l'éditeur UNIQUE d'une image ou d'une vidéo.
+    func test_11170_theConversationSceneDoors_areGone() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: racine.appendingPathComponent("Meeshy/Features/Main/Composer/ConversationImageSceneDoor.swift").path))
+        let retouche = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ConversationPieceRetouch.swift")
+        XCTAssertFalse(retouche.contains("MeeshyComposerHost("), "la retouche ne monte pas le meuble")
+    }
+
+    private static func settles(_ condition: () -> Bool) -> Bool {
+        let fin = Date().addingTimeInterval(3)
+        while Date() < fin {
+            if condition() { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        return condition()
+    }
+
+    func test_theTopRow_followsTheLaw_andThePlayback_isAlwaysMountedForAVideo() throws {
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("topRow.opacity(showsTopRow ? 1 : 0)"), "(x) et « Terminé » suivent la loi")
+        XCTAssertTrue(chrome.contains("ComposerEditTools.showsTopRow(familyOpen: session.openFamily != nil, shownTools: session.shownEditTools)"))
+        XCTAssertTrue(chrome.contains("if !finishing, session.offersEditPlayback { editPlayback }"),
+                      "lecture et volume ne dépendent ni du chrome ni d'un outil")
     }
 
     /// **#10930 — seul le recadrage réduit le média**, et seulement quand le
@@ -85,11 +430,11 @@ final class ComposerEditToolsTests: XCTestCase {
 
     func test_panels_stackEveryActiveTool_fromTheProportionsDownToTheCut() {
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.trim, .sound, .crop]),
-                       [.trim],
-                       "les proportions se posent sur la scène (#10930) ; le son se peint sur la coupe (#10356)")
-        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.sound, .crop]), [.sound],
+                       [.presets, .trim],
+                       "les proportions sous la scène (porteur 2026-10-20) ; le son se peint sur la coupe (#10356)")
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.sound, .crop]), [.presets, .sound],
                        "Couper retiré : le spectre garde sa propre piste")
-        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.crop]), [])
+        XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: [.crop]), [.presets])
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: false, active: []), [])
         XCTAssertEqual(ComposerEditTools.panels(familyOpen: true, active: [.crop, .trim, .sound]), [.band],
                        "une bande ouverte replie les panneaux, sans désactiver leurs outils")
@@ -116,50 +461,50 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(chrome.contains("session.showsCropBrackets, let aspect = session.editAspect"))
     }
 
-    func test_aPhoto_opensFullScreen_andCropsOnlyOnceRevealed() {
+    func test_aPhoto_opensFullScreen_withItsToolsReachable_andCropsOnTap() {
         let photo = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
         photo.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
-        XCTAssertFalse(photo.editChromeShown, "#10930 : la photo prend tout l'écran, sans chrome")
+        XCTAssertTrue(photo.editChromeShown, "#10930 : les outils se posent sur la photo dès l'entrée")
         XCTAssertFalse(photo.showsCropBrackets)
-        XCTAssertFalse(photo.editFramesScene)
-        XCTAssertEqual(photo.editPanels, [])
-        photo.revealEditChrome()
-        XCTAssertTrue(photo.editChromeShown)
         XCTAssertFalse(photo.editFramesScene, "montrer les outils ne réduit pas la photo")
+        XCTAssertEqual(photo.editPanels, [])
         photo.toggleEditTool(.crop)
         XCTAssertTrue(photo.showsCropBrackets)
         XCTAssertTrue(photo.editFramesScene, "recadrer réduit la photo pour libérer ses bords")
-        XCTAssertEqual(photo.editPanels, [], "les proportions se posent sur la scène")
+        XCTAssertEqual(photo.editPanels, [.presets], "les proportions retiennent leur bande sous la scène")
         photo.hideEditChrome()
         XCTAssertFalse(photo.showsCropBrackets)
         XCTAssertFalse(photo.editFramesScene, "le chrome caché, la photo reprend l'écran")
+        photo.revealEditChrome()
+        XCTAssertTrue(photo.showsCropBrackets, "les outils reviennent comme on les a laissés")
         photo.toggleEditTool(.trim)
         XCTAssertEqual(photo.editTools, [.crop], "une photo ne se coupe pas")
     }
 
     // MARK: - (3) Les outils d'une vidéo, ensemble et chacun pour soi
 
-    func test_aVideo_opensFullScreen_andTheSwipeUpShowsTheCut() async {
+    func test_aVideo_opensFullScreen_withTheRailAndNoToolOpen() async {
         let (session, _) = await videoSession()
-        XCTAssertEqual(session.activeEditTools, [], "#10930 : la vidéo prend tout l'écran")
+        XCTAssertTrue(session.editChromeShown, "le rail est atteignable dès l'entrée")
+        XCTAssertEqual(session.activeEditTools, [], "porteur 2026-10-20 : aucun outil ouvert")
         XCTAssertEqual(session.editPanels, [])
         XCTAssertFalse(session.showsCropBrackets)
-        session.revealEditChrome()
-        XCTAssertEqual(session.activeEditTools, [.trim, .sound], "« Couper » sélectionné, son spectre dessus")
-        XCTAssertEqual(session.editPanels, [.trim])
-        XCTAssertFalse(session.editFramesScene, "la coupe se pose par-dessus la vidéo")
+        session.toggleEditTool(.trim)
+        session.toggleEditTool(.sound)
+        XCTAssertEqual(session.editPanels, [.trim], "le spectre se peint sur la coupe")
+        XCTAssertFalse(session.editFramesScene, "la coupe se pose par-dessus la vidéo, qui garde l'écran")
         session.toggleEditTool(.crop)
         XCTAssertTrue(session.editFramesScene)
-        XCTAssertEqual(session.editPanels, [.trim])
+        XCTAssertEqual(session.editPanels, [.presets, .trim])
         session.toggleEditTool(.trim)
-        XCTAssertEqual(session.editPanels, [.sound], "Couper se retire seul")
+        XCTAssertEqual(session.editPanels, [.presets, .sound], "Couper se retire seul")
         XCTAssertTrue(session.showsCropBrackets, "les équerres restent")
         session.toggleEditTool(.trim)
         session.toggleFamily(.filters)
         XCTAssertEqual(session.editPanels, [.band])
         XCTAssertEqual(session.activeEditTools, [.crop, .trim, .sound], "la bande replie les panneaux, rien ne s'éteint")
         session.toggleFamily(.filters)
-        XCTAssertEqual(session.editPanels, [.trim], "la bande repliée, ils reviennent")
+        XCTAssertEqual(session.editPanels, [.presets, .trim], "la bande repliée, ils reviennent")
         session.hideEditChrome()
         XCTAssertEqual(session.editPanels, [], "le glissé vers le bas rend tout l'écran à la vidéo")
         XCTAssertFalse(session.editFramesScene)
@@ -173,7 +518,7 @@ final class ComposerEditToolsTests: XCTestCase {
 
     func test_tappingAFoldedTool_closesTheBand_andShowsIt() async {
         let (session, _) = await videoSession()
-        session.revealEditChrome()
+        session.toggleEditTool(.trim)
         session.toggleFamily(.frames)
         session.toggleEditTool(.sound)
         XCTAssertNil(session.openFamily, "le toucher d'un outil replie la bande")
@@ -199,19 +544,108 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertEqual(ComposerEditSwipe.outcome(translationY: seuil / 2), .none, "une hésitation ne décide rien")
     }
 
-    /// **#10930 — les formats se posent sur la scène**, à gauche de la pause et
-    /// du muet d'une vidéo, sans couvrir le crochet du coin.
-    func test_thePresets_sitOnTheScene_leftOfThePlayback() {
+    /// **#10930 — un toucher sur la prise montre ou cache ses outils**, comme
+    /// dans la visionneuse : en retouche, il visait un objectif qui se repose
+    /// et ne faisait RIEN — le geste universel était mort.
+    func test_aTapOnTheTake_togglesItsTools() {
+        let retouche = ComposerCaptureGestureContext(editing: true)
+        XCTAssertEqual(ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: retouche),
+                       .toggleEditChrome)
+        let photo = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        photo.perform(.toggleEditChrome, item: nil)
+        XCTAssertFalse(photo.editChromeShown, "hors retouche, rien à montrer")
+        photo.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        photo.perform(.toggleEditChrome, item: nil)
+        XCTAssertFalse(photo.editChromeShown, "le toucher rend tout l'écran à la photo")
+        photo.perform(.toggleEditChrome, item: nil)
+        XCTAssertTrue(photo.editChromeShown, "le suivant rend les outils")
+    }
+
+    /// **Lecture et volume, en haut à droite sous « Terminé »** (porteur
+    /// 2026-10-20 ; recette iPhone 18 Pro Max du même jour : posés au coin bas
+    /// de la scène plein écran, la pause tombait sur « Couper » et le volume sur
+    /// « Son »). Ni le rail, ni la coupe, ni une bande ouverte, ni les crochets
+    /// d'une scène recadrée ne les touchent, à 375 comme à 440 pt.
+    func test_playbackRow_sitsUnderTheDoneRow_clearOfRailCutAndBrackets_at375And440() {
+        let ecrans = [CGSize(width: 375, height: 812 - 47 - 34), CGSize(width: 440, height: 956 - 62 - 34)]
+        let panneaux: [[ComposerEditPanel]] = [[], [.trim], [.sound], [.band]]
+        for ecran in ecrans {
+            for son in [true, false] {
+                let rangee = ComposerEditPlaybackLayout.frame(container: ecran, hasAudio: son)
+                XCTAssertGreaterThanOrEqual(rangee.minY, ComposerEditScene.topBand, "\(ecran) : sous la ligne de « Terminé »")
+                XCTAssertEqual(rangee.maxX, ecran.width - ComposerEditScene.margin, accuracy: 0.001, "\(ecran) : à droite")
+                XCTAssertEqual(rangee.height, MeeshyControlSize.tapTarget, "cible de 44 pt")
+                for p in panneaux {
+                    let bas = ecran.height - ComposerEditScene.bottomReserve(p)
+                    XCTAssertLessThanOrEqual(rangee.maxY, bas, "\(ecran) \(p) : ni rail, ni coupe, ni bande")
+                    let zone = ComposerEditScene.area(container: ecran, top: 0, bottom: 0, panels: p,
+                                                      framed: true, playback: true)
+                    let scene = ComposerEditScene.rect(aspect: ComposerEditScene.clampedAspect(ecran.width / ecran.height),
+                                                       in: zone)
+                    XCTAssertGreaterThanOrEqual(scene.minY, rangee.maxY, "\(ecran) \(p) : la scène recadrée commence dessous")
+                }
+            }
+            let rail = CGRect(x: 0, y: ecran.height - ComposerEditScene.gap - ComposerEditScene.toolsRow,
+                              width: ecran.width, height: ComposerEditScene.toolsRow)
+            XCTAssertFalse(ComposerEditPlaybackLayout.frame(container: ecran, hasAudio: true).intersects(rail))
+        }
+    }
+
+    func test_theSceneTap_isRoutedThroughTheTable_inEditing() throws {
+        let chrome = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: context)"),
+                      "le toucher de la nappe consulte la table avant de viser")
+    }
+
+    /// **Les formats : une bande pleine largeur SOUS la scène** (porteur
+    /// 2026-10-20 : « le moins coupés possible […] hors viewport ou hors cadre
+    /// de la scène »). D'un bord de l'écran à l'autre, sous le cadre — aucun
+    /// crochet ne la coupe —, au-dessus du rail des outils, à 375 et 440 pt.
+    func test_thePresetsBand_spansTheScreen_underTheScene_clearOfBracketsAndRail() {
+        let ecrans = [CGSize(width: 375, height: 812 - 47 - 34), CGSize(width: 440, height: 956 - 62 - 34)]
         let cible = MeeshyControlSize.tapTarget
-        let scene = CGRect(x: 16, y: 100, width: 370, height: 600)
-        let lecture = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: true, clearsBrackets: true)
-        let formats = ComposerEditPresetsLayout.frame(scene: scene, playback: lecture)
-        XCTAssertLessThanOrEqual(formats.maxX, lecture.minX - ComposerEditPlaybackLayout.spacing + 0.001)
-        XCTAssertEqual(formats.midY, lecture.midY, accuracy: 0.001, "sur la même rangée")
-        XCTAssertGreaterThanOrEqual(formats.minX, scene.minX + cible, "le crochet du coin garde sa cible")
-        let photo = ComposerEditPresetsLayout.frame(scene: scene, playback: nil)
-        XCTAssertLessThanOrEqual(photo.maxX, scene.maxX - cible + 0.001)
-        XCTAssertTrue(scene.contains(photo), "posés SUR la photo")
+        for ecran in ecrans {
+            for (panneaux, lecture) in [([ComposerEditPanel.presets], false), ([.presets, .trim], true)] {
+                for aspect in [ComposerEditScene.clampedAspect(ecran.width / ecran.height), 1, 16.0 / 9.0] {
+                    let zone = ComposerEditScene.area(container: ecran, top: 0, bottom: 0, panels: panneaux,
+                                                      framed: true, playback: lecture)
+                    let scene = ComposerEditScene.rect(aspect: aspect, in: zone)
+                    let bande = ComposerEditPresetsLayout.frame(scene: scene)
+                    XCTAssertEqual(bande.minX, 0, accuracy: 0.001, "\(ecran) : la bande part du bord gauche de l'écran")
+                    XCTAssertEqual(bande.maxX, ecran.width, accuracy: 0.001, "\(ecran) : jusqu'au bord droit")
+                    XCTAssertGreaterThanOrEqual(bande.minY, scene.maxY, "\(ecran) \(aspect) : sous le cadre")
+                    let crochetsBas = [CGRect(x: scene.minX, y: scene.maxY - cible, width: cible, height: cible),
+                                       CGRect(x: scene.maxX - cible, y: scene.maxY - cible, width: cible, height: cible)]
+                    XCTAssertFalse(crochetsBas.contains { $0.intersects(bande) }, "\(ecran) \(aspect) : aucun crochet ne la coupe")
+                    let haut = ecran.height - ComposerEditScene.bottomReserve(panneaux.filter { $0 != .presets })
+                    XCTAssertLessThanOrEqual(bande.maxY, haut + 0.001,
+                                             "\(ecran) \(panneaux) \(aspect) : au-dessus de la coupe et du rail")
+                }
+            }
+        }
+    }
+
+    /// **Aucun libellé du rail n'est coupé** (porteur 2026-10-20) : à 375 comme
+    /// à 440 pt, chaque entrée du rail d'une vidéo (six outils) garde au moins
+    /// la largeur entière de son nom — le rail défile plutôt que de rogner.
+    func test_theEditRail_neverTruncatesALabel_at375And440() async {
+        let (session, _) = await videoSession()
+        let noms = ComposerLookFamily.allCases.map(ComposerCaptureCopy.familyName)
+            + session.editTools.map(ComposerCaptureCopy.editToolName)
+        for largeur in [CGFloat(375), 440] {
+            let ecran = RenderedScreen(ComposerCaptureBottomRow(session: session, context: session.gestureContext)
+                                        .frame(width: largeur),
+                                       size: CGSize(width: largeur, height: 400))
+            for nom in noms {
+                let ideal = UIHostingController(rootView: Text(nom)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold)))
+                    .sizeThatFits(in: CGSize(width: 1_000, height: 100)).width
+                let cadre = ecran.nodes.first { $0.label == nom }?.frame
+                XCTAssertNotNil(cadre, "\(largeur) : « \(nom) » est rendu")
+                XCTAssertGreaterThanOrEqual(cadre?.width ?? 0, ideal - 0.5, "\(largeur) : « \(nom) » est coupé")
+            }
+            ecran.dismount()
+        }
     }
 
     func test_theOverlayChrome_isWired() throws {
@@ -241,21 +675,13 @@ final class ComposerEditToolsTests: XCTestCase {
                        "allumer « Son » ne déplace pas la scène")
     }
 
-    /// **#10356 — lecture et muet, en bas à droite de la SCÈNE**, la pause à
-    /// gauche du muet ; la rangée s'écarte du crochet du coin.
-    func test_10356_playbackRow_sitsBottomRightOfTheScene_clearOfTheCornerBracket() {
+    func test_10356_playbackRow_hasOneTargetPerButton_andSaysItsAction() {
         let cible = MeeshyControlSize.tapTarget
-        let scene = CGRect(x: 16, y: 100, width: 300, height: 500)
-        let deux = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: true, clearsBrackets: false)
-        XCTAssertEqual(deux.height, cible, "cible de 44 pt")
+        let ecran = CGSize(width: 402, height: 790)
+        let deux = ComposerEditPlaybackLayout.frame(container: ecran, hasAudio: true)
         XCTAssertEqual(deux.width, cible * 2 + ComposerEditPlaybackLayout.spacing, accuracy: 0.001)
-        XCTAssertEqual(deux.maxX, scene.maxX - ComposerEditPlaybackLayout.margin, accuracy: 0.001)
-        XCTAssertEqual(deux.maxY, scene.maxY - ComposerEditPlaybackLayout.margin, accuracy: 0.001)
-        XCTAssertTrue(scene.contains(deux), "posée SUR la vidéo")
-        let crochets = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: true, clearsBrackets: true)
-        XCTAssertLessThanOrEqual(crochets.maxX, scene.maxX - cible, "le crochet du coin garde sa cible")
-        let seul = ComposerEditPlaybackLayout.frame(scene: scene, hasAudio: false, clearsBrackets: false)
-        XCTAssertEqual(seul.width, cible, accuracy: 0.001, "un clip muet n'a que la lecture")
+        XCTAssertEqual(ComposerEditPlaybackLayout.frame(container: ecran, hasAudio: false).width, cible, accuracy: 0.001,
+                       "un clip muet n'a que la lecture")
         XCTAssertNotEqual(ComposerCaptureCopy.playbackLabel(paused: true),
                           ComposerCaptureCopy.playbackLabel(paused: false), "« Lire » et « Pause »")
     }
@@ -268,15 +694,15 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertTrue(chrome.contains("ComposerEditPlaybackControls("), "lecture et muet sont montés sur la scène")
         XCTAssertTrue(chrome.contains("onTogglePlayback: { session.toggleEditPlayback() }"))
         XCTAssertTrue(chrome.contains("onToggleMute: { session.toggleTakeMute() }"))
-        XCTAssertTrue(chrome.contains("ComposerEditPlaybackLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone)"),
-                      "la rangée se pose sur la scène que les crochets cadrent")
+        XCTAssertTrue(chrome.contains("ComposerEditPlaybackLayout.frame(container: proxy.size, hasAudio: session.takeHasAudio)"),
+                      "la rangée se pose par la règle que le témoin de géométrie éprouve")
     }
 
     func test_aSilentClip_offersNoSoundTool() async {
         let (session, _) = await videoSession(hasAudio: false)
         XCTAssertEqual(session.editTools, [.crop, .trim])
-        session.revealEditChrome()
-        XCTAssertEqual(session.activeEditTools, [.trim], "« Couper » seul, sans spectre (#10930)")
+        session.toggleEditTool(.trim)
+        XCTAssertEqual(session.activeEditTools, [.trim], "« Couper » seul, sans spectre")
         session.toggleEditTool(.sound)
         XCTAssertEqual(session.activeEditTools, [.trim], "un outil que la prise n'offre pas ne s'active pas")
     }

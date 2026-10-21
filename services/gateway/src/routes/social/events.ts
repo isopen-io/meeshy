@@ -3,7 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
-import { filterConsumablePostIds } from '../posts/postConsumptionGate';
+import { consumablePostAuthors } from '../posts/postConsumptionGate';
 import { readServableToAnonymous } from '../posts/anonymousPostGate';
 import {
   creditAnonymousImpressions,
@@ -34,6 +34,7 @@ import { readAnalyticsStanding, type AnalyticsStanding } from '../../services/so
 import { impressionRowOf, insertKeyedImpressions, removeKeyedImpressions } from '../../services/social/impressionRows';
 import { ingestSocialEventsV2 } from '../../services/social/socialEventsV2';
 import {
+  authorImpressionsOnce,
   consumeImpliedImpressions,
   impressionsCarriedByViews,
 } from '../../services/social/viewImpressions';
@@ -70,7 +71,7 @@ export {
  * tenait ensemble
  *
  * 1. **L'audience filtre DANS la requête**, en UNE passe, AVANT la moindre
- *    écriture — {@link filterConsumablePostIds} pour un compte,
+ *    écriture — {@link consumablePostAuthors} pour un compte,
  *    {@link readServableToAnonymous} pour un visiteur (la garde de LECTURE
  *    anonyme, #10483 : on ne compte jamais ce qu'un anonyme ne peut pas lire).
  *    Ce qui n'y survit pas est COMPTÉ (`rejected`), jamais écrit.
@@ -262,8 +263,12 @@ async function applyImpressions(
   all: readonly Extract<SocialEvent, { type: 'impression' }>[],
   userId: string,
   options: SocialEventsIngestOptions,
+  ownPostIds: ReadonlySet<string>,
 ): Promise<number> {
   if (all.length === 0) return 0;
+
+  // #11037 — l'auteur ne compte qu'une fois par contenu, et n'ouvre rien.
+  const counted = await authorImpressionsOnce(deps.prisma, userId, all, ownPostIds);
 
   const receivedAt = options.receivedAt ?? new Date();
   const rowOf = (event: Extract<SocialEvent, { type: 'impression' }>) => impressionRowOf({
@@ -277,8 +282,8 @@ async function applyImpressions(
 
   // Une impression qui porte un `eventId` s'écrit par l'`insert` brut : sa
   // ligne porte la clé, et un doublon (rejeu) ne crédite aucun compteur.
-  const plain = all.filter((event) => !event.eventId);
-  const keyed = all.filter((event) => event.eventId);
+  const plain = counted.filter((event) => !event.eventId);
+  const keyed = counted.filter((event) => event.eventId);
   if (plain.length > 0) await deps.prisma.postImpression.createMany({ data: plain.map(rowOf) });
   const keyedRows = keyed.map(rowOf);
   const { inserted } = await insertKeyedImpressions(deps.prisma, keyedRows);
@@ -290,7 +295,9 @@ async function applyImpressions(
   const impressions = new Map([...compterParId(events.map((event) => event.postId))]
     .map(([id, n]) => [id, n - (remplacees.get(id) ?? 0)] as const)
     .filter(([, n]) => n > 0));
-  const ouvertures = compterParId(events.filter(isDetailOpen).map((event) => event.postId));
+  const ouvertures = compterParId(events
+    .filter((event) => isDetailOpen(event) && !ownPostIds.has(event.postId))
+    .map((event) => event.postId));
 
   const racines = await resoudreRacinesDeRepost(deps.prisma, [...impressions.keys()]);
   const creditsRacine = compterParId(
@@ -412,7 +419,9 @@ export async function ingestSocialEvents(
 
   if (actor.kind === 'anonymous') return ingestAnonymous(deps, events, actor, options);
 
-  const allowed = await filterConsumablePostIds(deps.prisma, events.map((e) => e.postId), actor.userId);
+  const authors = await consumablePostAuthors(deps.prisma, events.map((e) => e.postId), actor.userId);
+  const allowed = new Set(authors.keys());
+  const ownPostIds = new Set([...authors].filter(([, authorId]) => authorId === actor.userId).map(([id]) => id));
 
   const audiences = events.filter((event) => allowed.has(event.postId));
   const rejected = events.length - audiences.length;
@@ -442,7 +451,7 @@ export async function ingestSocialEvents(
 
     const [ouvertures, impressions, telechargements, sessions] = await Promise.all([
       applyOpens(deps, parType('open'), actor.userId).then((n) => { counted(parType('open')); return n; }),
-      applyImpressions(deps, [...parType('impression'), ...impressionsCarriedByViews(parType('view'))], actor.userId, situated),
+      applyImpressions(deps, [...parType('impression'), ...impressionsCarriedByViews(parType('view'))], actor.userId, situated, ownPostIds),
       applyDownloads(deps, parType('download'), actor.userId),
       applyDwell(deps, [...parType('dwell'), ...parType('dwell-start')], actor.userId, standing),
     ]);

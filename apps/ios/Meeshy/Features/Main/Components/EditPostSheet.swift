@@ -408,12 +408,8 @@ struct EditPostSheet: View {
             // dé-qualifie la composition impose le post (`toggleRemove`).
             selectedType = PostEditTypeChoice.initialType(originalType: originalType)
             selectedLayout = originalLayout
-            // Defer focus slightly so the keyboard rises after the sheet
-            // present animation settles — otherwise the appearance jolts.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                isFocused = true
-            }
         }
+        .onAppear(after: .milliseconds(250)) { isFocused = true }
         .interactiveDismissDisabled(isSaving)
     }
 

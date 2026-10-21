@@ -78,7 +78,7 @@ describe('les noms du jeu couvrent tout le catalogue partagé, dans les sept lan
   });
 
   test('les noms sont traduits, pas recopiés du français', () => {
-    expect(levelTierName('etincelle', 'en')).toBe('Ember');
+    expect(levelTierName('etincelle', 'en')).toBe('Spark');
     expect(rankName('voix', 'es')).toBe('Voz');
     expect(treasuryName('coffre', 'de')).not.toBe(treasuryName('coffre', 'fr'));
     expect(flameFormName('soleil', 'ar')).not.toBe(flameFormName('soleil', 'fr'));
@@ -123,8 +123,8 @@ describe('les nombres s’accordent', () => {
     expect(missionTitle('send-texts', 1, 'en')).toBe('Send 1 message');
   });
   test('un gabarit futur se dit sans casser l’écran', () => {
-    expect(missionTitle('gabarit-de-2027', 3, 'fr')).toBe('Mission du jour');
-    expect(missionTitle('gabarit-de-2027', 3, 'en')).toBe('Mission of the day');
+    expect(missionTitle('gabarit-de-2027', 3, 'fr')).toBe('Un acte du rêve');
+    expect(missionTitle('gabarit-de-2027', 3, 'en')).toBe('An act of the dream');
   });
 });
 
@@ -164,11 +164,11 @@ describe('rang et division', () => {
 describe('les refus du serveur se disent', () => {
   test('un code connu a sa phrase, un code inconnu une phrase neutre qui invite à réessayer', () => {
     expect(gameErrorMessage('INSUFFICIENT_MEESHES', 'fr')).toContain('Meesh');
-    expect(gameErrorMessage('FREEZE_AT_MAXIMUM', 'fr')).toContain('gel');
+    expect(gameErrorMessage('FREEZE_AT_MAXIMUM', 'fr')).toContain('Veilleuse');
     // Les deux refus de la frappe d'aujourd'hui (porteur 2026-10-16) : un message clair, jamais le « réessaie » générique.
     expect(gameErrorMessage('TREASURY_LOCKED', 'fr')).toContain('rang');
     expect(gameErrorMessage('TREASURY_LOCKED', 'fr')).not.toContain('réessaie');
-    expect(gameErrorMessage('MINT_BLOCKED_BY_DEBT', 'fr')).toContain('dette');
+    expect(gameErrorMessage('MINT_BLOCKED_BY_DEBT', 'fr')).toContain('ombre');
     expect(gameErrorMessage('MINT_BLOCKED_BY_DEBT', 'fr')).not.toContain('réessaie');
     expect(gameErrorMessage('???', 'fr')).toContain('réessaie');
     expect(gameErrorMessage(undefined, 'fr')).toContain('réessaie');
@@ -207,7 +207,7 @@ describe('la médaille se dit en toutes lettres (#9466)', () => {
 
   test('un badge éteint dit ce qu’il manque', () => {
     const medal = { tier: 0, material: null, nextMaterial: null, value: 0, nextThreshold: 1, missing: 1 } as const;
-    expect(medalLabel(medal, axisName, 'fr')).toContain('pas encore obtenu');
+    expect(medalLabel(medal, axisName, 'fr')).toContain('pas encore de médaille');
   });
 
   test('dans chaque langue : les sept matières ont un nom, et les trois phrases se disent', () => {
@@ -225,8 +225,8 @@ describe('la médaille se dit en toutes lettres (#9466)', () => {
 });
 
 describe('l’anneau de niveau se dit en toutes lettres (#9481)', () => {
-  test('« Niveau 34, palier Éclat, quatrième palier »', () => {
-    expect(levelRingLabel(34, 'eclat', 'fr')).toBe('Niveau 34, palier Éclat, quatrième palier');
+  test('« Niveau 34, ta lumière en Éclat, quatrième état »', () => {
+    expect(levelRingLabel(34, 'eclat', 'fr')).toBe('Niveau 34, ta lumière en Éclat, quatrième état');
   });
 
   test('dans chaque langue, chacun des dix paliers dit son niveau, son nom et son rang', () => {
@@ -284,16 +284,16 @@ describe('les étapes des niveaux se disent dans les sept langues (#9706)', () =
   test('en français : le compte, la Flamme et le rang se disent', () => {
     expect(steps.map((step) => levelStepWhat(step, 'fr'))).toEqual([
       'frapper ta première Meesh',
-      'accomplir une mission du jour',
+      'réaliser un rêve',
       'atteindre le rang Écho',
       'tenir une Flamme de 7 jours',
-      'accomplir 10 missions du jour',
+      'réaliser 10 rêves',
       'atteindre le rang Voix',
       'frapper 5 Meeshes',
       'atteindre le rang Conteur',
       'tenir une Flamme de 30 jours',
       'atteindre le rang Passeur',
     ]);
-    expect(levelHeldLine(steps[0]!, 'fr')).toBe('Tes étincelles ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
+    expect(levelHeldLine(steps[0]!, 'fr')).toBe('Ta lumière ouvre déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
   });
 });

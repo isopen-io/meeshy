@@ -81,7 +81,7 @@ extension StoryViewModel {
         if intro.displayName == nil && intro.bannerURL == nil,
            let fetched = try? await introProfileResolver(group.id) {
             Self.applyIntroProfile(fetched, to: &intro)
-            try? await CacheCoordinator.shared.profiles.save([fetched], for: group.id)
+            await bestEffort("storyViewModelViewing.profiles.save", category: .cache) { try await CacheCoordinator.shared.profiles.save([fetched], for: group.id) }
         }
 
         if introMoodsByUserId == nil {
@@ -331,7 +331,7 @@ extension StoryViewModel {
     }
 
     func groupIndex(forUserId userId: String) -> Int? {
-        storyGroups.firstIndex { $0.id == userId }
+        trayProjection.index(forUserId: userId)
     }
 
     func groupIndex(forStoryId storyId: String) -> Int? {
@@ -341,19 +341,17 @@ extension StoryViewModel {
     }
 
     func hasStories(forUserId userId: String) -> Bool {
-        storyGroups.contains { $0.id == userId }
+        trayProjection.group(forUserId: userId) != nil
     }
 
     func hasUnviewedStories(forUserId userId: String) -> Bool {
-        storyGroups.first { $0.id == userId }?.hasUnviewed ?? false
+        trayProjection.group(forUserId: userId)?.hasUnviewed ?? false
     }
 
     /// Source unique de l'état d'anneau story d'un avatar, toutes surfaces.
     /// `.none` si l'utilisateur n'a aucune story active (groupe absent ou
     /// entièrement expiré), `.unread` s'il reste au moins une story non vue.
     func storyRingState(forUserId userId: String) -> StoryRingState {
-        guard let group = storyGroups.first(where: { $0.id == userId }),
-              !group.isFullyExpired() else { return .none }
-        return group.hasUnviewed ? .unread : .read
+        trayProjection.ringState(forUserId: userId, at: Date())
     }
 }

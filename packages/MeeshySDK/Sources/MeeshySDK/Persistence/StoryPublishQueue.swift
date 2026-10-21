@@ -350,7 +350,7 @@ public actor StoryPublishQueue {
     private var failedItems: [StoryPublishQueueItem] = []
     private var isProcessing = false
     private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+    private let logger = MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -608,7 +608,7 @@ public actor StoryPublishQueue {
             // Backoff between consecutive retries within the same processing
             // pass — small jitter to avoid thundering-herd on reconnect.
             if attemptedInSweep > 0 {
-                try? await Task.sleep(for: .milliseconds(Int.random(in: 200...700)))
+                guard await cancellableSleep(for: .milliseconds(Int.random(in: 200...700))) else { break }
             }
             attemptedInSweep += 1
 
@@ -773,7 +773,7 @@ public actor StoryPublishQueue {
                 guard let self else { return }
                 Task {
                     // Stabilization delay matches OfflineQueue's pattern.
-                    try? await Task.sleep(for: .seconds(2))
+                    guard await cancellableSleep(for: QueueTiming.reconnectSettle) else { return }
                     await self.processNext()
                 }
             }
@@ -789,7 +789,7 @@ public actor StoryPublishQueue {
             do {
                 try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
             } catch {
-                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+                MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
                     .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
             }
         }
@@ -803,7 +803,7 @@ public actor StoryPublishQueue {
             do {
                 try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
             } catch {
-                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+                MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
                     .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
             }
         }

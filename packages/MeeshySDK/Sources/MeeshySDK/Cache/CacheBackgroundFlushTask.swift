@@ -33,24 +33,23 @@ public final class CacheBackgroundFlushTask: Sendable {
     private static let budget: TimeInterval = 25
 
     private let coordinator: CacheCoordinator
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "cache-bg-flush")
+    private let logger = MeeshyLog.logger(.cacheBgFlush)
 
     public init(coordinator: CacheCoordinator = .shared) {
         self.coordinator = coordinator
     }
 
-    private static let registrationLock = NSLock()
-    nonisolated(unsafe) private static var didRegister = false
+    private static let registration = Locked(false)
 
     /// Un seul enregistrement par processus. `BGTaskScheduler` ne rend PAS `false` sur un doublon : il lève
     /// `NSInternalInconsistencyException` (« launch handler … already registered ») et l'app meurt au lancement —
     /// vu sur simulateur, build 1936, depuis `MeeshyApp.init`. Rend `true` à la première demande seulement.
     static func claimRegistration() -> Bool {
-        registrationLock.lock()
-        defer { registrationLock.unlock() }
-        guard !didRegister else { return false }
-        didRegister = true
-        return true
+        registration.mutate { claimed in
+            guard !claimed else { return false }
+            claimed = true
+            return true
+        }
     }
 
     /// Registers the task identifier with `BGTaskScheduler`, once per process — a second call is a no-op.
@@ -89,7 +88,7 @@ public final class CacheBackgroundFlushTask: Sendable {
         coordinator: CacheCoordinator
     ) {
         let deadline = Date().addingTimeInterval(Self.budget)
-        let logger = Logger(subsystem: "me.meeshy.app", category: "cache-bg-flush")
+        let logger = MeeshyLog.logger(.cacheBgFlush)
         processingTask.expirationHandler = {
             logger.warning("Background flush task expired before completion")
         }

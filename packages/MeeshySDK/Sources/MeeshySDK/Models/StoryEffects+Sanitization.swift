@@ -78,5 +78,5 @@ extension StoryEffects {
         raw.lowercased().hasPrefix("file:")
     }
 
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-publish-sanitizer")
+    private static let logger = MeeshyLog.logger(.storyPublishSanitizer, subsystem: .legacySDK)
 }

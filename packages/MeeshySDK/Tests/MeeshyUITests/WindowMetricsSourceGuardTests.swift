@@ -28,25 +28,26 @@ final class WindowMetricsSourceGuardTests: XCTestCase {
 
     // MARK: - Test réel (fichiers du repo)
 
-    /// Assertion en ÉGALITÉ, pas en inclusion : une inclusion resterait verte
-    /// si une nouvelle mesure écran-dérivée apparaissait ailleurs, ce qui est
-    /// précisément ce que cette garde existe pour attraper.
-    func test_meeshyUI_confinesDisplayBoundsToTheDeliberateDecodeBudgetSite() throws {
-        let deliberate: Set<String> = [
-            "WindowMetrics.swift",     // the last resort when no scene exists
-            "CachedAsyncImage.swift",  // decode target: widest the image may need
-        ]
-
+    func test_meeshyUI_confinesTheMainScreenToWindowMetrics() throws {
         let found = try Self.allMeeshyUISources()
-            .filter { $0.code.contains("UIScreen.main.bounds") }
+            .filter { $0.code.contains("UIScreen.main") }
             .map { ($0.path as NSString).lastPathComponent }
 
         XCTAssertEqual(
-            Set(found), deliberate,
-            "Nouvelle mesure écran-dérivée (ou exception délibérée retirée sans mise à jour de " +
-            "cette garde). Le layout doit lire WindowMetrics.windowSize ; seul un budget de " +
-            "décodage d'image peut encore lire l'écran physique."
+            Set(found), ["WindowMetrics.swift"],
+            "Nouvelle lecture de l'écran principal : le layout lit WindowMetrics.windowSize, le décodage DecodeBudget."
         )
+    }
+
+    func test_windowMetrics_holdsExactlyOneMainScreenRead() throws {
+        let code = try Self.sourceWithoutComments("Sources/MeeshyUI/Utilities/WindowMetrics.swift")
+        XCTAssertEqual(code.components(separatedBy: "UIScreen.main").count - 1, 1)
+    }
+
+    func test_cachedAsyncImage_derivesEveryDecodeBudgetFromDecodeBudget() throws {
+        let code = try Self.sourceWithoutComments("Sources/MeeshyUI/Primitives/CachedAsyncImage.swift")
+        XCTAssertFalse(code.contains("UIScreen"))
+        XCTAssertFalse(code.contains("func pixelSize("))
     }
 
     /// Même principe que la garde `UIScreen.main.bounds` ci-dessus, pour l'autre
@@ -121,6 +122,15 @@ final class WindowMetricsSourceGuardTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    private static func sourceWithoutComments(_ relativePath: String) throws -> String {
+        ComposerSourceGuard.stripComments(
+            try String(
+                contentsOf: ComposerSourceGuard.packageRoot.appendingPathComponent(relativePath),
+                encoding: .utf8
+            )
+        )
+    }
 
     private static func allMeeshyUISources() throws -> [(path: String, code: String)] {
         let root = ComposerSourceGuard.packageRoot.appendingPathComponent("Sources/MeeshyUI")

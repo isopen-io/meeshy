@@ -57,7 +57,7 @@ final class NotificationBannerRules {
         final String label;
         final String link;
         final String tag;
-        /** Vrai : le lien s'ouvre dans {@link MainActivity}, qui retire la banniere. */
+        /** Vrai : le lien s'ouvre dans {@link MainActivity} ; faux : dans l'app de cartes. */
         final boolean inApp;
 
         Action(String label, String link, String tag, boolean inApp) {

@@ -1,9 +1,12 @@
+import { useState } from 'react';
+
 import { translate } from '@/lib/i18n-catalog';
 import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { DeleteOffer } from '@/lib/view/message-deletion';
 import type { MessageDeleteMode } from '@/lib/view/use-message-delete';
 
+import { ContentRemovalSheet } from './content-removal-sheet';
 import { Sheet } from './sheet';
 
 /**
@@ -17,6 +20,12 @@ import { Sheet } from './sheet';
  *
  * La feuille basse (`Sheet`, `<dialog>` modal) porte le piège de focus, Échap
  * et le toucher sur le voile : les trois referment sans rien supprimer.
+ *
+ * « RETIRER » (#11150) — le message d'un autre, pour qui modère la
+ * conversation : le choix ouvre la feuille du MOTIF (`ContentRemovalSheet`),
+ * et c'est elle qui confirme, motif nettoyé en main. Une offre qui ne porte
+ * QUE le retrait (le geste « Retirer » du menu rapide, #11210) s'ouvre
+ * directement sur le motif : il n'y a rien d'autre à choisir.
  */
 export function MessageDeleteDialog({
   count,
@@ -26,17 +35,20 @@ export function MessageDeleteDialog({
 }: {
   readonly count: number;
   readonly offer: DeleteOffer;
-  readonly onConfirm: (mode: MessageDeleteMode) => void;
+  readonly onConfirm: (mode: MessageDeleteMode, reason?: string) => void;
   readonly onDismiss: () => void;
 }) {
   const language = currentInterfaceLanguage();
+  const [removing, setRemoving] = useState(offer.remove && !offer.forEveryone && !offer.forMe);
+  if (removing) return <ContentRemovalSheet onConfirm={(reason) => onConfirm('remove', reason)} onCancel={onDismiss} />;
   const title =
     count === 1
       ? translateMessagePieces(language, 'message.delete.title')
       : translateMessagePieces(language, 'message.delete.titleMany', { count: new Intl.NumberFormat(language).format(count) });
   const choices = [
-    { mode: 'everyone', offered: offer.forEveryone, labelKey: 'message.delete.forEveryone' },
-    { mode: 'me', offered: offer.forMe, labelKey: 'message.delete.forMe' },
+    { mode: 'everyone', offered: offer.forEveryone, label: () => translateMessagePieces(language, 'message.delete.forEveryone') },
+    { mode: 'remove', offered: offer.remove, label: () => translate(language, 'moderation.remove.action') },
+    { mode: 'me', offered: offer.forMe, label: () => translateMessagePieces(language, 'message.delete.forMe') },
   ] as const;
 
   return (
@@ -52,11 +64,11 @@ export function MessageDeleteDialog({
             <button
               type="button"
               data-message-delete={choice.mode}
-              onClick={() => onConfirm(choice.mode)}
+              onClick={() => (choice.mode === 'remove' ? setRemoving(true) : onConfirm(choice.mode))}
               className="flex w-full items-center px-4 text-start text-body font-semibold"
               style={{ minHeight: 44, color: 'var(--color-error)' }}
             >
-              {translateMessagePieces(language, choice.labelKey)}
+              {choice.label()}
             </button>
           </li>
         ) : null,

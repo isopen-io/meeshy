@@ -45,7 +45,7 @@ final class ConversationDeleteMessageGuardTests: XCTestCase {
             return XCTFail("`requestDeleteMessage` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
-            fn.contains("deliveryStatus == .failed"),
+            fn.contains("outgoingState(of: messageId)?.isFailed == true"),
             "doit distinguer un message JAMAIS envoyé du cas normal."
         )
         XCTAssertTrue(
@@ -100,9 +100,11 @@ final class ConversationDeleteMessageGuardTests: XCTestCase {
             messageRow.contains("requestDeleteMessage(messageId)"),
             "la barre de réaction rapide doit appeler `requestDeleteMessage(_:)`."
         )
+        let sheets = try source("Features/Main/Views/ConversationView+MessageSheets.swift")
         XCTAssertTrue(
-            conversationView.contains("onDeleteMessage: { requestDeleteMessage(msg.id) }"),
-            "la feuille « Plus… » doit appeler `requestDeleteMessage(_:)`."
+            sheets.contains("onDeleteMessage: { actions.requestDelete(msg.id) }")
+                && conversationView.contains("requestDelete: { requestDeleteMessage($0) }"),
+            "la feuille « Plus… » doit appeler `requestDeleteMessage(_:)` (par les gestes que l'hôte lui remet)."
         )
     }
 
@@ -119,7 +121,8 @@ final class ConversationDeleteMessageGuardTests: XCTestCase {
             conversationView.contains("conversation.view.delete_message.title"),
             "aucune confirmation de suppression ne reste posée sur la racine de l'écran"
         )
-        XCTAssertTrue(conversationView.contains(".overlay { messageDeleteConfirmationAnchor }"))
+        XCTAssertTrue(conversationView.contains("deleteAnchor: { messageDeleteConfirmationAnchor }"),
+                      "l'hôte remet l'ancre aux feuilles ; elles la posent en `.overlay { deleteAnchor() }`")
         let anchor = try XCTUnwrap(body(of: "var messageDeleteConfirmationAnchor: some View", in: menu))
         XCTAssertEqual(anchor.components(separatedBy: ".confirmationDialog(").count - 1, 2,
                        "le message seul ET la sélection")

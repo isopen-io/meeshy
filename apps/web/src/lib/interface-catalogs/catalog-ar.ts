@@ -40,6 +40,7 @@ import arDownload from './catalog-ar-download';
 import arPhonePrompt from './catalog-ar-phone-prompt';
 import arUserProfile from './catalog-ar-user-profile';
 import arContentRefused from './catalog-ar-content-refused';
+import arContentRemoval from './catalog-ar-content-removal';
 import arPublicEntry from './catalog-ar-public-entry';
 import arThreadSearch from './catalog-ar-thread-search';
 
@@ -1069,6 +1070,7 @@ const ar = {
   ...arContactDiscovery,
   ...arUserProfile,
   ...arContentRefused,
+  ...arContentRemoval,
   ...arPublicEntry,
   ...arThreadSearch,
 } satisfies InterfaceCatalog;

@@ -341,6 +341,15 @@ const THREAD_MENU = [
   'chat-text',
   'caret-left',
   'caret-right',
+  // Les gestes du TYPE et du RÔLE (#11210) : réessayer un envoi, ouvrir un
+  // lien, un lieu dans une carte, épingler, retirer le message d'un autre, et
+  // la mention discrète du bout en bout dans « Plus ».
+  'arrow-clockwise',
+  'arrow-square-out',
+  'map-pin',
+  'push-pin',
+  'prohibit',
+  'lock-simple',
 ];
 
 emit({
@@ -759,18 +768,21 @@ emit({
  * | `folder.fill` (Déplacer vers…) | `folder-simple` |
  * | `hand.raised.fill` (Bloquer / Débloquer) | `hand-palm` |
  * | `chevron.forward` (ouvre un sous-menu) | `caret-right` |
+ * | `person.badge.plus` (Inviter, #11211) | `user-plus` |
+ * | `shield.lefthalf.filled` (Ouvrir dans l'administration) | `shield-check` |
+ * | `rectangle.portrait.and.arrow.right` (Quitter) | `sign-out` |
  *
- * `caretLeft` (retour du sous-menu) et `check` (l'entrée courante) restent au
- * SOCLE. Chargé avec la liste, jamais dans le socle.
+ * `caretLeft` (retour du sous-menu), `check` (l'entrée courante) et `users`
+ * (Gérer les membres, `person.3.fill`) restent au SOCLE. Chargé avec la liste, jamais dans le socle.
  */
-const ROW_MENU = ['info', 'pencil-simple', 'star', 'star-fill', 'folder-simple', 'hand-palm', 'caret-right'];
+const ROW_MENU = ['info', 'pencil-simple', 'star', 'star-fill', 'folder-simple', 'hand-palm', 'caret-right', 'user-plus', 'shield-check', 'sign-out'];
 
 emit({
   ids: ROW_MENU,
   output: join(HERE, '../src/components/glyphs-row-menu.ts'),
   constant: 'ROW_MENU_GLYPHS',
   type: 'RowMenuGlyphName',
-  role: "LE JEU du menu d'une ligne de conversation (#10593) : detail, renommage, favori, rangement, blocage, charge avec la liste, jamais dans le socle.",
+  role: "LE JEU du menu d'une ligne de conversation (#10593, #11211) : detail, renommage, favori, rangement, blocage, invitation, membres, administration, depart, charge avec la liste, jamais dans le socle.",
 });
 
 const STARRED = ['star', 'star-fill', 'chats-circle'];

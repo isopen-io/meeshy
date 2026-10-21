@@ -15,8 +15,16 @@ enum VideoFilmstrip {
         return cache
     }()
 
-    static func frames(url: URL, count: Int, maxHeight: CGFloat) async -> [UIImage] {
-        let key = "\(url.absoluteString)|\(count)|\(Int(maxHeight))" as NSString
+    static func cacheKey(url: URL, count: Int, maxHeight: CGFloat, scale: CGFloat) -> String {
+        "\(url.absoluteString)|\(count)|\(Int(maxHeight))|\(scale)"
+    }
+
+    static func maximumSize(maxHeight: CGFloat, scale: CGFloat) -> CGSize {
+        CGSize(width: maxHeight * 4, height: maxHeight * scale)
+    }
+
+    static func frames(url: URL, count: Int, maxHeight: CGFloat, scale: CGFloat) async -> [UIImage] {
+        let key = cacheKey(url: url, count: count, maxHeight: maxHeight, scale: scale) as NSString
         if let cached = cache.object(forKey: key) as? [UIImage] { return cached }
 
         let asset = AVURLAsset(url: url)
@@ -25,7 +33,7 @@ enum VideoFilmstrip {
 
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: maxHeight * 4, height: maxHeight * UIScreen.main.scale)
+        generator.maximumSize = maximumSize(maxHeight: maxHeight, scale: scale)
         // Tolérance large : le filmstrip est un repère visuel, pas un montage
         // frame-accurate — les seeks précis coûtent une décompression GOP par frame.
         generator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)

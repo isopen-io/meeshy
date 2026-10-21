@@ -36,6 +36,16 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// ConversationAudioCoordinator (app) opte pour `.content`.
     public var sessionProfile: AudioSessionProfile = .transient
 
+    /// `false` pour un moteur dont l'hôte traite lui-même les interruptions
+    /// (le `ConversationAudioCoordinator` de l'app, qui sait aussi suspendre
+    /// pour un appel Meeshy). Sinon le moteur se met en pause à une
+    /// interruption et reprend à sa fin (#11040).
+    public var respondsToSessionInterruptions = true
+    var interruptionLedger = InterruptionResumeLedger()
+    var sessionSignalCancellables = Set<AnyCancellable>()
+    /// `AVAudioSession.isOtherAudioPlaying` — injectable pour les témoins.
+    var otherAudioIsPlaying: () -> Bool = { AVAudioSession.sharedInstance().isOtherAudioPlaying }
+
     public var onPlaybackFinished: (() -> Void)?
 
     /// BUG A (round 4) — opaque permission predicate consulted BEFORE any
@@ -143,6 +153,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         super.init()
         PlaybackCoordinator.shared.register(self)
         observeAppLifecycle()
+        observeSessionInterruptions()
     }
 
     /// Designated init that lets callers opt out of `PlaybackCoordinator`
@@ -158,6 +169,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             PlaybackCoordinator.shared.register(self)
         }
         observeAppLifecycle()
+        observeSessionInterruptions()
     }
 
     /// Persists the current playback position when the app resigns active
@@ -272,7 +284,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// Logger dédié — `os.Logger` subsystem `me.meeshy.app`, catégorie
     /// `audio-playback`. Permet de filtrer rapidement dans Console.app
     /// quand un preview ne déclenche aucune lecture audible.
-    private static let log = os.Logger(subsystem: "me.meeshy.app", category: "audio-playback")
+    private static let log = MeeshyLog.logger(.audioPlayback)
 
     /// Décodage et préparation HORS du MainActor (#9702) ; une piste changée
     /// pendant ce temps (`resetState` annule `loadTask`) n'est pas jouée.
@@ -336,6 +348,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
 
     public func stop() {
+        _ = interruptionLedger.handle(.contentReleased)
         persistPosition()
         resetState()
         currentUrl = nil
@@ -345,16 +358,22 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public func togglePlayPause() {
         guard let player = player else { return }
         if player.isPlaying {
+            _ = interruptionLedger.handle(.userPaused)
             player.pause()
             isPlaying = false
             timer?.invalidate()
             stretchTracker.pause(positionMs)
             reportListenProgress(complete: false)
             persistPosition()
+            // La musique que ce son avait coupée reprend dans ≈ 3 s, sauf relance (#11039).
+            MediaSessionCoordinator.shared.releaseAfterUserPause()
         } else {
             // BUG A (round 4) — gate ONLY the resume branch. Pausing is always
             // allowed; resuming during a call must not steal the VoIP session.
             if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
+            _ = interruptionLedger.handle(.userStartedPlayback)
+            // La session a pu être rendue pendant la pause : la reprendre.
+            MediaSessionCoordinator.shared.activateContentPlayback(.audible)
             PlaybackCoordinator.shared.willStartPlaying(audio: self)
             player.rate = Float(speed.rawValue)
             player.play()
@@ -384,9 +403,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public func resumeFromInterruption() {
         guard let player, !isPlaying else { return }
         if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
-        MediaSessionCoordinator.shared.activatePlaybackSync(
-            options: sessionProfile.categoryOptions
-        )
+        MediaSessionCoordinator.shared.activateContentPlayback(.audible)
         PlaybackCoordinator.shared.willStartPlaying(audio: self)
         player.rate = Float(speed.rawValue)
         player.play()
@@ -628,7 +645,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     // call them directly. `MainActor.assumeIsolated` from a non-main thread is
     // a precondition crash (see lesson feedback_swift6_concurrency_pitfalls:
     // @MainActor deinit pitfall) and the last release can happen off-main.
-    deinit {
+    nonisolated deinit {
         cleanupHandle.timer?.invalidate()
         cleanupHandle.loadTask?.cancel()
         if let observer = cleanupHandle.lifecycleObserver {
@@ -682,6 +699,14 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         let next = idx - 1
         guard next >= 0 else { return }
         autoplayRegistry[next].play()
+    }
+}
+
+// MARK: - Enregistrement (#11042)
+extension AudioPlaybackManager {
+    /// Le lecteur à baisser pendant un enregistrement : celui qui joue.
+    var audibleVolumeTarget: (any PlaybackVolumeTarget)? {
+        isPlaying ? player : nil
     }
 }
 

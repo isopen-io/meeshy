@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.meeshy.sdk", category: "push-receipt")
+private let logger = MeeshyLog.logger(.pushReceipt, subsystem: .legacySDK)
 
 /// Contract for emitting a delivery acknowledgement ("double-check" cursor
 /// in the sender's UI) when a push notification surfaces a message we have
@@ -24,7 +24,7 @@ public protocol PushReceipting: AnyObject, Sendable {
 ///    dependency on it would couple this service to its retry callback;
 ///    we keep a small dedicated queue in UserDefaults instead — the
 ///    payloads are tiny (`conversationId` + optional `messageId`).
-public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendable {
+public final class PushDeliveryReceiptService: PushReceipting, Sendable {
     public static let shared = PushDeliveryReceiptService()
 
     /// Injection point for tests. Production wires through
@@ -51,17 +51,66 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
         )
     }
 
-    private var deps: Dependencies
-    private let defaults: UserDefaults
-    private let queueKey = "com.meeshy.push.pendingReceipts"
-    private let lock = NSLock()
+    private static let queueKey = "com.meeshy.push.pendingReceipts"
+
+    private struct Backing {
+        var deps: Dependencies
+        let defaults: UserDefaults
+
+        func load() -> [PendingReceipt] {
+            guard let data = defaults.data(forKey: PushDeliveryReceiptService.queueKey) else { return [] }
+            return (try? JSONDecoder.iso8601.decode([PendingReceipt].self, from: data)) ?? []
+        }
+
+        func save(_ items: [PendingReceipt]) {
+            if items.isEmpty {
+                defaults.removeObject(forKey: PushDeliveryReceiptService.queueKey)
+                return
+            }
+            if let data = try? JSONEncoder.iso8601.encode(items) {
+                defaults.set(data, forKey: PushDeliveryReceiptService.queueKey)
+            }
+        }
+
+        func append(_ items: [PendingReceipt]) {
+            save(load() + items)
+        }
+
+        func prepend(_ items: [PendingReceipt]) {
+            save(items + load())
+        }
+
+        func enqueue(conversationId: String, messageId: String?, at date: Date) {
+            var current = load()
+            // Deduplicate — only one pending ack per conversation is useful.
+            current.removeAll { $0.conversationId == conversationId }
+            current.append(PendingReceipt(conversationId: conversationId, messageId: messageId, enqueuedAt: date))
+            // Cap the queue at 200 items to avoid unbounded growth in
+            // pathological offline scenarios; oldest entries are dropped first.
+            if current.count > 200 {
+                current = Array(current.suffix(200))
+            }
+            save(current)
+        }
+
+        func drain() -> [PendingReceipt] {
+            let current = load()
+            save([])
+            return current
+        }
+    }
+
+    private let backing: Locked<Backing>
 
     public init(
         dependencies: Dependencies = .live,
         defaults: UserDefaults = .standard
     ) {
-        self.deps = dependencies
-        self.defaults = defaults
+        self.backing = Locked(uncheckedState: Backing(deps: dependencies, defaults: defaults))
+    }
+
+    private var deps: Dependencies {
+        backing.read { $0.deps }
     }
 
     /// Acknowledge a push. Non-throwing — failures are queued for retry.
@@ -71,6 +120,7 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
         // `/conversations//mark-as-received` → 404 "Route not found" permanent,
         // et la ligne empoisonnée se re-enfile à chaque resume.
         guard !conversationId.isEmpty else { return }
+        let deps = self.deps
         guard deps.isAuthenticated() else {
             logger.info("ack skipped: not authenticated, queuing")
             enqueue(conversationId: conversationId, messageId: messageId)
@@ -93,6 +143,7 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
         // builds (conversationId vide → 404 permanent à chaque tentative).
         let pending = drainQueueSnapshot().filter { !$0.conversationId.isEmpty }
         guard !pending.isEmpty else { return }
+        let deps = self.deps
         guard deps.isAuthenticated() else {
             // Put it back untouched — we cannot authenticate right now.
             requeueAppend(pending)
@@ -139,23 +190,17 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
     }
 
     /// Re-append drained items to the tail of whatever is currently queued.
-    /// Kept synchronous so callers inside `async` contexts don't acquire
-    /// `NSLock` across suspension points.
+    /// Kept synchronous so callers inside `async` contexts never hold the lock
+    /// across suspension points.
     private func requeueAppend(_ items: [PendingReceipt]) {
-        lock.lock()
-        defer { lock.unlock() }
-        let current = loadQueueLocked()
-        saveQueueLocked(current + items)
+        backing.read { $0.append(items) }
     }
 
     /// Re-prepend items to the head of the queue while preserving anything
     /// enqueued in parallel at the tail. Kept synchronous so callers inside
-    /// `async` contexts don't acquire `NSLock` across suspension points.
+    /// `async` contexts never hold the lock across suspension points.
     private func requeuePrepend(_ items: [PendingReceipt]) {
-        lock.lock()
-        defer { lock.unlock() }
-        let current = loadQueueLocked()
-        saveQueueLocked(items + current)
+        backing.read { $0.prepend(items) }
     }
 
     // MARK: - Queue (UserDefaults)
@@ -167,45 +212,12 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
     }
 
     private func enqueue(conversationId: String, messageId: String?) {
-        lock.lock()
-        defer { lock.unlock() }
-        var current = loadQueueLocked()
-        // Deduplicate — only one pending ack per conversation is useful.
-        current.removeAll { $0.conversationId == conversationId }
-        current.append(PendingReceipt(
-            conversationId: conversationId,
-            messageId: messageId,
-            enqueuedAt: Date()
-        ))
-        // Cap the queue at 200 items to avoid unbounded growth in
-        // pathological offline scenarios; oldest entries are dropped first.
-        if current.count > 200 {
-            current = Array(current.suffix(200))
-        }
-        saveQueueLocked(current)
+        let now = Date()
+        backing.read { $0.enqueue(conversationId: conversationId, messageId: messageId, at: now) }
     }
 
     private func drainQueueSnapshot() -> [PendingReceipt] {
-        lock.lock()
-        defer { lock.unlock() }
-        let current = loadQueueLocked()
-        saveQueueLocked([])
-        return current
-    }
-
-    private func loadQueueLocked() -> [PendingReceipt] {
-        guard let data = defaults.data(forKey: queueKey) else { return [] }
-        return (try? JSONDecoder.iso8601.decode([PendingReceipt].self, from: data)) ?? []
-    }
-
-    private func saveQueueLocked(_ items: [PendingReceipt]) {
-        if items.isEmpty {
-            defaults.removeObject(forKey: queueKey)
-            return
-        }
-        if let data = try? JSONEncoder.iso8601.encode(items) {
-            defaults.set(data, forKey: queueKey)
-        }
+        backing.read { $0.drain() }
     }
 
     // MARK: - Testing hooks
@@ -213,14 +225,12 @@ public final class PushDeliveryReceiptService: PushReceipting, @unchecked Sendab
     /// For tests only — swap the backing dependencies. Production code
     /// always uses `.live`.
     public func _setDependencies(_ dependencies: Dependencies) {
-        deps = dependencies
+        backing.mutate { $0.deps = dependencies }
     }
 
     /// For tests only — inspect how many receipts are waiting.
     public func _pendingCount() -> Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return loadQueueLocked().count
+        backing.read { $0.load().count }
     }
 }
 

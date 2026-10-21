@@ -138,6 +138,32 @@ final class AudioRecorderManagerTests: XCTestCase {
         XCTAssertTrue(source.contains("RecorderCallGuard.shared.register(self)"))
     }
 
+    /// #9887 — le niveau suit un lien d'affichage, qui ne tire pas en
+    /// arrière-plan : un vocal arrêté depuis l'îlot gardait la durée du
+    /// dernier écran (et tombait sous la durée minimale). La durée se relève
+    /// à l'arrêt, avant que `stop()` ne remette `currentTime` à zéro.
+    func test_stop_readsTheRecorderTimeBeforeStopping() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/AudioRecorderManager.swift")
+        for (opening, stop) in [("func stopRecording() -> URL? {", "recorder?.stop()"), ("func stopForCall() {", "recorder.stop()")] {
+            let start = try XCTUnwrap(source.range(of: opening), opening)
+            let body = String(source[start.upperBound...].prefix(600))
+            let read = try XCTUnwrap(body.range(of: "duration = recorder.currentTime"), "\(opening) relève la durée")
+            let stopped = try XCTUnwrap(body.range(of: stop), opening)
+            XCTAssertLessThan(read.lowerBound, stopped.lowerBound, "\(opening) relève la durée avant l'arrêt")
+        }
+    }
+
+    /// #9887 — en arrière-plan, l'îlot est le seul écran : il relève lui-même
+    /// le niveau, sinon son vumètre restait figé sur le dernier niveau vu.
+    func test_liveActivity_metersTheRecorderWhileTheAppIsOffScreen() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/LiveActivity/VoiceRecordingLiveActivityCoordinator.swift")
+        let start = try XCTUnwrap(source.range(of: "private func meterOffScreen() {"))
+        let body = String(source[start.upperBound...].prefix(300))
+        XCTAssertTrue(body.contains("UIApplication.shared.applicationState != .active"))
+        XCTAssertTrue(body.contains("session?.recorder?.updateMetering()"))
+        XCTAssertTrue(source.contains(".sink { [weak self] _ in self?.meterOffScreen() }"))
+    }
+
     func test_stopForCall_whenIdle_keepsTheRecorderIdle() {
         let sut = makeSUT()
         sut.stopForCall()
@@ -164,7 +190,7 @@ final class AudioRecorderManagerTests: XCTestCase {
     /// le plateau AVANT que le brouillon ne soit persisté.
     func test_conversationDisappearing_keepsTheRecordingInTheTray() throws {
         let source = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationView.swift")
-        let start = try XCTUnwrap(source.range(of: ".onDisappear {\n                composerText.flushPendingChange()"))
+        let start = try XCTUnwrap(source.range(of: "private func conversationDidDisappear() {\n        composerText.flushPendingChange()"))
         let block = String(source[start.upperBound...].prefix(2_500))
         let keep = try XCTUnwrap(block.range(of: "if audioRecorder.isRecording { _ = stopRecordingToAttachment() }"))
         let persist = try XCTUnwrap(block.range(of: "persistDraftAttachmentsForBackground()"))

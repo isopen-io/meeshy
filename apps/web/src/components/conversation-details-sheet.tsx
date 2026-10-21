@@ -103,6 +103,7 @@ export function ConversationDetailsSheet({
   onJumpToMessage,
   canJumpTo,
   onRequestDeparture,
+  focus,
 }: {
   readonly conversation: Conversation;
   readonly title: string;
@@ -122,6 +123,12 @@ export function ConversationDetailsSheet({
    * (visiteur sans compte), aucun des deux n'est rendu.
    */
   readonly onRequestDeparture?: ((kind: DepartureKind) => void) | undefined;
+  /**
+   * OÙ LA FICHE S'OUVRE (revue #11211) — « Inviter » depuis le menu d'une
+   * ligne ouvre l'ajout de membres, « Gérer les membres » amène la liste en
+   * vue. Absent, la fiche s'ouvre sur sa tête.
+   */
+  readonly focus?: 'invite' | 'members' | undefined;
 }) {
   const language = currentInterfaceLanguage();
   const queryClient = useQueryClient();
@@ -248,6 +255,7 @@ export function ConversationDetailsSheet({
           deps={deps}
           language={language}
           manageReady={manageReady}
+          {...(focus === undefined ? {} : { focus })}
           {...(storyRingOf === undefined ? {} : { storyRingOf })}
         />
 

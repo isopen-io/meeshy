@@ -3,6 +3,7 @@ import AVFoundation
 import AudioToolbox
 import WebRTC
 import os
+import MeeshySDK
 
 /// SOTA call-lifecycle sounds, all in one place:
 ///   • **ringback** — the looping "rrr-rrr" the CALLER hears while waiting for the
@@ -31,7 +32,7 @@ final class RingbackTonePlayer {
     nonisolated deinit {}
     private var loopPlayer: AVAudioPlayer?
     private var activeLoop: String?
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-sounds")
+    private let logger = MeeshyLog.logger(.callSounds)
 
     /// Set by `CallManager` to `!callUsesCallKit`: true when there is no CallKit to
     /// activate the AVAudioSession during the ringing phase (iOS-app-on-Mac, or a

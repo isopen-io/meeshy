@@ -13,7 +13,7 @@ final class NSEPendingMessageConsumer {
 
     private nonisolated static let appGroupId = "group.me.meeshy.apps"
     private nonisolated static let pendingDirName = "nse_pending_messages"
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "nse-consumer")
+    private let logger = MeeshyLog.logger(.nseConsumer)
 
     /// Dossier de staging App Group — exposé pour le wipe de logout
     /// (appgroup-01), miroir de `SharePendingSendConsumer.directoryURL()`.

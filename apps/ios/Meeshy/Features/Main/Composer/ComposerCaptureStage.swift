@@ -30,8 +30,11 @@ struct ComposerCaptureStage: View {
     let onDisarm: () -> Void
     let onDeliver: @MainActor (CameraResult) -> Void
 
+    /// Une retouche n'a pas besoin de l'objectif (#11133) : un média choisi
+    /// dans la photothèque se retouche même sans accès à la caméra.
     private var refused: Bool {
-        ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)
+        !session.phase.isEditing
+            && ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)
             == .permissionRefused
     }
 

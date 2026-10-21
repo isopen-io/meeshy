@@ -75,7 +75,7 @@ struct ComposerObjectChipsRow: View {
         Text(chip.label)
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             .lineLimit(1)
-            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+            .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
             .padding(.horizontal, MeeshySpacing.mdPlus)
             // Le plancher de 44 pt est POSÉ, pas déduit du contenu :
             // « TAILLE 38 » et « 0:00 → 0:06 » n'ont pas la même largeur, et la

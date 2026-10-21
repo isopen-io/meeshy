@@ -61,8 +61,9 @@ const CONVERSATION_TYPES: readonly ConversationType[] = ['direct', 'group', 'pub
 /**
  * Les champs STRUCTURÉS de `metadata` que la ligne lit (#8724) : les extraits
  * du commentaire, de son parent et du POST qui le porte, le média d'un contenu
- * sans texte, la clé du palier d'engagement et la section du jeu (`gameSection`,
- * #9490) — jamais la prose du corps.
+ * sans texte, la clé du palier d'engagement, la section du jeu (`gameSection`,
+ * #9490) et le MOTIF d'un retrait par la modération (`reason`, #11150) —
+ * jamais la prose du corps.
  */
 type MetadataField =
   | 'postType'
@@ -77,7 +78,8 @@ type MetadataField =
   | 'mediaType'
   | 'axisKey'
   | 'achievementKey'
-  | 'gameSection';
+  | 'gameSection'
+  | 'reason';
 
 const METADATA_FIELDS: readonly MetadataField[] = [
   'postType',
@@ -93,6 +95,7 @@ const METADATA_FIELDS: readonly MetadataField[] = [
   'axisKey',
   'achievementKey',
   'gameSection',
+  'reason',
 ];
 
 /** `tierRank` (#10298) : présent ⇒ le palier est composé par le serveur, titre et corps compris. */
@@ -217,6 +220,7 @@ export function decodeNotification(raw: unknown): NotificationRecord | null {
 
   const subtitle = filledString(notification.subtitle);
   const metadata = objectOf(notification.metadata);
+  const contextReason = filledString(objectOf(notification.context)?.reason);
   return {
     id,
     type,
@@ -225,7 +229,11 @@ export function decodeNotification(raw: unknown): NotificationRecord | null {
     content: typeof notification.content === 'string' ? notification.content : '',
     actor: decodeActor(notification.actor),
     context: decodeContext(notification.context),
-    metadata: { ...pickStrings(metadata, METADATA_FIELDS), ...pickNumbers(metadata, METADATA_NUMBER_FIELDS) },
+    metadata: {
+      ...(contextReason === null ? {} : { reason: contextReason }),
+      ...pickStrings(metadata, METADATA_FIELDS),
+      ...pickNumbers(metadata, METADATA_NUMBER_FIELDS),
+    },
     state: { isRead: state.isRead === true, createdAt },
   };
 }

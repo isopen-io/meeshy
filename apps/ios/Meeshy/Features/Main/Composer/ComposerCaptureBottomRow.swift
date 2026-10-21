@@ -171,15 +171,21 @@ struct ComposerCaptureBottomRow: View {
                     mediaTrack { ComposerSoundTrack(session: session, url: trimClip.url) }
                 }
             case .presets, .band, .none:
-                // Les proportions se posent SUR la scène (#10930).
+                // Les proportions : leur place est retenue sous la scène, leur
+                // bande pleine largeur s'y pose (`ComposerEditPresetsLayout`).
                 EmptyView()
             }
         }
+        ComposerEditRailFit(rail: editRail)
+            .frame(height: ComposerEditScene.toolsRow)
+    }
+
+    private var editRail: ComposerLookRail {
         ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
-                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) { famille in
+                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) },
+                         fitsLabels: true) { famille in
             session.toggleFamily(famille)
         }
-        .frame(height: ComposerEditScene.toolsRow)
     }
 
     /// **La famille ouverte, au niveau de son rail** (#10311) : Filtres · Effets
@@ -213,5 +219,25 @@ struct ComposerCaptureBottomRow: View {
                                switching: capture.switchingCamera,
                                onSelect: { session.controls.setZoom($0) },
                                onStep: { session.stepZoom(up: $0) })
+    }
+}
+
+/// **Le rail entier, ou qui défile — jamais un libellé coupé** (porteur
+/// 2026-10-20) : à son idéal s'il tient, sinon il défile jusqu'aux bords.
+///
+/// Un type à lui seul (#11411) : `ViewThatFits` mesure ses candidats sur le
+/// rendu asynchrone d'iOS 26, et un candidat posé au fil d'un membre de la
+/// rangée y emportait tout ce que ce membre construit avant lui — pistes de
+/// coupe et de son, bande des familles. Ici, il ne voit que le rail.
+struct ComposerEditRailFit: View {
+    let rail: ComposerLookRail
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            rail
+            ScrollView(.horizontal, showsIndicators: false) {
+                rail.padding(.horizontal, ComposerEditPresetsLayout.leadingInset)
+            }
+        }
     }
 }

@@ -48,18 +48,20 @@ nonisolated enum ComposerEditTools {
         }
     }
 
-    /// **Rien n'est actif à l'entrée** (#10930, porteur 2026-10-18 : « par
-    /// défaut prendre tout l'écran lors de l'édition après la prise »). La
-    /// prise remplit le viewport ; ses outils attendent le glissé vers le haut.
+    /// **Aucun outil ouvert à l'entrée** (porteur 2026-10-20 : « afficher
+    /// immédiatement les touches d'édition »). Le rail est là, la prise remplit
+    /// le viewport, (x) et « Terminé » restent visibles tant qu'aucun élément
+    /// d'édition ne s'affiche.
     static func initial(_ take: ComposerEditTake) -> Set<ComposerEditTool> {
         []
     }
 
-    /// **Ce que le glissé vers le haut allume** (#10930) : « la barre de trim
-    /// et son contenu avec l'outil couper sélectionné » — le spectre du son se
-    /// peint sur elle (#10341). Une photo n'a que le recadrage, à choisir.
-    static func revealed(_ take: ComposerEditTake) -> Set<ComposerEditTool> {
-        Set(offered(take).filter { $0 != .crop })
+    /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur
+    /// 2026-10-20 : « on ne doit pas afficher (X) et Terminé en même temps que
+    /// les éléments d'édition ») : une famille ouverte ou un outil montré les
+    /// cache ; refermés, ils reviennent.
+    static func showsTopRow(familyOpen: Bool, shownTools: Set<ComposerEditTool>) -> Bool {
+        !familyOpen && shownTools.isEmpty
     }
 
     /// **Seul le recadrage réduit la prise** (#10930 : « seul le recadrage
@@ -84,10 +86,12 @@ nonisolated enum ComposerEditTools {
         isShown(tool, active: active, familyOpen: familyOpen) ? active.subtracting([tool]) : active.union([tool])
     }
 
-    /// L'ordre des panneaux sous la scène, de haut en bas : le spectre, puis la
-    /// coupe, au plus près des outils. Les proportions n'en sont plus : elles
-    /// se posent SUR la scène, à gauche de la lecture (#10930).
-    static let panelOrder: [ComposerEditTool] = [.sound, .trim]
+    /// L'ordre des panneaux sous la scène, de haut en bas : les proportions,
+    /// le spectre, puis la coupe, au plus près des outils. Les proportions
+    /// retiennent leur bande SOUS la scène (porteur 2026-10-20 : « les rails
+    /// d'outils doivent être le moins coupés possible ») : aucun crochet ne
+    /// les coupe, et elles défilent jusqu'aux bords de l'écran.
+    static let panelOrder: [ComposerEditTool] = [.crop, .sound, .trim]
 
     /// Les panneaux sous la scène : la bande d'une famille ouverte, sinon un par
     /// outil actif — **sauf le son quand la coupe est montrée** (#10356) : il se

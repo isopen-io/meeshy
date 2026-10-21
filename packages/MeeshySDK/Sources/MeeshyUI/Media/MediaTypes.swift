@@ -603,13 +603,7 @@ public enum MediaPreviewContext: Equatable {
 // MARK: - Format Helpers
 
 public func formatMediaDuration(_ seconds: TimeInterval) -> String {
-    let mins = Int(seconds) / 60
-    let secs = Int(seconds) % 60
-    return String(format: "%d:%02d", mins, secs)
-}
-
-public func formatMediaDurationMs(_ ms: Int) -> String {
-    formatMediaDuration(Double(ms) / 1000.0)
+    DurationFormat.clock(seconds)
 }
 
 /// Single source of truth for human-readable file sizes across the app —

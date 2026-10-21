@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Pastille de mood (atome de présentation partagé)
 
@@ -88,7 +89,7 @@ public struct MeeshyMoodBadge: View {
     }
 
     /// La cible tactile minimale (HIG, WCAG 2.5.5).
-    public nonisolated static let minimumHitTarget: CGFloat = 44
+    public nonisolated static let minimumHitTarget: CGFloat = MeeshyControlSize.tapTarget
 
     /// Le diamètre de la zone de toucher (#10528) : la pastille mesure
     /// 0,42 × l'avatar — 22 pt dans la liste, 9 pt sur une rangée de message —
@@ -135,17 +136,20 @@ public struct MeeshyMoodBadge: View {
                 // qu'elle recouvre. Avec, sa cible fait au moins 44 pt.
                 .overlay {
                     if let onTap {
-                        Color.clear
-                            .frame(
-                                width: Self.hitDiameter(diameter: diameter),
-                                height: Self.hitDiameter(diameter: diameter)
-                            )
-                            .contentShape(Circle())
-                            .onTapGesture {
-                                HapticFeedback.light()
-                                let frame = geo.frame(in: .global)
-                                onTap(CGPoint(x: frame.midX, y: frame.midY))
-                            }
+                        Button {
+                            HapticFeedback.light()
+                            let frame = geo.frame(in: .global)
+                            onTap(CGPoint(x: frame.midX, y: frame.midY))
+                        } label: {
+                            Color.clear
+                                .frame(
+                                    width: Self.hitDiameter(diameter: diameter),
+                                    height: Self.hitDiameter(diameter: diameter)
+                                )
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
+                        .accessibilityLabel(String(localized: "avatar.a11y.mood", defaultValue: "humeur \(emoji)", bundle: .module))
                     }
                 }
                 // `.task` et non `.onAppear` : une seule séquence par identité
@@ -164,15 +168,13 @@ public struct MeeshyMoodBadge: View {
                         // est absorbé par sa transition (mesuré au simulateur) :
                         // la respiration y échappe par son départ décalé, le
                         // pulse discret par ce battement.
-                        try? await Task.sleep(for: .milliseconds(80))
-                        guard !Task.isCancelled else { return }
+                        guard await cancellableSleep(for: .milliseconds(80)) else { return }
                         hushPulse()
                         return
                     case .breathe: break
                     }
                     startPulse()
-                    try? await Task.sleep(for: .seconds(Self.maximumStartDelay + Self.breathingDuration))
-                    guard !Task.isCancelled else { return }
+                    guard await cancellableSleep(for: .seconds(Self.maximumStartDelay + Self.breathingDuration)) else { return }
                     settlePulse()
                 }
                 .onDisappear {

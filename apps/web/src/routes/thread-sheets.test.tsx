@@ -9,6 +9,7 @@ import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadExportCardCatalog } from '@/lib/i18n-export-card-catalog';
 import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { messageMenuContextOf } from '@/lib/view/message-actions';
 import { closeReactorsSheet, openReactorsSheet, reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -113,6 +114,7 @@ const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => 
   reportFor: null,
   onPickReportReason: () => {},
   onDismissReport: () => {},
+  menuContextOf: (m) => messageMenuContextOf(m, { now: Date.now() }),
   ...overrides,
 });
 
@@ -193,6 +195,27 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     expect(has(host, '[data-message-receipts-attachment]')).toBe(false);
   });
 
+  test('« Plus… » offre « Imager » quand le contexte du menu l’admet', async () => {
+    const offered = await mountSheets(menuOf({ detailFor: SERVER_MESSAGE_ID }), [ownMessage()]);
+    expect(has(offered, '[data-message-create="image"]')).toBe(true);
+  });
+
+  test('« Plus… » lit le contexte du MENU, celui du lecteur (#11372) : ce que le menu retient, la fiche le retient', async () => {
+    const seen: string[] = [];
+    const held = await mountSheets(
+      menuOf({
+        detailFor: SERVER_MESSAGE_ID,
+        menuContextOf: (m) => {
+          seen.push(m.id);
+          return { ...messageMenuContextOf(m, { now: Date.now() }), leaves: false };
+        },
+      }),
+      [ownMessage()],
+    );
+    expect(seen.includes(SERVER_MESSAGE_ID)).toBe(true);
+    expect(has(held, '[data-message-create="image"]')).toBe(false);
+  });
+
   test('la fiche d’un message d’AUTRUI n’a pas d’accusé nominatif (delivery nul ⇒ aucun « Infos du message »)', async () => {
     const host = await mountSheets(menuOf({ detailFor: SERVER_MESSAGE_ID }), [ownMessage({ senderId: 'u-other' })]);
     expect(offersLanguage(host, 'Français (original)')).toBe(true);
@@ -269,7 +292,8 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
   test('le menu reçoit le sous-menu de « Transférer » (#9039)', async () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
-    const item = (id: 'forward' | 'exportDiscussion', labelKey: 'message.menu.forward' | 'message.menu.exportDiscussion') => ({ id, labelKey, glyph: 'imageSquare' as const });
+    const item = (id: 'forward' | 'exportDiscussion', labelKey: 'message.menu.forward' | 'message.menu.exportDiscussion') =>
+      ({ id, catalog: 'interface', labelKey, glyph: 'imageSquare', group: 'primary' }) as const;
     await mountSheets(
       menuOf({
         menuTarget: { messageId: SERVER_MESSAGE_ID, element, isMine: true },
@@ -278,12 +302,28 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
           forwardItems: [item('forward', 'message.menu.forward'), item('exportDiscussion', 'message.menu.exportDiscussion')],
           choices: [],
           subjectLabel: 'Actions',
+          canReact: true,
         },
       }),
       [ownMessage()],
     );
     await mounter.click(document.querySelector<HTMLElement>('.message-menu-list [data-action="forward"]'));
     expect(document.querySelector('.message-menu-list [data-action="exportDiscussion"]') !== null).toBe(true);
+    element.remove();
+  });
+
+  test('réagir refusé (#11206) : le menu se monte SANS rail de réactions', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    await mountSheets(
+      menuOf({
+        menuTarget: { messageId: SERVER_MESSAGE_ID, element, isMine: true },
+        menuData: { items: [], forwardItems: [], choices: [], subjectLabel: 'Actions', canReact: false },
+      }),
+      [ownMessage()],
+    );
+    expect(document.querySelector('[role="menu"]') !== null).toBe(true);
+    expect(document.querySelector('[data-message-menu-rail]')).toBe(null);
     element.remove();
   });
 
@@ -321,7 +361,7 @@ describe('ThreadMessageSheets — le dialogue de suppression (#10582)', () => {
     const journal: string[] = [];
     const host = await mountSheets(
       menuOf({
-        deleteRequest: { messageIds: [SERVER_MESSAGE_ID], offer: { forEveryone: false, forMe: true } },
+        deleteRequest: { messageIds: [SERVER_MESSAGE_ID], offer: { forEveryone: false, forMe: true, remove: false } },
         onConfirmDelete: (mode) => journal.push(mode),
       }),
       [ownMessage()],

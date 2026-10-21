@@ -2,7 +2,7 @@ import BackgroundTasks
 import MeeshySDK
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "background")
+private let logger = MeeshyLog.logger(.background)
 
 /// startup-08 — enveloppe `BGTaskScheduler.cancel` pour rendre le chemin de
 /// logout testable : l'API réelle n'offre aucun moyen d'observer un cancel

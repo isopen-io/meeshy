@@ -92,13 +92,20 @@ final class LentilleSceneActivityTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
     }
 
+    /// L'UNITÉ de la liste (`ConversationListView.swift` + `ConversationListView+*.swift`), normalisée :
+    /// le chrome de défilement et la queue vivent dans leurs fichiers.
+    private func normalizedUnit(_ relativePath: String) throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(relativePath))
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+    }
+
     func test_list_mountsTheSceneHostOnce_behindTheFlag_andSharesTheSceneWithRowsAndCard() throws {
-        let code = try normalized("Meeshy/Features/Main/Views/ConversationListView.swift")
+        let code = try normalizedUnit("Meeshy/Features/Main/Views/ConversationListView.swift")
         XCTAssertEqual(code.components(separatedBy: "LentilleSceneActivityHost(").count - 1, 1,
                        "UN seul hôte d'activité, abonné au relais existant — jamais un second détecteur.")
-        let overlayStart = try XCTUnwrap(code.range(of: "private var lentilleFocusElectionOverlay: some View { if LentilleFeatureFlag.isLentilleListEnabled { LentilleFocusElectionHost("))
-        let overlayEnd = try XCTUnwrap(code.range(of: "private var mainContentZStack"))
-        let overlay = code[overlayStart.lowerBound..<overlayEnd.lowerBound]
+        let chrome = try normalized("Meeshy/Features/Main/Views/ConversationListView+ScrollChrome.swift")
+        let overlayStart = try XCTUnwrap(chrome.range(of: "private var focusElectionOverlay: some View { if LentilleFeatureFlag.isLentilleListEnabled { LentilleFocusElectionHost("))
+        let overlay = chrome[overlayStart.lowerBound...]
         XCTAssertTrue(overlay.contains("LentilleSceneActivityHost(relay: scrollOffsetRelay, scene: sceneActivity)"),
                       "L'hôte vit derrière le drapeau, dans l'overlay d'élection, à côté de l'élection et de la carte.")
         XCTAssertTrue(code.contains(".environmentObject(sceneActivity)"),
@@ -122,7 +129,7 @@ final class LentilleSceneActivityTests: XCTestCase {
     }
 
     func test_quickActions_areTheListTail_andTheEmptyState_behindTheFlag() throws {
-        let code = try normalized("Meeshy/Features/Main/Views/ConversationListView.swift")
+        let code = try normalizedUnit("Meeshy/Features/Main/Views/ConversationListView.swift")
         // **Le compte voyage jusqu'aux DEUX montages** (directive porteur
         // 2026-09-01). La queue de liste passe le compte RÉEL — c'est lui qui
         // décide des trois grands boutons jusqu'à dix conversations ; l'état

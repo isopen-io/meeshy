@@ -56,7 +56,7 @@ describe('useSectionFolds', () => {
   afterAll(async () => {
     await act(async () => {});
     delete globals.IS_REACT_ACT_ENVIRONMENT;
-    releaseHappyDomIfRegistered();
+    await releaseHappyDomIfRegistered();
   });
   beforeEach(() => {
     window.localStorage.clear();

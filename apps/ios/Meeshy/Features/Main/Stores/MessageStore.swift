@@ -38,7 +38,7 @@ private final class WeakBox: @unchecked Sendable {
 }
 
 // Notification.Name `messageStoreShouldRefresh` is defined in
-// `packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift`
+// `packages/MeeshySDK/Sources/MeeshySDK/Persistence/PersistenceNotifications.swift`
 // so both MessageStore (iOS app) and MessagePersistenceActor (SDK) can use it.
 
 /// Fetches the message window from GRDB based on `WindowMode`. Declared at
@@ -239,6 +239,8 @@ public final class MessageStore: ObservableObject {
     // MARK: - Public State
 
     private(set) var messages: [MessageRecord] = []
+    /// « Supprimer pour moi » en vol (#11221) : filtré de TOUTE publication, la base intacte.
+    private(set) var personalConcealment = PersonalConcealment()
     var isUserScrolling = false
 
     // MARK: - Window Mode
@@ -542,7 +544,7 @@ public final class MessageStore: ObservableObject {
         // render as a "message en double" the moment a later event re-snapshots.
         // Applied before the drop diagnostic so a collapsed mirror is never
         // mistaken for an unintended drop (the prior publish was deduped too).
-        let published = ExpiredEphemeralRow.living(Self.collapsingDuplicateServerIds(next))
+        let published = personalConcealment.filtering(ExpiredEphemeralRow.living(Self.collapsingDuplicateServerIds(next)))
 
         #if DEBUG
         // BUG1 diagnostics — detect any publish that DROPS currently-displayed
@@ -555,8 +557,8 @@ public final class MessageStore: ObservableObject {
         let beforeCount = messages.count
         let beforeIds = Set(messages.map(\.localId))
         let afterIds = Set(published.map(\.localId))
-        // Les lignes rendues par le plafond (`unanchoredWindowCap`) sont un retrait VOULU, pas une perte.
-        let droppedIds = beforeIds.subtracting(afterIds).subtracting(cappedIds)
+        // Plafond (`unanchoredWindowCap`) et masquage « pour moi » : des retraits VOULUS, pas des pertes.
+        let droppedIds = beforeIds.subtracting(afterIds).subtracting(cappedIds).subtracting(personalConcealment.ids)
         if !droppedIds.isEmpty {
             let beforeById = Dictionary(messages.map { ($0.localId, $0) }, uniquingKeysWith: { a, _ in a })
             // Classify each dropped row: when its serverId survives in the
@@ -609,6 +611,21 @@ public final class MessageStore: ObservableObject {
             }
         }
         messagesDidChange.send()
+    }
+
+    /// **« Supprimer pour moi » : le message quitte le fil AVANT la réponse du
+    /// serveur, sans quitter la base** (#11221). Toute publication le filtre
+    /// tant que le masquage tient ; la purge n'a lieu qu'après l'accord.
+    func conceal(_ ids: [String]) {
+        personalConcealment.conceal(ids)
+        publishUnchecked(records: messages, mergeInMemory: false)
+    }
+
+    /// Refus du serveur, ou retour en vue venu d'un autre appareil : le filtre
+    /// se lève et la base, intacte, rend le message — sans aucun appel réseau.
+    func reveal(_ ids: [String]) async {
+        personalConcealment.reveal(ids)
+        await refreshFromDB(mergeInMemory: true)
     }
 
     /// **Retire les éphémères morts DEPUIS la dernière publication** (#8382).

@@ -32,6 +32,9 @@ export type PostInteractionsPayload = {
    * aucun visiteur n'entre dans la liste nominative. Absent d'un serveur
    * antérieur ⇒ rien ne s'affiche. */
   readonly anonymousViewCount?: number;
+  /** Le compte de vues relu dans la MÊME lecture que la liste (#11065) — l'en-tête
+   * le préfère à l'instantané de l'ouverture. Absent d'un serveur antérieur. */
+  readonly viewCount?: number;
   readonly pagination: { readonly total: number; readonly offset: number; readonly limit: number; readonly hasMore: boolean };
 };
 
@@ -59,11 +62,12 @@ export async function fetchStoryViewers(
       data: {
         viewers: result.viewers,
         ...(result.engagement !== undefined ? { engagement: result.engagement } : {}),
+        ...(result.viewCount !== undefined ? { viewCount: result.viewCount } : {}),
         pagination: { total: result.viewers.length, offset: 0, limit: 50, hasMore: false },
       },
     };
   }
-  const result = await params.transport.request<PostViewersPage & { readonly anonymousViewCount?: unknown }>({
+  const result = await params.transport.request<PostViewersPage & { readonly anonymousViewCount?: unknown; readonly viewCount?: unknown }>({
     method: 'GET',
     path: postsEndpoints.byPostIdInteractions(params.postId),
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
@@ -75,13 +79,20 @@ export async function fetchStoryViewers(
       viewers: result.data.viewers,
       ...(result.data.engagement !== undefined ? { engagement: result.data.engagement } : {}),
       ...visitorCountOf(result.data.anonymousViewCount),
+      ...servedViewCountOf(result.data.viewCount),
       pagination: result.pagination ?? { total: result.data.viewers.length, offset: 0, limit: 50, hasMore: false },
     },
   };
 }
 
+const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0;
+
 function visitorCountOf(value: unknown): { readonly anonymousViewCount?: number } {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? { anonymousViewCount: value } : {};
+  return isCount(value) ? { anonymousViewCount: value } : {};
+}
+
+function servedViewCountOf(value: unknown): { readonly viewCount?: number } {
+  return isCount(value) ? { viewCount: value } : {};
 }
 
 export const storyViewersQueryKey = (postId: string) => ['stories', 'viewers', postId] as const;

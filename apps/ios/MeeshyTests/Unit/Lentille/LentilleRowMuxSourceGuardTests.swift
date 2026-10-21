@@ -211,9 +211,9 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
     // MARK: - Trois actions au plus par côté (#10579)
 
     func test_swipeActions_eachSideDeclaresAtMostThree() throws {
-        let code = normalizedCode(try source(at: "Meeshy/Features/Main/Views/ConversationListView.swift"))
-        guard let leading = code.range(of: "private func leadingSwipeActions("),
-              let trailing = code.range(of: "private func trailingSwipeActions("),
+        let code = normalizedCode(try source(at: "Meeshy/Features/Main/Views/ConversationListView+SwipeActions.swift"))
+        guard let leading = code.range(of: "func leadingSwipeActions("),
+              let trailing = code.range(of: "func trailingSwipeActions("),
               let end = code.range(of: "return actions }", range: trailing.upperBound..<code.endIndex) else {
             XCTFail("leadingSwipeActions / trailingSwipeActions introuvables")
             return

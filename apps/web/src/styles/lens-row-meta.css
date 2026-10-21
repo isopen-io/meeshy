@@ -65,3 +65,17 @@
 :root.light .lens-row[data-active]::before {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
+
+/*
+ * L'APPUI LONG EST CELUI DE MEESHY (#11211) — au doigt, tenir une ligne ouvre
+ * son aperçu (`useLongPress`, `lens-row.tsx`). Safari iOS y poserait sinon sa
+ * bulle de lien (« Ouvrir dans un nouvel onglet ») et sa sélection de texte,
+ * par-dessus la grappe. Seulement sans survol : à la souris, le texte d'une
+ * ligne reste sélectionnable.
+ */
+@media (any-hover: none) {
+  [data-row] {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+}

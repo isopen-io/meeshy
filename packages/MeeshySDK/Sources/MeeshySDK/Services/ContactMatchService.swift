@@ -9,7 +9,7 @@ public protocol ContactMatchServiceProviding: Sendable {
     func match(_ request: ContactMatchRequest) async throws -> ContactMatchResponse
 }
 
-public final class ContactMatchService: ContactMatchServiceProviding, @unchecked Sendable {
+public final class ContactMatchService: ContactMatchServiceProviding, Sendable {
     public static let shared = ContactMatchService()
     private let api: APIClientProviding
 

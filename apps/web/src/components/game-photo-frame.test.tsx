@@ -70,7 +70,7 @@ describe('un emblème par sorte de moment', () => {
     ['rang', rankMoment({ rank: 'oracle', division: 1 }), 'data-game-rank="oracle"'],
     ['palier', tierMoment({ tier: 'aurore', level: 50 }), 'data-game-tier="aurore"'],
     ['niveau 100', levelHundredMoment(0), 'data-game-tier="galaxie"'],
-    ['Meesh', meeshMoment({ number: 10, edition: 'silver' }), 'data-game-coin'],
+    ['Meesh', meeshMoment({ number: 10 }), 'data-game-coin'],
     ['trésor', treasuryMoment('coffre'), 'data-game-coin'],
     ['Flamme', flameMoment(30), 'data-game-flame="brasier"'],
   ];
@@ -80,8 +80,17 @@ describe('un emblème par sorte de moment', () => {
     });
   }
 
-  test('une Meesh frappée montre son numéro', () => {
-    expect(text(render(meeshMoment({ number: 10, edition: 'silver' })))).toContain('N° 10');
+  test('une Meesh frappée montre son numéro, « Nº » dans toutes les langues (épopée § 6)', () => {
+    const html = render(meeshMoment({ number: 10 }));
+    expect(html).toContain('data-game-number="10"');
+    expect(text(html)).not.toContain('N° 10');
+  });
+});
+
+describe('la pièce de la photo-souvenir se dessine comme on la voit (#11483)', () => {
+  test('le n° 247, frappé après le n° 100, est une pièce d’or ; le n° 10, d’argent', () => {
+    expect(render(meeshMoment({ number: 247 }))).toMatch(/data-game-face="reverse" data-game-edition="gold"/);
+    expect(render(meeshMoment({ number: 10 }))).toMatch(/data-game-face="reverse" data-game-edition="silver"/);
   });
 });
 
@@ -253,14 +262,14 @@ describe('les emblèmes de la vague 2', () => {
   test('une montée de ligue : la gemme de la ligue atteinte', () => {
     const html = render(photoMomentOfEmblemV2({ kind: 'league-up', league: 'saphir', weekKey: '2026-11-09' }));
     expect(html).toContain('data-game-league-gem="saphir"');
-    expect(text(html)).toContain('Ligue Saphir');
+    expect(text(html)).toContain('Joute Saphir');
   });
 
   test('une saison terminée et un Prestige : leur coupe, plaque numérotée', () => {
-    expect(render(photoMomentOfEmblemV2({ kind: 'season', season: 1 }))).toContain('>SAISON 1<');
+    expect(render(photoMomentOfEmblemV2({ kind: 'season', season: 1 }))).toContain('>VOYAGE 1<');
     const prestige = render(photoMomentOfEmblemV2({ kind: 'prestige', number: 2 }));
     expect(prestige).toContain('data-game-trophy="prestige"');
-    expect(prestige).toContain('>PRESTIGE 2<');
+    expect(prestige).toContain('>RENAISSANCE 2<');
   });
 
   test('un trophée d’une version plus récente : la coupe neutre, jamais une erreur', () => {

@@ -22,6 +22,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { BADGE_THRESHOLDS, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { raiseEngagementCounterCount } from './EngagementCounterWrites';
+import { prefixRange } from '../../utils/prefix-range';
 import { AXES_WITH_HISTORY, engraveBadgesSilently, historyCountFor } from './engagementAxisHistory';
 
 export type CountBackfillPlan = {
@@ -104,7 +105,7 @@ export async function backfillEngagementCounts(prisma: PrismaClient, options: { 
         if (history === null) continue;
         const [row, milestones] = await Promise.all([
           prisma.engagementCounter.findFirst({ where: { userId, axisKey }, select: { count: true } }),
-          prisma.engagementMilestone.findMany({ where: { userId, milestoneType: 'badge', milestoneKey: { startsWith: `${axisKey}:` } }, select: { milestoneKey: true } }),
+          prisma.engagementMilestone.findMany({ where: { userId, milestoneType: 'badge', milestoneKey: prefixRange(`${axisKey}:`) }, select: { milestoneKey: true } }),
         ]);
         const plan = planCountBackfill({
           current: row === null ? null : (row.count ?? 0),

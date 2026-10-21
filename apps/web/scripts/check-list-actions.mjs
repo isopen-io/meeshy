@@ -80,6 +80,7 @@ import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { checkLensRowMetaRest } from './lib/check-lens-row-meta.mjs';
 import { checkRowMenuMore } from './lib/check-row-menu-more.mjs';
+import { reportFailures } from './lib/ci-annotation.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -252,6 +253,13 @@ for (const row of rows) {
   );
   check(hit.ok, `la cible tactile du bouton d'actions de « ${row} » couvre ${TAP_FLOOR}×${TAP_FLOOR} (${hit.why})`);
 }
+
+/* LE CADRE DE L'ÉCRAN NE DÉFILE JAMAIS (#11090) — la barre de recherche, escamotée
+   par `transform` au défilement, déborde du bas du cadre : `overflow-hidden` en
+   faisait un scrollport que chaque `scrollIntoView` ci-dessus décalait, et dont
+   le retour à 0, au retour de la barre, refermait le menu de rangée du § 4. */
+const shellScroll = await page.$eval('.h-app', (el) => ({ top: el.scrollTop, overflow: getComputedStyle(el).overflowY }));
+check(shellScroll.top === 0, `le cadre de l'écran n'a pas défilé sous les scrollIntoView (${JSON.stringify(shellScroll)})`);
 
 // ------------------------------------------------------- 3. clavier
 /** La DERNIÈRE rangée — jamais la première : au chargement c'est la première
@@ -1037,8 +1045,8 @@ for (const scheme of ['light', 'dark']) {
   const labels = opened ? await enPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
   check(
     JSON.stringify(labels) ===
-      JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Details', 'Rename', 'Favorite', 'Move to…', 'Archive', 'Delete']),
-    `en anglais, le menu d'une ligne est entièrement anglais — « Conversation actions » (${JSON.stringify(labels)})`,
+      JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Details', 'Favorite', 'Move to…', 'Archive', 'Leave', 'Delete']),
+    `en anglais, le menu d'une ligne — ouvert par le clic droit, sous l'aperçu (#11211) — est entièrement anglais, et un simple membre y quitte sans renommer (${JSON.stringify(labels)})`,
   );
   await enContext.close();
 }
@@ -1054,7 +1062,7 @@ served.close();
 
 if (failures.length > 0) {
   console.error(`\n  ${failures.length} constat(s) en défaut :`);
-  for (const e of failures) console.error(`    · ${e}`);
+  reportFailures({ gate: 'check-list-actions', failures, bullet: '·' });
   console.error("\n  Une action de rangée sans effet observable est une action ABSENTE.\n");
   process.exit(1);
 }

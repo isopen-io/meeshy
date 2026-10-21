@@ -33,6 +33,11 @@ extension MeeshyApp {
             // Les bannières ne partent plus qu'à la consommation de ce
             // qu'elles annoncent.
             NotificationGapResyncCoordinator.shared.refreshOnForeground()
+            // IL8 (#11286) — lancement à froid ET retour au premier plan :
+            // une autre application a pu remplir le volume pendant que la
+            // nôtre ne faisait que lire. Passe hors du fil principal, bornée
+            // à une toutes les dix minutes.
+            DiskPressureSweeper.shared.requestSweep()
             // CALL-FIX 2026-06-06 — tell the gateway we're foreground so
             // incoming calls use the in-app banner (socket) instead of a
             // VoIP push / CallKit.
@@ -213,9 +218,9 @@ extension MeeshyApp {
             }
             MessageSocketManager.shared.disconnect()
             SocialSocketManager.shared.disconnect()
-            // Drop the store subscriptions so an event from user A
-            // can't mutate the store after logout.
+            // Close store and sync-engine lanes: no queued event of user A may mutate state after logout.
             ConversationStoreSocketBridge.shared.deactivate()
+            Task { await ConversationSyncEngine.shared.stopSocketRelay() }
             // startup-08 — une BGTask soumise avant le logout ne
             // doit pas survivre pour réveiller un appareil
             // déconnecté (delta sync 401 en boucle, prefetch sur

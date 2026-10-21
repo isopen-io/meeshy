@@ -3,7 +3,7 @@ import Combine
 import UserNotifications
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.sdk", category: "notification-coordinator")
+private let logger = MeeshyLog.logger(.notificationCoordinator, subsystem: .sdk)
 
 /// Sink that receives notification data for home/lock-screen widgets.
 ///
@@ -429,8 +429,7 @@ public final class NotificationCoordinator: ObservableObject {
     private func scheduleSync() {
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .milliseconds(150)), let self else { return }
             await self.syncNow()
         }
     }

@@ -535,15 +535,15 @@ final class ReelsViewModel: ObservableObject {
     /// Suppression optimiste, avec rollback si l'API échoue. Réutilise
     /// `removeDeletedReel` (même logique d'avancement du pager que l'événement
     /// temps réel `post:deleted`) pour ne pas dupliquer la règle d'avancement.
-    func deletePost(_ postId: String) async {
+    func deletePost(_ postId: String, reason: String? = nil) async {
         guard let removedIndex = reels.firstIndex(where: { $0.id == postId }) else { return }
         let removedReel = reels[removedIndex]
         let snapshotCurrentId = currentId
         removeDeletedReel(postId)
         let advancedTo = currentId
         do {
-            try await service.delete(postId: postId)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
+            try await service.delete(postId: postId, reason: reason)
+            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main)))
         } catch {
             // Remet CE réel à sa place — la page chargée pendant l'appel reste — et ne ramène le pager
             // dessus que si l'utilisateur n'a pas bougé depuis (`OptimisticRollback`).

@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import os
+import MeeshySDK
 
 final class CallAudioRouteViewModel: ObservableObject {
     @Published private(set) var state: CallAudioRouteState = .empty
@@ -56,5 +57,5 @@ final class CallAudioRouteViewModel: ObservableObject {
 }
 
 private extension Logger {
-    static let callAudioRoute = Logger(subsystem: "me.meeshy.app", category: "calls")
+    static let callAudioRoute = MeeshyLog.logger(.calls)
 }

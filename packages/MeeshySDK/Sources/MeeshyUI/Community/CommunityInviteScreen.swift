@@ -1,0 +1,169 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+
+public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
+    @ObservedObject private var viewModel: ViewModel
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
+    @Environment(\.dismiss) private var dismiss
+
+    /// Fermeture fournie par l'hôte. `nil` = présentation modale classique, on
+    /// retombe sur `dismiss()`. Indispensable dès que la vue n'est PAS présentée
+    /// modalement (poussée dans une pile, posée dans le panneau droit iPad) :
+    /// `dismiss()` y est un no-op et « Done » ne fermait alors rien.
+    private let onDone: (() -> Void)?
+
+    public init(viewModel: ViewModel, onDone: (() -> Void)? = nil) {
+        self.viewModel = viewModel
+        self.onDone = onDone
+    }
+
+    public var body: some View {
+        NavigationStack {
+            ZStack {
+                theme.backgroundPrimary.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    searchBar
+                    resultsList
+                }
+            }
+            .navigationTitle(String(localized: "community.invite.title", defaultValue: "Invite Members", bundle: .module))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "common.done", defaultValue: "Terminé", bundle: .module)) {
+                        if let onDone { onDone() } else { dismiss() }
+                    }
+                        .foregroundColor(theme.textSecondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack(spacing: MeeshySpacing.smPlus) {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(theme.textMuted)
+            TextField(String(localized: "community.invite.search.placeholder", defaultValue: "Search users...", bundle: .module), text: $viewModel.searchText)
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+                .textFieldStyle(.plain)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+                .onSubmit { Task { await viewModel.searchUsers() } }
+        }
+        .padding(MeeshySpacing.md)
+        .background(theme.backgroundSecondary.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
+    }
+
+    // MARK: - Results
+
+    private var resultsList: some View {
+        Group {
+            if viewModel.isSearching {
+                ProgressView()
+                    .tint(MeeshyColors.indigo500)
+                    .frame(maxHeight: .infinity)
+            } else if viewModel.searchResults.isEmpty && !viewModel.searchText.isEmpty {
+                EmptyStateView(
+                    icon: "person.crop.circle.badge.questionmark",
+                    title: String(localized: "community.invite.empty.title", defaultValue: "No Users Found", bundle: .module),
+                    subtitle: String(localized: "community.invite.empty.subtitle", defaultValue: "Try a different search term", bundle: .module)
+                )
+            } else if !viewModel.invitedUserIds.isEmpty {
+                VStack(spacing: MeeshySpacing.md) {
+                    invitedSection
+                    searchResultsSection
+                }
+            } else {
+                searchResultsSection
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var invitedSection: some View {
+        if !viewModel.recentlyInvited.isEmpty {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                Text(String(localized: "community.invite.recentlyInvited", defaultValue: "Recently Invited", bundle: .module))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
+                    .foregroundColor(theme.textMuted)
+                    .textCase(.uppercase)
+                    .padding(.horizontal, MeeshySpacing.lg)
+
+                ForEach(viewModel.recentlyInvited, id: \.id) { user in
+                    inviteRow(user: user, alreadyInvited: true)
+                }
+            }
+        }
+    }
+
+    private var searchResultsSection: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(viewModel.searchResults, id: \.id) { user in
+                    let isInvited = viewModel.invitedUserIds.contains(user.id)
+                    inviteRow(user: user, alreadyInvited: isInvited)
+
+                    if user.id != viewModel.searchResults.last?.id {
+                        Divider().padding(.leading, 68)
+                    }
+                }
+            }
+        }
+    }
+
+    private func inviteRow(user: UserSearchResult, alreadyInvited: Bool) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            MeeshyAvatar(
+                name: user.displayName ?? user.username,
+                context: .userListItem,
+                accentColor: DynamicColorGenerator.colorForName(user.username),
+                avatarURL: user.avatar,
+                presenceState: UserPresence(isOnline: user.isOnline ?? false).state,
+                ring: user.avatarRing
+            )
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(user.displayName ?? user.username)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+
+                Text("@\(user.username)")
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
+                    .foregroundColor(theme.textSecondary)
+            }
+
+            Spacer()
+
+            if alreadyInvited {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: MeeshyIconSize.xl))
+                    .foregroundColor(MeeshyColors.success)
+            } else {
+                Button {
+                    Task { await viewModel.inviteUser(userId: user.id) }
+                } label: {
+                    Text(String(localized: "community.invite.button", defaultValue: "Invite", bundle: .module))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
+                        .background(MeeshyColors.indigo500)
+                        .clipShape(Capsule())
+                }
+                .disabled(viewModel.invitingUserId == user.id)
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
+    }
+}

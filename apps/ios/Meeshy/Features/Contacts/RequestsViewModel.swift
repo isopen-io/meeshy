@@ -40,7 +40,7 @@ final class RequestsViewModel: ObservableObject {
     private let receivedKey = FriendshipCache.PersistenceKeys.receivedRequests
     private let sentKey = FriendshipCache.PersistenceKeys.sentRequests
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "requests")
+    private static let logger = MeeshyLog.logger(.requests)
 
     init(
         friendService: FriendServiceProviding = FriendService.shared,
@@ -61,7 +61,7 @@ final class RequestsViewModel: ObservableObject {
         if let sent = sentRequests.repaintedElements(by: event.repainted) { sentRequests = sent }
     }
 
-    deinit {
+    nonisolated deinit {
         receivedRevalidationTask?.cancel()
         sentRevalidationTask?.cancel()
     }
@@ -387,6 +387,6 @@ final class RequestsViewModel: ObservableObject {
         guard !existing.contains(where: { $0.id == user.id }) else { return }
         var merged = existing
         merged.append(user)
-        try? await store.save(merged, for: key)
+        await bestEffort("requestsViewModel.store.save", category: .cache) { try await store.save(merged, for: key) }
     }
 }

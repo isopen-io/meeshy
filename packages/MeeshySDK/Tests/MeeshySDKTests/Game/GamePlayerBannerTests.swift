@@ -93,14 +93,16 @@ struct GamePlayerBannerTests {
     func treasuryAndRank() throws {
         let banner = GamePlayerBanner(game: try block())
         #expect(banner.meeshes == 9)
-        #expect(banner.rank == GamePlayerBanner.Rank(rank: .voix, division: .v))
+        #expect(banner.rank?.rank == .voix)
+        #expect(banner.rank?.division == .v)
     }
 
     @Test("Mythe n'a pas de division")
     func mythHasNoDivision() throws {
         let glory = GameBlock.Glory(glory: 90_000, rank: .mythe, division: nil, next: nil, gloryMissing: nil, progress: 1)
         let banner = GamePlayerBanner(game: try game(glory: glory))
-        #expect(banner.rank == GamePlayerBanner.Rank(rank: .mythe, division: nil))
+        #expect(banner.rank?.rank == .mythe)
+        #expect(banner.rank?.division == nil)
     }
 
     @Test("la ligue ne paraît qu'avec le consentement ET un groupe")

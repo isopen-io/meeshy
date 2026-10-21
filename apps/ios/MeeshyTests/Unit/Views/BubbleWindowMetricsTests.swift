@@ -152,15 +152,16 @@ final class BubbleWindowMetricsTests: XCTestCase {
     /// Sur iPad la conversation occupe une COLONNE (~62 % de la fenêtre) : la
     /// bulle réelle se plafonne contre la liste, l'aperçu contre la fenêtre — il
     /// était plus large que la bulle qu'il reproduit, et le texte se recoupait.
-    /// L'aperçu se plafonne contre la largeur de son overlay.
+    /// L'aperçu se plafonne contre la largeur de son overlay — depuis #11208, il
+    /// rend la bulle du fil elle-même, à qui l'overlay remet la largeur de sa
+    /// colonne comme la liste la remet à la cellule.
     func test_messageOverlayMenu_previewCapsAgainstItsOwnWidth() throws {
         let code = codeLines(try source(Self.messageOverlayMenu))
 
         XCTAssertTrue(
-            code.contains("containerWidth: containerWidth > 0 ? containerWidth : nil"),
+            code.contains(".environment(\\.bubbleContainerWidth, geometry.size.width > 0 ? geometry.size.width : nil)"),
             "The long-press preview must cap against the column it is drawn in, like the bubble it mirrors."
         )
-        XCTAssertTrue(code.contains("messagePreview(containerWidth: geometry.size.width)"))
         XCTAssertFalse(
             code.contains("UIScreen.main"),
             "MessageOverlayMenu already reads its own GeometryReader for every other metric."
@@ -186,17 +187,11 @@ final class BubbleWindowMetricsTests: XCTestCase {
         )
     }
 
-    /// `DeviceLayout` keeps exactly one reference to the deprecated API: the
-    /// documented last-resort fallback used when no foreground scene is attached
-    /// — a context where nothing is being laid out anyway. Pinning the count is
-    /// what makes this a single source of truth rather than a fourth copy.
-    func test_deviceLayout_holdsTheOnlyRemainingDisplayFallback() throws {
+    func test_deviceLayout_relaysTheDisplayFallbackToWindowMetrics() throws {
         let code = codeLines(try source(Self.deviceLayout))
 
-        XCTAssertEqual(
-            code.components(separatedBy: "UIScreen.main").count - 1, 1,
-            "DeviceLayout must carry a single, documented display fallback — no more, no fewer."
-        )
+        XCTAssertEqual(code.components(separatedBy: "UIScreen.main").count - 1, 0)
+        XCTAssertTrue(code.contains("WindowMetrics.physicalDisplay.points"))
         XCTAssertTrue(
             code.contains("activationState == .foregroundActive"),
             "The scene must be resolved by activation state: `connectedScenes` is an unordered " +
@@ -206,5 +201,22 @@ final class BubbleWindowMetricsTests: XCTestCase {
             code.contains("isKeyWindow"),
             "Within the foreground scene, the key window is the one hosting the app's UI."
         )
+    }
+
+    func test_bubbleFullscreen_electsTheVariantThroughTheGallerySource() throws {
+        let code = codeLines(try source(Self.bubbleStandardLayout))
+
+        XCTAssertTrue(code.contains("GalleryImageSource.fullscreenURL(for: attachment)"))
+        // La case de la GRILLE élit, elle, la variante de SA largeur
+        // (`BubbleGridImageView.displayedURL`, bande passante 5.2) — ce n'est pas
+        // un plein écran. Hors de ce site, aucune élection locale.
+        let cellSite = try XCTUnwrap(code.range(of: "static func displayedURL(for attachment: MessageAttachment, cellPointWidth: CGFloat,"),
+                                     "l'élection de la case de grille a disparu")
+        let cellBody = String(code[cellSite.upperBound...].prefix(600))
+        XCTAssertTrue(cellBody.contains("targetWidthPx: Int((cellPointWidth * displayScale).rounded())"),
+                      "la case élit pour SA largeur, jamais pour l'écran")
+        XCTAssertEqual(code.components(separatedBy: "ImageVariantSelector.bestImageURL").count - 1, 1,
+                       "seule la case de grille élit localement ; le plein écran passe par la galerie")
+        XCTAssertTrue(cellBody.contains("ImageVariantSelector.bestImageURL"))
     }
 }

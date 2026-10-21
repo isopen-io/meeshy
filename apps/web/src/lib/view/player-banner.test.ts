@@ -6,7 +6,7 @@ import { ALL_LEVEL_STEPS, gameBlockFixture, gameBlockWithExtrasFixture, gameExtr
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
-import { isLargeText, playerBannerLabel, playerBannerModel, playerBannerPieceLabels } from './player-banner';
+import { bannerShortCount, isLargeText, playerBannerLabel, playerBannerModel, playerBannerPieceLabels } from './player-banner';
 
 /**
  * LA BANNIÈRE DU JOUEUR (#9494) — SEULEMENT CE QUI EXISTE. Le modèle ne pose
@@ -121,7 +121,7 @@ describe('seulement ce qui a du sens (#9536)', () => {
 describe('ce que lit le lecteur d’écran — une phrase complète', () => {
   test('fr : le nouveau joueur, son niveau, son palier et sa marche vers le suivant', () => {
     const model = shown(NEWCOMER);
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, Braise, \d+ % vers le \d+$/);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, Étincelle, \d+ % vers le \d+$/);
   });
 
   test('fr : au niveau 1, le total de points est dit — il n’y a pas de niveau à lire', () => {
@@ -129,29 +129,35 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
     expect(playerBannerLabel(model, 'fr')).toMatch(/^12 étincelles$/);
   });
 
-  test('fr : tout ce qui existe, dans l’ordre de la bannière', () => {
+  test('fr : tout ce qui existe, dans l’ordre de la rangée compacte — l’anneau, le milieu, le rang au bout (#11125)', () => {
     const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
-    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, 12 Meeshes, [\p{L} ]+, ligue Jade \d+(re|e), Flamme 23 jours, Trophées : \d+, Missions du jour : \d+ sur \d+, Saison : \d+ étoiles$/u);
+    expect(playerBannerLabel(model, 'fr')).toMatch(/^Niveau \d+, \p{L}+, \d+ % vers le \d+, Flamme 23 jours, 12 Meeshes, Rêve : \d+ sur \d+, joute de Jade · \d+(re|e), Murmure IV, gloire 620, [\d\s\u202f]+ de gloire jusqu’à Murmure III$/u);
+  });
+
+  test('fr : trophées et saison ne sont dits que dans la disposition grand texte, où ils restent (#11125)', () => {
+    const model = shownExtras({ balance: 12, streak: 23, glory: 620 });
+    expect(playerBannerLabel(model, 'fr')).not.toMatch(/Trophées|Voyage/);
+    expect(playerBannerLabel(model, 'fr', 'large')).toMatch(/Trophées : \d+, Voyage : \d+ pas$/);
   });
 
   test('le rang : la division V..I et la place du Mythe, dites et dessinées (#9636)', () => {
     const model = shownExtras({ glory: 620 });
-    expect(model.rank).toEqual({ rank: 'murmure', division: 4, mythic: null });
+    expect(model.rank).toMatchObject({ rank: 'murmure', division: 4, mythic: null });
     expect(playerBannerLabel(model, 'fr')).toContain('Murmure IV');
     const mythe = shownExtras({ glory: 1_000_000, mythic: true, mythicSeat: { number: 18, edition: 22 } });
-    expect(mythe.rank).toEqual({ rank: 'mythe', division: null, mythic: { number: 18, edition: 22 } });
+    expect(mythe.rank).toMatchObject({ rank: 'mythe', division: null, mythic: { number: 18, edition: 22 } });
     expect(playerBannerLabel(mythe, 'fr')).toContain('Mythe n° 18');
   });
 
   test('en : l’ordinal anglais de la place', () => {
     const model = shownExtras({ balance: 12, streak: 23 });
-    expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Jade league \d+(st|nd|rd|th), Flame 23 days, Trophies: \d+, Daily missions: \d+ of \d+, Season: \d+ stars$/);
+    expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Flame 23 days, .*, Dream: \d+ of \d+, Jade joust · \d+(st|nd|rd|th), .*$/);
   });
 
   test('aucune langue ne laisse une clé nue, un paramètre en clair ou un « undefined »', () => {
     const model = shownExtras({ balance: 12, streak: 23 });
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
-      const label = playerBannerLabel(model, language);
+      const label = [playerBannerLabel(model, language, 'large'), playerBannerPieceLabels(model, language).rank ?? ''].join(' ');
       expect({ language, defect: /game\.|\{\w+\}|undefined|NaN/.test(label) }).toEqual({ language, defect: false });
     }
   });
@@ -243,9 +249,9 @@ describe('trophées, mission du jour et saison', () => {
     const game = gameBlockWithExtrasFixture({ ...NEWCOMER, levelRecord: 9 }, { trophies: [{ key: 'trophy.prestige.1', awardedAt: '2026-11-01T00:00:00.000Z' }], season: { stars: 25, claimedSteps: [], sealOwned: false } });
     const model = playerBannerModel(game);
     expect(model).not.toBeNull();
-    const label = playerBannerLabel(model!, 'fr');
+    const label = playerBannerLabel(model!, 'fr', 'large');
     expect(label).toContain('Trophées');
-    expect(label).toContain('Saison');
+    expect(label).toContain('Voyage');
   });
 });
 
@@ -265,5 +271,72 @@ describe('un nom accessible par pièce', () => {
     expect(labels.level).toMatch(/^Niveau \d+, /);
     expect(labels.sparks).toContain('Étincelles');
     expect(labels.sparks).toMatch(/vers le/);
+  });
+});
+
+/**
+ * LE RANG ET SA GLOIRE (#11125, porteur 2026-10-20) — le rang se lit comme le niveau : sa jauge de Gloire (la marche dans la
+ * division) et ce qui manque pour le rang suivant. Tout est LU dans le bloc `glory` servi, rien n'est recalculé.
+ */
+describe('le rang porte sa Gloire, sa jauge et ce qui manque', () => {
+  test('lus tels quels dans le bloc servi : la Gloire, la marche, le manque et le rang suivant', () => {
+    const game = gameBlockWithExtrasFixture({ glory: 620 });
+    const { glory } = game;
+    expect(glory.next).not.toBeNull();
+    expect(playerBannerModel(game)?.rank).toEqual({
+      rank: 'murmure',
+      division: 4,
+      mythic: null,
+      glory: 620,
+      progress: glory.progress,
+      gloryMissing: glory.gloryMissing,
+      next: { rank: glory.next!.rank, division: glory.next!.division5 ?? glory.next!.division },
+    });
+  });
+
+  test('rien n’est recalculé : un manque servi différent du seuil est montré tel quel', () => {
+    const game = gameBlockWithExtrasFixture({ glory: 620 });
+    const served = { ...game, glory: { ...game.glory, gloryMissing: 7, progress: 0.25 } };
+    expect(playerBannerModel(served)?.rank).toMatchObject({ gloryMissing: 7, progress: 0.25 });
+  });
+
+  test('le Mythe n’a pas de suite : ni rang suivant ni manque', () => {
+    const mythe = shownExtras({ glory: 1_000_000, mythic: true, mythicSeat: { number: 18, edition: 22 } });
+    expect(mythe.rank).toMatchObject({ glory: 1_000_000, next: null, gloryMissing: null });
+  });
+
+  test('le nom accessible du rang : son nom, sa Gloire et ce qui manque vers le suivant', () => {
+    const game = gameBlockWithExtrasFixture({ glory: 620 });
+    const labels = playerBannerPieceLabels(playerBannerModel(game)!, 'fr');
+    expect(labels.rank).toMatch(/^Murmure IV, gloire 620, [\d\s\u202f]+ de gloire jusqu’à Murmure III$/u);
+  });
+
+  test('au Mythe : le nom et la Gloire seule, sans « encore »', () => {
+    const mythe = shownExtras({ glory: 1_000_000, mythic: true, mythicSeat: { number: 18, edition: 22 } });
+    const label = playerBannerPieceLabels(mythe, 'fr').rank ?? '';
+    expect(label).toMatch(/^Mythe n° 18, gloire 1[\s\u202f]000[\s\u202f]000$/u);
+    expect(label).not.toContain('encore');
+  });
+});
+
+/**
+ * LE CHIFFRE COURT DU BANDEAU (porteur 2026-10-20, #11125) — « 5 543 vers Passeur II », « 12,3 k vers le 62 » : le chiffre
+ * plein sous 10 000, compact dès 10 000 (une décimale au plus), dans la langue de l'interface.
+ */
+describe('bannerShortCount', () => {
+  test('sous 10 000 : le chiffre plein de la langue', () => {
+    expect(bannerShortCount(5543, 'fr')).toBe(new Intl.NumberFormat('fr-FR').format(5543));
+    expect(bannerShortCount(9999, 'en')).toBe('9,999');
+  });
+
+  test('dès 10 000 : compact, une décimale au plus', () => {
+    expect(bannerShortCount(10_000, 'en')).toBe('10K');
+    expect(bannerShortCount(12_345, 'en')).toBe('12.3K');
+    expect(bannerShortCount(12_345, 'fr')).toBe(new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }).format(12_345));
+    expect(bannerShortCount(1_000_000, 'fr')).toBe(new Intl.NumberFormat('fr-FR', { notation: 'compact', maximumFractionDigits: 1 }).format(1_000_000));
+  });
+
+  test('l’arabe garde les chiffres latins du jeu', () => {
+    expect(bannerShortCount(12_345, 'ar')).toMatch(/12[.,٫]3/);
   });
 });

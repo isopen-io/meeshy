@@ -5,44 +5,6 @@ import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
-/// **Une cible tactile se pense autour d'un GLYPHE, jamais autour de sa
-/// police** (#4086, mesuré le 2026-09-02).
-///
-/// Relevé sur la rangée d'actions du détail :
-///
-/// ```
-/// 32 × 17   Je n'aime plus
-/// 22 × 19   Commentaires
-/// 25 × 17   Republier
-/// 17 × 20   Ajouter aux favoris
-/// ```
-///
-/// Soit environ le TIERS du minimum d'Apple (44 pt) dans chaque dimension.
-/// `EngagementGlyph` ne pose que `.font(MeeshyFont.relative(size))` — aucun
-/// cadre, aucune forme de contact — donc le bouton fait exactement la taille de
-/// ses caractères. Personne n'a « choisi » 17 pt : c'est la hauteur du glyphe.
-///
-/// > La règle des 44 pt s'applique là où elle est CONVOQUÉE — autour d'une
-/// > icône qu'on encadre. Un label qui se dimensionne tout seul, glyphe ou mot,
-/// > ne la convoque jamais : elle n'est pas violée, elle est absente.
-///
-/// L'agrandissement ne déplace RIEN : le retrait qui étend la zone est annulé
-/// par un retrait négatif de même valeur. Même patron que
-/// `captionAffordanceHitArea` (`MediaCaptionOverlay`), même raison.
-private extension View {
-    func engagementHitArea() -> some View {
-        // 14 et non 13 : le plus PETIT glyphe de la rangée fait 17 pt
-        // (`EngagementGlyph(size: 17)` par défaut), et 17 + 2 × 13 = 43 — un
-        // point sous le minimum. Mesuré à l'écran, pas calculé : deux des cinq
-        // cibles sortaient à 43 après le premier réglage.
-        self.padding(.vertical, MeeshySpacing.mdPlus)
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .contentShape(Rectangle())
-            .padding(.vertical, -14)
-            .padding(.horizontal, -14)
-    }
-}
-
 struct PostDetailView: View {
     let postId: String
     var initialPost: FeedPost?
@@ -84,8 +46,7 @@ struct PostDetailView: View {
         _mentionController = StateObject(wrappedValue: MentionComposerController(context: .post(id: postId)))
     }
     @EnvironmentObject var statusViewModel: StatusViewModel
-    @EnvironmentObject private var storyViewModel: StoryViewModel
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
     @State var showTranslationSheet = false
     @State var selectedProfileUser: ProfileSheetUser?
     @State private var likeScale: CGFloat = 1.0
@@ -380,58 +341,13 @@ struct PostDetailView: View {
 
         // Comments (threaded)
         ForEach(viewModel.topLevelComments) { comment in
-            ThreadedCommentSection(
-                comment: comment,
-                replies: viewModel.repliesFor(comment.id),
-                isExpanded: viewModel.expandedThreads.contains(comment.id),
-                isLoadingReplies: viewModel.loadingReplies.contains(comment.id),
-                accentColor: accentColor, post: displayPost,
-                // Like de commentaire optimiste + réaction socket cœur, porté par le
-                // ViewModel (miroir de `CommentsSheetView`). L'état est semé depuis
-                // `currentUserReactions` au chargement, donc les commentaires déjà
-                // likés s'affichent cœur plein et le tap donne un retour instantané.
-                likedIds: viewModel.commentLikedIds,
-                likeDelta: viewModel.commentLikeDelta,
-                heartInFlightIds: viewModel.commentHeartInFlightIds,
-                onReply: { target in
-                    beginReply(to: target)
-                },
-                onToggleThread: {
-                    Task { await viewModel.toggleThread(comment.id, postId: postId) }
-                },
-                onLikeComment: { commentId in
-                    Task { await viewModel.toggleCommentLike(commentId, postId: postId) }
-                },
-                onDeleteComment: { target in
-                    Task { await viewModel.deleteComment(target) }
-                },
+            PostDetailCommentThread(
+                comment: comment, post: displayPost, postId: postId,
+                accentColor: accentColor, highlightedCommentId: highlightedCommentId,
+                onReply: { target in beginReply(to: target) },
                 onEditComment: { target in beginEditComment(target) },
-                onRequestTranslation: { target in
-                    let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
-                    Task {
-                        try? await PostService.shared.requestCommentTranslation(
-                            postId: postId, commentId: target.id, targetLanguage: lang)
-                    }
-                },
-                moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
-                storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
-                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
-                replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
-                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
-                hasMoreReplies: viewModel.expandedThreads.contains(comment.id)
-                    && (viewModel.repliesHasMore[comment.id] ?? false),
-                onLoadMoreReplies: { await viewModel.loadMoreReplies(comment.id, postId: postId) },
-                highlightedCommentId: highlightedCommentId
+                viewModel: viewModel
             )
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
-                    .padding(.horizontal, MeeshySpacing.sm)
-            )
-            .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
             // Anchor for notification-driven navigation: scroll/highlight targets
             // the top-level section. For a reply, the parent thread is expanded so
             // the reply becomes visible right below this anchor.
@@ -643,18 +559,15 @@ struct PostDetailView: View {
                 } label: {
                     Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                 }
-                Divider()
-                Button(role: .destructive) {
-                    HapticFeedback.medium()
-                    Task {
-                        if await viewModel.deletePost(postId) {
-                            router.pop()
-                        }
-                    }
-                } label: {
-                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                }
+                PublicationDestructiveMenuItems(postId: postId, onDelete: { _ in
+                    Task { if await viewModel.deletePost(postId) { router.pop() } }
+                }, onRemove: nil)
             } else {
+                if let post = displayPost {
+                    PublicationDestructiveMenuItems(postId: postId, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: post) { [viewModel, router] in
+                        if await viewModel.deletePost($0, reason: $1) { router.pop() }
+                    })
+                }
                 Divider()
                 Button(role: .destructive) {
                     HapticFeedback.light()
@@ -722,7 +635,7 @@ struct PostDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Author header
             HStack(spacing: MeeshySpacing.md) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: post.author,
                     context: .postAuthor,
                     accentColor: post.authorColor,
@@ -737,7 +650,7 @@ struct PostDetailView: View {
                             selectedProfileUser = .from(feedPost: post)
                         }
                     ]
-                )
+                ) }
                 .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -821,39 +734,7 @@ struct PostDetailView: View {
 
             // Inline secondary translation panel
             if let content = secondaryContent, let code = secondaryLangCode {
-                let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
-                let display = LanguageDisplay.from(code: code)
-                VStack(spacing: 0) {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
-                        Circle().fill(langColor).frame(width: 4, height: 4)
-                        Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
-                    }
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                        if let display {
-                            HStack(spacing: MeeshySpacing.xs) {
-                                Text(display.flag).font(.caption)
-                                Text(display.name)
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundColor(langColor)
-                            }
-                        }
-                        Text(content)
-                            .font(.subheadline)
-                            .foregroundColor(theme.textPrimary.opacity(0.8))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.vertical, MeeshySpacing.sm)
-                    .padding(.horizontal, MeeshySpacing.smPlus)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(langColor.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.top, MeeshySpacing.xsPlus)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(String(format: String(localized: "a11y.post.secondary_translation", defaultValue: "Traduction en %1$@ : %2$@", bundle: .main), display?.name ?? code, content))
+                PostDetailSecondaryTranslationPanel(content: content, code: code)
             }
 
             // Embed vidéo (YouTube) détecté dans le contenu du post.

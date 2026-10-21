@@ -57,24 +57,23 @@ const standing = (over: Partial<BannerStanding> = {}): BannerStanding => ({
 const words = (node: Element | null | undefined): string => (node?.textContent ?? '').replace(/\s+/g, ' ').trim();
 const styleOf = (node: Element | null | undefined): string => node?.getAttribute('style') ?? '';
 
-describe('au début de la bannière : le nom du palier au-dessus du cercle, les étincelles en grand à droite (porteur 2026-10-19, #10951)', () => {
+describe('au début de la bannière : le nom du palier au-dessus du cercle, les étincelles dessous (porteur 2026-10-19, #10951)', () => {
   test('le nom du palier se pose AU-DESSUS du cercle ; ni « Niveau N », ni record, ni reste', async () => {
     const host = await mount(<GameProfileBanner standing={standing({ levelMax: 40 })} />);
     const start = host.querySelector('[data-profile-banner-level]');
     const name = start?.querySelector('[data-profile-banner-level-name]');
     const ring = start?.querySelector('[data-game-level="12"]');
-    expect(words(name)).toBe('Braise');
+    expect(words(name)).toBe('Étincelle');
     expect(ring !== null && ring !== undefined).toBe(true);
     expect(((name?.compareDocumentPosition(ring as Node) ?? 0) & 4) !== 0).toBe(true);
-    expect(name?.parentElement?.contains(ring as Node)).toBe(true);
-    expect((name?.parentElement?.getAttribute('class') ?? '').split(/\s+/)).toContain('flex-col');
+    expect((start?.getAttribute('class') ?? '').split(/\s+/)).toContain('flex-col');
     for (const gone of ['level-now', 'level-max', 'missing', 'rule']) {
       expect(start?.querySelector(`[data-profile-banner-${gone}]`) === null).toBe(true);
     }
     expect(words(start)).not.toMatch(/Niveau|record|encore/);
   });
 
-  test('« ✦ 976 » en GRAND, à droite du cercle ; la Gloire n’est plus de ce côté', async () => {
+  test('« ✦ 976 » SOUS le cercle, plus petit qu’un titre ; la Gloire n’est plus de ce côté', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
     const start = host.querySelector('[data-profile-banner-level]');
     const pocket = start?.querySelector('[data-profile-banner-points]');
@@ -82,7 +81,8 @@ describe('au début de la bannière : le nom du palier au-dessus du cercle, les 
     expect(words(pocket)).toBe(`${SPARK_GLYPH} 976`);
     expect(((ring?.compareDocumentPosition(pocket as Node) ?? 0) & 4) !== 0).toBe(true);
     const names = (pocket?.getAttribute('class') ?? '').split(/\s+/);
-    expect(names).toContain('text-section');
+    expect(names).toContain('text-body');
+    expect(names).not.toContain('text-section');
     expect(names).toContain('font-bold');
     expect(start?.querySelector('[data-profile-banner-glory]') === null).toBe(true);
     expect(host.querySelector('[data-profile-banner-lifetime]') === null).toBe(true);
@@ -102,13 +102,13 @@ describe('au début de la bannière : le nom du palier au-dessus du cercle, les 
     const host = await mount(<GameProfileBanner standing={standing({ points: null, glory: null, pointsToNext: null, progress: null })} />);
     expect(host.querySelector('[data-profile-banner-points]') === null).toBe(true);
     expect(host.querySelector('[data-profile-banner-glory]') === null).toBe(true);
-    expect(words(host.querySelector('[data-profile-banner-level-name]'))).toBe('Braise');
+    expect(words(host.querySelector('[data-profile-banner-level-name]'))).toBe('Étincelle');
     expect(host.querySelector('[data-profile-banner-level] [data-game-level="12"]') !== null).toBe(true);
   });
 });
 
-describe('à la fin de la bannière : la Gloire, à gauche du blason et du nom du rang (porteur 2026-10-19, #10951)', () => {
-  test('« ♛ 41 250 » AVANT le blason ; le blason, puis le nom du rang AVEC sa division dessous', async () => {
+describe('à la fin de la bannière : la Gloire au-dessus du blason, le nom du rang dessous (porteur 2026-10-19, #10951)', () => {
+  test('« ♛ 41 250 » AU-DESSUS du blason, puis le nom du rang AVEC sa division dessous', async () => {
     const host = await mount(<GameProfileBanner standing={standing()} />);
     const end = host.querySelector('[data-profile-banner-rank]');
     const glory = end?.querySelector('[data-profile-banner-glory]');
@@ -117,9 +117,9 @@ describe('à la fin de la bannière : la Gloire, à gauche du blason et du nom d
     expect(words(glory)).toBe(`${GLORY_GLYPH} ${formatCount(41_250, 'fr')}`.replace(/\s+/g, ' '));
     expect((glory?.getAttribute('class') ?? '').split(/\s+/)).toContain('font-bold');
     expect(((glory?.compareDocumentPosition(crest as Node) ?? 0) & 4) !== 0).toBe(true);
+    expect(((crest?.compareDocumentPosition(name as Node) ?? 0) & 4) !== 0).toBe(true);
     expect(words(name)).toBe('Murmure V');
-    expect(name?.parentElement?.contains(crest as Node)).toBe(true);
-    expect(name?.parentElement?.contains(glory as Node)).toBe(false);
+    expect((end?.getAttribute('class') ?? '').split(/\s+/)).toContain('flex-col');
   });
 
   test('deux glyphes distincts, aucun mot', () => {
@@ -150,12 +150,12 @@ describe('un libellé par groupe, lisible dans les sept langues', () => {
       expect(node?.querySelectorAll('[role="img"]').length).toBe(0);
     }
     const level = host.querySelector('[data-profile-banner-level]')?.getAttribute('aria-label') ?? '';
-    expect(level.startsWith('Niveau 12, palier Braise')).toBe(true);
+    expect(level.startsWith('Niveau 12, ta lumière en ')).toBe(true);
     expect(level).toContain('976 étincelles');
     expect(level).not.toContain('Gloire');
-    expect(level).toContain('record de niveau 12');
-    expect(level.endsWith(', encore 624 vers le 13')).toBe(true);
-    expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe(`Murmure V, Gloire ${formatCount(41_250, 'fr')}`);
+    expect(level).toContain('ta plus haute lumière : niveau 12');
+    expect(level.endsWith(', 624 jusqu’au niveau 13')).toBe(true);
+    expect(host.querySelector('[data-profile-banner-rank]')?.getAttribute('aria-label')).toBe(`Murmure V, ${formatCount(41_250, 'fr')} de gloire`);
   });
 
   test('chaque langue nomme les deux groupes et écrit les points', async () => {

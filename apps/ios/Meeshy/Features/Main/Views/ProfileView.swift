@@ -95,7 +95,7 @@ struct ProfileView: View {
             Task { await authManager.refreshCurrentUserProfile() }
             if let fresh = try? await StatsService.shared.fetchStats() {
                 stats = fresh
-                try? await CacheCoordinator.shared.stats.save([fresh], for: userId)
+                await bestEffort("profileView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([fresh], for: userId) }
             }
         }
         .fullScreenCover(item: $fullscreenImage) { image in
@@ -496,7 +496,7 @@ struct ProfileView: View {
             .accessibilityHint(String(localized: "profile.stats.a11y.hint", defaultValue: "Ouvre les statistiques détaillées", bundle: .main))
 
             progressionEntry
-            ProfileDecorEntry(user: user) { router.openPackShop(domain: $0) }
+            ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
         }
     }
 
@@ -790,7 +790,7 @@ struct ProfileView: View {
 
     private func loadImageForEditor(from item: PhotosPickerItem, completion: @escaping (UIImage?) -> Void) {
         Task {
-            guard let data = try? await item.loadTransferable(type: Data.self),
+            guard let data = try? await PickedMedia.loadImageData(item),
                   let image = UIImage(data: data) else {
                 completion(nil)
                 return
@@ -979,72 +979,3 @@ struct ProfileView: View {
         return date.formatted(date: .abbreviated, time: .omitted)
     }
 }
-
-// MARK: - Optimistic Profile Builder
-
-extension MeeshyUser {
-    /// Returns a copy with the supplied fields overridden. Used by the
-    /// profile editor to apply optimistic local updates before the server
-    /// response lands. Only fields that the editor can touch are exposed;
-    /// everything else is carried over verbatim — which means every stored
-    /// property must appear in the `MeeshyUser(...)` call below: an omitted
-    /// argument takes the `= nil` default of `MeeshyUser.init` and ERASES the
-    /// field instead of carrying it (that is how the thumb hashes, the device
-    /// locale and the whole voice profile used to be wiped by a bio edit).
-    ///
-    /// Non-`private` (like `ProfileView.changedOrNil`) so the carry-over
-    /// contract can be exercised from `MeeshyTests` via `@testable import
-    /// Meeshy` without instantiating the SwiftUI view.
-    func applyingProfileEdits(
-        firstName: String? = nil,
-        lastName: String? = nil,
-        displayName: String? = nil,
-        bio: String? = nil,
-        systemLanguage: String? = nil,
-        regionalLanguage: String? = nil,
-        customDestinationLanguage: String? = nil
-    ) -> MeeshyUser {
-        MeeshyUser(
-            id: id,
-            username: username,
-            email: email,
-            firstName: firstName ?? self.firstName,
-            lastName: lastName ?? self.lastName,
-            displayName: displayName ?? self.displayName,
-            bio: bio ?? self.bio,
-            avatar: avatar,
-            avatarThumbHash: avatarThumbHash,
-            banner: banner,
-            bannerThumbHash: bannerThumbHash,
-            role: role,
-            systemLanguage: systemLanguage ?? self.systemLanguage,
-            regionalLanguage: regionalLanguage ?? self.regionalLanguage,
-            isOnline: isOnline,
-            lastActiveAt: lastActiveAt,
-            createdAt: createdAt,
-            updatedAt: updatedAt,
-            blockedUserIds: blockedUserIds,
-            isActive: isActive,
-            deactivatedAt: deactivatedAt,
-            isAnonymous: isAnonymous,
-            isMeeshyer: isMeeshyer,
-            phoneNumber: phoneNumber,
-            emailVerifiedAt: emailVerifiedAt,
-            phoneVerifiedAt: phoneVerifiedAt,
-            customDestinationLanguage: customDestinationLanguage ?? self.customDestinationLanguage,
-            autoTranslateEnabled: autoTranslateEnabled,
-            deviceLocale: deviceLocale,
-            timezone: timezone,
-            registrationCountry: registrationCountry,
-            profileCompletionRate: profileCompletionRate,
-            signalIdentityKeyPublic: signalIdentityKeyPublic,
-            voicePublic: voicePublic,
-            voiceSampleUrl: voiceSampleUrl,
-            voiceSampleDurationMs: voiceSampleDurationMs,
-            voiceQuality: voiceQuality,
-            activation: activation,
-            profileDecor: profileDecor
-        )
-    }
-}
-

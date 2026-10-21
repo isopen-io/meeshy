@@ -20,10 +20,11 @@ struct ReelPreloadWindowTests {
         network: Law.Network = Law.Network(effectiveType: .fourG, saveData: false),
         deviceMemoryGb: Double? = nil,
         lowPower: Bool = false,
-        thermalState: ProcessInfo.ThermalState = .nominal
+        thermalState: ProcessInfo.ThermalState = .nominal,
+        tier: DeviceMediaTier? = nil
     ) -> Law.Context {
         Law.Context(visits: visits, network: network, deviceMemoryGb: deviceMemoryGb,
-                    lowPower: lowPower, thermalState: thermalState)
+                    lowPower: lowPower, thermalState: thermalState, tier: tier)
     }
 
     static func visits(_ dwellsMs: [Int], _ direction: Law.VisitDirection = .forward) -> [Law.Visit] {
@@ -290,5 +291,30 @@ struct ReelPreloadWindowTests {
         let plan = Law.plan(count: 3, activeIndex: 0, window: Law.Window(ahead: 10, behind: 10))
         #expect(plan.map(\.index) == [1, 2])
         #expect(Law.plan(count: 0, activeIndex: 0, window: Law.Window(ahead: 2, behind: 2)).isEmpty)
+    }
+
+    // MARK: - Le tier média de l'appareil (#11281)
+
+    @Test("un balayeur frénétique : la fenêtre devant suit le tier de l'appareil")
+    func tierCapsTheWindow() {
+        #expect(Law.window(for: Self.context(visits: Self.frantic, tier: .low)).ahead == Law.constrainedRadius)
+        #expect(Law.window(for: Self.context(visits: Self.frantic, tier: .mid)).ahead == Law.midTierRadius)
+        #expect(Law.window(for: Self.context(visits: Self.frantic, tier: .high)).ahead == Law.maxRadius)
+        #expect(Law.window(for: Self.context(visits: Self.frantic, tier: .pro)).ahead == Law.maxRadius)
+        #expect(Law.window(for: Self.context(visits: Self.frantic, tier: nil)).ahead == Law.maxRadius)
+    }
+
+    @Test("le tier ne relève jamais une contrainte : réseau, chaleur et batterie plafonnent toujours plus bas")
+    func tierNeverLiftsAConstraint() {
+        let threeG = Law.Network(effectiveType: .threeG, saveData: false)
+        #expect(Law.window(for: Self.context(visits: Self.frantic, network: threeG, tier: .pro)).ahead == Law.constrainedRadius)
+        #expect(Law.window(for: Self.context(visits: Self.frantic, thermalState: .serious, tier: .pro)).ahead == Law.minRadius)
+        #expect(Law.window(for: Self.context(visits: Self.frantic, lowPower: true, tier: .pro)).ahead == Law.minRadius)
+        #expect(Law.window(for: Self.context(visits: Self.frantic, deviceMemoryGb: 2, tier: .pro)).ahead == Law.constrainedRadius)
+    }
+
+    @Test("le plancher N−2…N+2 tient aussi sur un appareil de tier bas")
+    func lowTierKeepsTheFloor() {
+        #expect(Law.window(for: Self.context(tier: .low)) == Law.Window(ahead: 2, behind: 2))
     }
 }

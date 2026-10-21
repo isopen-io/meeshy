@@ -211,15 +211,13 @@ public enum ConversationReadPrecedence {
 /// le menu flottant lisent le total SYNCHRONEMENT, dans le tour de boucle du
 /// rendu. Un acteur imposerait un `await` à chaque lecture, donc une frame où
 /// la surface affiche la valeur d'AVANT — exactement le scintillement que ce
-/// lot supprime. L'état est protégé par une file sérielle, même patron que
-/// `ConversationSyncEngine`.
+/// lot supprime. L'état vit dans un `Locked<ConversationReadLedgerState>` : la logique
+/// est pure (`ConversationReadLedgerState`), le verrou ne fait que la sérialiser.
 public final class ConversationReadLedger: @unchecked Sendable {
 
     public static let shared = ConversationReadLedger()
 
-    private let stateQueue = DispatchQueue(label: "me.meeshy.read-ledger.state")
-    private var entries: [String: ConversationReadEntry] = [:]
-    private var _openConversationIds: Set<String> = []
+    private let locked = Locked(ConversationReadLedgerState())
     private let _changes = CurrentValueSubject<Void, Never>(())
 
     public init() {}
@@ -233,12 +231,12 @@ public final class ConversationReadLedger: @unchecked Sendable {
     ///
     /// Fenêtre unique : la conversation affichée. Plusieurs fenêtres : `nil` — lire `openConversationIds`.
     public var openConversationId: String? {
-        stateQueue.sync { _openConversationIds.count == 1 ? _openConversationIds.first : nil }
+        locked.read { $0.openConversationId }
     }
 
     /// Toutes les conversations qu'une scène affiche (iPad multi-fenêtre).
     public var openConversationIds: Set<String> {
-        stateQueue.sync { _openConversationIds }
+        locked.read { $0.openConversationIds }
     }
 
     /// Émet à l'abonnement (sémantique `CurrentValueSubject`) puis à chaque
@@ -248,16 +246,7 @@ public final class ConversationReadLedger: @unchecked Sendable {
     public var changes: AnyPublisher<Void, Never> { _changes.eraseToAnyPublisher() }
 
     public func state(for conversationId: String) -> ConversationReadState? {
-        stateQueue.sync {
-            guard let entry = entries[conversationId] else { return nil }
-            return ConversationReadState(
-                conversationId: conversationId,
-                unreadCount: entry.unreadCount,
-                serverLastReadAt: entry.serverLastReadAt,
-                isMuted: entry.isMuted,
-                isOpen: _openConversationIds.contains(conversationId)
-            )
-        }
+        locked.read { $0.state(for: conversationId) }
     }
 
     /// Projection PAR CONVERSATION du compteur, pour les surfaces qui rendent
@@ -266,12 +255,7 @@ public final class ConversationReadLedger: @unchecked Sendable {
     /// total, c'est l'inventaire. La conversation OUVERTE s'y lit à zéro
     /// (rang 1) ; son entrée garde ce qui lui reste à lire.
     public func counts() -> [String: Int] {
-        stateQueue.sync {
-            let openIds = _openConversationIds
-            return Dictionary(uniqueKeysWithValues: entries.map { id, entry in
-                (id, openIds.contains(id) ? 0 : max(0, entry.unreadCount))
-            })
-        }
+        locked.read { $0.counts() }
     }
 
     /// **Le total UNIQUE**, et ses deux seules bornes. Trois formules
@@ -290,14 +274,7 @@ public final class ConversationReadLedger: @unchecked Sendable {
     ///   ligne mais ne doivent pas gonfler l'agrégat qu'on les a mises en
     ///   sourdine pour faire taire.
     public func total(excludingOpen: Bool, excludingMuted: Bool) -> Int {
-        stateQueue.sync {
-            let openIds = _openConversationIds
-            return entries.reduce(0) { acc, element in
-                if excludingOpen, openIds.contains(element.key) { return acc }
-                if excludingMuted, element.value.isMuted { return acc }
-                return acc + max(0, element.value.unreadCount)
-            }
-        }
+        locked.read { $0.total(excludingOpen: excludingOpen, excludingMuted: excludingMuted) }
     }
 
     /// **Le compte de CONVERSATIONS non lues** — D-L1 (#7236) : le badge
@@ -323,14 +300,7 @@ public final class ConversationReadLedger: @unchecked Sendable {
     /// peut pas savoir — c'est le seul écart assumé avec lui. Il se referme à
     /// la fermeture : l'entrée a gardé ce que le serveur a servi (#7350).
     public func conversationUnreadTotal(excludingOpen: Bool) -> Int {
-        stateQueue.sync {
-            let openIds = _openConversationIds
-            return entries.reduce(0) { acc, element in
-                if excludingOpen, openIds.contains(element.key) { return acc }
-                if element.value.isMuted { return acc }
-                return element.value.unreadCount > 0 ? acc + 1 : acc
-            }
-        }
+        locked.read { $0.conversationUnreadTotal(excludingOpen: excludingOpen) }
     }
 
     // MARK: Écriture
@@ -348,81 +318,14 @@ public final class ConversationReadLedger: @unchecked Sendable {
     /// passe par la même précédence que toutes les autres.
     @discardableResult
     public func apply(_ event: ConversationReadEvent) -> ConversationReadEntry? {
-        let previous: ConversationReadEntry? = stateQueue.sync { () -> ConversationReadEntry? in
-            switch event {
-            case .localOpen(let conversationId):
-                // Ouvrir n'est pas lire (#7350) : seul le curseur bouge. La
-                // ligne affichée se LIT à zéro dans ce tour de boucle (rang 1,
-                // projection) et son entrée garde ce que le serveur sert
-                // pendant l'affichage. La refermer rend ce compte — rien
-                // d'inventé : la lecture, elle, passe par `localMarkRead` ou
-                // par le serveur.
-                _openConversationIds = conversationId.map { [$0] } ?? []
-                return nil
-
-            case .localOpenSet(let conversationIds):
-                _openConversationIds = conversationIds
-                return nil
-
-            case .snapshot(let rows, let source):
-                applySnapshotLocked(rows: rows, source: source)
-                return nil
-
-            case .forget(let conversationId):
-                let before = entries.removeValue(forKey: conversationId)
-                _openConversationIds.remove(conversationId)
-                return before
-
-            case .serverUnread(let conversationId, _),
-                 .serverReceipt(let conversationId, _, _),
-                 .localMarkRead(let conversationId),
-                 .localMarkUnread(let conversationId):
-                let before = entries[conversationId] ?? ConversationReadEntry()
-                entries[conversationId] = ConversationReadPrecedence.resolve(before, event: event)
-                return before
-            }
-        }
+        let previous = locked.mutate { $0.apply(event) }
         _changes.send(())
         return previous
     }
 
     /// Purge au logout — isolation des comptes sur un même appareil.
     public func reset() {
-        stateQueue.sync {
-            entries.removeAll()
-            _openConversationIds = []
-        }
+        locked.mutate { $0.reset() }
         _changes.send(())
-    }
-
-    // MARK: Interne
-
-    /// Appelée SOUS `stateQueue` — jamais depuis l'extérieur.
-    private func applySnapshotLocked(rows: [ConversationReadRow], source: ConversationReadSource) {
-        var known: [String: ConversationReadEntry] = [:]
-        for row in rows {
-            var entry = entries[row.conversationId] ?? ConversationReadEntry()
-            // L'état MUET vient toujours de l'instantané, quelle que soit sa
-            // source : c'est une préférence, pas un compteur, et elle bascule
-            // sur n'importe quelle liste republiée.
-            entry.isMuted = row.isMuted
-            let isTracked = entries[row.conversationId] != nil
-            if source == .server || !isTracked {
-                entry.unreadCount = max(0, row.unreadCount)
-            }
-            // La conversation OUVERTE garde elle aussi le compte servi : elle se
-            // LIT à zéro (rang 1, projection), et c'est ce compte que sa
-            // fermeture rend (#7350).
-            known[row.conversationId] = entry
-        }
-        // Un instantané dit aussi QUI existe : une conversation qui n'y figure
-        // plus a été quittée, supprimée ou bannie, et son non-lu ne doit plus
-        // peser sur aucun agrégat. Les instantanés de CACHE, eux, peuvent être
-        // partiels (une page) — ils n'ont pas le droit de retirer.
-        if source == .server {
-            entries = known
-        } else {
-            for (id, entry) in known { entries[id] = entry }
-        }
     }
 }

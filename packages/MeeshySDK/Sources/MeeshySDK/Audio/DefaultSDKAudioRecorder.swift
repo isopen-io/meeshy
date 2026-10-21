@@ -19,46 +19,34 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
     public private(set) var recordedFileURL: URL?
 
     private var recorder: AVAudioRecorder? {
-        didSet { cleanupHandle.recorder = recorder }
+        didSet { teardown.update { $0.recorder = recorder } }
     }
     private var timer: Timer? {
-        didSet { cleanupHandle.timer = timer }
+        didSet { teardown.update { $0.timer = timer } }
     }
     private var levelHistory: [CGFloat] = []
     internal var settings: AudioRecordingSettings = .standard
 
-    /// Handles thread-safe à libérer depuis le `deinit` (potentiellement
-    /// off-main) — même pattern que `AudioPlaybackManager.CleanupHandle`.
-    /// Synchronisés avec les props @MainActor via leurs `didSet`. Sans ce
+    /// Ressources à libérer depuis le `deinit` (potentiellement off-main),
+    /// synchronisées avec les props @MainActor via leurs `didSet`. Sans ce
     /// filet, un recorder lâché sans stop/cancel (sheet swipée mid-recording,
     /// instance `@ObservedObject` remplacée par une ré-évaluation du parent)
     /// laissait un Timer 20 Hz au run loop pour toujours, le micro actif et
-    /// la session audio jamais rendue. `@unchecked Sendable` : champs mutés
-    /// uniquement depuis MainActor, lus une fois par le deinit/cleanup.
-    private final class CleanupHandle: @unchecked Sendable {
-        nonisolated(unsafe) var timer: Timer?
-        nonisolated(unsafe) var recorder: AVAudioRecorder?
-    }
-    private let cleanupHandle = CleanupHandle()
+    /// la session audio jamais rendue.
+    private let teardown = TeardownBox(RecordingResources())
 
     public init() {}
 
-    deinit {
-        cleanupHandle.timer?.invalidate()
+    nonisolated deinit {
+        teardown.update(RecordingResources.invalidateTimer)
         // `recorder` non-nil ⟺ mort mid-recording (stop/cancel posent nil) :
         // sémantique cancel — micro stoppé, fichier partiel jeté (dérivé de
         // `recorder.url`), session rendue (call-aware). Déporté sur une queue
-        // utility : stop (finalisation fichier) + removeItem + setActive sont
+        // utility : stop (finalisation fichier) + removeItem sont
         // bloquants, et ce dealloc arrive typiquement sur le main thread
         // pendant l'animation de dismiss de la sheet.
-        guard cleanupHandle.recorder != nil else { return }
-        let handle = cleanupHandle
-        DispatchQueue.global(qos: .utility).async {
-            guard let recorder = handle.recorder else { return }
-            recorder.stop()
-            try? FileManager.default.removeItem(at: recorder.url)
-            MediaSessionCoordinator.shared.deactivatePlaybackSync()
-        }
+        guard teardown.read(\.isRecording) else { return }
+        teardown.release(on: .global(qos: .utility), RecordingResources.releaseOffMain)
     }
 
     public func configure(with settings: AudioRecordingSettings) {
@@ -89,11 +77,11 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         }
         permissionDenied = false
 
-        // Source unique de session (call-aware) : pendant un appel VoIP la
-        // reconfiguration est refusée — on n'enregistre pas par-dessus
-        // RTCAudioSession (l'ancien chemin direct AVAudioSession cassait
-        // l'uplink micro de l'appel).
-        guard MediaSessionCoordinator.shared.activateRecordingSync() else { return }
+        // Source unique de session (call-aware, #11042) : pendant un appel VoIP
+        // la reconfiguration est refusée — on n'enregistre pas par-dessus
+        // RTCAudioSession. Les sons extérieurs s'arrêtent ; un son Meeshy qui
+        // joue baisse, et remonte à la fin.
+        guard MeeshyRecordingSession.shared.begin(.voiceMessage) else { return }
 
         // Second démarrage sans arrêt (double appui, relance après le prompt
         // micro) : arrêter l'enregistrement précédent et son minuteur 20 Hz,
@@ -122,7 +110,7 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
             // Rendre la session activée juste au-dessus : sans cela le micro
             // reste réservé et l'indicateur orange allumé.
             recorder = nil
-            MediaSessionCoordinator.shared.deactivatePlaybackSync()
+            MeeshyRecordingSession.shared.finish(handingBackSession: true)
             return
         }
 
@@ -156,10 +144,9 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         recorder?.stop()
         isRecording = false
 
-        // Call-aware (L3) : un `setActive(false)` direct pendant un appel VoIP
-        // démontait la session possédée par RTCAudioSession. Le coordinator
-        // no-op dans ce cas.
-        MediaSessionCoordinator.shared.deactivatePlaybackSync()
+        // Le son Meeshy baissé remonte, et la session revient à la lecture ou
+        // se rend (call-aware : rien ne bouge pendant un appel VoIP).
+        MeeshyRecordingSession.shared.finish(handingBackSession: true)
 
         let url = recordedFileURL
         recorder = nil
@@ -182,7 +169,7 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         // Symétrique de stopRecording : sans cette désactivation, un cancel
         // explicite (X, onDisappear) laissait la session `.playAndRecord`
         // active — micro indiqué, audio des autres apps interrompu.
-        MediaSessionCoordinator.shared.deactivatePlaybackSync()
+        MeeshyRecordingSession.shared.finish(handingBackSession: true)
     }
 
     private func updateMetering() {
@@ -203,5 +190,27 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
             levelHistory.removeFirst(levelHistory.count - 15)
         }
         audioLevels = levelHistory
+    }
+}
+
+private struct RecordingResources {
+    var timer: Timer?
+    var recorder: AVAudioRecorder?
+
+    var isRecording: Bool {
+        recorder != nil
+    }
+
+    static func invalidateTimer(_ resources: inout RecordingResources) {
+        resources.timer?.invalidate()
+    }
+
+    static func releaseOffMain(_ resources: RecordingResources) {
+        guard let recorder = resources.recorder else { return }
+        recorder.stop()
+        try? FileManager.default.removeItem(at: recorder.url)
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { MeeshyRecordingSession.shared.finish(handingBackSession: true) }
+        }
     }
 }

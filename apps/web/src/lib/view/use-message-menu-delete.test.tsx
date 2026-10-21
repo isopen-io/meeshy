@@ -10,6 +10,7 @@ import type { Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -84,8 +85,8 @@ function mount(options: { readonly hasAccount?: boolean; readonly answer?: (requ
       messages: MESSAGES,
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      canStar: options.hasAccount ?? true,
+      viewer: menuViewer({ hasAccount: options.hasAccount ?? true }),
+      conversation: menuConversation(),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
       queryClient,
@@ -125,13 +126,13 @@ describe('« Plus… » — supprimer UN message', () => {
     const ask = api().deleteOf('m-1');
     expect(ask).not.toBeNull();
     act(() => ask?.());
-    expect(api().deleteRequest).toEqual({ messageIds: ['m-1'], offer: { forEveryone: true, forMe: true } });
+    expect(api().deleteRequest).toEqual({ messageIds: ['m-1'], offer: { forEveryone: true, forMe: true, remove: false } });
   });
 
   test('le message d’un autre ⇒ pour moi seulement', () => {
     const { api } = mount();
     act(() => api().deleteOf('m-3')?.());
-    expect(api().deleteRequest?.offer).toEqual({ forEveryone: false, forMe: true });
+    expect(api().deleteRequest?.offer).toEqual({ forEveryone: false, forMe: true, remove: false });
   });
 
   test('un invité ⇒ aucun geste', () => {
@@ -195,14 +196,14 @@ describe('la barre de sélection — supprimer PLUSIEURS messages', () => {
     const { api } = mount();
     select(api, ['m-2', 'm-1']);
     act(() => api().onDeleteSelection(PLACED));
-    expect(api().deleteRequest).toEqual({ messageIds: ['m-1', 'm-2'], offer: { forEveryone: true, forMe: true } });
+    expect(api().deleteRequest).toEqual({ messageIds: ['m-1', 'm-2'], offer: { forEveryone: true, forMe: true, remove: false } });
   });
 
   test('un seul message d’un autre dans la sélection ⇒ « pour tous » n’est plus offert', () => {
     const { api } = mount();
     select(api, ['m-1', 'm-3']);
     act(() => api().onDeleteSelection(PLACED));
-    expect(api().deleteRequest?.offer).toEqual({ forEveryone: false, forMe: true });
+    expect(api().deleteRequest?.offer).toEqual({ forEveryone: false, forMe: true, remove: false });
   });
 
   test('« pour tous » boucle sur la route unitaire, la sélection se termine, l’issue compte', async () => {

@@ -201,7 +201,7 @@ final class UserStatsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "stats")
+    private static let logger = MeeshyLog.logger(.stats)
 
     func load() async {
         let userId = AuthManager.shared.currentUser?.id ?? ""
@@ -244,8 +244,8 @@ final class UserStatsViewModel: ObservableObject {
             stats = s
             timeline = t
             errorMessage = nil
-            try? await CacheCoordinator.shared.stats.save([s], for: userId)
-            try? await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)")
+            await bestEffort("userStatsView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([s], for: userId) }
+            await bestEffort("userStatsView.timeline.save", category: .cache) { try await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)") }
         } catch {
             UserStatsViewModel.logger.error("stats refresh failed: \(error.localizedDescription)")
             errorMessage = error.localizedDescription

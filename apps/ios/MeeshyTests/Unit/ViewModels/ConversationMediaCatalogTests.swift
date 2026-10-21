@@ -166,7 +166,7 @@ final class ConversationMediaCatalogTests: XCTestCase {
         XCTAssertEqual(service.listMediaCallCount, 3)
         XCTAssertEqual(service.listMediaCursors, [nil, "msg-5", "msg-3"])
         XCTAssertEqual(sut.snapshot.attachments.map(\.id), ["att-2", "att-3", "att-4", "att-5", "att-6"])
-        let persisted = await store.completed
+        let persisted = store.completed
         XCTAssertTrue(persisted, "l'épuisement se retient : la prochaine ouverture ne refeuillette pas tout")
     }
 
@@ -216,7 +216,7 @@ final class ConversationMediaCatalogTests: XCTestCase {
         await sut.load(preferredLanguages: ["fr"])
 
         XCTAssertEqual(sut.snapshot.attachments.map(\.id), ["att-1", "att-9"])
-        let completed = await store.completed
+        let completed = store.completed
         XCTAssertFalse(completed, "un refus n'est pas un épuisement : la remontée reprendra plus tard")
     }
 
@@ -335,7 +335,8 @@ final class GalleryPagePinningTests: XCTestCase {
 
 // MARK: - Index en mémoire
 
-actor InMemoryConversationMediaIndexStore: ConversationMediaIndexStoring {
+@MainActor
+private final class InMemoryConversationMediaIndexStore: ConversationMediaIndexStoring {
     private var items: [MeeshyMessage]?
     private(set) var completed: Bool
     private var fresh: Bool
@@ -345,6 +346,8 @@ actor InMemoryConversationMediaIndexStore: ConversationMediaIndexStoring {
         self.completed = completed
         self.fresh = fresh
     }
+
+    nonisolated deinit {}
 
     func load(conversationId: String) async -> CacheResult<[MeeshyMessage]> {
         guard let items else { return .empty }

@@ -9,8 +9,9 @@ import os
 extension ConversationView {
 
     // MARK: - Conversation Background
-    var conversationBackground: some View {
-        ConversationBackgroundView(
+    var conversationBackground: ConversationBackgroundLayer {
+        let model = viewModel
+        return ConversationBackgroundLayer(
             conversationId: conversation?.id ?? "",
             initialAppearance: liveConversation?.userState.appearance,
             signature: ConversationBackgroundConfig(
@@ -22,25 +23,12 @@ extension ConversationView {
                 secondaryHex: secondaryColor,
                 isDarkMode: isDark
             ),
-            knownAttachment: { id in viewModel.messages.lazy.flatMap(\.attachments).first { $0.id == id } }
-        )
-        // Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair
-        // d'un direct (#9359). Seule une annonce qui CHANGE le pair affiché
-        // écrit l'état — les autres ne redessinent rien.
-        .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
-            admitPeerUpdate(event)
-        }
-        // L'accent personnel choisi (ou rétabli) repeint le fil, ses bulles, son
-        // composeur et son en-tête aussitôt, sans relecture réseau (#10631).
-        .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
-            admitAppearance(note)
-        }
-        // Traduction sur l'appareil (#9899) : le fond vit aussi longtemps que
-        // l'écran, et la couche n'y peint rien.
-        .deviceTranslationLayer(
-            viewModel: viewModel,
-            isEnabled: !previewMode && anonymousSession == nil,
-            encryptionMode: liveConversation?.encryptionMode
+            knownAttachment: { id in model.messages.lazy.flatMap(\.attachments).first { $0.id == id } },
+            viewModel: model,
+            deviceTranslationEnabled: !previewMode && anonymousSession == nil,
+            encryptionMode: liveConversation?.encryptionMode,
+            onPeerUpdate: { admitPeerUpdate($0) },
+            onAppearanceChange: { admitAppearance($0) }
         )
     }
 
@@ -53,8 +41,8 @@ extension ConversationView {
     }
 
     // MARK: - Header Avatar (thin wrapper → extracted struct to avoid PAC crashes)
-    var headerAvatarView: AnyView {
-        AnyView(ConversationHeaderAvatarView(
+    var headerAvatarView: ConversationHeaderAvatarView {
+        ConversationHeaderAvatarView(
             composerState: $composerState,
             headerState: $headerState,
             // La bande d'avatars est le SEUL endroit de l'en-tête que les
@@ -88,7 +76,7 @@ extension ConversationView {
             onViewMemberProfile: { user in
                 router.openProfile(user, inConversation: conversation?.id)
             }
-        ))
+        )
     }
 
     /// Ce que le toucher de l'avatar de l'en-tête ouvre (#10300) — lu sur la
@@ -107,15 +95,15 @@ extension ConversationView {
     /// getter de ce maillon que la trace du crash désignait, sous
     /// `__swift_instantiateConcreteTypeFromMangledNameV2`. Quand l'avatar ouvre
     /// une fiche (#10300), la bascule de l'en-tête passe à la zone libre de la bande.
-    var expandedHeaderMidContent: AnyView {
-        AnyView(ConversationHeaderMidContent(
+    var expandedHeaderMidContent: some View {
+        ConversationHeaderMidContent(
             layout: headerLayout,
-            titleAndTags: { AnyView(expandedHeaderTitleAndTags) },
+            titleAndTags: { expandedHeaderTitleAndTags },
             actionButtons: { headerButtonsCluster },
             onToggleBand: headerAvatarDoor.bandToggles(isPreview: previewMode)
                 ? { setHeaderExpanded(!composerState.showOptions) }
                 : nil
-        ))
+        )
     }
 
     // MARK: - L'aperçu tiré de la bannière (#8822)
@@ -126,18 +114,21 @@ extension ConversationView {
         ConversationHeaderLayout.resolve(previewMode: previewMode, showOptions: composerState.showOptions)
     }
 
-    /// LA PORTE VERS LA CONVERSATION COMPLÈTE, dans l'aperçu. Elle remplace le
-    /// calque transparent posé sur tout le fil, qui l'ouvrait au toucher — et
-    /// volait ainsi le DÉFILEMENT à la liste.
-    var openFullConversationButton: AnyView {
-        AnyView(Button {
-            HapticFeedback.light()
-            onOpenFullConversation?()
-        } label: {
-            HeaderOpenFullGlyph(accentColor: accentColor)
-        }
-        .accessibilityLabel(String(localized: "conversation.preview.openFull", defaultValue: "Ouvrir la conversation", bundle: .main))
-        .accessibilityIdentifier("conversation.preview.openFull"))
+    /// L'emplacement de la recherche : la loupe, ou — dans l'aperçu — la porte
+    /// vers la conversation complète.
+    var headerSearchSlot: ConversationHeaderSearchSlot {
+        ConversationHeaderSearchSlot(
+            previewMode: previewMode,
+            accentColor: accentColor,
+            secondaryColor: secondaryColor,
+            onOpenFull: { onOpenFullConversation?() },
+            onSearch: { openHeaderSearch() }
+        )
+    }
+
+    func openHeaderSearch() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { headerState.showSearch = true }
+        isSearchFocused = true
     }
 
     /// La barre qui remplace l'en-tête pendant la frappe (extraite de `ConversationView.swift`,
@@ -208,63 +199,32 @@ extension ConversationView {
 
     // MARK: - Header Call Buttons (audio + video)
 
-    // AnyView : dernier maillon nu de la chaîne du header (voir les
-    // commentaires d'érasure sur `headerButtonsCluster`/
-    // `readingModeAffordanceCluster` dans ConversationView.swift, même
-    // débordement de pile au décodage de mangled name, 2026-08-17).
-    var headerCallButtons: AnyView {
-        AnyView(headerCallButtonsOnly
-        .task(id: liveConversation?.id) {
-            await ConversationEngagementStore.shared.revalidate(liveConversation?.id ?? "")
-        })
-    }
-
-    // MARK: - « 🔥 série · total » (#8906, #9044)
-
-    /// Ce que le lecteur a gagné dans CETTE conversation. Elle ne se lit que
-    /// sous le titre de l'en-tête DÉPLIÉ : replié ou en aperçu, c'est la flamme
-    /// du jour sous l'avatar qui parle.
-    var headerEngagementBadge: some View {
-        ConversationEngagementBadge(
-            conversationId: liveConversation?.id ?? "",
-            seed: liveConversation?.viewerEngagement,
-            accentColor: accentColor
-        )
-    }
-
-    private var headerCallButtonsOnly: AnyView {
-        guard let entry = HeaderCallEntry.resolve(
+    /// Frontière NOMINALE du bouton d'appel : l'emplacement lit un instantané
+    /// `Equatable` de l'état d'appel (`CallHeaderSnapshotStore`) et ne construit
+    /// pas la pile d'appel.
+    var headerCallButtons: ConversationHeaderCallSlot {
+        let entry = HeaderCallEntry.resolve(
             conversation: conversation,
             viewerPlatformRole: AuthManager.shared.currentUser?.role,
             viewerIsGuest: anonymousSession != nil
-        ) else { return AnyView(EmptyView()) }
+        )
+        return ConversationHeaderCallSlot(
+            entry: entry,
+            conversationId: conversation?.id ?? "",
+            calleeName: headerCalleeName(for: entry),
+            accentColor: accentColor,
+            secondaryColor: secondaryColor,
+            engagementConversationId: liveConversation?.id
+        )
+    }
+
+    /// #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
+    /// poignée de l'appel est la conversation, son nom le titre du groupe.
+    private func headerCalleeName(for entry: HeaderCallEntry?) -> String {
+        guard let entry else { return "" }
         switch entry.callee {
-        case .conversation:
-            // #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
-            // poignée de l'appel est la conversation, son nom le titre du groupe.
-            let groupId = conversation?.id ?? ""
-            return AnyView(HeaderCallButtonsView(
-                conversationId: groupId,
-                userId: groupId,
-                calleeName: conversation?.displayName ?? "",
-                accentColor: accentColor,
-                secondaryColor: secondaryColor,
-                isGroup: true,
-                canStart: entry.canStart
-            ))
-        case .peer(let userId):
-            // §7.6 — the start-call buttons are owned by a dedicated subview that
-            // observes CallManager, so during an active call they swap to a
-            // "tap to return" indicator (preventing a 2nd call from the header)
-            // without forcing the whole ConversationView to observe the singleton.
-            return AnyView(HeaderCallButtonsView(
-                conversationId: conversation?.id ?? "",
-                userId: userId,
-                calleeName: resolvedCalleeName,
-                accentColor: accentColor,
-                secondaryColor: secondaryColor,
-                canStart: entry.canStart
-            ))
+        case .conversation: return conversation?.displayName ?? ""
+        case .peer: return resolvedCalleeName
         }
     }
 
@@ -292,75 +252,14 @@ extension ConversationView {
     }
 
     // MARK: - Header Tags Row (category first, then colored tags, horizontally scrollable)
-    @ViewBuilder
-    var headerTagsRow: some View {
-        // F11 (revue adversariale 2026-08-25) : `encryptionMode`/`tags`
-        // lisent la conversation VIVANTE — un réglage (changement de mode de
-        // chiffrement, ajout/retrait d'un tag) doit se refléter sur CETTE
-        // bande sans réouverture, exactement comme la bande d'avatars juste
-        // au-dessus dans le même en-tête.
-        let isEncrypted = liveConversation?.encryptionMode != nil
-        let hasTags = conversationSection != nil || !(liveConversation?.tags.isEmpty ?? true) || isEncrypted
-        let showsEngagement = !headerLayout.showsActions
-        if hasTags {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.xs) {
-                    if showsEngagement {
-                        headerEngagementBadge
-                    }
-
-                    // Lock icon (encryption only, no text)
-                    if isEncrypted {
-                        Image(systemName: "lock.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                            .foregroundColor(theme.success)
-                            .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Conversation chiffrée", bundle: .main))
-                    }
-
-                    // Category tag
-                    if let section = conversationSection {
-                        HStack(spacing: MeeshySpacing.xxs) {
-                            Image(systemName: section.icon)
-                                .font(MeeshyFont.relative(7, weight: .bold))
-                                .accessibilityHidden(true)
-                            Text(section.name)
-                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                        }
-                        .foregroundColor(Color(hex: section.color))
-                        .padding(.horizontal, MeeshySpacing.xs)
-                        .padding(.vertical, MeeshySpacing.xxs)
-                        .background(
-                            Capsule()
-                                .fill(Color(hex: section.color).opacity(MeeshyOpacity.light))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color(hex: section.color).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
-                                )
-                        )
-                    }
-
-                    if let conv = liveConversation {
-                        ForEach(conv.tags) { tag in
-                            Text(tag.name)
-                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
-                                .foregroundColor(Color(hex: tag.color))
-                                .padding(.horizontal, MeeshySpacing.xs)
-                                .padding(.vertical, MeeshySpacing.xxs)
-                                .background(
-                                    Capsule()
-                                        .fill(Color(hex: tag.color).opacity(MeeshyOpacity.light))
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(Color(hex: tag.color).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
-                                        )
-                                )
-                        }
-                    }
-                }
-            }
-        } else if showsEngagement {
-            headerEngagementBadge
-        }
+    var headerTagsRow: ConversationHeaderTagsRow {
+        ConversationHeaderTagsRow(
+            conversation: liveConversation,
+            section: conversationSection,
+            showsEngagement: !headerLayout.showsActions,
+            accentColor: accentColor,
+            successColor: theme.success
+        )
     }
 
     // MARK: - Navigate to DM
@@ -438,247 +337,12 @@ struct HeaderCallEntry: Equatable {
     }
 }
 
-// MARK: - Header Call Buttons (§7.6)
-// Owns the CallManager observation so the header reacts to call state without
-// the whole ConversationView subscribing. Idle → audio + video start buttons;
-// active call → a green "tap to return" indicator (blocks starting a 2nd call,
-// gives one-tap return to the in-progress call).
-
-private struct HeaderCallButtonsView: View {
-    let conversationId: String
-    let userId: String
-    let calleeName: String
-    let accentColor: String
-    let secondaryColor: String
-    /// #3585 — `userId` porte alors la conversation (poignée CallKit du groupe)
-    /// et `calleeName` son titre.
-    var isGroup = false
-    /// `false` : le lecteur ne LANCE pas d'appel ici (#10207 — une `public`
-    /// dont il n'est ni créateur ni administrateur) ; il rejoint seulement
-    /// celui qui est déjà en cours.
-    var canStart = true
-
-    @ObservedObject private var callManager = CallManager.shared
-    /// Set when the SERVER (not this device's own `CallManager`) reports an
-    /// active call for this conversation — the case `callManager.callState`
-    /// alone can't detect: this device's own session was lost (app relaunch,
-    /// crash) while the call is still ongoing. User-requested 2026-07-11 —
-    /// "il faut permettre... l'indicateur minuteur vert... doit être présent
-    /// avec la possibilité au touché de rejoindre l'appel". Reconciliation
-    /// itself (the REST call) is an SDK atom (`ActiveCallService`); deciding
-    /// WHEN to call it and how it changes this button is app orchestration.
-    @State private var reconciledActiveCall: ActiveCallSession?
-
-    var body: some View {
-        Group {
-            if callManager.callState.isActive {
-                // 2026-08-13 — un appel actif ne doit apparaître dans le header
-                // QUE de la conversation qui l'héberge, jamais dans toutes les
-                // conversations ouvertes pendant qu'un appel tourne ailleurs.
-                // `callManager.callState.isActive` seul (avant ce fix) ne
-                // distinguait pas — cette pastille "revenir à l'appel" sortait
-                // identique dans n'importe quelle conversation directe.
-                if isActiveCallForThisConversation {
-                    returnToCallIndicator
-                }
-            } else if let activeCall = reconciledActiveCall {
-                rejoinCallIndicator(activeCall)
-            } else if canStart {
-                startCallButtons
-            }
-        }
-        // Re-reconciles when the conversation changes OR when the local call
-        // starts/stops (#9111 — after leaving a group call that goes on, the
-        // pill must come back as « Rejoindre ») — never on every callState tick.
-        .task(id: HeaderCallReconcileKey(conversationId: conversationId, isLocalCallActive: callManager.callState.isActive)) {
-            await reconcileActiveCall()
-        }
-        // Invalidation temps réel : le gateway fanout `call:ended` jusqu'aux
-        // user-rooms de TOUS les membres de la conversation
-        // (resolveCallEndedRooms) — un viewer non-participant le reçoit donc
-        // aussi. Sans ça, la pill « Rejoindre » (posée une seule fois au
-        // .task ci-dessus) resterait pointée sur un appel mort jusqu'au
-        // prochain passage dans la conversation, et un tap déclencherait un
-        // call:join rejeté « This call has already ended ». Match par callId :
-        // un appel qui finit dans une AUTRE conversation ne doit pas effacer
-        // la pill de celle-ci. Hop main obligatoire : le publisher émet
-        // depuis la queue du socket (classe SIGTRAP connue des surfaces
-        // d'appel).
-        .onReceive(MessageSocketManager.shared.callEnded.receive(on: DispatchQueue.main)) { event in
-            if reconciledActiveCall?.id == event.callId {
-                reconciledActiveCall = nil
-            }
-        }
-    }
-
-    /// `true` quand l'appel actif localement (`CallManager.shared`) appartient
-    /// à CETTE conversation. `callManager.conversationId` peut être `nil` pour
-    /// un appel entrant réveillé par VoIP push sans ce champ dans le payload
-    /// (cf. doc sur `CallManager.conversationId`) — dans ce cas précis on
-    /// dégrade en affichant quand même la pastille plutôt que de la masquer
-    /// partout, pour ne jamais priver l'utilisateur d'un chemin de retour
-    /// vers son propre appel.
-    private var isActiveCallForThisConversation: Bool {
-        guard let activeConversationId = callManager.conversationId else { return true }
-        return activeConversationId == conversationId
-    }
-
-    private var returnToCallIndicator: some View {
-        Button {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
-                callManager.displayMode = .fullScreen
-            }
-            HapticFeedback.medium()
-        } label: {
-            HStack(spacing: MeeshySpacing.xs) {
-                Circle()
-                    .fill(MeeshyColors.success)
-                    .frame(width: 7, height: 7)
-                Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                CallDurationClock {
-                    Text(callManager.formattedDuration)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
-                }
-            }
-            .foregroundColor(MeeshyColors.success)
-            .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(
-                Capsule()
-                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.light))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
-            )
-        }
-        .accessibilityLabel(String(localized: "call.header.return", defaultValue: "Appel en cours, toucher pour revenir", bundle: .main))
-    }
-
-    /// Same visual family as `returnToCallIndicator` (green pill, same glyph)
-    /// but no live duration — this device hasn't rejoined the media session
-    /// yet, so there's nothing ticking to show. Tapping calls
-    /// `CallManager.rejoinActiveCall`, which resumes the WebRTC session
-    /// directly into `.connecting` — once that lands, `callManager.callState.isActive`
-    /// flips true and this view naturally swaps to `returnToCallIndicator`.
-    private func rejoinCallIndicator(_ activeCall: ActiveCallSession) -> some View {
-        Button {
-            // Rejoindre un groupe en cours : les membres présents offrent à
-            // l'arrivant, et le premier qui offre devient le pair principal.
-            if isGroup { GroupCallMeshCoordinator.shared.markGroupConversation(conversationId, title: calleeName) }
-            callManager.rejoinActiveCall(
-                callId: activeCall.id,
-                conversationId: conversationId,
-                remoteUserId: userId,
-                remoteUsername: calleeName,
-                isVideo: activeCall.isVideo
-            )
-            HapticFeedback.medium()
-        } label: {
-            HStack(spacing: MeeshySpacing.xs) {
-                Circle()
-                    .fill(MeeshyColors.success)
-                    .frame(width: 7, height: 7)
-                Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            }
-            .foregroundColor(MeeshyColors.success)
-            .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(
-                Capsule()
-                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.light))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
-            )
-        }
-        .accessibilityLabel(String(localized: "call.header.rejoin.a11y", defaultValue: "Appel en cours, toucher pour rejoindre", bundle: .main))
-    }
-
-    /// Reconciles with the server on every conversation open — this
-    /// device's own `callManager.callState` can't tell the difference
-    /// between "no call" and "a call is active but this session lost it".
-    /// Skipped when `callManager` already knows locally (no need to hit the
-    /// network, and avoids a race that could momentarily contradict local
-    /// state) or for non-direct conversations (no single peer to rejoin).
-    private func reconcileActiveCall() async {
-        guard !callManager.callState.isActive else { return }
-        // try? flattens the throws+Optional combination (SE-0230) — a
-        // network error and "no active call" both collapse to nil here,
-        // which is the right behavior: reconciliation is best-effort and
-        // silent, never surfaced as an error to the user.
-        let session = try? await ActiveCallService.shared.activeCall(conversationId: conversationId)
-        reconciledActiveCall = session?.conversationId == conversationId ? session : nil
-    }
-
-    /// Bouton d'appel unique : un `Menu` qui laisse choisir vocal ou vidéo via un
-    /// menu contextuel (au lieu de deux boutons séparés). Le glyphe adopte le verre
-    /// adaptatif (Liquid Glass iOS 26, repli `.ultraThinMaterial` en deçà) teinté à
-    /// la couleur d'accent de la conversation.
-    private var startCallButtons: some View {
-        Menu {
-            Button {
-                startCall(isVideo: false)
-            } label: {
-                Label(String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), systemImage: "phone.fill")
-            }
-            Button {
-                startCall(isVideo: true)
-            } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
-            }
-        } label: {
-            callGlyph("phone.fill")
-                .meeshyTapTarget()
-        }
-        .accessibilityLabel(isGroup
-            ? String(localized: "call.group.start.menu", defaultValue: "Appeler le groupe", bundle: .main)
-            : String(localized: "call.start.menu", defaultValue: "Appeler", bundle: .main))
-        .accessibilityHint(isGroup
-            ? String(localized: "call.group.start.menu.hint", defaultValue: "Appel vocal ou vidéo avec les membres du groupe, jusqu'à 6 personnes", bundle: .main)
-            : String(localized: "call.start.menu.hint", defaultValue: "Choisir un appel vocal ou vidéo", bundle: .main))
-    }
-
-    private func startCall(isVideo: Bool) {
-        let conversationId = conversationId
-        let userId = userId
-        let calleeName = calleeName
-        guard isGroup else {
-            Task { await CallManager.shared.requestPermissionsThenStartCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: isVideo) }
-            return
-        }
-        Task { await CallManager.shared.startGroupCall(conversationId: conversationId, title: calleeName, isVideo: isVideo) }
-    }
-
-    private func callGlyph(_ systemName: String) -> some View {
-        Image(systemName: systemName)
-            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-            .foregroundStyle(
-                LinearGradient(
-                    colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
-            )
-            // Matches expandedHeaderSearchButton's circle exactly (28×28,
-            // font 13) — user-requested 2026-07-11: the two header buttons
-            // must read as the same size. `.adaptiveGlass` MUST come before
-            // `.meeshyTapTarget()`, not after (bug found 2026-07-11): glass
-            // is a Circle sized to the CURRENT view bounds at that point in
-            // the chain — applying it after meeshyTapTarget's `.frame(minWidth:
-            // 44, minHeight: 44)` drew the visible circle at 44pt instead of
-            // 28pt, even though both buttons declared identical numbers.
-            // expandedHeaderSearchButton already has the correct order.
-            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
-            .meeshyTapTarget()
-    }
-}
-
 // MARK: - Conversation Header Avatar View
 // Extracted struct to avoid PAC (Pointer Authentication Code) crashes on ARM64e:
 // @ViewBuilder computed properties capturing @EnvironmentObject + @State in @escaping closures
 // cause EXC_BAD_ACCESS in swift_retain. Using a dedicated struct gives SwiftUI proper ownership.
 
-private struct ConversationHeaderAvatarView: View {
+struct ConversationHeaderAvatarView: View {
     @Binding var composerState: ConversationComposerState
     @Binding var headerState: ConversationHeaderState
 
@@ -708,6 +372,14 @@ private struct ConversationHeaderAvatarView: View {
     @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
 
     private var isDirect: Bool { conversation?.type == .direct }
+
+    /// La pastille de l'interlocuteur, RELUE à chaque battement de `presencePulse`
+    /// (#11412) : `headerPresenceState` est résolu par `ConversationView`, qui
+    /// n'observe pas la présence — passé tel quel, il figeait le point replié.
+    private var livePresenceState: PresenceState {
+        guard isDirect, let userId = conversation?.participantUserId else { return headerPresenceState }
+        return PresenceManager.shared.presenceState(for: userId)
+    }
 
     /// Le pair a l'écran de CETTE conversation ouvert (#8892), et y est
     /// peut-être actif (#9061).
@@ -925,7 +597,7 @@ private struct ConversationHeaderAvatarView: View {
                 avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
                 storyState: collapsedStoryState,
                 moodEmoji: headerMoodEmoji,
-                presenceState: headerPresenceState,
+                presenceState: livePresenceState,
                 isHere: isDirect ? isHere(conversation?.participantUserId) : .absent,
                 ring: isDirect ? conversation?.participantRing : nil,
                 onTap: openDoor,
@@ -954,7 +626,7 @@ private struct ConversationHeaderAvatarView: View {
 
 /// Le disque de verre de la porte de l'aperçu — la forme de la loupe
 /// (`HeaderSearchGlyph`), type NOMINAL pour borner la chaîne de types de l'en-tête.
-private struct HeaderOpenFullGlyph: View {
+struct HeaderOpenFullGlyph: View {
     let accentColor: String
 
     var body: some View {
@@ -964,5 +636,44 @@ private struct HeaderOpenFullGlyph: View {
             .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
             .meeshyTapTarget()
+    }
+}
+
+// MARK: - Le fond de la conversation, en type NOMINAL
+
+/// Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair d'un
+/// direct (#9359) — seule une annonce qui CHANGE le pair affiché écrit l'état —
+/// et l'accent personnel choisi ou rétabli (#10631), qui repeint le fil, ses
+/// bulles, son composeur et son en-tête sans relecture réseau. La traduction
+/// sur l'appareil (#9899) y vit aussi : la couche n'y peint rien.
+struct ConversationBackgroundLayer: View {
+    let conversationId: String
+    let initialAppearance: ConversationAppearance?
+    let signature: ConversationBackgroundConfig
+    let knownAttachment: (String) -> MeeshyMessageAttachment?
+    let viewModel: ConversationViewModel
+    let deviceTranslationEnabled: Bool
+    let encryptionMode: String?
+    let onPeerUpdate: (UserUpdatedEvent) -> Void
+    let onAppearanceChange: (Notification) -> Void
+
+    var body: some View {
+        ConversationBackgroundView(
+            conversationId: conversationId,
+            initialAppearance: initialAppearance,
+            signature: signature,
+            knownAttachment: knownAttachment
+        )
+        .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
+            onPeerUpdate(event)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ConversationAppearanceChange.notification).receive(on: DispatchQueue.main)) { note in
+            onAppearanceChange(note)
+        }
+        .deviceTranslationLayer(
+            viewModel: viewModel,
+            isEnabled: deviceTranslationEnabled,
+            encryptionMode: encryptionMode
+        )
     }
 }

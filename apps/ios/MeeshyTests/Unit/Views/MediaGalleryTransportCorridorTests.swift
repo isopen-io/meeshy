@@ -340,8 +340,8 @@ final class MediaGalleryTransportCorridorTests: XCTestCase {
     /// lecture, durée totale à l'arrêt — la règle est `MediaInfoLine`, au SDK.
     func test_theInfoLine_carriesTheDuration_andItCountsDown() throws {
         let code = try unit()
-        guard let ligne = corps("private func bottomMetadataOverlay(", dans: code) else {
-            return XCTFail("`bottomMetadataOverlay` introuvable")
+        guard let ligne = corps("struct GalleryMediaMetadataBlock", dans: code) else {
+            return XCTFail("`GalleryMediaMetadataBlock` introuvable")
         }
         let plat = compact(ligne)
 

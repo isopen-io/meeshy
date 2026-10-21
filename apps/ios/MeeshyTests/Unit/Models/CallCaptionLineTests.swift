@@ -15,8 +15,8 @@ final class CallCaptionLineTests: XCTestCase {
         translatedText: String? = "Bonjour",
         translatedLanguage: String? = "fr",
         isFinal: Bool = true
-    ) -> Meeshy.TranscriptionSegment {
-        Meeshy.TranscriptionSegment(
+    ) -> Meeshy.CallTranscriptionSegment {
+        Meeshy.CallTranscriptionSegment(
             id: UUID(),
             text: text,
             speakerId: speakerId,
@@ -32,7 +32,7 @@ final class CallCaptionLineTests: XCTestCase {
     }
 
     private func line(
-        _ segment: Meeshy.TranscriptionSegment,
+        _ segment: Meeshy.CallTranscriptionSegment,
         isLocal: Bool = false,
         prefersOriginal: Bool = false,
         isRevealed: Bool = false

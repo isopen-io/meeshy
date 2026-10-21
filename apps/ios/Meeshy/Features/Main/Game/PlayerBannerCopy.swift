@@ -18,7 +18,7 @@ enum PlayerBannerCopy {
         PlayerBannerView.Texts(
             points: GameText.bannerPoints(points: GameCopy.formatCount(banner.score)),
             missing: banner.pointsToNext.map {
-                GameText.bannerMissing(points: GameCopy.formatCount($0), level: GameCopy.formatCount(banner.nextLevel ?? banner.level + 1))
+                GameText.bannerMissing(points: GameCopy.compactCount($0), level: GameCopy.formatCount(banner.nextLevel ?? banner.level + 1))
             },
             meeshes: banner.meeshes.map { GameCopy.formatCount($0) },
             place: banner.league.map { GameText.bannerPlace(count: $0.place) },
@@ -26,8 +26,19 @@ enum PlayerBannerCopy {
             trophies: banner.trophies.map { GameCopy.formatCount($0) },
             mission: banner.dailyMission.map { "\(GameCopy.formatCount($0.done))/\(GameCopy.formatCount($0.total))" },
             season: banner.season.map { seasonShort($0.number) },
+            rank: banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) },
+            gloryMissing: banner.rank.map(gloryMissing),
             pieceLabels: Dictionary(uniqueKeysWithValues: banner.pieces.map { ($0, pieceLabel($0, banner)) })
         )
+    }
+
+    /// « 5 543 vers Passeur II », ou « Gloire 990 k » quand il n'y a plus de marche.
+    static func gloryMissing(_ rank: GamePlayerBanner.Rank) -> String {
+        guard let next = rank.next, let missing = rank.gloryMissing else {
+            return GameText.bannerGloryTotal(points: GameCopy.compactCount(rank.glory))
+        }
+        return GameText.bannerGloryMissing(points: GameCopy.compactCount(missing),
+                                           rank: GameCopy.rankLabel(next.rank, division5: next.shownDivision))
     }
 
     /// « S1 ».
@@ -49,7 +60,9 @@ enum PlayerBannerCopy {
         case .meesh:
             return GameCopy.meeshes(banner.meeshes ?? 0)
         case .rank:
-            return banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) } ?? ""
+            return banner.rank.map {
+                [GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic), gloryMissing($0)].joined(separator: GameText.bannerSeparator)
+            } ?? ""
         case .league:
             return banner.league.map {
                 GameText.bannerLeague(league: GameText.leagueName($0.league), place: GameText.bannerPlace(count: $0.place))
@@ -62,11 +75,11 @@ enum PlayerBannerCopy {
         case .mission:
             let mission = banner.dailyMission ?? .init(done: 0, total: 0)
             return String(localized: "game2.banner.mission.a11y",
-                          defaultValue: "Missions du jour : \(GameCopy.formatCount(mission.done)) sur \(GameCopy.formatCount(mission.total))",
+                          defaultValue: "Rêve : \(GameCopy.formatCount(mission.done)) sur \(GameCopy.formatCount(mission.total))",
                           bundle: .main)
         case .season:
             return String(localized: "game2.banner.season.a11y",
-                          defaultValue: "Saison \(GameCopy.formatCount(banner.season?.number ?? 0))", bundle: .main)
+                          defaultValue: "Voyage \(GameCopy.formatCount(banner.season?.number ?? 0))", bundle: .main)
         }
     }
 

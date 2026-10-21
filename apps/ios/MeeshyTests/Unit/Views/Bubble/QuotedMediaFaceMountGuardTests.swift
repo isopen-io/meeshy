@@ -68,7 +68,8 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
         XCTAssertTrue(host.contains("onMediaTap(attachment)"),
                       "la pièce citée s'ouvre par le MÊME geste que le toucher d'un média")
         let conversation = try source("Meeshy/Features/Main/Views/ConversationView.swift")
-        XCTAssertTrue(conversation.contains("onMediaTap: openMediaFullscreen"),
+        let riverLayer = try source("Meeshy/Features/Main/Views/ConversationView+ReaderLayers.swift")
+        XCTAssertTrue(conversation.contains("openMedia: openMediaFullscreen") && riverLayer.contains("onMediaTap: openMedia,"),
                       "la conversation relaie son ouvreur unique jusqu'à la Rivière")
 
         // Lecture directe : le plancher de `source(_:)` refuserait le plus petit,
@@ -97,7 +98,7 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
                       "l'hôte de la Rivière route l'audio cité vers la lecture sur place")
         XCTAssertTrue(host.contains("onPlayQuotedAudio?(reference)"),
                       "la lecture est DITE par l'appelant, l'hôte ne connaît pas le VM")
-        let conversation = try source("Meeshy/Features/Main/Views/ConversationView.swift")
+        let conversation = try source("Meeshy/Features/Main/Views/ConversationView+ReaderLayers.swift")
         XCTAssertTrue(conversation.contains("onPlayQuotedAudio: { viewModel.toggleQuotedAudio($0) }"),
                       "la Rivière joue par le MÊME `toggleQuotedAudio` que le Fil — aucun second lecteur")
         let face = try source("Meeshy/Features/Main/Riviere/View/RiverQuotedMediaFace.swift")

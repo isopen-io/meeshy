@@ -1,5 +1,6 @@
 import Foundation
 import os
+import MeeshySDK
 
 /// Le budget d'une image composée (doc frames 06 § 4, spec 02 § 3.1) : 0,5 ms pour un cadre
 /// léger, 1 ms standard, 2,5 ms riche, mesurés en temps CARTE GRAPHIQUE sur iPhone 12.
@@ -29,7 +30,7 @@ nonisolated final class CallLiveFrameBudgetMeter: @unchecked Sendable {
     private let lock = NSLock()
     private var samples: [Double] = []
     private var limitMs: Double
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-live-frame")
+    private let logger = MeeshyLog.logger(.callLiveFrame)
 
     init(limitMs: Double = CallLiveFrameBudget.limitMs(for: nil)) {
         self.limitMs = limitMs

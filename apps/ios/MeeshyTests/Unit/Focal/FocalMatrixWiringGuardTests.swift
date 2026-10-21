@@ -28,7 +28,10 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
     }
 
     private func stripped(_ relativePath: String) throws -> String {
-        AppSourceGuard.stripComments(try source(relativePath))
+        let chrome = relativePath == rowPath
+            ? "\n" + (try source("Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift"))
+            : ""
+        return AppSourceGuard.stripComments(try source(relativePath) + chrome)
     }
 
     private var hostPath: String { "Meeshy/Features/Main/Views/MessageListViewController.swift" }
@@ -138,7 +141,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "drapeau et réactions partagent une HStack — jamais deux lignes empilées"
         )
         guard let textBlockStart = code.range(of: "private var textBlock"),
-              let textBlockEnd = code.range(of: "private var headerTimeString")
+              let textBlockEnd = code.range(of: "private var expansion:")
         else { return XCTFail("bornes du textBlock introuvables") }
         let textBlockBody = code[textBlockStart.lowerBound..<textBlockEnd.lowerBound]
         XCTAssertFalse(
@@ -261,9 +264,18 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             return XCTFail("scrollToBottom introuvable dans l'hôte")
         }
         let body = String(code[start.lowerBound...].prefix(600))
+        // La déclaration passe par UN geste partagé, qui annule aussi la
+        // libération différée d'un saut précédent.
         XCTAssertTrue(
-            body.contains("isIntentionalProgrammaticScroll = true"),
+            body.contains("beginIntentionalProgrammaticScroll()"),
             "scrollToBottom doit se déclarer INTENTIONNEL — sans ce drapeau, le verrou de scène annule chaque frame de l'animation et le bouton « aller au dernier message » ne fait rien"
+        )
+        guard let geste = code.range(of: "func beginIntentionalProgrammaticScroll() {") else {
+            return XCTFail("beginIntentionalProgrammaticScroll introuvable dans l'hôte")
+        }
+        XCTAssertTrue(
+            String(code[geste.upperBound...].prefix(200)).contains("isIntentionalProgrammaticScroll = true"),
+            "le geste partagé pose le drapeau que le verrou de scène lit"
         )
     }
 

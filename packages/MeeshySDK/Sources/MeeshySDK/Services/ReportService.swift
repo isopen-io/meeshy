@@ -22,7 +22,7 @@ public protocol ReportServiceProviding: Sendable {
 ///
 /// `/admin/reports` reste servie en adaptateur mince le temps que les versions
 /// déjà installées disparaissent.
-public final class ReportService: ReportServiceProviding, @unchecked Sendable {
+public final class ReportService: ReportServiceProviding, Sendable {
     public static let shared = ReportService()
     private let api: APIClientProviding
     /// #10503 — un signalement ABOUTI d'un contenu social devient un signal

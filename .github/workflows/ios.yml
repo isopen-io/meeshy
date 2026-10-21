@@ -335,6 +335,27 @@ jobs:
       - name: Le project.pbxproj committé reste lisible par Xcode
         run: bash apps/ios/scripts/check_pbxproj_quoting.sh
 
+      # Le pbxproj COMMITTÉ ne doit référencer aucun fichier supprimé et doit
+      # porter l'isolation nonisolated des extensions : la CI régénère le projet
+      # et ne voit pas l'écart que subissent meeshy.sh et fastlane (lot 03).
+      - name: Le project.pbxproj committé reste cohérent avec le dépôt et project.yml
+        run: bash apps/ios/scripts/check_pbxproj_consistency.sh
+
+      # Le budget de 1 000 lignes par fichier se satisfait en coupant en
+      # `Type+X.swift` : le type et sa fonction de 400 lignes restent entiers.
+      # Ce cliquet mesure la COHÉSION (fonction <= 80 lignes, type <= 1 500 en
+      # unité avec ses extensions) ; il lit du texte, sans compilateur (#10988).
+      - name: Cohésion — fonctions et types en unité, cliquet sur la référence
+        run: bash apps/ios/scripts/check_cohesion_budget.sh
+
+      # Douze règles maison (UIScreen.main, NSLock, AnyView, `.font(.system(size:`,
+      # `try? await Task.sleep`…) sont tenues par des totaux comparés à
+      # `house-rules-baseline.json` : un total qui monte rougit, un total qui
+      # baisse se verrouille. Le `--self-test` rejoue le rouge « référence
+      # abaissée » sur le dépôt réel ; aucun compilateur Swift n'est requis (#11046).
+      - name: Règles maison — cliquets sur la référence
+        run: bash apps/ios/scripts/check_house_rules.sh --self-test && bash apps/ios/scripts/check_house_rules.sh
+
   # File d'attente des suites complètes (#9751). L'org a 5 jobs macOS
   # simultanés, et une suite complète les prend tous (build + 4 tranches) : deux
   # suites lancées ensemble entrelaçaient leurs tranches et finissaient en 60 à

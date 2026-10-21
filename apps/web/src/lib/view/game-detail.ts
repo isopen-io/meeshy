@@ -9,7 +9,7 @@ import type { GloryDivision5, GloryRankOrMythic, MythicSeatRef } from '@meeshy/s
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import { levelStepsOf, type LevelStep, type LevelStepKind } from '@meeshy/shared/utils/game/level-steps';
 import type { LevelTierKey } from '@meeshy/shared/utils/game/levels';
-import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
+import { meeshDisplayEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { seasonStepReward } from '@meeshy/shared/utils/game/season';
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
@@ -402,7 +402,7 @@ export function coinDetail(view: EngagementWithGame): ElementDetail | null {
     facts: present([
       mint === undefined
         ? null
-        : row(gameText('game.fact.next_meesh'), `${gameText('game.mint.number_label', { number: formatCount(mint.number) })} · ${editionName(mint.edition)}`),
+        : row(gameText('game.fact.next_meesh'), `${gameText('game.mint.number_label', { number: formatCount(mint.number) })} · ${editionName(meeshDisplayEdition(mint.number))}`),
       mint === undefined ? null : row(gameText('game.mint.row.price'), pointsLabel(mint.price)),
       mint === undefined || mint.canMint
         ? null

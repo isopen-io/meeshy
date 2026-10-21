@@ -18,7 +18,53 @@ nonisolated enum ConversationSearchCommunitiesBandLaw {
     /// **Des communautés, ou rien** (#10924) : « Communautés · Voir tout »
     /// au-dessus d'une bande vide est un titre qui ment. Sans communauté, le
     /// panneau ne se peint pas — le champ garde le focus, la liste se filtre.
-    static func drawsBand(for communities: [MeeshyCommunity]) -> Bool { !communities.isEmpty }
+    ///
+    /// **Taper replie la bande** (#11036) : dès le premier caractère, elle
+    /// laisse la place aux résultats ; le champ vidé, elle revient.
+    static func drawsBand(for communities: [MeeshyCommunity], queryIsEmpty: Bool) -> Bool {
+        !communities.isEmpty && queryIsEmpty
+    }
+}
+
+// MARK: - La barre de recherche suit le SENS du défilement (#11036)
+
+/// Défiler vers le BAS escamote la barre ; un défilement vers le HAUT, même
+/// partiel, la ramène ; près de la tête de liste, elle est toujours là. Miroir
+/// web : `nextSearchBarScroll` (`apps/web/src/lib/view/search-bar-reveal.ts`).
+///
+/// `offset` est celui de `MeeshyRefreshableScroll` (négatif vers le bas).
+/// `anchor` retient l'extrême atteint dans le sens courant — le point le plus
+/// BAS tant que la barre est escamotée, le plus HAUT tant qu'elle est là — et
+/// une bascule exige `hysteresis` points depuis cet extrême.
+nonisolated enum ConversationSearchBarScrollLaw {
+    static let topZone: CGFloat = 30
+    static let hysteresis: CGFloat = 12
+
+    struct State: Equatable {
+        var hidden: Bool
+        var anchor: CGFloat
+        static let initial = State(hidden: false, anchor: 0)
+    }
+
+    static func next(_ state: State, offset: CGFloat) -> State {
+        let depth = -offset
+        if depth <= topZone { return State(hidden: false, anchor: depth) }
+        if state.hidden {
+            return state.anchor - depth >= hysteresis
+                ? State(hidden: false, anchor: depth)
+                : State(hidden: true, anchor: max(state.anchor, depth))
+        }
+        return depth - state.anchor >= hysteresis
+            ? State(hidden: true, anchor: depth)
+            : State(hidden: false, anchor: min(state.anchor, depth))
+    }
+}
+
+/// L'extrême de la loi, retenu SANS abonnement (même famille que
+/// `ScrollOffsetRelay`) : l'écrire à chaque image ne ré-évalue aucun body.
+final class ConversationSearchBarScrollAnchor {
+    var value: CGFloat = 0
+    nonisolated deinit {}
 }
 
 /// **La carte d'une communauté dans la bande de recherche : la MOITIÉ de sa
@@ -41,7 +87,7 @@ struct ConversationSearchCommunitiesBand: View {
     let communities: [MeeshyCommunity]
     let onClose: () -> Void
 
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {

@@ -11,15 +11,15 @@ final class CallControlsSocketTests: XCTestCase {
     }
 
     func test_ack_success_isAccepted() {
-        XCTAssertNil(MessageSocketManager.callControlRefusal(["success": true]))
+        XCTAssertNil(MessageSocketManager.callControlRefusal(SocketAck<SocketAckNoPayload>.parse(["success": true], payloadAt: .none)))
     }
 
     func test_ack_refusal_carriesTheGatewayCode() {
-        XCTAssertEqual(MessageSocketManager.callControlRefusal(["success": false, "code": "NOT_A_CONTACT"]), CallControlRefusal(code: "NOT_A_CONTACT"))
+        XCTAssertEqual(MessageSocketManager.callControlRefusal(SocketAck<SocketAckNoPayload>.parse(["success": false, "code": "NOT_A_CONTACT"], payloadAt: .none)), CallControlRefusal(code: "NOT_A_CONTACT"))
     }
 
     func test_ack_timeout_isARefusal() {
-        XCTAssertEqual(MessageSocketManager.callControlRefusal("NO ACK"), CallControlRefusal(code: "TIMEOUT"))
+        XCTAssertEqual(MessageSocketManager.callControlRefusal(SocketAck<SocketAckNoPayload>.parse("NO ACK", payloadAt: .none)), CallControlRefusal(code: "TIMEOUT"))
     }
 
     func test_reactionEmojis_areTheGatewaysClosedList() {

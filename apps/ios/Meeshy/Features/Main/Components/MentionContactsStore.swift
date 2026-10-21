@@ -161,7 +161,7 @@ final class MentionContactsStore: MentionContactsProviding {
 
     private static func saveFriendsCache(_ friends: [FriendRequestUser]) async {
         let store = await CacheCoordinator.shared.friends
-        try? await store.save(friends, for: FriendshipCache.PersistenceKeys.friendsList)
+        await bestEffort("mentionContactsStore.store.save", category: .cache) { try await store.save(friends, for: FriendshipCache.PersistenceKeys.friendsList) }
     }
 
     /// La même lecture que `ContactsListViewModel.fetchFriendsFromNetwork` :

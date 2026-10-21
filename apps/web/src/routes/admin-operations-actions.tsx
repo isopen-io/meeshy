@@ -12,6 +12,7 @@ import { Sheet } from '@/components/sheet';
 import { cooldownOf, operationRunning } from '@/lib/admin/host-metrics';
 import { formatBytes } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
+import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { ADMIN_OPS_STATUS_KEY, SERVER_OPERATIONS_SHOWN, loadOpsStatus, triggerServerOperation, type AdminOpsStatus } from '@/lib/api/admin-ops';
@@ -23,11 +24,13 @@ import { useOnline } from '@/lib/net/online';
 import { BackupsSection } from './admin-monitoring-backups';
 
 /**
- * **LA SAUVEGARDE ET LA PURGE DES IMAGES** (#10396) — deux cartes : le dernier passage
- * (statut, fin, octets récupérés), le délai avant la prochaine, et le bouton réservé au
- * rang souverain. La confirmation exige de TAPER le nom de l'opération (`backup`,
+ * **LA SAUVEGARDE ET LE NETTOYAGE** (#10396, #11441) — deux cartes : le dernier passage
+ * (statut, fin, octets récupérés), le délai avant la prochaine, et le bouton, offert au
+ * RANG D'ADMINISTRATION (ADMIN et BIGBOSS, demande porteur 2026-10-21 ; la passerelle
+ * garde la même règle, et journalise chaque tentative). Le motif est proposé à l'ADMIN
+ * (`useAdminMotive`), facultatif. La confirmation exige de TAPER le nom de l'opération (`backup`,
  * `image-prune`) — la passerelle compare le même mot. Les refus se disent en mots :
- * trop tôt (409), déjà en cours (409), relais absent (503). Le statut se relit toutes les
+ * trop tôt (409), déjà en cours (409), relais absent ou journal indisponible (503). Le statut se relit toutes les
  * 5 s tant qu'une opération est en file ou en cours, 30 s sinon.
  */
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -35,6 +38,7 @@ const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 function refusalOf(failure: ApiFailure, language: AdminLanguage): string {
   if (failure.code === 'OPERATION_COOLDOWN') return translateAdmin(language, 'admin.ops.refused.cooldown');
   if (failure.code === 'OPERATION_IN_PROGRESS') return translateAdmin(language, 'admin.ops.refused.inProgress');
+  if (failure.code === 'AUDIT_UNAVAILABLE') return translateAdmin(language, 'admin.ops.refused.audit');
   if (failure.code === 'OPS_RELAY_UNAVAILABLE' || failure.status === 503) return translateAdmin(language, 'admin.ops.refused.relay');
   if (failure.status === 403) return translateAdmin(language, 'admin.kit.refused.permission');
   if (failure.status === 0) return translateAdmin(language, 'admin.kit.refused.network');
@@ -56,8 +60,9 @@ function ConfirmOperation({
   readonly onConfirm: (reason: string) => void;
   readonly onCancel: () => void;
 }) {
+  const proposed = useAdminMotive(language).fallback;
   const [typed, setTyped] = useState('');
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(proposed ?? '');
   const typedId = useId();
   const reasonId = useId();
   const field = { minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK } as const;
@@ -89,14 +94,23 @@ function ConfirmOperation({
         </label>
         <label htmlFor={reasonId} className="grid gap-2 text-body" style={{ color: INK }}>
           {translateAdmin(language, 'admin.ops.action.reason')}
-          <input id={reasonId} data-admin-ops-reason value={reason} maxLength={500} onInput={(event) => setReason(event.currentTarget.value)} className={`rounded-chip px-3 text-body ${FOCUS}`} style={field} />
+          <input
+            id={reasonId}
+            data-admin-ops-reason
+            value={reason}
+            maxLength={500}
+            {...(proposed === undefined ? {} : { placeholder: proposed })}
+            onInput={(event) => setReason(event.currentTarget.value)}
+            className={`rounded-chip px-3 text-body ${FOCUS}`}
+            style={field}
+          />
         </label>
         <AdminFormError text={error} data={{ 'data-admin-ops-error': '' }} />
-        <div className="flex flex-wrap justify-end gap-2">
-          <AdminButton onClick={onCancel} disabled={busy}>
+        <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:justify-end">
+          <AdminButton size="lg" onClick={onCancel} disabled={busy}>
             {translateAdmin(language, 'admin.ops.action.cancel')}
           </AdminButton>
-          <AdminButton type="submit" tone="danger" busy={busy} disabled={typed.trim() !== operation} data={{ 'data-admin-ops-go': operation }}>
+          <AdminButton size="lg" type="submit" tone="danger" busy={busy} disabled={typed.trim() !== operation} data={{ 'data-admin-ops-go': operation }}>
             {translateAdmin(language, `admin.ops.action.${operation}`)}
           </AdminButton>
         </div>
@@ -228,7 +242,6 @@ export function AdminOperationsActions({ language, deps, now }: { readonly langu
       <h2 id="admin-ops-actions-title" className="text-body font-semibold" style={{ color: INK }}>
         {translateAdmin(language, 'admin.ops.actions.title')}
       </h2>
-      {reach.isSovereign ? null : <AdminInlineNotice tone="info" text={translateAdmin(language, 'admin.ops.action.sovereignOnly')} />}
       {data === undefined ? (
         status.isPending ? (
           <AdminSkeleton rows={2} />
@@ -250,7 +263,7 @@ export function AdminOperationsActions({ language, deps, now }: { readonly langu
                 operation={operation}
                 status={data}
                 now={clock}
-                canTrigger={reach.isSovereign}
+                canTrigger={reach.hasAdminRank}
                 online={online}
                 awaited={awaited !== null && awaited.operation === operation && !servedAwaited ? awaited : null}
                 onAsk={() => {

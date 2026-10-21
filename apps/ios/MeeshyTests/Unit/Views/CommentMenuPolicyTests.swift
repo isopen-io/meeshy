@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import SwiftUI
 @testable import Meeshy
 
 /// **Le menu « … » d'un commentaire : quelles actions, pour ce commentaire et
@@ -32,11 +33,12 @@ final class CommentMenuPolicyTests: XCTestCase {
         viewerId: String? = me,
         canImagine: Bool = true,
         editable: Bool = true,
-        deletable: Bool = false
+        deletable: Bool = false,
+        removable: Bool = false
     ) -> [CommentMenuAction] {
         CommentMenuPolicy.actions(
             for: comment, viewerId: viewerId, servedText: comment.displayContent,
-            canImagine: canImagine, editable: editable, deletable: deletable
+            canImagine: canImagine, editable: editable, deletable: deletable, removable: removable
         )
     }
 
@@ -60,6 +62,26 @@ final class CommentMenuPolicyTests: XCTestCase {
     func test_actions_forAnUnknownReader_offerNeitherEditNorReport() {
         XCTAssertEqual(Self.actions(Self.comment(authorId: ""), viewerId: ""), [.copy, .imagine])
         XCTAssertEqual(Self.actions(Self.comment(authorId: Self.me), viewerId: nil), [.copy, .imagine])
+    }
+
+    // MARK: - Retrait par la modération (#11151)
+
+    func test_actions_whenTheHostCanRemove_anotherReadersCommentOffersRemoveAfterReport() {
+        let theirs = Self.comment(authorId: "u-other")
+        XCTAssertEqual(Self.actions(theirs, removable: true), [.copy, .imagine, .report, .remove])
+    }
+
+    func test_actions_removeIsNeverOfferedOnItsOwnComment() {
+        let mine = Self.comment(authorId: Self.me)
+        XCTAssertFalse(Self.actions(mine, deletable: true, removable: true).contains(.remove))
+    }
+
+    func test_actions_removeIsNeverOfferedToAnUnknownReader() {
+        XCTAssertFalse(Self.actions(Self.comment(authorId: "u-other"), viewerId: nil, removable: true).contains(.remove))
+    }
+
+    func test_actions_withoutTheRemovalRight_noRemove() {
+        XCTAssertFalse(Self.actions(Self.comment(authorId: "u-other")).contains(.remove))
     }
 
     // MARK: - Protections
@@ -148,5 +170,91 @@ final class CommentMenuPolicyTests: XCTestCase {
         XCTAssertNil(StoryCommentEditing.draftToSend("   ", original: "Bonjour"))
         XCTAssertNil(StoryCommentEditing.draftToSend("Bonjour ", original: "Bonjour"))
         XCTAssertEqual(StoryCommentEditing.draftToSend("  Bonsoir ", original: "Bonjour"), "Bonsoir")
+    }
+}
+
+/// **Retirer un commentaire de story** (#11159) : la modération retire le
+/// commentaire d'un autre, avec un motif — la racine emporte ses réponses, une
+/// réponse décompte son parent ; optimiste, défait si la passerelle refuse.
+@MainActor
+final class StoryCommentRemovalTests: XCTestCase {
+
+    private static func comment(id: String, authorId: String = "u-other", parentId: String? = nil, replies: Int = 0) -> FeedComment {
+        FeedComment(id: id, author: "Awa", authorId: authorId, content: "Bonjour", replies: replies, parentId: parentId)
+    }
+
+    private final class Thread {
+        var comments: [FeedComment]
+        var replies: [String: [FeedComment]]
+        var count: Int
+        init(comments: [FeedComment], replies: [String: [FeedComment]], count: Int) {
+            self.comments = comments
+            self.replies = replies
+            self.count = count
+        }
+    }
+
+    private static func writer(_ thread: Thread, service: MockPostService) -> StoryCommentThreadWriter {
+        StoryCommentThreadWriter(
+            postId: "story-1",
+            comments: Binding(get: { thread.comments }, set: { thread.comments = $0 }),
+            replies: Binding(get: { thread.replies }, set: { thread.replies = $0 }),
+            count: Binding(get: { thread.count }, set: { thread.count = $0 }),
+            service: service
+        )
+    }
+
+    func test_removing_aRoot_dropsItAndItsReplies_andCountsThemAll() {
+        let root = Self.comment(id: "root", replies: 2), other = Self.comment(id: "b")
+        let result = StoryCommentEditing.removing(
+            root, comments: [root, other],
+            replies: ["root": [Self.comment(id: "r1", parentId: "root"), Self.comment(id: "r2", parentId: "root")]]
+        )
+        XCTAssertEqual(result.comments.map(\.id), ["b"])
+        XCTAssertNil(result.replies["root"])
+        XCTAssertEqual(result.removedCount, 3)
+    }
+
+    func test_removing_aReply_dropsItFromItsThread_andDecrementsItsParent() {
+        let root = Self.comment(id: "root", replies: 2)
+        let r1 = Self.comment(id: "r1", parentId: "root"), r2 = Self.comment(id: "r2", parentId: "root")
+        let result = StoryCommentEditing.removing(r1, comments: [root], replies: ["root": [r1, r2]])
+        XCTAssertEqual(result.replies["root"]?.map(\.id), ["r2"])
+        XCTAssertEqual(result.comments.first?.replies, 1)
+        XCTAssertEqual(result.removedCount, 1)
+    }
+
+    func test_remove_accepted_sendsTheReason_andKeepsTheCommentOut() async {
+        let service = MockPostService()
+        let thread = Thread(comments: [Self.comment(id: "a"), Self.comment(id: "b")], replies: [:], count: 2)
+
+        await Self.writer(thread, service: service).remove(Self.comment(id: "a"), reason: "Propos haineux")
+
+        XCTAssertEqual(service.lastDeleteCommentPostId, "story-1")
+        XCTAssertEqual(service.lastDeleteCommentCommentId, "a")
+        XCTAssertEqual(service.lastDeleteCommentReason, "Propos haineux")
+        XCTAssertEqual(thread.comments.map(\.id), ["b"])
+        XCTAssertEqual(thread.count, 1)
+    }
+
+    func test_remove_refused_restoresTheThreadAndTheCount() async {
+        let service = MockPostService()
+        service.deleteCommentResult = .failure(APIError.serverError(403, "forbidden"))
+        let thread = Thread(comments: [Self.comment(id: "a", replies: 1)], replies: ["a": [Self.comment(id: "r1", parentId: "a")]], count: 2)
+
+        await Self.writer(thread, service: service).remove(Self.comment(id: "a", replies: 1), reason: "Spam répété")
+
+        XCTAssertEqual(thread.comments.map(\.id), ["a"])
+        XCTAssertEqual(thread.replies["a"]?.map(\.id), ["r1"])
+        XCTAssertEqual(thread.count, 2)
+    }
+
+    func test_commentOffer_platformModeratorOnAnothersComment_isOffered_neverOnTheirOwn() {
+        let theirs = Self.comment(id: "a", authorId: "u-other")
+        for role in ["MODERATOR", "ADMIN", "BIGBOSS"] {
+            XCTAssertNotNil(ContentRemovalOffer.comment(theirs, viewerId: "mod", viewerRole: role) { _ in }, role)
+        }
+        XCTAssertNil(ContentRemovalOffer.comment(theirs, viewerId: "mod", viewerRole: "USER") { _ in })
+        XCTAssertNil(ContentRemovalOffer.comment(Self.comment(id: "m", authorId: "mod"), viewerId: "mod", viewerRole: "BIGBOSS") { _ in })
     }
 }

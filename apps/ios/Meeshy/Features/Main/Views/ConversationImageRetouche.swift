@@ -48,7 +48,7 @@ enum ConversationImageRetouche {
         do {
             try compressed.data.write(to: url, options: .atomic)
         } catch {
-            os.Logger(subsystem: "me.meeshy.app", category: "media")
+            MeeshyLog.logger(.media)
                 .error("retouche: écriture ratée — l'image d'origine est gardée (\(error.localizedDescription, privacy: .public))")
             return nil
         }

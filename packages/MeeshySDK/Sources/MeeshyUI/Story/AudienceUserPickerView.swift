@@ -147,6 +147,7 @@ public struct AudienceUserPickerView: View {
     private let onDone: ([String]) -> Void
     @StateObject private var vm: AudienceUserPickerViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
     @State private var searchTask: Task<Void, Never>?
 
     public init(mode: PostVisibility,
@@ -194,9 +195,9 @@ public struct AudienceUserPickerView: View {
                 .font(MeeshyFont.relative(16, weight: .semibold))
                 .lineLimit(1)
             HStack {
-                Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module)) { dismiss() }
                 Spacer()
-                Button(String(localized: "common.done", defaultValue: "OK")) {
+                Button(String(localized: "common.done", defaultValue: "OK", bundle: .module)) {
                     onDone(vm.selectedIds)
                     dismiss()
                 }
@@ -231,8 +232,7 @@ public struct AudienceUserPickerView: View {
         .adaptiveOnChange(of: vm.query) { _, _ in
             searchTask?.cancel()
             searchTask = Task {
-                try? await Task.sleep(for: .milliseconds(350))
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .milliseconds(350)) else { return }
                 await vm.performSearch()
             }
         }
@@ -275,7 +275,9 @@ public struct AudienceUserPickerView: View {
 
     private func row(_ user: UserSearchResult) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem, avatarURL: user.avatar, presenceState: user.servedPresence, ring: user.avatarRing)
+            MeeshyLivePresence {
+                MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem, avatarURL: user.avatar, presenceState: presenceResolver?(user.id) ?? user.servedPresence, ring: user.avatarRing)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayName ?? user.username)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))

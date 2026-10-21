@@ -29,8 +29,9 @@ final class StatusBubbleHostPlacementTests: XCTestCase {
     /// Code source SANS les lignes de commentaire — une mention du modificateur
     /// dans une doc ne doit jamais satisfaire (ni faire échouer) le garde.
     private func strippedSource(of fileName: String) throws -> String {
-        let url = viewsDir().appendingPathComponent(fileName)
-        let raw = try String(contentsOf: url, encoding: .utf8)
+        // L'UNITÉ du fichier (`Foo.swift` + `Foo+*.swift`) : les gardes négatives de cette suite
+        // doivent balayer les types extraits d'une surface, pas seulement son fichier-tête.
+        let raw = try AppSourceGuard.unit("Meeshy/Features/Main/Views/\(fileName)")
         return raw
             .split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }

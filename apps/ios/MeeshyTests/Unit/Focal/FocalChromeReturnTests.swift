@@ -56,11 +56,15 @@ final class FocalChromeReturnTests: XCTestCase {
 
     func test_conversationView_slidesEachChromePiece_towardsItsOwnEdge() throws {
         let code = try normalized("Meeshy/Features/Main/Views/ConversationView.swift")
-        XCTAssertTrue(code.contains("AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top))"), "l'en-tête glisse vers le HAUT")
-        XCTAssertTrue(code.contains(".hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)"), "le composeur glisse vers le BAS")
-        XCTAssertEqual(code.components(separatedBy: ".hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)").count - 1, 1,
+        let band = try normalized("Meeshy/Features/Main/Views/ConversationExpandedHeaderBand.swift")
+        let stage = try normalized("Meeshy/Features/Main/Views/ConversationLayers/ConversationBodyStage.swift")
+        XCTAssertTrue(code.contains("hidesBandForScroll: hidesEntireHeaderForScroll"), "l'hôte remet à la section la loi de l'en-tête")
+        XCTAssertTrue(band.contains("expandedBand() .hiddenTowardsEdge(hidesBandForScroll, .top)"), "l'en-tête glisse vers le HAUT, DANS le corps de la section")
+        XCTAssertTrue(code.contains("hidesComposerChrome: hidesComposerChromeForScroll"), "l'hôte remet à la scène la loi du composeur")
+        XCTAssertTrue(stage.contains(".hiddenTowardsEdge(hidesComposerChrome, .bottom)"), "le composeur glisse vers le BAS")
+        XCTAssertEqual(stage.components(separatedBy: ".hiddenTowardsEdge(hidesComposerChrome, .bottom)").count - 1, 1,
                        "le composeur seul glisse vers le bas — la bulle « retour en bas » reste (#8002)")
         XCTAssertFalse(code.contains(".opacity(hidesComposerChromeForScroll ? 0 : 1)"), "plus de simple fondu sans glissement")
-        XCTAssertFalse(code.contains("else if hidesEntireHeaderForScroll { AnyView(EmptyView()) }"), "plus de démontage de l'en-tête")
+        XCTAssertFalse(code.contains("else if hidesEntireHeaderForScroll {"), "plus de démontage de l'en-tête")
     }
 }

@@ -2,6 +2,7 @@ import AVFoundation
 import Combine
 import MeeshySDK
 import os
+import QuartzCore
 
 @MainActor
 final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, CallInterruptibleRecorder {
@@ -14,46 +15,37 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     private(set) var recordedFileURL: URL?
 
     private var recorder: AVAudioRecorder? {
-        didSet { cleanupHandle.recorder = recorder }
+        didSet { teardown.update { $0.recorder = recorder } }
     }
-    private var timer: Timer? {
-        didSet { cleanupHandle.timer = timer }
+    private var displayLink: CADisplayLink? {
+        didSet { teardown.update { $0.displayLink = displayLink } }
     }
     private var levelHistory: [CGFloat] = []
     private var settings: AudioRecordingSettings = .standard
     private var onMaxDurationReached: (() -> Void)?
+    private let recordingSession: MeeshyRecordingSession = .shared
 
-    /// Handles thread-safe à libérer depuis le `deinit` (potentiellement
-    /// off-main) — pattern `AudioPlaybackManager.CleanupHandle`. Concerne les
-    /// instances NON partagées (ex. `AudioPostComposerView`) lâchées
-    /// mid-recording par un swipe-down de sheet : sans ce filet le Timer
-    /// 20 Hz restait au run loop, le micro actif et la session jamais rendue.
-    private final class CleanupHandle: @unchecked Sendable {
+    /// Ressources à libérer depuis le `deinit` (potentiellement off-main).
+    /// Concerne les instances NON partagées (ex. `AudioPostComposerView`)
+    /// lâchées mid-recording par un swipe-down de sheet : sans ce filet le
+    /// lien d'affichage restait au run loop, le micro actif et la session
+    /// jamais rendue.
+    private let teardown = TeardownBox(RecordingResources())
+
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-        nonisolated(unsafe) var timer: Timer?
-        nonisolated(unsafe) var recorder: AVAudioRecorder?
-    }
-    private let cleanupHandle = CleanupHandle()
-
     nonisolated deinit {
-        cleanupHandle.timer?.invalidate()
+        teardown.update(RecordingResources.invalidateDisplayLink)
         // `recorder` non-nil ⟺ mort mid-recording : sémantique cancel
         // (fichier partiel dérivé de `recorder.url`). Déporté sur une queue
-        // utility : stop/removeItem/setActive sont bloquants et ce dealloc
-        // arrive sur le main thread pendant l'animation de dismiss.
-        // `deactivatePlaybackSync` est call-aware (no-op pendant un appel).
-        guard cleanupHandle.recorder != nil else { return }
-        let handle = cleanupHandle
-        DispatchQueue.global(qos: .utility).async {
-            guard let recorder = handle.recorder else { return }
-            recorder.stop()
-            FileManager.default.removeItemLogging(at: recorder.url, context: "aborted recording cleanup", logger: Logger.audioRecorder)
-            MediaSessionCoordinator.shared.deactivatePlaybackSync()
-        }
+        // utility : stop/removeItem sont bloquants et ce dealloc arrive sur le
+        // main thread pendant l'animation de dismiss. La fin de
+        // l'enregistrement (son Meeshy remonté, session rendue, call-aware)
+        // revient au main.
+        guard teardown.read(\.isRecording) else { return }
+        teardown.release(on: .global(qos: .utility), RecordingResources.releaseOffMain)
     }
 
     func configure(settings: AudioRecordingSettings, onMaxDurationReached: (() -> Void)? = nil) {
@@ -92,18 +84,12 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         // synchrone, aucune latence ajoutée.
         guard hasMicrophonePermission() else { return }
 
-        let session = AVAudioSession.sharedInstance()
-        do {
-            // Audit P1-10 — `.voiceChat` enables the system EC/AGC/NS chain
-            // that `.default` skips (better captured speech for voice
-            // messages). Drop `.allowBluetoothA2DP`: A2DP is output-only and
-            // forces the OS to flap to HFP for the mic, producing the same
-            // ~200ms audio glitches that PERF-010 removed from the call path.
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
-            try session.setActive(true)
-        } catch {
-            return
-        }
+        // La session de `RecordingSessionLaw` (#11042) : les sons extérieurs
+        // s'arrêtent, un son Meeshy qui joue (PiP, vocal, extrait) BAISSE sans
+        // s'arrêter et remonte à la fin. Seul un vocal sans son Meeshy garde
+        // `.voiceChat` (audit P1-10) : son traitement de la voix rendrait le
+        // son Meeshy inaudible au lieu de le baisser.
+        guard recordingSession.begin(.voiceMessage) else { return }
 
         // A3 — from here on, the session is active. Any failure path MUST
         // deactivate it to avoid leaking the microphone indicator + battery
@@ -133,12 +119,19 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         audioLevels = levelHistory
         RecorderCallGuard.shared.register(self)
 
-        // Un second démarrage sans arrêt entre les deux laissait l'ancien minuteur tourner à 20 Hz
-        // jusqu'à la fin du processus.
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateMetering() }
+        // Un second démarrage sans arrêt entre les deux laissait l'ancien lien tourner
+        // jusqu'à la fin du processus. Le niveau suit l'écran, plafonné à 30 Hz ;
+        // en arrière-plan le lien ne tire plus, l'îlot relève lui-même le niveau.
+        displayLink?.invalidate()
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .meter) { [weak self] link in
+            guard let self else {
+                link.invalidate()
+                return
+            }
+            self.updateMetering()
         }
+        link.add(to: .main, forMode: .common)
+        displayLink = link
     }
 
     /// Tranche la permission micro AVANT toute activation de session.
@@ -175,10 +168,8 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     /// Idempotent: safe to call when no session is active (the OS returns
     /// the no-op status silently).
     internal func deactivateAudioSessionAfterFailure() {
-        // Only deactivate when no VoIP call is active — we never want to
-        // tear down a session owned by the WebRTC stack.
-        guard !CallManagerHost.shared.isCallActiveForAudioGuard else { return }
-        deactivateSharedAudioSession()
+        // Call-aware : la session d'un appel VoIP n'est jamais rendue d'ici.
+        endRecordingSession()
     }
 
     /// Un appel commence : la CAPTURE s'arrête (micro rendu à l'appel, plus
@@ -188,23 +179,23 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     /// rend le fichier ; annuler le supprime. La session reste à l'appel.
     func stopForCall() {
         guard isRecording, let recorder, recorder.isRecording else { return }
-        timer?.invalidate()
-        timer = nil
+        displayLink?.invalidate()
+        displayLink = nil
+        duration = recorder.currentTime
         recorder.stop()
     }
 
     @discardableResult
     func stopRecording() -> URL? {
-        timer?.invalidate()
-        timer = nil
+        displayLink?.invalidate()
+        displayLink = nil
+        // Le lien ne tire pas en arrière-plan : la durée se relève à l'arrêt,
+        // sinon un vocal arrêté depuis l'îlot gardait celle du dernier écran.
+        if let recorder, recorder.isRecording { duration = recorder.currentTime }
         recorder?.stop()
         isRecording = false
 
-        // Call-aware (L3) : même garde que `cancelRecording` — un stop
-        // mid-appel VoIP démontait sinon la session possédée par WebRTC.
-        if !CallManagerHost.shared.isCallActiveForAudioGuard {
-            deactivateSharedAudioSession()
-        }
+        endRecordingSession()
 
         let url = recordedFileURL
         recorder = nil
@@ -212,8 +203,8 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     }
 
     func cancelRecording() {
-        timer?.invalidate()
-        timer = nil
+        displayLink?.invalidate()
+        displayLink = nil
         recorder?.stop()
         isRecording = false
 
@@ -225,23 +216,18 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         duration = 0
         audioLevels = Array(repeating: 0, count: 15)
 
-        // Audit P2-iOS-4 — deactivate the AVAudioSession so the mic indicator
-        // turns off. Without this, cancelling a voice message left the
-        // session active indefinitely (drained battery + kept mic icon on).
-        if !CallManagerHost.shared.isCallActiveForAudioGuard {
-            deactivateSharedAudioSession()
-        }
+        // Audit P2-iOS-4 — la session se rend pour que l'indicateur micro
+        // s'éteigne ; sans elle, annuler un vocal laissait le micro tenu.
+        endRecordingSession()
     }
 
-    /// Deactivates the shared audio session so the system mic indicator turns
-    /// off. A failure here leaves the indicator lit and the session owning the
-    /// mic — a user-visible, battery-draining state that must not be silent.
-    private func deactivateSharedAudioSession() {
-        do {
-            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        } catch {
-            Logger.audioRecorder.error("Audio session not deactivated, mic indicator may stay on: \(error.localizedDescription, privacy: .public)")
-        }
+    /// Fin d'enregistrement — envoi, annulation, échec (#11042) : le son
+    /// Meeshy baissé remonte au volume qu'il avait, puis la session revient à
+    /// sa lecture s'il joue encore, ou se rend aux autres apps
+    /// (`.notifyOthersOnDeactivation`). Call-aware : pendant un appel VoIP,
+    /// la session reste à l'appel.
+    private func endRecordingSession() {
+        recordingSession.finish(handingBackSession: true)
     }
 
     func result() -> AudioRecordingResult? {
@@ -257,7 +243,9 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         return AudioRecordingResult(url: url, duration: duration, data: data)
     }
 
-    private func updateMetering() {
+    /// Relève durée et niveau. Appelé par le lien d'affichage à l'écran, et
+    /// par l'îlot (`VoiceRecordingLiveActivityCoordinator`) en arrière-plan.
+    func updateMetering() {
         guard let recorder, recorder.isRecording else { return }
 
         duration = recorder.currentTime
@@ -285,5 +273,27 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let audioRecorder = Logger(subsystem: "me.meeshy.app", category: "audio-recorder")
+    nonisolated static let audioRecorder = MeeshyLog.logger(.audioRecorder)
+}
+
+private nonisolated struct RecordingResources {
+    var displayLink: CADisplayLink?
+    var recorder: AVAudioRecorder?
+
+    var isRecording: Bool {
+        recorder != nil
+    }
+
+    static func invalidateDisplayLink(_ resources: inout RecordingResources) {
+        resources.displayLink?.invalidate()
+    }
+
+    static func releaseOffMain(_ resources: RecordingResources) {
+        guard let recorder = resources.recorder else { return }
+        recorder.stop()
+        FileManager.default.removeItemLogging(at: recorder.url, context: "aborted recording cleanup", logger: Logger.audioRecorder)
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated { MeeshyRecordingSession.shared.finish(handingBackSession: true) }
+        }
+    }
 }

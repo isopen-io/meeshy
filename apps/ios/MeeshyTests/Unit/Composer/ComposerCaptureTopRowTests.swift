@@ -157,7 +157,7 @@ final class ComposerCaptureTopRowTests: XCTestCase {
         XCTAssertFalse(chrome.contains("guard !session.phase.isEditing else { return session.cancelEditing() }"),
                        "la croix de la retouche ne jette plus rien sans demander")
         XCTAssertTrue(chrome.contains("takeSave: session.takeSaveState"))
-        XCTAssertTrue(chrome.contains("discardsTake = session.phase.isEditing"),
+        XCTAssertTrue(chrome.contains("session.discardPrompt.ask(take: retouche"),
                       "ce que la confirmation abandonne se fixe à la question : une remise entre-temps ne ferme pas le viseur")
     }
 

@@ -267,7 +267,7 @@ extension CallManager {
         voipFreshnessTask = nil
         analyticsSnapshotTask?.cancel()
         analyticsSnapshotTask = nil
-        isRemoteQualityDegraded = false
+        remoteMedia = remoteMedia.applying(.qualityDegraded(false))
         isSignalingDegraded = false
         pendingRemoteOffer = nil
         pendingIceCandidates = []
@@ -290,9 +290,7 @@ extension CallManager {
         // (placeholder "Caméra désactivée" fantôme) et d'un FSM de survie
         // vidéo potentiellement suspendu — violation du contrat documenté de
         // `VideoSurvivalControlling.reset()`.
-        isRemoteVideoEnabled = true
-        isRemoteAudioEnabled = true
-        isRemoteScreenCapturing = false
+        remoteMedia = .initial
         screenShare.callEnded()
         recording.callEnded()
         videoSurvivalController.reset()
@@ -386,5 +384,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

@@ -170,10 +170,10 @@ extension BubbleContent {
         }
 
         // --- Text + emoji ---
-        let activeLang = activeDisplayLangCode
-            ?? preferredTranslation?.targetLanguage
-            ?? preferredAudioLangCode
-            ?? message.originalLanguage
+        let activeLang = Self.activeLanguage(
+            of: message, preferredTranslation: preferredTranslation,
+            activeDisplayLangCode: activeDisplayLangCode, preferredAudioLangCode: preferredAudioLangCode
+        )
         // #9617 — l'avis de capture se compose CHEZ LE LECTEUR (langue
         // d'interface, fuseau) ; son `content` n'est que le repli français.
         // #7759 — la ligne d'arrivées de Meeshy Global, de même.
@@ -423,6 +423,39 @@ extension BubbleContent {
     static func arrivalsNoticeText(for message: Message, strings: ConversationPreviewStrings? = nil) -> String? {
         guard message.messageSource == .system, let notice = message.arrivalsNotice else { return nil }
         return notice.text(strings ?? ConversationPreviewCatalog.strings())
+    }
+
+    /// La langue que la bulle AFFICHE : le drapeau basculé par le lecteur
+    /// d'abord, puis la traduction préférée, la piste audio préférée, l'original.
+    static func activeLanguage(
+        of message: Message,
+        preferredTranslation: MessageTranslation?,
+        activeDisplayLangCode: String?,
+        preferredAudioLangCode: String? = nil
+    ) -> String {
+        activeDisplayLangCode
+            ?? preferredTranslation?.targetLanguage
+            ?? preferredAudioLangCode
+            ?? message.originalLanguage
+    }
+
+    /// **Le texte que la bulle AFFICHE** (#11233) — le site unique que « Copier »
+    /// lit, pour copier ce que le lecteur a sous les yeux : la langue du drapeau
+    /// qu'il a basculé, jamais la seule traduction préférée.
+    static func displayedText(
+        of message: Message,
+        translations: [MessageTranslation],
+        preferredTranslation: MessageTranslation?,
+        activeDisplayLangCode: String?
+    ) -> String {
+        resolveEffectiveContent(
+            message: message,
+            translations: translations,
+            preferredTranslation: preferredTranslation,
+            activeLangCode: activeLanguage(
+                of: message, preferredTranslation: preferredTranslation, activeDisplayLangCode: activeDisplayLangCode
+            )
+        )
     }
 
     static func resolveEffectiveContent(

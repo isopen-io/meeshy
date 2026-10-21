@@ -88,7 +88,7 @@ public enum NearbyDensityCellSize: Sendable, CaseIterable, Equatable {
 /// `APIPost` (et de faire porter à toutes les autres surfaces un champ qui n'a
 /// de sens que sur celle-ci).
 public struct NearbyPost: Decodable, Sendable, Identifiable {
-    private static let log = Logger(subsystem: "me.meeshy.sdk", category: "nearby-decode")
+    private static let log = MeeshyLog.logger(.nearbyDecode, subsystem: .sdk)
 
     public let post: APIPost
     /// Distance renvoyée par `$geoNear`, calculée depuis `Post.geoPoint` —
@@ -334,7 +334,7 @@ public protocol NearbyDiscoveryServiceProviding: Sendable {
 /// produit. Quel rayon, quel mode d'affichage, quoi dire quand c'est vide —
 /// tout cela vit côté app, avec les singletons Meeshy. Ici, des paramètres
 /// opaques et rien d'autre.
-public final class NearbyDiscoveryService: NearbyDiscoveryServiceProviding, @unchecked Sendable {
+public final class NearbyDiscoveryService: NearbyDiscoveryServiceProviding, Sendable {
     public static let shared = NearbyDiscoveryService()
 
     private let api: APIClientProviding

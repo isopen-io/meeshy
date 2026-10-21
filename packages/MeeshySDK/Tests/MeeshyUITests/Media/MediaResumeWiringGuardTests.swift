@@ -69,7 +69,8 @@ final class MediaResumeWiringGuardTests: XCTestCase {
     /// valeur remise avant `load()` naîtrait avec le même défaut, et aucun
     /// témoin de valeur ne la verrait mourir.
     func test_lesRenderersVideoRemettentLaConsommationServieApresLoad() throws {
-        let text = try source("Sources/MeeshyUI/Media/MeeshyVideoPlayer+Renderers.swift")
+        let text = try source("Sources/MeeshyUI/Media/MeeshyVideoPlayer+InlineRenderer.swift")
+            + source("Sources/MeeshyUI/Media/MeeshyVideoPlayer+Renderers.swift")
         let loads = Self.offsets(
             of: "manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)",
             in: text)

@@ -51,7 +51,7 @@ extension FeedPostCard {
     var authorHeader: some View {
         HStack(spacing: MeeshySpacing.md) {
             // Avatar
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: post.author,
                 context: .postAuthor,
                 accentColor: accentColor,
@@ -68,7 +68,7 @@ extension FeedPostCard {
                         selectedProfileUser = .from(feedPost: post)
                     }
                 ]
-            )
+            ) }
             .accessibilityLabel(String(format: String(localized: "a11y.feed.post.author_avatar", defaultValue: "Profil de %@", bundle: .main), post.author))
             .accessibilityHint(String(localized: "a11y.feed.post.author_avatar.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
@@ -242,15 +242,7 @@ extension FeedPostCard {
                         Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                     }
                 }
-                if onDelete != nil {
-                    Divider()
-                    Button(role: .destructive) {
-                        onDelete?(post.id)
-                        HapticFeedback.medium()
-                    } label: {
-                        Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                    }
-                }
+                PublicationDestructiveMenuItems(postId: post.id, onDelete: onDelete, onRemove: onRemove)
                 if onReport != nil {
                     Divider()
                     Button(role: .destructive) {

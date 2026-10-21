@@ -134,7 +134,7 @@ public class TextAnalyzer: ObservableObject {
 
     private func updateSentimentOnly(text: String) {
         let score = computeSentiment(text: text.lowercased())
-        DispatchQueue.main.async { self.sentiment = SentimentLevel.from(score: score) }
+        sentiment = SentimentLevel.from(score: score)
     }
 
     public func setLanguageOverride(_ lang: DetectedLanguage?) {
@@ -157,7 +157,7 @@ public class TextAnalyzer: ObservableObject {
         let cleaned = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
 
         let score = computeSentiment(text: cleaned)
-        DispatchQueue.main.async { self.sentiment = SentimentLevel.from(score: score) }
+        sentiment = SentimentLevel.from(score: score)
 
         guard !isLanguageLocked else { return }
 
@@ -170,15 +170,10 @@ public class TextAnalyzer: ObservableObject {
             let langCode = dominant.rawValue
             let hypotheses = recognizer.languageHypotheses(withMaximum: 1)
             let confidence = hypotheses[dominant] ?? 0
-            DispatchQueue.main.async {
-                self.language = DetectedLanguage.find(code: langCode)
-                self.languageConfidence = confidence
-                // Lock only once 18 words give a firm signal — keep
-                // re-interpreting before that, even at high confidence,
-                // so an early word in another language can still flip it.
-                if wordCount >= self.wordCountThreshold {
-                    self.isLanguageLocked = true
-                }
+            language = DetectedLanguage.find(code: langCode)
+            languageConfidence = confidence
+            if wordCount >= wordCountThreshold {
+                isLanguageLocked = true
             }
         }
     }
@@ -238,40 +233,3 @@ public class TextAnalyzer: ObservableObject {
         "traurig": -0.5,
     ]
 }
-
-// MARK: - Smart Context Zone View
-
-public struct SmartContextZone: View {
-    @ObservedObject public var analyzer: TextAnalyzer
-    public let accentColor: String
-    public let isCompact: Bool
-    public var showFlag: Bool = true
-
-    public init(analyzer: TextAnalyzer, accentColor: String, isCompact: Bool, showFlag: Bool = true) {
-        self.analyzer = analyzer; self.accentColor = accentColor
-        self.isCompact = isCompact; self.showFlag = showFlag
-    }
-
-    public var body: some View {
-        VStack(spacing: isCompact ? 0 : 2) {
-            Text(analyzer.sentiment.emoji)
-                .font(.system(size: isCompact ? 20 : 18))
-                .scaleEffect(analyzer.sentiment == .neutral ? 1.0 : 1.1)
-                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: analyzer.sentiment)
-
-            if showFlag, let lang = analyzer.displayLanguage {
-                Button {
-                    analyzer.showLanguagePicker = true
-                    HapticFeedback.light()
-                } label: {
-                    Text(lang.flag).font(.system(size: MeeshyFont.calloutSize))
-                }
-                .transition(.scale.combined(with: .opacity))
-            }
-        }
-        .frame(width: 36, height: showFlag && analyzer.displayLanguage != nil ? 44 : 36)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isCompact)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showFlag)
-    }
-}
-

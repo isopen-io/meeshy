@@ -170,7 +170,7 @@ public enum BannerFrameRenderer {
         )
     }
 
-    public static func staticImage(_ design: BannerFrameDesign, size: CGSize, skipping: Set<Int> = [], screenScale: CGFloat = UIScreen.main.scale) -> UIImage? {
+    public static func staticImage(_ design: BannerFrameDesign, size: CGSize, skipping: Set<Int> = [], screenScale: CGFloat) -> UIImage? {
         guard size.width > 0, size.height > 0 else { return nil }
         let format = UIGraphicsImageRendererFormat.preferred()
         format.scale = screenScale

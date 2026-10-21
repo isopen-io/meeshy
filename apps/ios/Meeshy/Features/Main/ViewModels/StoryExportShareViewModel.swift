@@ -50,7 +50,7 @@ final class StoryExportShareViewModel: ObservableObject {
     @Published var selectedLanguage: String? = nil
 
     private let exporter: StoryVideoExportServiceProviding
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "story-export-share")
+    private let logger = MeeshyLog.logger(.storyExportShare)
     private var exportTask: Task<Void, Never>?
 
     /// L'habillage de l'export — interlude, carte de fin, pseudo du filigrane —

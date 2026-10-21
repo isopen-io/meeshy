@@ -5,34 +5,6 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-/// Signposts pour profiler les segments CHAUDS du rendu de la liste dans
-/// Instruments (track « Points of Interest ») ET via `XCTOSSignpostMetric` dans
-/// les tests. Deux intervalles : `applySnapshot` (prépa snapshot O(n) : reversed
-/// + map + groupByDay + diff) et `cellConfig` (config PAR cellule : domainMessage
-/// + build `BubbleContent` + `UIHostingConfiguration`). Permet de voir EXACTEMENT
-/// quel segment du rendu coûte, par device/iOS, sur un scroll réel.
-enum PerfSignpost {
-    static let signposter = OSSignposter(
-        logHandle: OSLog(subsystem: "me.meeshy.app", category: .pointsOfInterest)
-    )
-}
-
-/// §3.1 du contrat Focal — le miroir GELÉ `ReadingModeOrchestrator.
-/// ConversationReadingMode` (`typealias ConversationReadingMode`, F-080,
-/// `Focal/Preferences/ReadingModePreferenceStore.swift`) n'a que ses 5 cas
-/// bruts, sans la computed property `usesFlatRow` que le contrat §3.1
-/// documente sur le type top-level qui n'a jamais atterri (RE-PREUVE
-/// F-080/F-083). Ajoutée ICI (fichier propriété WS-6, F-085) plutôt que
-/// dans le Core figé — un simple regroupement de cas, aucune loi, aucune
-/// constante numérique (garde R15). RETRAIT FOCAL iOS (2026-08-18) :
-/// `usesPerspective` est parti avec le pass — `usesFlatRow` reste (Script).
-extension ConversationReadingMode {
-    /// `.script` et `.focal` rendent la MÊME rangée plate uniforme ; Focal y
-    /// ajoute la perspective minimale au défilement (`FocalScrollPerspective`,
-    /// 2026-08-21 — transform + opacity CALayer, zéro relayout).
-    var usesFlatRow: Bool { self == .focal || self == .script }
-}
-
 final class MessageListViewController: UIViewController {
 
     // `internal` (et non `private`/`fileprivate`) depuis la sortie du cluster de
@@ -551,7 +523,7 @@ final class MessageListViewController: UIViewController {
 
     required init?(coder: NSCoder) { fatalError() }
 
-    deinit {
+    nonisolated deinit {
         // Ni vidange ni invalidation du timer ici : `deinit` n'est pas isolé au
         // MainActor et `Timer` n'est pas Sendable — y toucher ne compile pas
         // sous Swift 6. (`CADisplayLink` ci-dessous passe, lui, ce qui rend le
@@ -830,29 +802,10 @@ final class MessageListViewController: UIViewController {
             // point de départ. Repli sur la cote de bulle quand l'hôte est
             // parti : comportement historique de ce closure, inchangé.
             let estimate = self?.currentRowHeightEstimate ?? Self.estimatedBubbleRowLayoutHeight
-            let itemSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1),
-                heightDimension: .estimated(estimate)
+            return MessageListSectionLayout.section(
+                estimate: estimate,
+                horizontalInset: Self.sectionHorizontalInset
             )
-            let item = NSCollectionLayoutItem(layoutSize: itemSize)
-            let groupSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1),
-                heightDimension: .estimated(estimate)
-            )
-            let group = NSCollectionLayoutGroup.vertical(layoutSize: groupSize, subitems: [item])
-            let section = NSCollectionLayoutSection(group: group)
-            section.interGroupSpacing = 0
-            // 12pt horizontal breathing room so bubbles don't kiss the screen
-            // edge — identique dans TOUS les modes depuis le retrait de la
-            // loupe (spec §5 réancrée : échelle ≤ 1, aucune réserve à payer ;
-            // la date de l'élu retrouve au passage sa pleine largeur).
-            section.contentInsets = NSDirectionalEdgeInsets(
-                top: 8,
-                leading: Self.sectionHorizontalInset,
-                bottom: 8,
-                trailing: Self.sectionHorizontalInset
-            )
-            return section
         }
         // Même règle « près du bas » que `isCurrentlyNearBottom` : sous ce
         // seuil la poussée naturelle d'un message entrant reste le
@@ -902,28 +855,7 @@ final class MessageListViewController: UIViewController {
     /// que `fireOrDeferRecoveryInvalidation` de `MessageListLayout`).
     func messageIdsInGroup(endingAt lastLocalId: String) -> [String] {
         guard let lastIndex = store.index(of: lastLocalId) else { return [lastLocalId] }
-        var ids = [lastLocalId]
-        var index = lastIndex
-        while index > 0 {
-            let current = store.messages[index]
-            let previous = store.messages[index - 1]
-            let isHead = MessageDayGrouping.isGroupHead(
-                previous: .init(
-                    senderId: previous.senderId,
-                    isSystem: previous.messageSource == MeeshyMessage.MessageSource.system.rawValue,
-                    createdAt: previous.createdAt
-                ),
-                current: .init(
-                    senderId: current.senderId,
-                    isSystem: current.messageSource == MeeshyMessage.MessageSource.system.rawValue,
-                    createdAt: current.createdAt
-                )
-            )
-            if isHead { break }
-            ids.append(previous.localId)
-            index -= 1
-        }
-        return ids
+        return MessageGroupRules.idsInGroup(endingAt: lastLocalId, lastIndex: lastIndex, messages: store.messages)
     }
 
     // MARK: - Snapshot
@@ -965,6 +897,13 @@ final class MessageListViewController: UIViewController {
     /// `internal` depuis `+UnreadSeparator.swift` (#7222) : même raison que
     /// `isDark` juste au-dessus.
     var isIntentionalProgrammaticScroll = false
+    var programmaticScrollRelease: Task<Void, Never>?
+
+    func beginIntentionalProgrammaticScroll() {
+        programmaticScrollRelease?.cancel()
+        programmaticScrollRelease = nil
+        isIntentionalProgrammaticScroll = true
+    }
 
     /// La frontière gelée du séparateur de premier non-lu (#7222) — voir
     /// `MessageListViewController+UnreadSeparator.swift`. `internal`, pas
@@ -995,7 +934,7 @@ final class MessageListViewController: UIViewController {
         // fois la fenêtre posée — même contrat que la cible absente.
         guard collectionView.numberOfSections > 0,
               indexPath.item < collectionView.numberOfItems(inSection: 0) else { return }
-        isIntentionalProgrammaticScroll = true
+        beginIntentionalProgrammaticScroll()
         scrollSettleTarget = ScrollToMessageSettleLaw.PendingTarget(localId: localId, strong: strong)
         collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
         scheduleScrollSettleFallback()

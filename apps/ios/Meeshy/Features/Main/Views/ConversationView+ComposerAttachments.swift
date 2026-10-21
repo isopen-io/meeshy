@@ -111,7 +111,7 @@ extension ConversationView {
     func handleAttachmentPreviewTap(_ attachment: MessageAttachment) {
         switch attachment.type {
         case .image, .video:
-            openRetouchSeries(focusId: attachment.id)
+            openPieceRetouch(attachment.id)
         case .audio:
             if let url = composerState.pendingMediaFiles[attachment.id] {
                 scrollState.audioToEdit = PendingAudioEdit(id: attachment.id, url: url)
@@ -152,7 +152,7 @@ extension ConversationView {
         MediaKindLabel.attachmentLabel(for: attachment)
     }
 
-    // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, handlePhotoSelection, generateVideoThumbnail, handleFileImport, mimeTypeForURL, getFileSize, handleCameraCapture, sendMessage
+    // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, handlePhotoSelection, generateVideoThumbnail, handleFileImport, getFileSize, handleCameraCapture, sendMessage
 }
 
 // MARK: - Tuile d'un audio en attente

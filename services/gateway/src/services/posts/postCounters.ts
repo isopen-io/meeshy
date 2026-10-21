@@ -41,6 +41,24 @@ export const POST_COUNTERS = [
 export type PostCounter = (typeof POST_COUNTERS)[number];
 
 /**
+ * Ce qu'une story « revue comme neuve » remet à zéro (#11065) — l'édition de son
+ * contenu et sa republication, qui suppriment ses `PostView` et ses
+ * `PostImpression`. TOUS les compteurs de vues et d'impressions, parts anonymes
+ * et personnes distinctes comprises : en oublier un laisse un compteur plein
+ * au-dessus d'une liste vide.
+ */
+export const STORY_VIEW_RESET = {
+  viewCount: 0,
+  impressionCount: 0,
+  uniqueViewCount: 0,
+  anonymousViewCount: 0,
+  anonymousUniqueViewCount: 0,
+  anonymousImpressionCount: 0,
+  viewCountByProvenance: {},
+  listingViewCountByOrigin: {},
+} as const;
+
+/**
  * Les VENTILATIONS d'un post (#10483) : des sous-documents `{ clé: n }` dont
  * chaque clé s'incrémente — engagements d'ouverture par origine, vues par
  * provenance, vues de listing par origine. Une clé absente, un sous-document

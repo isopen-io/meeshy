@@ -109,3 +109,15 @@ struct HardwareReturnModifiers: ViewModifier {
         }
     }
 }
+
+/// Un relais par composer (`SceneActionRelay`) : l'action publiée reste la
+/// même d'un rendu à l'autre, et envoie toujours avec la dernière fermeture.
+struct PublishesComposerSend: ViewModifier {
+    let send: () -> Void
+    @State private var relay = SceneActionRelay()
+
+    func body(content: Content) -> some View {
+        relay.perform = send
+        return content.focusedValue(\.meeshySendMessage, relay.action)
+    }
+}

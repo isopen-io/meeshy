@@ -45,7 +45,9 @@ final class RecentMediaStripHeadTests: XCTestCase {
     }
 
     private func stripSource() throws -> String {
-        try source("Meeshy/Features/Main/Components/RecentMediaStrip.swift")
+        try ["RecentMediaStrip", "RecentMediaCell", "RecentMediaPreview"]
+            .map { try source("Meeshy/Features/Main/Components/\($0).swift") }
+            .joined(separator: "\n")
     }
 
     // MARK: - Taille de l'échantillon
@@ -117,7 +119,7 @@ final class RecentMediaStripHeadTests: XCTestCase {
             "L'aperçu vidéo ne doit plus être coupé"
         )
         XCTAssertTrue(
-            src.contains("MediaSessionCoordinator.shared.activatePlaybackSync"),
+            src.contains("MediaSessionCoordinator.shared.activateContentPlayback(.audible)"),
             "Sans session .playback l'aperçu reste muet interrupteur Silence enclenché"
         )
     }
@@ -139,7 +141,7 @@ final class RecentMediaStripHeadTests: XCTestCase {
     func test_videoPreview_silencesOtherPlayersBeforeArmingTheSession() throws {
         let src = try stripSource()
         let stop = try XCTUnwrap(src.range(of: "PlaybackCoordinator.shared.stopAll()"))
-        let arm = try XCTUnwrap(src.range(of: "MediaSessionCoordinator.shared.activatePlaybackSync"))
+        let arm = try XCTUnwrap(src.range(of: "MediaSessionCoordinator.shared.activateContentPlayback"))
         XCTAssertTrue(stop.lowerBound < arm.lowerBound)
     }
 

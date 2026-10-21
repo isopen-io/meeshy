@@ -28,3 +28,13 @@
   --color-admin-danger-ink: #b91c1c;
   --color-admin-info-ink: #1d4ed8;
 }
+
+/* LE TITRE D'UNE MODALE D'ADMINISTRATION (#11410) — la feuille commune titre en `subhead`
+ * (13 px), plus petit que le corps (15 px) qu'il annonce : lu sur la capture de la recette,
+ * « Supprimer ce compte ? » s'effaçait sous sa propre phrase. L'administration, qui ne pose
+ * que des gestes lourds dans ses modales, titre en `title3` ; le reste de l'application garde
+ * le dessin commun. */
+[data-admin-shell] [data-sheet-title] {
+  font-size: var(--ios-font-title3);
+  line-height: 1.25;
+}

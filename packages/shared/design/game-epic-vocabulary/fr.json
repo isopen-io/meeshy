@@ -1,0 +1,339 @@
+{
+  "$doc": "LE LEXIQUE DE L’ÉPOPÉE, FRANÇAIS — la source (#11173 ; conception docs/superpowers/specs/2026-10-20-epopee-du-jeu-design.md § 3.1 et § 4 ; glossaire docs/product/epopee/glossaire/fr.md). Format : docs/product/epopee/glossaire/README.md. Lu par la garde web (apps/web/src/lib/game/epic-vocabulary.test.ts) et, demain, par la garde iOS (#11179). `banned` : les motifs qu’AUCUNE valeur des catalogues du jeu ne porte, paramètres {…} mis de côté ; `names` : la valeur exacte de chaque clé de nom.",
+  "language": "fr",
+  "banned": [
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])augment\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "grandir, nourrir, s’éveiller, briller plus fort"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])compteurs?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "le nom du concept : « ta gloire », « ta Flamme »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])valeurs?(?:\\s+réelles?)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« ta lumière »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])convertibles?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« ta lumière »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])en\\s+poche(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« ta lumière »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])potentiel(?:le)?s?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "rien : on dit ce qu’on possède"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])dettes?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« une ombre voile N étincelles de ta lumière » (l’Ombre)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])records?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« reçues depuis toujours », « ta plus haute lumière », « ta plus longue Flamme », « frappées depuis toujours »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])encore(?![\\p{L}\\p{N}])[^.!?:;]*(?<![\\p{L}\\p{N}])avant(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "en petit, « N jusqu’à X »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])co[uû]t\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "une phrase : « elle fige N étincelles de ta lumière » ; le calcul va dans les règles"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])restera(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "rien : aucune soustraction sur une fiche"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])barèmes?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« chaque geste fait jaillir les siennes »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])prix\\s+de\\s+base(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "rien sur une fiche : le calcul vit dans les règles",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])pourcentages?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "rien sur une fiche : le calcul vit dans les règles",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])facteurs?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "rien sur une fiche : le calcul vit dans les règles",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])ligues?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« joute »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])rangs?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« place » (la joute parle de place ; le rang est le nom du héros)",
+      "keys": [
+        "game.league.",
+        "game.state.league.",
+        "game.guide.moment.league",
+        "game.trophy.league",
+        "game.photo.title.league",
+        "game.archive.week."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])pseudonymes?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« nom de joute »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])duos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« alliance »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])saisons?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« voyage » ; ses étoiles sont des « pas », ses étapes des « haltes »"
+    },
+    {
+      "pattern": "(?<!d[’'])(?<![\\p{L}\\p{N}])étoiles?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« pas » (le voyage) ; « âges » (la renaissance) ; « paliers » (une médaille)",
+      "keys": [
+        "game.season.",
+        "game.prestige.",
+        "game.fact.strides",
+        "game.fact.rebirths",
+        "game.badge.stars_label"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])prestiges?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« renaissance »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])gel(?:s|é|ée|és|ées|er)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« Veilleuse »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])séries?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« Flamme »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])missions?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« le rêve » ; une mission est un « acte »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])coffres?\\s+du\\s+jour(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« l’Offrande »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])succès(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« hauts faits »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])badges?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« médailles »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])carnets?(?![\\p{L}\\p{N}])(?!\\s+des\\s+règles)",
+      "flags": "iu",
+      "instead": "« la Chronique » (seul le carnet des règles garde son nom)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])constellations?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« le ciel des aïeux » (Constellation ne nomme plus que le neuvième état de la lumière)",
+      "except": [
+        "game.tier.constellation"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])célébrations?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« signe des aïeux »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])étapes?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« épreuve » (les dix niveaux), « halte » (le voyage) ; « étape » ne nomme plus que l’accueil",
+      "keys": [
+        "game."
+      ],
+      "except": [
+        "game.guide.step_of",
+        "game.rules.section_steps"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])trésors?(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "« l’Héritage » (le Trésor, avec sa majuscule, ne nomme plus que la cinquième réserve)"
+    },
+    {
+      "pattern": "\\+\\s*\\S+\\s+Gloire(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "« +250 de gloire » : minuscule dans une phrase, liée par « de »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:vos|votre)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« ton », « ta », « tes » : le jeu tutoie"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])flammes?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« N jours » sous 🔥 : la Flamme est celle du héros, jamais d’une conversation",
+      "keys": [
+        "engagement.pill.streak."
+      ]
+    }
+  ],
+  "names": {
+    "game.tier.etincelle": "Étincelle",
+    "game.tier.lueur": "Lueur",
+    "game.tier.lumiere": "Clarté",
+    "game.tier.eclat": "Éclat",
+    "game.tier.rayon": "Rayon",
+    "game.tier.aurore": "Aurore",
+    "game.tier.comete": "Comète",
+    "game.tier.etoile": "Étoile",
+    "game.tier.constellation": "Constellation",
+    "game.tier.galaxie": "Galaxie",
+    "game.tier.nebuleuse": "Nébuleuse",
+    "game.tier.pulsar": "Pulsar",
+    "game.tier.quasar": "Quasar",
+    "game.tier.supernova": "Supernova",
+    "game.tier.magnetar": "Magnétar",
+    "game.tier.amas": "Amas",
+    "game.tier.superamas": "Superamas",
+    "game.tier.cosmos": "Cosmos",
+    "game.tier.infini": "Infini",
+    "game.tier.singularite": "Singularité",
+    "game.rank.murmure": "Murmure",
+    "game.rank.echo": "Écho",
+    "game.rank.voix": "Voix",
+    "game.rank.conteur": "Conteur",
+    "game.rank.passeur": "Passeur",
+    "game.rank.polyglotte": "Polyglotte",
+    "game.rank.ambassadeur": "Ambassadeur",
+    "game.rank.orateur": "Orateur",
+    "game.rank.oracle": "Oracle",
+    "game.rank.legende": "Légende",
+    "game.rank.mythe": "Mythe",
+    "game.treasury.bourse": "Bourse",
+    "game.treasury.escarcelle": "Escarcelle",
+    "game.treasury.coffret": "Coffret",
+    "game.treasury.coffre": "Coffre",
+    "game.treasury.tresor": "Trésor",
+    "game.treasury.reserve": "Réserve",
+    "game.flame.form.braise": "Braise",
+    "game.flame.form.flamme": "Flamme",
+    "game.flame.form.brasier": "Brasier",
+    "game.flame.form.astre": "Astre",
+    "game.flame.form.soleil": "Soleil",
+    "game.league.name.quartz": "Quartz",
+    "game.league.name.ambre": "Ambre",
+    "game.league.name.jade": "Jade",
+    "game.league.name.saphir": "Saphir",
+    "game.league.name.rubis": "Rubis",
+    "game.league.name.amethyste": "Améthyste",
+    "game.league.name.diamant": "Diamant",
+    "game.league.name.prisme": "Prisme",
+    "game.edition.silver": "argent",
+    "game.edition.gold": "or",
+    "game.edition.prism": "prisme",
+    "game.difficulty.easy": "Acte I",
+    "game.difficulty.medium": "Acte II",
+    "game.difficulty.hard": "Acte III",
+    "game.difficulty.gold": "Acte d’or",
+    "game.material.copper": "Cuivre",
+    "game.material.bronze": "Bronze",
+    "game.material.silver": "Argent",
+    "game.material.gold": "Or",
+    "game.material.platinum": "Platine",
+    "game.material.obsidian": "Obsidienne",
+    "game.material.prism": "Prisme",
+    "game.concept.level.name": "La Lumière",
+    "game.concept.points.name": "Étincelles",
+    "game.concept.meesh.name": "L’Héritage",
+    "game.concept.glory.name": "Le Rang",
+    "game.concept.flame.name": "La Flamme",
+    "game.concept.missions.name": "Le Rêve",
+    "game.concept.league.name": "La Joute",
+    "game.concept.season.name": "Le Voyage",
+    "game.concept.prestige.name": "La Renaissance",
+    "game.concept.elans.name": "Élans",
+    "game.concept.badges.name": "Médailles",
+    "game.concept.defis.name": "Défis",
+    "game.concept.succes.name": "Hauts faits",
+    "game.concept.showcase.name": "Trophées",
+    "game.concept.atlas.name": "L’Atlas",
+    "game.rules.concept.level.name": "La Lumière",
+    "game.rules.concept.points.name": "Étincelles",
+    "game.rules.concept.meesh.name": "La Meesh",
+    "game.rules.concept.glory.name": "Le Rang",
+    "game.rules.concept.flame.name": "La Flamme",
+    "game.rules.concept.missions.name": "Le Rêve",
+    "game.rules.concept.league.name": "La Joute",
+    "game.rules.concept.season.name": "Le Voyage",
+    "game.rules.concept.prestige.name": "La Renaissance",
+    "game.rules.concept.elans.name": "Élans",
+    "game.rules.concept.badges.name": "Médailles",
+    "game.rules.concept.defis.name": "Défis",
+    "game.rules.concept.succes.name": "Hauts faits",
+    "game.rules.concept.showcase.name": "Trophées",
+    "game.rules.concept.atlas.name": "L’Atlas",
+    "game.rules.concept.chest.name": "L’Offrande",
+    "game.rules.concept.treasury.name": "L’Héritage",
+    "game.rules.concept.steps.name": "Les épreuves",
+    "game.rules.concept.duo.name": "L’Alliance",
+    "game.chest.title": "L’Offrande",
+    "game.notebook.page_title": "La Chronique",
+    "game.door.notebook": "La Chronique",
+    "game.constellation.title": "Le ciel des aïeux",
+    "game.league.title": "Joute",
+    "game.duo.title": "Alliance",
+    "game.season.title": "Voyage",
+    "game.prestige.title": "Renaissance",
+    "game.gauge.level": "Lumière",
+    "game.gauge.rank": "Rang",
+    "game.gauge.treasury": "Héritage",
+    "game.gauge.flame": "Flamme",
+    "game.fact.strides": "Pas",
+    "game.fact.rebirths": "Renaissances",
+    "game.badge.stars_label": "Paliers",
+    "game.badge.ladder_title": "Les sept paliers"
+  }
+}

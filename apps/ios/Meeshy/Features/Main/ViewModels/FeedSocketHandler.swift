@@ -23,6 +23,7 @@ final class FeedSocketHandler {
     private let socialSocket: SocialSocketProviding
     private let currentUserIdProvider: @MainActor () -> String?
     private var cancellables = Set<AnyCancellable>()
+    private var eventLane: OrderedEventLane?
 
     convenience init(
         persistence: FeedPersistenceActor,
@@ -51,54 +52,53 @@ final class FeedSocketHandler {
     /// Armé UNE fois au niveau app (`RootView.task`) et jamais désarmé : la
     /// persistance disque ne doit dépendre d'aucun écran monté. La garde le
     /// rend idempotent — un second appel (setup de `FeedView`, remontage) ne
-    /// duplique aucun sink.
+    /// duplique aucun abonnement. Tous les événements qui écrivent entrent dans
+    /// UNE file ordonnée (#11047) : une suppression reçue après une création ne
+    /// peut plus être appliquée avant elle.
     func arm() {
         guard cancellables.isEmpty else { return }
-        // Post events
+        let lane = OrderedEventLane()
+        lane.store(in: &cancellables)
+        eventLane = lane
+        armPostEvents(on: lane)
+        armCommentEvents(on: lane)
+        armReactionEvents(on: lane)
+    }
+
+    func disarm() {
+        cancellables.removeAll()
+        eventLane = nil
+    }
+
+    /// Barrière des tests : rend la main quand tout événement reçu avant
+    /// l'appel est appliqué.
+    func awaitPendingEvents() async {
+        await eventLane?.barrier()
+    }
+
+    private func armPostEvents(on lane: OrderedEventLane) {
         socialSocket.postCreated
-            .sink { [weak self] payload in
-                Task { await self?.handlePostUpsert(payload.post) }
-            }
+            .relay(through: lane) { [weak self] in await self?.handlePostUpsert($0.post) }
             .store(in: &cancellables)
 
         socialSocket.postUpdated
-            .sink { [weak self] post in
-                Task { await self?.handlePostUpsert(post) }
-            }
+            .relay(through: lane) { [weak self] in await self?.handlePostUpsert($0) }
             .store(in: &cancellables)
 
         socialSocket.postDeleted
-            .sink { [weak self] postId in
-                Task { try? await self?.persistence.deletePost(id: postId) }
-            }
+            .relay(through: lane) { [weak self] in await self?.handlePostDeleted(id: $0) }
             .store(in: &cancellables)
 
         socialSocket.postLiked
-            .sink { [weak self] data in
-                Task { await self?.handlePostLiked(data) }
-            }
+            .relay(through: lane) { [weak self] in await self?.handlePostLiked($0) }
             .store(in: &cancellables)
 
         socialSocket.postUnliked
-            .sink { [weak self] data in
-                Task { await self?.handlePostUnliked(data) }
-            }
+            .relay(through: lane) { [weak self] in await self?.handlePostUnliked($0) }
             .store(in: &cancellables)
 
         socialSocket.postReposted
-            .sink { [weak self] data in
-                // `post:reposted` n'est pas typé : une story repostée y arrive
-                // et s'insérait dans `feed_posts`, la table que le secours de
-                // pagination hors-ligne (`FeedViewModel.loadMoreIfNeeded`)
-                // mappe TELLE QUELLE en `FeedPost`. Le chemin socket EN DIRECT
-                // applique déjà ce partage (`FeedViewModel`) : la persistance
-                // doit le partager, sinon le tray reparaît dans le fil dès que
-                // le réseau tombe. Les lignes STORY DÉJÀ persistées ne sont pas
-                // purgées par cette garde — un résidu après mise à jour n'est
-                // donc pas un échec du filtre.
-                guard !data.repost.belongsToStoryTray else { return }
-                Task { await self?.handlePostUpsert(data.repost) }
-            }
+            .relay(through: lane) { [weak self] in await self?.handlePostReposted($0) }
             .store(in: &cancellables)
 
         socialSocket.postBookmarked
@@ -107,29 +107,22 @@ final class FeedSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Comment events
+        socialSocket.postTranslationUpdated
+            .relay(through: lane) { [weak self] in await self?.handlePostTranslationUpdated($0) }
+            .store(in: &cancellables)
+    }
+
+    private func armCommentEvents(on lane: OrderedEventLane) {
         socialSocket.commentAdded
-            .sink { [weak self] data in
-                Task { await self?.handleCommentAdded(data) }
-            }
+            .relay(through: lane) { [weak self] in await self?.handleCommentAdded($0) }
             .store(in: &cancellables)
 
         socialSocket.commentDeleted
-            .sink { [weak self] data in
-                Task {
-                    try? await self?.persistence.deleteComment(id: data.commentId)
-                    try? await self?.persistence.updateCommentCount(
-                        postId: data.postId,
-                        count: data.commentCount
-                    )
-                }
-            }
+            .relay(through: lane) { [weak self] in await self?.handleCommentDeleted($0) }
             .store(in: &cancellables)
 
         socialSocket.commentLiked
-            .sink { [weak self] data in
-                Task { await self?.handleCommentLiked(data) }
-            }
+            .relay(through: lane) { [weak self] in await self?.handleCommentLiked($0) }
             .store(in: &cancellables)
 
         // Jumelle DESCENDANTE : même écriture, parce que les deux charges
@@ -137,71 +130,43 @@ final class FeedSocketHandler {
         // commentaire ne savait que monter — et comme la valeur est PERSISTÉE
         // ici, le compte gonflé survivait au redémarrage jusqu'au prochain REST.
         socialSocket.commentUnliked
-            .sink { [weak self] data in
-                Task { await self?.handleCommentLiked(data) }
-            }
-            .store(in: &cancellables)
-
-        // Comment emoji reactions — persist the ABSOLUTE per-emoji count so it
-        // survives a cold start. The live UI (PostDetailViewModel) only tracks the
-        // current user's heart state in-memory; without this bridge the aggregate
-        // count reverted to the last REST snapshot on app restart. Mirror of the
-        // `post:reaction-*` persistence path above.
-        socialSocket.commentReactionAdded
-            .sink { [weak self] event in
-                Task { await self?.handleCommentReaction(event) }
-            }
-            .store(in: &cancellables)
-
-        socialSocket.commentReactionRemoved
-            .sink { [weak self] event in
-                Task { await self?.handleCommentReaction(event) }
-            }
-            .store(in: &cancellables)
-
-        socialSocket.commentReactionSync
-            .sink { [weak self] event in
-                Task { await self?.handleCommentReactionSync(event) }
-            }
+            .relay(through: lane) { [weak self] in await self?.handleCommentLiked($0) }
             .store(in: &cancellables)
 
         // Pipeline audio d'un média de commentaire terminé (transcription
-        // Whisper + variantes TTS). Les deux surfaces qui l'écoutaient
-        // (PostDetailViewModel, FeedCommentsSheet) ne muteraient que leur état
-        // en mémoire : l'enrichissement disparaissait à la fermeture de
-        // l'écran et ne revenait qu'au prochain aller-retour REST.
+        // Whisper + variantes TTS). Les surfaces qui l'écoutaient ne muteraient
+        // que leur état en mémoire : l'enrichissement disparaissait à la
+        // fermeture de l'écran et ne revenait qu'au prochain aller-retour REST.
         socialSocket.commentMediaUpdated
-            .sink { [weak self] data in
-                Task { await self?.handleCommentMediaUpdated(data) }
-            }
-            .store(in: &cancellables)
-
-        // Reaction events (emoji, non-heart) — persist to GRDB so the count
-        // survives an app restart. The live UI already updates in-session via
-        // FeedViewModel / PostDetailViewModel; without this bridge the cached
-        // count was stale on cold start.
-        socialSocket.postReactionAdded
-            .sink { [weak self] event in
-                Task { await self?.handlePostReaction(event) }
-            }
-            .store(in: &cancellables)
-
-        socialSocket.postReactionRemoved
-            .sink { [weak self] event in
-                Task { await self?.handlePostReaction(event) }
-            }
-            .store(in: &cancellables)
-
-        // Translation events
-        socialSocket.postTranslationUpdated
-            .sink { [weak self] data in
-                Task { await self?.handlePostTranslationUpdated(data) }
-            }
+            .relay(through: lane) { [weak self] in await self?.handleCommentMediaUpdated($0) }
             .store(in: &cancellables)
     }
 
-    func disarm() {
-        cancellables.removeAll()
+    // Reactions emoji (non-heart) — persistées dans GRDB pour que le compte
+    // survive à un redémarrage. L'UI vivante se met déjà à jour en session via
+    // FeedViewModel / PostDetailViewModel ; sans ce pont le compte en cache était
+    // périmé au démarrage à froid. Pour les commentaires, on persiste le compte
+    // ABSOLU par emoji (miroir du chemin `post:reaction-*`).
+    private func armReactionEvents(on lane: OrderedEventLane) {
+        socialSocket.commentReactionAdded
+            .relay(through: lane) { [weak self] in await self?.handleCommentReaction($0) }
+            .store(in: &cancellables)
+
+        socialSocket.commentReactionRemoved
+            .relay(through: lane) { [weak self] in await self?.handleCommentReaction($0) }
+            .store(in: &cancellables)
+
+        socialSocket.commentReactionSync
+            .relay(through: lane) { [weak self] in await self?.handleCommentReactionSync($0) }
+            .store(in: &cancellables)
+
+        socialSocket.postReactionAdded
+            .relay(through: lane) { [weak self] in await self?.handlePostReaction($0) }
+            .store(in: &cancellables)
+
+        socialSocket.postReactionRemoved
+            .relay(through: lane) { [weak self] in await self?.handlePostReaction($0) }
+            .store(in: &cancellables)
     }
 
     // MARK: - Post Handlers
@@ -209,6 +174,22 @@ final class FeedSocketHandler {
     private func handlePostUpsert(_ post: APIPost) async {
         guard let record = PostRecord(from: post) else { return }
         try? await persistence.insertPost(record)
+    }
+
+    private func handlePostDeleted(id postId: String) async {
+        try? await persistence.deletePost(id: postId)
+    }
+
+    /// `post:reposted` n'est pas typé : une story repostée y arrive et
+    /// s'insérait dans `feed_posts`, la table que le secours de pagination
+    /// hors-ligne (`FeedViewModel.loadMoreIfNeeded`) mappe TELLE QUELLE en
+    /// `FeedPost`. Le chemin socket EN DIRECT applique déjà ce partage : la
+    /// persistance doit le partager, sinon le tray reparaît dans le fil dès que
+    /// le réseau tombe. Les lignes STORY DÉJÀ persistées ne sont pas purgées par
+    /// cette garde — un résidu après mise à jour n'est donc pas un échec du filtre.
+    private func handlePostReposted(_ data: SocketPostRepostedData) async {
+        guard !data.repost.belongsToStoryTray else { return }
+        await handlePostUpsert(data.repost)
     }
 
     // stores-03 — isLikedByMe n'a de sens que pour l'utilisateur courant : le
@@ -240,6 +221,11 @@ final class FeedSocketHandler {
     private func handleCommentAdded(_ data: SocketCommentAddedData) async {
         guard let record = CommentRecord(from: data.comment, postId: data.postId) else { return }
         try? await persistence.insertComment(record)
+        try? await persistence.updateCommentCount(postId: data.postId, count: data.commentCount)
+    }
+
+    private func handleCommentDeleted(_ data: SocketCommentDeletedData) async {
+        try? await persistence.deleteComment(id: data.commentId)
         try? await persistence.updateCommentCount(postId: data.postId, count: data.commentCount)
     }
 
@@ -298,11 +284,11 @@ final class FeedSocketHandler {
     // MARK: - Translation Handler
 
     private func handlePostTranslationUpdated(_ data: SocketPostTranslationUpdatedData) async {
-        try? await persistence.upsertPostTranslation(
+        await bestEffort("feedSocketHandler.postTranslation.upsert", category: .grdb) { try await persistence.upsertPostTranslation(
             postId: data.postId,
             language: data.language,
             translatedText: data.translation.text
-        )
+        ) }
     }
 }
 

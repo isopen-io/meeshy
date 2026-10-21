@@ -12,134 +12,21 @@ import os
 // Discovered via the Task 1 spike (2026-07-10): a bare `private let` here
 // made the tap closure's log call fail to compile once the closure was
 // correctly typed `@Sendable` (see below) — same fix applied there.
-private nonisolated let callsLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
-
-// MARK: - Transcription Segment
-
-struct TranscriptionSegment: Identifiable, Equatable {
-    let id: UUID
-    /// Identifiant de journal stable, partagé entre transports : minté à la
-    /// capture par le device du locuteur, il voyage sur le data channel
-    /// WebRTC ET dans `call:transcription-segment` → `call:translated-segment`.
-    /// C'est la clé de fusion (`upsertRemoteSegment`) qui évite de dupliquer
-    /// une ligne quand le même segment arrive par les deux chemins. `nil`
-    /// pour les segments d'anciens pairs/gateways qui ne l'émettent pas.
-    let wireId: String?
-    let text: String
-    let speakerId: String
-    /// Nom d'affichage du locuteur tel que transporté par le wire — estampillé
-    /// par le gateway sur le chemin socket (anti-usurpation), déclaratif sur
-    /// le data channel. L'affichage préfère TOUJOURS le nom résolu localement
-    /// depuis le roster de l'appel ; ce champ n'est qu'un fallback.
-    let speakerDisplayName: String?
-    let startTime: TimeInterval
-    let endTime: TimeInterval
-    let isFinal: Bool
-    let confidence: Double
-    let language: String
-    let translatedText: String?
-    let translatedLanguage: String?
-    /// Wall-clock capture time — LOCAL segments stamp it when the ASR result
-    /// arrives, REMOTE segments stamp it on socket receipt (see
-    /// `CallManager.makeTranscriptionSegment`). Used for chronological
-    /// ordering and for the "since call start" timestamp shown per row —
-    /// `startTime`/`endTime` are ASR-buffer-relative (they reset every time
-    /// `CallTranscriptionService.rotateRecognitionRequest` rotates the
-    /// recognition request) and are unsuitable for either. No default: every
-    /// call site must decide this deliberately rather than inherit a stale
-    /// `Date()` evaluated at type-definition time.
-    let capturedAt: Date
-
-    init(
-        id: UUID,
-        wireId: String? = nil,
-        text: String,
-        speakerId: String,
-        speakerDisplayName: String? = nil,
-        startTime: TimeInterval,
-        endTime: TimeInterval,
-        isFinal: Bool,
-        confidence: Double,
-        language: String,
-        translatedText: String? = nil,
-        translatedLanguage: String? = nil,
-        capturedAt: Date
-    ) {
-        self.id = id
-        self.wireId = wireId
-        self.text = text
-        self.speakerId = speakerId
-        self.speakerDisplayName = speakerDisplayName
-        self.startTime = startTime
-        self.endTime = endTime
-        self.isFinal = isFinal
-        self.confidence = confidence
-        self.language = language
-        self.translatedText = translatedText
-        self.translatedLanguage = translatedLanguage
-        self.capturedAt = capturedAt
-    }
-}
-
-// MARK: - Transcription Permission
-
-enum TranscriptionPermission: Equatable {
-    case notDetermined
-    case authorized
-    case denied
-    case restricted
-}
-
-// MARK: - Transcription Error
-
-enum TranscriptionError: LocalizedError, Equatable {
-    case permissionDenied
-    case recognizerUnavailable(language: String)
-    case onDeviceNotSupported(language: String)
-    case recognitionFailed(underlying: Error)
-    case audioEngineFailed(underlying: Error)
-    /// Le micro n'a plus de format exploitable — route d'entrée disparue,
-    /// session désactivée, matériel en cours de reconfiguration. Distincte
-    /// d'`audioEngineFailed` : rien n'a échoué, on a REFUSÉ d'appeler
-    /// AVAudioEngine, parce que l'appeler aurait levé une exception ObjC
-    /// irrattrapable (voir `AudioTapFormatReadiness`, #7002).
-    case tapFormatUnavailable(sampleRate: Double, channelCount: UInt32)
-
-    var errorDescription: String? {
-        switch self {
-        case .permissionDenied:
-            return "Speech recognition permission denied"
-        case .recognizerUnavailable(let language):
-            return "Speech recognizer unavailable for language: \(language)"
-        case .onDeviceNotSupported(let language):
-            return "On-device recognition not supported for language: \(language)"
-        case .recognitionFailed(let error):
-            return "Recognition failed: \(error.localizedDescription)"
-        case .audioEngineFailed(let error):
-            return "Local audio capture failed: \(error.localizedDescription)"
-        case .tapFormatUnavailable(let sampleRate, let channelCount):
-            return "Microphone format unavailable: \(sampleRate) Hz / \(channelCount) ch"
-        }
-    }
-
-    static func == (lhs: TranscriptionError, rhs: TranscriptionError) -> Bool {
-        lhs.errorDescription == rhs.errorDescription
-    }
-}
+private nonisolated let callsLogger = MeeshyLog.logger(.calls)
 
 // MARK: - Protocol
 
 @MainActor
 protocol CallTranscriptionServiceProviding {
-    var segments: [TranscriptionSegment] { get }
+    var segments: [CallTranscriptionSegment] { get }
     var isTranscribing: Bool { get }
     var permission: TranscriptionPermission { get }
     var lastError: TranscriptionError? { get }
     func startTranscribing(callId: String, localLanguage: String, localUserId: String, localDisplayName: String)
     func stopTranscribing()
     func requestPermission() async -> TranscriptionPermission
-    func receiveTranslatedSegment(_ segment: TranscriptionSegment)
-    func receivePeerEntry(_ segment: TranscriptionSegment)
+    func receiveTranslatedSegment(_ segment: CallTranscriptionSegment)
+    func receivePeerEntry(_ segment: CallTranscriptionSegment)
 }
 
 // MARK: - Call Transcription Service
@@ -165,7 +52,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         static let persistedSegmentCeiling = CallTranscriptJournal.ceiling
     }
 
-    @Published private(set) var segments: [TranscriptionSegment] = []
+    @Published private(set) var segments: [CallTranscriptionSegment] = []
     @Published private(set) var isTranscribing = false
     @Published private(set) var permission: TranscriptionPermission = .notDetermined
     @Published private(set) var lastError: TranscriptionError?
@@ -177,7 +64,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     /// #8579 — l'historique COMPLET de l'appel, sans troncature (plafond
     /// mémoire `CallTranscriptJournal.ceiling`), trié par heure de capture.
-    var displayedSegments: [TranscriptionSegment] {
+    var displayedSegments: [CallTranscriptionSegment] {
         segments
     }
 
@@ -199,12 +86,12 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// reste émis systématiquement (traduction + fallback) ; le pair fusionne
     /// par `wireId`.
     var sendPeerEntry: ((DataChannelTranscriptEntry) -> Void)?
-    private var allSegments: [TranscriptionSegment] = []
+    private var allSegments: [CallTranscriptionSegment] = []
     /// Full-call accumulator for local persistence at call end — append-only,
     /// NOT re-sorted per append (unlike `allSegments`/`segments`, which drive
     /// the live UI and must stay cheap to re-render), bounded only by
     /// `Constants.persistedSegmentCeiling`.
-    private var persistedSegments: [TranscriptionSegment] = []
+    private var persistedSegments: [CallTranscriptionSegment] = []
 
     private let audioEngine = AVAudioEngine()
     private nonisolated static let engineTeardownQueue = DispatchQueue(label: "me.meeshy.calls.transcription-engine-teardown")
@@ -237,7 +124,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         isTranscribing = value
     }
 
-    var persistedSegmentsForTesting: [TranscriptionSegment] { persistedSegments }
+    var persistedSegmentsForTesting: [CallTranscriptionSegment] { persistedSegments }
 
     /// Test-only seam: sets the active call identity without going through
     /// `startTranscribing`, which requires a real `SFSpeechRecognizer` +
@@ -716,7 +603,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // two independently detached callbacks. Re-stamping `Date()` at
         // application time could sort a later-arriving-but-earlier-applied
         // result ahead of one that truly arrived first (see appendSegment's
-        // capturedAt-based sort and TranscriptionSegment's doc comment).
+        // capturedAt-based sort and CallTranscriptionSegment's doc comment).
         let capturedAt = Date()
         let isFinal = result.isFinal
         let text = result.bestTranscription.formattedString
@@ -769,7 +656,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // fusionner la traduction serveur, sans jamais dupliquer de ligne.
         let wireId = currentUtteranceWireId ?? UUID().uuidString.lowercased()
         currentUtteranceWireId = wireId
-        let segment = TranscriptionSegment(
+        let segment = CallTranscriptionSegment(
             id: UUID(), wireId: wireId, text: text, speakerId: speakerId,
             startTime: Double(startMs) / 1000, endTime: Double(endMs) / 1000,
             isFinal: isFinal, confidence: confidence, language: language,
@@ -873,24 +760,24 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// Segment relayé par le gateway (`call:translated-segment`) — si la même
     /// entrée est déjà arrivée en P2P par le data channel, la traduction vient
     /// ENRICHIR la ligne existante (fusion par `wireId`), jamais la dupliquer.
-    func receiveTranslatedSegment(_ segment: TranscriptionSegment) {
+    func receiveTranslatedSegment(_ segment: CallTranscriptionSegment) {
         upsertRemoteSegment(segment)
     }
 
     /// Entrée de journal arrivée en P2P direct par le data channel WebRTC —
     /// même sink de fusion que le relais socket : premier arrivé crée la
     /// ligne, le suivant l'enrichit.
-    func receivePeerEntry(_ segment: TranscriptionSegment) {
+    func receivePeerEntry(_ segment: CallTranscriptionSegment) {
         upsertRemoteSegment(segment)
     }
 
-    private func upsertRemoteSegment(_ segment: TranscriptionSegment) {
+    private func upsertRemoteSegment(_ segment: CallTranscriptionSegment) {
         guard let wireId = segment.wireId,
               let index = allSegments.firstIndex(where: { $0.wireId == wireId }) else {
             appendSegment(segment)
             return
         }
-        let merged = mergedSegment(existing: allSegments[index], incoming: segment)
+        let merged = CallTranscriptMergeRules.merged(existing: allSegments[index], incoming: segment)
         let others = Array(allSegments[..<index]) + Array(allSegments[(index + 1)...])
         allSegments = CallTranscriptJournal.inserting(merged, into: others)
         segments = allSegments
@@ -908,76 +795,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         }
     }
 
-    /// Fusion d'un même énoncé (`wireId` partagé) à travers ses révisions et
-    /// ses transports — miroir de `mergeEntries` dans
-    /// `packages/shared/utils/call-transcript.ts` :
-    /// 1. existant PARTIEL → la révision entrante REMPLACE le texte (stream
-    ///    de corrections du moteur de l'auteur) ; le final clôt par ce chemin ;
-    /// 2. existant FINAL + entrant partiel → révision périmée en retard
-    ///    (aucun ordre garanti entre les deux transports), ignorée ;
-    /// 3. final + final (data channel puis relais traduit) → le texte
-    ///    original est conservé, traduction/nom manquant viennent enrichir.
-    /// Dans tous les cas `capturedAt` garde la valeur la plus ancienne (le
-    /// début de l'énoncé — l'heure de capture réelle, jamais la réception).
-    private func mergedSegment(
-        existing: TranscriptionSegment, incoming: TranscriptionSegment
-    ) -> TranscriptionSegment {
-        let displayName = existing.speakerDisplayName ?? incoming.speakerDisplayName
-        let capturedAt = min(existing.capturedAt, incoming.capturedAt)
-        if !existing.isFinal {
-            return TranscriptionSegment(
-                id: existing.id,
-                wireId: existing.wireId,
-                text: incoming.text,
-                speakerId: existing.speakerId,
-                speakerDisplayName: displayName,
-                startTime: incoming.startTime,
-                endTime: incoming.endTime,
-                isFinal: incoming.isFinal,
-                confidence: incoming.confidence,
-                language: incoming.language,
-                translatedText: incoming.translatedText ?? existing.translatedText,
-                translatedLanguage: incoming.translatedLanguage ?? existing.translatedLanguage,
-                capturedAt: capturedAt
-            )
-        }
-        guard incoming.isFinal else {
-            return TranscriptionSegment(
-                id: existing.id,
-                wireId: existing.wireId,
-                text: existing.text,
-                speakerId: existing.speakerId,
-                speakerDisplayName: displayName,
-                startTime: existing.startTime,
-                endTime: existing.endTime,
-                isFinal: true,
-                confidence: existing.confidence,
-                language: existing.language,
-                translatedText: existing.translatedText,
-                translatedLanguage: existing.translatedLanguage,
-                capturedAt: capturedAt
-            )
-        }
-        return TranscriptionSegment(
-            id: existing.id,
-            wireId: existing.wireId,
-            text: existing.text,
-            speakerId: existing.speakerId,
-            speakerDisplayName: displayName,
-            startTime: existing.startTime,
-            endTime: existing.endTime,
-            isFinal: true,
-            confidence: existing.confidence,
-            language: existing.language,
-            translatedText: incoming.translatedText ?? existing.translatedText,
-            translatedLanguage: incoming.translatedLanguage ?? existing.translatedLanguage,
-            capturedAt: capturedAt
-        )
-    }
-
     // MARK: - Private — Result Handling
 
-    private func appendSegment(_ segment: TranscriptionSegment) {
+    private func appendSegment(_ segment: CallTranscriptionSegment) {
         let others = allSegments.filter { !($0.speakerId == segment.speakerId && !$0.isFinal) }
         allSegments = CallTranscriptJournal.bounded(CallTranscriptJournal.inserting(segment, into: others))
         segments = allSegments

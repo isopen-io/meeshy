@@ -76,3 +76,17 @@ describe('commentMenuEntries — le menu « … » d’un commentaire (#8734, ju
     expect(entries(comment(), 'x', { canImage: false, postComposition: { imageable: true } })).toEqual(['copy', 'report']);
   });
 });
+
+describe('commentMenuEntries — « Retirer » le commentaire d’un autre (#11150)', () => {
+  const withRemove = (target: PostComment) =>
+    commentMenuEntries({ comment: target, viewerId: VIEWER, servedText: 'x', canCopy: true, canImage: false, canReport: true, canRemove: true });
+
+  test('la modération le voit sur le commentaire d’un autre, avant « Signaler »', () => {
+    expect(withRemove(comment())).toEqual(['copy', 'remove', 'report']);
+  });
+
+  test('jamais sur le sien, jamais sans la capacité', () => {
+    expect(withRemove(mine())).toEqual(['copy', 'edit', 'delete']);
+    expect(entries(comment())).not.toContain('remove');
+  });
+});

@@ -17,91 +17,6 @@ import MeeshySDK
 /// inside `body`. See `test_inspector_clipChanges_stateResyncs`.
 public struct ClipInspector: View {
 
-    // MARK: - Snapshot
-
-    public struct ClipSnapshot: Equatable, Sendable {
-        public enum Kind: String, Sendable, Equatable {
-            case video, audio, text, image, sticker
-            /// Pastille de LIEU — sa fiche ne porte que la fenêtre et le nom.
-            /// Sans ce cas, `TimelineInspectorHost.clipSnapshot` rendait `nil`,
-            /// et toute la chaîne du doigt se coupait trois appels plus haut :
-            /// pas de fiche ⇒ pas de sélection ⇒ pas de poignées de rognage
-            /// (#4840, moitié manquante).
-            case place
-        }
-        public let id: String
-        public let displayName: String
-        public let kind: Kind
-        public let startTime: Float
-        public let duration: Float
-        public let volume: Float
-        public let fadeInDuration: Float
-        public let fadeOutDuration: Float
-        public let isLooping: Bool
-        public let isBackground: Bool
-        /// Nom personnalisé de la piste (nil = utilise `displayName` par défaut).
-        public let name: String?
-        /// Place de la piste dans le PLAN. Le snapshot ne la transportait pas,
-        /// si bien que la fiche restituait le temps mais jamais l'espace : on
-        /// ne pouvait ni lire ni corriger une position au chiffre près.
-        public let transform: ClipTransform
-        /// Points d'automation du volume déjà posés sur ce clip.
-        public let volumeKeyframes: [VolumePoint]
-        /// L'atténuation automatique est coupée sur ce clip.
-        public let isDuckingDisabled: Bool
-        /// La slide porte un audio de fond. Sans lui, rien n'est atténué : la
-        /// bascule d'atténuation serait un contrôle sans effet.
-        public let slideHasBackgroundAudio: Bool
-        /// `true` quand `timing == nil` au modèle (O4 — le clip est un
-        /// FANTÔME, sa fenêtre suit la durée de la slide). `false` = une
-        /// fenêtre explicite a été posée (un bord tiré, typiquement) — c'est
-        /// alors que « Suivre la slide » (D3, revue totale U9) redevient
-        /// pertinente : la sortie de l'état doit être aussi évidente que son
-        /// entrée.
-        public let isFollowingSlide: Bool
-
-        /// Un point de la courbe de volume, tel que la fiche l'affiche.
-        ///
-        /// `absoluteTime` est l'instant sur la TIMELINE, pas l'offset dans le
-        /// clip : le modèle stocke du relatif, et l'afficher tel quel sur un
-        /// clip qui démarre à 5 s annoncerait un instant faux. Même convention
-        /// que `KeyframeInspector.KeyframeSnapshot.absoluteTime`.
-        public struct VolumePoint: Equatable, Sendable, Identifiable {
-            public let id: String
-            public let absoluteTime: Float
-            public let volume: Float
-
-            public init(id: String, absoluteTime: Float, volume: Float) {
-                self.id = id
-                self.absoluteTime = absoluteTime
-                self.volume = volume
-            }
-        }
-
-        public init(id: String, displayName: String, kind: Kind,
-                    startTime: Float, duration: Float, volume: Float,
-                    fadeInDuration: Float, fadeOutDuration: Float,
-                    isLooping: Bool, isBackground: Bool,
-                    name: String? = nil,
-                    transform: ClipTransform = .identity,
-                    volumeKeyframes: [VolumePoint] = [],
-                    isDuckingDisabled: Bool = false,
-                    slideHasBackgroundAudio: Bool = false,
-                    isFollowingSlide: Bool = false) {
-            self.id = id; self.displayName = displayName; self.kind = kind
-            self.startTime = startTime; self.duration = duration
-            self.volume = volume
-            self.fadeInDuration = fadeInDuration; self.fadeOutDuration = fadeOutDuration
-            self.isLooping = isLooping; self.isBackground = isBackground
-            self.name = name
-            self.transform = transform
-            self.volumeKeyframes = volumeKeyframes
-            self.isDuckingDisabled = isDuckingDisabled
-            self.slideHasBackgroundAudio = slideHasBackgroundAudio
-            self.isFollowingSlide = isFollowingSlide
-        }
-    }
-
     public static let fadeRange: ClosedRange<Float> = 0...3
 
     // MARK: - Sections (modale allégée)
@@ -233,6 +148,9 @@ public struct ClipInspector: View {
     /// Position de lecture courante — le point se pose LÀ, et le bouton le dit
     /// plutôt que de laisser deviner où il atterrira.
     public let playheadTime: Float
+    /// Tête de lecture vivante (#9874) : le libellé « Point de volume à … » la
+    /// lit seul, l'inspecteur ne se réévalue pas à chaque tick. `nil` = `playheadTime`.
+    public let playhead: PlayheadClock?
     /// Pose un point de volume au playhead, au niveau passé.
     public let onAddVolumePoint: (Float) -> Void
     /// Retire le point d'automation d'identifiant donné.
@@ -358,6 +276,7 @@ public struct ClipInspector: View {
                 onDurationSet: @escaping (Float) -> Void = { _ in },
                 onTransformChanged: @escaping (ClipTransform.Field) -> Void = { _ in },
                 playheadTime: Float = 0,
+                playhead: PlayheadClock? = nil,
                 onAddVolumePoint: @escaping (Float) -> Void = { _ in },
                 onRemoveVolumePoint: @escaping (String) -> Void = { _ in },
                 onDuckingDisabledChanged: @escaping (Bool) -> Void = { _ in },
@@ -385,6 +304,7 @@ public struct ClipInspector: View {
         self.onDurationSet = onDurationSet
         self.onTransformChanged = onTransformChanged
         self.playheadTime = playheadTime
+        self.playhead = playhead
         self.onAddVolumePoint = onAddVolumePoint
         self.onRemoveVolumePoint = onRemoveVolumePoint
         self.onDuckingDisabledChanged = onDuckingDisabledChanged
@@ -654,25 +574,28 @@ public struct ClipInspector: View {
                 onTrimEndCommitted: onEndAdjusted
             )
             HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-                numericField(key: "start",
+                ClipInspectorNumericField(key: "start",
                              title: String(localized: "story.timeline.inspector.start",
                                            defaultValue: "Début", bundle: .module),
                              value: String(format: "%.1f", clip.startTime),
                              unit: "s",
+                             drafts: $drafts,
                              onStep: onStartAdjusted,
                              onCommit: { if let v = Self.parseSeconds($0) { onStartSet(v) } })
-                numericField(key: "end",
+                ClipInspectorNumericField(key: "end",
                              title: String(localized: "story.timeline.inspector.end",
                                            defaultValue: "Fin", bundle: .module),
                              value: String(format: "%.1f", clip.startTime + clip.duration),
                              unit: "s",
+                             drafts: $drafts,
                              onStep: onEndAdjusted,
                              onCommit: { if let v = Self.parseSeconds($0) { onEndSet(v) } })
-                numericField(key: "duration",
+                ClipInspectorNumericField(key: "duration",
                              title: String(localized: "story.timeline.inspector.duration",
                                            defaultValue: "Durée", bundle: .module),
                              value: String(format: "%.1f", clip.duration),
                              unit: "s",
+                             drafts: $drafts,
                              onStep: onDurationAdjusted,
                              onCommit: { if let v = Self.parseSeconds($0) { onDurationSet(v) } })
             }
@@ -687,134 +610,6 @@ public struct ClipInspector: View {
             .font(.caption2)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-    }
-
-    /// Place de la piste dans le PLAN. La fiche restituait le temps et jamais
-    /// l'espace : impossible de lire ou corriger une position au chiffre près,
-    /// alors que les modèles portent x/y/échelle/rotation/plan depuis toujours.
-    private var transformSection: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-            Text(String(localized: "story.timeline.inspector.transform",
-                        defaultValue: "Position dans le plan", bundle: .module).uppercased())
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
-            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-                // x/y sont normalisés 0–1 dans le modèle ; on les présente en
-                // POURCENTAGE, plus lisible qu'un « 0,5 » pour dire « au centre ».
-                numericField(key: "tx", title: "X",
-                             value: String(format: "%.0f", clip.transform.x * 100),
-                             unit: "%",
-                             onStep: { delta in
-                                 onTransformChanged(.x(clip.transform.x + Double(delta) / 10))
-                             },
-                             onCommit: {
-                                 if let v = Self.parseDecimal($0) { onTransformChanged(.x(v / 100)) }
-                             })
-                numericField(key: "ty", title: "Y",
-                             value: String(format: "%.0f", clip.transform.y * 100),
-                             unit: "%",
-                             onStep: { delta in
-                                 onTransformChanged(.y(clip.transform.y + Double(delta) / 10))
-                             },
-                             onCommit: {
-                                 if let v = Self.parseDecimal($0) { onTransformChanged(.y(v / 100)) }
-                             })
-            }
-            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
-                numericField(key: "scale",
-                             title: String(localized: "story.timeline.inspector.scale",
-                                           defaultValue: "Taille", bundle: .module),
-                             value: String(format: "%.2f", clip.transform.scale),
-                             unit: "×",
-                             onStep: { delta in
-                                 onTransformChanged(.scale(clip.transform.scale + Double(delta)))
-                             },
-                             onCommit: {
-                                 if let v = Self.parseDecimal($0) { onTransformChanged(.scale(v)) }
-                             })
-                numericField(key: "rotation",
-                             title: String(localized: "story.timeline.inspector.rotation",
-                                           defaultValue: "Rotation", bundle: .module),
-                             value: String(format: "%.0f", clip.transform.rotation),
-                             unit: "°",
-                             onStep: { delta in
-                                 onTransformChanged(.rotation(clip.transform.rotation + Double(delta) * 50))
-                             },
-                             onCommit: {
-                                 if let v = Self.parseDecimal($0) { onTransformChanged(.rotation(v)) }
-                             })
-                numericField(key: "zIndex",
-                             title: String(localized: "story.timeline.inspector.zIndex",
-                                           defaultValue: "Plan", bundle: .module),
-                             value: "\(clip.transform.zIndex)",
-                             unit: "",
-                             onStep: { delta in
-                                 onTransformChanged(.zIndex(clip.transform.zIndex + (delta > 0 ? 1 : -1)))
-                             },
-                             onCommit: {
-                                 if let v = Self.parseDecimal($0) { onTransformChanged(.zIndex(Int(v))) }
-                             })
-            }
-        }
-        .padding(MeeshySpacing.smPlus)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .fill(MeeshyColors.indigo500.opacity(0.08))
-        )
-    }
-
-    /// Champ numérique : saisissable au clavier ET grignotable par pas.
-    /// `key` isole le brouillon de saisie d'un champ à l'autre.
-    private func numericField(key: String, title: String, value: String, unit: String,
-                              onStep: @escaping (Float) -> Void,
-                              onCommit: @escaping (String) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title.uppercased())
-                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            HStack(spacing: MeeshySpacing.xxs) {
-                TextField("", text: Binding(
-                    get: { drafts[key] ?? value },
-                    set: { drafts[key] = $0 }
-                ))
-                .keyboardType(.numbersAndPunctuation)
-                .multilineTextAlignment(.center)
-                .font(.system(.footnote, design: .monospaced))
-                .monospacedDigit()
-                .submitLabel(.done)
-                .onSubmit {
-                    if let draft = drafts[key] { onCommit(draft) }
-                    drafts[key] = nil
-                }
-                if !unit.isEmpty {
-                    Text(unit)
-                        .font(.system(size: MeeshyFont.microSize))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.vertical, 5)
-            .padding(.horizontal, MeeshySpacing.xs)
-            .background(RoundedRectangle(cornerRadius: 7)
-                .fill(MeeshyColors.indigo500.opacity(0.10)))
-            HStack(spacing: MeeshySpacing.xs) {
-                stepButton(systemName: "minus.circle.fill") { onStep(-Self.timeStep) }
-                Spacer(minLength: 0)
-                stepButton(systemName: "plus.circle.fill") { onStep(Self.timeStep) }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title) \(value)\(unit)")
-    }
-
-    private func stepButton(systemName: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.title3)
-                .foregroundStyle(MeeshyColors.indigo400)
-                .contentShape(Rectangle().inset(by: -8))
-        }
-        .buttonStyle(.plain)
     }
 
     private var volumeSlider: some View {
@@ -902,66 +697,13 @@ public struct ClipInspector: View {
         .padding(.top, MeeshySpacing.xsPlus)
     }
 
-    /// Automation du volume : pose d'un point au playhead et liste des points
-    /// posés. C'est la SEULE surface d'édition de la courbe — la piste ne fait
-    /// que 52 pt et ses gestes servent déjà au déplacement et au rognage.
     private var volumeAutomation: some View {
-        let points = Self.sortedVolumePoints(clip.volumeKeyframes)
-        return VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-            Button {
-                onAddVolumePoint(volume)
-            } label: {
-                Label(
-                    String(format: String(localized: "story.timeline.inspector.volume.addPoint",
-                                          defaultValue: "Point de volume à %@",
-                                          bundle: .module),
-                           Self.formatTime(seconds: playheadTime)),
-                    systemImage: "plus.circle"
-                )
-                .font(.caption.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .tint(MeeshyColors.warning)
-            .accessibilityHint(String(localized: "story.timeline.inspector.volume.addPoint.hint",
-                                      defaultValue: "Fige le volume courant à la position de lecture",
-                                      bundle: .module))
-
-            if points.isEmpty {
-                Text(String(localized: "story.timeline.inspector.volume.automation.caption",
-                            defaultValue: "Sans point, le volume reste constant sur toute la durée du clip.",
-                            bundle: .module))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                ForEach(points) { point in
-                    HStack(spacing: MeeshySpacing.sm) {
-                        Text(Self.formatTime(seconds: point.absoluteTime))
-                            .font(.system(.caption2, design: .monospaced))
-                            .monospacedDigit()
-                        Text(Self.formatGain(point.volume))
-                            .font(.caption2.weight(.semibold))
-                            .monospacedDigit()
-                            .foregroundStyle(MeeshyColors.warning)
-                        Spacer(minLength: 0)
-                        Button {
-                            onRemoveVolumePoint(point.id)
-                        } label: {
-                            Image(systemName: "minus.circle.fill")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .contentShape(Rectangle().inset(by: -8))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "story.timeline.inspector.volume.removePoint",
-                                                   defaultValue: "Retirer ce point de volume",
-                                                   bundle: .module))
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-            }
-        }
-        .padding(.top, MeeshySpacing.xs)
+        ClipVolumeAutomation(points: Self.sortedVolumePoints(clip.volumeKeyframes),
+                             playheadTime: playheadTime,
+                             playhead: playhead,
+                             volume: volume,
+                             onAddVolumePoint: onAddVolumePoint,
+                             onRemoveVolumePoint: onRemoveVolumePoint)
     }
 
     /// Durées proposées pour les animations d'entrée/sortie (fondu). `0` = off.
@@ -982,14 +724,14 @@ public struct ClipInspector: View {
     /// modale ne montre plus que l'essentiel (retour user 2026-07-11).
     private var animationConfig: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-            fadeChipRow(
+            ClipFadeChipRow(
                 title: String(localized: "story.timeline.inspector.fadeIn",
                               defaultValue: "Apparition (fondu)", bundle: .module),
                 systemImage: "arrow.down.right.circle",
                 value: $fadeIn,
                 onCommit: { onFadeInChanged(fadeIn) }
             )
-            fadeChipRow(
+            ClipFadeChipRow(
                 title: String(localized: "story.timeline.inspector.fadeOut",
                               defaultValue: "Disparition (fondu)", bundle: .module),
                 systemImage: "arrow.up.right.circle",
@@ -1022,47 +764,6 @@ public struct ClipInspector: View {
                 .fill(MeeshyColors.indigo500.opacity(0.08))
         )
         .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
-    }
-
-    private func fadeChipRow(title: String, systemImage: String,
-                             value: Binding<Float>, onCommit: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: systemImage)
-                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.indigo400)
-                    .accessibilityHidden(true)
-                Text(title.uppercased())
-                    .font(.system(size: MeeshyFont.microSize, weight: .semibold))
-                    .foregroundStyle(.secondary)
-            }
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                ForEach(Self.fadePresets, id: \.self) { preset in
-                    let isOn = Self.nearestFadePreset(to: value.wrappedValue) == preset
-                    Button {
-                        value.wrappedValue = preset
-                        onCommit()
-                    } label: {
-                        Text(preset == 0
-                             ? String(localized: "story.timeline.inspector.fade.off",
-                                      defaultValue: "off", bundle: .module)
-                             : (preset < 1 ? String(format: "%.1f s", preset)
-                                           : String(format: "%.0f s", preset)))
-                            .font(.caption2.weight(.semibold))
-                            .monospacedDigit()
-                            .padding(.horizontal, MeeshySpacing.smPlus)
-                            .padding(.vertical, MeeshySpacing.xsPlus)
-                            .background(Capsule().fill(
-                                isOn ? MeeshyColors.indigo500 : MeeshyColors.indigo500.opacity(0.14)))
-                            .foregroundStyle(isOn ? .white : MeeshyColors.indigo400)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(title) \(preset)s")
-                    .accessibilityAddTraits(isOn ? [.isSelected] : [])
-                }
-            }
-        }
-        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder
@@ -1107,110 +808,12 @@ public struct ClipInspector: View {
         }
     }
 
-    /// Deux boutons, deux intentions LISIBLES : « Animation » déplie la
-    /// configuration PAR-DESSOUS (il n'anime rien lui-même), « Supprimer »
-    /// demande confirmation avant la suppression définitive. Icône + TEXTE
-    /// obligatoires — les pastilles icône-seule teintées (losange indigo sur
-    /// verre indigo, corbeille rouge sur verre rouge) ne portaient ni leur
-    /// sens ni leur contraste (capture user 2026-07-20).
-    ///
-    /// Composition Liquid Glass (iOS 26 via `Compatibility/AdaptiveGlass`) :
-    /// la SURFACE de la modale reste en matériau (le verre ne peut pas
-    /// échantillonner du verre), seuls les CONTRÔLES flottants prennent le
-    /// glass — groupés dans un `AdaptiveGlassContainer` pour que les formes
-    /// adjacentes se fondent correctement. Fallback < 26 : matériau teinté
-    /// + liseré, géré par le wrapper.
-    /// Trois actions ne tiennent pas toujours sur une ligne — en français
-    /// « Animation · Diviser · Supprimer » débordait déjà à 360 pt, et les
-    /// langues plus verbeuses (allemand) aggravent le cas. `ViewThatFits`
-    /// bascule sur deux rangées plutôt que de laisser les capsules se
-    /// chevaucher et les libellés se couper en deux (« Anima-tion »).
-    ///
-    /// Le premier candidat n'a PAS de `Spacer` : un `Spacer` se comprimant à
-    /// l'infini, `ViewThatFits` le jugerait toujours suffisant et ne
-    /// basculerait jamais.
     private var actionsRow: some View {
-        AdaptiveGlassContainer(spacing: 12) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: MeeshySpacing.smPlus) {
-                    if !clip.isFollowingSlide { followSlideButton }
-                    if Self.supportsSplit(kind: clip.kind) { splitButton }
-                    if Self.supportsDeletion(kind: clip.kind) { deleteButton }
-                }
-                VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-                    if !clip.isFollowingSlide { followSlideButton }
-                    if Self.supportsSplit(kind: clip.kind) { splitButton }
-                    if Self.supportsDeletion(kind: clip.kind) { deleteButton }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
-    /// « Suivre la slide » (D3, revue totale U9) — n'apparaît que quand une
-    /// fenêtre EXPLICITE a été posée (`!clip.isFollowingSlide`) : un fantôme
-    /// n'a rien à relâcher, l'afficher pour lui serait un contrôle mort.
-    private var followSlideButton: some View {
-        Button(action: onFollowSlide) {
-            Label(String(localized: "story.timeline.inspector.followSlide",
-                         defaultValue: "Suivre la slide", bundle: .module),
-                  systemImage: "arrow.uturn.backward.circle")
-                .font(.footnote.weight(.semibold))
-                .fixedSize(horizontal: true, vertical: false)
-                .glassControlForeground()
-                .padding(.horizontal, MeeshySpacing.md)
-                .frame(height: 36)
-                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.indigo500, interactive: true)
-                .contentShape(Rectangle().inset(by: -4))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "story.timeline.inspector.followSlide",
-                                   defaultValue: "Suivre la slide", bundle: .module))
-        .accessibilityHint(String(localized: "story.timeline.inspector.followSlide.hint",
-                                  defaultValue: "Remet la fenêtre du clip à zéro : il suit de nouveau la durée de la slide",
-                                  bundle: .module))
-    }
-
-    private var splitButton: some View {
-        Button(action: onSplit) {
-            Label(String(localized: "story.timeline.inspector.split",
-                         defaultValue: "Diviser", bundle: .module),
-                  systemImage: "scissors")
-                .font(.footnote.weight(.semibold))
-                .fixedSize(horizontal: true, vertical: false)
-                .glassControlForeground()
-                .padding(.horizontal, MeeshySpacing.md)
-                .frame(height: 36)
-                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.indigo500, interactive: true)
-                .contentShape(Rectangle().inset(by: -4))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "story.timeline.inspector.split",
-                                   defaultValue: "Diviser", bundle: .module))
-        .accessibilityHint(String(localized: "story.timeline.inspector.split.hint",
-                                  defaultValue: "Coupe le clip à la position de lecture",
-                                  bundle: .module))
-    }
-
-    private var deleteButton: some View {
-        Button {
-            deleteConfirmation.request()
-        } label: {
-            Label(String(localized: "story.timeline.clip.delete", bundle: .module),
-                  systemImage: "trash")
-                .font(.footnote.weight(.semibold))
-                .fixedSize(horizontal: true, vertical: false)
-                .foregroundStyle(.white)
-                .padding(.horizontal, MeeshySpacing.md)
-                .frame(height: 36)
-                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.error)
-                .contentShape(Rectangle().inset(by: -4))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "story.timeline.clip.delete", bundle: .module))
-        .accessibilityHint(String(localized: "story.timeline.inspector.delete.hint",
-                                  defaultValue: "Demande une confirmation avant la suppression",
-                                  bundle: .module))
+        ClipInspectorActionsRow(kind: clip.kind,
+                                isFollowingSlide: clip.isFollowingSlide,
+                                onFollowSlide: onFollowSlide,
+                                onSplit: onSplit,
+                                onRequestDelete: { deleteConfirmation.request() })
     }
 
     private var kindSystemImage: String {

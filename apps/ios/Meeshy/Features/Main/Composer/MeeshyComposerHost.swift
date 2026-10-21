@@ -160,20 +160,6 @@ struct MeeshyComposerHost: View {
     let onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     let onDismiss: () -> Void
 
-    /// **Rendre le média composé au lieu de le publier** (#8416, #9124) — posé
-    /// par la retouche d'une pièce du brouillon d'un message.
-    /// `nil` pour toute autre porte, qui publie.
-    let onReturnMedia: ((ComposerReturnedMedia) -> Void)?
-
-    /// **Toutes les pièces du message, une scène chacune** (#9126) — posé par
-    /// « Éditer » sur une pièce en attente ; « Terminé » rend les retouchées.
-    let retouchSeries: ComposerRetouchSeed?
-    let onReturnSeries: (([ComposerRetouchedPiece]) -> Void)?
-    /// L'empreinte de chaque scène à son départ — `nil` tant que les mesures
-    /// vidéo ne sont pas arrivées.
-    @State var retouchBaselines: [String: Data]?
-    @State var retouchSeriesIngested = false
-
     /// L'atelier et le meuble lisent le MÊME état de composition. Le host le
     /// possède pour que le gate du réel (`ComposerReelGate`) lise la composition
     /// RÉELLE sans redemander quoi que ce soit à l'atelier — c'est ce qui fait
@@ -739,14 +725,8 @@ struct MeeshyComposerHost: View {
         moodSeed: ComposerMoodSeed?,
         mediaSeed: StoryComposerSeed?,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
-        onDismiss: @escaping () -> Void,
-        onReturnMedia: ((ComposerReturnedMedia) -> Void)? = nil,
-        retouchSeries: ComposerRetouchSeed? = nil,
-        onReturnSeries: (([ComposerRetouchedPiece]) -> Void)? = nil
+        onDismiss: @escaping () -> Void
     ) {
-        self.onReturnMedia = onReturnMedia
-        self.retouchSeries = retouchSeries
-        self.onReturnSeries = onReturnSeries
         self.intent = intent
         self.initialVisibility = initialVisibility
         // **La PORTE peut porter le brouillon** (#4611). `draftId` était le
@@ -915,40 +895,6 @@ struct MeeshyComposerHost: View {
         .background(tint.color.ignoresSafeArea())
     }
 
-    func composerChrome<Contenu: View>(_ contenu: Contenu) -> some View {
-        contenu
-        // **La couche d'écriture, AU-DESSUS de tout** (#4124). En overlay du
-        // meuble et non en `.sheet` : une feuille système laisse voir la scène
-        // NETTE derrière son bord arrondi et impose sa propre poignée, alors que
-        // la directive demande la scène FLOUTÉE et un « Terminé » au-dessus du
-        // clavier — deux choses qu'une feuille ne sait pas faire ensemble.
-        // **La saisie s'ancre en BAS, la scène monte au-dessus** (#4361). Elle
-        // fut une couche plein écran voilant la scène ; écrire une description,
-        // c'est regarder la scène qu'on décrit, et le voile la retirait au
-        // moment précis où elle sert. La remontée passe par
-        // `storyComposerCanvasBottomReservation`, posée sur `composerSurface` —
-        // la MÊME mécanique que celle d'une band qui s'ouvre, jamais une
-        // seconde.
-        .overlay(alignment: .bottom) { textEditingZones }
-        // Le socle revient APRÈS le panneau qui part, jamais pendant (#9448).
-        .modifier(ComposerWritingAnimation(writesText: writesText))
-        // **La feuille de partage est portée par la RACINE, pas par
-        // `surfaceWithIntakePortals`** (#4996). Ce dernier porte déjà un
-        // `.sheet(item:)` et un `.fullScreenCover(item:)`, et SwiftUI n'honore
-        // qu'UNE présentation par vue : une troisième posée là aurait été
-        // silencieusement avalée par les deux premières — le mode de panne
-        // exact que le doc-comment de l'éditeur d'objet décrit.
-        .sheet(item: $sceneExport.sharedFile, onDismiss: { sceneExport.finishSharing() }) { fichier in
-            ShareSheet(activityItems: [fichier.url])
-        }
-        // **La progression du bake, par-dessus tout.** Un export dure des
-        // secondes : sans témoin, l'auteur retape « Enregistrer » et croit que
-        // rien ne se passe. Le contrôleur ignore le second appel (un seul bake
-        // à la fois) — donc sans ce voile, le geste serait sans effet ET sans
-        // explication.
-        .overlay { composerExportProgress }
-    }
-
     func composerLifecycle<Contenu: View>(_ contenu: Contenu) -> some View {
         contenu
         // Le meuble se ferme pendant un bake : le RÉSULTAT tardif est jeté et
@@ -969,16 +915,10 @@ struct MeeshyComposerHost: View {
         // `StoryComposerSeed` n'est pas Equatable (elle porte un `UIImage`),
         // donc il n'y a rien à observer. Le loquet tient la répétition.
         .onAppear { ingestSeedIntoDocumentIfNeeded() }
-        .onAppear { ingestRetouchSeriesIfNeeded() }
         // **La caméra se prépare à l'ouverture** (#10307) : un format qui filme
         // configure sa session sans la lancer — l'armement n'a plus qu'à démarrer.
         .adaptiveOnChange(of: ComposerSceneCamera.initialMode(for: selectedFormat) != nil, initial: true) { _, filme in
             if filme { sceneCapture.prewarm() }
-        }
-        // Une scène fondée en retouche prend son état de départ après ses
-        // mesures vidéo (#9126, #9131).
-        .adaptiveOnChange(of: slideIdByMediaURL.count) { _, _ in
-            settleReturnedScenes()
         }
         // B3 (#3926) — le report du contenu vers la scène, en UN seul site :
         // dès que `mountedSurface` DEVIENT `.scene` (par l'éventail STORY/RÉEL

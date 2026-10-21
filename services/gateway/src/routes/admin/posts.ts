@@ -8,6 +8,8 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects';
+import { noticeAdminRemoval } from '../../services/moderation/adminRemovalNotices';
+import { removedPostContentType } from '../../services/moderation/contentRemoval';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { requirePermission } from '../../middleware/authorize';
@@ -767,11 +769,12 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
       // `type` / `visibility` / `visibilityUserIds` ne servent pas au retrait
       // lui-même mais à l'annoncer : ils choisissent l'événement et refiltrent
-      // l'audience (`broadcastPostRemoval`). Prisma `select` : ce qui n'est pas
-      // demandé ici n'existe pas plus bas.
+      // l'audience (`broadcastPostRemoval`). `createdAt` décide si les points de
+      // la publication sont repris (trente jours, #11467). Prisma `select` : ce
+      // qui n'est pas demandé ici n'existe pas plus bas.
       const post = await fastify.prisma.post.findUnique({
         where: { id: postId },
-        select: { id: true, deletedAt: true, expiresAt: true, authorId: true, type: true, visibility: true, visibilityUserIds: true }
+        select: { id: true, deletedAt: true, expiresAt: true, authorId: true, type: true, visibility: true, visibilityUserIds: true, createdAt: true }
       });
 
       if (!post) {
@@ -817,6 +820,14 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       // ont été rattrapés ici un par un, à des cycles d'intervalle, parce que
       // rien ne nommait la liste : il n'y a plus qu'un endroit à tenir.
       await applyPostRemovalEffects(fastify.prisma, post, { id: user.id, reason, viaAdministration: true });
+      noticeAdminRemoval({ prisma: fastify.prisma }, {
+        actorUserId: user.id,
+        authorUserId: post.authorId,
+        contentType: removedPostContentType(post.type),
+        contentId: postId,
+        postId,
+        reason,
+      });
 
       fastify.log.info({
         action: 'admin_post_delete',

@@ -153,7 +153,7 @@ public extension ConversationSyncEngineProviding {
 public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unchecked Sendable {
     public static let shared = ConversationSyncEngine()
 
-    /* partagé entre les fichiers du moteur (#4172) */ static let logger = Logger(subsystem: "me.meeshy.sdk", category: "sync")
+    /* partagé entre les fichiers du moteur (#4172) */ static let logger = MeeshyLog.logger(.sync, subsystem: .sdk)
 
     // Internal subjects (send-capable)
     /* partagé entre les fichiers du moteur (#4172) */ let _conversationsDidChange = PassthroughSubject<Void, Never>()
@@ -182,55 +182,39 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // State (protected by serial queue)
     /* partagé entre les fichiers du moteur (#4172) */ let stateQueue = DispatchQueue(label: "me.meeshy.sync-engine.state")
+    /// L'état du moteur propre à ce fichier, sous UN verrou : propriétaire de la
+    /// synchro et ses attentes, persisteurs, anti-rafale du delta, rattrapage.
+    ///
     /// Le compte dont une synchronisation est EN VOL — jamais un simple
     /// booléen (#8651). Un booléen confondait « ce compte synchronise déjà »
     /// (coalescer) et « le compte QUITTÉ synchronise encore » (périmé) : au
     /// changement de compte, la synchronisation du compte suivant rendait
     /// `true` sans rien lire, pendant que celle de l'ancien, arrivée en retard,
     /// écrivait SA liste dans le cache fraîchement purgé.
-    private var _syncingOwner: String?
+    private let engineState = Locked(SyncEngineState())
 
     /// Réserve la synchronisation pour `owner`. Refusée seulement quand CE
     /// compte en a déjà une en vol ; celle d'un autre compte est périmée et
     /// cède la place — ses écritures seront refusées par `ownsSession()`.
     /* partagé entre les fichiers du moteur (#4172) */ func claimSync(for owner: String) -> Bool {
-        let (claimed, released) = stateQueue.sync { () -> (Bool, [CheckedContinuation<Void, Never>]) in
-            guard _syncingOwner != owner else { return (false, []) }
-            _syncingOwner = owner
-            return (true, takeReleaseWaiters())
-        }
-        released.forEach { $0.resume() }
-        return claimed
+        let outcome = engineState.mutate { $0.ownership.claim(owner) }
+        outcome.released.forEach { $0.resume() }
+        return outcome.claimed
     }
 
     /* partagé entre les fichiers du moteur (#4172) */ func releaseSync(for owner: String) {
-        let released = stateQueue.sync { () -> [CheckedContinuation<Void, Never>] in
-            guard _syncingOwner == owner else { return [] }
-            _syncingOwner = nil
-            return takeReleaseWaiters()
-        }
+        let released = engineState.mutate { $0.ownership.release(owner) }
         released.forEach { $0.resume() }
     }
 
-    /// #10927 — ceux qui attendent que la synchro en vol de leur compte rende
-    /// le verrou. Repris à chaque changement de détenteur, sous `stateQueue`.
-    private var _syncReleaseWaiters: [CheckedContinuation<Void, Never>] = []
-
-    private func takeReleaseWaiters() -> [CheckedContinuation<Void, Never>] {
-        defer { _syncReleaseWaiters = [] }
-        return _syncReleaseWaiters
-    }
-
-    /// Rend la main quand `owner` ne tient plus le verrou — tout de suite s'il
-    /// ne le tient déjà plus. L'inscription et le test se font sous la même
-    /// file : une libération ne peut pas tomber entre les deux.
+    /// #10927 — rend la main quand `owner` ne tient plus le verrou, tout de
+    /// suite s'il ne le tient déjà plus. L'inscription et le test se font sous
+    /// le même verrou : une libération ne peut pas tomber entre les deux.
+    /// Volontairement NON annulable : `rejoinsLaSynchroEnVol` relance
+    /// `fullSync()` au retour, une tâche annulée bouclerait.
     /* partagé entre les fichiers du moteur (#10927) */ func awaitSyncRelease(for owner: String) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let resumesNow = stateQueue.sync { () -> Bool in
-                guard _syncingOwner == owner else { return true }
-                _syncReleaseWaiters.append(continuation)
-                return false
-            }
+            let resumesNow = engineState.mutate { $0.ownership.admit(owner, continuation) }
             if resumesNow { continuation.resume() }
         }
     }
@@ -301,10 +285,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// the open conversation until the next REST revalidation completes.
     /// Invoked from `handleNewMessage`, `ensureMessages` and
     /// `fetchOlderMessages` with the exact decoded payloads.
-    private var _apiMessagePersistor: (@Sendable @concurrent ([APIMessage]) async -> Void)?
     public var apiMessagePersistor: (@Sendable @concurrent ([APIMessage]) async -> Void)? {
-        get { stateQueue.sync { _apiMessagePersistor } }
-        set { stateQueue.sync { _apiMessagePersistor = newValue } }
+        get { engineState.read { $0.apiMessagePersistor } }
+        set { engineState.mutate { $0.apiMessagePersistor = newValue } }
     }
 
     /// Sibling of `apiMessagePersistor` for the mutations that carry no
@@ -315,10 +298,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// offline the timeline still showed the pre-edit text, the deleted
     /// bubble and the missing reaction. Installed by the host app, which owns
     /// the store; `nil` in tests that only exercise the cache surfaces.
-    private var _realtimeMessagePersistor: (@Sendable @concurrent (RealtimeMessageMutation) async -> Void)?
     public var realtimeMessagePersistor: (@Sendable @concurrent (RealtimeMessageMutation) async -> Void)? {
-        get { stateQueue.sync { _realtimeMessagePersistor } }
-        set { stateQueue.sync { _realtimeMessagePersistor = newValue } }
+        get { engineState.read { $0.realtimeMessagePersistor } }
+        set { engineState.mutate { $0.realtimeMessagePersistor = newValue } }
     }
 
     /// Accusés de RÉCEPTION en attente, par conversation.
@@ -344,10 +326,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     // a delta sync just ran, skip until the window elapses. Cold-start
     // `fullSync` is unaffected because it runs through the `isSyncing`
     // path, not this guard.
-    private var _lastDeltaSyncAt: Date = .distantPast
     /* partagé entre les fichiers du moteur (#4172) */ var lastDeltaSyncAt: Date {
-        get { stateQueue.sync { _lastDeltaSyncAt } }
-        set { stateQueue.sync { _lastDeltaSyncAt = newValue } }
+        get { engineState.read { $0.lastDeltaSyncAt } }
+        set { engineState.mutate { $0.lastDeltaSyncAt = newValue } }
     }
     /* partagé entre les fichiers du moteur (#4172) */ let deltaSyncCooldown: TimeInterval = 3
 
@@ -356,18 +337,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// premier plan part avant que le socket ait rejoint ses salles, et ce qui
     /// arrive entre son instantané et le retour des salles n'était relu par
     /// personne. La demande reste posée jusqu'à ce qu'une passe la consomme.
-    private var _reconnectCatchUpPending = false
     /* partagé entre les fichiers du moteur (#4172) */ func requestReconnectCatchUp() {
-        stateQueue.sync { _reconnectCatchUpPending = true }
+        engineState.mutate { $0.reconnectCatchUpPending = true }
     }
     /* partagé entre les fichiers du moteur (#4172) */ func takeReconnectCatchUp() -> Bool {
-        stateQueue.sync {
-            defer { _reconnectCatchUpPending = false }
-            return _reconnectCatchUpPending
-        }
+        engineState.mutate { $0.takeReconnectCatchUp() }
     }
     /* partagé entre les fichiers du moteur (#4172) */ var hasReconnectCatchUpPending: Bool {
-        stateQueue.sync { _reconnectCatchUpPending }
+        engineState.read { $0.reconnectCatchUpPending }
     }
 
     // Dependencies

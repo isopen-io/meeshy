@@ -15,7 +15,8 @@ import XCTest
 final class ComposerTransparentAndConditionalSendSourceGuardTests: XCTestCase {
 
     private static let composerPath = "Meeshy/Features/Main/Components/UniversalComposerBar.swift"
-    private static let conversationViewPath = "Meeshy/Features/Main/Views/ConversationView.swift"
+    /// Le dock du composeur a quitté `ConversationView.swift` (cohésion) : l'hôte du composer vit ici.
+    private static let composerDockPath = "Meeshy/Features/Main/Views/ConversationView+ComposerDock.swift"
 
     // MARK: - Bouton d'envoi : invisible à vide, pas seulement estompé
 
@@ -47,7 +48,7 @@ final class ComposerTransparentAndConditionalSendSourceGuardTests: XCTestCase {
     /// le composer nu — exactement celui que #3920 veut transparent. Le retirer
     /// ne prive donc aucune sous-vue de sa lisibilité.
     func test_composerHost_noLongerForcesOpaqueBackground() throws {
-        let source = try Self.strippedSource(at: Self.conversationViewPath)
+        let source = try Self.strippedSource(at: Self.composerDockPath)
         guard let anchorRange = source.range(of: ".ignoresSafeArea(.container, edges: .bottom)") else {
             throw GuardIsBlind(description: "Ancre `.ignoresSafeArea(.container, edges: .bottom)` introuvable")
         }

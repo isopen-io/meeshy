@@ -4,8 +4,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { useState } from 'react';
 
-import { forwardMenuItems, messageMenuItems, translationChoices, type MessageMenuItem } from '@/lib/view/message-actions';
+import { message, minutesAgo } from '@/lib/api/fixtures-base';
+import { forwardMenuItems, messageMenuContextOf, messageMenuItems, translationChoices, type MessageMenuItem } from '@/lib/view/message-actions';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { menuScope } from '@/test-support/menu-viewer';
 import { useLongPress } from '@/lib/view/long-press';
 import { pinToBottom } from '@/lib/view/pin-to-bottom';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -31,8 +34,13 @@ beforeAll(async () => {
      la langue n'est pas chargée — c'est le contrat de `i18n-catalog.ts`, pas
      un état à maquiller. Trois langues ici : le français des témoins
      existants, l'anglais et l'arabe du témoin de rang. */
-  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar'), loadMessagePiecesCatalog('fr')]);
 });
+
+/** Les verdicts de la loi partagée (#11210) sur le message d'un autre, et sur le mien. */
+const subject = (senderId: string) =>
+  message({ id: 'm2', conversationId: 'c-a', senderId, content: 'texte', originalLanguage: 'fr', translations: [], createdAt: minutesAgo(5) });
+const THEIRS = messageMenuContextOf(subject('u-autre'), { now: Date.now(), scope: menuScope() }).actions;
 
 afterAll(async () => {
   delete globals.IS_REACT_ACT_ENVIRONMENT;
@@ -67,9 +75,12 @@ function Harness({
   flatRow = false,
   events = {},
   forwardItems,
+  items: givenItems,
 }: {
   /** Le sous-menu de « Transférer » (#9039) — absent : Transférer agit aussitôt. */
   readonly forwardItems?: readonly MessageMenuItem[];
+  /** Les entrées, quand le témoin les compose lui-même (groupes, #11210). */
+  readonly items?: readonly MessageMenuItem[];
   readonly text?: string;
   readonly isMine?: boolean;
   readonly protectedMessage?: boolean;
@@ -83,7 +94,9 @@ function Harness({
     onOpen: (anchor) => setTarget({ messageId: 'm2', element: anchor.element, isMine }),
   });
 
-  const items = messageMenuItems({ hasText: true, isProtected: protectedMessage, languageCount: 2, canForward: true });
+  const items =
+    givenItems ??
+    messageMenuItems({ hasText: true, isProtected: protectedMessage, languageCount: 2, canForward: true, ...(THEIRS === undefined ? {} : { actions: THEIRS }) });
   const choices = translationChoices({
     message: { originalLanguage: 'fr', translations: [{ id: 't', messageId: 'm2', targetLanguage: 'en', translatedContent: 'Hello', translationModel: 'medium', createdAt: new Date() }] },
     preferredLanguages: ['en'],
@@ -184,14 +197,14 @@ describe('MessageMenu — ouvrir (T8)', () => {
     expect(document.querySelector('[aria-label="Ajouter une réaction"]')).not.toBeNull();
   });
 
-  test('les entrées, dans l’ordre : Sélectionner · Traduire · Copier · Transférer · Répondre · Imager · Plus…', () => {
+  test('les entrées, dans l’ordre : Répondre · Copier · Transférer · Traduire · Sélectionner · Imager · Plus… (#11210)', () => {
     const el = mount();
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const list = document.querySelector('.message-menu-list')!;
     const labels = Array.from(list.querySelectorAll('[role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['Sélectionner', 'Traduire', 'Copier', 'Transférer', 'Répondre', 'Imager', 'Plus…']);
+    expect(labels).toEqual(['Répondre', 'Copier', 'Transférer', 'Traduire', 'Sélectionner', 'Imager', 'Plus…']);
   });
 
   test('l’aperçu contient le texte de la rangée et AUCUN data-message/data-row dupliqué', () => {
@@ -379,7 +392,7 @@ describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-    expect(labelsOf()).toEqual(['Select', 'Translate', 'Copy', 'Forward', 'Reply', 'Make an image', 'More…']);
+    expect(labelsOf()).toEqual(['Reply', 'Copy', 'Forward', 'Translate', 'Select', 'Make an image', 'More…']);
   });
 
   test('interface AR ⇒ le menu rendu est arabe, et son rail s’annonce en arabe', () => {
@@ -388,7 +401,7 @@ describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-    expect(labelsOf()).toEqual(['تحديد', 'ترجمة', 'نسخ', 'إعادة توجيه', 'رد', 'تحويل إلى صورة', 'المزيد…']);
+    expect(labelsOf()).toEqual(['رد', 'نسخ', 'إعادة توجيه', 'ترجمة', 'تحديد', 'تحويل إلى صورة', 'المزيد…']);
     expect(document.querySelector('[data-message-menu-rail]')?.getAttribute('aria-label')).toBe(
       translate('ar', 'message.menu.react'),
     );
@@ -505,7 +518,113 @@ describe('MessageMenu — garde de protection (T11, D-23)', () => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const labels = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['Sélectionner', 'Transférer', 'Répondre', 'Plus…']);
+    expect(labels).toEqual(['Répondre', 'Transférer', 'Sélectionner', 'Plus…']);
+  });
+});
+
+/**
+ * #11210 — LES GROUPES SE VOIENT. Principal, organiser, plus, modération et
+ * destructif sont séparés par un trait ; « Supprimer » se dit dans la couleur
+ * de l'erreur ; la mention du bout en bout se lit sans être un geste (elle
+ * n'entre pas dans le parcours au clavier).
+ */
+describe('MessageMenu — les groupes (#11210)', () => {
+  const open = (items: readonly MessageMenuItem[]) => {
+    const el = mount({ items });
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+  };
+  const moderated = (encryptionMode: string | null) =>
+    messageMenuItems({
+      ...messageMenuContextOf(subject('u-autre'), { now: Date.now(), scope: menuScope({ platformRole: 'MODERATOR' }, { encryptionMode }) }),
+      piecesLabels: true,
+    });
+
+  test('un trait entre chaque groupe, jamais à l’intérieur d’un groupe', () => {
+    open(moderated(null));
+    const list = document.querySelector('.message-menu-list')!;
+    const groups = Array.from(list.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((b) => b.dataset.group);
+    const changes = groups.filter((group, i) => i > 0 && group !== groups[i - 1]).length;
+    expect(new Set(groups)).toEqual(new Set(['primary', 'organize', 'more', 'moderation', 'destructive']));
+    expect(list.querySelectorAll('[data-message-menu-separator]').length).toBe(changes);
+  });
+
+  test('« Retirer » est au menu rapide d’un MODERATOR ; « Supprimer » porte la variante destructive, en dernier', () => {
+    open(moderated(null));
+    const buttons = Array.from(document.querySelectorAll<HTMLElement>('.message-menu-list [role="menuitem"]'));
+    expect(buttons.map((b) => b.textContent)).toContain('Retirer');
+    const last = buttons.at(-1);
+    expect([last?.textContent, last?.dataset.variant]).toEqual(['Supprimer', 'destructive']);
+    expect(buttons.filter((b) => b.dataset.variant === 'destructive').length).toBe(1);
+  });
+
+  test('« Traduire sur l’appareil » DEMANDE la traduction (l’hôte agit) — jamais le sous-menu des langues présentes', () => {
+    const actions: string[] = [];
+    const items = messageMenuItems({
+      ...messageMenuContextOf(subject('u-autre'), { now: Date.now(), scope: menuScope({}, { encryptionMode: 'e2ee' }) }),
+      piecesLabels: true,
+      deviceTranslationWanted: true,
+    });
+    const el = mount({ items, events: { onAction: (id) => actions.push(id) } });
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    const device = document.querySelector<HTMLElement>('.message-menu-list [data-action="translateOnDevice"]')!;
+    act(() => device.click());
+    expect(actions).toEqual(['translateOnDevice']);
+    expect(document.querySelector('[data-message-menu-languages]')).toBeNull();
+  });
+
+  test('360×640 : la liste groupée est BORNÉE au bas de l’écran et DÉFILE — « Supprimer » s’atteint sans le glisser (#11210, revue)', () => {
+    const real = { height: Object.getOwnPropertyDescriptor(window, 'innerHeight'), width: Object.getOwnPropertyDescriptor(window, 'innerWidth') };
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 640 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+    try {
+      const mine = message({
+        id: 'm2',
+        conversationId: 'c-a',
+        senderId: 'u-viewer',
+        content: 'Le programme : https://meeshy.me/programme',
+        originalLanguage: 'fr',
+        translations: [{ id: 't', messageId: 'm2', targetLanguage: 'en', translatedContent: 'The programme', translationModel: 'medium', createdAt: new Date() }],
+        createdAt: minutesAgo(5),
+      });
+      const items = messageMenuItems({
+        ...messageMenuContextOf(mine, { now: Date.now(), scope: menuScope() }),
+        piecesLabels: true,
+        canEdit: true,
+        hasDefaultExportFormat: true,
+      });
+      expect(items.length).toBeGreaterThanOrEqual(12);
+      const el = mount({ items });
+      const rect = { top: 300, bottom: 400, left: 16, right: 344, width: 328, height: 100, x: 16, y: 300 };
+      row(el).getBoundingClientRect = () => ({ ...rect, toJSON: () => rect }) as DOMRect;
+      act(() => {
+        row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      });
+      const list = document.querySelector<HTMLElement>('.message-menu-list')!;
+      const top = Number.parseFloat(list.style.top);
+      const maxHeight = Number.parseFloat(list.style.maxHeight);
+      expect(top + maxHeight).toBeLessThanOrEqual(640 - 12);
+      expect(list.style.overflowY).toBe('auto');
+      expect(Array.from(list.querySelectorAll<HTMLElement>('[role="menuitem"]')).at(-1)?.dataset.action).toBe('delete');
+    } finally {
+      for (const [key, descriptor] of [['innerHeight', real.height], ['innerWidth', real.width]] as const) {
+        if (descriptor === undefined) Reflect.deleteProperty(window, key);
+        else Object.defineProperty(window, key, descriptor);
+      }
+    }
+  });
+
+  test('en bout en bout, la mention se lit en « Plus », sans être une entrée du menu', () => {
+    open(moderated('e2ee'));
+    const notice = document.querySelector('[data-message-menu-notice]');
+    expect(notice?.textContent).toBe('Chiffré de bout en bout : ni transcription ni analyse');
+    expect(notice?.getAttribute('role')).toBeNull();
+    expect(Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).map((b) => b.textContent)).not.toContain(
+      'Chiffré de bout en bout : ni transcription ni analyse',
+    );
   });
 });
 
@@ -802,10 +921,22 @@ describe('MessageMenu — le sous-menu de « Transférer » (#9039)', () => {
 
 /**
  * #9043 — SANS CADRE, COMME LA STORY, ET GLISSER VERS LE HAUT RÉDUIT L'APERÇU.
- * Un message LONG (1 500 px) pousse la liste sous le bas de l'écran : on
- * impose cette géométrie à l'ancre, `happy-dom` ne mesurant rien.
+ * Un message LONG (1 500 px) sur un écran COURT (un téléphone en paysage,
+ * 360 px) : même tronqué à `PREVIEW_MIN_VISIBLE`, l'aperçu pousse la liste sous
+ * le bas de l'écran — sur un écran de téléphone en portrait, la troncature
+ * fait tenir le cluster entier (#11206). On impose cette géométrie à l'ancre et
+ * à la fenêtre, `happy-dom` ne mesurant rien.
  */
 describe('MessageMenu — le rail sans cadre, la liste dans sa carte, et l’aperçu se réduit au glissement (#9043)', () => {
+  /* `window` n'existe qu'après le `beforeAll` (happy-dom) : la fenêtre se lit
+     dans le témoin, jamais au chargement du module. */
+  const shortened: { real: PropertyDescriptor | undefined; active: boolean } = { real: undefined, active: false };
+  afterEach(() => {
+    if (!shortened.active) return;
+    shortened.active = false;
+    if (shortened.real === undefined) Reflect.deleteProperty(window, 'innerHeight');
+    else Object.defineProperty(window, 'innerHeight', shortened.real);
+  });
   const surface = (): HTMLElement => document.querySelector('[data-message-menu-drag-surface]')!;
   const list = (): HTMLElement => document.querySelector('.message-menu-list')!;
   const previewScale = (): number =>
@@ -817,6 +948,9 @@ describe('MessageMenu — le rail sans cadre, la liste dans sa carte, et l’ape
     });
 
   const openLong = (): void => {
+    shortened.real = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    shortened.active = true;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 360 });
     const el = mount();
     const rect = { top: 120, bottom: 1620, left: 20, right: 370, width: 350, height: 1500, x: 20, y: 120 };
     row(el).getBoundingClientRect = () => ({ ...rect, toJSON: () => rect }) as DOMRect;

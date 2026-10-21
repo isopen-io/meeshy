@@ -2,6 +2,7 @@ import CoreText
 import Foundation
 import os
 import UIKit
+import MeeshySDK
 
 // MARK: - Les polices d'apparat des cadres de gloire (§ 5.6, D10, #10158)
 
@@ -81,7 +82,7 @@ nonisolated final class GloryFrameFonts: @unchecked Sendable {
     private let bundle: Bundle
     private let lock = NSLock()
     private var registered: Set<GloryFrameFontFamily> = []
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "game")
+    private let logger = MeeshyLog.logger(.game)
 
     init(bundle: Bundle = .main) {
         self.bundle = bundle

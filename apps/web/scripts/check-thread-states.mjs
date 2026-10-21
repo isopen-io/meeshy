@@ -32,6 +32,7 @@ import {
   TRANSLATED_UNVEILED_WITNESS_ID,
   checkProtectionStates,
 } from './lib/check-protection-states.mjs';
+import { reportFailures } from './lib/ci-annotation.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -383,19 +384,22 @@ await checkProtectionStates({ browser, BASE, expect });
   await menuPage.keyboard.press('Escape');
   await awaitFact(cluster, { state: 'detached' });
 
-  // 6.5 — L'APPUI LONG (500 ms, souris tenue) ouvre le même menu, et le geste
-  // ne laisse AUCUNE sélection de texte native derrière lui.
+  // 6.5 — L'APPUI LONG (`LONG_PRESS_MS`, 350 ms depuis #11207 — D-209 —,
+  // souris tenue) ouvre le même menu, et le geste ne laisse AUCUNE sélection
+  // de texte native derrière lui.
   await rows.nth(0).scrollIntoViewIfNeeded();
   await rows.nth(0).hover();
   // DÉLAI DE GESTE, pas d'état (#7054) : le temps tenu EST l'entrée — le
-  // seuil d'appui long (500 ms) se mesure en le TENANT, aucun fait ne le
-  // remplace. La seule occurrence autorisée par `no-fixed-delays.test.ts`.
+  // seuil d'appui long (`LONG_PRESS_MS`, `src/lib/view/long-press.ts`) se
+  // mesure en le TENANT, aucun fait ne le remplace ; 700 ms le dépassent avec
+  // la marge d'un moteur chargé. La seule occurrence autorisée par
+  // `no-fixed-delays.test.ts`.
   await menuPage.mouse.down();
   await menuPage.waitForTimeout(700);
   await menuPage.mouse.up();
   const longPressOpened = expect(
     (await awaitFact(cluster)) && (await cluster.count()) === 1,
-    'un appui tenu 500 ms ouvre le menu',
+    'un appui tenu au-delà de LONG_PRESS_MS ouvre le menu',
   );
   expect(
     await menuPage.evaluate(() => (window.getSelection()?.toString() ?? '') === ''),
@@ -907,7 +911,7 @@ if (failures.length > 0) {
   // SEULE ligne qui reste visible quel que soit le bruit qui précède
   // (défaut #5676 revue 3, flake non identifiable dans check-thread-states.mjs).
   console.error(`\n  ${failures.length} état(s) du fil non tenus :\n`);
-  for (const what of failures) console.error(`    - ${what}`);
+  reportFailures({ gate: 'check-thread-states', failures, bullet: '-' });
   console.error('');
   process.exit(1);
 }

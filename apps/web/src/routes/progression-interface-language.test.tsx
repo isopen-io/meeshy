@@ -78,18 +78,18 @@ describe('Progression, interface en', () => {
         />,
       ),
     ].join('\n');
-    expect(html).toContain('Latest achievement');
-    expect(html).toContain('First achievement');
-    expect(html).toContain('Unlocked on');
+    expect(html).toContain('Latest great deed');
+    expect(html).toContain('First great deed');
+    expect(html).toContain('Done on');
     expect(html).toContain(`Level ${fixture.level.level}`);
-    expect(html).toContain('How to earn sparks');
-    expect(html).toContain('Progress toward the next level');
+    expect(html).toContain('How to make sparks fly');
+    expect(html).toContain('Your light toward the next level');
     expect(html).toContain('No Meesh');
     expect(html).toContain('2 Meeshes');
-    expect(html).toContain('Meesh record: 5');
+    expect(html).toContain('5 minted since the beginning');
     expect(html).toContain('No mint yet.');
-    expect(html).toContain('Mint a Meesh for 1,221 sparks');
-    expect(html).toContain('more sparks before a Meesh.');
+    expect(html).toContain('Mint a Meesh with 1,221 sparks');
+    expect(html).toContain('sparks to your next Meesh.');
     expect(html).not.toMatch(FRENCH);
   });
 
@@ -101,8 +101,8 @@ describe('Progression, interface en', () => {
       rendered(<AchievementsSection progress={fixture} />),
       rendered(<GeneratedAchievements sections={fixture.achievementSections ?? []} />),
     ].join('\n');
-    expect(html).toContain('8 more before milestone 50');
-    expect(html).toContain('Achievements');
+    expect(html).toContain('8 to the 50 mark');
+    expect(html).toContain('Great Deeds');
     expect(html).toContain('Challenges');
     expect(html).toContain('Circles');
     expect(html).toMatch(/Circles — \d+ of \d+/u);
@@ -133,7 +133,7 @@ describe('Progression, interface en', () => {
 describe('Progression, interface it', () => {
   test('le héros vide et les sections viennent du catalogue italien', () => {
     document.documentElement.lang = 'it';
-    expect(rendered(<LastAchievementHero progress={empty} />)).toContain('Primo successo');
+    expect(rendered(<LastAchievementHero progress={empty} />)).toContain('Prima impresa');
     expect(rendered(<GeneratedAchievements sections={fixture.achievementSections ?? []} />)).toContain('Cerchi');
   });
 });

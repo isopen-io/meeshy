@@ -89,18 +89,15 @@ extension EnvironmentValues {
 }
 
 struct AdaptiveRootView: View {
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var navigationHandoff = RootNavigationHandoff()
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Group {
-            if sizeClass == .regular {
-                iPadRootView()
-            } else {
-                RootView()
-            }
-        }
+        RootScopeSwitch(
+            makeScope: { RootScopeModels() },
+            compact: { RootView(scope: $0) },
+            regular: { iPadRootView(scope: $0) }
+        )
         .environment(\.rootNavigationHandoff, navigationHandoff)
         // Le composer de story démonté avec sa racine (compact ↔ regular) : son brouillon est tenu ICI, au-dessus
         // des deux racines, jusqu'à ce que la suivante le rouvre (`RootIntentRoutingLayer`).
@@ -461,25 +458,14 @@ struct DetachedWindowView: View {
         }
         // 6. La fenêtre principale tient sockets et synchronisation : fermée (par l'utilisateur ou par le système),
         // la fenêtre détachée propose de la rouvrir plutôt que de rester muette.
-        .overlay(alignment: .top) {
-            if mainWindows.primary == nil, authManager.isAuthenticated {
-                Button {
-                    UIApplication.shared.requestSceneSessionActivation(nil, userActivity: nil, options: nil)
-                } label: {
-                    Label(String(localized: "window.detached.open_main", defaultValue: "Ouvrir la fenêtre principale", bundle: .main),
-                          systemImage: "macwindow")
-                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .padding(.horizontal, MeeshySpacing.md)
-                        .padding(.vertical, MeeshySpacing.sm)
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.top, MeeshySpacing.sm)
-            }
-        }
+        .overlay(alignment: .top) { reopenMainWindowBanner }
         // Les liens vont à la fenêtre principale ; seule une conversation glissée au bord vient ici.
         .handlesExternalEvents(preferring: [DetachedWindowOpener.activityIdentifier],
                                allowing: [DetachedWindowOpener.activityIdentifier])
-        .environmentObject(router)
+        .modifier(MeeshyRouterInjection(router: router))
+        .modifier(PublishesSceneNavigation(router: router, role: .detached))
+        .modifier(PublishesSceneAction(keyPath: \.meeshyCloseWindow, perform: closeWindow))
+        .modifier(PublishesSceneAction(keyPath: \.meeshySearch, perform: { router.pendingOpenSearch = true }))
         .environmentObject(storyViewModel)
         .environmentObject(statusViewModel)
         .meeshyConversationList(conversationVMOwner.viewModel)
@@ -492,32 +478,21 @@ struct DetachedWindowView: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) }
             )
-            .environmentObject(router)
+            .modifier(MeeshyRouterInjection(router: router))
             .environmentObject(statusViewModel)
             .meeshyConversationList(conversationVMOwner.viewModel)
         }
-        .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: request.id,
-                isPresented: Binding(
-                    get: { storyViewerCoordinator.pendingRequest != nil },
-                    set: { if !$0 { storyViewerCoordinator.dismiss() } }
-                ),
-                onReplyToStory: { _ in storyViewerCoordinator.dismiss() },
-                singleGroup: request.singleGroup,
-                postId: request.postId,
-                startAtFirstUnviewed: request.startAtFirstUnviewed,
-                presentationSource: "DetachedWindow",
-                initialAction: request.initialAction,
-                targetCommentId: request.targetCommentId,
-                targetParentCommentId: request.targetParentCommentId
-            )
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .meeshyConversationList(conversationVMOwner.viewModel)
-            .environment(\.isStoryViewerPresenting, true)
-        }
+        .modifier(StoryReaderCover(
+            request: $storyViewerCoordinator.pendingRequest,
+            storyViewModel: storyViewModel,
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationList: conversationVMOwner.viewModel,
+            presentationSource: "DetachedWindow",
+            onReply: { replyContext in
+                router.navigateToStoryReply(replyContext, conversationList: conversationVMOwner.viewModel)
+            }
+        ))
         .fullScreenCover(isPresented: .constant(upgradeGate.isBlocked)) {
             if let requirement = upgradeGate.requirement {
                 UpgradeGateView(requirement: requirement)
@@ -532,6 +507,25 @@ struct DetachedWindowView: View {
         // racines (#10543) : sans elle ses feuilles s'inscrivaient « de toute
         // fenêtre », et la principale les refermait en ouvrant une conversation.
         .environment(\.presentedSurfaceScope, router.surfaceScope)
+    }
+
+    // MARK: - Bandeau
+
+    @ViewBuilder
+    private var reopenMainWindowBanner: some View {
+        if mainWindows.primary == nil, authManager.isAuthenticated {
+            Button {
+                UIApplication.shared.requestSceneSessionActivation(nil, userActivity: nil, options: nil)
+            } label: {
+                Label(String(localized: "window.detached.open_main", defaultValue: "Ouvrir la fenêtre principale", bundle: .main),
+                      systemImage: "macwindow")
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.sm)
+            }
+            .buttonStyle(.borderedProminent)
+            .padding(.top, MeeshySpacing.sm)
+        }
     }
 
     // MARK: - Conversation

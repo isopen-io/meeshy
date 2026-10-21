@@ -86,7 +86,8 @@ final class ComposerSceneMenuTests: XCTestCase {
 
     func test_laSurface_remetLAppuiLongAuMeuble() throws {
         let surface = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift"))
+            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift",
+            alsoIncluding: ["Meeshy/Features/Main/Composer/ComposerSceneSoundChips.swift"]))
         XCTAssertTrue(surface.contains("onItemMenuRequested: onItemMenu"),
                       "le canvas doit remettre l'appui long au meuble, sans quoi le UIMenu système revient")
         XCTAssertTrue(surface.contains("onItemMenu?(son.id, .audio"),

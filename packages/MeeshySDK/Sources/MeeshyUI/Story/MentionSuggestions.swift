@@ -75,8 +75,7 @@ final class MentionSuggestionsModel: ObservableObject {
         recompute()
         let debounce = self.debounce
         searchTask = Task { [weak self] in
-            try? await Task.sleep(for: debounce)
-            guard let self, !Task.isCancelled else { return }
+            guard await cancellableSleep(for: debounce), let self else { return }
             self.isSearching = true
             defer { self.isSearching = false }
             guard let found = try? await self.userService.searchUsers(query: trimmed, limit: 20, offset: 0),
@@ -216,14 +215,17 @@ public extension MentionSuggestionList where Menu == EmptyView {
 
 struct MentionSuggestionRow: View {
     let user: UserSearchResult
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
 
     var body: some View {
         HStack(spacing: MeeshySpacing.sm) {
-            MeeshyAvatar(name: user.displayName ?? user.username,
-                         context: .userListItem,
-                         avatarURL: user.avatar,
-                         presenceState: user.servedPresence,
-                         ring: user.avatarRing)
+            MeeshyLivePresence {
+                MeeshyAvatar(name: user.displayName ?? user.username,
+                             context: .userListItem,
+                             avatarURL: user.avatar,
+                             presenceState: presenceResolver?(user.id) ?? user.servedPresence,
+                             ring: user.avatarRing)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text(user.displayName ?? user.username)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))

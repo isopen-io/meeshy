@@ -171,19 +171,37 @@ struct AudioPostComposerView: View {
                             // ont besoin, plus bas.
                             .frame(minHeight: 220)
                         } else {
-                            statusCard
+                            AudioPostStatusCard(
+                                phase: phase,
+                                borrowedSound: borrowedSound,
+                                isDark: isDark,
+                                formattedDuration: formattedDuration,
+                                spokenDuration: spokenDuration
+                            )
                         }
                         // **Le placement suit immédiatement le carré du son**
                         // (directive porteur 2026-09-01) : c'est la décision qui
                         // dit ce que la publication DEVIENT, et elle se prend en
                         // regardant ce qu'on vient d'enregistrer — pas en bas
                         // d'un écran qu'il faut faire défiler.
-                        placementSection
+                        if let placement, recordedURL != nil || borrowedSound != nil {
+                            AudioPostPlacementSection(
+                                placement: placement,
+                                isBorrowed: borrowedSound != nil,
+                                foregroundDestination: foregroundDestination
+                            )
+                        }
                         if offersTranscription {
                             languageSelector
                         }
                         contentPanel
-                        trimSection
+                        AudioPostTrimZone(
+                            acquisition: acquisition,
+                            recordedURL: recordedURL,
+                            recordedDuration: recordedDuration,
+                            trimRange: $trimRange,
+                            onRetry: retryBorrowedDownload
+                        )
                         // `safeAreaInset` ci-dessous retranche la hauteur RÉELLE
                         // de la barre, mesurée par SwiftUI — jamais un nombre
                         // écrit à la main, qui mentirait au premier changement de
@@ -296,306 +314,6 @@ struct AudioPostComposerView: View {
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
-    }
-
-    // MARK: - Status Card (transcription / préview)
-
-    /// Carte d'état hors capture : la phase idle/recording est entièrement
-    /// portée par la feuille unifiée (`AudioRecorderSheet`).
-    private var statusCard: some View {
-        VStack(spacing: MeeshySpacing.lg) {
-            ZStack {
-                Circle()
-                    .fill(haloColor.opacity(MeeshyOpacity.light))
-                    .frame(width: 168, height: 168)
-                    .blur(radius: 4)
-
-                Circle()
-                    .fill(haloColor.opacity(MeeshyOpacity.subtle))
-                    .frame(width: 132, height: 132)
-
-                centerContent
-                    // Visualisation d'état purement décorative (sceau / note /
-                    // spinner). L'état parlé est porté par `durationLabel` juste
-                    // en dessous → on masque le décor pour éviter le bruit
-                    // VoiceOver.
-                    .accessibilityHidden(true)
-            }
-            .frame(height: 132)
-
-            durationLabel
-        }
-        .padding(.vertical, MeeshySpacing.xxl)
-        .padding(.horizontal, MeeshySpacing.xl)
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
-                        .stroke(MeeshyColors.indigo300.opacity(isDark ? 0.25 : 0.4), lineWidth: 1)
-                )
-        )
-    }
-
-    @ViewBuilder
-    private var centerContent: some View {
-        if phase == .transcribing {
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: MeeshyColors.indigo500))
-                .scaleEffect(1.6)
-        } else if borrowedSound != nil {
-            Image(systemName: "music.note.list")
-                .font(MeeshyFont.relative(56))
-                .foregroundStyle(MeeshyColors.brandGradient)
-        } else {
-            Image(systemName: "checkmark.seal.fill")
-                .font(MeeshyFont.relative(56))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [MeeshyColors.success, MeeshyColors.success.opacity(MeeshyOpacity.heavy)],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                )
-        }
-    }
-
-    private var haloColor: Color {
-        if phase == .preview { return borrowedSound != nil ? MeeshyColors.indigo500 : MeeshyColors.success }
-        return MeeshyColors.indigo500
-    }
-
-    @ViewBuilder
-    private var durationLabel: some View {
-        if phase == .preview, let borrowedSound {
-            VStack(spacing: MeeshySpacing.xs) {
-                Text(borrowedSound.hasAuthoredTitle
-                     ? borrowedSound.title
-                     : String(localized: "media.sound.original", defaultValue: "Son original"))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-                Text(borrowedSound.authorLabel.map { "@\($0)" } ?? "")
-                    .font(.caption)
-                    .foregroundColor(theme.textSecondary)
-                Text(formattedDuration)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(theme.textMuted)
-            }
-        } else if phase == .preview {
-            Text(formattedDuration)
-                .font(.system(.largeTitle, design: .monospaced).weight(.light))
-                .foregroundColor(theme.textPrimary)
-                // A bare monospaced "0:34" reads to VoiceOver as a context-less
-                // number. Name what the timer measures via the label and expose
-                // the running time as the value.
-                .accessibilityLabel(String(localized: "composer.audio.recorded-duration", defaultValue: "Durée enregistrée"))
-                .accessibilityValue(spokenDuration)
-        } else if phase == .transcribing {
-            VStack(spacing: MeeshySpacing.xs) {
-                Text(String(localized: "composer.audio.transcription.running", defaultValue: "Transcription en cours…"))
-                    .font(.subheadline.weight(.medium))
-                    .foregroundColor(theme.textSecondary)
-                Text(formattedDuration)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundColor(theme.textMuted)
-            }
-        }
-    }
-
-    // MARK: - Rognage et placement
-
-    /// **La zone de rognage** — montée dès qu'une piste existe, quelle que soit
-    /// sa provenance : un enregistrement, un fichier, un son de bibliothèque.
-    @ViewBuilder
-    private var trimSection: some View {
-        // **Ce que la zone rend est une DÉCISION, prise ailleurs** (#4667) :
-        // quatre cas exclusifs, éprouvables sans monter l'écran. Les conditions
-        // écrites dans un `@ViewBuilder` ne s'interrogent qu'à la garde de
-        // source, et une garde de source ne dit pas ce que l'auteur VOIT.
-        switch AudioTrimSection.resolve(acquisition: acquisition,
-                                        hasLocalTrack: recordedURL != nil,
-                                        duration: recordedDuration) {
-        case .hidden:
-            EmptyView()
-        case .loading:
-            trimPlaceholder {
-                HStack(spacing: MeeshySpacing.sm) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: MeeshyColors.indigo500))
-                    Text(String(localized: "composer.audio.trim.loading",
-                                defaultValue: "Chargement du son…", bundle: .main))
-                        .font(.caption)
-                        .foregroundColor(theme.textSecondary)
-                }
-            }
-        case .failed:
-            trimPlaceholder {
-                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                    Text(String(localized: "composer.audio.trim.load-failed",
-                                defaultValue: "Le son n'a pas pu être chargé.", bundle: .main))
-                        .font(.caption)
-                        .foregroundColor(theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button(String(localized: "common.retry",
-                                  defaultValue: "Réessayer", bundle: .main)) {
-                        retryBorrowedDownload()
-                    }
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
-                }
-            }
-        case .trimmer:
-            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-                trimHeader
-                if let url = recordedURL {
-                    MeeshyAudioTrimmer(
-                        url: url,
-                        duration: recordedDuration,
-                        range: $trimRange,
-                        tint: MeeshyColors.indigo500
-                    )
-                }
-            }
-        }
-    }
-
-    private var trimHeader: some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            Image(systemName: "scissors")
-                .font(.caption.weight(.semibold))
-                .accessibilityHidden(true)
-            Text(String(localized: "composer.audio.trim.title",
-                        defaultValue: "Rogner", bundle: .main))
-                .font(.caption.weight(.semibold))
-            Spacer()
-            if acquisition == .direct {
-                Text(Self.rangeLabel(trimRange))
-                    .font(.caption.monospacedDigit())
-                    .foregroundColor(theme.textMuted)
-            }
-        }
-        .foregroundColor(theme.textSecondary)
-    }
-
-    /// **L'attente et l'échec occupent la MÊME place que les poignées.** Une
-    /// zone qui apparaît d'un coup pousse tout ce qui la suit ; en réservant sa
-    /// hauteur, le placement et le panneau de contenu ne sautent pas quand la
-    /// piste arrive.
-    @ViewBuilder
-    private func trimPlaceholder<Contenu: View>(@ViewBuilder _ contenu: () -> Contenu) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-            trimHeader
-            contenu()
-                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                .padding(.horizontal, MeeshySpacing.md)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .fill(theme.surface(tint: "C7D2FE"))
-                )
-        }
-    }
-
-    /// **Le PLACEMENT, en bas** — c'est lui qui remplace le choix de la porte.
-    ///
-    /// Avant #4657, « Vocal » et « Ajouter un son » différaient par leur
-    /// DESTINATION, et l'auteur devait la deviner au bouton qu'il pressait.
-    /// Elle se choisit désormais, à l'endroit où l'on décide de publier.
-    @ViewBuilder
-    private var placementSection: some View {
-        if let placement, recordedURL != nil || borrowedSound != nil {
-            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-                // **Sans titre** (directive porteur 2026-09-01). « Place du
-                // son » nommait ce que les deux libellés disent déjà — « fond
-                // de publication », « contenu de publication » se lisent seuls.
-                // Un en-tête qui répète son contenu vole une ligne au rognage.
-                HStack(spacing: 0) {
-                    ForEach(ComposerAudioRole.allCases, id: \.self) { role in
-                        placementHalf(role, binding: placement)
-                    }
-                }
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .fill(theme.surface(tint: "C7D2FE"))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(MeeshyColors.indigo400.opacity(MeeshyOpacity.medium), lineWidth: 1)
-                )
-
-                // La définition passe SOUS l'interrupteur, sur une ligne, pour
-                // celle qui est choisie — c'est ce qui divise sa hauteur par
-                // deux. Le prix est réel et assumé : il faut choisir une moitié
-                // pour lire ce qu'elle fait. Les deux libellés étant explicites,
-                // la ligne CONFIRME plutôt qu'elle n'enseigne.
-                Text(borrowedSound != nil
-                     ? ComposerSoundRoleCopy.borrowedForegroundRefusal
-                     : ComposerSoundRoleCopy.description(placement.wrappedValue,
-                                                       destination: foregroundDestination))
-                    .font(.caption2)
-                    .foregroundColor(theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    /// Une moitié de l'interrupteur — son libellé, et rien d'autre.
-    ///
-    /// La description a quitté chaque moitié pour la ligne unique sous
-    /// l'interrupteur : deux titres et deux sous-titres empilés faisaient un
-    /// bloc de 88 pt là où la décision en mérite 44.
-    @ViewBuilder
-    private func placementHalf(_ role: ComposerAudioRole,
-                               binding: Binding<ComposerAudioRole>) -> some View {
-        let choisi = binding.wrappedValue == role
-        // Le premier plan fait du son une pièce jointe, c'est-à-dire un FICHIER
-        // de la publication : un son de la bibliothèque devrait être ré-uploadé
-        // pour en devenir une, donc détaché de son `soundId` et du crédit de son
-        // auteur. La moitié reste MONTRÉE et désactivée — une option absente se
-        // lit comme une capacité qui n'existe pas.
-        let refuse = (role == .foreground && borrowedSound != nil)
-
-        Button {
-            guard !refuse else { return }
-            binding.wrappedValue = role
-            HapticFeedback.light()
-        } label: {
-            Text(ComposerSoundRoleCopy.label(role, destination: foregroundDestination))
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(choisi ? .white : theme.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, MeeshySpacing.smPlus)
-                .padding(.horizontal, MeeshySpacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .fill(choisi ? AnyShapeStyle(MeeshyColors.brandGradient) : AnyShapeStyle(Color.clear))
-                )
-                .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
-        }
-        .buttonStyle(.plain)
-        .disabled(refuse)
-        .opacity(refuse ? 0.4 : 1)
-        // **La MÊME destination que ce que l'œil lit** (#4722) : de deux chaînes
-        // pour un bouton, celle qu'on n'entend pas est celle que nul ne corrige.
-        .accessibilityLabel(ComposerSoundRoleCopy.label(role, destination: foregroundDestination))
-        .accessibilityHint(refuse
-                           ? ComposerSoundRoleCopy.borrowedForegroundRefusal
-                           : ComposerSoundRoleCopy.description(role, destination: foregroundDestination))
-        .accessibilityAddTraits(choisi ? [.isSelected] : [])
-    }
-
-    /// « 0:03 → 0:41 » — l'intervalle MONTRÉ.
-    ///
-    /// `LocalizedNumber.duration` et non un `String(format:)` : un format sans
-    /// locale grave les chiffres LATINS, et un lecteur arabophone y lirait des
-    /// chiffres qui ne sont pas les siens. VoiceOver, lui, lit la valeur PARLÉE
-    /// que portent les poignées du composant — jamais cette horloge.
-    private static func rangeLabel(_ range: ClosedRange<TimeInterval>) -> String {
-        let debut = LocalizedNumber.duration(seconds: range.lowerBound)
-        let fin = LocalizedNumber.duration(seconds: range.upperBound)
-        return "\(debut) → \(fin)"
     }
 
     // MARK: - Action Bar
@@ -992,108 +710,5 @@ struct AudioPostComposerView: View {
             confidence: t.confidence,
             segments: segments
         )
-    }
-}
-
-// MARK: - Audio Language Picker
-
-struct AudioLanguagePickerView: View {
-    @Binding var selectedLocale: Locale
-    /// Le titre de la feuille. Défaut : le contexte d'ORIGINE (la langue d'un
-    /// audio). Un hôte qui remonte ce composant dans un AUTRE contexte — le
-    /// meuble, dont la feuille nomme la langue du POST — passe le sien, sans
-    /// que les trois appelants audio aient à répéter le défaut.
-    var title: LocalizedStringResource = "Langue de l'audio"
-    private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.dismiss) private var dismiss
-    @State private var searchText = ""
-    @State private var showAllLanguages = false
-
-    private var listedLocales: [(locale: Locale, name: String)] {
-        let locales = showAllLanguages
-            ? EdgeTranscriptionService.shared.supportedLocales
-            : EdgeTranscriptionService.shared.availableLocales
-        return locales.compactMap { locale -> (Locale, String)? in
-            guard let name = Locale.current.localizedString(forIdentifier: locale.identifier) else {
-                return nil
-            }
-            let cap = name.prefix(1).uppercased() + name.dropFirst()
-            return (locale, cap)
-        }
-        .sorted { $0.1 < $1.1 }
-    }
-
-    private var filteredLocales: [(locale: Locale, name: String)] {
-        guard !searchText.isEmpty else { return listedLocales }
-        let q = searchText.lowercased()
-        return listedLocales.filter {
-            $0.name.lowercased().contains(q) ||
-            $0.locale.identifier.lowercased().contains(q)
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    Toggle(isOn: $showAllLanguages) {
-                        Text(String(localized: "composer.audio.languages.show-all", defaultValue: "Afficher toutes les langues"))
-                            .font(.subheadline)
-                            .foregroundColor(theme.textPrimary)
-                    }
-                    .tint(MeeshyColors.indigo500)
-                } footer: {
-                    Text(String(
-                        localized: "composer.audio.languages.hint", defaultValue: "Par défaut, seules les langues disponibles sur cet appareil sont listées."
-                    ))
-                    .font(.caption)
-                    .foregroundColor(theme.textMuted)
-                }
-
-                Section {
-                    ForEach(filteredLocales, id: \.locale.identifier) { item in
-                        Button {
-                            selectedLocale = item.locale
-                            HapticFeedback.light()
-                            dismiss()
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                                    Text(item.name)
-                                        .font(.callout.weight(
-                                            selectedLocale.identifier == item.locale.identifier
-                                                ? .semibold : .regular
-                                        ))
-                                        .foregroundColor(theme.textPrimary)
-                                    Text(item.locale.identifier)
-                                        .font(.caption)
-                                        .foregroundColor(theme.textMuted)
-                                }
-                                Spacer()
-                                if selectedLocale.identifier == item.locale.identifier {
-                                    Image(systemName: "checkmark")
-                                        .font(.subheadline.weight(.bold))
-                                        .foregroundColor(MeeshyColors.indigo500)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .searchable(text: $searchText,
-                        prompt: String(localized: "composer.audio.languages.search", defaultValue: "Rechercher une langue"))
-            .navigationTitle(Text(title))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) {
-                        dismiss()
-                    }
-                    .foregroundColor(MeeshyColors.indigo500)
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
     }
 }

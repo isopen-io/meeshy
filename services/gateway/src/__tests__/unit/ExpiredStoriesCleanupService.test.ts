@@ -410,6 +410,7 @@ describe('ExpiredStoriesCleanupService — notifications des posts détruits', (
       expect.objectContaining({
         find: 'Notification',
         filter: {
+          type: { $ne: 'content_removed' },
           $or: [
             { 'context.postId': { $in: ['story1', 'repost1'] } },
             { 'metadata.repostId': { $in: ['story1', 'repost1'] } },

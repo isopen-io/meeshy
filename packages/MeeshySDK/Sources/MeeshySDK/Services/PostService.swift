@@ -92,6 +92,8 @@ public protocol PostServiceProviding: Sendable {
     /// reste conforme, et continue d'observer le corps par ses paramètres.
     func update(postId: String, known: Set<PostEditField>, draft: PostEditDraft) async throws -> APIPost
     func delete(postId: String) async throws
+    /// #11151 — le retrait de la publication d'un AUTRE porte son motif.
+    func delete(postId: String, reason: String?) async throws
     func like(postId: String) async throws
     func unlike(postId: String) async throws
     func bookmark(postId: String) async throws
@@ -102,6 +104,8 @@ public protocol PostServiceProviding: Sendable {
     func likeComment(postId: String, commentId: String) async throws
     func unlikeComment(postId: String, commentId: String) async throws
     func deleteComment(postId: String, commentId: String) async throws
+    /// #11151 — le retrait du commentaire d'un AUTRE porte son motif.
+    func deleteComment(postId: String, commentId: String, reason: String?) async throws
     /// Édition d'un commentaire par son auteur : contenu et/ou effets visuels
     /// (`effectFlags`, même bitfield que la création — lueur/pulse/…). Une
     /// requirement séparée avec défaut ci-dessous pour garder les mocks valides.
@@ -210,6 +214,16 @@ public protocol PostServiceProviding: Sendable {
 }
 
 public extension PostServiceProviding {
+    func delete(postId: String, reason: String?) async throws {
+        guard reason == nil else { throw APIError.serverError(501, "delete(reason:) not implemented by \(Self.self)") }
+        try await delete(postId: postId)
+    }
+
+    func deleteComment(postId: String, commentId: String, reason: String?) async throws {
+        guard reason == nil else { throw APIError.serverError(501, "deleteComment(reason:) not implemented by \(Self.self)") }
+        try await deleteComment(postId: postId, commentId: commentId)
+    }
+
     func recordSocialEvents(_ events: [StampedSocialEvent], credential: SocialEventsCredential) async throws -> SocialEventsReceipt {
         throw APIError.serverError(501, "recordSocialEvents not implemented by \(Self.self)")
     }
@@ -395,7 +409,7 @@ public extension PostServiceProviding {
     }
 }
 
-public final class PostService: PostServiceProviding, @unchecked Sendable {
+public final class PostService: PostServiceProviding, Sendable {
     public static let shared = PostService()
     let api: APIClientProviding
     /// #10502 — les interactions RÉUSSIES par appel direct (réels, profil,
@@ -510,7 +524,11 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func delete(postId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostId(postId: postId))
+        try await delete(postId: postId, reason: nil)
+    }
+
+    public func delete(postId: String, reason: String?) async throws {
+        try await api.deleteRemovingContent(PostsEndpoint.byPostId(postId: postId), reason: reason)
     }
 
     public func like(postId: String) async throws {
@@ -805,7 +823,11 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func deleteComment(postId: String, commentId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostIdCommentsByCommentId(postId: postId, commentId: commentId))
+        try await deleteComment(postId: postId, commentId: commentId, reason: nil)
+    }
+
+    public func deleteComment(postId: String, commentId: String, reason: String?) async throws {
+        try await api.deleteRemovingContent(PostsEndpoint.byPostIdCommentsByCommentId(postId: postId, commentId: commentId), reason: reason)
     }
 
     public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) async throws -> APIPost {

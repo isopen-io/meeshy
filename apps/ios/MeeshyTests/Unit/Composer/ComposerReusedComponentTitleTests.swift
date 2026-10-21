@@ -62,7 +62,7 @@ final class ComposerReusedComponentTitleTests: XCTestCase {
 
     // 3 — le composant garde son défaut d'ORIGINE, pour que ses appelants audio restent justes.
     func test_lAudioPickerDeclareTitre_avecDefautLangueDeLAudio() throws {
-        let picker = compact(try source("Meeshy/Features/Main/Views/AudioPostComposerView.swift"))
+        let picker = compact(try source("Meeshy/Features/Main/Views/AudioLanguagePickerView.swift"))
         XCTAssertTrue(picker.contains("structAudioLanguagePickerView"), "AudioLanguagePickerView introuvable ou vide")
         XCTAssertTrue(
             picker.contains("vartitle:LocalizedStringResource=\"Languedel'audio\""),

@@ -190,6 +190,10 @@
         <receiver
             android:name=".DeclineCallReceiver"
             android:exported="false" />
+        <!-- #10921 — balayer une bannière note « écartée » dans l'entonnoir. -->
+        <receiver
+            android:name=".NotificationDismissReceiver"
+            android:exported="false" />
         <!-- #10626 — les quatre widgets d'écran d'accueil d'iOS (MeeshyWidgets),
              alimentés par la page via MeeshyWidgetsPlugin : aucun second SDK, aucune
              mise à jour périodique. WidgetActionActivity relaie les gestes des lignes
@@ -244,6 +248,15 @@
             android:permission="android.permission.BIND_REMOTEVIEWS" />
         <activity
             android:name=".WidgetActionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <!-- #11052 — le relais des actions de banniere : note « ouverte », retire la
+             banniere, puis ouvre la destination, comme notificationclick sur le web. -->
+        <activity
+            android:name=".NotificationActionActivity"
             android:excludeFromRecents="true"
             android:exported="false"
             android:noHistory="true"

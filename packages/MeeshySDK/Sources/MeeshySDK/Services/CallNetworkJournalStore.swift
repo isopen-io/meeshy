@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let journalLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+private let journalLogger = MeeshyLog.logger(.calls)
 
 public protocol CallNetworkJournalStoreProviding: Sendable {
     func append(_ event: CallNetworkEvent, callId: String, startedAt: Date) async

@@ -181,7 +181,7 @@ extension Route {
         case .progressionRules:
             return String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main)
         case .progressionNotebook:
-            return String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main)
+            return String(localized: "game.notebook.page_title", defaultValue: "La Chronique", bundle: .main)
         case .gamePage(let page, _):
             return page.title
         case .progressionConcept(let concept, _):
@@ -225,6 +225,7 @@ final class Router: ObservableObject {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
+    private(set) lazy var commands = RouterCommands(router: self)
     @Published var path: [Route] = [] {
         didSet {
             AnalyticsManager.shared.trackRoute(path.last)
@@ -293,7 +294,7 @@ final class Router: ObservableObject {
     /// iPad two-column mode: called when pop/popToRoot is requested.
     var onPopRequested: (() -> Void)?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "router")
+    private static let logger = MeeshyLog.logger(.router)
 
     var currentRoute: Route? { path.last }
 

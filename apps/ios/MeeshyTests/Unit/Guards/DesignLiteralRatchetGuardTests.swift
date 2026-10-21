@@ -175,7 +175,7 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             reason: "palettes proposées à l'utilisateur : nuanciers de fond et de communauté",
             globs: [
                 "\(app)/Components/BackgroundColorPalette.swift",
-                "\(ui)/Community/CommunitySettingsView.swift",
+                "\(ui)/Community/CommunitySettingsScreen.swift",
             ]
         ),
         Exemption(
@@ -225,6 +225,10 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
         Exemption(
             reason: "jeu : le bandeau de parrainage est dessiné dans une IMAGE partagée hors de l'app (#7742) — ses couleurs et ses rayons sont fixes, jamais ceux du thème de celui qui compose la carte",
             globs: ["\(ui)/Game/GameReferralBannerView.swift"]
+        ),
+        Exemption(
+            reason: "jeu : la palette et les couches de la cérémonie de la frappe (une forge de nuit, apps/web/src/styles/game-ceremony.css), rejouées couleur pour couleur à l'identique du web — acier, bois, poussières et nuit du prisme ne sont pas des jetons d'interface",
+            globs: ["\(app)/Game/Choreography/MintCeremonyLayers.swift"]
         ),
         Exemption(
             reason: "code : thèmes de coloration syntaxique",

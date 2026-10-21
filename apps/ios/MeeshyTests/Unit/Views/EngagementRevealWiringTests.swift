@@ -49,7 +49,8 @@ final class EngagementRevealWiringTests: XCTestCase {
     /// seulement — le genre d'écart qu'aucun essai manuel ne couvre.
     func test_everyTapSource_carriesTheMilestone() throws {
         let iphone = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift",
+                                    alsoIncluding: ["Meeshy/Features/Main/Views/RootNotificationNavigator.swift"]))
         // Les constructeurs vivent à côté de la racine depuis #10483.
         let iphoneContext = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView+NotificationNavContext.swift"))
@@ -95,7 +96,8 @@ final class EngagementRevealWiringTests: XCTestCase {
     /// là d'où il vient.
     func test_theGameIsStillOpened_theRevealOnlyCoversIt() throws {
         let iphone = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift",
+                                    alsoIncluding: ["Meeshy/Features/Main/Views/RootNotificationNavigator.swift"]))
         let reveal = try XCTUnwrap(iphone.range(of: "router.pendingEngagementReveal = ctx.reveal"))
         XCTAssertTrue(iphone[reveal.upperBound...].prefix(200).contains("router.openGame(at: GameNavigationMap.entry(for: ctx.type)"))
 

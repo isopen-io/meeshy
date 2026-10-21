@@ -94,7 +94,7 @@ extension CallManager {
                 callId: pending.callId,
                 fromUserId: pending.fromUserId,
                 fromUsername: pending.fromUsername,
-                isVideo: pending.isVideo,
+                isVideo: pending.kind.isVideo,
                 iceServers: pending.iceServers,
                 conversationId: pending.conversationId
             )
@@ -109,5 +109,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

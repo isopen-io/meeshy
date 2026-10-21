@@ -29,7 +29,7 @@ public final class ReaderAudioMixer {
     /// Number of foreground audio clips currently configured.
     public var activeClipCount: Int { entries.count }
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    private let logger = MeeshyLog.logger(.media)
     /// `internal` : l'extension du FOND vit dans son propre fichier
     /// (`ReaderAudioMixer+Background.swift`) et y attache son node.
     let engine = AVAudioEngine()
@@ -244,6 +244,8 @@ public final class ReaderAudioMixer {
             // HORS de toute correction #6580 : une reprise à clé identique reste
             // un `resume`, jamais une replanification — replanifier ici
             // ressusciterait l'ÉCHO que cette garde ferme (RC4.6).
+            // La reprise reprend la session que la pause a pu rendre (#11040, j).
+            if isSounding { MediaSessionCoordinator.shared.activateContentPlayback(.audible) }
             try resumeWithoutRescheduling()
             return false
         }
@@ -332,6 +334,9 @@ public final class ReaderAudioMixer {
     }
 
     public func pause() {
+        // Une story qui sonnait rend la main au bout de ≈ 3 s de pause ; sa
+        // reprise réactive la session et annule la libération (#11040, j).
+        if isPlaying, isSounding { MediaSessionCoordinator.shared.releaseAfterUserPause() }
         for entry in entries.values { entry.node.pause() }
         backgroundEntry?.player.pause()
         if engine.isRunning { engine.pause() }
@@ -520,7 +525,7 @@ public final class ReaderAudioMixer {
     // via le teardown de StoryCanvasUIView qui possède toujours un audioMixer.
     nonisolated deinit {
         if !didShutdown {
-            os.Logger(subsystem: "me.meeshy.app", category: "media").warning(
+            MeeshyLog.logger(.media).warning(
                 "ReaderAudioMixer deinit without shutdown() — owner should call shutdown() before drop to release AVAudioEngine + nodes deterministically."
             )
         }
@@ -716,7 +721,7 @@ public final class ReaderAudioMixer {
                                                      duration: duration, elapsed: elapsed)
                 live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : volume
                 if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { return }
-                try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
             }
         }
         if var stored = entries[entry.audioId] {
@@ -740,7 +745,7 @@ public final class ReaderAudioMixer {
         let task = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 guard self?.applyLoopEnvelope(audioId: audioId, epoch: epoch, cycle: cycle) == true else { return }
-                try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+                guard await cancellableSleep(for: ReaderVolumeRamp.step) else { return }
             }
         }
         if var stored = entries[audioId] {
@@ -868,7 +873,13 @@ public final class ReaderAudioMixer {
 /// `PlaybackCoordinator` lets a second reader surface (viewer + composer preview
 /// mounted together) stop the previous engine before starting its own, so the
 /// same background track is never heard from two engines at once (RC4.6).
-extension ReaderAudioMixer: StoppablePlayer {}
+extension ReaderAudioMixer: AudiblyPlayingPlayer {
+    public var isPlayingAudibly: Bool { isPlaying && isSounding }
+
+    /// Des clips chargés et le son ouvert : le mixer tient (ou reprend) une
+    /// session `.playback`. Une slide silencieuse n'en prend jamais.
+    var isSounding: Bool { !isMuted && (!entries.isEmpty || backgroundEntry != nil) }
+}
 
 // MARK: - Ducking + fade-out
 
@@ -904,7 +915,7 @@ extension ReaderAudioMixer {
             let elapsed = Self.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: startHost)
             applyFadeGain(ReaderVolumeRamp.volume(from: 1, to: 0, duration: duration, elapsed: elapsed))
             if ReaderVolumeRamp.isComplete(duration: duration, elapsed: elapsed) { break }
-            try? await Task.sleep(for: .seconds(ReaderVolumeRamp.stepInterval))
+            guard await cancellableSleep(for: ReaderVolumeRamp.step) else { break }
         }
         guard playbackEpoch == epoch else { return }
         stop()

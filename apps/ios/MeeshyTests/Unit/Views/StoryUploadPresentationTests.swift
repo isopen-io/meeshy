@@ -92,7 +92,6 @@ final class StoryUploadPresentationTests: XCTestCase {
         StoryViewModel.StoryUploadState(
             id: id,
             thumbnailImage: UIImage(),
-            progress: 0,
             phase: phase,
             authorId: "me",
             authorName: "Me",

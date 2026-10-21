@@ -27,6 +27,17 @@ struct OutboxDispatcher: OutboxDispatching {
         return d
     }()
 
+    let messageService: any MessageServiceProviding
+    let persistence: @Sendable @concurrent () async -> MessagePersistenceActor
+
+    init(
+        messageService: any MessageServiceProviding = MessageService.shared,
+        persistence: @escaping @Sendable @concurrent () async -> MessagePersistenceActor = { await DependencyContainer.shared.messagePersistence }
+    ) {
+        self.messageService = messageService
+        self.persistence = persistence
+    }
+
     /// #10502 — une mutation ENVOYÉE qui est une interaction avec un contenu
     /// (réaction, repost, commentaire, blocage) s'émet en événement v2, daté
     /// de son enfilement. Un échec ne s'émet pas : le rejeu le fera.
@@ -40,7 +51,7 @@ struct OutboxDispatcher: OutboxDispatching {
     private func route(_ record: OutboxRecord) async throws {
         switch record.kind {
         case .sendMessage:
-            try await dispatchSendMessage(record)
+            try await dispatchSendMessageRecordingFailure(record)
 
         case .editMessage:
             try await dispatchEditMessage(record)

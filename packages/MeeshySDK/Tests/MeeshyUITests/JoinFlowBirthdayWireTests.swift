@@ -10,13 +10,13 @@ final class JoinFlowBirthdayWireTests: XCTestCase {
 
     func test_birthdayField_requis_voyageEnDateHeureAMillisecondes() {
         XCTAssertEqual(
-            JoinFlowViewModel.birthdayField(Self.naissance, required: true),
+            JoinFlowWire.birthdayField(Self.naissance, required: true),
             "2026-09-15T09:34:23.563Z"
         )
     }
 
     func test_birthdayField_nonRequis_neVoyagePas() {
-        XCTAssertNil(JoinFlowViewModel.birthdayField(Self.naissance, required: false))
+        XCTAssertNil(JoinFlowWire.birthdayField(Self.naissance, required: false))
     }
 }
 
@@ -41,36 +41,30 @@ final class InviteGroupFactsShownCountTests: XCTestCase {
 final class JoinFlowDefaultLanguageTests: XCTestCase {
 
     func test_defaultLanguage_englishDevice_offersEnglish() {
-        XCTAssertEqual(JoinFlowViewModel.defaultLanguage(for: ["en-US", "en_US"]), "en")
+        XCTAssertEqual(JoinFlowLanguages.defaultLanguage(for: ["en-US", "en_US"]), "en")
     }
 
     func test_defaultLanguage_normalizesScriptAndRegion() {
-        XCTAssertEqual(JoinFlowViewModel.defaultLanguage(for: ["zh-Hans-CN"]), "zh")
-        XCTAssertEqual(JoinFlowViewModel.defaultLanguage(for: ["ko_KR"]), "ko")
+        XCTAssertEqual(JoinFlowLanguages.defaultLanguage(for: ["zh-Hans-CN"]), "zh")
+        XCTAssertEqual(JoinFlowLanguages.defaultLanguage(for: ["ko_KR"]), "ko")
     }
 
     func test_defaultLanguage_deviceLanguageNotOffered_fallsBackToFrench() {
-        XCTAssertEqual(JoinFlowViewModel.defaultLanguage(for: ["sv-SE", "sv_SE"]), "fr")
+        XCTAssertEqual(JoinFlowLanguages.defaultLanguage(for: ["sv-SE", "sv_SE"]), "fr")
     }
 
     func test_defaultLanguage_firstOfferedPreferredLanguageWins() {
-        XCTAssertEqual(JoinFlowViewModel.defaultLanguage(for: ["sv-SE", "ar-EG"]), "ar")
+        XCTAssertEqual(JoinFlowLanguages.defaultLanguage(for: ["sv-SE", "ar-EG"]), "ar")
     }
 
     func test_defaultLanguage_noDeviceLanguage_fallsBackToFrench() {
-        XCTAssertEqual(JoinFlowViewModel.defaultLanguage(for: []), "fr")
+        XCTAssertEqual(JoinFlowLanguages.defaultLanguage(for: []), "fr")
     }
 
     func test_defaultLanguage_isAlwaysOneOfThePickerLanguages() {
-        let offered = JoinFlowViewModel.offeredLanguages.map(\.code)
+        let offered = JoinFlowLanguages.offered.map(\.code)
         for device in ["en-GB", "ja-JP", "pt-BR", "sv-SE", "", "x"] {
-            XCTAssertTrue(offered.contains(JoinFlowViewModel.defaultLanguage(for: [device])), device)
+            XCTAssertTrue(offered.contains(JoinFlowLanguages.defaultLanguage(for: [device])), device)
         }
-    }
-
-    @MainActor
-    func test_init_preselectsTheDeviceLanguage() {
-        let sut = JoinFlowViewModel(identifier: "mshy_link", deviceLanguages: ["en-US"])
-        XCTAssertEqual(sut.language, "en")
     }
 }

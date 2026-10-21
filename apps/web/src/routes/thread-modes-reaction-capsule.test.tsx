@@ -112,6 +112,8 @@ const monte = async (options: {
   readonly messages: readonly Message[];
   readonly mode?: 'bubbles' | 'focal';
   readonly reacts?: boolean;
+  /** Le verdict `canReact` du lecteur (#11372) — vrai par défaut. */
+  readonly reactable?: boolean;
   readonly selection?: SelectionState | null;
 }) => {
   const journal: string[] = [];
@@ -138,6 +140,7 @@ const monte = async (options: {
         : {
             onReact: (messageId: string, emoji: string) => journal.push(`react:${messageId}:${emoji}`),
             onExpandReactions: (messageId: string) => journal.push(`expand:${messageId}`),
+            reactableOf: () => options.reactable ?? true,
           })}
     />,
   );
@@ -210,5 +213,17 @@ describe('la capsule « + », montée sur ThreadModes (#10583)', () => {
     expect(journal.length).toBe(2);
     expect(journal[0]?.startsWith('react:m-2:')).toBe(true);
     expect(journal[1]).toBe('expand:m-2');
+  });
+
+  test('un lecteur que la loi ne laisse pas réagir (`canReact`) n’a ni capsule ni pastille à basculer (#11372)', async () => {
+    const reacted = messageOf('m-2', 2, 'u-awa', { reactionSummary: { '👍': 2 }, reactionCount: 2 } as Partial<Message>);
+    for (const mode of ['bubbles', 'focal'] as const) {
+      const { host } = await monte({ messages: [reacted], mode, reactable: false });
+      expect(host.querySelector(CAPSULE)).toBeNull();
+      expect([...host.querySelectorAll('button')].some((button) => button.textContent?.includes('👍'))).toBe(false);
+      mounter.unmountAll();
+    }
+    const { host } = await monte({ messages: [reacted] });
+    expect([...host.querySelectorAll('button')].some((button) => button.textContent?.includes('👍'))).toBe(true);
   });
 });

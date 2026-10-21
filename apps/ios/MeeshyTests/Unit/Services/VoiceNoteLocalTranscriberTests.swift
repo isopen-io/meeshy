@@ -54,6 +54,7 @@ final class MockVoiceNoteLocalTranscriber: VoiceNoteLocalTranscribing {
     private(set) var awaitCallCount = 0
     private(set) var discardCallCount = 0
     private(set) var discardedAttachmentIds: [String] = []
+    private(set) var lookupCount = 0
 
     func beginTranscription(attachmentId: String, audioURL: URL, durationMs: Int, languageCode: String) {
         beginCallCount += 1
@@ -61,7 +62,8 @@ final class MockVoiceNoteLocalTranscriber: VoiceNoteLocalTranscribing {
     }
 
     func transcription(for attachmentId: String) -> MessageTranscription? {
-        knownResults[attachmentId]
+        lookupCount += 1
+        return knownResults[attachmentId]
     }
 
     func awaitTranscription(for attachmentId: String) async -> MessageTranscription? {
@@ -324,6 +326,23 @@ final class VoiceNoteLocalTranscriberTests: XCTestCase {
         XCTAssertTrue(awaited.isEmpty, "Passé le budget d'envoi, l'upload part sans texte — Whisper reste le repli")
         XCTAssertLessThan(ecoule, .seconds(2), "L'envoi ne doit jamais attendre le plafond du moteur")
         sut.discard(attachmentId: "att-1")
+    }
+
+    func test_awaitTranscriptionsWithinBudget_cancelled_returnsAtOnceAndStopsPolling() async {
+        let mock = MockVoiceNoteLocalTranscriber()
+        let waiting = Task { await mock.awaitTranscriptions(for: ["att-1"], within: .seconds(5)) }
+        _ = await cancellableSleep(for: .milliseconds(50))
+
+        let debut = ContinuousClock.now
+        waiting.cancel()
+        let awaited = await waiting.value
+        let ecoule = debut.duration(to: ContinuousClock.now)
+
+        XCTAssertTrue(awaited.isEmpty)
+        XCTAssertLessThan(ecoule, .milliseconds(150), "annulée, l'attente rend la main sans finir son budget")
+        let countAfterCancel = mock.lookupCount
+        _ = await cancellableSleep(for: .milliseconds(300))
+        XCTAssertEqual(mock.lookupCount, countAfterCancel, "plus aucun sondage après l'annulation")
     }
 
     /// Le cas nominal d'un vocal court : la reconnaissance a déjà rendu, le

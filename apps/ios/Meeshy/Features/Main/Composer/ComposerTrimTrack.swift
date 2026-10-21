@@ -292,7 +292,7 @@ struct ComposerTrimTrack: View {
             guard !releve.isEmpty else { return }
             let pas = width / CGFloat(releve.count)
             for (index, valeur) in releve.enumerated() {
-                let hauteur = max(2, CGFloat(valeur) * Self.height)
+                let hauteur = max(2, CGFloat(WaveformScale.displayHeight(rms: valeur)) * Self.height)
                 chemin.addRect(CGRect(x: CGFloat(index) * pas, y: (Self.height - hauteur) / 2,
                                       width: max(1, pas - 1), height: hauteur))
             }

@@ -7,7 +7,7 @@ public struct CachePolicy: Sendable {
     public let maxItemCount: Int?
     public let storageLocation: StorageLocation
 
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "cache-policy")
+    private static let logger = MeeshyLog.logger(.cachePolicy, subsystem: .legacySDK)
 
     public enum StorageLocation: Sendable, Equatable {
         case grdb

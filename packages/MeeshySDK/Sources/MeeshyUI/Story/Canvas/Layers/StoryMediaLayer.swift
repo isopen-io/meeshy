@@ -5,60 +5,6 @@ import UIKit
 import os
 import MeeshySDK
 
-/// Async image loader used by `StoryMediaLayer.configureImage`. Default
-/// production conformer is `DiskCacheImageLoader`, which forwards into
-/// `CacheCoordinator.shared.images` (`DiskCacheStore`) and inherits its
-/// L1 NSCache + L2 disk + network fetch + downsampling pipeline.
-///
-/// The protocol exists so tests can inject a deterministic in-process stub
-/// and exercise the cancel chain without hitting the real disk cache or
-/// `URLSession`. Marked `nonisolated` on the requirement so witnesses don't
-/// pick up MeeshyUI's `defaultIsolation(MainActor)` — actor-isolated
-/// witnesses (e.g. `DiskCacheStore.image(for:)`) match cleanly.
-public protocol StoryMediaImageLoading: Sendable {
-    nonisolated func image(for urlString: String) async -> UIImage?
-
-    /// **Les OCTETS, et pas seulement l'image** (#4925).
-    ///
-    /// `image(for:)` rend une `UIImage`, c'est-à-dire UNE image : pour un GIF ou
-    /// un APNG, l'animation est déjà perdue à ce niveau, avant qu'aucune vue ne
-    /// puisse la demander. C'est ce maillon — et lui seul — qui faisait qu'un
-    /// sticker animé arrivait figé jusqu'au canvas, quel que soit le soin mis
-    /// en aval.
-    ///
-    /// Le repli par défaut rend `nil`, et il est une DÉCLARATION, pas une
-    /// commodité : **un chargeur qui ne sert pas d'octets ne peut pas animer**,
-    /// et le dire explicitement vaut mieux qu'obliger chaque bouchon de test à
-    /// implémenter une méthode dont il n'a que faire. Le conformeur de
-    /// PRODUCTION, lui, doit la servir — `StoryStickerAnimatedBytesGuardTests`
-    /// le vérifie, sans quoi le repli s'appliquerait partout en silence et la
-    /// feature n'existerait nulle part.
-    nonisolated func data(for urlString: String) async -> Data?
-}
-
-public extension StoryMediaImageLoading {
-    nonisolated func data(for urlString: String) async -> Data? { nil }
-}
-
-/// Production conformer — thin shim around `CacheCoordinator.shared.images`.
-/// We don't conform `DiskCacheStore` directly because doing so from the UI
-/// module crosses the MainActor / actor isolation boundary in a way that
-/// confuses Swift 6.2's conformance checker; a value-type shim sidesteps
-/// the issue and stays trivially `Sendable`.
-public struct DiskCacheImageLoader: StoryMediaImageLoading {
-    public nonisolated init() {}
-    public nonisolated func image(for urlString: String) async -> UIImage? {
-        await CacheCoordinator.shared.images.image(for: urlString)
-    }
-
-    /// Les octets bruts, servis par la MÊME pile que `image(for:)` — L1 NSCache,
-    /// L2 disque, réseau. Aucun second chemin de téléchargement : ce serait une
-    /// jumelle du cache, avec sa propre politique et ses propres ratés.
-    public nonisolated func data(for urlString: String) async -> Data? {
-        try? await CacheCoordinator.shared.images.data(for: urlString)
-    }
-}
-
 /// Référence faible transportable dans un bloc `@Sendable` — ici celui de
 /// l'observer `AVPlayerItemDidPlayToEndTime`, qui doit masquer le layer sans le
 /// retenir (`layer → observer → layer` serait un cycle).
@@ -99,7 +45,7 @@ public final class StoryMediaLayer: CALayer {
     public private(set) nonisolated(unsafe) weak var avPlayer: AVPlayer?
     public private(set) nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    private static let logger = MeeshyLog.logger(.media)
 
     /// Fenêtre de rognage NON destructive du média foreground courant — `nil`
     /// tant que la durée réelle de la source n'a pas été chargée (le fichier
@@ -189,10 +135,7 @@ public final class StoryMediaLayer: CALayer {
     /// ou une bascule plein écran ne provoque donc aucun saut.
     @MainActor public var slidePlayheadSeconds: Double = 0
 
-    /// Au-delà de cette dérive (secondes) entre la position du player et la cible
-    /// timeline, on seek ; en-deçà on lance la lecture telle quelle (pas de
-    /// hoquet sur un resume déjà aligné).
-    static let timelineSeekDriftThreshold: Double = 0.30
+    static let timelineSeekDriftThreshold: Double = StoryMediaLayerRules.timelineSeekDriftThreshold
 
     private nonisolated(unsafe) var loopObserver: NSObjectProtocol?
 
@@ -210,20 +153,27 @@ public final class StoryMediaLayer: CALayer {
         }
     }
 
-    /// Image loader used by `configureImage`. Defaults to a shim that calls
+    /// Image loader used by `configureImage` (`StoryMediaLayer+ImageLoading.swift`). Defaults to a shim that calls
     /// `CacheCoordinator.shared.images.image(for:)`. Override in tests via
     /// `_setImageLoaderForTesting(_:)` to inject a deterministic stub.
     /// `nonisolated(unsafe)` so the `nonisolated init()` can populate the
     /// default value; readers/writers below are explicitly `@MainActor` so
     /// mutation always happens on a single isolation context.
-    private nonisolated(unsafe) var imageLoader: any StoryMediaImageLoading = DiskCacheImageLoader()
+    nonisolated(unsafe) var imageLoader: any StoryMediaImageLoading = DiskCacheImageLoader()
 
     /// In-flight network/cache fetch for the current media URL. Captured so a
     /// subsequent `configure(with:geometry:mode:)` call (recycled layer, new
     /// slide, scrub) cancels the previous load before it can stamp a stale
     /// CGImage into `contents`. `Task<Void, Never>` because the closure
     /// swallows all errors — it either sets `contents` or no-ops.
-    private nonisolated(unsafe) var currentLoadTask: Task<Void, Never>?
+    nonisolated(unsafe) var currentLoadTask: Task<Void, Never>?
+
+    /// La cuisson hors du fil principal du look d'une image REPEINTE en place
+    /// pendant qu'un curseur glisse (#9873) — `StoryMediaLayer+ImageLoading`.
+    @MainActor var liveLookStorage: StoryLiveLook?
+    /// L'image du composer dont la couche montre le look — seule une source
+    /// DÉJÀ montrée se repeint hors du fil principal ; une autre se pose sur place.
+    @MainActor weak var lookSource: UIImage?
 
     /// In-flight video load (pré-cache + AVPlayer setup). Annulé à chaque
     /// `configureVideo` pour éviter qu'une URL obsolète stamp la layer après
@@ -314,7 +264,8 @@ public final class StoryMediaLayer: CALayer {
                           resolver: (@Sendable (String) -> URL?)? = nil,
                           imageCache: ImageCacheReader? = nil,
                           playerProvider: (any StoryCarrierPlayerProviding)? = nil,
-                          renderScale: CGFloat = UIScreen.main.scale) {
+                          renderScale: CGFloat = StoryCanvasDisplayScale.ambient,
+                          decodeTiming: StoryImageDecodeTiming = .immediate) {
         self.media = media
         self.playerProvider = playerProvider
         // Niveau de BASE repris du modèle. L'automation du canvas réécrira
@@ -337,7 +288,7 @@ public final class StoryMediaLayer: CALayer {
         // promesse de la planche `4c` au niveau du rendu — « aucun ne
         // ré-encode » — et la seule écriture qui la tienne sans toucher au
         // fichier.
-        applyCrop(media.crop)
+        contentsRect = StoryMediaLayerRules.contentsRect(for: media.crop)
         let pose = Self.renderedPose(for: media, geometry: geometry)
         let renderedSize = pose.size
         let renderedCenter = pose.center
@@ -358,7 +309,7 @@ public final class StoryMediaLayer: CALayer {
 
         switch media.kind {
         case .image:
-            configureImage(media, resolver: resolver, imageCache: imageCache)
+            configureImage(media, resolver: resolver, imageCache: imageCache, decodeTiming: decodeTiming)
         case .video:
             configureVideo(media, mode: mode, resolver: resolver)
         case .none:
@@ -405,26 +356,6 @@ public final class StoryMediaLayer: CALayer {
     /// update double-scale en posant `transform = scale × rotation` sur des
     /// bounds déjà × scale (bug "media grossit après rotation puis pan",
     /// 2026-05-27). Aligne avec le pattern déjà appliqué au text scale.
-    /// **Le recadrage, posé sur le COMPOSITEUR** (#5085).
-    ///
-    /// `contentsRect` prend un sous-rectangle normalisé des contenus : c'est
-    /// exactement la forme de `MediaCropRect`, et rien n'est ré-encodé — le
-    /// fichier reste celui qui est déjà en train de partir.
-    ///
-    /// Le remettre au cadre ENTIER quand il n'y a pas de recadrage n'est pas
-    /// une redite : un calque réutilisé garderait sinon le `contentsRect` de
-    /// l'objet qu'il peignait avant, et l'auteur verrait un média recadré
-    /// qu'il n'a jamais recadré.
-    private func applyCrop(_ crop: MediaCropRect?) {
-        guard let crop, !crop.isFull else {
-            contentsRect = CGRect(x: 0, y: 0, width: 1, height: 1)
-            return
-        }
-        let borné = MediaCropRule.clamped(crop)
-        contentsRect = CGRect(x: borné.x, y: borné.y,
-                              width: borné.width, height: borné.height)
-    }
-
     /// **La taille et le centre qu'un média pose dans le canvas** — la moitié
     /// géométrique de `configure`, isolée pour rester testable seule. Le
     /// mesureur qui la consommait à distance (`StorySceneFootprint`, #6636)
@@ -444,16 +375,7 @@ public final class StoryMediaLayer: CALayer {
     }
 
     internal static func baseMediaDesignSize(aspectRatio: Double) -> CGSize {
-        let target: CGFloat = CanvasGeometry.designWidth * 0.65   // 702
-        let ratio = max(0.1, min(10.0, CGFloat(aspectRatio)))
-        if abs(ratio - 1.0) < 0.05 {
-            let side = CanvasGeometry.designWidth * 0.5  // 540 carré
-            return CGSize(width: side, height: side)
-        }
-        if ratio < 1.0 {
-            return CGSize(width: target * ratio, height: target)
-        }
-        return CGSize(width: target, height: target / ratio)
+        StoryMediaLayerRules.baseMediaDesignSize(aspectRatio: aspectRatio)
     }
 
     /// Resynchronise l'`AVPlayerLayer` hébergé (et le `cornerRadius`) sur les
@@ -477,160 +399,10 @@ public final class StoryMediaLayer: CALayer {
         CATransaction.commit()
     }
 
-    // MARK: - URL resolution
-
-    /// Resolves the playable URL for a foreground media object.
-    ///
-    /// Order (identical to `StoryReaderContext.postMediaURLResolver`):
-    ///  1. `resolver(media.postMediaId)` — preloaded composer-preview asset,
-    ///     then the published `StoryItem.media` remote URL.
-    ///  2. Fallback `media.mediaURL` — fixtures and the `file://` URL the
-    ///     composer edition embeds directly on the object. A `file://` here is
-    ///     the AUTHOR's local edition asset: on another viewer's device it points
-    ///     into the author's sandbox and never exists. Honouring it would feed a
-    ///     dead path to the loader (silent blank foreground, or a video player
-    ///     wired to nothing) — the exact "foreground missing on another user's
-    ///     story" symptom. So a file URL is only used when it resolves on THIS
-    ///     device; otherwise the media is treated as unresolved and the reader's
-    ///     content-readiness failsafe takes over.
-    @MainActor
-    private func resolvedMediaURL(for media: StoryMediaObject,
-                                  resolver: (@Sendable (String) -> URL?)?) -> URL? {
-        if !media.postMediaId.isEmpty, let resolved = resolver?(media.postMediaId) {
-            return resolved
-        }
-        // #7056 — `resolveMediaURL` porte la branche « clé de stockage » et
-        // traite `file://` AVANT tout (`MeeshyConfig.swift:139-143`), donc le
-        // garde d'existence ci-dessous reste exact. `URL(string:)` nu rendait
-        // une URL relative sur une clé nue : le média ne se chargeait jamais,
-        // sans qu'aucun `nil` ne le signale.
-        guard let urlString = media.mediaURL, let url = MeeshyConfig.resolveMediaURL(urlString) else {
-            return nil
-        }
-        // The file-existence guard applies ONLY in the READER (a resolver is
-        // always provided there). A `file://` that survives a resolver miss is
-        // the AUTHOR's local edition path — dead on another viewer's device — so
-        // we honour it only when it resolves on THIS device. In the COMPOSER /
-        // edit (resolver == nil) the file:// IS the intended local asset (and
-        // fixtures use placeholder paths), so it is used as-is.
-        if resolver != nil, url.isFileURL {
-            return FileManager.default.fileExists(atPath: url.path) ? url : nil
-        }
-        return url
-    }
-
     // MARK: - Image path
 
-    /// Configure the layer's `contents` from a media URL.
-    ///
-    /// **Performance contract** (P0 fix, 2026-05-12):
-    /// - The previous implementation called `Data(contentsOf: url)` directly,
-    ///   which is synchronous I/O. On `http(s)` URLs that meant a blocking
-    ///   network fetch on the main thread (~500 ms / 5 MB on 4G ≈ 30 dropped
-    ///   frames) every time `rebuildLayers()` ran on `displayLinkTick`.
-    /// - We now keep the contract synchronous for `file://` URLs (already
-    ///   non-blocking — local FS read is fast and matches the legacy hot path
-    ///   used by the composer preview) and switch `http(s)` to the cache
-    ///   coordinator's async `image(for:)` API, which serves from the L1
-    ///   NSCache instantly when warm, falls back to disk, and finally to the
-    ///   network on `URLSession`.
-    /// - `currentLoadTask` is cancelled on every entry so a recycled layer
-    ///   (slide change, scrub, re-configure for a different media) never
-    ///   stamps the previous URL's image into `contents` after the new URL
-    ///   has been set. The continuation also guards with `Task.isCancelled`
-    ///   before mutating `contents`.
-    @MainActor
-    private func configureImage(_ media: StoryMediaObject,
-                                resolver: (@Sendable (String) -> URL?)?,
-                                imageCache: ImageCacheReader?) {
-        // Cancel any in-flight load from a previous configure() call before
-        // we mutate `contents`. The previous Task observes `isCancelled`
-        // and returns without touching `contents`.
-        currentLoadTask?.cancel()
-        currentLoadTask = nil
-
-        contentsGravity = .resizeAspectFill
-        masksToBounds = true
-
-        let resolvedURL = resolvedMediaURL(for: media, resolver: resolver)
-        // Cache key : pour les médias publiés on a un `postMediaId` serveur ;
-        // pour les médias composer (PhotosPicker → tmp file) postMediaId reste
-        // vide, donc on retombe sur `media.id` (UUID local) qui est exactement
-        // la clé utilisée par `viewModel.loadedImages` côté composer. Sans
-        // ce fallback, `MeeshyImageEditorView` onAccept écrivait
-        // `loadedImages[media.id] = edited` et le `ComposerImageCacheReader`
-        // était bien câblé, mais la lookup ici utilisait `""` → cache miss →
-        // chemin file:// servait l'ancien bitmap (bug 2026-05-27).
-        let cacheKey: String = media.postMediaId.isEmpty ? media.id : media.postMediaId
-
-        // Composer fast-path : si un bitmap in-memory est dans le reader
-        // (typiquement après `MeeshyImageEditorView` onAccept), il prime sur
-        // le chemin file:// — la version éditée n'a pas été ré-écrite dans
-        // le fichier tmp et le file:// servirait l'original obsolète.
-        if let imageCache,
-           let synchronousReader = imageCache as? ComposerImageCacheReader,
-           let cached = CanvasImageOrientation.displayCGImage(Self.filtered(synchronousReader.images[cacheKey], for: media)) {
-            contents = cached
-            return
-        }
-
-        // Local file:// URLs stay on the synchronous path — they are not
-        // blocking in any meaningful sense (no DNS / TCP / TLS) and the
-        // composer preview relies on the image being present by the time
-        // `configure(with:)` returns. Anything with a network scheme goes
-        // through the async cache.
-        if let url = resolvedURL, url.isFileURL {
-            if let data = try? Data(contentsOf: url),
-               let cgImage = CanvasImageOrientation.displayCGImage(Self.filtered(UIImage(data: data), for: media)) {
-                contents = cgImage
-            }
-            return
-        }
-
-        let loader = imageLoader
-        // Strong capture de `self` dans la Task. `[weak self]` faisait que la
-        // layer se désallouait entre le `await` et le stamp `contents` —
-        // `rebuildLayers()` à 60 Hz détache la layer du parent et, à chaque
-        // cache miss du `StoryRendererCache`, ARC libère l'ancien layer avant
-        // que la Task n'arrive au stamp. Le `guard let self` retournait sans
-        // jamais stamper le bitmap → l'image foreground restait invisible.
-        // Le cycle Task→self→Task se ferme dès le `return` de la Task :
-        // pas de leak persistant.
-        currentLoadTask = Task { @MainActor in
-            // A configure() that superseded this one (or a teardown) cancels the
-            // task before it runs. Bail out *before* awaiting the loader: a
-            // cancelled task must never register a fetch continuation it will
-            // then abandon — that leaks a suspended load (and hangs any awaiter
-            // of `currentLoadTask.value`).
-            guard !Task.isCancelled else { return }
-            // (1) Fast-path image cache (composer preview / disk-backed reader).
-            if let imageCache,
-               let cached = CanvasImageOrientation.displayCGImage(Self.filtered(await imageCache.cachedImage(for: cacheKey), for: media)) {
-                guard !Task.isCancelled else { return }
-                self.contents = cached
-                return
-            }
-            // (2) Network URL through the disk-cache-backed loader.
-            guard let url = resolvedURL else { return }
-            let loaded = await loader.image(for: url.absoluteString)
-            guard !Task.isCancelled,
-                  let cgImage = CanvasImageOrientation.displayCGImage(Self.filtered(loaded, for: media)) else { return }
-            self.contents = cgImage
-        }
-    }
-
-    /// **Le filtre PROPRE à l'objet** (retour porteur 2026-09-28), cuit dans
-    /// le bitmap au même point de passage que l'orientation — comme le fond le
-    /// fait pour le filtre de slide (`StoryBackgroundLayer.stampFinalImage`).
-    /// La clé de cache suit l'INSTANCE d'image : un bitmap retouché ne resservira
-    /// jamais le filtre de l'ancien.
-    /// Les RÉGLAGES de l'objet (#9175) suivent le filtre, dans l'ordre de
-    /// l'éditeur d'image : filtre, puis réglages.
     static func filtered(_ image: UIImage?, for media: StoryMediaObject) -> UIImage? {
-        guard let image else { return nil }
-        let instance = "\(media.id)-\(ObjectIdentifier(image).hashValue)"
-        let filtree = media.parsedFilter.map { StoryFilterProcessor.apply($0, to: image, imageId: instance) } ?? image
-        return StoryMediaAdjustmentsProcessor.apply(media.adjustments, to: filtree, imageId: "\(instance)-\(media.filter ?? "")")
+        StoryMediaLayerRules.filtered(image, for: media)
     }
 
     // MARK: - Video path
@@ -639,7 +411,7 @@ public final class StoryMediaLayer: CALayer {
     private func configureVideo(_ media: StoryMediaObject,
                                 mode: RenderMode,
                                 resolver: (@Sendable (String) -> URL?)?) {
-        guard let remoteURL = resolvedMediaURL(for: media, resolver: resolver) else { return }
+        guard let remoteURL = StoryMediaLayerRules.resolvedMediaURL(for: media, resolver: resolver) else { return }
 
         // Fast-path cache chaud : si l'URL est déjà locale (file://) OU si le
         // cache disk a déjà le fichier, on attache directement le player SANS
@@ -804,7 +576,7 @@ public final class StoryMediaLayer: CALayer {
             // no-op pendant un appel (micro de l'appel préservé). Couvre aussi le
             // composer live preview (`.edit` + `playsInEditMode`) → audio des
             // vidéos qui bouclent dans l'éditeur.
-            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
+            MediaSessionCoordinator.shared.activateContentPlayback(ContentPlaybackAudibility.of(player))
         }
 
         switch mode {
@@ -946,35 +718,16 @@ public final class StoryMediaLayer: CALayer {
         player.play()
     }
 
-    /// Pure drift decision (WS3.3 / F4): the aligned start seeks the foreground
-    /// player ONLY when the gap between the current position and the timeline
-    /// `target` exceeds `timelineSeekDriftThreshold`. A resume-in-place
-    /// (long-press) or an already-aligned start stays put (no jump); a video that
-    /// arrived late (network) or an open-at-`t>0` is recaled. Non-finite inputs
-    /// never seek. Extracted (non-private) so the seek trigger is unit-testable
-    /// without a decodable `AVAsset` — `AVPlayer` seek movement on a fixture mp4
-    /// is not observable.
     static func shouldSeekToAlign(current: Double, target: Double) -> Bool {
-        guard target.isFinite, current.isFinite else { return false }
-        return abs(current - target) > timelineSeekDriftThreshold
+        StoryMediaLayerRules.shouldSeekToAlign(current: current, target: target)
     }
 
-    /// Position de seek DANS LA SOURCE pour un playhead de slide donné, la
-    /// fenêtre de rognage repliée dedans. `bounds == nil` (rognage jamais
-    /// déclaré, ou pas encore chargé) rend exactement `max(0, slidePlayheadSeconds
-    /// − mediaStartTime)` — le calcul d'aujourd'hui, bit à bit : c'est le repli
-    /// "source entière" qui garantit qu'un média non rogné ne change jamais de
-    /// comportement. Une fois `bounds` connu, l'origine du média glisse de `0`
-    /// à `bounds.start` et la cible ne dépasse jamais `bounds.end` — un resume
-    /// tardif ou une dérive réseau ne rejoue donc jamais la portion coupée.
-    /// Pure et statique : éprouvable sans `AVAsset` ni simulateur, comme
-    /// `shouldSeekToAlign` ci-dessus.
     static func trimmedSeekTarget(bounds: MediaTrimBounds?,
                                   slidePlayheadSeconds: Double,
                                   mediaStartTime: Double) -> Double {
-        let elapsedInMedia = max(0, slidePlayheadSeconds - mediaStartTime)
-        guard let bounds else { return elapsedInMedia }
-        return min(bounds.start + elapsedInMedia, bounds.end)
+        StoryMediaLayerRules.trimmedSeekTarget(bounds: bounds,
+                                               slidePlayheadSeconds: slidePlayheadSeconds,
+                                               mediaStartTime: mediaStartTime)
     }
 
     /// Charge la durée réelle de la source PUIS résout la fenêtre de rognage —
@@ -1043,19 +796,8 @@ public final class StoryMediaLayer: CALayer {
         }
     }
 
-    /// **Ce que devient un clip arrivé à la fin de son item en lecture** (#6757).
-    ///
-    /// Sa disparition appartient à sa FENÊTRE (`StoryRenderer.shouldRender`,
-    /// `startTime ..< startTime + duration`), pas à l'horloge du player. Les deux
-    /// divergent dès que la timeline de la slide gèle — chargement du fond,
-    /// stall — pendant que l'AVPlayer roule : masquer à la fin de l'item
-    /// escamotait la vidéo avant l'heure. La story de recette, clip de 6 s posé
-    /// sur un panorama, montrait le fond seul pendant la pause (capture 244).
-    ///
-    /// Sans durée déclarée, la fenêtre est infinie et rien d'autre ne retirerait
-    /// le clip : il part à la fin de son item, comme depuis 09cfcf95f0.
     nonisolated static func leavesAtItemEnd(declaredDuration: Double?) -> Bool {
-        declaredDuration == nil
+        StoryMediaLayerRules.leavesAtItemEnd(declaredDuration: declaredDuration)
     }
 
     /// Fin d'item d'un clip en lecture : il reste sur sa dernière image tant que

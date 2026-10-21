@@ -146,7 +146,7 @@ nonisolated extension CanvasMediaAdoption {
         idsBySourceIndex: [Int: String],
         urlsBySourceIndex: [Int: String]
     ) -> StoryEffects? {
-        let journal = os.Logger(subsystem: "me.meeshy.app", category: "media")
+        let journal = MeeshyLog.logger(.media)
         guard var effets = effects, let objectIds = objectIdsBySourceIndex else {
             journal.info(
                 "adoption IMPOSSIBLE: effets=\(effects != nil, privacy: .public) objectIds=\(objectIdsBySourceIndex?.count ?? -1, privacy: .public)"

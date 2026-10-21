@@ -8,7 +8,7 @@ public protocol ReactionServiceProviding: Sendable {
     func fetchDetails(messageId: String) async throws -> ReactionSyncResponse
 }
 
-public final class ReactionService: ReactionServiceProviding, @unchecked Sendable {
+public final class ReactionService: ReactionServiceProviding, Sendable {
     public static let shared = ReactionService()
     private let api: APIClientProviding
 

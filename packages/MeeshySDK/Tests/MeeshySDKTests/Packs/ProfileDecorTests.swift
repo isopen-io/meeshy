@@ -210,7 +210,11 @@ final class ProfileDecorTests: XCTestCase {
         }
         XCTAssertEqual(catalog.frameName("haussmannien", language: "fr"), "Haussmannien")
         XCTAssertEqual(catalog.frameName("haussmannien", language: "xx"), "Haussmannien", "langue inconnue : le français")
-        XCTAssertFalse(catalog.framePacks.contains { $0.installedByDefault })
+        XCTAssertEqual(
+            Set(catalog.framePacks.filter(\.installedByDefault).map(\.slug)),
+            ["cadres-haussmannien", "cadres-ancestral"],
+            "deux packs de cadres installés d'office, les cinq autres en boutique (#11165)"
+        )
     }
 
     func test_frameCatalog_anUnreadableFrameFallsAlone() throws {
@@ -231,8 +235,10 @@ final class ProfileDecorTests: XCTestCase {
         XCTAssertNil(ProfileDecorResolver.bannerFrame(official), "un contrat adressé n'est pas encore chargé : aucun cadre, jamais une erreur")
     }
 
-    func test_options_frames_listOnlyInstalledAndOwnedPacks_noneByDefault() {
-        XCTAssertTrue(ProfileDecorOptions.bannerFrames(installed: nil).isEmpty, "aucun pack de cadres n'est installé d'office")
+    func test_options_frames_listOnlyInstalledAndOwnedPacks_twoByDefault() {
+        let byDefault = ProfileDecorOptions.bannerFrames(installed: nil)
+        XCTAssertEqual(byDefault.map(\.pack), ["cadres-haussmannien", "cadres-ancestral"], "un cadre fixe et un animé par pack installé d'office (#11165)")
+        XCTAssertEqual(ProfileDecorOptions.flattened(byDefault).map { !$0.design.motion.isEmpty }, [false, true, false, true])
         XCTAssertTrue(ProfileDecorOptions.bannerFrames(installed: [ShopPack(slug: "cadres-grec", name: "x", installed: true, price: 40, owned: false)]).isEmpty)
         let ok = ProfileDecorOptions.bannerFrames(installed: [ShopPack(slug: "cadres-grec", name: "x", installed: true)])
         XCTAssertEqual(ok.first?.items.map(\.ref), [ProfileDecorRef(pack: "cadres-grec", item: "grec"), ProfileDecorRef(pack: "cadres-grec", item: "grec-anime")])

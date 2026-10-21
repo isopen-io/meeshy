@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { EMOJI_USAGE_KEY, readEmojiUsage } from '@/lib/emoji-usage';
@@ -8,6 +8,8 @@ import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { closeSendSheet, sendSheetStore, type SendSheetRequest } from '@/lib/send/send-sheet-store';
 import { NO_MEDIA_OFFERS, type MediaPageOffers, type MediaViewerPage } from '@/lib/view/viewer-page-offers';
+
+import { setAttachmentReactionEmitter } from '@/lib/api/attachment-reaction-emit';
 
 import MediaViewer from './media-viewer';
 
@@ -51,6 +53,11 @@ afterAll(async () => {
 
 let container: HTMLDivElement;
 let root: Root;
+
+/* L'émetteur est un port global : un autre fichier du même processus (api/realtime) peut l'avoir armé — « sans connexion » se pose, il ne se suppose pas. */
+beforeEach(() => {
+  setAttachmentReactionEmitter(null);
+});
 
 afterEach(() => {
   act(() => {

@@ -59,6 +59,7 @@ public struct UserProfileSheet: View {
     @ObservedObject var theme = ThemeManager.shared
     /// L'emplacement du jeu (#9481) — fourni par l'app, vide sinon.
     @Environment(\.profileGameSection) var gameSection
+    @Environment(\.profileLoading) private var injectedProfileLoading
     @Environment(\.dismiss) var dismiss
     @State var selectedTab: ProfileTab = .details
     /// #10093 — la bannière ou la photo ouverte en plein écran, PRÉSENTÉE par-dessus la feuille (`fullScreenCover`) :
@@ -300,7 +301,7 @@ public struct UserProfileSheet: View {
     }
 
     private func retryProfile() async {
-        await loader.retry(userId: user.userId, username: user.username)
+        await loader.retry(userId: user.userId, username: user.username, using: profileLoading)
         resolveConnectionStatus()
         if internalConversations.isEmpty {
             await loadConversationsIfNeeded()
@@ -310,9 +311,11 @@ public struct UserProfileSheet: View {
     // MARK: - Auto-loading
 
     private func loadDataIfNeeded() async {
-        await loader.open(userId: user.userId, username: user.username)
+        await loader.open(userId: user.userId, username: user.username, using: profileLoading)
         resolveConnectionStatus()
     }
+
+    private var profileLoading: any ProfileLoading { injectedProfileLoading ?? UncachedProfileLoading() }
 
     var resolvedUserId: String? {
         user.userId ?? loader.profile?.id
@@ -321,16 +324,7 @@ public struct UserProfileSheet: View {
     private func loadConversationsIfNeeded() async {
         guard let userId = resolvedUserId else { return }
         internalIsLoadingConversations = true
-        do {
-            let apiConversations = try await ConversationService.shared.listSharedWith(userId: userId)
-            let mapped = apiConversations.map { $0.toConversation(currentUserId: currentUserId) }
-            internalConversations = mapped
-            // Extend the TTL of the shared conversations we just surfaced so a
-            // returning visitor keeps them warm in the conversations cache.
-            for conv in mapped {
-                await CacheCoordinator.shared.conversations.touch(for: conv.id)
-            }
-        } catch {}
+        internalConversations = (try? await profileLoading.sharedConversations(with: userId, currentUserId: currentUserId)) ?? internalConversations
         internalIsLoadingConversations = false
     }
 
@@ -500,7 +494,7 @@ public struct UserProfileSheet: View {
                     .foregroundColor(Color(hex: resolvedAccent))
             }
             Text(text)
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
@@ -521,7 +515,7 @@ public struct UserProfileSheet: View {
                 .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(MeeshyColors.success)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -558,7 +552,7 @@ public struct UserProfileSheet: View {
             Text(lang.flag)
                 .font(.system(size: MeeshyFont.labelSize))
             Text(lang.name)
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
