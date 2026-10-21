@@ -52,14 +52,14 @@ describe('le plancher ABSENT ne compose rien', () => {
 describe('la langue d’interface (#10823)', () => {
   test('interface en : le manque et le plancher en anglais, avec les valeurs d’iOS', async () => {
     await loadGameCatalog('en');
-    expect(meeshMissing(1, 0, 'en')).toBe('1 more spark before a Meesh.');
+    expect(meeshMissing(1, 0, 'en')).toBe('1 spark to your next Meesh.');
     expect(meeshMissing(4, 3, 'en')).toBe(
-      '4 more sparks before a Meesh. Your 3 conversation sparks will be used last, without turning off any badge.',
+      '4 sparks to your next Meesh. Your 3 conversation sparks will be bound last, without putting out any medal.',
     );
   });
 
   test('interface ar : la forme duelle du catalogue arabe', async () => {
     await loadGameCatalog('ar');
-    expect(meeshMissing(2, 0, 'ar')).toBe('لا يزال أمامك شرارتان قبل الحصول على Meesh.');
+    expect(meeshMissing(2, 0, 'ar')).toBe('شرارتان حتى Meesh التالية.');
   });
 });

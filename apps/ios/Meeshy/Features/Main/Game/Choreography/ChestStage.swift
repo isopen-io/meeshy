@@ -88,7 +88,7 @@ enum GameChestLines {
         let bonus = GameCopy.chestBonus(reward)
         let fragment = reward.fragment
             ? String(localized: "game.chest.reward.fragment", defaultValue: "Un fragment d’étoile", bundle: .main) : nil
-        let freeze = reward.freeze ? String(localized: "game.chest.reward.freeze", defaultValue: "Un gel de Flamme", bundle: .main) : nil
+        let freeze = reward.freeze ? String(localized: "game.chest.reward.freeze", defaultValue: "Une Veilleuse pour ta Flamme", bundle: .main) : nil
         return [points, glory, bonus, fragment, freeze].compactMap { $0 }
     }
 }
@@ -104,7 +104,7 @@ extension GameCopy {
 
     /// « +175 Gloire » — la Gloire du coffre.
     static func chestGlory(_ glory: Int) -> String {
-        String(localized: "game.chest.reward.glory", defaultValue: "+\(formatCount(glory)) Gloire", bundle: .main)
+        String(localized: "game.chest.reward.glory", defaultValue: "+\(formatCount(glory)) de gloire", bundle: .main)
     }
 
     /// « Prime : +1 221 points, le prix d’une Meesh » — la prime tombée, `nil` sans prime.
@@ -113,9 +113,9 @@ extension GameCopy {
         let amount = points(reward.bonusPoints)
         switch bonus {
         case .whole:
-            return String(localized: "game.chest.reward.bonus.whole", defaultValue: "Prime\u{00A0}:\u{00A0}+\(amount), le prix d’une Meesh", bundle: .main)
+            return String(localized: "game.chest.reward.bonus.whole", defaultValue: "Prime : +\(amount), le prix d’une Meesh", bundle: .main)
         case .fifth:
-            return String(localized: "game.chest.reward.bonus.fifth", defaultValue: "Prime\u{00A0}:\u{00A0}+\(amount), un cinquième de Meesh", bundle: .main)
+            return String(localized: "game.chest.reward.bonus.fifth", defaultValue: "Prime : +\(amount), un cinquième de Meesh", bundle: .main)
         case .noBonus:
             return nil
         }

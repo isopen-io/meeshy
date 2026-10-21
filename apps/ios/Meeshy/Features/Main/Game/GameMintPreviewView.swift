@@ -126,7 +126,7 @@ struct GameMintPreviewView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(
                     localized: "game.mint.next_title",
-                    defaultValue: "Prochaine Meesh · n° \(GameCopy.formatCount(mint.number))",
+                    defaultValue: "La Meesh n° \(GameCopy.formatCount(mint.number))",
                     bundle: .main
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -176,7 +176,7 @@ struct GameMintPreviewView: View {
                     .accessibilityIdentifier("game.mint.level")
             }
             GameChip(
-                text: String(localized: "game.mint.chip.glory", defaultValue: "+\(GameCopy.formatCount(mint.gloryGained)) Gloire", bundle: .main),
+                text: String(localized: "game.mint.chip.glory", defaultValue: "+\(GameCopy.formatCount(mint.gloryGained)) de gloire", bundle: .main),
                 tint: MeeshyColors.success
             )
             if rankChanges {

@@ -146,10 +146,10 @@ describe('le Sceau', () => {
     expect(page).toContain('Il manque 7 Meeshes');
   });
 
-  test('avant l’achat : les Meeshes en poche, le prix et ce qui restera (#9705)', () => {
+  test('avant l’achat : les Meeshes en poche et le prix — jamais ce qui restera (#9705, #11178)', () => {
     const page = text(renderToStaticMarkup(<GameSeason {...props({ held: 12 })} />));
     expect(page).toContain('Tu as 12 Meeshes');
-    expect(page).toContain('Après 2 Meeshes');
+    expect(page).not.toMatch(/(?<!\d)2 Meeshes/);
   });
 
   test('déjà possédé : on le dit, plus d’achat', () => {

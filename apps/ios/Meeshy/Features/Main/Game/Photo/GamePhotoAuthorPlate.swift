@@ -150,17 +150,17 @@ nonisolated enum GamePhotoAuthorPlate {
 
     private static func caption(_ family: PlateFamily) -> String {
         switch family {
-        case .achievement: String(localized: "game.photo.author.caption.achievement", defaultValue: "Succès de", bundle: .main)
+        case .achievement: String(localized: "game.photo.author.caption.achievement", defaultValue: "Haut fait de", bundle: .main)
         case .rank: String(localized: "game.photo.author.caption.rank", defaultValue: "Rang atteint par", bundle: .main)
-        case .mission: String(localized: "game.photo.author.caption.mission", defaultValue: "Mission menée par", bundle: .main)
+        case .mission: String(localized: "game.photo.author.caption.mission", defaultValue: "Rêve réalisé par", bundle: .main)
         }
     }
 
     private static func label(_ family: PlateFamily, name: String) -> String {
         switch family {
-        case .achievement: String(localized: "game.photo.author.label.achievement", defaultValue: "Succès de \(name)", bundle: .main)
+        case .achievement: String(localized: "game.photo.author.label.achievement", defaultValue: "Haut fait de \(name)", bundle: .main)
         case .rank: String(localized: "game.photo.author.label.rank", defaultValue: "Rang atteint par \(name)", bundle: .main)
-        case .mission: String(localized: "game.photo.author.label.mission", defaultValue: "Mission menée par \(name)", bundle: .main)
+        case .mission: String(localized: "game.photo.author.label.mission", defaultValue: "Rêve réalisé par \(name)", bundle: .main)
         }
     }
 }

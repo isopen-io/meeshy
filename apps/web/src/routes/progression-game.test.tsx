@@ -104,7 +104,7 @@ describe('le détail de ligue vit dans la fiche de la ligue (#9541)', () => {
     const locked: EngagementWithGame = { ...withExtras, game: { ...withExtras.game!, league: { ...withExtras.game!.league!, access: 'locked', current: null } } };
     const league = fiche('league', locked);
     expect(league).not.toContain('data-game-league-summary');
-    expect(league).toContain('Niveau 10');
+    expect(league).toContain('Dès le niveau 10');
   });
 });
 

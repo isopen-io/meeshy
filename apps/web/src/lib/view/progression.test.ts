@@ -98,7 +98,7 @@ describe('l’écran Progression parle la langue d’interface', () => {
 
   test('interface en : palier, échelle complète, niveau, section, axe, succès', async () => {
     await loadGameCatalog('en');
-    expect(messages && nextStepLabel(messages, 'en')).toBe('8 more before milestone 50');
+    expect(messages && nextStepLabel(messages, 'en')).toBe('8 to the 50 mark');
     expect(levelTitle(3, 'en')).toBe('Level 3');
     expect(achievementSectionTitle('cercles', 'en')).toBe('Circles');
     expect(achievementSectionTitle('decouverte', 'en')).toBe('Discovery');
@@ -111,6 +111,6 @@ describe('l’écran Progression parle la langue d’interface', () => {
   test('interface de : la section et le palier viennent du catalogue allemand', async () => {
     await loadGameCatalog('de');
     expect(achievementSectionTitle('appels', 'de')).toBe('Anrufe');
-    expect(messages && nextStepLabel(messages, 'de')).toBe('Noch 8 bis Stufe 50');
+    expect(messages && nextStepLabel(messages, 'de')).toBe('8 bis Stufe 50');
   });
 });

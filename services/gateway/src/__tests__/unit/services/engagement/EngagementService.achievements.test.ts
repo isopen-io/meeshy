@@ -113,7 +113,7 @@ describe('EngagementService achievements (#5546)', () => {
       userId: 'user-1',
       type: 'achievement_unlocked',
       priority: 'normal',
-      content: '🏆 Succès débloqué : Premier pas',
+      content: '🏆 Haut fait accompli : Premier pas',
       context: {},
       metadata: { action: 'view_details', route: 'progression', achievementKey: 'achievement.first_content' },
     });

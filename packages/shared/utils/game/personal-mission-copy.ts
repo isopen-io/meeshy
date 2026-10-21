@@ -1,6 +1,7 @@
 /**
- * LES PHRASES DE LA MISSION PERSONNELLE (#9539) — ce que la notification de début de plage dit de la mission :
- * une activité, jamais un compte (« Ta mission du jour : réagir à des messages, entre 18:00 et 20:00. »).
+ * LES PHRASES DE LA MISSION PERSONNELLE (#9539) — ce que la notification de début de plage dit de l'acte
+ * personnel du rêve (l'épopée, #11175) : une activité, jamais un compte (« Un acte rien que pour toi : réagir
+ * à des messages, entre 18:00 et 20:00. »).
  * Huit langues du catalogue de notifications ; le repli est l'anglais, comme `notificationString`.
  *
  * Les clients localisent LEUR carte par la clé du gabarit (`GameCopy`) ; ces phrases ne servent que le texte
