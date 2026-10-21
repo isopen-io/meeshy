@@ -7,8 +7,9 @@
  * sens de #9224, et sans ce retrait le GPS voyagerait chiffré vers chaque
  * destinataire.
  *
- * Un échec garde l'original et le journalise : c'est le régime de l'image
- * depuis #3627, étendu à la vidéo.
+ * Un échec garde l'original et le journalise avec sa cause : c'est le régime
+ * de l'image depuis #3627, étendu à la vidéo, jusqu'à ce que le refus de
+ * l'upload soit livré (#10686, #9746).
  */
 import fs from 'fs/promises';
 import { enhancedLogger } from '../../utils/logger-enhanced';

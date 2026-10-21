@@ -11,9 +11,11 @@
  * piste, pas dans les métadonnées : elle est conservée. `+faststart` place
  * l'index en tête pour une lecture progressive.
  *
- * Un échec (conteneur illisible, ffmpeg absent, délai) garde l'ORIGINAL et le
- * dit au retour (`false`) : c'est le régime de l'image (#3627), assumé tant
- * qu'un refus d'upload ne se décide pas (suivi de #11258).
+ * `true` : retiré ; `false` : type que ce module ne couvre pas. Un échec
+ * (conteneur illisible, ffmpeg absent, délai) garde l'ORIGINAL, ne laisse
+ * aucun fichier de travail, et LÈVE avec sa cause : `media-metadata-strip` la
+ * journalise. C'est le régime de l'image (#3627), assumé tant que le refus
+ * de l'upload n'est pas livré (#10686, #9746).
  */
 import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
@@ -71,9 +73,9 @@ export async function stripVideoMetadataFile(params: {
     await run(videoRemuxArgs({ input: params.filePath, output, mimeType: params.mimeType }));
     await fs.rename(output, params.filePath);
     return true;
-  } catch {
+  } catch (error) {
     await fs.unlink(output).catch(() => undefined);
-    return false;
+    throw error;
   }
 }
 
@@ -88,8 +90,8 @@ export async function stripVideoMetadataBuffer(params: {
   const filePath = path.join(workDir, `source${path.extname(params.fileName) || '.bin'}`);
   try {
     await fs.writeFile(filePath, params.buffer);
-    const stripped = await stripVideoMetadataFile({ filePath, mimeType: params.mimeType, run: params.run });
-    return stripped ? await fs.readFile(filePath) : params.buffer;
+    await stripVideoMetadataFile({ filePath, mimeType: params.mimeType, run: params.run });
+    return await fs.readFile(filePath);
   } finally {
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => undefined);
   }

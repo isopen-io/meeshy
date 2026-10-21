@@ -113,13 +113,12 @@ describe('VideoMetadataStrip — remux sans ré-encodage (#9746)', () => {
     expect(sideData).toContain('rotation=90');
   });
 
-  it('garde l’original quand ffmpeg échoue, et le dit', async () => {
+  it('garde l’original quand ffmpeg échoue, et le dit en levant sa cause', async () => {
     const clip = path.join(workDir, 'broken.mp4');
     await fs.writeFile(clip, Buffer.from('not a video at all'));
 
-    const stripped = await stripVideoMetadataFile({ filePath: clip, mimeType: 'video/mp4' });
+    await expect(stripVideoMetadataFile({ filePath: clip, mimeType: 'video/mp4' })).rejects.toThrow(/ffmpeg exit/);
 
-    expect(stripped).toBe(false);
     expect((await fs.readFile(clip)).toString()).toBe('not a video at all');
     expect((await fs.readdir(workDir)).filter((name) => name.includes('broken') && name !== 'broken.mp4')).toEqual([]);
   });
