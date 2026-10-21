@@ -124,7 +124,7 @@ describe('une demande de sauvegarde valide', () => {
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(readdirSync(path.join(base, 'requests')), []);
     assert.deepEqual(readdirSync(path.join(base, 'done')), [`${ID_A}.json`]);
-    assert.deepEqual(calls(), ['systemctl start --wait meeshy-staging-backup.service']);
+    assert.deepEqual(calls(), ['systemctl start --wait meeshy-staging-backup@on-demand.service']);
     const state = opsState();
     assert.equal(state.v, 1);
     assert.equal(state.lastAcceptedAt.backup, NOW);
