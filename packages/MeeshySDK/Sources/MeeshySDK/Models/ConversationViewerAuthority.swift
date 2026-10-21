@@ -16,6 +16,11 @@ import Foundation
 /// créateur, jamais au-dessus ; MODERATOR, AUDIT et ANALYST y gardent le rang
 /// de leur ligne. Un lecteur qui porte `isAnonymous` est un invité, quel que
 /// soit `hasAccount` (fermé par défaut).
+///
+/// Comme l'`ActionViewer` TypeScript, l'initialiseur n'a AUCUN défaut hors
+/// `participantId` : un défaut sur `isAnonymous`, `canSendMessages` ou
+/// `isDeclaredMinor` serait ouvert (un invité sans droit d'envoi, un mineur
+/// dans Global recevraient Répondre ou Épingler), donc chaque site le dit.
 public struct ConversationViewerAuthority: Equatable, Sendable {
     /// `User.id` pour un inscrit ; `Participant.id` pour un invité.
     public let id: String
@@ -35,12 +40,12 @@ public struct ConversationViewerAuthority: Equatable, Sendable {
         id: String,
         participantId: String? = nil,
         hasAccount: Bool,
-        isAnonymous: Bool = false,
-        platformRoleRaw: String? = nil,
-        conversationRoleRaw: String? = nil,
+        isAnonymous: Bool,
+        platformRoleRaw: String?,
+        conversationRoleRaw: String?,
         isActiveMember: Bool,
-        canSendMessages: Bool = true,
-        isDeclaredMinor: Bool = false
+        canSendMessages: Bool,
+        isDeclaredMinor: Bool
     ) {
         self.id = id
         self.participantId = participantId

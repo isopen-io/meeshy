@@ -198,17 +198,23 @@ public enum MessageActionPolicy {
         if conversation.isGlobal { return !viewer.isDeclaredMinor }
         if writeHierarchyFreeTypes.contains(conversation.type) { return true }
         let announcement = conversation.isAnnouncementChannel == true || conversation.type == "broadcast"
-        let requiredRole = announcement ? "admin" : conversation.defaultWriteRole ?? "everyone"
-        let required = writeRanks[requiredRole] ?? MemberRole.creator.level
-        return viewer.memberRank >= required || viewer.moderatesPlatform
+        let requiredRole = announcement ? MemberRole.admin.rawValue : conversation.defaultWriteRole ?? everyoneWriteRole
+        return viewer.memberRank >= requiredWriteRank(of: requiredRole) || viewer.moderatesPlatform
+    }
+
+    /// `WRITE_PERMISSION_HIERARCHY` (`packages/shared/types/role-types.ts`) lu sur
+    /// `MemberRole` : `everyone` vaut 0, un rang exact son niveau, tout autre
+    /// valeur exige le créateur (fermé par défaut).
+    static func requiredWriteRank(of role: String) -> Int {
+        if role == everyoneWriteRole { return 0 }
+        return MemberRole(rawValue: role)?.level ?? MemberRole.creator.level
     }
 
     // MARK: - Tables
 
     private static let moderatedTypes: Set<String> = ["group", "public", "global", "broadcast"]
     private static let writeHierarchyFreeTypes: Set<String> = ["global", "direct"]
-    /// `WRITE_PERMISSION_HIERARCHY` (`packages/shared/types/role-types.ts`).
-    private static let writeRanks: [String: Int] = ["everyone": 0, "member": 10, "moderator": 20, "admin": 30, "creator": 40]
+    private static let everyoneWriteRole = "everyone"
     private static let saveableKinds: Set<MessageContentKind> = [.image, .video, .audio, .file, .multi]
     /// Un lieu, un sondage, un sticker : leur texte n'en porte pas la structure (`metadata`).
     private static let editableKinds: Set<MessageContentKind> = [.text, .link, .image, .video, .audio, .file, .contact, .multi]
