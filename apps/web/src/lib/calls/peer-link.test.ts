@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createPeerLink, ICE_DISCONNECT_GRACE_MS, ICE_RESTART_MAX_ATTEMPTS, isPolitePeer, isStaleEpoch, restartBackoffMs, type LinkState, type OutgoingSignal } from './peer-link';
+import { createPeerLink, ICE_DISCONNECT_GRACE_MS, ICE_RESTART_MAX_ATTEMPTS, isPolitePeer, isStaleEpoch, orderVideoCodecs, peerConfiguration, restartBackoffMs, type LinkState, type OutgoingSignal } from './peer-link';
 
 /**
  * LE LIEN PAIR-À-PAIR (#6382, #8044) — les trois règles d'iOS
@@ -9,15 +9,22 @@ import { createPeerLink, ICE_DISCONNECT_GRACE_MS, ICE_RESTART_MAX_ATTEMPTS, isPo
  */
 
 type Track = { readonly kind: 'audio' | 'video' };
-type Transceiver = { direction: string; readonly sender: { track: Track | null; replaceTrack: (t: Track | null) => Promise<void> }; readonly receiver: { readonly track: Track } };
+type Transceiver = { direction: string; readonly sender: { track: Track | null; replaceTrack: (t: Track | null) => Promise<void> }; readonly receiver: { readonly track: Track }; readonly setCodecPreferences?: (codecs: readonly { readonly mimeType: string }[]) => void };
 
-function fakeConnection() {
+function fakeConnection(options: { readonly codecPreferences?: boolean } = {}) {
   const calls: string[] = [];
   const transceivers: Transceiver[] = [];
   const addTransceiver = (trackOrKind: Track | 'audio' | 'video', init: { direction: string }): Transceiver => {
     const kind = typeof trackOrKind === 'string' ? trackOrKind : trackOrKind.kind;
     const sender = { track: typeof trackOrKind === 'string' ? null : trackOrKind, replaceTrack: async (t: Track | null) => void (sender.track = t) };
-    const transceiver: Transceiver = { direction: init.direction, sender, receiver: { track: { kind } } };
+    const transceiver: Transceiver = {
+      direction: init.direction,
+      sender,
+      receiver: { track: { kind } },
+      ...(options.codecPreferences === false
+        ? {}
+        : { setCodecPreferences: (codecs: readonly { readonly mimeType: string }[]) => void calls.push(`codecs:${kind}:${codecs.map((codec) => codec.mimeType).join(',')}`) }),
+    };
     transceivers.push(transceiver);
     calls.push(`add:${kind}:${init.direction}`);
     return transceiver;
@@ -61,8 +68,8 @@ function fakeConnection() {
   return { pc, calls, setState };
 }
 
-function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean; readonly receiveOnly?: boolean; readonly shapeSdp?: (sdp: string) => string } = {}) {
-  const fake = fakeConnection();
+function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean; readonly receiveOnly?: boolean; readonly shapeSdp?: (sdp: string) => string; readonly codecPreferences?: boolean } = {}) {
+  const fake = fakeConnection(options.codecPreferences === undefined ? {} : { codecPreferences: options.codecPreferences });
   const sent: OutgoingSignal[] = [];
   const states: LinkState[] = [];
   const timers: Array<{ fn: () => void; ms: number; active: boolean }> = [];
@@ -307,5 +314,102 @@ describe('le canal de données des sous-titres (#8048)', () => {
     expect(h.created).toEqual([]);
     h.peer.close();
     expect(h.pc.ondatachannel).toBeNull();
+  });
+});
+
+describe('configuration et codecs de la négociation (#11319)', () => {
+  const CAPABILITIES: Readonly<Record<string, readonly { readonly mimeType: string; readonly clockRate: number }[]>> = {
+    audio: [{ mimeType: 'audio/red', clockRate: 48000 }, { mimeType: 'audio/opus', clockRate: 48000 }, { mimeType: 'audio/G722', clockRate: 8000 }],
+    video: [
+      { mimeType: 'video/VP9', clockRate: 90000 },
+      { mimeType: 'video/rtx', clockRate: 90000 },
+      { mimeType: 'video/AV1', clockRate: 90000 },
+      { mimeType: 'video/VP8', clockRate: 90000 },
+      { mimeType: 'video/H264', clockRate: 90000 },
+      { mimeType: 'video/ulpfec', clockRate: 90000 },
+    ],
+  };
+
+  const withCodecCapabilities = async <T>(run: () => Promise<T>): Promise<T> => {
+    const globals = globalThis as unknown as { RTCRtpReceiver?: unknown };
+    const previous = globals.RTCRtpReceiver;
+    globals.RTCRtpReceiver = { getCapabilities: (kind: string) => ({ codecs: CAPABILITIES[kind] ?? [], headerExtensions: [] }) };
+    try {
+      return await run();
+    } finally {
+      globals.RTCRtpReceiver = previous;
+    }
+  };
+
+  test('la connexion est en max-bundle, rtcp-mux exigé, pool ICE de 4, et garde les serveurs ICE', () => {
+    const servers = [{ urls: 'turn:relay.example.test:3478', username: 'u', credential: 'c' }];
+    expect(peerConfiguration(servers)).toEqual({ iceServers: servers, bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: 4 });
+  });
+
+  test('createPeerLink crée sa connexion avec cette configuration', () => {
+    const seen: RTCConfiguration[] = [];
+    const fake = fakeConnection();
+    createPeerLink({
+      localUserId: 'u-a',
+      remoteUserId: 'u-b',
+      iceServers: [],
+      localStream: { getAudioTracks: () => [], getVideoTracks: () => [] } as unknown as MediaStream,
+      send: () => undefined,
+      onRemoteStream: () => undefined,
+      onState: () => undefined,
+      createConnection: (config) => {
+        seen.push(config);
+        return fake.pc as unknown as RTCPeerConnection;
+      },
+      createStream: () => ({ getTracks: () => [], addTrack: () => undefined }) as unknown as MediaStream,
+    });
+    expect(seen).toEqual([{ iceServers: [], bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: 4 }]);
+  });
+
+  test('l’ordre vidéo garde H264 puis VP8 puis VP9, suivis du RTX, et exclut AV1, ULPFEC et RED', () => {
+    expect(orderVideoCodecs(CAPABILITIES.video ?? []).map((codec) => codec.mimeType)).toEqual(['video/H264', 'video/VP8', 'video/VP9', 'video/rtx']);
+  });
+
+  test('sans capacité vidéo annoncée, l’ordre vidéo est vide', () => {
+    expect(orderVideoCodecs([])).toEqual([]);
+  });
+
+  test('l’offre applique H264 > VP8 > VP9 au transceiver vidéo, et l’audio garde Opus puis RED', async () => {
+    const { peer, fake } = link({ video: true });
+    await withCodecCapabilities(() => peer.offer());
+    expect(fake.calls).toContain('codecs:video:video/H264,video/VP8,video/VP9,video/rtx');
+    expect(fake.calls).toContain('codecs:audio:audio/opus,audio/red,audio/G722');
+  });
+
+  test('un navigateur qui n’annonce aucune capacité garde la négociation par défaut', async () => {
+    const { peer, fake } = link({ video: true });
+    await peer.offer();
+    expect(fake.calls).toContain('setLocal:offer');
+    expect(fake.calls.some((call) => call.startsWith('codecs:'))).toBe(false);
+  });
+
+  test('un navigateur sans setCodecPreferences (Firefox avant 128) offre quand même, sans erreur', async () => {
+    const { peer, fake, sent } = link({ video: true, codecPreferences: false });
+    await withCodecCapabilities(() => peer.offer());
+    expect(fake.calls).toContain('setLocal:offer');
+    expect(sent.map((signal) => signal.type)).toEqual(['offer']);
+  });
+
+  test('le côté qui répond applique H264 > VP8 > VP9 aux lignes vidéo de l’offre reçue', async () => {
+    const { peer, fake } = link({ video: true, local: 'u-b', remote: 'u-a' });
+    fake.pc.addTransceiver('audio', { direction: 'recvonly' });
+    fake.pc.addTransceiver('video', { direction: 'recvonly' });
+    await withCodecCapabilities(() => peer.receiveDescription({ type: 'offer', sdp: 'remote-offer' }, 1));
+    expect(fake.calls).toContain('codecs:video:video/H264,video/VP8,video/VP9,video/rtx');
+    expect(fake.calls.indexOf('codecs:video:video/H264,video/VP8,video/VP9,video/rtx')).toBeLessThan(fake.calls.indexOf('setLocal:answer'));
+  });
+
+  test('une caméra allumée après une offre sans vidéo garde H264 d’abord sur sa nouvelle ligne', async () => {
+    const { peer, fake } = link({ local: 'u-b', remote: 'u-a' });
+    fake.pc.addTransceiver('audio', { direction: 'recvonly' });
+    await peer.receiveDescription({ type: 'offer', sdp: 'audio-only-offer' }, 1);
+    await withCodecCapabilities(() => peer.setVideoTrack({ kind: 'video' } as unknown as MediaStreamTrack));
+    expect(fake.calls).toContain('add:video:sendrecv');
+    expect(fake.calls).toContain('codecs:video:video/H264,video/VP8,video/VP9,video/rtx');
   });
 });
