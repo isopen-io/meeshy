@@ -48,8 +48,8 @@ public final class TimelineViewModel: ObservableObject {
 
     // MARK: - State observable by Views
 
-    @Published public internal(set) var project: TimelineProject { didSet { projectRevision &+= 1 } }
-    public private(set) var projectRevision: UInt = 0 // clé des résolveurs mémoïsés (KeyedMemo)
+    @Published public internal(set) var project: TimelineProject { didSet { projectRevision = TimelineProjectRevision.next() } }
+    public private(set) var projectRevision: UInt = TimelineProjectRevision.next() // clé KeyedMemo, unique au processus
     public let playhead = PlayheadClock() // #9874 : un tick ne publie que sur lui, pas sur ce view model
     public private(set) var currentTime: Float { // NON publié ici : lire `playhead` pour être réveillé
         get { playhead.time }

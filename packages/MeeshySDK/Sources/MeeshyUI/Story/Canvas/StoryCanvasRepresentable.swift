@@ -411,12 +411,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // de fin de geste resync naturellement le parent.
         if uiView.isGestureActive { return }
 
-        // Push outside-driven slide changes (e.g. toolbar mutations of
-        // `slide.effects`) into the canvas. Skip pushes when the slide is
-        // semantically identical to avoid redundant `rebuildLayers()` calls.
-        if !Self.slidesEqualForCanvas(uiView.slide, slide) {
-            uiView.slide = slide
-        }
+        pushOutsideSlide(into: uiView, coordinator: context.coordinator)
         uiView.onInlineTextChanged = onInlineTextChanged
         uiView.onInlineTextEditEnded = onInlineTextEditEnded
         // Posé AVANT `beginInlineTextEdit` : l'ouverture ancre le bloc d'après
@@ -438,6 +433,20 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 uiView.endInlineTextEdit()
             }
         }
+    }
+
+    /// Push outside-driven slide changes (e.g. toolbar mutations of
+    /// `slide.effects`) into the canvas. Skip pushes when the slide is
+    /// semantically identical to avoid redundant `rebuildLayers()` calls.
+    ///
+    /// Au lâcher, la dernière valeur du geste peut encore attendre son front
+    /// de queue (#9874) : le canvas est alors EN AVANCE sur le binding, et lui
+    /// repousser la valeur périmée le ferait reculer d'une image. On écrit la
+    /// valeur en attente et on ne pousse rien.
+    private func pushOutsideSlide(into uiView: StoryCanvasUIView, coordinator: Coordinator) {
+        let canvasIsAhead = coordinator.slideWrites?.flush() ?? false
+        guard !canvasIsAhead, !Self.slidesEqualForCanvas(uiView.slide, slide) else { return }
+        uiView.slide = slide
     }
 
     /// Semantic equality used to decide whether to forward a slide change into

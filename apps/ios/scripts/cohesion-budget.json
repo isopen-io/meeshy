@@ -348,7 +348,7 @@
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryTextLayer.swift::StoryTextLayer.configure": 232,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryAVCompositor.swift::StoryAVCompositor.renderFrame": 259,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryAVCompositor.swift::StoryAVCompositor.startRequest": 93,
-    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasRepresentable.swift::StoryComposerCanvasView.updateUIView": 105,
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasRepresentable.swift::StoryComposerCanvasView.updateUIView": 100,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Audio.swift::StoryCanvasUIView.reconfigureAudioForPlayback": 175,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+ContentReadiness.swift::StoryCanvasUIView.fireContentReadyIfNeeded": 90,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+ContentReadiness.swift::StoryCanvasUIView.scheduleContentReadyEvaluation": 109,

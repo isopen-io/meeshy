@@ -190,9 +190,18 @@ public struct StoryTimelineHost: View {
 
     /// Pistes du plan, dérivées du projet courant via l'adaptateur pur
     /// (Global Constraints — le plan lit le RUNTIME, jamais CanvasV3).
+    /// Mémoïsées sur la révision du projet (#9874) : pistes, jonctions et
+    /// échos sont des fonctions pures du projet — un calcul par version, pas
+    /// un par body (zoom, sélection, sheet). Caches de lecture, jamais observés.
+    @State private var tracksMemo = KeyedMemo<UInt, [Plan2DTrack]>()
+    @State private var junctionsMemo = KeyedMemo<UInt, [TransitionJunction]>()
+    @State private var loopEchoesMemo = KeyedMemo<UInt, [LoopEcho]>()
+
     private var plan2DTracks: [Plan2DTrack] {
-        Plan2DLayout.tracks(from: Plan2DProjectAdapter.effects(from: viewModel.project),
-                            slideDuration: Double(viewModel.project.slideDuration))
+        tracksMemo.value(for: viewModel.projectRevision) {
+            Plan2DLayout.tracks(from: Plan2DProjectAdapter.effects(from: viewModel.project),
+                                slideDuration: Double(viewModel.project.slideDuration))
+        }
     }
 
     /// Zoom DEUX PALIERS du plan — piloté par le MÊME état que le transport
@@ -387,7 +396,10 @@ public struct StoryTimelineHost: View {
         // du composant) débordaient 8 pt au-dessus de la barre et
         // s'arrêtaient 4 pt avant son bas (mineur 17, revue Opus).
         let echoFrame = Plan2DView.loopEchoVerticalFrame(laneHeight: TimelineMetrics.laneHeight)
-        ForEach(Self.loopEchoes(project: viewModel.project, tracks: tracks)) { echo in
+        let echoes = loopEchoesMemo.value(for: viewModel.projectRevision) {
+            Self.loopEchoes(project: viewModel.project, tracks: tracks)
+        }
+        ForEach(echoes) { echo in
             ZStack(alignment: .topLeading) {
                 LoopRepeatOverlay(
                     nativeDuration: echo.nativeDuration,
@@ -419,8 +431,10 @@ public struct StoryTimelineHost: View {
     @ViewBuilder
     private func transitionJunctionOverlay(tracks: [Plan2DTrack], laneWidth: CGFloat,
                                            zoom: Plan2DZoom, slideDuration: Double) -> some View {
-        let junctions = TransitionJunctionResolver.resolve(
-            project: viewModel.project, slideDuration: Float(slideDuration))
+        let junctions = junctionsMemo.value(for: viewModel.projectRevision) {
+            TransitionJunctionResolver.resolve(
+                project: viewModel.project, slideDuration: Float(slideDuration))
+        }
         let frameWidth = Plan2DView.labelColumnWidth + laneWidth * zoom.scale
         ForEach(junctions) { junction in
             if let rowIndex = tracks.firstIndex(where: { $0.id == junction.toClipId }) {

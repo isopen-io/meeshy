@@ -12,12 +12,13 @@ final class BindingWriteThrottleTests: XCTestCase {
         var now: TimeInterval = 100
         var written: [Int] = []
         var scheduled: [(delay: TimeInterval, run: @MainActor () -> Void)] = []
+        var cancelled = 0
         lazy var throttle = BindingWriteThrottle<Int>(
             write: { [unowned self] in self.written.append($0) },
             clock: { [unowned self] in self.now },
             schedule: { [unowned self] delay, run in
                 self.scheduled.append((delay, run))
-                return {}
+                return { [unowned self] in self.cancelled += 1 }
             }
         )
     }
@@ -55,7 +56,7 @@ final class BindingWriteThrottleTests: XCTestCase {
         XCTAssertEqual(h.written, [1, 3], "la valeur finale part, pas les intermediaires")
     }
 
-    func test_sixtySubmissionsOverOneSecond_writeAtMost31Times() {
+    func test_120SubmissionsOverOneSecond_writeAtMost32Times() {
         let h = Harness()
         for index in 0..<120 {
             h.now = 100 + Double(index) / 120
@@ -76,6 +77,18 @@ final class BindingWriteThrottleTests: XCTestCase {
         h.throttle.flush()
         h.throttle.flush()
 
+        XCTAssertEqual(h.written, [1, 2])
+    }
+
+    func test_flush_reportsWhetherTheSourceWasAhead_andDisarmsTheTrailingEdge() {
+        let h = Harness()
+        h.throttle.submit(1)
+        h.now += 0.010
+        h.throttle.submit(2)
+
+        XCTAssertTrue(h.throttle.flush(), "une valeur attendait : la source est en avance sur le binding")
+        XCTAssertEqual(h.cancelled, 1, "le front de queue arme ne doit plus tirer apres un flush")
+        XCTAssertFalse(h.throttle.flush(), "plus rien n'attend : le binding est a jour")
         XCTAssertEqual(h.written, [1, 2])
     }
 }

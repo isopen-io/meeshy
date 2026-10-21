@@ -100,4 +100,17 @@ final class TimelineViewModelPlayheadIsolationTests: XCTestCase {
 
         XCTAssertGreaterThan(sut.projectRevision, before)
     }
+
+    func test_projectRevision_neverCollidesAcrossViewModels() {
+        let (first, _) = makeSUT()
+        let (second, _) = makeSUT()
+
+        XCTAssertNotEqual(first.projectRevision, second.projectRevision,
+                          "une vue qui change de view model ne doit jamais retrouver la cle de l'ancien projet")
+
+        first.bootstrap(project: TimelineProjectFactory.emptyProject(), mediaURLs: [:], images: [:])
+        second.bootstrap(project: TimelineProjectFactory.emptyProject(), mediaURLs: [:], images: [:])
+
+        XCTAssertNotEqual(first.projectRevision, second.projectRevision)
+    }
 }

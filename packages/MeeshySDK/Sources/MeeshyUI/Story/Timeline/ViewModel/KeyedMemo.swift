@@ -1,3 +1,5 @@
+import os
+
 /// Mémoïsation à UNE entrée : la dernière clé et sa valeur.
 ///
 /// Les résolveurs « hoistés » de la timeline (pistes, jonctions, marqueurs)
@@ -20,5 +22,22 @@ final class KeyedMemo<Key: Equatable, Value> {
         let fresh = compute()
         entry = (key, fresh)
         return fresh
+    }
+}
+
+/// Révisions de projet UNIQUES pour tout le processus.
+///
+/// Un compteur par view model repartait de zéro à chaque instance : une vue
+/// qui changeait de view model en gardant ses `KeyedMemo` (des `@State`)
+/// retrouvait la même clé et servait les pistes de l'ANCIEN projet. Une source
+/// unique rend une collision impossible, quelle que soit l'instance.
+enum TimelineProjectRevision {
+    private static let seed = OSAllocatedUnfairLock(initialState: UInt(0))
+
+    static func next() -> UInt {
+        seed.withLock { value in
+            value &+= 1
+            return value
+        }
     }
 }

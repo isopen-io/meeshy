@@ -60,17 +60,22 @@ public final class BindingWriteThrottle<Value> {
         case .deferred(let delay):
             pending = value
             guard cancelTrailing == nil else { return }
-            cancelTrailing = schedule(delay) { [weak self] in self?.flush() }
+            cancelTrailing = schedule(delay) { [weak self] in _ = self?.flush() }
         }
     }
 
-    /// Écrit la valeur en attente, s'il y en a une. Idempotent.
-    public func flush() {
+    /// Écrit la valeur en attente, s'il y en a une, et désarme le front de
+    /// queue. Idempotent. Rend `true` quand une valeur attendait : la source
+    /// était alors EN AVANCE sur le binding, qui ne doit pas la réécraser.
+    @discardableResult
+    public func flush() -> Bool {
+        cancelTrailing?()
         cancelTrailing = nil
-        guard let value = pending else { return }
+        guard let value = pending else { return false }
         pending = nil
         lastWrite = clock()
         write(value)
+        return true
     }
 }
 
