@@ -15,8 +15,8 @@ import XCTest
 /// fichier. La source est la seule surface où le défaut existe.
 final class PostUploadCacheSeedGuardTests: XCTestCase {
 
-    private static let handlersPath = "Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift"
-    private static let loopAnchor = "for (item, result) in zip(pendingUploads, uploadResults)"
+    private static let handlersPath = "Meeshy/Features/Main/Views/MediaGroupUploader.swift"
+    private static let loopAnchor = "struct TusMediaGroupUploader"
 
     private struct AncreIntrouvable: Error, CustomStringConvertible {
         let ancre: String
@@ -47,7 +47,7 @@ final class PostUploadCacheSeedGuardTests: XCTestCase {
         let body = try postUploadLoopBody()
 
         XCTAssertTrue(
-            body.contains("uploadedIds.append(result.id)"),
+            body.contains("didPromote(item.attachmentId, result.id)"),
             "La boucle lue n'est pas celle qui suit le téléversement — la garde ne mesurerait rien"
         )
     }

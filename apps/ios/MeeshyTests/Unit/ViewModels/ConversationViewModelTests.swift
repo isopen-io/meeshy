@@ -609,7 +609,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_emptyContent_returnsFalse() async {
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "")
+        let result = await sut.send(outgoingMessage(content: "", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
         XCTAssertTrue(sut.messages.isEmpty)
@@ -618,7 +618,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_whitespaceOnly_returnsFalse() async {
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "   \n  ")
+        let result = await sut.send(outgoingMessage(content: "   \n  ", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
     }
@@ -631,7 +631,7 @@ final class ConversationViewModelTests: XCTestCase {
         // which crosses several runloop hops — poll for the condition instead
         // of a fixed sleep (a 50 ms delay races the pipeline under load).
         let sendTask = Task {
-            await sut.sendMessage(content: "Hello world")
+            await sut.send(outgoingMessage(content: "Hello world", conversationId: sut.conversationId)).isAccepted
         }
 
         let surfaced = await MessageStoreObservationHelper.awaitMessage(in: sut) {
@@ -647,7 +647,7 @@ final class ConversationViewModelTests: XCTestCase {
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
 
-        let result = await sut.sendMessage(content: "Hello")
+        let result = await sut.send(outgoingMessage(content: "Hello", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         // Post Phase 1.5: insertOptimistic + applyEvent(.serverAck) write
@@ -672,7 +672,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Send failed"]))
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Fail me")
+        let result = await sut.send(outgoingMessage(content: "Fail me", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
         XCTAssertEqual(sut.messages.count, 1)
@@ -687,7 +687,7 @@ final class ConversationViewModelTests: XCTestCase {
         let sut = makeSUT()
         XCTAssertEqual(sut.messages.count, 0)
 
-        _ = await sut.sendMessage(content: "Test")
+        _ = await sut.send(outgoingMessage(content: "Test", conversationId: sut.conversationId)).isAccepted
 
         // The optimistic GRDB insert surfaces through the store observation
         // (notification → store refresh → @Published messages), which hops the
@@ -705,7 +705,7 @@ final class ConversationViewModelTests: XCTestCase {
         let sut = makeSUT()
         sut.messages = [makeMessage(id: "parent-msg", content: "Original", isMe: false)]
 
-        _ = await sut.sendMessage(content: "Reply", replyToId: "parent-msg")
+        _ = await sut.send(outgoingMessage(content: "Reply", conversationId: sut.conversationId, relation: .reply(to: MessageID("parent-msg"), citing: nil))).isAccepted
 
         XCTAssertEqual(mockMessageService.lastSendRequest?.replyToId, "parent-msg")
     }
@@ -719,7 +719,7 @@ final class ConversationViewModelTests: XCTestCase {
         )
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Fallback me")
+        let result = await sut.send(outgoingMessage(content: "Fallback me", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1)
@@ -728,7 +728,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_restSucceeds_skipsSocketFallback() async {
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Plain send")
+        let result = await sut.send(outgoingMessage(content: "Plain send", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 0)
@@ -745,7 +745,7 @@ final class ConversationViewModelTests: XCTestCase {
         )
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Fast via socket")
+        let result = await sut.send(outgoingMessage(content: "Fast via socket", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1, "socket-first sends via the socket")
@@ -759,7 +759,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageSocket.sendViaSocketFallbackResult = nil
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Socket miss then REST")
+        let result = await sut.send(outgoingMessage(content: "Socket miss then REST", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1, "socket-first was attempted")
@@ -771,7 +771,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageSocket.sendViaSocketFallbackResult = nil
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Both down")
+        let result = await sut.send(outgoingMessage(content: "Both down", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1)
@@ -784,7 +784,7 @@ final class ConversationViewModelTests: XCTestCase {
         )
         let sut = makeSUT()
 
-        _ = await sut.sendMessage(content: "Dedup key check")
+        _ = await sut.send(outgoingMessage(content: "Dedup key check", conversationId: sut.conversationId)).isAccepted
 
         // The fallback MUST reuse the cid_<uuid> optimistic id so the gateway
         // dedup (conversationId, clientMessageId) prevents a duplicate when the

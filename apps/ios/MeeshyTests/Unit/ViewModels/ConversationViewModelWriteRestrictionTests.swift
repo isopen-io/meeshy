@@ -75,7 +75,7 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
     func test_sendMessage_globalAdultsOnly_learnsTheRestriction() async throws {
         let fx = try await makeFixture(restSendFailure: globalAdultsOnly)
 
-        let sent = await fx.sut.sendMessage(content: "Salut Global")
+        let sent = await fx.sut.send(outgoingMessage(content: "Salut Global", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertFalse(sent)
         XCTAssertEqual(fx.sut.learnedWriteRestriction, .minorGlobal)
@@ -85,7 +85,7 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
     func test_sendMessage_globalAdultsOnly_withdrawsTheOptimisticMessage() async throws {
         let fx = try await makeFixture(restSendFailure: globalAdultsOnly)
 
-        _ = await fx.sut.sendMessage(content: "Salut Global")
+        _ = await fx.sut.send(outgoingMessage(content: "Salut Global", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertEqual(try storedMessageCount(in: fx.pool), 0)
     }
@@ -93,7 +93,7 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
     func test_sendMessage_globalAdultsOnly_neitherFallsBackNorQueues() async throws {
         let fx = try await makeFixture(restSendFailure: globalAdultsOnly)
 
-        _ = await fx.sut.sendMessage(content: "Salut Global")
+        _ = await fx.sut.send(outgoingMessage(content: "Salut Global", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertEqual(fx.messageSocket.sendViaSocketFallbackCallCount, 0)
         let queued = await fx.offlineQueue.enqueueCount
@@ -103,7 +103,7 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
     func test_sendMessage_otherForbidden_learnsNoRestriction() async throws {
         let fx = try await makeFixture(restSendFailure: MeeshyError.forbidden(reason: nil, body: Data(#"{"code":"FORBIDDEN"}"#.utf8)))
 
-        _ = await fx.sut.sendMessage(content: "Salut")
+        _ = await fx.sut.send(outgoingMessage(content: "Salut", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertNil(fx.sut.learnedWriteRestriction)
     }
@@ -117,7 +117,7 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
     func test_sendMessage_newcomerSlowMode_keepsTheMessageFailed_toResend() async throws {
         let fx = try await makeFixture(restSendFailure: newcomerSlowMode)
 
-        let sent = await fx.sut.sendMessage(content: "Salut Global")
+        let sent = await fx.sut.send(outgoingMessage(content: "Salut Global", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertFalse(sent)
         XCTAssertNil(fx.sut.learnedWriteRestriction, "un refus temporaire ne ferme pas le composeur")
@@ -128,7 +128,7 @@ final class ConversationViewModelWriteRestrictionTests: XCTestCase {
     func test_sendMessage_newcomerSlowMode_neitherFallsBackNorQueues() async throws {
         let fx = try await makeFixture(restSendFailure: newcomerSlowMode)
 
-        _ = await fx.sut.sendMessage(content: "Salut Global")
+        _ = await fx.sut.send(outgoingMessage(content: "Salut Global", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertEqual(fx.messageSocket.sendViaSocketFallbackCallCount, 0)
         let queued = await fx.offlineQueue.enqueueCount

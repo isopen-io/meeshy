@@ -193,49 +193,13 @@ extension ConversationViewModel {
         // une fois, et le marqueur disparaît.
         //
         // Ce site est le point de passage des DEUX transports acquittés par le
-        // serveur (socket-first et REST) : le placer dans `sendMessage`, qui a
+        // serveur (socket-first et REST) : le placer dans `send`, qui a
         // quatre `return true` dont un pour la simple mise en file HORS LIGNE,
         // demanderait la permission pour un message qui n'est pas encore parti.
         //
         // Détaché : la demande ouvre une alerte système qui peut rester à
         // l'écran indéfiniment, et rien de l'envoi ne doit l'attendre.
         Task { await PushPermissionPrompt.honourDeferredRequest() }
-    }
-
-    @discardableResult
-    @available(*, deprecated, message: "Construire un OutgoingMessage et appeler send(_:)")
-    /// `attachmentReplyTo` — l'ANCRE de la pièce citée (#6164, moitié ÉCRITURE).
-    ///
-    /// Elle n'a de sens qu'avec `replyToId` : la garde serveur
-    /// (`admitAttachmentReply`) refuse une pièce sans son message, et relit la
-    /// ligne pour vérifier l'appartenance.
-    ///
-    /// **Sa présence CHANGE DE TRANSPORT.** Le canal socket ne la porte pas —
-    /// `MessageHandler.ts` ne lit `attachmentReplyTo` nulle part et
-    /// `admitAttachmentReply` n'y est pas wiré. Un envoi qui la porte est donc
-    /// inéligible au socket-first ET au repli socket (`OutgoingMessage
-    /// .socketFirstEligible`, `.socketFallbackEligible`), exactement comme le
-    /// chiffrement, l'éphémère, la vue unique, le flou et les effets.
-    func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, protection: MessageProtectionIntent? = nil, originalLanguage: String? = nil, existingTempId: String? = nil, location: SharedPlace? = nil, sticker: MessageSticker? = nil, attachmentReplyTo: QuotedAttachmentSend? = nil) async -> Bool {
-        let outgoing = OutgoingMessage(
-            conversationId: ConversationID(conversationId),
-            content: content,
-            relation: .legacy(
-                replyToId: replyToId,
-                storyReplyToId: storyReplyToId,
-                storyReference: storyReplyReference,
-                forwardedFromId: forwardedFromId,
-                forwardedFromConversationId: forwardedFromConversationId,
-                attachmentReplyTo: attachmentReplyTo
-            ),
-            attachments: OutgoingAttachments(ids: attachmentIds, previews: localAttachments),
-            protection: protection,
-            originalLanguage: originalLanguage,
-            reusedClientMessageId: existingTempId.map { MessageID($0) },
-            location: location,
-            sticker: sticker
-        )
-        return await send(outgoing).isAccepted
     }
 
     // MARK: - Les étapes de l'envoi
