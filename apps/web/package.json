@@ -87,7 +87,7 @@
     "@mediapipe/tasks-vision": "1.1.0",
     "@meeshy/shared": "workspace:*",
     "@tanstack/react-query": "5.104.1",
-    "@tanstack/react-virtual": "3.14.13",
+    "@tanstack/react-virtual": "3.14.20",
     "preact": "11.0.1",
     "socket.io-client": "4.8.4",
     "zod": "4.4.3",
