@@ -224,7 +224,7 @@ final class StoryReactionStripGestureTests: XCTestCase {
             return XCTFail("Le lecteur doit consulter `StoryReaderHorizontalYield.yields(` avant de poser `gestureAxis = 1`.")
         }
         let cession = try strippedSource(at: "Meeshy/Features/Main/Views/StoryReaderDragOwnership.swift")
-        guard let yields = corps("static func yields(", dans: cession) else {
+        guard let yields = self.corps("static func yields(", dans: cession) else {
             return XCTFail("`StoryReaderHorizontalYield.yields` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(compact(yields).contains("StoryReactionStripGesture.yieldsHorizontalAxis(stripFrame:stripFrame,dragStart:dragStart)"),
