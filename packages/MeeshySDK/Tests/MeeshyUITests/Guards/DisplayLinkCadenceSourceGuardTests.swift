@@ -82,6 +82,17 @@ final class DisplayLinkCadenceSourceGuardTests: XCTestCase {
         XCTAssertFalse(factory.contains("frameRateRange:CAFrameRateRange="), "la plage n'a pas de défaut")
     }
 
+    func test_voiceRecorderLevel_isDrivenByAPinnedDisplayLink_notATimer() throws {
+        let recorder = try Self.compactCode(
+            of: Self.repoRoot.appendingPathComponent("apps/ios/Meeshy/Features/Main/Services/AudioRecorderManager.swift")
+        )
+        XCTAssertFalse(recorder.contains("Timer.scheduledTimer"), "le niveau du micro suit l'écran, pas un minuteur à 20 Hz")
+        XCTAssertTrue(
+            recorder.contains("WeakDisplayLinkTarget.makeLink(frameRateRange:.pinned(fps:30))"),
+            "le niveau du micro est un lien d'affichage plafonné à 30 Hz"
+        )
+    }
+
     func test_frameRateRangeLiterals_liveOnlyInTheSharedLaws() throws {
         let lawName = URL(fileURLWithPath: Self.cadenceLawPath).lastPathComponent
         let offenders = try Self.callSiteFiles()
