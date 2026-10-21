@@ -59,6 +59,12 @@ UNITS = {"B": 1, "kB": 1000, "KB": 1000, "MB": 1000**2, "GB": 1000**3, "TB": 100
          "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
 
 # Les seuls gestes que le runner sait faire. Rien d'autre ne s'execute.
+# Jamais `container prune`, `system prune`, `rm` ni `rmi` ici (#11452) : sur
+# l'hote partage, l'epingle de retour arriere de la production EST un conteneur
+# ARRETE (`meeshy-rollback-pin-<service>`, pose par meeshy-promote-production.sh)
+# qui retient l'image N-1 hors de `image prune -a`. Un nettoyage lance par un
+# ADMIN de staging ne doit jamais pouvoir toucher cette epingle. Le temoin
+# `meeshy-ops-runner.test.mjs` tient cette liste.
 PRUNE_COMMANDS = (
     ("docker", "image", "prune", "-f"),
     ("docker", "image", "prune", "-af", "--filter", "until=168h"),

@@ -176,11 +176,28 @@ describe('la purge des images', () => {
       'docker image prune -af --filter until=168h',
       'docker builder prune -f',
     ]);
-    assert.ok(!log.some((line) => /volume|system prune|--volumes/.test(line)));
+    assert.ok(!log.some((line) => /volume|system prune|container prune|--volumes|^docker (container )?rmi? /.test(line)));
     const state = opsState();
     assert.equal(state.runs['image-prune'].status, 'succeeded');
     assert.equal(state.runs['image-prune'].reclaimedBytes, 1_500_000_000 + 512_000_000);
     assert.ok(existsSync(path.join(base, 'state', 'docker.json')));
+  });
+
+  it('la liste blanche ne connaît ni container prune, ni system prune, ni rm : l’épingle de retour arrière de la production est un conteneur arrêté (#11452)', () => {
+    const listed = spawnSync('python3', ['-I', '-c', `import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location('runner', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(json.dumps([list(command) for command in module.PRUNE_COMMANDS]))`, RUNNER], { encoding: 'utf8' });
+    assert.equal(listed.status, 0, listed.stderr);
+    const commands = JSON.parse(listed.stdout);
+    assert.ok(commands.length > 0);
+    for (const command of commands) {
+      assert.equal(command[0], 'docker', command.join(' '));
+      assert.ok(['image', 'builder'].includes(command[1]), command.join(' '));
+      assert.equal(command[2], 'prune', command.join(' '));
+      assert.ok(!command.some((word) => /^(rm|rmi|container|system|volume)$/.test(word) || /--volumes/.test(word)), command.join(' '));
+    }
   });
 
   it('une purge en échec est publiée en échec', () => {
