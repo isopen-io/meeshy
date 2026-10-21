@@ -69,9 +69,22 @@ export function trimmedAudioFileName(name: string): string {
   return `${dot > 0 ? name.slice(0, dot) : name}-coupe.wav`;
 }
 
-/** Le navigateur réel : le fichier décodé par Web Audio. */
-export async function decodeAudioFile(file: Blob): Promise<DecodedAudio | null> {
-  if (typeof AudioContext === 'undefined') return null;
+/**
+ * La taille maximale de la source compressée qu'on décode pour couper : le PCM
+ * décodé pèse 4 o par échantillon et par canal, donc on borne l'entrée avant
+ * tout décodage (#11312).
+ */
+export const MAXIMUM_TRIM_SOURCE_BYTES = 24 * 1024 * 1024;
+
+export type TrimSource = Pick<Blob, 'size' | 'arrayBuffer'>;
+
+export function trimSourceFits(source: Pick<TrimSource, 'size'>): boolean {
+  return source.size <= MAXIMUM_TRIM_SOURCE_BYTES;
+}
+
+/** Le navigateur réel : le fichier décodé par Web Audio, jamais au-delà de la borne. */
+export async function decodeAudioFile(file: TrimSource): Promise<DecodedAudio | null> {
+  if (!trimSourceFits(file) || typeof AudioContext === 'undefined') return null;
   const context = new AudioContext();
   try {
     return await context.decodeAudioData(await file.arrayBuffer());
