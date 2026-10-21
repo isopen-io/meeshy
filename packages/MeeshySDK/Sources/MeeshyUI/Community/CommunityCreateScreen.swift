@@ -171,8 +171,8 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: MeeshyFont.calloutSize, design: .rounded))
                         .foregroundColor(theme.textPrimary)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
                 }
             }
 
@@ -302,7 +302,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: MeeshyFont.bodySize, design: .rounded))
                     .foregroundColor(theme.textPrimary)
-                    .autocapitalization(.none)
+                    .textInputAutocapitalization(.never)
 
                 if !viewModel.memberSearch.isEmpty {
                     Button {

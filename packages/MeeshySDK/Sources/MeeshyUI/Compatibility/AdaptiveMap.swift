@@ -292,10 +292,10 @@ private struct LegacyInteractiveMap<PinContent: View>: View {
         ) { item in
             MapAnnotation(coordinate: item.coordinate) { pin() }
         }
-        .onChange(of: RegionKey(region)) { _ in
+        .adaptiveOnChange(of: RegionKey(region)) { _, _ in
             onRegionChange(region.center)
         }
-        .onChange(of: target) { newTarget in
+        .adaptiveOnChange(of: target) { _, newTarget in
             if let newTarget { region = newTarget.region }
         }
     }
