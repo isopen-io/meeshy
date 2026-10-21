@@ -30,7 +30,7 @@ struct MintCeremonyScene: View {
             .ignoresSafeArea()
             Text(MintCeremonyCopy.skip)
                 .font(.system(size: 11))
-                .foregroundColor(MintCeremonyPalette(edition: run.edition).hint)
+                .foregroundStyle(MintCeremonyPalette(edition: run.edition).hint)
                 .padding(.trailing, 14)
                 .padding(.bottom, 10)
         }
