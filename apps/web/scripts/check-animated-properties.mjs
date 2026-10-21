@@ -8,6 +8,9 @@
  * témoins) et relève toute géométrie nommée dans :
  *
  *  - une `transition` / `transition-property` (CSS ou objet de style) ;
+ *  - une chaîne qui a la FORME d'une transition (`'height 250ms …'`), où
+ *    qu'elle soit rangée — une constante nommée ailleurs que sous la clé
+ *    `transition` lui échappait sinon ;
  *  - une classe Tailwind `transition-[…]` ;
  *  - un `@keyframes` ;
  *  - les images clés d'un `.animate(` (animation Web).
@@ -64,6 +67,13 @@ function propertiesOfTransition(value) {
     .filter((token) => GEOMETRY.test(token));
 }
 
+/** `'height 250ms ease, bottom 250ms ease'` : chaque segment commence par une propriété suivie d'une durée. */
+const transitionShaped = (literal) =>
+  [...literal.matchAll(/(?:^|,)\s*([a-zA-Z-]+)\s+(?:[\d.]+m?s\b|\$\{[^}]*\}m?s\b)/g)].map((found) => kebab(found[1])).filter((name) => GEOMETRY.test(name));
+
+/** Une chaîne posée sous la clé `transition` est déjà comptée par le premier relevé. */
+const underTransitionKey = (text, index) => /\btransition(?:Property)?\s*:\s*$/.test(text.slice(Math.max(0, index - 40), index));
+
 function balanced(text, open, opening, closing) {
   let depth = 0;
   for (let index = open; index < text.length; index += 1) {
@@ -85,10 +95,11 @@ export function geometryAnimationsIn({ kind, text: source }) {
     kind === 'css'
       ? sitesOf(text, /\btransition(?:-property)?\s*:\s*([^;}]*)/g, (match) => propertiesOfTransition(match[1]))
       : sitesOf(text, /\btransition(?:Property)?\s*:\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g, (match) => propertiesOfTransition(match[2]));
+  const shaped = kind === 'css' ? [] : sitesOf(text, /(['"`])((?:\\.|(?!\1)[^\\\n])*)\1/g, (match) => (underTransitionKey(text, match.index) ? [] : transitionShaped(match[2])));
   const tailwind = sitesOf(text, /\btransition-\[([^\]]*)\]/g, (match) => propertiesOfTransition(match[1]));
   const keyframes = sitesOf(text, /@keyframes\s+[\w-]+\s*\{/g, (match) => declaredIn(balanced(text, match.index + match[0].length - 1, '{', '}')));
   const animate = kind === 'css' ? [] : sitesOf(text, /\.animate\(/g, (match) => declaredIn(balanced(text, match.index + match[0].length - 1, '(', ')')));
-  return [...transitions, ...tailwind, ...keyframes, ...animate].sort((a, b) => a.line - b.line);
+  return [...transitions, ...shaped, ...tailwind, ...keyframes, ...animate].sort((a, b) => a.line - b.line);
 }
 
 function* walk(directory) {

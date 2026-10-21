@@ -43,6 +43,14 @@ describe('geometryAnimationsIn — ce que le gate reconnaît', () => {
     expect(properties('ts', "const d = { transitionProperty: 'maxHeight' };")).toEqual(['max-height']);
   });
 
+  test('une transition rangée dans une constante, hors de toute clé `transition` (la forme d’origine de comments-zone.ts)', () => {
+    expect(properties('ts', "export const ZONE = 'height 250ms cubic-bezier(0.2, 0.8, 0.2, 1), bottom 250ms cubic-bezier(0.2, 0.8, 0.2, 1)';")).toEqual(['height', 'bottom']);
+    expect(properties('ts', 'const settle = `width ${ms}ms ease-out`;')).toEqual(['width']);
+    expect(properties('ts', "const glide = 'translate 180ms ease-out';")).toEqual([]);
+    expect(properties('ts', 'const label = `Membre ${seed}`;')).toEqual([]);
+    expect(properties('ts', "const a = { transition: 'left 180ms ease-out' };")).toEqual(['left']);
+  });
+
   test('une animation Web dont les images clés portent la géométrie', () => {
     expect(properties('ts', "el.animate([{ height: '0px' }, { height: `${to}px` }], { duration: 300 });")).toEqual(['height', 'height']);
     expect(properties('ts', "el.animate([{ transform: 'none' }, { opacity: 1 }], { duration: 300 });")).toEqual([]);
