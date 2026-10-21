@@ -65,10 +65,14 @@ import { useMessageStar, type MessageStarEntry } from './use-message-star';
  * rend, motif `useSend`/`useThreadScene`.
  *
  * SANS RÈGLE PROPRE — la loi vient d'ailleurs à chaque fois : `served()`
- * (D-14, le Prisme), `messageMenuItems`/`translationChoices`
- * (`message-actions.ts`), `selectionReducer` (`selection.ts`), `reactAction`
- * (`api/query.ts`, qui délègue à `performReaction`). Ce fichier ne fait que
- * les COMPOSER derrière une surface stable pour l'hôte.
+ * (D-14, le Prisme), `messageActionsFor` (`@meeshy/shared`, #11210) pour TOUT
+ * ce qu'un rôle, un auteur, un compte ou le chiffrement décide — lu par
+ * `message-action-scope.ts` et projeté par `messageMenuItems` —,
+ * `translationChoices` (`message-actions.ts`), `selectionReducer`
+ * (`selection.ts`), `reactAction` (`api/query.ts`, qui délègue à
+ * `performReaction`). Le lecteur et la conversation lui sont REMIS par
+ * l'hôte (`menuViewerOf`, `menuConversationOf`) : il n'en déduit rien. Ce
+ * fichier ne fait que COMPOSER ces lois derrière une surface stable.
  */
 
 type PieceMenuTransport = { readonly request: <T>(request: HttpRequest) => Promise<ApiResult<T>> };
