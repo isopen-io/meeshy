@@ -10,6 +10,7 @@ import { createActMounter } from '@/test-support/act-mount';
 import { adminIdentityFixture } from '@/test-support/admin-assertions';
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import { receptionOf } from '@/lib/view/ephemeral-reception';
+import { createFakeIntersectionObservers } from '@/test-support/fake-intersection-observer';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { AdminConversationReading } from './admin-conversation-reading';
@@ -454,7 +455,7 @@ describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
    * rougir ce témoin, et c'est voulu — il faudra alors dire lequel, et prouver
    * qu'il fait quelque chose.
    */
-  const GESTES_OFFERTS = ['Précédents', 'Suivants', 'Ouvrir plan.png', 'Lire l’audio', 'Vitesse de lecture', 'Ouvrir en plein écran'];
+  const GESTES_OFFERTS = ['Fil', 'Médias', 'Ouvrir plan.png', 'Lire l’audio', 'Vitesse de lecture', 'Ouvrir en plein écran'];
 
   test('la fenêtre n’offre QUE les gestes dont l’effet existe', async () => {
     const { host } = await lire(['de', 'es']);
@@ -618,5 +619,138 @@ describe('un message éphémère, en lecture souveraine', () => {
     expect(host.textContent ?? '').toContain('Je disparais dans trente secondes');
     expect(host.querySelector('[data-admin-ephemeral="m-ephemere"]')?.textContent).toMatch(/éphémère · 30\s?s/i);
     expect(receptionOf('m-ephemere')).toBe(null);
+  });
+});
+
+/**
+ * **LE FIL SE REMONTE D'UN GESTE** (#11457, demande porteur 2026-10-21 : « on scroll du
+ * plus récent en bas au plus ancien en haut »). La lecture s'ouvre sur la page la plus
+ * RÉCENTE ; une prise posée en TÊTE du fil demande la page plus ancienne quand elle entre
+ * dans la vue, et la page arrive AU-DESSUS. Plus de « Précédent / Suivant ».
+ *
+ * L'observateur est un faux qui sait ce qu'il observe : `emitAll(1)` met la prise dans la
+ * vue, exactement ce que fait un défilement vers le haut.
+ */
+describe('le fil souverain se remonte en continu (#11457)', () => {
+  const observers = createFakeIntersectionObservers();
+  let natif: typeof IntersectionObserver | undefined;
+  beforeEach(() => {
+    observers.reset();
+    natif = globalThis.IntersectionObserver;
+    globalThis.IntersectionObserver = observers.FakeIntersectionObserver as unknown as typeof IntersectionObserver;
+  });
+  afterEach(() => {
+    if (natif !== undefined) globalThis.IntersectionObserver = natif;
+  });
+
+  const [ANCIEN] = CHARGE.data.slice(-1);
+  const RECENT = {
+    ...ANCIEN,
+    id: 'm-recent',
+    content: 'Dernier mot',
+    translations: [],
+    attachmentCount: 0,
+    attachments: [],
+    createdAt: '2026-06-02T12:00:00.000Z',
+  };
+  const PAGE_RECENTE = { data: [RECENT], pagination: { total: 3, offset: 0, limit: 30, hasMore: true } };
+  /* Le message CHIFFRÉ porte ici une pièce : sans elle, « la pellicule n'expose pas un
+     message retenu » verdirait aussi bien sans la garde. */
+  const [CHIFFRE, TRADUIT] = CHARGE.data;
+  const RETENU_AVEC_PIECE = {
+    ...CHIFFRE,
+    attachmentCount: 1,
+    attachments: [{ ...TRADUIT?.attachments[0], id: 'a-secret', messageId: 'm-chiffre', fileUrl: 'data:image/png;base64,SECRET' }],
+  };
+  const PAGE_ANCIENNE = { data: [RETENU_AVEC_PIECE, TRADUIT], pagination: { total: 3, offset: 30, limit: 30, hasMore: false } };
+
+  function transportEnDeuxPages() {
+    const calls: HttpRequest[] = [];
+    const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    transport.request = (async (req: HttpRequest): Promise<ApiResult<unknown>> => {
+      calls.push(req);
+      if (!req.path.startsWith(`/api/v1/admin/conversations/${CONVERSATION}/messages`)) return { ok: false, status: 404, error: 'non prévu' };
+      return { ok: true, data: req.path.includes('offset=30') ? PAGE_ANCIENNE : PAGE_RECENTE };
+    }) as HttpTransport['request'];
+    return { transport, calls: () => calls };
+  }
+
+  async function ouvrir() {
+    const { transport, calls } = transportEnDeuxPages();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading conversationId={CONVERSATION} language="fr" prisme="lecteur" readerLanguages={['fr']} viewer={VIEWER} deps={{ source: 'gateway', transport }} />
+      </QueryClientProvider>,
+    );
+    mounter.type(host, '[data-admin-reason]', MOTIF);
+    await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+    await mounter.settle();
+    return { host, calls };
+  }
+
+  const remonter = async () => {
+    observers.emitAll(1);
+    await mounter.settle();
+  };
+
+  test('s’ouvre sur la page la plus RÉCENTE, sans bouton de pagination', async () => {
+    const { host, calls } = await ouvrir();
+    expect(host.textContent ?? '').toContain('Dernier mot');
+    expect(host.textContent ?? '').not.toContain('Bonjour');
+    expect(calls().filter((c) => c.path.includes('/messages'))).toHaveLength(1);
+    expect(host.querySelector('[data-admin-messages-prev]')).toBeNull();
+    expect(host.querySelector('[data-admin-messages-next]')).toBeNull();
+    expect(host.querySelector('[data-thread-older]')?.getAttribute('data-thread-older')).toBe('idle');
+  });
+
+  test('remonter demande la page plus ANCIENNE, sous le même motif, et la pose AU-DESSUS', async () => {
+    const { host, calls } = await ouvrir();
+    await remonter();
+    const lectures = calls().filter((c) => c.path.includes('/messages'));
+    expect(lectures).toHaveLength(2);
+    expect(lectures[1]?.path).toContain('offset=30');
+    expect(lectures[1]?.path).toContain('reason=');
+    const texte = host.textContent ?? '';
+    expect(texte).toContain('Bonjour');
+    expect(texte.indexOf('Bonjour')).toBeLessThan(texte.indexOf('Dernier mot'));
+  });
+
+  test('remonté jusqu’au bout, le fil DIT qu’il commence là, et ne demande plus rien', async () => {
+    const { host, calls } = await ouvrir();
+    expect(host.querySelector('[data-admin-reading-start]')?.textContent ?? '').toBe('');
+    await remonter();
+    expect(host.querySelector('[data-thread-older]')?.getAttribute('data-thread-older')).toBe('exhausted');
+    expect(host.querySelector('[data-admin-reading-start]')?.textContent).toContain('Début de la conversation');
+    await remonter();
+    expect(calls().filter((c) => c.path.includes('/messages'))).toHaveLength(2);
+  });
+
+  test('l’onglet « Médias » montre les pièces transmises — image en vignette, vocal en rangée — et jamais celles d’un message RETENU', async () => {
+    const { host } = await ouvrir();
+    await remonter();
+    await mounter.click(host.querySelector('[data-admin-reading-tab="media"]') as HTMLElement | null);
+    expect(host.querySelector('[data-admin-reading-tab="media"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[data-media-hub-tile="m-traduit:a-image"]')).not.toBeNull();
+    expect(host.querySelector('[data-media-hub-row="m-traduit:a-vocal"]')).not.toBeNull();
+    expect(host.querySelectorAll('[data-media-hub-tile^="m-chiffre"], [data-media-hub-row^="m-chiffre"]')).toHaveLength(0);
+  });
+
+  test('toucher une vignette ramène au FIL, sur le message qui la porte', async () => {
+    const { host } = await ouvrir();
+    await remonter();
+    await mounter.click(host.querySelector('[data-admin-reading-tab="media"]') as HTMLElement | null);
+    await mounter.click(host.querySelector('[data-media-hub-tile="m-traduit:a-image"]') as HTMLElement | null);
+    await mounter.settle();
+    expect(host.querySelector('[data-admin-reading-tab="thread"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[data-admin-reading-media]')).toBeNull();
+  });
+
+  test('l’onglet « Médias » remonte AUSSI le temps : sa prise du bas demande la page plus ancienne', async () => {
+    const { host, calls } = await ouvrir();
+    await mounter.click(host.querySelector('[data-admin-reading-tab="media"]') as HTMLElement | null);
+    expect(host.querySelector('[data-admin-reading-media-empty]')).toBeNull();
+    await remonter();
+    expect(calls().filter((c) => c.path.includes('offset=30'))).toHaveLength(1);
+    expect(host.querySelector('[data-media-hub-tile="m-traduit:a-image"]')).not.toBeNull();
   });
 });

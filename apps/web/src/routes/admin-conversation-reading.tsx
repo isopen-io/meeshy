@@ -1,14 +1,16 @@
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 import { BRAND, INK, INK2 } from '@/components/admin/tone';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
+import { OlderLoadIndicator } from '@/components/thread-chrome';
 import {
-  ADMIN_MESSAGES_PAGE_SIZE,
-  adminConversationMessagesQueryKey,
+  adminConversationThreadQueryKey,
   loadAdminSovereignThread,
+  mergeAdminThreadPages,
   MOTIF_LONGUEUR_MINIMALE,
+  nextAdminThreadOffset,
 } from '@/lib/api/admin-conversations';
 import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 import { formatDuration } from '@/lib/admin/interpret/time';
@@ -18,8 +20,14 @@ import { apiDeps } from '@/lib/api/deps';
 import type { Viewer } from '@/lib/api/viewer';
 import { place } from '@/lib/grouping';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { paginationStateOf } from '@/lib/lens/pagination';
 import { useThreadScene } from '@/lib/reading-mode/scene';
+import { keepReadingInPlace } from '@/lib/view/thread-resize-compensation';
+import { THREAD_ROW_ESTIMATE, useHeadAnchor, useOlderMessages } from '@/lib/view/use-older-messages';
+import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { ThreadModes } from '@/routes/thread-modes';
+
+import { AdminConversationReadingMedia } from './admin-conversation-reading-media';
 
 /**
  * **LA VRAIE VUE CONVERSATION, SOUS ADMINISTRATION** (#6862, lot C) — le SEUL
@@ -72,6 +80,17 @@ import { ThreadModes } from '@/routes/thread-modes';
  * SERVIE (`useAdminReach().isSovereign`) ; tant qu'elle n'est pas lue, le
  * lecteur n'est pas souverain (fermé par défaut).
  *
+ * ## LE FIL SE REMONTE D'UN GESTE (#11457)
+ *
+ * Comme le fil du produit : la lecture s'ouvre EN BAS, sur les messages les plus
+ * récents, et remonter charge les plus anciens AU-DESSUS — la prise de tête
+ * (`useOlderMessages`), l'ancre du virtualiseur (`useHeadAnchor`,
+ * `keepReadingInPlace`) et l'atterrissage en bas (`useThreadOpenScroll`) sont ceux
+ * de `routes/thread.tsx`, jamais une copie. Les pages, servies par offset en
+ * `createdAt DESC`, vivent dans UNE requête infinie et se recousent par
+ * `mergeAdminThreadPages`. L'onglet « Médias » tire ses pièces des mêmes pages
+ * (`admin-conversation-reading-media.tsx`).
+ *
  * ## RIEN DE CE QUI EST LU ICI NE TOUCHE LE DISQUE
  *
  * La clé descend d'`ADMIN_SOUVERAIN_PREFIXE`, qu'exclut le filtre de
@@ -91,13 +110,9 @@ const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
  */
 const BOUNDED_HEIGHT = 'min(75vh, 52rem)';
 
-const PAGER_BUTTON = {
-  minHeight: 44,
-  backgroundColor: 'var(--color-ios-surface)',
-  border: '1px solid var(--color-edge)',
-  color: INK,
-  outlineColor: BRAND,
-} as const;
+type ReadingTab = 'thread' | 'media';
+const READING_TABS: readonly ReadingTab[] = ['thread', 'media'];
+const TAB_LABEL = { thread: 'admin.conversation.reading.tab.thread', media: 'admin.conversation.reading.tab.media' } as const;
 
 /**
  * LE MODE DE LECTURE DE L'ADMINISTRATION — `focal`, le mode PAR DÉFAUT du
@@ -183,32 +198,45 @@ export function AdminConversationReading({
   const [motif, setMotif] = useState<string | null>(null);
   /** La lecture est armée : un motif validé, ou le rang souverain qui n'en écrit pas. */
   const armee = motif !== null || souverain;
-  const [offset, setOffset] = useState(0);
+  const [tab, setTab] = useState<ReadingTab>('thread');
+  /** Le message qu'un geste de l'onglet Médias a désigné — rejoint une fois le fil revenu à l'écran. */
+  const [pendingJump, setPendingJump] = useState<string | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [expiredIds, setExpiredIds] = useState<ReadonlySet<string>>(() => new Set());
 
-  const page = useQuery({
-    queryKey: adminConversationMessagesQueryKey(conversationId, offset),
-    queryFn: async ({ signal }) => {
+  const thread = useInfiniteQuery({
+    queryKey: adminConversationThreadQueryKey(conversationId),
+    queryFn: async ({ pageParam, signal }) =>
       /* `unwrap` lève une `ApiError` qui GARDE son statut : un refus (403) et une
          conversation disparue (404) ne se disent pas comme une panne. */
-      return unwrap(
+      unwrap(
         await loadAdminSovereignThread({
           ...deps,
           conversationId,
-          offset,
+          offset: pageParam,
           reason: motif,
           signal,
         }),
-      );
-    },
+      ),
+    initialPageParam: 0,
+    getNextPageParam: nextAdminThreadOffset,
     enabled: armee,
     retry: false,
     gcTime: 0,
   });
 
-  const messages = page.data?.messages ?? EMPTY_MESSAGES;
-  const protectedIds = page.data?.protectedIds ?? EMPTY_IDS;
+  const woven = useMemo(() => (thread.data === undefined ? null : mergeAdminThreadPages(thread.data.pages)), [thread.data]);
+  const messages = woven?.messages ?? EMPTY_MESSAGES;
+  const protectedIds = woven?.protectedIds ?? EMPTY_IDS;
+  const olderState = paginationStateOf({
+    hasNextPage: thread.hasNextPage,
+    isFetchingNextPage: thread.isFetchingNextPage,
+    isFetchNextPageError: thread.isFetchNextPageError,
+  });
+  /* Deux prises (le haut du fil, le pied de la pellicule) peuvent appeler dans le même
+     instant : la seconde rejoint la page en vol au lieu de l'annuler. */
+  const fetchNextPage = thread.fetchNextPage;
+  const fetchOlder = useCallback(() => void fetchNextPage({ cancelRefetch: false }), [fetchNextPage]);
   /* `useMemo` et non un appel nu : `placed` alimente le virtualiseur, le saut
      de citation et la scène. Le reconstruire à chaque rendu leur donnerait une
      identité neuve à chaque fois — la mémoïsation du fil ne tiendrait plus
@@ -227,16 +255,41 @@ export function AdminConversationReading({
    * `thread.tsx` : les bulles n'ont pas de hauteur commune, et une estimation
    * fixe ferait sauter la barre de défilement à chaque mesure réelle.
    */
+  const anchorTo = useHeadAnchor(placed[0]?.message.id);
   const virtualizer = useVirtualizer({
     count: placed.length,
     getScrollElement: () => scroller.current,
-    estimateSize: () => 88,
+    estimateSize: () => THREAD_ROW_ESTIMATE,
     overscan: 6,
     getItemKey: (index) => placed[index]?.message.id ?? index,
+    anchorTo,
   });
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = keepReadingInPlace;
 
   const scene = useThreadScene(scroller, { mode: MODE_DE_LECTURE, ready: placed.length > 0 });
   const noteProgrammaticScroll = scene.noteProgrammaticScroll;
+
+  /* La prise de tête n'est armée que fil À L'ÉCRAN : caché derrière l'onglet Médias, il
+     ne demanderait pas de pages pour un défilement que personne ne fait. */
+  const older = useOlderMessages({
+    scroller,
+    state: olderState,
+    rowCount: tab === 'thread' ? placed.length : 0,
+    firstMessageId: placed[0]?.message.id,
+    fetchOlder,
+    noteProgrammaticScroll,
+  });
+
+  useThreadOpenScroll({
+    scroller,
+    conversationId,
+    placed,
+    unreadBoundary: null,
+    ready: placed.length > 0,
+    virtualizer,
+    onProgrammaticScroll: noteProgrammaticScroll,
+    followTail: false,
+  });
 
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -265,6 +318,19 @@ export function AdminConversationReading({
     [placed, virtualizer, noteProgrammaticScroll],
   );
 
+  /* « Voir dans le fil » depuis l'onglet Médias : le saut attend que le fil soit revenu
+     à l'écran, sans quoi le virtualiseur d'un panneau caché ne mesure rien. */
+  useEffect(() => {
+    if (tab !== 'thread' || pendingJump === null) return;
+    setPendingJump(null);
+    jumpToMessage(pendingJump);
+  }, [tab, pendingJump, jumpToMessage]);
+
+  const showInThread = useCallback((messageId: string) => {
+    setTab('thread');
+    setPendingJump(messageId);
+  }, []);
+
   /**
    * UN ÉPHÉMÈRE QUI S'ÉTEINT SOUS LES YEUX S'ÉTEINT ICI AUSSI. La passerelle
    * retient déjà le contenu d'un message expiré ; ce relais couvre le cas où
@@ -277,7 +343,7 @@ export function AdminConversationReading({
 
   const contentWithheld = useCallback((messageId: string) => protectedIds.has(messageId), [protectedIds]);
 
-  const ephemeralDurations = page.data?.ephemeralDurations;
+  const ephemeralDurations = woven?.ephemeralDurations;
   /**
    * LA MARQUE D'UN ÉPHÉMÈRE — « éphémère · 30 s » sous la rangée. La durée n'est
    * jamais confiée au fil (voir `AdminSovereignThreadPage.ephemeralDurations`) :
@@ -339,12 +405,12 @@ export function AdminConversationReading({
     );
   }
 
-  if (page.isPending) return <AdminSkeleton rows={6} />;
+  if (thread.isPending) return <AdminSkeleton rows={6} />;
 
-  if (page.data === undefined) {
+  if (thread.data === undefined) {
     /* Trois échecs, trois phrases (audit 2026-10-04) : un refus n'est pas une panne,
        une conversation disparue non plus — et ni l'un ni l'autre ne se « réessaie ». */
-    const status = page.error instanceof ApiError ? page.error.status : 0;
+    const status = thread.error instanceof ApiError ? thread.error.status : 0;
     if (status === 403) {
       return (
         <div data-admin-reading-failure="denied">
@@ -361,7 +427,7 @@ export function AdminConversationReading({
     }
     return (
       <div data-admin-reading-failure="error">
-        <AdminErrorState language={language} onRetry={() => void page.refetch()} />
+        <AdminErrorState language={language} onRetry={() => void thread.refetch()} />
       </div>
     );
   }
@@ -393,51 +459,88 @@ export function AdminConversationReading({
         </p>
       ) : null}
 
-      {/* `<section>` et non `<div>` : React type le `ref` d'une balise
-          sectionnante en `HTMLElement`, le type même qu'attendent
-          `useThreadScene` et `Virtualizer<HTMLElement, Element>` — la MÊME
-          raison qui fait du fil un `<main ref={scroller}>`. */}
-      <section ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto" lang={language}>
-        <ThreadModes
-          mode={MODE_DE_LECTURE}
-          viewer={viewer}
-          placed={placed}
-          virtualizer={virtualizer}
-          scene={scene}
-          readerLanguages={readerLanguages}
-          group
-          highlightedId={highlightedId}
-          expiredIds={expiredIds}
-          jumpToMessage={jumpToMessage}
-          onEphemeralExpired={onEphemeralExpired}
-          contentWithheld={contentWithheld}
-          rowNoteOf={ephemeralNote}
-          typists={EMPTY_TYPISTS}
-        />
-      </section>
-
-      <div className="flex shrink-0 justify-between gap-2 px-4 pt-2">
-        <button
-          type="button"
-          data-admin-messages-prev
-          disabled={offset === 0}
-          onClick={() => setOffset((valeur) => Math.max(0, valeur - ADMIN_MESSAGES_PAGE_SIZE))}
-          className={`rounded-chip px-4 text-body font-semibold disabled:opacity-40 ${FOCUS}`}
-          style={PAGER_BUTTON}
-        >
-          {translateAdmin(language, 'admin.users.previous')}
-        </button>
-        <button
-          type="button"
-          data-admin-messages-next
-          disabled={!page.data.hasMore}
-          onClick={() => setOffset((valeur) => valeur + ADMIN_MESSAGES_PAGE_SIZE)}
-          className={`rounded-chip px-4 text-body font-semibold disabled:opacity-40 ${FOCUS}`}
-          style={PAGER_BUTTON}
-        >
-          {translateAdmin(language, 'admin.users.next')}
-        </button>
+      <div
+        role="tablist"
+        aria-label={translateAdmin(language, 'admin.conversation.reading.tabs')}
+        className="flex shrink-0 gap-2 pb-2"
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+          event.preventDefault();
+          setTab((current) => (current === 'thread' ? 'media' : 'thread'));
+        }}
+      >
+        {READING_TABS.map((candidate) => {
+          const selected = candidate === tab;
+          return (
+            <button
+              key={candidate}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              tabIndex={selected ? 0 : -1}
+              data-admin-reading-tab={candidate}
+              onClick={() => setTab(candidate)}
+              className={`rounded-chip px-4 text-body font-semibold ${FOCUS}`}
+              style={{
+                minHeight: 44,
+                outlineColor: BRAND,
+                color: selected ? 'var(--color-ios-on-brand)' : INK,
+                backgroundColor: selected ? BRAND : 'var(--color-ios-surface)',
+                border: selected ? '1px solid transparent' : '1px solid var(--color-edge)',
+              }}
+            >
+              {translateAdmin(language, TAB_LABEL[candidate])}
+            </button>
+          );
+        })}
       </div>
+
+      {/* LE FIL RESTE MONTÉ derrière l'onglet Médias : sa position de lecture et ses
+          mesures survivent à l'aller-retour, et « Voir dans le fil » y saute. */}
+      <div className="relative flex min-h-0 flex-1 flex-col" hidden={tab !== 'thread'}>
+        {/* `<section>` et non `<div>` : React type le `ref` d'une balise
+            sectionnante en `HTMLElement`, le type même qu'attendent
+            `useThreadScene` et `Virtualizer<HTMLElement, Element>` — la MÊME
+            raison qui fait du fil un `<main ref={scroller}>`. */}
+        <section ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto" lang={language}>
+          {/* LE DÉBUT DU FIL SE DIT — et sa place est tenue avant qu'il ne s'écrive :
+              la phrase qui apparaît en haut ne pousse pas ce qu'on est en train de lire. */}
+          <p className="shrink-0 px-4 py-2 text-center text-caption" style={{ color: INK2, minHeight: 32 }} data-admin-reading-start>
+            {olderState === 'exhausted' ? translateAdmin(language, 'admin.conversation.reading.start') : ''}
+          </p>
+          <ThreadModes
+            mode={MODE_DE_LECTURE}
+            viewer={viewer}
+            placed={placed}
+            virtualizer={virtualizer}
+            scene={scene}
+            readerLanguages={readerLanguages}
+            group
+            highlightedId={highlightedId}
+            expiredIds={expiredIds}
+            jumpToMessage={jumpToMessage}
+            onEphemeralExpired={onEphemeralExpired}
+            contentWithheld={contentWithheld}
+            rowNoteOf={ephemeralNote}
+            typists={EMPTY_TYPISTS}
+            older={{ state: older.state, sentinelRef: older.sentinelRef }}
+          />
+        </section>
+        <OlderLoadIndicator state={older.state} onRetry={older.retry} />
+      </div>
+
+      {tab === 'media' ? (
+        <AdminConversationReadingMedia
+          messages={messages}
+          protectedIds={protectedIds}
+          language={language}
+          readerLanguages={readerLanguages}
+          viewerId={viewer.id ?? ''}
+          state={olderState}
+          onLoadOlder={fetchOlder}
+          onShowInThread={showInThread}
+        />
+      ) : null}
     </div>
   );
 }
