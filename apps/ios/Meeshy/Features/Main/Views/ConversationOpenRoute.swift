@@ -3,11 +3,14 @@ import Foundation
 /// **Ce que devient une demande d'ouverture depuis la liste** (#11213, revue
 /// adversariale).
 ///
-/// Le verrou par PIN d'une conversation n'est vérifié qu'ICI : ni le fil, ni
-/// le routeur ne le revérifient. Tout chemin qui ouvre une conversation depuis
-/// la liste — le toucher d'une rangée, le clavier, la carte d'aperçu, sa loupe,
-/// l'entrée « Rechercher » du menu natif — lit donc cette loi, par
-/// `ConversationListView.openConversation(_:searching:)`.
+/// La LISTE demande le PIN elle-même, avant de remettre l'ouverture au
+/// routeur : tout chemin qui ouvre une conversation depuis la liste — le
+/// toucher d'une rangée, le clavier, la carte d'aperçu, sa loupe, l'entrée
+/// « Rechercher » du menu natif — lit cette loi, par
+/// `ConversationListView.openConversation(_:searching:)`. Les autres chemins
+/// (lien profond, notification, recherche globale, widget, Siri…) sont gardés
+/// par la porte du routeur, `Router.admitConversation` (#11386), que la liste
+/// traverse aussi : le PIN donné ici y vaut UNE ouverture.
 ///
 /// La recherche demandée sur une conversation verrouillée attend le PIN : armée
 /// avant, elle survivrait à un PIN abandonné et s'ouvrirait dans la prochaine
@@ -33,6 +36,13 @@ enum ConversationOpenRoute: Equatable {
     static func mayDetach(isLocked: Bool) -> Bool { !isLocked }
 
     static func mayDetach(_ conversationId: String, locks: ConversationLockManager = .shared) -> Bool {
+        mayDetach(isLocked: locks.isLocked(conversationId))
+    }
+
+    /// L'aperçu d'un toast de notification (appui long) monte le fil en lecture
+    /// sans passer la porte du routeur (#11386) : même règle qu'une fenêtre
+    /// détachée. Refusé, l'appui long se replie sur le toucher, qui la passe.
+    static func mayPreview(_ conversationId: String, locks: ConversationLockManager = .shared) -> Bool {
         mayDetach(isLocked: locks.isLocked(conversationId))
     }
 

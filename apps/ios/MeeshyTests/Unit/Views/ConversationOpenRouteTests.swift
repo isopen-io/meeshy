@@ -7,9 +7,10 @@ import XCTest
 /// Le toucher d'une rangée demandait le PIN d'une conversation verrouillée ;
 /// le toucher de la carte d'aperçu, sa loupe et l'entrée « Rechercher » du menu
 /// natif appelaient `onSelect` directement et ouvraient la conversation sans le
-/// demander. Aucun autre site ne revérifie le verrou : ni le fil, ni le routeur.
-/// La décision se lit donc à UNE loi, que tous les chemins d'ouverture de la
-/// liste consomment par `ConversationListView.openConversation(_:searching:)`.
+/// demander. La décision se lit à UNE loi, que tous les chemins d'ouverture de
+/// la liste consomment par `ConversationListView.openConversation(_:searching:)` ;
+/// les chemins hors de la liste passent la porte du routeur
+/// (`ConversationLockGateTests`, #11386).
 @MainActor
 final class ConversationOpenRouteTests: XCTestCase {
 

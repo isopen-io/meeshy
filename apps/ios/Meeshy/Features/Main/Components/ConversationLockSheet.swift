@@ -11,6 +11,7 @@ struct ConversationLockSheet: View {
         case unlockConversation       // Menu: entrer 4ch → removeLock
         case openConversation         // Tap: entrer 4ch → onSuccess()
         case unlockAll                // Settings: vérifier master 6ch → removeAllLocks
+        case enableBiometricUnlock    // Settings: vérifier master 6ch → enableBiometricUnlock
     }
 
     let mode: Mode
@@ -26,6 +27,7 @@ struct ConversationLockSheet: View {
     @State private var step: Int = 0
     @State private var errorMessage: String?
     @State private var shakeOffset: CGFloat = 0
+    @State private var biometricKind: BiometricKind?
 
     private let lockManager = ConversationLockManager.shared
 
@@ -33,7 +35,7 @@ struct ConversationLockSheet: View {
 
     private var pinLength: Int {
         switch mode {
-        case .setupMasterPin, .removeMasterPin, .unlockAll, .changeMasterPin:
+        case .setupMasterPin, .removeMasterPin, .unlockAll, .changeMasterPin, .enableBiometricUnlock:
             return 6
         case .lockConversation:
             return step == 0 ? 6 : 4
@@ -63,6 +65,7 @@ struct ConversationLockSheet: View {
         .presentationDragIndicator(.visible)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: errorMessage)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: step)
+        .task { await offerBiometricUnlock() }
     }
 
     // MARK: - Header
@@ -144,7 +147,7 @@ struct ConversationLockSheet: View {
                 }
             }
             HStack(spacing: MeeshySpacing.xl) {
-                Color.clear.frame(width: 76, height: 76)
+                biometricKey
                 numpadKey(digit: 0)
                 Button {
                     HapticFeedback.light()
@@ -161,6 +164,25 @@ struct ConversationLockSheet: View {
                 .accessibilityLabel(String(localized: "conversation.lock.a11y.delete", defaultValue: "Supprimer le dernier chiffre", bundle: .main))
                 .disabled(currentPin.isEmpty)
             }
+        }
+    }
+
+    /// La case vide du pavé, ou — à l'ouverture d'une conversation, biométrie
+    /// activée — la touche Face ID / Touch ID, comme l'écran de code d'iOS.
+    @ViewBuilder
+    private var biometricKey: some View {
+        if let biometricKind {
+            Button {
+                Task { await unlockWithBiometrics() }
+            } label: {
+                Image(systemName: biometricKind.systemImage)
+                    .font(.title2.weight(.medium))
+                    .foregroundColor(theme.textPrimary)
+                    .frame(width: 76, height: 76)
+            }
+            .accessibilityLabel(String(localized: "conversation.lock.a11y.biometric", defaultValue: "Déverrouiller avec la biométrie", bundle: .main))
+        } else {
+            Color.clear.frame(width: 76, height: 76)
         }
     }
 
@@ -196,6 +218,8 @@ struct ConversationLockSheet: View {
             return "lock.open.fill"
         case .openConversation:
             return "lock.fill"
+        case .enableBiometricUnlock:
+            return lockManager.biometricKind?.systemImage ?? "lock.shield.fill"
         }
     }
 
@@ -221,6 +245,8 @@ struct ConversationLockSheet: View {
             return String(localized: "conversation.lock.title.locked", defaultValue: "Conversation verrouillée", bundle: .main)
         case .unlockAll:
             return String(localized: "conversation.lock.title.unlockAll", defaultValue: "Déverrouiller tout", bundle: .main)
+        case .enableBiometricUnlock:
+            return String(localized: "conversation.lock.title.enableBiometric", defaultValue: "Déverrouillage biométrique", bundle: .main)
         }
     }
 
@@ -247,6 +273,8 @@ struct ConversationLockSheet: View {
             return String(format: String(localized: "conversation.lock.subtitle.enterCodeToOpen", defaultValue: "Saisissez le code pour accéder à %@", bundle: .main), conversationName)
         case .unlockAll:
             return String(localized: "conversation.lock.subtitle.unlockAll", defaultValue: "Saisissez votre master PIN pour déverrouiller toutes les conversations", bundle: .main)
+        case .enableBiometricUnlock:
+            return String(localized: "conversation.lock.subtitle.enableBiometric", defaultValue: "Saisissez votre master PIN pour autoriser le déverrouillage biométrique", bundle: .main)
         }
     }
 
@@ -263,6 +291,27 @@ struct ConversationLockSheet: View {
     }
     private var errCodeIncorrect: String {
         String(localized: "conversation.lock.error.codeIncorrect", defaultValue: "Code incorrect", bundle: .main)
+    }
+
+    /// Ce que dit un essai refusé (#11388) : « incorrect », ou, la temporisation
+    /// engagée, combien de temps attendre — un refus muet pousserait à
+    /// réessayer, et chaque essai rallonge l'attente.
+    private func refusal(_ outcome: PinAttemptOutcome, incorrect: String) -> String {
+        guard let wait = outcome.retryDelay, wait > 0 else { return incorrect }
+        return String(
+            format: String(localized: "conversation.lock.error.throttled", defaultValue: "Trop d'essais. Réessayez dans %@", bundle: .main),
+            LocalizedNumber.spokenDuration(seconds: wait)
+        )
+    }
+
+    private func masterPinRefusal() -> String? {
+        let outcome = lockManager.attemptMasterPin(pin)
+        return outcome == .granted ? nil : refusal(outcome, incorrect: errMasterPinIncorrect)
+    }
+
+    private func conversationPinRefusal(_ conversationId: String) -> String? {
+        let outcome = lockManager.attemptLock(conversationId: conversationId, pin: pin)
+        return outcome == .granted ? nil : refusal(outcome, incorrect: errCodeIncorrect)
     }
 
     // MARK: - Input logic
@@ -303,7 +352,7 @@ struct ConversationLockSheet: View {
 
         case .changeMasterPin:
             if step == 0 {
-                guard lockManager.verifyMasterPin(pin) else { return shakeAndReset(errMasterPinIncorrect) }
+                if let message = masterPinRefusal() { return shakeAndReset(message) }
                 withAnimation { step = 1; pin = "" }
             } else if step == 1 {
                 withAnimation { step = 2 }
@@ -316,7 +365,7 @@ struct ConversationLockSheet: View {
             }
 
         case .removeMasterPin:
-            guard lockManager.verifyMasterPin(pin) else { return shakeAndReset(errMasterPinIncorrect) }
+            if let message = masterPinRefusal() { return shakeAndReset(message) }
             lockManager.forceRemoveMasterPin()
             HapticFeedback.success()
             onSuccess()
@@ -324,7 +373,7 @@ struct ConversationLockSheet: View {
 
         case .lockConversation:
             if step == 0 {
-                guard lockManager.verifyMasterPin(pin) else { return shakeAndReset(errMasterPinIncorrect) }
+                if let message = masterPinRefusal() { return shakeAndReset(message) }
                 withAnimation { step = 1; pin = "" }
             } else if step == 1 {
                 withAnimation { step = 2 }
@@ -339,9 +388,7 @@ struct ConversationLockSheet: View {
 
         case .unlockConversation:
             guard let id = conversationId else { return }
-            guard lockManager.verifyLock(conversationId: id, pin: pin) else {
-                return shakeAndReset(errCodeIncorrect)
-            }
+            if let message = conversationPinRefusal(id) { return shakeAndReset(message) }
             lockManager.removeLock(conversationId: id)
             HapticFeedback.success()
             onSuccess()
@@ -349,20 +396,48 @@ struct ConversationLockSheet: View {
 
         case .openConversation:
             guard let id = conversationId else { return }
-            guard lockManager.verifyLock(conversationId: id, pin: pin) else {
-                return shakeAndReset(errCodeIncorrect)
-            }
+            if let message = conversationPinRefusal(id) { return shakeAndReset(message) }
             HapticFeedback.success()
             onSuccess()
             dismiss()
 
         case .unlockAll:
-            guard lockManager.verifyMasterPin(pin) else { return shakeAndReset(errMasterPinIncorrect) }
+            if let message = masterPinRefusal() { return shakeAndReset(message) }
             lockManager.removeAllLocks()
             HapticFeedback.success()
             onSuccess()
             dismiss()
+
+        case .enableBiometricUnlock:
+            let outcome = lockManager.enableBiometricUnlock(authorizedBy: pin)
+            guard outcome == .granted else { return shakeAndReset(refusal(outcome, incorrect: errMasterPinIncorrect)) }
+            HapticFeedback.success()
+            onSuccess()
+            dismiss()
         }
+    }
+
+    // MARK: - Biometric unlock (#11388)
+
+    /// À l'ouverture d'une conversation, biométrie activée : la touche apparaît
+    /// et le visage est demandé d'emblée — le pavé reste là pour qui préfère
+    /// son code, ou pour quand le visage échoue.
+    private func offerBiometricUnlock() async {
+        guard mode == .openConversation, lockManager.offersBiometricUnlock else { return }
+        biometricKind = lockManager.biometricKind
+        await unlockWithBiometrics()
+    }
+
+    private func unlockWithBiometrics() async {
+        guard let id = conversationId else { return }
+        let reason = String(
+            format: String(localized: "conversation.lock.biometric.reason", defaultValue: "Accéder à %@", bundle: .main),
+            conversationName
+        )
+        guard await lockManager.unlockWithBiometrics(conversationId: id, reason: reason) else { return }
+        HapticFeedback.success()
+        onSuccess()
+        dismiss()
     }
 
     private func shakeAndReset(_ message: String) {
@@ -377,6 +452,88 @@ struct ConversationLockSheet: View {
             pin = ""
             confirmPin = ""
             if step == 2 { step = 1 }
+        }
+    }
+}
+
+// MARK: - La feuille de la porte du routeur (#11386)
+
+/// Présente la feuille du PIN devant l'ouverture que le routeur retient
+/// (`Router.pendingLockedOpening`). Montée par les DEUX racines, via
+/// `RootIntentRoutingLayer` : quel que soit le chemin qui ouvre une
+/// conversation verrouillée, c'est ici que le PIN se demande.
+struct ConversationLockGateLayer: ViewModifier {
+    @ObservedObject var router: Router
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    func body(content: Content) -> some View {
+        content.sheet(item: Binding(
+            get: { router.pendingLockedOpening },
+            set: { opening in if opening == nil { router.abandonLockedOpening() } }
+        )) { opening in
+            ConversationLockSheet(
+                mode: .openConversation,
+                conversationId: opening.conversation.id,
+                conversationName: opening.conversation.name,
+                onSuccess: { router.resumeLockedOpening() }
+            )
+            .environmentObject(theme)
+        }
+    }
+}
+
+// MARK: - Réglages › Sécurité : la biométrie (#11388)
+
+/// Ouvrir une conversation verrouillée par Face ID / Touch ID. L'activer passe
+/// par le master PIN (`.enableBiometricUnlock`) ; le couper, non. Absente sur
+/// un appareil sans capteur utilisable ou sans visage / doigt enrôlé.
+struct ConversationBiometricUnlockRow: View {
+    let color: String
+
+    @ObservedObject private var lockManager = ConversationLockManager.shared
+    @State private var showsEnableSheet = false
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        Group {
+            if let kind = lockManager.biometricKind {
+                Toggle(isOn: Binding(
+                    get: { lockManager.biometricUnlockEnabled },
+                    set: { enabled in
+                        guard enabled else { return lockManager.disableBiometricUnlock() }
+                        showsEnableSheet = true
+                    }
+                )) {
+                    HStack(spacing: MeeshySpacing.md) {
+                        Image(systemName: kind.systemImage)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(Color(hex: color))
+                            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+                            .background(
+                                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                                    .fill(Color(hex: color).opacity(MeeshyOpacity.light))
+                            )
+                            .accessibilityHidden(true)
+                        Text(String(localized: "settings.security.biometric_unlock", defaultValue: "Déverrouiller par biométrie", bundle: .main))
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(theme.textPrimary)
+                    }
+                }
+                .tint(MeeshyColors.indigo500)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.bottom, MeeshySpacing.smPlus)
+            }
+        }
+        .sheet(isPresented: $showsEnableSheet) {
+            ConversationLockSheet(
+                mode: .enableBiometricUnlock,
+                conversationId: nil,
+                conversationName: String(localized: "settings.security.all_conversations", defaultValue: "toutes les conversations", bundle: .main),
+                onSuccess: {}
+            )
+            .environmentObject(theme)
         }
     }
 }
