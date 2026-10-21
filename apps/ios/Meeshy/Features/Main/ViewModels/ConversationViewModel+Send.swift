@@ -426,59 +426,16 @@ extension ConversationViewModel {
         payload: SealedOutgoingPayload,
         context: SendAttemptContext
     ) async -> Result<SentMessageReceipt, SendFailure> {
-        let tempId = context.clientMessageId.rawValue
-        if let refusal = await classifyRefusal(error, tempId: tempId) { return .failure(refusal) }
-
-        let failElapsedMs = Int(Date().timeIntervalSince(context.startedAt) * 1000)
-        Logger.messages.warning("perf:ios.send.fail clientMessageId=\(tempId, privacy: .public) durationMs=\(failElapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-
-        if outgoing.socketFallbackEligible(intent: context.intent, hasPendingEffects: pendingEffects.hasAnyEffect),
-           let receipt = await emitSocketFallback(outgoing, payload: payload, context: context, failedAfterMs: failElapsedMs) {
-            return .success(receipt)
-        }
-
-        await sendCoordinator.recordFailure(error, localId: tempId)
-        return .failure(await sendCoordinator.enqueueForRetry(outgoing, context: context, cause: error))
-    }
-
-    /// Refus DÉFINITIFS : retenter ne réussirait jamais, donc ni repli socket
-    /// ni outbox. Un blocage entrant, lui, n'est pas visible d'avance.
-    private func classifyRefusal(_ error: any Error, tempId: String) async -> SendFailure? {
-        if let restriction = ConversationWriteRestriction(refusal: error), restriction.closesComposer {
-            await withdrawRefusedMessage(tempId: tempId, restriction: restriction)
-            return .writeRestricted(restriction)
-        }
-        if let slowMode = NewcomerSlowMode.from(error) {
-            await holdForSlowMode(tempId: tempId, slowMode: slowMode, error: error)
-            return .slowMode(slowMode)
-        }
-        guard error.isUserBlockedError else { return nil }
-        Logger.messages.warning("perf:ios.send.fail.blocked clientMessageId=\(tempId, privacy: .public)")
-        await sendCoordinator.recordFailure(error, localId: tempId)
-        FeedbackToastManager.shared.showError(
-            String(localized: "conversation.send.blocked", defaultValue: "Vous ne pouvez pas écrire à cet utilisateur.", bundle: .main)
+        await collaborators.failureRecovery.recover(
+            from: error, outgoing: outgoing, payload: payload, context: context,
+            fallbackEligible: outgoing.socketFallbackEligible(intent: context.intent, hasPendingEffects: pendingEffects.hasAnyEffect),
+            coordinator: sendCoordinator,
+            hooks: SendRecoveryHooks(
+                withdraw: { [weak self] in await self?.withdrawRefusedMessage(tempId: $0, restriction: $1) },
+                holdSlowMode: { [weak self] in await self?.holdForSlowMode(tempId: $0, slowMode: $1, error: $2) },
+                registerServerId: { [weak self] in self?.pendingServerIds[$0] = $1 }
+            )
         )
-        return .recipientBlocked
-    }
-
-    /// Repli socket : le POST REST a échoué — le coordinateur réémet UNE fois
-    /// avec le MÊME clientMessageId (dedup gateway). Les envois que le canal
-    /// perdrait en silence restent sur le retry REST de l'outbox, qui les
-    /// préserve. `pendingServerIds` est posé AVANT l'acquittement GRDB : un
-    /// `message:new` qui arrive pendant l'attente se réconcilie sans doublon.
-    private func emitSocketFallback(
-        _ outgoing: OutgoingMessage,
-        payload: SealedOutgoingPayload,
-        context: SendAttemptContext,
-        failedAfterMs: Int
-    ) async -> SentMessageReceipt? {
-        guard let receipt = await sendCoordinator.emitSocketFallback(outgoing, payload: payload, context: context),
-              case .acknowledged(let serverId, let at, _) = receipt.delivery else { return nil }
-        let tempId = context.clientMessageId.rawValue
-        pendingServerIds[tempId] = serverId.rawValue
-        _ = await sendCoordinator.acknowledge(localId: tempId, serverId: serverId.rawValue, at: at)
-        Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId.rawValue, privacy: .public) transport=socket-fallback durationMs=\(failedAfterMs, privacy: .public)")
-        return receipt
     }
 
     /// Les vues qui pilotent leur propre envoi (média, sticker) rapportent
