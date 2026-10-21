@@ -49,15 +49,24 @@ const world = (seed: { glory?: number; trophies?: string[]; seasons?: { number: 
 };
 
 describe('PackGrants — un pack se possède par le jeu, un octroi ou un événement', () => {
-  it('un octroi écrit une possession SANS dépense : source grant, aucun prix, aucune requête de dépense', async () => {
+  it('un octroi écrit une possession SANS dépense : source grant, prix 0, aucune requête de dépense', async () => {
     const { grants, ownerships } = world();
 
     const outcome = await grants.award({ userId: USER, pack: PACK, award: { source: 'grant', reference: 'support-4821' } });
 
     expect(outcome).toBe('granted');
-    expect(ownerships).toEqual([{ userId: USER, packKey: 'wallpaper.prestige', source: 'grant', reference: 'support-4821', acquiredAt: AT }]);
+    expect(ownerships).toEqual([{ userId: USER, packKey: 'wallpaper.prestige', source: 'grant', reference: 'support-4821', priceMeeshes: 0, acquiredAt: AT }]);
     expect(ownerships[0]).not.toHaveProperty('requestId');
-    expect(ownerships[0]).not.toHaveProperty('priceMeeshes');
+  });
+
+  it('RETOUR ARRIÈRE : chaque voie sans achat écrit un prix 0, que le schéma d’avant (priceMeeshes requis) relit sans lever', async () => {
+    const { grants, ownerships } = world({ glory: 40_000 });
+
+    await grants.award({ userId: USER, pack: PACK, award: { source: 'grant', reference: 'support' } });
+    await grants.award({ userId: USER, pack: { domain: 'banner', slug: 'coupe' }, award: { source: 'event', reference: 'fete' } });
+    await grants.award({ userId: USER, pack: { domain: 'glory-frame', slug: 'or' }, award: { source: 'game', rule: { kind: 'rank', rank: 'conteur' } } });
+
+    expect(ownerships.map((row) => [row.source, row.priceMeeshes])).toEqual([['grant', 0], ['event', 0], ['game', 0]]);
   });
 
   it('un événement écrit la source event, et la clé est celle du domaine (stickers : le slug nu)', async () => {

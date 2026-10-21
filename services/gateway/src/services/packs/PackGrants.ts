@@ -13,8 +13,10 @@
  *    course, ou un pack déjà ACHETÉ rendent `already-owned` sans réécrire la
  *    ligne (un achat garde sa source et son prix).
  *
- * La ligne ne porte ni prix ni `requestId` : rien n'a été dépensé. Posséder n'est
- * pas installer — l'installation reste un geste du compte.
+ * La ligne ne porte aucun `requestId` (rien n'a été dépensé) et un prix de 0 :
+ * `priceMeeshes` était REQUIS avant #11272, et un serveur d'avant qui relit la
+ * ligne après un retour arrière (l'export RGPD la sélectionne) lève sur un champ
+ * requis absent. Posséder n'est pas installer — l'installation reste un geste du compte.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { packChoiceKey, type PackDomain } from '@meeshy/shared/types/content-pack';
@@ -63,7 +65,7 @@ export class PackGrants {
 
     const reference = (award.source === 'game' ? packEligibilityReference(award.rule) : award.reference).slice(0, REFERENCE_MAX);
     try {
-      await this.prisma.userPackOwnership.create({ data: { userId, packKey, source: award.source, reference, acquiredAt: this.now() } });
+      await this.prisma.userPackOwnership.create({ data: { userId, packKey, source: award.source, reference, priceMeeshes: 0, acquiredAt: this.now() } });
       return 'granted';
     } catch (error) {
       if (isUniqueViolation(error)) return 'already-owned';
