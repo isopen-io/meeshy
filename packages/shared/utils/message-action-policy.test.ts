@@ -223,4 +223,19 @@ describe('messageActionsFor — ce que la passerelle accorde sans le droit d’�
     const { verdicts } = actions({ message: { senderId: 'part-other', authorUserId: 'user-viewer' }, viewer: { isAnonymous: true } });
     expect([verdicts.edit, verdicts.deleteForEveryone, verdicts.deleteForMe, verdicts.report, verdicts.pin]).toEqual([null, false, false, false, null]);
   });
+  it('« Supprimer pour moi » exige un membre actif, comme DELETE /messages/:id/delete-for-me', () => {
+    expect(actions().verdicts.deleteForMe).toBe(true);
+    const left = actions({ viewer: { isActiveMember: false, conversationRole: null } });
+    expect(left.verdicts.deleteForMe).toBe(false);
+    expect(left.groups.destructive).not.toContain('deleteForMe');
+  });
+
+  const photo = { content: '', messageType: 'image', attachments: [{ mimeType: 'image/jpeg' }] } as const;
+
+  it.each(['server', 'hybrid'])('transfert en conversation %s : le texte se transfère, les pièces non (ENCRYPTED_SOURCE de la passerelle)', (encryptionMode) => {
+    expect(actions({ conversation: { encryptionMode } }).verdicts.forward).toBe(true);
+    expect(actions({ message: photo, conversation: { encryptionMode } }).verdicts.forward).toBe(false);
+    expect(actions({ message: { ...photo, isEncrypted: true, encryptionMode } }).verdicts.forward).toBe(false);
+    expect(actions({ message: photo }).verdicts.forward).toBe(true);
+  });
 });

@@ -16,8 +16,15 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it, jest } from '@jest/globals';
 
+jest.mock('../../../../services/messaging/messageReadAccess', () => ({
+  ...(jest.requireActual('../../../../services/messaging/messageReadAccess') as object),
+  loadMessageReadableByParticipant: async () => ({ id: 'source', conversationId: 'conv-source' }),
+}));
+
+import { serverReadsAttachmentCarrier } from '../../../../services/attachments/attachmentCarrierServerReadable';
+import { admitMessageForward } from '../../../../services/messaging/forwardAdmission';
 import { ReactionService } from '../../../../services/ReactionService';
 import { refusesContentGesture } from '../../../../services/messaging/captureNoticeVisibility';
 import { refusesMinorInConversationOfType } from '../../../../services/messaging/globalMinorGate';
@@ -235,6 +242,74 @@ describe('parité des actions sur un message — signaler (verifierCible)', () =
   });
 });
 
+/** La ligne que `admitReadableSource` relit pour juger le transfert de cette source. */
+function forwardSourceReader(vector: MessageVector) {
+  const { message, conversation } = vector.input;
+  const pieces = (message.attachments ?? []).filter((piece) => piece != null);
+  const row = {
+    isViewOnce: message.isViewOnce ?? false,
+    isBlurred: message.isBlurred ?? false,
+    effectFlags: message.effectFlags ?? 0,
+    ephemeralDuration: message.ephemeralDuration ?? null,
+    expiresAt: message.expiresAt == null ? null : new Date(message.expiresAt),
+    isEncrypted: message.isEncrypted ?? false,
+    encryptionMode: message.encryptionMode ?? null,
+    conversation: { encryptionEnabledAt: null, encryptionMode: conversation.encryptionMode ?? null },
+    attachments: pieces.map((piece, index) => ({
+      id: `att-${index}`, isViewOnce: piece.isViewOnce ?? false, isBlurred: piece.isBlurred ?? false,
+      effectFlags: piece.effectFlags ?? 0, isEncrypted: false, encryptionMode: null,
+    })),
+    _count: { attachments: pieces.length },
+    messageType: message.messageType ?? null,
+    metadata: message.metadata ?? null,
+  };
+  return { message: { findUnique: async () => row } };
+}
+
+/** Une source sans texte ni pièces (sticker, lieu, sondage) se renvoie avec son propre corps ; une source de pièces seules n'existe que par la copie serveur. */
+async function gatewayForwards(vector: MessageVector): Promise<boolean> {
+  const { message, now } = vector.input;
+  const admission = await admitMessageForward(forwardSourceReader(vector) as never, {
+    forwardedFromId: message.id,
+    senderParticipantId: 'part-viewer',
+    at: new Date(now),
+    bodyOnlyFromSource: (message.content ?? '').trim() === '' && (message.attachments ?? []).length > 0,
+    bringsOwnPieces: false,
+  });
+  return admission.admitted && !admission.sourceUnavailable;
+}
+
+const SERVER_READABLE_MODES: readonly string[] = ['server', 'hybrid'];
+
+describe('parité des actions sur un message — transférer (admitMessageForward)', () => {
+  it('les vecteurs couvrent des pièces sous régime server et hybrid, que la passerelle ne recopie pas', () => {
+    const refused = messageVectors.filter((vector) => SERVER_READABLE_MODES.includes(vector.input.conversation.encryptionMode ?? '') && (vector.input.message.attachments ?? []).length > 0);
+    expect(refused.map((vector) => vector.input.conversation.encryptionMode)).toEqual(expect.arrayContaining(['server', 'hybrid']));
+    expect(refused.every((vector) => !vector.expected.verdicts.forward)).toBe(true);
+  });
+
+  it.each(messageVectors.map((vector) => [vector._label, vector] as const))('transférer : %s', async (_label, vector) => {
+    const admitted = await gatewayForwards(vector);
+    const offered = vector.expected.verdicts.forward;
+    const live = !vector.expected.content.flags.optimistic && !vector.expected.content.flags.failed && vector.expected.content.kind !== 'deleted';
+
+    if (offered) expect(admitted).toBe(true);
+    if (live && SERVER_READABLE_MODES.includes(vector.input.conversation.encryptionMode ?? '') && vector.expected.content.kind !== 'system') expect(admitted).toBe(offered);
+  });
+});
+
+describe('parité des actions sur un message — transcrire (serverReadsAttachmentCarrier)', () => {
+  it.each(messageVectors.map((vector) => [vector._label, vector] as const))('transcrire : %s', async (_label, vector) => {
+    const { message, conversation } = vector.input;
+    const carrier = { message: { findUnique: async () => ({ isEncrypted: message.isEncrypted ?? null, encryptionMode: message.encryptionMode ?? null, conversation: { encryptionMode: conversation.encryptionMode ?? null } }) } };
+    const serverReads = await serverReadsAttachmentCarrier(carrier as never, message.id);
+    const { transcribe } = vector.expected.verdicts;
+
+    expect(transcribe === null).toBe(!serverReads);
+    if (transcribe === true) expect(vector.expected.content.kind).toBe('audio');
+  });
+});
+
 describe('parité des actions sur une conversation — actorHasMinimumRole, mayMintShareLink, POST /leave', () => {
   it.each(conversationVectors.map((vector) => [vector._label, vector] as const))('%s', (_label, vector) => {
     const { conversation, viewer } = vector.input;
@@ -252,5 +327,27 @@ describe('parité des actions sur une conversation — actorHasMinimumRole, mayM
     if (governed && (authority || conversation.type === 'global')) expect(vector.expected.invite).toBe(mints);
     if (vector.expected.leave) expect(registered).toBe(true);
     if (governed && authority) expect([vector.expected.rename, vector.expected.deleteForAll]).toEqual([moderates, administers]);
+  });
+
+  it('les vecteurs couvrent un non-membre à qui la loi ne propose ni de masquer ni de signaler', () => {
+    expect(conversationVectors.some((vector) => !vector.input.viewer.isActiveMember && !vector.expected.report && !vector.expected.hide)).toBe(true);
+  });
+
+  it.each(conversationVectors.map((vector) => [vector._label, vector] as const))('signaler : %s', async (_label, vector) => {
+    const { viewer } = vector.input;
+    const registered = viewer.hasAccount && !viewer.isAnonymous;
+    const prisma = {
+      conversation: { findUnique: async () => ({ id: CONVERSATION_ID }) },
+      participant: { findFirst: async () => (viewer.isActiveMember ? { id: viewer.participantId ?? viewer.id } : null) },
+    };
+    const verdict = await verifierCible({
+      prisma: prisma as never,
+      signalant: registered ? { userId: viewer.id } : { participantId: viewer.participantId ?? viewer.id },
+      type: 'conversation',
+      entityId: CONVERSATION_ID,
+    });
+
+    if (vector.expected.report) expect(verdict.atteignable).toBe(true);
+    if (registered) expect(verdict.atteignable).toBe(vector.expected.report);
   });
 });

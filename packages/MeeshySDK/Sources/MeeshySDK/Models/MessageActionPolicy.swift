@@ -274,7 +274,7 @@ public enum MessageActionPolicy {
         return Verdicts(
             edit: editVerdict(context),
             deleteForEveryone: deletion.forEveryone,
-            deleteForMe: context.registered && !flags.optimistic,
+            deleteForMe: context.registered && context.viewer.isActiveMember && !flags.optimistic,
             remove: deletion.remove ? RemoveVerdict.withReason : nil,
             pin: pinVerdict(context),
             report: context.live && context.registered && context.viewer.isActiveMember
@@ -284,7 +284,7 @@ public enum MessageActionPolicy {
             translate: translatable ? (context.e2ee ? TranslateVerdict.device : TranslateVerdict.servedSwitch) : nil,
             transcribe: serverFeature(kind == .audio),
             sentiment: serverFeature(context.hasText),
-            forward: context.live && !context.notice && !context.e2ee && context.forwardable,
+            forward: context.live && !context.notice && !context.e2ee && !context.piecesNotServerCopyable && context.forwardable,
             copy: context.hasText && !context.gone && context.exportable,
             save: context.live && context.exportable && saveableKinds.contains(kind),
             serverFeatureAbsence: context.e2ee ? ServerFeatureAbsence.e2eeServerFeatureAbsent : nil
@@ -363,6 +363,8 @@ private struct MessageActionContext {
     let isMine: Bool
     let hasText: Bool
     let readable: Bool
+    /// `sourceIsEncrypted` de `forwardAdmission` : des pièces sous régime `server`/`hybrid` ne se recopient pas côté serveur.
+    let piecesNotServerCopyable: Bool
 
     private static let noticeKinds: Set<MessageContentKind> = [.system, .call]
 
@@ -394,6 +396,14 @@ private struct MessageActionContext {
         self.isMine = isAuthor || (participantId.map { input.message.senderId == $0 } ?? false)
         self.hasText = !notice && !(subject.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         self.readable = !gone && !flags.viewOnce && !flags.blurred
+        self.piecesNotServerCopyable = !subject.pieces.isEmpty
+            && (MessageActionContext.hasRegime(input.conversation.encryptionMode)
+                || MessageActionContext.hasRegime(subject.encryptionMode)
+                || subject.isEncrypted == true)
+    }
+
+    private static func hasRegime(_ mode: String?) -> Bool {
+        !(mode ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// D8 (#10949) : un message flouté, ou dont TOUTES les pièces le sont, se

@@ -173,7 +173,17 @@ type Context = MessageActionInput & {
   readonly isMine: boolean;
   readonly hasText: boolean;
   readonly readable: boolean;
+  /** `sourceIsEncrypted` de `forwardAdmission` : des pièces sous régime `server`/`hybrid` ne se recopient pas côté serveur. */
+  readonly piecesNotServerCopyable: boolean;
 };
+
+const hasRegime = (mode: string | null | undefined): boolean => (mode ?? '').trim() !== '';
+
+const carriesPieces = (message: MessageActionSubject): boolean => (message.attachments ?? []).some((piece) => piece != null);
+
+/** Conversation ou message sous un régime de chiffrement quelconque : la passerelle n'y recopie aucune pièce. */
+const carriesEncryptionRegime = (message: MessageActionSubject, conversation: ActionConversation): boolean =>
+  hasRegime(conversation.encryptionMode) || hasRegime(message.encryptionMode) || message.isEncrypted === true;
 
 function contextOf(input: MessageActionInput): Context {
   const content = messageContentKind(input.message);
@@ -196,6 +206,7 @@ function contextOf(input: MessageActionInput): Context {
     isMine: isAuthor || (participantId !== null && message.senderId === participantId),
     hasText: !NOTICE_KINDS.has(kind) && (message.content ?? '').trim().length > 0,
     readable: !gone && !flags.viewOnce && !flags.blurred,
+    piecesNotServerCopyable: carriesPieces(message) && carriesEncryptionRegime(message, input.conversation),
   };
 }
 
@@ -248,7 +259,7 @@ function verdictsOf(ctx: Context): MessageActionVerdicts {
   return {
     edit: editVerdict(ctx),
     deleteForEveryone: deletion.forEveryone,
-    deleteForMe: ctx.registered && !flags.optimistic,
+    deleteForMe: ctx.registered && ctx.viewer.isActiveMember && !flags.optimistic,
     remove: deletion.remove ? { reasonRequired: true } : null,
     pin: pinVerdict(ctx),
     report: ctx.live && ctx.registered && ctx.viewer.isActiveMember && !notice && !ctx.isMine,
@@ -257,7 +268,7 @@ function verdictsOf(ctx: Context): MessageActionVerdicts {
     translate: ctx.hasText && ctx.readable && ctx.live ? (ctx.e2ee ? 'device' : 'served-switch') : null,
     transcribe: serverFeature(kind === 'audio'),
     sentiment: serverFeature(ctx.hasText),
-    forward: ctx.live && !notice && !ctx.e2ee && exit.forward.allowed,
+    forward: ctx.live && !notice && !ctx.e2ee && !ctx.piecesNotServerCopyable && exit.forward.allowed,
     copy: ctx.hasText && !ctx.gone && exit.exportable,
     save: ctx.live && exit.exportable && SAVEABLE_KINDS.has(kind),
     serverFeatureAbsence: ctx.e2ee ? 'e2ee-server-feature-absent' : null,

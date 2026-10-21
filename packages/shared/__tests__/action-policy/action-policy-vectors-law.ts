@@ -63,6 +63,8 @@ const capture = (overrides: Partial<MessageActionSubject> = {}): Partial<Message
 const announcements = { type: 'broadcast', isAnnouncementChannel: true, defaultWriteRole: 'admin' } as const;
 const vocal = { content: '', messageType: 'audio', attachments: [{ mimeType: 'audio/m4a' }] } as const;
 
+const photoOf = (overrides: Partial<MessageActionSubject> = {}): Partial<MessageActionSubject> => ({ content: '', messageType: 'image', attachments: [{ mimeType: 'image/jpeg' }], ...overrides });
+
 type MessageCase = readonly [string, Partial<MessageActionSubject>, Partial<ActionConversation>, Partial<ActionViewer>];
 
 const MESSAGE_CASES: readonly MessageCase[] = [
@@ -117,6 +119,13 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['e2ee-regime-de-message-en-majuscules', { encryptionMode: 'E2EE' }, {}, {}],
   ['e2ee-vocal-d-autrui', vocal, { encryptionMode: 'e2ee' }, {}],
   ['vocal-transcriptible', vocal, {}, {}],
+  ['vocal-en-conversation-serveur-transcriptible', vocal, { encryptionMode: 'server' }, {}],
+  ['e2ee-texte-d-autrui-se-traduit-sur-l-appareil', {}, { encryptionMode: 'e2ee' }, {}],
+  ['serveur-photo-ne-se-transfere-pas', photoOf(), { encryptionMode: 'server' }, {}],
+  ['hybride-photo-ne-se-transfere-pas', photoOf(), { encryptionMode: 'hybrid' }, {}],
+  ['serveur-photo-chiffree-par-le-message-ne-se-transfere-pas', photoOf({ isEncrypted: true, encryptionMode: 'server' }), {}, {}],
+  ['hybride-texte-se-transfere', {}, { encryptionMode: 'hybrid' }, {}],
+  ['non-membre-supprimer-pour-moi-refuse', {}, {}, { isActiveMember: false, conversationRole: null }],
   ['photo-enregistrable', { content: '', messageType: 'image', attachments: [{ mimeType: 'image/jpeg' }] }, {}, {}],
   ['video-vue-unique', { content: '', messageType: 'video', isViewOnce: true, attachments: [{ mimeType: 'video/mp4' }] }, {}, {}],
   ['photo-floutee', { content: '', messageType: 'image', isBlurred: true, attachments: [{ mimeType: 'image/jpeg' }] }, {}, {}],
@@ -226,6 +235,7 @@ const CONVERSATION_EXTRAS: readonly (readonly [string, Partial<ActionConversatio
   ['groupe-e2ee-en-majuscules-porte-le-badge', { encryptionMode: 'E2EE' }, {}],
   ['groupe-regime-inconnu-porte-le-badge', { encryptionMode: 'signal_v3' }, {}],
   ['groupe-chiffrement-serveur-sans-badge', { encryptionMode: 'server' }, {}],
+  ['groupe-non-membre-ne-masque-ni-ne-signale', {}, { isActiveMember: false, conversationRole: null }],
   ['groupe-inscrit-et-anonyme-se-lit-comme-un-invite', {}, { isAnonymous: true }],
   ['groupe-rang-de-ligne-en-majuscules-modere', {}, { conversationRole: 'MODERATOR' }],
   ['groupe-createur-en-majuscules-supprime-pour-tous', {}, { conversationRole: 'CREATOR' }],
