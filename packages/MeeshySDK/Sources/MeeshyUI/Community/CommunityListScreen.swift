@@ -4,7 +4,8 @@ import MeeshySDK
 
 public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
     @ObservedObject private var viewModel: ViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
 
     public var onSelectCommunity: ((MeeshyCommunity) -> Void)?
