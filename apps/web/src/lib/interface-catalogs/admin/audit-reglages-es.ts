@@ -172,6 +172,8 @@ const f = {
   'admin.audit.action.ADMIN_REPORT_DELETED.explain': 'Se retiró una denuncia de la cola de moderación.',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED': 'Denuncia asumida',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED.explain': 'Se entregó una denuncia a un moderador.',
+  'admin.audit.action.ADMIN_REPORT_SELF_MODERATION_REFUSED': 'Tratamiento de denuncia rechazado: contenido propio',
+  'admin.audit.action.ADMIN_REPORT_SELF_MODERATION_REFUSED.explain': 'Un moderador intentó archivar, modificar, eliminar o asumir una denuncia que apunta a su propia cuenta, publicación o comentario; no se escribió nada en la denuncia.',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE': 'Baremo de puntos modificado',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'Un administrador modificó el baremo de puntos de participación: puntos por operación, multiplicador y límites.',
   'admin.audit.action.TRIGGER_SERVER_OPERATION': 'Operación lanzada en el servidor',

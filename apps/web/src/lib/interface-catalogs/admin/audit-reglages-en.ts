@@ -170,6 +170,8 @@ const f = {
   'admin.audit.action.ADMIN_REPORT_DELETED.explain': 'A report was removed from the moderation queue.',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED': 'Report taken on',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED.explain': 'A report was handed to a moderator.',
+  'admin.audit.action.ADMIN_REPORT_SELF_MODERATION_REFUSED': 'Report handling refused: own content',
+  'admin.audit.action.ADMIN_REPORT_SELF_MODERATION_REFUSED.explain': 'A moderator tried to dismiss, update, delete or take on a report targeting their own account, publication or comment; nothing was written on the report.',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE': 'Points scale changed',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'The engagement points scale — points per operation, multiplier and caps — was changed by an administrator.',
   'admin.audit.action.TRIGGER_SERVER_OPERATION': 'Server operation triggered',

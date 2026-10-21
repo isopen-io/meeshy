@@ -175,6 +175,8 @@ const f = {
   'admin.audit.action.ADMIN_REPORT_DELETED.explain': 'Un signalement a été supprimé de la file de modération.',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED': 'Signalement pris en charge',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED.explain': 'Un signalement a été confié à un modérateur.',
+  'admin.audit.action.ADMIN_REPORT_SELF_MODERATION_REFUSED': 'Traitement d’un signalement refusé : contenu propre',
+  'admin.audit.action.ADMIN_REPORT_SELF_MODERATION_REFUSED.explain': 'Un modérateur a tenté de classer, modifier, supprimer ou prendre en charge un signalement qui vise son propre compte, sa publication ou son commentaire ; rien n’a été écrit sur le signalement.',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE': 'Barème de points modifié',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'Le barème des points d’engagement — points par opération, multiplicateur et plafonds — a été réglé par un administrateur.',
   'admin.audit.action.TRIGGER_SERVER_OPERATION': 'Opération lancée sur le serveur',

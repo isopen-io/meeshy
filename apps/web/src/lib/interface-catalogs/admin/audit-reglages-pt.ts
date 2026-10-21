@@ -172,6 +172,8 @@ const f = {
   'admin.audit.action.ADMIN_REPORT_DELETED.explain': 'Uma denúncia foi removida da fila de moderação.',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED': 'Denúncia assumida',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED.explain': 'Uma denúncia foi atribuída a um moderador.',
+  'admin.audit.action.ADMIN_REPORT_SELF_MODERATION_REFUSED': 'Tratamento de denúncia recusado: conteúdo próprio',
+  'admin.audit.action.ADMIN_REPORT_SELF_MODERATION_REFUSED.explain': 'Um moderador tentou arquivar, alterar, excluir ou assumir uma denúncia que visa a sua própria conta, publicação ou comentário; nada foi escrito na denúncia.',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE': 'Tabela de pontos alterada',
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'Um administrador alterou a tabela de pontos de engajamento: pontos por operação, multiplicador e limites.',
   'admin.audit.action.TRIGGER_SERVER_OPERATION': 'Operação iniciada no servidor',

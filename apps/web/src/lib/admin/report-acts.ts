@@ -15,6 +15,26 @@ export function reportActsFor(report: { readonly reportedType: string | null; re
   return ['dismiss'];
 }
 
+/** Ce qu'il faut d'un signalement servi pour savoir s'il vise le lecteur. */
+export type ReportTarget = {
+  readonly reportedType: string | null;
+  readonly reportedEntityId: string;
+  readonly reportedEntity?: { readonly owner: { readonly id: string } | null } | null;
+};
+
+/**
+ * **UN MODÉRATEUR NE TRAITE PAS UN SIGNALEMENT QUI VISE SON PROPRE CONTENU** (#10458) —
+ * la passerelle refuse (`SELF_MODERATION`) ; l'écran le dit AVANT le geste. Un
+ * signalement de compte vise le compte ; tout autre contenu vise son propriétaire
+ * servi. Sans propriétaire servi (tableau de bord, entité disparue) ou sans lecteur
+ * connu, l'écran ne devine rien : le bouton reste, la passerelle tranche.
+ */
+export function reportTargetsViewer(report: ReportTarget, viewerId: string | null): boolean {
+  if (viewerId === null) return false;
+  if (report.reportedType === 'user') return report.reportedEntityId === viewerId;
+  return report.reportedEntity?.owner?.id === viewerId;
+}
+
 export const closedStatusOf = (action: AdminReportAction): 'resolved' | 'dismissed' => (action === 'dismiss' ? 'dismissed' : 'resolved');
 
 type Page<Row> = { readonly rows: readonly Row[]; readonly total: number; readonly hasMore: boolean };

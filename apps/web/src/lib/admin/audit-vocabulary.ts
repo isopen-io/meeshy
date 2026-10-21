@@ -133,6 +133,7 @@ export const AUDIT_ACTIONS = {
   ADMIN_REPORT_UPDATED: entry('reports', 'flag', 'neutral'),
   ADMIN_REPORT_DELETED: entry('reports', 'trash', 'danger'),
   ADMIN_REPORT_ASSIGNED: entry('reports', 'user', 'info'),
+  ADMIN_REPORT_SELF_MODERATION_REFUSED: entry('reports', 'prohibit', 'danger'),
   // ── Réglages de la plateforme ──────────────────────────────────────────────
   UPDATE_ENGAGEMENT_SCALE: entry('settings', 'flame', 'warning'),
   // ── Les opérations du serveur (#10396) : sauvegarde, purge des images ─────
