@@ -1,6 +1,7 @@
 import XCTest
 import UIKit
 @testable import MeeshyUI
+@testable import MeeshySDK
 
 @MainActor
 final class StickerTemplatePreviewScaleTests: XCTestCase {
