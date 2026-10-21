@@ -260,7 +260,7 @@ final class ReelPagerPreloader {
     }
 
     /// Les signaux de l'appareil, lus à l'instant : chemin réseau, mémoire,
-    /// économie d'énergie, état thermique.
+    /// économie d'énergie, état thermique, et son tier média (#11281).
     static func liveContext(visits: [ReelPreloadWindow.Visit]) -> ReelPreloadWindow.Context {
         let info = ProcessInfo.processInfo
         return ReelPreloadWindow.Context(
@@ -268,7 +268,8 @@ final class ReelPagerPreloader {
             network: ReelPreloadWindow.Network(snapshot: NetworkPathSource.shared.current),
             deviceMemoryGb: ReelPreloadWindow.gigabytes(physicalMemory: info.physicalMemory),
             lowPower: info.isLowPowerModeEnabled,
-            thermalState: info.thermalState
+            thermalState: info.thermalState,
+            tier: DeviceMediaTier.current
         )
     }
 
