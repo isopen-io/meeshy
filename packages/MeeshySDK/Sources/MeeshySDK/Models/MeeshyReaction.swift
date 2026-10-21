@@ -70,8 +70,6 @@ public struct MeeshyReactionSummary: Sendable {
     }
 }
 
-public typealias MeeshyMessageReaction = MeeshyReactionSummary
-
 // MARK: - Enriched Reaction Models
 
 public struct ReactionUserDetail: Codable, Identifiable, Sendable {
