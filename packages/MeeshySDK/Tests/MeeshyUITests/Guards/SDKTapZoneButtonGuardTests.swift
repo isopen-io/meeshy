@@ -74,6 +74,7 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         let lowest = max(0, index - 8)
         for position in stride(from: index, through: lowest, by: -1) {
             let line = lines[position]
+            if line.trimmingCharacters(in: .whitespaces).hasPrefix("//") { continue }
             if line.contains(".onTapGesture") { return .gesture }
             if line.contains("Button {") || line.contains("Button(action:") { return .button }
         }
@@ -81,7 +82,10 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
     }
 
     private static func gestureIndices(in lines: [String]) -> [Int] {
-        lines.indices.filter { lines[$0].contains(".onTapGesture") }
+        lines.indices.filter { index in
+            let line = lines[index].trimmingCharacters(in: .whitespaces)
+            return !line.hasPrefix("//") && line.contains(".onTapGesture")
+        }
     }
 
     static func isExposed(gestureAt index: Int, in lines: [String]) -> Bool {
