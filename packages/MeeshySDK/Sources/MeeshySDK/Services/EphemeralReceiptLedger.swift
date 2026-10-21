@@ -87,9 +87,10 @@ public final class EphemeralReceiptLedger: EphemeralReceiptRecording, Sendable {
             if let existing = table[messageId] {
                 return Date(timeIntervalSince1970: existing)
             }
-            table[messageId] = date.timeIntervalSince1970
+            let stamp = date.timeIntervalSince1970
+            table[messageId] = stamp
             EphemeralReceiptLedger.write(EphemeralReceiptLedger.prune(table, now: date), to: suite)
-            return date
+            return Date(timeIntervalSince1970: stamp)
         }
     }
 
