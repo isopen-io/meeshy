@@ -109,7 +109,7 @@ public nonisolated struct MeeshyColors {
     //
     // UN code couleur pour les deux plateformes : l'état se lit par sa teinte
     // avant tout texte, et le texte ne sert plus qu'au lecteur d'écran. Dérivé
-    // vers `packages/design-tokens/ios.css` (`--ios-state-*`) : web-v2 lit la
+    // vers `packages/design-tokens/ios.css` (`--ios-state-*`) : le web lit la
     // même table au lieu de la recopier. Chaque teinte ne dit qu'UN état — le
     // rouge d'erreur ne peint plus un éphémère, l'indigo ne peint plus un flou.
 
@@ -265,7 +265,7 @@ public nonisolated struct MeeshyColors {
     /// alpha PUIS luminance WCAG, même loi que `textMuted` ci-dessous) : sous
     /// AA texte normal (4,5:1) sur CHAQUE fond clair déclaré, y compris le
     /// fond de rangée le plus fréquent (`backgroundSecondary` `#F8F7FF`,
-    /// mesure `apps/web-v2` : 2,70:1 sur une rangée en sourdine, 2,80–3,12:1
+    /// mesure `apps/web` : 2,70:1 sur une rangée en sourdine, 2,80–3,12:1
     /// ailleurs). La variante SOMBRE (`indigo300`, opaque) n'était pas en
     /// cause (14,05:1 mesuré) — seule la CLAIRE est touchée, comme pour D-18.
     /// Relevée à `indigo700.opacity(0.8)` — le MÊME cran minimal que
