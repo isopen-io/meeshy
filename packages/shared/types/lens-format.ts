@@ -253,9 +253,13 @@ const exceedsDepth = (value: unknown, levelsLeft: number): boolean => {
 
 const isAsciiWord = (char: string | undefined): boolean => char !== undefined && /[A-Za-z0-9_]/.test(char);
 
-/** `data:` ne compte que s'il ouvre un mot : « metadata: » n'est pas une URL. */
+/**
+ * `data:` ne compte que s'il ouvre un mot : « metadata: » n'est pas une URL. Les positions sont des
+ * unités UTF-16 (`value.length`), jamais des points de code : `Array.from(value)` en compterait moins
+ * qu'il n'y a d'unités dès qu'un emoji précède, et la fin du texte échapperait au balayage.
+ */
 const hasBareScheme = (value: string, scheme: string): boolean =>
-  Array.from(value, (_, index) => index).some((index) => value.startsWith(scheme, index) && !isAsciiWord(value[index - 1]));
+  Array.from({ length: value.length }, (_, index) => index).some((index) => value.startsWith(scheme, index) && !isAsciiWord(value[index - 1]));
 
 const containsUrl = (raw: string): boolean => {
   const value = raw.toLowerCase();

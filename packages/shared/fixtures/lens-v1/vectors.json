@@ -3214,6 +3214,71 @@
       }
     },
     {
+      "name": "une URL après des caractères hors du plan de base reste une URL",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "😀😀😀😀😀😀😀😀😀😀😀data:x", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["url"]
+      }
+    },
+    {
       "name": "metadata: n'est pas une URL data:",
       "input": {
         "schema": 1,

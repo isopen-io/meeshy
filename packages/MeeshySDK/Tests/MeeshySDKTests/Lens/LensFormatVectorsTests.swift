@@ -28,11 +28,13 @@ struct LensFormatVectorsTests {
         let vectors: [Vector]
     }
 
-    /// `packages/MeeshySDK/Tests/MeeshySDKTests/Lens/…` : **5** composants à retirer pour atteindre `packages/`.
+    /// `packages/MeeshySDK/Tests/MeeshySDKTests/Lens/…` : **6** composants à retirer pour atteindre la racine du dépôt.
+    /// Le chemin s'écrit depuis la racine pour que `sdk-tests-shared-inputs.test.ts` le voie et exige
+    /// que `sdk-tests.yml` rejoue ce test quand les vecteurs changent.
     private static var vectorsURL: URL {
         var url = URL(fileURLWithPath: #filePath)
-        for _ in 0..<5 { url.deleteLastPathComponent() }
-        return url.appendingPathComponent("shared/fixtures/lens-v1/vectors.json")
+        for _ in 0..<6 { url.deleteLastPathComponent() }
+        return url.appendingPathComponent("packages/shared/fixtures/lens-v1/vectors.json")
     }
 
     private static func load() throws -> [Vector] {

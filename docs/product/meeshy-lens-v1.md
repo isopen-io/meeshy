@@ -39,6 +39,9 @@ lisibles, plus de 8 déclencheurs lisibles, identifiants de couche en double, do
 | `triggers` | 8 au plus (24 déclarés) |
 | `fallbacks` | `{ reduced?: { hide }, minimal?: { hide } }` : couches masquées aux paliers de dégradation |
 
+`window.geo` et `window.communities` sont des filtres **déclarés** par la lens. Le contrat ne demande ni ne transporte
+aucune position de l'appareil : aucun champ du document ne repart vers le serveur.
+
 ### Les cinq primitives (`layers`)
 
 Chaque couche porte un `id` unique. Les fichiers (`asset`) sont adressés par leur contenu (`16 hexadécimaux.webp|png|json`),
@@ -77,7 +80,7 @@ nouveau `schema`. Un nouveau `schema` n'est réservé qu'aux changements qui ne 
 
 ## Miroir Swift et vecteurs
 
-`bun run generate:lens-format` (dans `packages/shared`) régénère `LensFormat+Generated.swift` : les vocabulaires
+`bun run generate:lens-format` (dans `packages/shared`) régénère les six fichiers de `packages/MeeshySDK/Sources/MeeshySDK/Lens/` : les vocabulaires
 fermés et les bornes déduits de `lens-format.ts`, puis le lecteur tolérant. Un test vitest exige que les fichiers
 committés soient égaux à la sortie du générateur et qu'aucun fichier périmé ne traîne.
 
