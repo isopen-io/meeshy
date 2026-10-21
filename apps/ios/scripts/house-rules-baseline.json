@@ -3,7 +3,7 @@
     "anyview": 97,
     "autocapitalization": 0,
     "available-floor": 3,
-    "corner-radius-modifier": 7,
+    "corner-radius-modifier": 0,
     "disable-autocorrection": 0,
     "fixed-font": 945,
     "foreground-color": 3167,
