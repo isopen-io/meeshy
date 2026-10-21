@@ -72,7 +72,7 @@ struct MintCeremonyPalette {
     let orbInk = Color(hex: "e9d9b0")
     let steel = [Color(hex: "d6dbe5"), Color(hex: "7d8392")]
     let anvil = [Color(hex: "70778a"), Color(hex: "2c2f37")]
-    let anvilTop = [Color(hex: "a9afbd"), Color(hex: "5b6070")]
+    static let anvilTop = [Color(hex: "a9afbd"), Color(hex: "5b6070")]
     let die = [Color(hex: "5d6270"), Color(hex: "c9cfdb"), Color(hex: "6d7280")]
     let wood = [Color(hex: "6b4423"), Color(hex: "a8743f")]
     let flash = [Color.white, Color(red: 1, green: 250 / 255, blue: 230 / 255, opacity: 0.85), Color(red: 1, green: 240 / 255, blue: 200 / 255, opacity: 0)]
@@ -188,7 +188,7 @@ struct MintCeremonyStageLayers: View {
             .foregroundColor(palette.orbInk)
             .modifier(MintCeremonyStageBox(stage: stage, x: 100, y: 128, w: 160, h: 16))
         RoundedRectangle(cornerRadius: 4 * stage.k)
-            .fill(LinearGradient(colors: palette.anvilTop, startPoint: .top, endPoint: .bottom))
+            .fill(LinearGradient(colors: MintCeremonyPalette.anvilTop, startPoint: .top, endPoint: .bottom))
             .modifier(MintCeremonyStageBox(stage: stage, x: 104, y: 543, w: 152, h: 10))
         MintCeremonyAnvil()
             .fill(LinearGradient(colors: palette.anvil, startPoint: .top, endPoint: .bottom))
