@@ -111,6 +111,7 @@ let mockStatusServiceInstance: any;
 jest.mock('../../../services/StatusService', () => ({
   StatusService: jest.fn().mockImplementation(() => {
     mockStatusServiceInstance = {
+      setPresenceCallback: jest.fn(),
       updateUserOnline: jest.fn().mockResolvedValue(undefined),
       updateUserOffline: jest.fn().mockResolvedValue(undefined),
     };

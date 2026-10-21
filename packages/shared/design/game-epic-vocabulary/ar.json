@@ -127,7 +127,9 @@
       "instead": "«خطوات» (الرحلة)، «عصور» (الانبعاث)",
       "keys": [
         "game.season.",
-        "game.prestige."
+        "game.prestige.",
+        "game.fact.strides",
+        "game.fact.rebirths"
       ]
     },
     {
@@ -329,6 +331,8 @@
     "game.gauge.level": "النور",
     "game.gauge.rank": "الرتبة",
     "game.gauge.treasury": "الإرث",
-    "game.gauge.flame": "اللهب"
+    "game.gauge.flame": "اللهب",
+    "game.fact.strides": "الخطوات",
+    "game.fact.rebirths": "الانبعاثات"
   }
 }

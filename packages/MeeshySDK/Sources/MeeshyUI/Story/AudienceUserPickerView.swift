@@ -147,6 +147,7 @@ public struct AudienceUserPickerView: View {
     private let onDone: ([String]) -> Void
     @StateObject private var vm: AudienceUserPickerViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
     @State private var searchTask: Task<Void, Never>?
 
     public init(mode: PostVisibility,
@@ -274,7 +275,9 @@ public struct AudienceUserPickerView: View {
 
     private func row(_ user: UserSearchResult) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem, avatarURL: user.avatar, presenceState: user.servedPresence, ring: user.avatarRing)
+            MeeshyLivePresence {
+                MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem, avatarURL: user.avatar, presenceState: presenceResolver?(user.id) ?? user.servedPresence, ring: user.avatarRing)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayName ?? user.username)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))

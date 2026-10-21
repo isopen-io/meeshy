@@ -70,7 +70,7 @@ struct GameFicheHead<Emblem: View>: View {
             if let shadow {
                 Text(shadow.text)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .fixedSize(horizontal: false, vertical: true)
                     .modifier(GameFactsTag(shadow.facts))
                     .accessibilityIdentifier("\(identifier).shadow")
@@ -81,13 +81,13 @@ struct GameFicheHead<Emblem: View>: View {
             Text(label.text)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .textCase(.uppercase)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 .modifier(GameFactsTag(label.facts))
                 .accessibilityAddTraits(.isHeader)
             Text(big.text)
                 .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .modifier(GameValueRoll(value: big.text))
                 .modifier(GameFactsTag(big.facts))
@@ -95,14 +95,14 @@ struct GameFicheHead<Emblem: View>: View {
             if let secondary {
                 Text(secondary.text)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .modifier(GameFactsTag(secondary.facts))
             }
             if let tertiary {
                 Text(tertiary.text)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
                     .modifier(GameFactsTag(tertiary.facts))
             }
