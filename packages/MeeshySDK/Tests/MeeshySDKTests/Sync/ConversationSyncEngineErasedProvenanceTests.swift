@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import GRDB
 @testable import MeeshySDK
 
@@ -56,7 +57,8 @@ final class ConversationSyncEngineErasedProvenanceTests: XCTestCase {
 
         await engine.expireLocally(conversationId: conversationId, messageIds: ["m-burn"])
 
-        let expired = try XCTUnwrap(await cached("m-burn", in: cache))
+        let burned = await cached("m-burn", in: cache)
+        let expired = try XCTUnwrap(burned)
         XCTAssertEqual(expired.content, "")
         XCTAssertEqual(expired.contentOrigin, .wire, "aucune empreinte du clair échu ne reste sur le message")
         XCTAssertNil(try encodedOrigin(of: expired), "ni dans la ligne du cache")
@@ -72,7 +74,8 @@ final class ConversationSyncEngineErasedProvenanceTests: XCTestCase {
         socket.messageDeleted.send(MessageDeletedEvent(messageId: "m-del", conversationId: conversationId))
         try await Task.sleep(nanoseconds: 300_000_000)
 
-        let deleted = try XCTUnwrap(await cached("m-del", in: cache))
+        let removed = await cached("m-del", in: cache)
+        let deleted = try XCTUnwrap(removed)
         XCTAssertNotNil(deleted.deletedAt, "précondition : la suppression est appliquée")
         XCTAssertEqual(deleted.contentOrigin, .wire)
         XCTAssertNil(try encodedOrigin(of: deleted))

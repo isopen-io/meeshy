@@ -589,6 +589,8 @@ final class ConversationPreviewPhotoFallbacks {
         self.capacity = capacity
     }
 
+    nonisolated deinit {}
+
     func contains(_ attachmentId: String) -> Bool {
         attachmentIds.contains(attachmentId)
     }
