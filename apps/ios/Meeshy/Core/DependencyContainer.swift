@@ -15,7 +15,7 @@ private nonisolated let containerLogger = MeeshyLog.logger(.dependencyContainer)
 /// cannot be opened — corrupted SQLite files are quarantined and
 /// recreated, inaccessible paths fall back to Application Support
 /// (entitlement-less builds: the app-group container resolves but the
-/// sandbox denies access, seen on iOS-on-Mac build 1750, 2026-08-11),
+/// sandbox denies access, seen on iOS-on-Mac),
 /// and as a last resort a unique temp-file pool is used so the user
 /// lands in the app (in degraded mode) instead of a crash loop. This
 /// struct records what happened so the host app can surface the issue
@@ -37,7 +37,7 @@ final class DependencyContainer {
     nonisolated deinit {}
     static let shared = DependencyContainer()
 
-    /// #8656 — la base locale des messages est celle du compte ACTIF. Les trois
+    /// La base locale des messages est celle du compte ACTIF. Les trois
     /// accesseurs ci-dessous la relisent à chaque appel : un site qui les
     /// consulte au moment d'écrire vise la bonne base, un site qui a capturé
     /// une session garde celle du compte qui l'a ouverte.
@@ -66,7 +66,7 @@ final class DependencyContainer {
     let initDiagnostics: DatabaseInitDiagnostics
 
     private init() {
-        // #8656 — la base ouverte au démarrage est celle du compte du TROUSSEAU,
+        // La base ouverte au démarrage est celle du compte du TROUSSEAU,
         // lue en synchrone : un compte restauré se sert depuis SA base avant que
         // `checkExistingSession()` n'ait fini, cache-first.
         let directory = Self.databaseDirectory()
@@ -102,7 +102,7 @@ final class DependencyContainer {
         // a message received while its conversation is closed shows in the
         // list preview but is missing when the conversation opens.
         //
-        // #8656 — la page va dans la base du compte qui l'a DEMANDÉE
+        // La page va dans la base du compte qui l'a DEMANDÉE
         // (`currentSyncOwner`), et nulle part si ce compte n'est plus actif.
         ConversationSyncEngine.shared.apiMessagePersistor = { [router] messages in
             guard !messages.isEmpty,
@@ -119,10 +119,11 @@ final class DependencyContainer {
         }
 
         // Même raison pour les mutations qui ne portent PAS d'`APIMessage` :
-        // edit, suppression, réaction et vue unique consommée n'atteignaient que
-        // `cache.messages`, que la timeline ne lit pas. Hors-ligne, rouvrir la
-        // conversation affichait donc le texte d'avant l'édition, la bulle
-        // supprimée et la réaction manquante jusqu'au prochain refetch REST.
+        // edit, suppression, réaction et vue unique consommée. Sans ce relais
+        // elles n'atteindraient que `cache.messages`, que la timeline ne lit pas :
+        // hors-ligne, rouvrir la conversation afficherait le texte d'avant
+        // l'édition, la bulle supprimée et la réaction manquante jusqu'au
+        // prochain refetch REST.
         ConversationSyncEngine.shared.realtimeMessagePersistor = { [router] mutation in
             guard let session = router.session(ownedBy: ConversationSyncEngine.currentSyncOwner) else { return }
             await Self.persist(mutation, into: session.messagePersistence)
@@ -133,7 +134,7 @@ final class DependencyContainer {
     /// quand l'entitlement manque).
     let storeDirectory: URL
 
-    /// La base qui revient au compte ACTIF — utilisateur + environnement (#8657).
+    /// La base qui revient au compte ACTIF — utilisateur + environnement.
     static func activeAccountStoreKey() -> MessageStoreAccountKey? {
         MessageStoreAccountKey(
             userId: AuthManager.shared.activeAccountId,
@@ -141,7 +142,7 @@ final class DependencyContainer {
         )
     }
 
-    // MARK: - #8656 — bascule SYNCHRONE de la base locale
+    // MARK: - Bascule SYNCHRONE de la base locale
 
     /// Bascule la base AVANT que la session suivante ne lise quoi que ce soit.
     ///
@@ -170,7 +171,7 @@ final class DependencyContainer {
             activeKey: Self.activeAccountStoreKey()
         )
         guard case let .account(key) = target else { return }
-        // #8674 — un compte quitté SANS être déconnecté (changement de compte,
+        // Un compte quitté SANS être déconnecté (changement de compte,
         // ajout d'un compte) garde sa base ouverte pour son retour ; seul un
         // compte dont les jetons sont partis (déconnexion, session révoquée,
         // retrait) voit la sienne purgée.
@@ -192,7 +193,7 @@ final class DependencyContainer {
         guard outgoing != nil else { return }
         // La NSE dérive la base du destinataire de l'environnement publié :
         // un environnement changé à l'écran de connexion doit l'atteindre
-        // AVANT le premier push de la session (#8657).
+        // AVANT le premier push de la session.
         if key != nil { WidgetDataManager.shared.publishAPIBaseURL() }
         let incoming = storeRouter.current.dbPool
         Task { await OfflineQueue.shared.configure(pool: incoming) }
@@ -203,7 +204,7 @@ final class DependencyContainer {
         return sessionsAwaitingPurge
     }
 
-    // MARK: - #8674 — ce que l'appareil garde de chaque compte
+    // MARK: - Ce que l'appareil garde de chaque compte
 
     private func retainedAccountKeys() -> Set<MessageStoreAccountKey> {
         AccountDataRetention.retainedKeys(
@@ -237,7 +238,7 @@ final class DependencyContainer {
         guard UIApplication.shared.isProtectedDataAvailable else { return }
         let retained = retainedAccountKeys()
         let dropped = storeRouter.dropSessions(keeping: retained)
-        // Les pièces de commentaire des comptes que l'appareil ne garde plus (#9743).
+        // Les pièces de commentaire des comptes que l'appareil ne garde plus.
         OfflineQueue.purgePendingCommentMedia(keepingOwners: Set(retained.map(\.userId)))
         MessageStoreRouter.sweepDormantAccountStores(
             in: storeDirectory,
@@ -257,7 +258,7 @@ final class DependencyContainer {
     }
 
     private nonisolated static func purge(_ session: MessageStoreSession) async {
-        // #9743 — les pièces de commentaire en attente d'un compte retiré
+        // Les pièces de commentaire en attente d'un compte retiré
         // quittent le disque avec sa base.
         OfflineQueue.purgePendingCommentMedia(ownerId: session.key?.userId)
         do {
@@ -333,9 +334,9 @@ final class DependencyContainer {
             case let .expired(messageId, expiredAt):
                 // Même écriture que la conversation OUVERTE
                 // (`ConversationSocketHandler`) : contenu vidé, citations
-                // scellées — une vue unique n'y est pas épargnée (#7960).
+                // scellées — une vue unique n'y est pas épargnée.
                 try await persistence.markDeleted(localId: messageId, deletedAt: expiredAt, expired: true)
-                // #10433 — les réponses d'un mort quittent la base avec lui.
+                // Les réponses d'un mort quittent la base avec lui.
                 try await persistence.purgeQuoteCascade(fromDead: [messageId])
             case let .citedPostWithdrawn(postId, conversationId, _):
                 try await persistence.markCitedPostWithdrawn(postId: postId, conversationId: conversationId)
@@ -394,36 +395,25 @@ final class DependencyContainer {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.sessionWasInvalidated = true }
             .store(in: &cancellables)
-        // #5913 — PAS de `.dropFirst()`. Il écartait la valeur INITIALE, donc la
-        // purge n'avait lieu que sur une transition `true → false` observée EN
-        // VOL. Or les fins de session les plus courantes n'en émettent aucune :
-        // l'app tuée pendant la session, le jeton expiré constaté au démarrage,
-        // la session invalidée côté serveur entre deux lancements. Dans ces trois
-        // cas l'app démarre déjà déconnectée — première valeur `false`, jetée —
-        // et la file du compte sortant survivait jusqu'au compte suivant (mesuré :
-        // 7 lignes de 12 h, dont 2 `blockUser` et 1 `unblockUser`).
+        // PAS de `.dropFirst()` : la valeur INITIALE compte. Les fins de session
+        // les plus courantes n'émettent aucune transition `true → false` observée
+        // EN VOL : l'app tuée pendant la session, le jeton expiré constaté au
+        // démarrage, la session invalidée côté serveur entre deux lancements.
+        // Dans ces trois cas l'app démarre déjà déconnectée (première valeur
+        // `false`), et la file du compte sortant survivrait jusqu'au compte suivant.
         //
-        // Le `filter { !$0 }` suffit à garder un démarrage CONNECTÉ hors de la
-        // purge ; sur un démarrage déconnecté avec une file vide, le coût est une
-        // lecture `pendingOutboxCount()` et rien d'autre. Le toast, lui, reste
+        // Le `filter { !$0 }` seul ne suffit pas : le booléen confond « pas encore
+        // regardé » et « regardé, personne ». `isAuthenticated` naît `false`,
+        // `checkExistingSession()` est async, et ce conteneur s'abonne à la
+        // CONSTRUCTION de l'`App` : un `@Published` rejoue sa valeur courante au
+        // nouvel abonné, donc `false` traverserait le filtre et la purge partirait
+        // à CHAQUE démarrage à froid, sur une session parfaitement valide.
+        //
+        // `hasResolvedStoredSession` apporte le troisième état. Le cas « app tuée,
+        // jeton expiré, session invalidée entre deux lancements » reste couvert :
+        // il se présente comme « résolu, personne », et purge. Le toast reste
         // gouverné par `sessionWasInvalidated` — faux au démarrage à froid, donc
         // aucun message ne s'affiche pour une purge de résidus.
-        // #5968 — le booléen SEUL confond « pas encore regardé » et « regardé,
-        // personne ». `isAuthenticated` naît `false`, `checkExistingSession()`
-        // est async, et ce conteneur s'abonne à la CONSTRUCTION de l'`App` : un
-        // `@Published` rejoue sa valeur courante au nouvel abonné, donc `false`
-        // traversait `filter { !$0 }` et la purge partait à CHAQUE démarrage à
-        // froid — 25 messages et 7 lignes d'outbox effacés sur une session
-        // parfaitement valide, mesuré au simulateur de recette.
-        //
-        // Le commentaire de #5913 concluait « un `filter { !$0 }` suffit à
-        // garder le démarrage CONNECTÉ hors de la purge ». C'est cette phrase
-        // que la mesure réfute : au moment où le filtre s'applique, personne
-        // n'a encore regardé s'il y a une session.
-        //
-        // `hasResolvedStoredSession` apporte le troisième état. Le cas de #5913
-        // — app tuée, jeton expiré, session invalidée entre deux lancements —
-        // reste couvert : il se présente comme « résolu, personne », et purge.
         Publishers.CombineLatest(
             AuthManager.shared.$hasResolvedStoredSession,
             AuthManager.shared.$isAuthenticated
@@ -435,7 +425,7 @@ final class DependencyContainer {
             .sink { [weak self] _ in
                 let invalidated = self?.sessionWasInvalidated ?? false
                 self?.sessionWasInvalidated = false
-                // #8656 — la purge vise les bases QUITTÉES, que la bascule
+                // La purge vise les bases QUITTÉES, que la bascule
                 // synchrone a déjà retirées de la lecture : la session suivante
                 // ne les voit plus, qu'elle démarre avant ou après ce nettoyage.
                 let outgoing = self?.takeSessionsAwaitingPurge() ?? []
@@ -451,9 +441,9 @@ final class DependencyContainer {
                         } catch {
                             containerLogger.error("Q3 logout message purge failed: \(error.localizedDescription, privacy: .public)")
                         }
-                        // grdb-01 — purge feed indépendante : un échec d'un côté
+                        // Purge feed indépendante : un échec d'un côté
                         // ne doit pas empêcher l'autre purge.
-                        // #9743 — les pièces de commentaire en attente du compte
+                        // Les pièces de commentaire en attente du compte
                         // quitté partent avec sa file : rien ne reste sur le
                         // disque pour le compte suivant.
                         OfflineQueue.purgePendingCommentMedia(ownerId: session.key?.userId)
@@ -462,20 +452,19 @@ final class DependencyContainer {
                         } catch {
                             containerLogger.error("grdb-01 logout feed purge failed: \(error.localizedDescription, privacy: .public)")
                         }
-                        // #8656 — purgée, la base quittée quitte aussi le disque :
+                        // Purgée, la base quittée quitte aussi le disque :
                         // un acteur encore capturé n'y réécrira jamais rien que
                         // le compte retrouverait en revenant.
                         router?.retire(session)
                     }
-                    // #5913 — la purge SQL ci-dessus vide la TABLE ; l'acteur
+                    // La purge SQL ci-dessus vide la TABLE ; l'acteur
                     // `OfflineQueue` garde, lui, ses `items` et ses
                     // `outcomeTombstones` EN MÉMOIRE. Sans cette ligne, le
-                    // bandeau continue d'afficher les lignes du compte sortant
+                    // bandeau continuerait d'afficher les lignes du compte sortant
                     // et `retryAll()` — qui n'a aucun filtre de statut et se
-                    // déclenche au retour du réseau — peut encore les rejouer,
+                    // déclenche au retour du réseau — pourrait encore les rejouer,
                     // sous le jeton du compte SUIVANT. `clearAll()` fait les
-                    // trois (mémoire, tombstones, base) ; elle n'avait jusqu'ici
-                    // aucun appelant dans le dépôt.
+                    // trois (mémoire, tombstones, base).
                     await OfflineQueue.shared.clearAll()
                     if DependencyContainer.shouldSurfaceOutboxLossToast(
                         sessionWasInvalidated: invalidated, pendingCount: pendingCount
@@ -494,10 +483,10 @@ final class DependencyContainer {
                     // PendingStatusQueue. (pending_mark_read App Group est
                     // couvert par le wipe appgroup-01 — pas de doublon ici.)
                     ImpressionBatcher.purgeAllPendingImpressions()
-                    // #10501 — les pages servies au compte sortant ne situent
+                    // Les pages servies au compte sortant ne situent
                     // pas les impressions du suivant.
                     ListingContextLedger.shared.reset()
-                    // #10500 — la file v2 et l'approximation des contenus
+                    // La file v2 et l'approximation des contenus
                     // affichés appartiennent au compte sortant.
                     await SocialEventsV2Outbox.shared.purgeAll()
                     SocialNotificationInbox.shared.purge()
@@ -507,11 +496,11 @@ final class DependencyContainer {
                     await MainActor.run { DependencyContainer.resetInMemoryAccountState() }
                     ContactResolveService.shared.purge()
                     await PendingStatusQueue.shared.clearAll()
-                    // #8656 — les brouillons de commentaire sont rangés par post,
-                    // sans compte : un post vu des deux comptes rendait au
+                    // Les brouillons de commentaire sont rangés par post,
+                    // sans compte : un post vu des deux comptes rendrait au
                     // second le brouillon du premier.
                     await MainActor.run { CommentDraftStore.shared.clearAll() }
-                    // #8848 — création du composer (E9) et copies temporaires du glisser : au compte sortant.
+                    // Création du composer (E9) et copies temporaires du glisser : au compte sortant.
                     ComposerAutosaveStore.shared.deleteAll()
                     BubbleDragScratch.purge()
                 }
@@ -523,7 +512,7 @@ final class DependencyContainer {
     /// déconnexion : la présence vue, les contours de story, les amis du `@`,
     /// les relations des fiches contact, la citation du brouillon de
     /// commentaire, les rappels de série, les protections armées — et la
-    /// preuve « déchiffré sur cet appareil » (#11212), que le compte suivant
+    /// preuve « déchiffré sur cet appareil », que le compte suivant
     /// n'hérite jamais.
     private static func resetInMemoryAccountState() {
         PresenceManager.shared.resetForLogout()
@@ -630,17 +619,16 @@ final class DependencyContainer {
             containerLogger.fault("Access denied at \(path, privacy: .public) — leaving the file untouched (unreadable ≠ corrupt)")
             return nil
         }
-        // #7160 — UNE INTERRUPTION N'EST PAS UNE CORRUPTION, et ici elle coûte
+        // UNE INTERRUPTION N'EST PAS UNE CORRUPTION, et ici elle coûte
         // LE STORE DE MESSAGES DE L'UTILISATEUR.
         //
-        // Armer la suspension juste au-dessus fait apparaître une erreur que ce
-        // chemin n'avait jamais vue : une ouverture pendant la fenêtre de
-        // suspension (réveil d'arrière-plan, extension, tâche BG) rend
-        // `SQLITE_INTERRUPT`. `isAccessDenied` ne couvre que AUTH / PERM /
-        // CANTOPEN / READONLY : sans cette garde, l'interruption tombait dans
-        // la branche « corrompu », le fichier partait en quarantaine et une
-        // base VIDE le remplaçait. On aurait troqué une suppression par le
-        // système contre une perte de données — strictement pire.
+        // Armer la suspension juste au-dessus fait apparaître une erreur : une
+        // ouverture pendant la fenêtre de suspension (réveil d'arrière-plan,
+        // extension, tâche BG) rend `SQLITE_INTERRUPT`. `isAccessDenied` ne couvre
+        // que AUTH / PERM / CANTOPEN / READONLY : sans cette garde, l'interruption
+        // tomberait dans la branche « corrompu », le fichier partirait en
+        // quarantaine et une base VIDE le remplacerait — une perte de données,
+        // strictement pire qu'une suppression par le système.
         guard !DatabaseSuspension.isSuspensionInterruption(error) else {
             containerLogger.fault("Database open interrupted by suspension at \(path, privacy: .public) — leaving the file untouched (interrupted ≠ corrupt)")
             return nil
@@ -730,11 +718,11 @@ final class DependencyContainer {
         )
     }
 
-    /// Le dossier des bases de messages — une par compte depuis #8656.
+    /// Le dossier des bases de messages — une par compte.
     ///
     /// `groupContainer` is `nil` when the signed binary lost the app-group
     /// entitlement (seen on Xcode Cloud distribution-signed TestFlight
-    /// builds — launch crash-loop of build 1125, 2026-06-12). Trapping here
+    /// builds — launch crash-loop). Trapping here
     /// boot-loops the app on EVERY launch; falling back to Application
     /// Support keeps the user in the app, merely without NSE/widget data
     /// sharing until the signing issue is fixed.
@@ -795,15 +783,14 @@ final class DependencyContainer {
         // collision into SQLITE_BUSY; a 5 s timeout absorbs the contention
         // (the NSE's writes are sub-millisecond, the app's are batched).
         config.busyMode = .timeout(5)
-        // #7160 — LE SECOND POOL APPREND, LUI AUSSI, QUE L'APPLICATION SE SUSPEND.
+        // LE SECOND POOL APPREND, LUI AUSSI, QUE L'APPLICATION SE SUSPEND.
         //
-        // `observesSuspensionNotifications` se pose PAR POOL. #7059 l'a armé sur
-        // `AppDatabase` (`meeshy.sqlite`) et le `0xDEAD10CC` est revenu à
-        // l'identique en build 1827 : le rapport du 20/09 15:15 montre DEUX fils
-        // `GRDB.DatabasePool.writer` vivants au moment de la suppression — l'un
-        // en `sqlite3_wal_checkpoint_v2` jusqu'à `guarded_pwrite_np`, l'autre
-        // dans un `write` synchrone. Celui-ci est le pool de
-        // `meeshy_messages.sqlite`, et il n'écoutait rien.
+        // `observesSuspensionNotifications` se pose PAR POOL : l'armer sur
+        // `AppDatabase` (`meeshy.sqlite`) seul laisse revenir le `0xDEAD10CC`, car
+        // deux fils `GRDB.DatabasePool.writer` peuvent être vivants au moment de la
+        // suppression — l'un en `sqlite3_wal_checkpoint_v2` jusqu'à
+        // `guarded_pwrite_np`, l'autre dans un `write` synchrone. Celui-ci est le
+        // pool de `meeshy_messages.sqlite`.
         //
         // C'est le pool le plus exposé des deux : `MessagePersistenceActor`
         // écrit dessus à chaque message reçu, y compris pendant la transition
@@ -813,10 +800,10 @@ final class DependencyContainer {
             try db.execute(sql: "PRAGMA synchronous = NORMAL")
             try db.execute(sql: "PRAGMA journal_size_limit = 16777216")
             try db.execute(sql: "PRAGMA wal_autocheckpoint = 1000")
-            // #6221 — `cache_size`, `mmap_size` et `temp_store` vivent sur la
-            // CONNEXION, pas dans le fichier. `applyTuning(on:)` les posait via
+            // `cache_size`, `mmap_size` et `temp_store` vivent sur la
+            // CONNEXION, pas dans le fichier. `applyTuning(on:)` les poserait via
             // `pool.write`, donc sur le seul rédacteur : les seize lecteurs
-            // travaillaient sans mmap ni cache de pages. Ici, ils atteignent
+            // travailleraient sans mmap ni cache de pages. Ici, ils atteignent
             // chaque connexion — et sans transaction d'écriture au démarrage.
             try DatabaseMaintenance.prepareTuning(db)
         }

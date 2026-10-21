@@ -8,16 +8,14 @@ import MeeshyUI
 // **Ce que le meuble monte pour un DOCUMENT** — la surface post/réel, sa feuille
 // caméra, et les deux projections de média qu'elles servent.
 //
-// Extrait de `MeeshyComposerHost+Surfaces.swift` au #5069, qui portait 1248
-// lignes contre un plafond dur de 1200. **La coupe suit une RESPONSABILITÉ, pas
-// une tranche** : les cinq membres ci-dessous forment la surface DOCUMENT
-// entière, et n'ont aucun appelant commun avec la scène ni avec l'humeur —
-// seules les trois `var …Surface` se répondent, depuis le `body` du meuble.
-//
-// Ce qui RESTE dans le fichier d'origine, et pourquoi : la scène, l'humeur, le
-// calque de description et ses constantes. `descriptionLayerHeaderClearance`
-// voisine le dernier membre extrait sans lui appartenir — une coupe par numéro
-// de ligne l'aurait emporté, une coupe par responsabilité le laisse.
+// Les cinq membres ci-dessous forment la surface DOCUMENT entière, et n'ont
+// aucun appelant commun avec la scène ni avec l'humeur — seules les trois
+// `var …Surface` se répondent, depuis le `body` du meuble. **La coupe suit une
+// RESPONSABILITÉ, pas une tranche** : la scène, l'humeur, le calque de
+// description et ses constantes vivent dans `MeeshyComposerHost+Surfaces.swift`.
+// `descriptionLayerHeaderClearance` voisine le dernier membre ci-dessous sans
+// lui appartenir — une coupe par numéro de ligne l'aurait emporté, une coupe
+// par responsabilité le laisse.
 
 extension MeeshyComposerHost {
 
@@ -34,14 +32,14 @@ extension MeeshyComposerHost {
             onTool: { tool in handleDocumentTool(tool) },
             slideRailSlot: slideRailSlot,
             onPickBackground: { hex in
-                // Phase 2 (#3939) — choisir un fond pose la couleur SUR la slide
+                // Choisir un fond pose la couleur SUR la slide
                 // courante et fait apparaître la scène INCRUSTÉE dans l'écran
                 // document (via `showsScene` ci-dessous), SANS basculer sur
                 // l'atelier plein écran. Le report du contenu reste géré ailleurs.
                 documentBackground = hex
                 viewModel.applyBackground(hex: hex)
             },
-            // Phase 2 (#3939) — la scène 9:16 s'incruste EN HAUT de l'écran
+            // La scène 9:16 s'incruste EN HAUT de l'écran
             // document dès qu'un fond est choisi. Elle édite la slide courante
             // de l'atelier (source de vérité unique) ; son ratio suit le fond
             // (portrait par défaut, paysage si image de fond paysage).
@@ -49,55 +47,52 @@ extension MeeshyComposerHost {
                 get: { viewModel.currentSlide },
                 set: { viewModel.currentSlide = $0 }
             ),
-            // **Le MÊME prédicat que la vue montée** (#4513) — `sceneIsPresent`,
-            // jamais `documentHasScene` en direct. Les deux répondaient à la
-            // même question et divergeaient sur une story vide : la vue disait
-            // « il y a une scène », cette branche disait « non », et l'écran
-            // n'en montrait aucune.
+            // **Le MÊME prédicat que la vue montée** — `sceneIsPresent`,
+            // jamais `documentHasScene` en direct. Les deux répondent à la même question
+            // et divergeraient sur une story vide : la vue dirait « il y a une scène »,
+            // cette branche « non », et l'écran n'en montrerait aucune.
             showsScene: sceneIsPresent,
             sceneAspectRatio: viewModel.currentCanvasRatio,
             onSceneItemTapped: { _, kind in selectedSceneItemKind = kind },
-            // **#4035 — taper la scène quand son FOND est un média le
-            // SÉLECTIONNE.** Sans cette ligne l'inspecteur était INATTEIGNABLE
-            // sur l'écran document, et le câblage complet ne le disait pas :
-            // en profil Post, une slide ne porte QU'UN média et la règle 4 en
-            // fait son FOND (#4038) ; or `hitTestItem` n'itère que
-            // `itemsContainer`, où un fond ne vit pas — le tap retombait donc
-            // sur `onBackgroundTapped`, qui EFFAÇAIT la sélection. Mesuré au
-            // simulateur le 2026-08-28 : écran identique au bit près.
+            // **Taper la scène quand son FOND est un média le SÉLECTIONNE.** Sans cette
+            // ligne l'inspecteur serait INATTEIGNABLE sur l'écran document : en profil
+            // Post, une slide ne porte QU'UN média et la règle 4 en fait son FOND ; or
+            // `hitTestItem` n'itère que `itemsContainer`, où un fond ne vit pas — le tap
+            // retomberait sur `onBackgroundTapped`, qui EFFACERAIT la sélection : écran
+            // identique au bit près.
             //
             // La correction est APP-SIDE et non dans le geste du SDK : y
             // rendre le fond « hit-testable » changerait la manipulation de
-            // l'atelier plein écran, que ce lot doit laisser intact. Le SDK dit
+            // l'atelier plein écran, qu'il faut laisser intact. Le SDK dit
             // ce qui a été touché, l'app décide ce que cela sélectionne.
             onSceneBackgroundTapped: { handleSceneBackgroundTap() },
             onSceneBackgroundLongPressed: { handleSceneCaptureLongPress() },
-            // #4657 — la rangée de l'avatar montre le son de fond : la note,
+            // La rangée de l'avatar montre le son de fond : la note,
             // l'onde et la durée à côté du visage, et le texte descend.
-            // **Ce qu'elle a le DROIT de montrer est une loi** (#4670), pas la
+            // **Ce qu'elle a le DROIT de montrer est une loi**, pas la
             // propriété du site qui écrit : la place dit le FOND, et un son de
             // contenu n'y paraît jamais.
             backgroundSound: avatarBadgeSound,
-            // #4668 — et le toucher l'OUVRE, comme la carte du son de contenu.
+            // Et le toucher l'OUVRE, comme la carte du son de contenu.
             onEditBackgroundSound: editBackgroundSoundAction,
             onDeleteBackgroundSound: deleteBackgroundSoundAction,
-            // Directive porteur 2026-09-01 — un son de CONTENU se joue sous la
+            // Un son de CONTENU se joue sous la
             // zone de texte, transcription défilante, et se rouvre au toucher.
             onEditForegroundSound: { son in editForegroundSound(son) },
             onDeleteForegroundSound: { son in deleteForegroundSound(son) },
             foregroundSounds: foregroundSounds,
-            // …et le rail DIT laquelle est à l'écran (#4047). La résolution est
+            // …et le rail DIT laquelle est à l'écran. La résolution est
             // ici parce que la carte `média → slide` et la slide courante
             // vivent ici : demander à la surface de la refaire l'obligerait à
             // lire le ViewModel, donc à cesser d'être sans état.
-            // #4047 — le `⋯` au bout de la barre. Le meuble décide des ENTRÉES
+            // Le `⋯` au bout de la barre. Le meuble décide des ENTRÉES
             // par la règle, jamais par un `if` écrit dans un `body` ; aucune
             // entrée ⇒ `nil` ⇒ aucun bouton (loi 4).
             overflowMenu: documentOverflowEntries.isEmpty
                 ? nil : AnyView(overflowMenu),
-            // #4032 — l'occultation de la rangée défilante se peint de la teinte
+            // L'occultation de la rangée défilante se peint de la teinte
             // que le meuble applique DÉJÀ à tout l'écran, jamais d'une couleur
-            // re-choisie. C'est le retour porteur du 2026-08-27, tenu.
+            // re-choisie.
             plateauTint: tint.color,
             // Le meuble ne décide QUE de l'ABSENCE/PRÉSENCE de la scène ; QUELS
             // contrôles la zone sert est la décision du SDK, portée par l'`init?`
@@ -113,40 +108,31 @@ extension MeeshyComposerHost {
             sceneImages: viewModel.loadedImages,
             sceneStickerAnimations: viewModel.loadedStickerAnimations,
             sceneImagesVersion: viewModel.loadedImagesVersion,
-            // **La tuile de lieu (T2.5), corrigée #3903** : elle voyageait en
-            // `.overlay(alignment: .bottomLeading)` sur TOUTE la surface —
-            // exactement le point où `toolRow` peint sa première icône (elle
-            // aussi calée au bord de tête). Un overlay et le premier enfant
-            // d'un `HStack` occupent le MÊME z-niveau : rien n'empêchait le
-            // chevauchement, à aucune taille d'écran ni palier de Dynamic
-            // Type. Elle voyage désormais par `toolRowLeadingAccessory`, un
-            // slot rendu DANS le `HStack` de `toolRow` — deux enfants d'un
-            // `HStack` ne se superposent jamais, par construction.
-            // **Le chip de lieu est RETIRÉ de la rangée (#4034)** : le nom du
-            // lieu, son réglage et sa croix vivent désormais dans l'entête du
-            // composant Position, en bas. Deux moitiés d'une même information à
-            // deux endroits de l'écran, c'est ce que ce lot referme.
+            // **La tuile de lieu** ne voyage pas en `.overlay(alignment: .bottomLeading)`
+            // sur TOUTE la surface : c'est le point où `toolRow` peint sa première icône
+            // (elle aussi calée au bord de tête). Un overlay et le premier enfant d'un
+            // `HStack` occupent le MÊME z-niveau : rien n'empêcherait le chevauchement, à
+            // aucune taille d'écran ni palier de Dynamic Type. Elle voyage par
+            // `toolRowLeadingAccessory`, un slot rendu DANS le `HStack` de `toolRow` — deux
+            // enfants d'un `HStack` ne se superposent jamais, par construction.
+            // **Le chip de lieu n'est pas dans la rangée** : le nom du lieu, son réglage
+            // et sa croix vivent dans l'entête du composant Position, en bas. Deux moitiés
+            // d'une même information à deux endroits de l'écran, c'est ce que cette règle
+            // évite.
             //
-            // Le SLOT reste, et ce n'est pas de la dette : il est le jumeau
-            // symétrique de `toolRowTrailingAccessory` (la capsule de langue,
-            // vivante), et c'est LUI qui tient l'invariant anti-chevauchement
-            // de #3903 — tout futur chip de tête devra passer par là plutôt que
+            // Le SLOT reste, et ce n'est pas de la dette : il est le jumeau symétrique de
+            // `toolRowTrailingAccessory`, et c'est LUI qui tient l'invariant
+            // anti-chevauchement — tout futur chip de tête doit passer par là plutôt que
             // par un `.overlay`.
             toolRowLeadingAccessory: nil,
-            // **La capsule de langue a QUITTÉ la rangée le 2026-09-04**
-            // (#5137, directive porteur : « Du coup enlever cela de la ligne
-            // canonique ! »).
+            // **La capsule de langue n'est pas dans la rangée canonique.** Posée en
+            // `.overlay(alignment: .bottomTrailing)` sur TOUTE la surface, elle
+            // recouvrirait la moitié de la bande de mentions ; un slot l'accueillerait
+            // faute d'un meilleur endroit — pas parce que sa place sémantique y serait. La
+            // rangée canonique porte ce qu'on ATTACHE à un texte ; la langue le QUALIFIE.
             //
-            // Elle y était arrivée par la revue Opus du 2026-08-27, pour une
-            // raison de DISPOSITION : posée en `.overlay(alignment:
-            // .bottomTrailing)` sur TOUTE la surface, elle recouvrait la moitié
-            // de la bande de mentions (#3904). Le correctif était juste, et le
-            // slot l'a accueillie faute d'un meilleur endroit — pas parce que
-            // sa place sémantique y était. La rangée canonique porte ce qu'on
-            // ATTACHE à un texte ; la langue le QUALIFIE.
-            //
-            // > Une place choisie pour éviter un défaut n'est pas la place
-            // > JUSTE — et rien ne rougit quand on la garde.
+            // > Une place choisie pour éviter un défaut n'est pas la place JUSTE — et rien
+            // > ne rougit quand on la garde.
             //
             // Le slot reste, vide, avec son jumeau de tête : c'est LUI qui tient
             // l'invariant anti-chevauchement pour tout futur accessoire.
@@ -159,8 +145,8 @@ extension MeeshyComposerHost {
         )
     }
 
-    /// La capture caméra du document (T2.3) : le viseur du composeur, servi
-    /// SEUL en plein écran (#9125) — un statut n'a pas de scène où l'armer.
+    /// La capture caméra du document : le viseur du composeur, servi
+    /// SEUL en plein écran — un statut n'a pas de scène où l'armer.
     /// C'est le même viseur que la page blanche emprunte par environnement.
     var documentCameraSheet: some View {
         ComposerViewfinder(initialMode: pendingCameraMode) { result in
@@ -180,7 +166,7 @@ extension MeeshyComposerHost {
         )
     }
 
-    /// **B1 (#3924) — le média du document, traduit pour la scène.** Ne porte
+    /// **Le média du document, traduit pour la scène.** Ne porte
     /// que l'IMAGE et la VIDÉO : un son ou un document joint n'a pas de place de
     /// fond sur un canvas. `applyContentMedia` est idempotent (clé = `sourceURL`),
     /// donc câbler cette liste à chaque bascule ne duplique rien. Le média VISUEL
@@ -190,18 +176,14 @@ extension MeeshyComposerHost {
     /// **Le classement image/vidéo passe par `ComposerIngestRouter.route(mime:)`**,
     /// le SEUL classeur MIME du dépôt (six sites de production) — jamais un
     /// `hasPrefix` recopié, qui divergerait de la casse et des repli qu'il gère.
-    /// **Ce que la rangée haute montre — les FONDS, et rien d'autre** (#4724).
+    /// **Ce que la rangée haute montre — les FONDS, et rien d'autre.**
     ///
-    /// > Directive porteur 2026-09-01 : « le comportement actuel qui fait que
-    /// > lorsqu'on ajoute n'importe quel média ça vient [dans] la trail des
-    /// > slides doit être supprimé ! »
-    ///
-    /// Les deux barres hautes recevaient `documentLocalMedia` — la liste
-    /// ENTIÈRE. Une tuile paraissait donc pour tout ce qui entre : une image
-    /// posée SUR la scène, un vocal qui a déjà sa carte sous le texte, un PDF
-    /// qui n'est aucune page. Le carrousel grossissait sans qu'on ait ajouté de
-    /// page, et taper la tuile ne menait nulle part — l'hôte ne sait naviguer
-    /// que vers une slide, et ces médias n'en fondaient aucune.
+    /// Les deux barres hautes ne reçoivent pas `documentLocalMedia`, la liste
+    /// ENTIÈRE : une tuile paraîtrait pour tout ce qui entre — une image posée SUR
+    /// la scène, un vocal qui a déjà sa carte sous le texte, un PDF qui n'est
+    /// aucune page. Le carrousel grossirait sans qu'on ait ajouté de page, et
+    /// taper la tuile ne mènerait nulle part — l'hôte ne sait naviguer que vers une
+    /// slide, et ces médias n'en fondent aucune.
     ///
     /// La règle lit l'index des FONDATIONS, jamais une seconde vérité :
     /// `slideIdByMediaURL` dit déjà « ce média a fondé cette slide », ce qui est
@@ -209,12 +191,11 @@ extension MeeshyComposerHost {
     /// **Le rail des scènes, monté UNE fois pour les deux surfaces.**
     ///
     /// Il montre une mini-preview par SCÈNE — y compris celle qui n'a aucun
-    /// média, née d'un fond coloré. C'est le défaut que le porteur a signalé le
-    /// 2026-09-06 : la rangée comptait les médias fondateurs, donc créer une
-    /// scène ne produisait aucun retour tant qu'on ne lui avait pas donné de
-    /// photo.
+    /// média, née d'un fond coloré : une rangée qui compterait les médias
+    /// fondateurs ne produirait aucun retour à la création d'une scène, tant
+    /// qu'on ne lui a pas donné de photo.
     ///
-    /// Chaque tuile EST la vignette de sa scène (#5009 + #5037) ; le rail se
+    /// Chaque tuile EST la vignette de sa scène ; le rail se
     /// monte dès qu'une scène existe et est montée (`showsRail`) — une scène
     /// neuve y paraît donc tout de suite, noire parce qu'elle est vide.
     var slideRailSlot: AnyView? {
@@ -232,7 +213,7 @@ extension MeeshyComposerHost {
     }
 
     /// **L'outil Texte du document : la scène, le texte posé, le clavier — un
-    /// seul geste** (#9137). Le fond suit le chemin de la palette, la saisie
+    /// seul geste**. Le fond suit le chemin de la palette, la saisie
     /// celui de la porte Texte de la scène (`handleRailDoor(.text)`).
     func openTextScene() {
         guard let fond = ComposerTextSceneDoor.background(
@@ -273,7 +254,7 @@ extension MeeshyComposerHost {
     var documentContentMedia: [ComposerContentMedia] {
         documentLocalMedia.compactMap { media in
             switch ComposerIngestRouter.route(mime: media.mimeType) {
-            // **Le mime DÉCLARÉ voyage avec le média (#4038)** — jamais
+            // **Le mime DÉCLARÉ voyage avec le média** — jamais
             // re-dérivé du nom du fichier. La pose COPIE la source sous
             // `{objectId}.{ext}`, et c'est ce nom que l'aval relit pour
             // étiqueter le téléversement : sans le mime, une URL sans extension
@@ -285,7 +266,7 @@ extension MeeshyComposerHost {
                 return ComposerContentMedia(
                     sourceURL: media.url, kind: .video,
                     durationMs: media.durationMs, mimeType: media.mimeType)
-            // **Le son rejoint la scène au #4052.** Il ne devient PAS une slide
+            // **Le son rejoint la scène.** Il ne devient PAS une slide
             // (voir `syncPostMediaIntoSlides`) : le modèle § 4 lui donne un
             // TROISIÈME emplacement, la bande-son de la scène — pas une page du
             // carrousel.
@@ -301,7 +282,7 @@ extension MeeshyComposerHost {
         }
     }
 
-    /// **B2 (#3925), devenue la COUCHE D'ÉCRITURE au #4124.**
+    /// **La COUCHE D'ÉCRITURE.**
     ///
     /// Ce que l'auteur écrit ici part comme `slide.content` (via
     /// `applyContentText`, le même canal que B1) et le reader l'affiche
@@ -309,19 +290,17 @@ extension MeeshyComposerHost {
     /// existants. C'est la surface d'ÉDITION, côté scène, du contenu que B1
     /// préserve entre les modes ; jamais un second champ.
     ///
-    /// ## Trois formes en trois lots, et la troisième dit pourquoi
+    /// ## Une couche, pas une barre
     ///
-    /// Elle fut une **barre repliable à chevron** (#3925) : trois éléments de
-    /// chrome pour dire ce que le lecteur verrait, et qui ne le montraient pas.
-    /// Puis le **calque de lecture** (#4065), qui le montrait — mais depuis le
-    /// bas de l'écran, en permanence. La scène étant désormais CENTRÉE et
-    /// marginée (#4124), cette place permanente est précisément celle qu'il faut
-    /// lui rendre.
+    /// Une **barre repliable à chevron** serait trois éléments de chrome pour dire
+    /// ce que le lecteur verrait, et qui ne le montreraient pas. Un **calque de
+    /// lecture** le montrerait — mais depuis le bas de l'écran, en permanence,
+    /// alors que la scène est CENTRÉE et marginée : cette place permanente est
+    /// précisément celle qu'il faut lui rendre.
     ///
-    /// Elle devient donc une **couche**, ouverte par l'icône de la rangée haute.
-    /// Le calque de lecture n'est pas abandonné : il est ce que la couche
-    /// contient — même composant, mêmes mentions, même rendu par le renderer du
-    /// lecteur.
+    /// Elle est donc une **couche**, ouverte par l'icône de la rangée haute. Le
+    /// calque de lecture est ce que la couche contient — même composant, mêmes
+    /// mentions, même rendu par le renderer du lecteur.
     ///
     /// ## Le flou vient du MATÉRIAU, jamais d'un `.blur()`
     ///
@@ -333,7 +312,7 @@ extension MeeshyComposerHost {
     /// FLOTTANT — il ne prélève aucune hauteur —, donc cette réserve est ce qui
     /// le garde net. Même valeur que celle dont le canvas cardé se décale, pour
     /// que les deux bords tombent à la même ligne.
-    /// 44 pt de cible + 32 pt d'air. Mesuré à l'écran : à 52 pt la rangée était
+    /// 44 pt de cible + 32 pt d'air. À 52 pt la rangée serait
     /// coupée en deux par le bord du matériau — la réserve doit couvrir la
     /// CIBLE tactile entière, pas la seule pastille visible (36 pt).
 }

@@ -17,7 +17,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     @Published public var isAuthenticated = false
 
-    /// **La session a-t-elle été REGARDÉE ?** (#5968)
+    /// **La session a-t-elle été REGARDÉE ?**
     ///
     /// `isAuthenticated` naît `false` et `checkExistingSession()` est async :
     /// entre le lancement et sa conclusion, `false` ne veut pas dire « pas de
@@ -25,9 +25,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// rejouant sa valeur courante à tout nouvel abonné, un consommateur qui
     /// s'abonne tôt reçoit ce `false`-là et le prend pour un verdict.
     ///
-    /// Ce que ça a coûté : `DependencyContainer` s'abonne à la CONSTRUCTION de
-    /// l'`App` et purgeait la base locale — 25 messages et 7 lignes d'outbox
-    /// mesurés — à chaque démarrage à froid, session parfaitement valide.
+    /// Sans ce fait, `DependencyContainer` — qui s'abonne à la CONSTRUCTION de
+    /// l'`App` — purgerait la base locale à chaque démarrage à froid, session
+    /// parfaitement valide.
     ///
     /// Passe à `true` UNE fois, à la fin de `checkExistingSession()`, quelle
     /// que soit l'issue : c'est un fait sur la LECTURE, pas sur son résultat.
@@ -36,7 +36,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     ///
     /// Sans elle, l'app n'a que `isAuthenticated`, qui vaut `true` de la même
     /// façon après une connexion et après une inscription. Deux moments qui
-    /// n'autorisent pourtant pas la même chose : #5218 diffère la demande de
+    /// n'autorisent pourtant pas la même chose : l'inscription diffère la demande de
     /// permission de notification quand le compte VIENT D'ÊTRE CRÉÉ, pour ne
     /// pas poser une alerte système devant quelqu'un qui n'a encore rien
     /// envoyé.
@@ -48,17 +48,17 @@ public final class AuthManager: ObservableObject, AuthManaging {
     @Published public var twoFactorToken: String?
     /// All accounts that have saved credentials on this device, sorted by most recently active.
     @Published public var savedAccounts: [SavedAccount] = []
-    /// #8286 — une bascule entre deux comptes gardés est en cours : la session
+    /// Une bascule entre deux comptes gardés est en cours : la session
     /// sortante est quittée, l'entrante pas encore reprise. La racine y montre
     /// un écran neutre plutôt que la connexion.
     @Published public internal(set) var isSwitchingAccount = false
-    /// #10482 — le verrou de bascule est tenu par le retrait du compte ACTIF.
+    /// Le verrou de bascule est tenu par le retrait du compte ACTIF.
     var isRetiringActiveAccount = false
-    /// #9612 — la fermeture que le serveur vient de prononcer, à EXPLIQUER
+    /// La fermeture que le serveur vient de prononcer, à EXPLIQUER
     /// avant la reconnexion (« fermée par l'équipe Meeshy », « depuis un autre
     /// appareil »…). `nil` dès que l'utilisateur l'a lue.
     @Published public private(set) var sessionRevocationNotice: SessionRevocationNotice?
-    /// #8286 — le choix « Rester connecté sur cet appareil » d'une connexion
+    /// Le choix « Rester connecté sur cet appareil » d'une connexion
     /// en cours, consommé par la session qu'elle ouvre (second facteur compris).
     var pendingKeepSignedIn: Bool?
 
@@ -104,25 +104,25 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
     var tokenRefreshTask: Task<String, Error>?
-    /// #10904 — sa session, et les jetons remplacés de la session ouverte (`+RequestOwnership`).
+    /// Sa session, et les jetons remplacés de la session ouverte (`+RequestOwnership`).
     var tokenRefreshOwner: SessionOwner?
     var retiredSessionTokens: (owner: SessionOwner, tokens: [String])?
 
-    /// #10463 — la génération de la session ouverte. `leaveActiveSession` la
+    /// La génération de la session ouverte. `leaveActiveSession` la
     /// change EN ENTRANT : un rafraîchissement lancé sous une autre génération
     /// ne pose rien, même si le compte qu'il rafraîchit est encore actif
     /// pendant les attentes de la sortie.
     var sessionGeneration: UInt64 = 0
-    /// #10463 — les sorties de session EN COURS. Un compteur, pas un drapeau :
+    /// Les sorties de session EN COURS. Un compteur, pas un drapeau :
     /// deux sorties qui se chevauchent (déconnexion pendant une bascule) ne se
     /// lèvent pas l'une l'autre en finissant.
     var activeSessionExits = 0
     /// Une sortie est en cours : aucun rafraîchissement ne commence, et aucun
-    /// refus ne démonte le compte qu'elle retire déjà (#10463).
+    /// refus ne démonte le compte qu'elle retire déjà.
     var isLeavingActiveSession: Bool { activeSessionExits > 0 }
     #if DEBUG
     /// Les fermetures de sessions prouvées refusées, lancées sans être
-    /// attendues (#10463) : retenues pour que les témoins les attendent.
+    /// attendues : retenues pour que les témoins les attendent.
     var refusedSessionClosuresForTesting: [Task<Void, Never>] = []
     #endif
 
@@ -163,12 +163,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Le jeton de SESSION du compte actif, ou `nil`.
     ///
-    /// Il voyage déjà en en-tête `X-Session-Token` sur les appels REST ; il
-    /// manquait au handshake Socket.IO, si bien qu'un socket inscrit
-    /// s'authentifiait au JWT SEUL et que le serveur n'avait aucun moyen de
-    /// dire quel socket appartient à quelle session. Révoquer une session
-    /// passait la ligne à `isValid: false` et l'appareil continuait de tout
-    /// recevoir indéfiniment (#4213).
+    /// Il voyage en en-tête `X-Session-Token` sur les appels REST, et dans le
+    /// handshake Socket.IO : sans lui, un socket inscrit s'authentifierait au
+    /// JWT SEUL et le serveur n'aurait aucun moyen de dire quel socket
+    /// appartient à quelle session. Révoquer une session passe la ligne à
+    /// `isValid: false` ; sans ce jeton l'appareil continuerait de tout
+    /// recevoir indéfiniment.
     public var currentSessionToken: String? {
         guard let userId = activeUserId else { return nil }
         return keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
@@ -180,7 +180,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Le compte actif tel que le trousseau le garde, lisible AVANT la restauration de session. Une action
     /// de notification (réponse rapide, commentaire) peut s'exécuter app tuée, avant `checkExistingSession` :
-    /// `currentUser` est encore vide, et le texte tapé sur l'écran verrouillé partait à la poubelle.
+    /// `currentUser` est encore vide, et le texte tapé sur l'écran verrouillé partirait à la poubelle.
     public var persistedActiveUserId: String? { activeUserId }
 
     var activeUserId: String? {
@@ -242,7 +242,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Login
 
-    /// #10463 — refusée pendant un changement de compte ; la session qu'elle
+    /// Refusée pendant un changement de compte ; la session qu'elle
     /// ne peut pas poser est refermée côté passerelle.
     public func completeLoginWith2FA(code: String) async {
         guard let twoFactorToken = twoFactorToken else {
@@ -300,7 +300,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// jumelle, pour qu'un écran branché sur l'un ou l'autre voie le même
     /// `AuthManager`.
     ///
-    /// #8055 — rend `.verificationRequired` quand le compte, créé SANS numéro,
+    /// Rend `.verificationRequired` quand le compte, créé SANS numéro,
     /// attend la preuve de son adresse : aucune session n'est appliquée, et
     /// l'écran présente la saisie du code (le mot de passe est déjà sur le
     /// compte). `.authenticated` quand la session est appliquée.
@@ -325,7 +325,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.register(request: request)
-            // #8055 — compte créé sans numéro : aucune session, rien d'une panne.
+            // Compte créé sans numéro : aucune session, rien d'une panne.
             if data.pendingEmailVerification(typedIdentifier: request.email) != nil {
                 isLoading = false
                 return
@@ -385,7 +385,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Déconnexion, en choisissant si le compte est OUBLIÉ.
     ///
-    /// `forgettingAccount: false` est la « Déconnexion » des réglages (#8286) :
+    /// `forgettingAccount: false` est la « Déconnexion » des réglages :
     /// la session finit — serveur, jeton, jeton de session, profil et caches
     /// par compte — mais le compte RESTE listé. Y revenir redemande le mot de
     /// passe (ou un lien magique) : une `SavedAccount` ne porte que l'identité.
@@ -397,7 +397,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// `@EnvironmentObject`, et l'ajouter au protocole casserait les mocks de
     /// tous ses autres conformants sans servir personne.
     ///
-    /// #10463 — pendant un changement de compte, la session sortante est déjà
+    /// Pendant un changement de compte, la session sortante est déjà
     /// démontée et l'entrante pas encore posée : la déconnexion attend qu'il
     /// rende la main, puis ferme ce qui est ouvert.
     public func logout(forgettingAccount: Bool) async {
@@ -431,7 +431,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
-        // #8674 — retiré de l'appareil : son cache part, qu'il soit vivant ou
+        // Retiré de l'appareil : son cache part, qu'il soit vivant ou
         // mis de côté.
         guard activeUserId == userId else {
             if let key = accountKey(for: userId) { CacheAccountBinder.shared.forget(key) }
@@ -454,7 +454,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // état neuf doit être porté par TOUTES les portes du type. Le `defer`
         // les couvre par construction — on ne peut pas en oublier une.
         defer { hasResolvedStoredSession = true }
-        // #10463 — un changement de compte en cours tient la session : la
+        // Un changement de compte en cours tient la session : la
         // reprise ci-dessous effacerait l'état qu'il est en train de poser.
         guard !isSwitchingAccount else { return }
         loadSavedAccounts()
@@ -480,7 +480,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// re-authentication, any other error is transient and leaves the
     /// session untouched.
     ///
-    /// #10463 — la réponse ne vaut que pour la session qui l'a demandée : une
+    /// La réponse ne vaut que pour la session qui l'a demandée : une
     /// sortie commencée, ou une autre session posée entre-temps, l'écarte.
     public func refreshCurrentUserProfile() async {
         guard isAuthenticated, let userId = activeUserId else { return }
@@ -518,7 +518,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // D1 — guard against concurrent refreshes by invoking refreshSession(force: true)
         // asynchronously. Since refreshSession uses tokenRefreshTask to serialize,
         // multiple concurrent calls to handleUnauthorized() will safely share the same refresh task.
-        // #10904 — pour la session de CE 401 : si un autre compte (ou une autre
+        // Pour la session de CE 401 : si un autre compte (ou une autre
         // session) s'est ouvert avant que la tâche ne s'exécute, rien ne part.
         let owner = activeUserId.map { SessionOwner(userId: $0, generation: sessionGeneration) }
         let backgroundRefresh = Task { [weak self] in
@@ -555,7 +555,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     ///
     /// Sans session active, rien à révoquer : on sort.
     ///
-    /// Le motif (#9612) est gardé pour l'avis que la racine montre avant la
+    /// Le motif est gardé pour l'avis que la racine montre avant la
     /// reconnexion ; il ne change rien au chemin de fermeture.
     public func handleSessionRevoked(reason: SessionRevocationReason = .unknown) {
         guard let userId = activeUserId, !AccountDeletedSignal.isAwaitingRetirement(userId) else { return }
@@ -584,14 +584,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentlyAuthenticated && currentActiveUserId == newUserId
     }
 
-    /// #10446 — la loi de `applySession` : une session ouverte n'accepte que
+    /// La loi de `applySession` : une session ouverte n'accepte que
     /// son propre utilisateur (rotation). Un compte actif INCONNU (`nil`) sous
     /// une session ouverte n'est pas une permission : il refuse aussi.
     ///
-    /// #10450 — la loi n'a AUCUNE dérogation. Changer de compte, c'est d'abord
+    /// La loi n'a AUCUNE dérogation. Changer de compte, c'est d'abord
     /// DÉMONTER la session ouverte ; ce qui la pose ensuite passe ici comme une
-    /// première connexion. Un drapeau « changement de compte » laissait passer
-    /// l'autre utilisateur précisément quand le démontage n'avait pas eu lieu.
+    /// première connexion. Un drapeau « changement de compte » laisserait passer
+    /// l'autre utilisateur précisément quand le démontage n'a pas eu lieu.
     nonisolated static func refusesSessionReplacement(
         currentlyAuthenticated: Bool,
         currentActiveUserId: String?,
@@ -601,7 +601,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         return currentActiveUserId != newUserId
     }
 
-    /// #10450 — un rafraîchissement ne s'applique qu'au compte qui l'a
+    /// Un rafraîchissement ne s'applique qu'au compte qui l'a
     /// demandé, s'il est TOUJOURS le compte actif.
     nonisolated static func appliesRefreshedSession(refreshedUserId: String, currentActiveUserId: String?) -> Bool {
         currentActiveUserId == refreshedUserId
@@ -611,7 +611,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// rotation, plus bas) est bien une session REPRISE, et les suites qui
     /// posent une session à la main n'ont pas d'origine à déclarer.
     ///
-    /// #10446 — refuse d'installer un AUTRE utilisateur par-dessus une session
+    /// Refuse d'installer un AUTRE utilisateur par-dessus une session
     /// ouverte : poser une session sans démonter la précédente laisserait ses
     /// sockets, ses files et ses caches servir le compte entrant. Passer à un
     /// autre compte quitte d'abord la session sortante (`switchToProvenAccount`,
@@ -631,7 +631,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
             Logger.auth.error("Refused to install another user's session over the open session")
             throw SessionReplacementRefused(activeUserId: activeUserId, incomingUserId: userId)
         }
-        // #10483 — un compte compte sous son identité : la clé visiteur s'efface.
+        // Un compte compte sous son identité : la clé visiteur s'efface.
         VisitorReaderKey(keychain: keychain).purge()
         // Capture BEFORE we mutate state. If we were already authenticated
         // when applySession runs, this is a token rotation (refresh) — the
@@ -673,7 +673,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         activeUserId = userId
         APIClient.shared.authToken = token
-        // Le jeton de session suit le JWT (#4213) : le transport le lit depuis
+        // Le jeton de session suit le JWT : le transport le lit depuis
         // un contexte non isolé, et sans lui aucune révocation ne peut viser
         // ce socket-ci plutôt qu'un autre.
         APIClient.shared.registeredSessionToken = currentSessionToken
@@ -692,7 +692,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // deux dans la même passe, et la lire après ferait décider le bascule
         // sur l'origine de la session PRÉCÉDENTE.
         sessionOrigin = origin
-        // #8674 — le cache devient celui de ce compte (rendu s'il en avait un
+        // Le cache devient celui de ce compte (rendu s'il en avait un
         // de côté). Sans effet sur une rotation de jeton.
         if !isTokenRotation { CacheAccountBinder.shared.bind(accountKey(for: userId)) }
         isAuthenticated = true
@@ -767,7 +767,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
             throw MeeshyError.auth(.sessionExpired)
         }
         let owner = SessionOwner(userId: userId, generation: sessionGeneration)
-        // #10904 — seule la MÊME session rejoint le rafraîchissement en vol.
+        // Seule la MÊME session rejoint le rafraîchissement en vol.
         // Celui d'une session quittée s'abandonnera de lui-même ; le rejoindre
         // ferait hériter son abandon au compte qui vient de s'ouvrir.
         if let task = tokenRefreshTask, tokenRefreshOwner == owner {
@@ -785,7 +785,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return token
         }
 
-        // #10463 — pendant la sortie, le compte quitté est encore actif : un
+        // Pendant la sortie, le compte quitté est encore actif : un
         // rafraîchissement lancé maintenant rouvrirait ses sockets.
         guard !isLeavingActiveSession else { throw CancellationError() }
         let generation = sessionGeneration
@@ -797,28 +797,28 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 guard let newToken = data.token, let newUser = data.user else {
                     throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
                 }
-                // #10450 — le compte rafraîchi a pu être QUITTÉ pendant l'appel
+                // Le compte rafraîchi a pu être QUITTÉ pendant l'appel
                 // (changement de compte, déconnexion) : sa session rafraîchie
                 // est abandonnée, jamais réinstallée. Pas une `MeeshyError` :
                 // les jetons d'un compte gardé au sélecteur restent intacts.
-                // #10463 — ni quand une sortie a COMMENCÉ pendant l'appel : le
+                // Ni quand une sortie a COMMENCÉ pendant l'appel : le
                 // compte y est encore actif tant qu'elle attend.
                 guard Self.appliesRefreshedSession(refreshedUserId: userId, currentActiveUserId: self.activeUserId),
                       self.sessionGeneration == generation else {
                     Logger.auth.info("Refreshed session abandoned: its account is no longer the active one")
                     throw CancellationError()
                 }
-                // #10904 — le jeton remplacé reste reconnu comme de CETTE
+                // Le jeton remplacé reste reconnu comme de CETTE
                 // session : son 401 tardif se rejouera sans rien rafraîchir.
                 self.retire(token, from: owner)
                 try self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken
             } catch let error as MeeshyError {
-                // #10463 — le refus d'une session qu'on a quittée ne ferme pas
+                // Le refus d'une session qu'on a quittée ne ferme pas
                 // celle qui l'a remplacée, et n'est pas rendu comme un refus :
                 // l'appelant (`APIClient`) le traduirait en session expirée.
                 guard self.sessionGeneration == generation else { throw CancellationError() }
-                // Un compte de moins de 13 ans (#9929) ne se rafraîchit plus :
+                // Un compte de moins de 13 ans ne se rafraîchit pas :
                 // ses jetons partent, sans quoi chaque requête rejouerait le refus.
                 if case .auth = error {
                     self.requireReauthentication(userId: userId, generation: generation)
@@ -834,7 +834,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         tokenRefreshTask = task
         tokenRefreshOwner = owner
 
-        // #10904 — ne libère que SA tâche : une autre session a pu en poser
+        // Ne libère que SA tâche : une autre session a pu en poser
         // une depuis, et l'effacer la ferait rafraîchir deux fois.
         defer {
             if tokenRefreshTask == task {
@@ -952,7 +952,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     }
 
     #if DEBUG
-    /// Lève le délai d'une minute de `refreshCurrentUserProfile` (#10463) : un
+    /// Lève le délai d'une minute de `refreshCurrentUserProfile` : un
     /// témoin qui le subirait passerait sans avoir rien demandé.
     func resetProfileRefreshThrottleForTesting() {
         lastProfileRefreshAt = nil

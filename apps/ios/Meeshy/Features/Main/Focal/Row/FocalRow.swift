@@ -7,16 +7,15 @@ import MeeshyUI
 /// contenu et citations sur la colonne du nom, méta discrète, AUCUNE bulle.
 ///
 /// **Densité uniforme** : `input.density` n'est PAS lu par ce fichier —
-/// « même rangée, densité uniforme, zéro perspective ». RETRAIT FOCAL iOS
-/// (2026-08-18) : le pass de perspective (`FocalScrollPass`) est supprimé ;
-/// cette rangée sert le mode Script à plat, sans AUCUN transform —
+/// « même rangée, densité uniforme, zéro perspective ». Aucun pass de
+/// perspective : cette rangée sert le mode Script à plat, sans AUCUN transform —
 /// jamais de `.visualEffect`/`.scaleEffect` conditionnel ici (garde source
 /// `FocalRowSourceGuardTests`).
 ///
 /// **Contrainte dure (§WS-4)** : aucun `@State` de langue — la sélection
 /// active/secondaire vient de `input` (`activeDisplayLangCode`/
 /// `secondaryLangCode`) et repart par `actions.onSetActiveDisplayLanguage`/
-/// `onSetSecondaryLanguage` (régression `b9a39c2c`).
+/// `onSetSecondaryLanguage`.
 ///
 /// **Contrainte dure** : tout contrôle interne est un `Button(.plain)` +
 /// `.contentShape(Rectangle())`, jamais `.onTapGesture` seul sur un contrôle
@@ -32,7 +31,7 @@ struct FocalRow: View {
     private var content: BubbleContent { input.content }
 
     /// Retrait CONSTANT du contenu propre ET des citations — la colonne du
-    /// nom (#7995) : l'avatar seul dans sa marge, une seule origine ensuite.
+    /// nom : l'avatar seul dans sa marge, une seule origine ensuite.
     ///
     /// Constant pour la même raison que `textSize` : le retrait fixe la
     /// largeur disponible, donc le retour à la ligne, donc la hauteur ; le
@@ -71,10 +70,10 @@ struct FocalRow: View {
                 standardBody
             }
         }
-        // #7467 — la destruction se VOIT, dans la rangée plate comme dans la
+        // La destruction se VOIT, dans la rangée plate comme dans la
         // bulle : même modificateur, même durée, même repli.
         .ephemeralBurn(isBurning: content.isBurning)
-        // Ce que les visionneuses ouvertes depuis cette rangée laissent sortir (#9573).
+        // Ce que les visionneuses ouvertes depuis cette rangée laissent sortir.
         .contentExitGate(content.exitGate)
         .padding(.top, input.isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0)
         .padding(.vertical, FocalMetrics.Row.paddingVertical)
@@ -82,11 +81,11 @@ struct FocalRow: View {
         // Une cellule qui porte encore une hauteur ESTIMÉE (auto-dimension-
         // nement différé pendant le mouvement) propose plus de place que le
         // contenu n'en prend : le contenu reste collé en HAUT, ses espaces
-        // internes intacts — jamais centré ni étiré dans le vide (2026-08-21).
+        // internes intacts — jamais centré ni étiré dans le vide.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // Envoi optimiste (matrice §5) : 0,7 d'opacité tant que le gateway
-        // n'a pas accusé. Depuis le RETRAIT du pass (2026-08-18), la rangée
-        // possède son opacité — `cell.alpha` n'a plus d'autre écrivain.
+        // n'a pas accusé. La rangée possède son opacité — `cell.alpha` n'a
+        // pas d'autre écrivain.
         .opacity(input.isOptimistic ? 0.7 : 1)
         .environment(\.layoutDirection, input.isRightToLeft ? .rightToLeft : .leftToRight)
         // « 1 rangée = 1 élément VoiceOver » (critère §7) : combine tous les
@@ -102,7 +101,7 @@ struct FocalRow: View {
         }
     }
 
-    /// #8147 — la rangée fusionnée absorbe le libellé « Lire la suite » :
+    /// La rangée fusionnée absorbe le libellé « Lire la suite » :
     /// l'état se DIT par la valeur, et le geste reste une action nommée.
     private var isLongText: Bool { LongMessageExcerpt.isLong(effectiveText) }
 
@@ -119,7 +118,7 @@ struct FocalRow: View {
     }
 
     /// **LOI DES ZONES — la moitié VoiceOver.** Site unique des deux rangées :
-    /// `QuotedZoneAccessibility` (#8320). La citation d'un message VOCAL est
+    /// `QuotedZoneAccessibility`. La citation d'un message VOCAL est
     /// hébergée par le widget audio et n'est pas rendue ici — mais elle vit
     /// sous CETTE rangée, dont le libellé combiné l'absorbe : les actions
     /// valent donc pour elle aussi, `content.reply` étant renseigné dans les
@@ -148,39 +147,35 @@ struct FocalRow: View {
 
     // MARK: - Rangée standard
 
-    /// **DEUX COLONNES** (#5135, directive porteur 2026-09-04) : la bulle à
-    /// gauche, la date et l'accusé au BAS de sa droite.
+    /// **DEUX COLONNES** : la bulle à gauche, la date et l'accusé au BAS de sa
+    /// droite.
     ///
-    /// Ils vivaient sur la ligne basse, qui se montait alors TOUJOURS — c'est
-    /// elle qui portait la méta — et ne montrait RIEN au repos,
-    /// `FocalRevealedDetail` masquant l'heure et les coches par OPACITÉ. Une
-    /// hauteur pleine et son espacement, réservés sous chaque message à de
+    /// La ligne basse ne porte pas la méta : `FocalRevealedDetail` masque
+    /// l'heure et les coches par OPACITÉ, donc une ligne dédiée réserverait,
+    /// sous chaque message, une hauteur pleine et son espacement à de
     /// l'invisible.
     ///
     /// `.bottom` est la forme exacte demandée : la date se pose au niveau de la
     /// DERNIÈRE ligne de la bulle, jamais de la première.
     ///
     /// **La carte de focus vit ICI, sur les deux colonnes** : elle est le fond
-    /// de la rangée ENTIÈRE, méta comprise. `.messageEffects`, lui, a quitté ce
-    /// niveau le 2026-09-23 — il épouse désormais `contentColumn`, comme le
-    /// chemin bulle épouse sa bulle. Le garder ici étirait le liseré
-    /// arc-en-ciel sur toute la largeur de l'écran : 355 pt de cadre pour
-    /// 174 pt de message, mesuré en recette.
+    /// de la rangée ENTIÈRE, méta comprise. `.messageEffects`, lui, épouse
+    /// `contentColumn`, comme le chemin bulle épouse sa bulle : le poser au
+    /// niveau de la rangée étirerait le liseré arc-en-ciel sur toute la
+    /// largeur de l'écran (355 pt de cadre pour 174 pt de message).
     @ViewBuilder
     private var standardBody: some View {
         HStack(alignment: .bottom, spacing: FocalMetrics.MetaColumn.spacing) {
-            // #8303 — la flamme-œil, dans la gouttière de l'avatar jusqu'à la première lettre.
+            // La flamme-œil, dans la gouttière de l'avatar jusqu'à la première lettre.
             contentColumn.afterReadWatermark(content.protection.isAfterRead, gutter: indent, tint: ComposerProtection.ephemeral.tint)
-                // #8506 (directive porteur 2026-09-28 : « place les contrôleurs
-                // et détails À L'INTÉRIEUR du cadre, en laissant de l'espace
-                // sur les bords ») : le cadre de l'élu épouse la colonne du
+                // Le cadre de l'élu épouse la colonne du
                 // MESSAGE, et tout ce qu'il porte y vit ENTIER, à
                 // `electedCardMargin` de ses quatre bords — l'identité en haut
                 // du bloc, la bande et l'heure sous le contenu. Des
                 // superpositions et un fond : aucune hauteur réservée, tout
                 // apparaît AVEC le cadre, au tick d'élection.
                 //
-                // #8537 — seul le CONTENU grossit (`focalElectedLoupe`) : le
+                // Seul le CONTENU grossit (`focalElectedLoupe`) : le
                 // cadre et la bande se posent sur sa mesure réelle, lue par
                 // préférence, et gardent leur échelle d'origine.
                 .backgroundPreferenceValue(FocalElectedContentKey.self) { elected in
@@ -209,22 +204,19 @@ struct FocalRow: View {
             .equatable()
             .opacity(input.isFocused ? 0 : 1)
         }
-        // #7953 — une SUITE magnifiée descend sous sa pastille, en rendu seul.
+        // Une SUITE magnifiée descend sous sa pastille, en rendu seul.
         .offset(y: focusLift)
-        // #8147 — le message long DÉPLIÉ (hors élection) garde le bloc de
+        // Le message long DÉPLIÉ (hors élection) garde le bloc de
         // verre de la rangée entière, à ses marges d'origine.
         .background {
             if input.isExpanded && !input.isFocused { focusChrome.focusCardBackground }
         }
-        // F-083ter (F15) : l'effet épouse le bloc CONTENU, pas la rangée.
-        // Il a vécu ici au nom d'un « même périmètre que la bulle » citant
-        // `ThemedMessageBubble.swift:317` — référence PÉRIMÉE, qui dit
-        // aujourd'hui l'inverse : le chemin bulle a déplacé l'effet sur la
-        // bulle elle-même parce qu'« il encadrait du vide ». Focal gardait
-        // l'ancien périmètre en le justifiant par le correctif qui le dément.
-        // Mesuré en recette le 2026-09-23 (Arc-en-ciel) : 355 pt de liseré
-        // pour 174 pt de message. La méta reste dehors — en Focal c'est une
-        // colonne détachée au bord opposé, et l'inclure était la cause.
+        // L'effet épouse le bloc CONTENU, pas la rangée : le chemin bulle pose
+        // l'effet sur la bulle elle-même parce qu'« il encadrait du vide », et
+        // Focal suit le même périmètre. Sur la rangée entière, le liseré
+        // arc-en-ciel s'étirerait sur 355 pt pour 174 pt de message. La méta
+        // reste dehors — en Focal c'est une colonne détachée au bord opposé, et
+        // l'inclure étirerait le cadre.
         
     }
 
@@ -236,22 +228,20 @@ struct FocalRow: View {
         FocalFocusChrome(input: input, actions: actions, focusLift: focusLift)
     }
 
-    /// La PREMIÈRE colonne — la bulle elle-même. Son contenu n'a pas changé
-    /// d'un espace avec #5135 : seule la méta l'a quittée, et la ligne basse
-    /// est devenue conditionnelle.
+    /// La PREMIÈRE colonne — la bulle elle-même. La méta vit dans l'autre
+    /// colonne, et la ligne basse est conditionnelle.
     @ViewBuilder
     private var contentColumn: some View {
         VStack(alignment: .leading, spacing: FocalMetrics.Row.paddingVertical) {
-            // F-083ter (F11) : « les badges éphémère/épinglé/transféré
-            // restent AU-DESSUS DE L'IDENTITÉ » — avant FocalIdentityHeader,
-            // pas après, et indépendants de isFirstInGroup (ce sont des
-            // propriétés du MESSAGE, pas du groupe).
+            // Les badges éphémère/épinglé/transféré restent AU-DESSUS DE L'IDENTITÉ —
+            // avant FocalIdentityHeader, pas après, et indépendants de isFirstInGroup
+            // (ce sont des propriétés du MESSAGE, pas du groupe).
             badgesSection
 
             // Le message EN FOCUS (Focal) porte toujours son identité — avatar,
             // présence, mood, jour et heure — même en continuation de groupe.
             // Tête de groupe : en focus, l'identité et la date passent SUR
-            // les lignes de la carte (chips, 2026-08-22) — l'en-tête garde sa
+            // les lignes de la carte (chips) — l'en-tête garde sa
             // place et s'efface, la hauteur de la rangée ne dépend jamais du
             // focus (instantané, zéro relayout).
             if input.isFirstInGroup {
@@ -289,8 +279,8 @@ struct FocalRow: View {
 
             // Matrice §5 « Éphémère / flou / vue unique » : le flou de
             // niveau MESSAGE s'applique au BLOC CONTENU (citation comprise),
-            // jamais à l'identité ni à la méta — corrigé 2026-08-18 (un
-            // message protégé s'affichait EN CLAIR en Focal). L'état de
+            // jamais à l'identité ni à la méta : un message protégé ne s'affiche
+            // jamais EN CLAIR en Focal. L'état de
             // révélation vit dans la feuille (`FocalProtectedContent`),
             // FocalRow reste sans @State (contrainte dure §WS-4).
             //
@@ -300,12 +290,10 @@ struct FocalRow: View {
             // le `@StateObject` ni le modificateur. `isBlurred` est stable
             // sur la vie du message, la branche ne bascule pas au recyclage.
             //
-            // #7452 — **le voile couvre aussi la VUE UNIQUE, pas seulement le
-            // flou.** Un texte à vue unique s'affichait EN CLAIR, sans même
-            // une mention : le masquage ne lisait que `isBlurred`, et
-            // « Voir une fois » n'existait que sur les médias. Un message
-            // qu'on ne peut lire qu'une fois doit être un CHOIX, donc voilé
-            // jusqu'au toucher qui le consomme.
+            // **Le voile couvre aussi la VUE UNIQUE, pas seulement le flou.** Un
+            // message qu'on ne peut lire qu'une fois doit être un CHOIX, donc voilé
+            // jusqu'au toucher qui le consomme (« Voir une fois » couvre le texte
+            // comme les médias).
             Group {
                 if let chip = content.viewOnceChipState {
                     ViewOnceChip(state: chip, isDark: input.isDark, hint: content.protectedTap().accessibilityHint) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
@@ -324,34 +312,28 @@ struct FocalRow: View {
                     contentSections.viewOnceRetouch(isActive: content.viewOnceRetouchIsActive) { actions.onConsumeViewOnce?(content.messageId) { _ in } }
                 }
             }
-            // #9574, #9617 — annoncé OU noir (Focal et Script).
+            // Annoncé OU noir (Focal et Script).
             .captureShield(content.captureVerdict.shieldsCapture(surfaceAnnounces: announcesCapture))
             .focalElectedLoupe(isFocused: input.isFocused, rowWidth: input.availableWidth)
 
             failedRetrySection
 
-            // **UNE seule ligne basse** (directive 2026-08-24) : drapeaux et
-            // réactions à gauche, date et coches TOUT À DROITE. Elles vivaient
-            // sur une ligne à elles — qui, au repos, ne montre RIEN (l'heure et
-            // les coches ne paraissent qu'au défilement) tout en gardant sa
-            // hauteur. C'était l'essentiel du blanc entre deux messages : une
-            // ligne réservée à une information invisible.
+            // **UNE seule ligne basse**, qui ne porte QUE les drapeaux et les
+            // réactions (la date et les coches vivent dans `FocalMetaColumn`) : elle
+            // est CONDITIONNELLE. Sans drapeau ni réaction (le cas nominal), aucune
+            // ligne n'est réservée — une ligne réservée à une information invisible
+            // serait l'essentiel du blanc entre deux messages.
             //
-            // C'est aussi la disposition qu'a déjà la bande du message
-            // magnifié (`focusStrip` … `focusStampChip`) : les deux modes
-            // disent maintenant la même chose au même endroit.
-            // La ligne basse ne porte plus QUE les drapeaux et les réactions —
-            // elle redevient donc CONDITIONNELLE. C'est très exactement le
-            // blanc que la directive vient chercher : sans drapeau ni réaction
-            // (le cas nominal), plus aucune ligne n'est réservée.
+            // C'est aussi la disposition de la bande du message magnifié
+            // (`focusStrip` … `focusStampChip`) : les deux modes disent la même
+            // chose au même endroit.
             //
-            // Sa garde d'origine (`translation != nil || showsReactions`) était
-            // juste ; c'est en lui confiant la méta qu'on l'avait rendue
-            // inconditionnelle. La méta partie en colonne, la condition revient.
-            // #8506 — plus de réserve sous le texte d'un élu sans ligne basse
-            // (#5718) : la bande ne chevauche plus la dernière ligne, elle se
-            // pose ENTIÈRE sous le contenu. La rangée ne change donc plus du
-            // tout de hauteur à l'élection.
+            // La garde (`translation != nil || showsReactions`) est celle d'origine ;
+            // lui confier la méta la rendrait inconditionnelle.
+            //
+            // Pas de réserve sous le texte d'un élu sans ligne basse : la bande ne
+            // chevauche pas la dernière ligne, elle se pose ENTIÈRE sous le contenu.
+            // La rangée ne change donc pas du tout de hauteur à l'élection.
             if mountsBottomLine {
                 flagAndReactionsRow
                     // En focus, la bande du cadre remplace visuellement cette
@@ -360,9 +342,9 @@ struct FocalRow: View {
             }
         }
         // L'effet se pose ICI : AVANT l'étirement ci-dessous, donc sur la
-        // largeur NATURELLE du contenu. Posé après, il épousait la laisse et
-        // non le message — 355 pt de liseré arc-en-ciel pour 174 pt de texte,
-        // mesuré en recette le 2026-09-23. `.frame(maxWidth:)` ÉTEND, il ne
+        // largeur NATURELLE du contenu. Posé après, il épouserait la laisse et
+        // non le message — 355 pt de liseré arc-en-ciel pour 174 pt de texte.
+        // `.frame(maxWidth:)` ÉTEND, il ne
         // borne pas : tout modificateur visuel monté après lui hérite de
         // l'écran, pas du contenu.
         .messageEffects(RainbowLetters.rowEffects(input.effects))
@@ -373,10 +355,10 @@ struct FocalRow: View {
     }
 
     /// **La ligne basse se monte-t-elle ?** La règle est éprouvée dans
-    /// `FocalMetaColumn.mountsBottomLine` — jamais réécrite ici. Elle portait
-    /// deux gardes que ce `if` tenait inline, donc hors d'atteinte de toute
-    /// assertion : pas de drapeau en clair sur un message voilé (2026-08-18),
-    /// un seul jeu de drapeaux par groupe (#3919).
+    /// `FocalMetaColumn.mountsBottomLine` — jamais réécrite ici. Elle porte
+    /// deux gardes, hors d'atteinte de toute assertion si elles étaient
+    /// inline : pas de drapeau en clair sur un message voilé, un seul jeu de
+    /// drapeaux par groupe.
     private var mountsBottomLine: Bool {
         FocalMetaColumn.mountsBottomLine(
             hasTranslation: content.translation != nil,
@@ -386,27 +368,19 @@ struct FocalRow: View {
         )
     }
 
-    // MARK: - F-083ter (F11) — badges éphémère/épinglé/transféré
+    // MARK: - Badges éphémère/épinglé/transféré
 
     /// `content.isPinned`/`content.isForwarded`/`content.protection` LUS et
-    /// RENDUS (jusqu'ici seul le libellé VoiceOver les portait, F-080) —
-    /// réutilise `BubblePinnedIndicator`/`BubbleForwardedIndicator` (§1.3,
-    /// `internal`, vérifiés non `fileprivate`) TELS QUELS, et
-    /// `FocalEphemeralBadge` (ce chantier) pour un countdown vivant sans
-    /// faire porter le `@StateObject` par `FocalRow`.
+    /// RENDUS — réutilise `BubblePinnedIndicator`/`BubbleForwardedIndicator`
+    /// (§1.3, `internal`, vérifiés non `fileprivate`) TELS QUELS ; le chrome de
+    /// protection est partagé avec la bulle (voir plus bas).
     ///
-    /// **L'attribution est la MÊME qu'en bulle depuis le #5058.** Elle restait
-    /// `.anonymous` ici — « Transféré » tout court — parce que `BubbleContent`
-    /// ne portait qu'un booléen et que la rangée plate n'avait pas le `Message`
-    /// d'où la bulle tirait sa `ForwardReference`. L'écart était SIGNALÉ, et le
-    /// repli était le bon : jamais celui qui nommerait quelqu'un.
-    ///
-    /// Ce qui manquait était en AMONT. `BubbleContent.forwardAttribution` porte
-    /// désormais la valeur tranchée par `ForwardBadgePolicy` au site unique
+    /// **L'attribution est la MÊME qu'en bulle.** `BubbleContent.forwardAttribution`
+    /// porte la valeur tranchée par `ForwardBadgePolicy` au site unique
     /// qu'est `BubbleContentBuilder` — pas une seconde résolution inventée ici,
-    /// ce que le repli refusait à juste titre, mais la PREMIÈRE, remontée là où
-    /// les trois peaux la partagent. Une règle de confidentialité résolue à
-    /// deux endroits est une règle qui divergera.
+    /// mais la PREMIÈRE, remontée là où les trois peaux la partagent. Une
+    /// règle de confidentialité résolue à deux endroits est une règle qui
+    /// divergera.
     @ViewBuilder
     private var badgesSection: some View {
         if content.isPinned {
@@ -415,14 +389,13 @@ struct FocalRow: View {
         if let attribution = content.forwardAttribution {
             BubbleForwardedIndicator(isMe: content.isMe, isDark: input.isDark, attribution: attribution)
         }
-        // #7452 — LE chrome de protection, partagé avec la bulle, la rivière
-        // et le résumé. `FocalEphemeralBadge` était une seconde implémentation
-        // du même badge, avec son propre minuteur de cellule.
+        // LE chrome de protection, partagé avec la bulle, la rivière
+        // et le résumé.
         MessageProtectionChrome(descriptor: content.chromeProtection, isDark: input.isDark)
             .equatable()
     }
 
-    // MARK: - F-083ter (F05) — réactions live en pilule plate méta
+    // MARK: - Réactions live en pilule plate méta
 
     /// Réutilise `BubbleReactionsOverlay` (§1.3, `internal`, vérifié non
     /// `fileprivate`) TEL QUEL — pilule `11`pt, fond `backgroundSecondary`,
@@ -430,17 +403,12 @@ struct FocalRow: View {
     /// inchangés : exactement F05. Le bouton `(+)` d'ajout rapide suit la
     /// MÊME règle que la bulle (`BubbleReactionsOverlay.isMounted`) : sur le
     /// dernier message reçu (`input.isLastReceivedMessage`, fourni par
-    /// l'hôte depuis 2026-08-21 — l'écart « jamais côté Focal » est comblé).
+    /// l'hôte).
     // (réactions : fusionnées dans `flagAndReactionsRow` — drapeau premier,
-    // même ligne, arbitrage user 2026-08-18)
-
-    // RETRAIT FOCAL iOS (2026-08-18) : la barre de contrôles de l'élue et
-    // sa RÉSERVE de hauteur permanente sont supprimées avec l'élection — la
-    // rangée Script gagne ~28 pt de densité et une mesure de moins.
-
+    // même ligne)
 
     /// La citation est rendue ICI sauf quand le lecteur audio l'héberge. Le
-    /// bloc média nu n'en loge aucune (#7928) : la règle de la bulle
+    /// bloc média nu n'en loge aucune : la règle de la bulle
     /// (`visualHostsReply`) n'a pas cours dans la rangée plate.
     private var showsQuotedReply: Bool { content.flatRowDrawsQuote }
 
@@ -460,12 +428,11 @@ struct FocalRow: View {
     /// pile parente : hauteur de rangée identique, wrapper monté ou pas.
     private var contentSections: some View {
         VStack(alignment: .leading, spacing: FocalMetrics.Row.paddingVertical) {
-            // **Vue `3h` (#5059) — une story citée est une SCÈNE ici aussi.**
+            // **Vue `3h` — une story citée est une SCÈNE ici aussi.**
             //
-            // La rangée plate rendait TOUTE citation par `FocalQuotedReplyView`,
-            // y compris celle d'une story : un carré de 38 pt sur une ligne
-            // « 📷 Story · il y a 3 h ». C'est le mot que la doctrine emploie —
-            // *aplatie* — et la bulle l'avait corrigé seule au #4098.
+            // `FocalQuotedReplyView` ne rend pas la citation d'une story : un carré
+            // de 38 pt sur une ligne « 📷 Story · il y a 3 h » serait ce que la
+            // doctrine appelle *aplatie*, et la bulle suit la même règle.
             //
             // La règle de détachement n'est pas réécrite : elle vit sur
             // `BubbleContent`, que cette rangée reçoit déjà. Un `else if` plutôt
@@ -490,8 +457,8 @@ struct FocalRow: View {
                 )
                 // Le rail de la citation est une forme (souple en hauteur) :
                 // dans une cellule qui porte encore une hauteur ESTIMÉE, la
-                // pile lui donnait tout l'espace en trop — citation étirée,
-                // rail d'un écran (capture 2026-08-21). La citation prend sa
+                // pile lui donnerait tout l'espace en trop — citation étirée,
+                // rail d'un écran. La citation prend sa
                 // hauteur idéale, rien de plus.
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -505,8 +472,8 @@ struct FocalRow: View {
     }
 
     /// La carte de conversation, la façade vidéo ou l'aperçu de lien du
-    /// premier lien — le MÊME `BubbleLinkEmbed` que la bulle (#8139) : Focal,
-    /// Script et Rivière le rendaient en texte seul. Même garde que le texte
+    /// premier lien — le MÊME `BubbleLinkEmbed` que la bulle, dans Focal,
+    /// Script et Rivière. Même garde que le texte
     /// (le widget audio qui héberge la légende n'a pas de carte en bulle non
     /// plus) ; un sticker ou un emoji seul ne porte aucun lien.
     @ViewBuilder
@@ -522,9 +489,8 @@ struct FocalRow: View {
     /// `BubbleFailedRetryBar` TELLE QUELLE (§1.3 — spinner, blink gaté
     /// Reduce Motion, a11y) ; seule sa POSE change : une bande compacte sous
     /// le contenu au retrait de colonne, à la place de l'onglet de bord de
-    /// bulle. Jusqu'au 2026-08-18, `onRetry` était câblé par l'hôte mais
-    /// AUCUNE vue Focal ne le consommait — un message échoué n'offrait aucun
-    /// moyen de le renvoyer.
+    /// bulle. `onRetry` est câblé par l'hôte et consommé ici : un message
+    /// échoué offre un moyen de le renvoyer.
     private var isFailedOutgoing: Bool {
         content.isMe && content.meta.deliveryStatus == .failed
     }
@@ -569,7 +535,7 @@ struct FocalRow: View {
                 mentionDisplayNames: input.mentionDisplayNames,
                 conversationName: input.conversationName,
                 // Le drapeau-toggle de la rangée pilote AUSSI la piste audio
-                // et ses segments karaoké (user 2026-08-18) — même bascule
+                // et ses segments karaoké — même bascule
                 // que le texte (`activeDisplayLangCode`), une seule loi.
                 activeAudioLanguage: input.activeDisplayLangCode,
                 voiceConsentMissing: input.voiceConsentMissing,
@@ -614,9 +580,8 @@ struct FocalRow: View {
             nonMediaCount: nonMediaAttachments.count,
             audioMode: audioMode
         ) {
-            // Lot 3.2 (2026-08-18) : cartes RÉELLES (LocationMessageView +
-            // BubbleAttachmentView, réutilisées telles quelles) à la place du
-            // repli texte inerte — un document redevient ouvrable en Focal.
+            // Cartes RÉELLES (LocationMessageView + BubbleAttachmentView, réutilisées
+            // telles quelles) : un document est ouvrable en Focal.
             FocalNonMediaBlock(
                 items: nonMediaAttachments,
                 isDark: input.isDark,
@@ -630,7 +595,7 @@ struct FocalRow: View {
     }
 
     /// Miroir de la bulle : emoji seul ⇒ grand emoji libre, citation ou non
-    /// (`flatRowRendersLargeEmoji`, #10628) ; sinon texte normal SI
+    /// (`flatRowRendersLargeEmoji`) ; sinon texte normal SI
     /// du contenu existe ET que l'audio ne l'héberge pas déjà en caption
     /// (`audioHostsCaption` ⇒ le texte vit DANS le widget audio, WS-3).
     @ViewBuilder
@@ -647,11 +612,10 @@ struct FocalRow: View {
     /// **Le sticker se DESSINE en Focal, Script et Rivière comme en Bulles.**
     ///
     /// Ces trois modes partagent cette rangée, qui « reproduit en une seule
-    /// décision » ce que `BubbleStandardLayout` fait — et la reproduction avait
-    /// omis le sticker : le mot n'apparaissait pas une fois dans tout
-    /// `Focal/Row/`. Un message-sticker s'y rendait par son texte de repli,
-    /// c'est-à-dire par l'emoji du gabarit quand il en avait un, et par rien
-    /// quand il n'en avait pas.
+    /// décision » ce que `BubbleStandardLayout` fait — sticker compris. Sans
+    /// ce cas, un message-sticker serait rendu par son texte de repli,
+    /// c'est-à-dire par l'emoji du gabarit quand il en a un, et par rien
+    /// quand il n'en a pas.
     ///
     /// Le dessin n'est pas recopié : `MessageStickerArtwork` est l'atome que la
     /// bulle monte aussi. Une règle qui divergerait — la priorité gabarit →
@@ -675,8 +639,8 @@ struct FocalRow: View {
     }
 
     /// L'emoji seul prend la taille de `content.text.emojiFontSize` (×4 / ×3 /
-    /// ×2, #9054), jamais recalculée ici — et à la taille EXACTE
-    /// (`MeeshyFont.emoji`) : `relative` la plafonnait à 34 pt.
+    /// ×2), jamais recalculée ici — et à la taille EXACTE
+    /// (`MeeshyFont.emoji`) : `relative` la plafonnerait à 34 pt.
     /// Rendu du texte ORIGINAL (`raw`), jamais traduit — même règle que
     /// `BubbleStandardLayout.emojiOnlyContent` (lu, jamais modifié).
     private var emojiBlock: some View {
@@ -693,7 +657,7 @@ struct FocalRow: View {
     /// externe à appliquer. Seul l'interligne additif (`1.42`, `.lineSpacing`
     /// est en points côté SwiftUI) et le retrait du contenu sont posés ICI.
     ///
-    /// **Signal multi-langue (arbitrage user 2026-08-18)** : ni icône
+    /// **Signal multi-langue** : ni icône
     /// translate, ni bande de drapeaux dans la rangée — le menu d'appui
     /// long demande/affiche les autres langues. Le SEUL indicateur est le
     /// drapeau de la langue D'ORIGINE, affiché UNIQUEMENT quand le message
@@ -702,9 +666,9 @@ struct FocalRow: View {
     /// `BubbleContentBuilder`.
     /// Texte effectif de la rangée — `text.raw` EST déjà le contenu résolu
     /// par `BubbleContentBuilder` (Prisme + bascule manuelle
-    /// `activeDisplayLangCode`), le même que la bulle. L'ancienne préférence
-    /// `preferredContent ?? raw` court-circuitait la bascule V.O. : le
-    /// drapeau-toggle changeait `activeLangCode` sans jamais changer le
+    /// `activeDisplayLangCode`), le même que la bulle. Une préférence
+    /// `preferredContent ?? raw` court-circuiterait la bascule V.O. : le
+    /// drapeau-toggle changerait `activeLangCode` sans jamais changer le
     /// texte de la rangée plate. Partagé par le rendu, l'extrait du message
     /// long et la clé du cross-fade.
     private var effectiveText: String {
@@ -713,14 +677,14 @@ struct FocalRow: View {
 
     private var textBlock: some View {
         HStack(alignment: .top, spacing: 4) {
-            // Le drapeau-toggle ne vit plus ICI : il est posé en BAS de la
-            // rangée, avant les réactions (`versionFlagSection`, arbitrage
-            // user 2026-08-18) — commun au texte et à l'audio traduit.
+            // Le drapeau-toggle ne vit pas ICI : il est posé en BAS de la
+            // rangée, avant les réactions (`versionFlagSection`) —
+            // commun au texte et à l'audio traduit.
             BubbleExpandableText(
                 content: effectiveText,
                 // La rangée plate n'a AUCUN fond teinté : `isMe` ferait passer
                 // le texte en blanc (règle de la bulle « sur ma bulle
-                // accent ») — illisible en mode clair (capture 2026-08-21).
+                // accent ») — illisible en mode clair.
                 isMe: false,
                 mentionDisplayNames: input.mentionDisplayNames,
                 highlightTerm: input.highlightSearchTerm,
@@ -731,9 +695,9 @@ struct FocalRow: View {
                 trackedLinks: content.text?.trackedLinks ?? [:], linksAreInert: content.text?.linksAreInert == true,
                 fontSize: textSize,
                 // Aucune entrée gouvernant la HAUTEUR ne dépend de
-                // `isFocused` (decisions.md 2026-08-22 bis) : seul le
+                // `isFocused` (decisions.md) : seul le
                 // dépliage, geste explicite, change la hauteur — et l'hôte
-                // l'anime sans saut de défilement (#8147).
+                // l'anime sans saut de défilement.
                 expansion: expansion,
                 // L'arc-en-ciel de la rangée plate colore les LETTRES (aucune bulle à entourer).
                 rainbowSeed: RainbowLetters.seed(for: input.effects, messageId: input.localId)
@@ -752,20 +716,19 @@ struct FocalRow: View {
         .animation(.easeInOut(duration: 0.15), value: effectiveText)
     }
 
-    /// Le dépliage EN PLACE (#8147), tenu par l'hôte : un seul message
+    /// Le dépliage EN PLACE, tenu par l'hôte : un seul message
     /// déplié à la fois. Sans hôte, le texte garde son état local.
     private var expansion: LongMessageExpansion? {
         actions.onToggleExpanded.map { LongMessageExpansion(messageId: input.localId, isExpanded: input.isExpanded, toggle: $0) }
     }
 
-    // `flagEmoji` a vécu ici, repliant sur 🌐 et lisant `LanguageData` quand la
-    // source unique lit `LanguageDisplay` : deux tables pour une question, et
-    // un repli qui ne distingue AUCUNE langue d'une autre là où #4248 avait
-    // choisi le code en capitales — « un code se lit et se reconnaît ». La
-    // production du drapeau passe désormais par `LanguageFlagChip.flag(for:)`.
+    // La production du drapeau passe par `LanguageFlagChip.flag(for:)`, source
+    // unique (`LanguageDisplay`) : un repli unique sur 🌐 ne distinguerait
+    // AUCUNE langue d'une autre, d'où le code en capitales — « un code se lit
+    // et se reconnaît ».
 
     /// Drapeau-toggle + réactions sur LA MÊME LIGNE, le drapeau en PREMIER
-    /// (arbitrage user 2026-08-18, précision : jamais sur une ligne à part).
+    /// (jamais sur une ligne à part).
     /// Rendue pour tout message multi-versions (texte traduit ET attachement
     /// audio porteur de traductions — le builder pose `content.translation`
     /// dès que `translations` OU `translatedAudios` est non vide) et/ou
@@ -783,16 +746,13 @@ struct FocalRow: View {
     @ViewBuilder
     /// La ligne BASSE — drapeaux et réactions.
     ///
-    /// **Elle ne se monte plus QUE si elle a quelque chose à montrer** (#5135,
-    /// 2026-09-04), et c'est `mountsBottomLine` qui en décide.
+    /// **Elle ne se monte QUE si elle a quelque chose à montrer**, et c'est
+    /// `mountsBottomLine` qui en décide.
     ///
-    /// Histoire de la ligne, en deux temps, parce que le second annule la
-    /// raison du premier : la directive 2026-08-24 y avait ramené la date et
-    /// les coches, jusque-là sur une ligne à elles — d'où un « elle se monte
-    /// TOUJOURS, même sans drapeau ni réaction : c'est elle qui porte désormais
-    /// la méta ». La méta étant passée en COLONNE, cette justification est
-    /// tombée avec elle et la garde d'origine (`translation != nil ||
-    /// showsReactions`) redevient la bonne — élargie de ses deux exceptions.
+    /// La date et les coches vivent dans une COLONNE à part : la ligne n'a donc
+    /// aucune raison de se monter sans drapeau ni réaction, et la garde
+    /// (`translation != nil || showsReactions`) est la bonne — élargie de ses
+    /// deux exceptions.
     private var flagAndReactionsRow: some View {
         // `mountsReactions` lu DIRECTEMENT plutôt que lié à un `let` : la
         // liaison imposait un `return` explicite, qui DÉSARME le `ViewBuilder`
@@ -800,14 +760,13 @@ struct FocalRow: View {
         // expression — et un piège dès qu'on y ajoutera une seconde vue, qui
         // ne se monterait alors pas.
         HStack(alignment: .center, spacing: MeeshySpacing.xsPlus) {
-            // Jamais de drapeau EN CLAIR sur un message protégé (revue
-            // adversariale 2026-08-18) : la bulle floute sa bande de
+            // Jamais de drapeau EN CLAIR sur un message protégé : la bulle floute sa bande de
             // drapeaux avec le contenu — révéler la langue d'origine
             // d'un message voilé fuirait une information. Les réactions,
             // elles, restent hors voile (parité bulle historique).
             //
             // UN SEUL jeu de drapeaux par groupe, sur son DERNIER message
-            // (#3919, directive porteur 2026-08-26 — miroir du mode Bulles,
+            // (miroir du mode Bulles,
             // où c'est déjà le dernier message qui porte l'identité). Le
             // choix posé ici s'applique à TOUT le groupe
             // (`onSetActiveDisplayLanguageForGroup`) ; changer la langue d'UN
@@ -832,24 +791,23 @@ struct FocalRow: View {
                 .equatable()
             }
 
-            // Plus de `Spacer` ni de méta : la ligne se rétracte sur ce
-            // qu'elle porte. Ce qui la remplissait jusqu'à la marge droite —
-            // la date et les coches — vit désormais dans `FocalMetaColumn`.
+            // Ni `Spacer` ni méta : la ligne se rétracte sur ce
+            // qu'elle porte. La date et les coches vivent dans `FocalMetaColumn`.
         }
         .padding(.leading, indent)
     }
 
-    // MARK: - Bordure basse du message EN FOCUS (2026-08-21)
+    // MARK: - Bordure basse du message EN FOCUS
 
     /// Les langues proposées sur la bordure : l'originale d'abord, puis les
     /// traductions disponibles, puis la langue AFFICHÉE (sans doublon,
     /// ordre du Prisme) — l'active porte l'anneau plein.
     /// Les drapeaux proposés par une rangée, dédupliqués et PLAFONNÉS.
     ///
-    /// Directive 2026-08-24 : « un message qui a plusieurs traductions
-    /// disponibles liste les 3 premiers drapeaux sans magnificence, et les 5
-    /// premiers en magnificence ». Sans plafond, un message très traduit
-    /// remplissait sa ligne de drapeaux jusqu'à la noyer.
+    /// Un message qui a plusieurs traductions disponibles liste les 3 premiers
+    /// drapeaux sans magnificence, et les 5 premiers en magnificence. Sans
+    /// plafond, un message très traduit remplirait sa ligne de drapeaux
+    /// jusqu'à la noyer.
     ///
     /// L'ORDRE porte le sens et survit à la coupe : l'original d'abord — c'est
     /// la version que le message est —, puis les traductions disponibles, puis
@@ -891,10 +849,8 @@ struct FocalRow: View {
                 ),
                 id: \.self
             ) { code in
-                // NEUVIÈME copie du drapeau-contrôle, soldée au 252i (#4260) —
-                // invisible à la garde de #4248 parce qu'elle disait son état
-                // par l'OPACITÉ et non par le soulignement que cette garde
-                // interdit. L'opacité seule ne dit rien à VoiceOver (WCAG
+                // Le drapeau-contrôle ne dit pas son état par l'OPACITÉ seule : elle ne
+                // dit rien à VoiceOver (WCAG
                 // 1.4.1), et « Français » nu ressemble à une étiquette, pas à
                 // une action : la source unique porte les deux (trait
                 // `.isSelected` + « Afficher en Français »).
@@ -904,7 +860,7 @@ struct FocalRow: View {
                     metrics: .compact
                 ) {
                     // Rangée ORDINAIRE, montée sur le DERNIER message d'un
-                    // groupe (#3919) : le choix s'applique à tout le groupe.
+                    // groupe : le choix s'applique à tout le groupe.
                     actions.onSetActiveDisplayLanguageForGroup?(content.messageId, code)
                 }
             }

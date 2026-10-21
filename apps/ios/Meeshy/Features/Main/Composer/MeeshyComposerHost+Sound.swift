@@ -4,30 +4,27 @@ import MeeshySDK
 import MeeshyUI
 
 /// **Le SON du composer — sa feuille, son rôle de mixage, et ce qu'un fichier
-/// devient** (#4632).
+/// devient.**
 ///
-/// Extrait de `MeeshyComposerHost+Intake.swift` le 2026-09-01, qui franchissait
-/// le plafond de 1 100 lignes. Le nom suit le motif `MeeshyComposerHost+*` :
-/// c'est ce qui garde le fichier DANS l'unité que `AppSourceGuard` lit, donc les
-/// gardes qui ancrent sur ces membres restent vivantes.
+/// Le nom suit le motif `MeeshyComposerHost+*` : c'est ce qui garde le fichier
+/// DANS l'unité que `AppSourceGuard` lit, donc les gardes qui ancrent sur ces
+/// membres restent vivantes.
 extension MeeshyComposerHost {
 
     // MARK: - Ce que le meuble RÉSOUT à propos des sons
 
     /// **Le son que la ligne de l'avatar affiche** — la loi convoquée, jamais
-    /// réécrite (#4670).
+    /// réécrite.
     ///
     /// L'URL locale vient de la session (`loadedAudioURLs`), seul handle commun
     /// entre un objet de scène et un média de document. Elle manque pour un son
     /// EMPRUNTÉ, qui n'a pas de fichier : la loi lit cette absence comme une
     /// preuve, et non comme une lacune.
     ///
-    /// **Les trois résolutions ci-dessous ont quitté `+Surfaces`** le
-    /// 2026-09-01 : ce fichier-là franchissait les 1 100 lignes, et la
-    /// directive du 2026-08-28 exige d'extraire AVANT d'ajouter. L'extraction
-    /// suit la responsabilité, pas la tranche — « ce que le meuble sait des
-    /// sons » vit avec le son, et la surface continue de RECEVOIR ces valeurs
-    /// sans jamais les chercher.
+    /// **Les trois résolutions ci-dessous vivent avec le son** : l'extraction suit
+    /// la responsabilité, pas la tranche — « ce que le meuble sait des sons » vit
+    /// avec le son, et la surface continue de RECEVOIR ces valeurs sans jamais les
+    /// chercher.
     var avatarBadgeSound: StoryAudioPlayerObject? {
         let fond = viewModel.currentEffects.resolvedBackgroundAudio
         return ComposerSoundColumn.avatarBadge(
@@ -37,7 +34,7 @@ extension MeeshyComposerHost {
         )
     }
 
-    /// **Retirer le son de FOND depuis sa trace** (#4930).
+    /// **Retirer le son de FOND depuis sa trace**.
     ///
     /// `nil` ⇒ aucun menu, et les deux cas qui rendent `nil` ne sont pas le
     /// même :
@@ -51,15 +48,14 @@ extension MeeshyComposerHost {
     ///
     /// ## Pourquoi un appui long, et non un bouton sur la trace
     ///
-    /// #4696 a établi l'appui long comme « la seconde porte de la suppression »
-    /// pour le son de CONTENU, et le même menu la sert. Ce n'est donc pas une
-    /// quatrième loi : c'est le geste que l'auteur connaît déjà, appliqué au
-    /// plan qui en manquait.
+    /// L'appui long est « la seconde porte de la suppression » pour le son de
+    /// CONTENU, et le même menu la sert. Ce n'est donc pas une quatrième loi :
+    /// c'est le geste que l'auteur connaît déjà, appliqué au plan qui en manquait.
     ///
     /// Le défaut que ça ferme : `opensEditor` refuse d'ouvrir la feuille pour un
-    /// son EMPRUNTÉ — à juste titre, pour protéger le crédit (#4668) — et le
-    /// retrait vivait DANS cette feuille. Fermer la porte avait donc emporté le
-    /// retrait avec elle, sans que personne le décide.
+    /// son EMPRUNTÉ — à juste titre, pour protéger le crédit — et le retrait
+    /// vivrait DANS cette feuille. Fermer la porte emporterait le retrait avec
+    /// elle, sans que personne le décide.
     var deleteBackgroundSoundAction: (() -> Void)? {
         guard let son = avatarBadgeSound,
               ComposerBackgroundSoundReplacement.supersededId(
@@ -77,7 +73,7 @@ extension MeeshyComposerHost {
         HapticFeedback.medium()
     }
 
-    /// **Faire sortir le son du FOND pour le poser sur la scène** (#5018).
+    /// **Faire sortir le son du FOND pour le poser sur la scène**.
     ///
     /// `nil` quand il n'y a rien à promouvoir — pas de fond, ou un fond LEGACY
     /// qui n'a aucun objet derrière lui. L'entrée de menu disparaît alors au
@@ -119,14 +115,14 @@ extension MeeshyComposerHost {
     }
 
     /// **Ce que le doigt fait de la pastille** — `nil` quand la loi refuse
-    /// d'ouvrir (#4668), et la pastille redevient alors une lecture pure.
+    /// d'ouvrir, et la pastille redevient alors une lecture pure.
     var editBackgroundSoundAction: (() -> Void)? {
         guard let son = avatarBadgeSound, ComposerSoundColumn.opensEditor(son) else { return nil }
         return { editBackgroundSound(son) }
     }
 
     /// Les sons placés en CONTENU, résolus depuis l'état du meuble — la surface
-    /// les reçoit, elle ne les cherche pas (#4672).
+    /// les reçoit, elle ne les cherche pas.
     var foregroundSounds: [ComposerForegroundSound] {
         ComposerForegroundSound.resolveAll(localMedia: documentLocalMedia,
                                            transcriptions: documentTranscriptions)
@@ -135,17 +131,17 @@ extension MeeshyComposerHost {
     /// **La transcription qui PART avec la publication.**
     ///
     /// `PublishIntent.document` n'en porte qu'une : le fil ne modélise pas
-    /// encore une transcription par pièce jointe. Celle du DERNIER son posé est
-    /// servie — le même choix qu'avant #4672, désormais nommé au lieu d'être
-    /// une conséquence de l'écrasement.
+    /// une transcription par pièce jointe. Celle du DERNIER son posé qui en a une
+    /// est servie : le choix est nommé, au lieu d'être une conséquence de
+    /// l'écrasement.
     ///
     /// **La limite est du CÔTÉ FIL, pas du composer** : l'écran montre bien N
     /// cartes, chacune avec son texte ; c'est la charge d'envoi qui n'en
-    /// transporte qu'un. Elle a son issue.
-    /// Le DERNIER son qui en a une — pas le dernier son. Depuis que le fond
-    /// remplacé DESCEND en contenu (#4695), la dernière carte peut être un son
-    /// muet ; servir sa transcription vide effacerait celle qu'un son précédent
-    /// portait, sans qu'aucun écran ne le dise.
+    /// transporte qu'un.
+    /// Le DERNIER son qui en a une — pas le dernier son. Le fond remplacé DESCEND
+    /// en contenu : la dernière carte peut être un son muet ; servir sa
+    /// transcription vide effacerait celle qu'un son précédent portait, sans
+    /// qu'aucun écran ne le dise.
     var documentTranscription: MobileTranscriptionPayload? {
         foregroundSounds.reversed().compactMap { documentTranscriptions[$0.url] }.first
     }
@@ -166,27 +162,27 @@ extension MeeshyComposerHost {
             onPublishBorrowed: { sound, rognage in
                 // Le crédit survit au découpage : `addBorrowedSound` garde le
                 // `soundId`, et l'intervalle se pose en `sourceStart`/`sourceEnd`
-                // plutôt que d'être gravé dans un fichier ré-uploadé (#4657).
+                // plutôt que d'être gravé dans un fichier ré-uploadé.
                 attachBorrowedBackgroundSound(sound, trim: rognage)
                 presentedPortal = nil
                 HapticFeedback.light()
             },
-            // **Pas de commutateur pour une pastille du canvas** (#4671) :
+            // **Pas de commutateur pour une pastille du canvas** :
             // ses deux moitiés désignent le fond de la slide et la pièce jointe
             // du post, or une pastille n'est ni l'un ni l'autre. `nil` retire la
             // section — la feuille ne rend alors aucun choix qu'elle ne saurait
             // honorer.
             placement: editedSceneChipId == nil ? $chosenSoundPlacement : nil,
             // **Ce que « premier plan » VA devenir, pour que le libellé le
-            // dise** (#4722). Le rôle envoyé au modèle est le même partout ; sur
+            // dise**. Le rôle envoyé au modèle est le même partout ; sur
             // une scène il pose une puce, sur un document une pièce jointe. La
             // feuille ne le décide pas — elle le reçoit pour nommer juste, et un
             // interrupteur qui décrit ce que son option fait ailleurs est
             // vérifiable ET faux.
             foregroundDestination: ComposerSoundDestination.forForeground(on: mountedComposerView),
             // **Éditer, c'est rouvrir la MÊME vue sur le son déjà posé**
-            // (directive porteur 2026-09-01). Aucune seconde surface d'édition
-            // n'est écrite : `AudioPostComposerView` a été rendue réutilisable
+            // Aucune seconde surface d'édition
+            // n'est écrite : `AudioPostComposerView` est réutilisable
             // pour exactement ça, et une vue jumelle aurait divergé au premier
             // réglage.
             initialAudio: editedSoundTrack,
@@ -194,19 +190,19 @@ extension MeeshyComposerHost {
             // `deleteEditedSoundAction`, dont le `nil` retire le bouton.
             onDelete: deleteEditedSoundAction
         )
-        // **Une ouverture, une feuille NEUVE** (#4684). Voir
+        // **Une ouverture, une feuille NEUVE**. Voir
         // `soundSheetSession` : sans identité renouvelée, SwiftUI réutilise la
         // vue — et son `@State` — d'une ouverture à la suivante.
         .id(soundSheetSession)
     }
 
-    /// **LA façon d'ouvrir « Création audio »** (#4684) — les quatre entrées y
+    /// **LA façon d'ouvrir « Création audio »** — les quatre entrées y
     /// passent, et c'est ce qui rend l'inventaire structurel.
     ///
-    /// Elles faisaient chacune leurs deux ou trois lignes : poser le placement,
-    /// poser le portail. Un cinquième site aurait pu naître en oubliant la
-    /// troisième — renouveler l'identité de la feuille — sans qu'aucun témoin ne
-    /// rougisse, puisque le défaut ne se voit qu'à la SECONDE ouverture.
+    /// Chaque entrée qui poserait elle-même son placement puis son portail
+    /// laisserait un cinquième site naître en oubliant la troisième étape —
+    /// renouveler l'identité de la feuille — sans qu'aucun témoin ne rougisse,
+    /// puisque le défaut ne se voit qu'à la SECONDE ouverture.
     ///
     /// `placement` à `nil` ⇒ la porte n'a pas d'avis, et ce que l'auteur avait
     /// choisi la fois d'avant tient. C'est le cas de la porte du rail, qui ouvre
@@ -219,18 +215,16 @@ extension MeeshyComposerHost {
 
     /// **La piste que la feuille rouvre** — de CONTENU ou de FOND, un seul site.
     ///
-    /// Les deux surfaces d'édition (#4657 pour le contenu, #4668 pour le fond)
+    /// Les deux surfaces d'édition (contenu et fond)
     /// remettent la même chose à la feuille : une URL, une durée, un type. Les
     /// composer en deux endroits aurait donné deux façons d'ouvrir la même vue,
     /// et la seconde aurait divergé au premier champ ajouté à `ExistingAudio`.
     var editedSoundTrack: AudioPostComposerView.ExistingAudio? {
         if let son = editedForegroundSound {
-            // **Le texte VOYAGE avec la piste** (#4697, directive porteur 2026-09-01 :
-            // « toujours la possibilité de rédiger la description »). Sans lui,
-            // la feuille rouverte s'ouvrait MUETTE sur un son qui avait pourtant
-            // sa transcription : l'auteur ne pouvait ni la relire, ni la
-            // corriger — et un rognage la perdait, `survivingTranscription` ne
-            // gardant l'ancienne que si l'URL ne change pas.
+            // **Le texte VOYAGE avec la piste.** Sans lui, la feuille rouverte
+            // s'ouvrirait MUETTE sur un son qui a pourtant sa transcription : l'auteur ne
+            // pourrait ni la relire, ni la corriger — et un rognage la perdrait,
+            // `survivingTranscription` ne gardant l'ancienne que si l'URL ne change pas.
             return AudioPostComposerView.ExistingAudio(
                 url: son.url, duration: son.duration, mimeType: son.mimeType,
                 transcription: documentTranscriptions[son.url])
@@ -247,25 +241,25 @@ extension MeeshyComposerHost {
             url: url,
             duration: objet.duration.map(TimeInterval.init) ?? 0,
             mimeType: "audio/mp4",
-            // **Le fond aussi garde sa description** (#4697). Sa piste a une URL
+            // **Le fond aussi garde sa description**. Sa piste a une URL
             // locale, donc une clé dans la même carte que les sons de contenu —
-            // sans quoi « Rédiger » sur un fond aurait été un contrôle qui écrit
+            // sans quoi « Rédiger » sur un fond serait un contrôle qui écrit
             // dans le vide, le texte disparaissant à la validation.
             transcription: documentTranscriptions[url])
     }
 
     // MARK: - Poser un son en FOND
 
-    /// **Un son posé en FOND REMPLACE celui qui y est** (#4676).
+    /// **Un son posé en FOND REMPLACE celui qui y est.**
     ///
-    /// Défaut trouvé à la vérification simulateur du 2026-09-01, et il perdait
-    /// des données en silence. Trois gestes, trois no-op :
+    /// Sans remplacement, trois gestes seraient trois no-op, et ils perdraient des
+    /// données en silence :
     ///
-    /// | fond en place | son proposé | ce qui arrivait |
+    /// | fond en place | son proposé | ce qui arriverait |
     /// |---|---|---|
-    /// | vocal 0:04 | un son de l'étagère | la pastille ne bougeait pas |
+    /// | vocal 0:04 | un son de l'étagère | la pastille ne bougerait pas |
     /// | son de l'étagère | un autre son de l'étagère | idem |
-    /// | son de l'étagère | un vocal enregistré | idem, **et l'enregistrement était perdu** |
+    /// | son de l'étagère | un vocal enregistré | idem, **et l'enregistrement serait perdu** |
     ///
     /// Deux causes distinctes, un seul symptôme :
     ///
@@ -310,7 +304,7 @@ extension MeeshyComposerHost {
             // `.abandonne` : un son ne se pose sur aucune scène — la boucle de
             // placement saute l'audio (`where media.kind != .audio`). Une
             // intention du rail encore armée ici est donc périmée, et la laisser
-            // vivre la ferait s'appliquer au média VISUEL d'après (#6008).
+            // vivre la ferait s'appliquer au média VISUEL d'après.
             ecrireDansLaListeDuDocument([ComposerDocumentMediaFactory.media(
                 url: url, declaredMimeType: "audio/mp4", durationMs: duree)],
                 rail: .abandonne)
@@ -334,7 +328,7 @@ extension MeeshyComposerHost {
         viewModel.addBorrowedSound(sound, trim: trim)
     }
 
-    /// **Oublier ce qu'on éditait — les DEUX contextes, en un geste** (#4668).
+    /// **Oublier ce qu'on éditait — les DEUX contextes, en un geste**.
     ///
     /// Le portail se ferme par « Valider », par « Annuler » et par un
     /// glissement ; un seul de ces trois chemins repasse par `applyCreatedAudio`.
@@ -347,27 +341,23 @@ extension MeeshyComposerHost {
         editedSceneChipId = nil
     }
 
-    /// **Supprimer le son qu'on est en train d'éditer** (#4696, directive
-    /// porteur 2026-09-01 : « lors de l'édition mettre un (x) pour supprimer »).
+    /// **Supprimer le son qu'on est en train d'éditer.**
     ///
-    /// Poser un son était jusqu'ici IRRÉVERSIBLE : aucune surface n'offrait de
-    /// le retirer, ni la carte, ni la pastille, ni le canvas. La seule façon
-    /// d'en défaire un était d'en poser un autre par-dessus — c'est-à-dire d'en
-    /// perdre un pour en perdre un autre.
+    /// Poser un son serait IRRÉVERSIBLE sans ce geste : la seule façon d'en défaire
+    /// un serait d'en poser un autre par-dessus — c'est-à-dire d'en perdre un pour
+    /// en perdre un autre.
     ///
     /// Le geste vit dans la FEUILLE et nulle part ailleurs, parce que c'est le
     /// seul endroit que les trois contextes traversent : carte de contenu,
     /// pastille de l'avatar, pastille du canvas y arrivent par le même
     /// `openSoundSheet`. Trois boutons dispersés auraient été trois lois.
     ///
-    /// **Elle passe par `retractMedia` depuis #6577**, et ce n'était pas une
-    /// harmonisation : elle nettoyait DEUX porteurs sur huit et n'appelait
-    /// jamais `preUploads.forget(url:)`. Un son pré-monté puis supprimé laissait
-    /// son `PostMedia` orphelin côté serveur, et le registre continuait de le
-    /// tenir pour prêt — le manque exact sur lequel ce lot fonde un témoin.
-    /// Le son de FOND et la pastille de scène y descendent par leur identifiant
-    /// d'objet ; le relevé du canvas en déduit leur fichier, qu'aucun index du
-    /// meuble ne connaît.
+    /// **Elle passe par `retractMedia`**, qui nettoie TOUS les porteurs du son et
+    /// appelle `preUploads.forget(url:)` : sinon un son pré-monté puis supprimé
+    /// laisserait son `PostMedia` orphelin côté serveur, et le registre
+    /// continuerait de le tenir pour prêt. Le son de FOND et la pastille de scène
+    /// y descendent par leur identifiant d'objet ; le relevé du canvas en déduit
+    /// leur fichier, qu'aucun index du meuble ne connaît.
     func deleteEditedSound() {
         retractMedia(objectIds: [editedBackgroundSoundId, editedSceneChipId].compactMap { $0 },
                      fileURLs: editedForegroundSound.map { [$0.url] } ?? [])
@@ -376,7 +366,7 @@ extension MeeshyComposerHost {
         HapticFeedback.medium()
     }
 
-    /// **Retirer un son de contenu depuis SA carte** (#4696).
+    /// **Retirer un son de contenu depuis SA carte**.
     ///
     /// L'appui long est la seconde porte de la suppression, et la plus courte :
     /// ouvrir la feuille pour supprimer coûte trois gestes là où poser en a
@@ -385,10 +375,9 @@ extension MeeshyComposerHost {
     /// liste perd sa pièce, sinon un son posé plus tard sous la même URL
     /// temporaire hériterait d'un texte qui n'est pas le sien.
     ///
-    /// **Le « même retrait » est LE retrait depuis #6577** : les deux portes
-    /// appelaient chacune leurs deux lignes, donc partageaient un motif sans
-    /// partager la règle — et il leur manquait à toutes deux l'oubli de la
-    /// pré-montée.
+    /// **Le « même retrait » est LE retrait** : deux portes qui appelleraient
+    /// chacune leurs deux lignes partageraient un motif sans partager la règle — et
+    /// il leur manquerait à toutes deux l'oubli de la pré-montée.
     func deleteForegroundSound(_ son: ComposerForegroundSound) {
         retractMedia(objectIds: [], fileURLs: [son.url])
         // Le son supprimé pouvait être celui que la feuille tenait ouvert.
@@ -408,9 +397,8 @@ extension MeeshyComposerHost {
         return { deleteEditedSound() }
     }
 
-    /// **Toucher une pastille audio du canvas la rouvre** (#4671, directive
-    /// porteur 2026-09-01 : « Toucher le chips sur le canvas ouvre la vue de
-    /// création audio »).
+    /// **Toucher une pastille audio du canvas la rouvre** : toucher le chip sur le
+    /// canvas ouvre la vue de création audio.
     ///
     /// Deux refus, et ils ne se valent pas :
     ///
@@ -436,8 +424,7 @@ extension MeeshyComposerHost {
         HapticFeedback.light()
     }
 
-    /// **Toucher la pastille du son de fond rouvre « Création audio » DESSUS**
-    /// (#4668).
+    /// **Toucher la pastille du son de fond rouvre « Création audio » DESSUS.**
     ///
     /// Le placement est forcé à `.background` — comme son jumeau de contenu
     /// force `.foreground` : ouvrir la feuille sur l'autre moitié du
@@ -464,8 +451,8 @@ extension MeeshyComposerHost {
         HapticFeedback.light()
     }
 
-    /// **Ce que le PLACEMENT décide** (#4657) — la seule chose qui distinguait
-    /// les deux portes d'hier.
+    /// **Ce que le PLACEMENT décide** — la seule chose qui distingue les deux
+    /// portes.
     ///
     /// | placement | destination |
     /// |---|---|
@@ -476,12 +463,11 @@ extension MeeshyComposerHost {
     /// publication DIT, et une bande-son n'est pas un propos. La poser sur un
     /// son de fond ferait parler la publication à la place de son auteur.
     ///
-    /// Trois points hérités de la feuille que #4657 remplace, et qui valent
-    /// toujours :
+    /// Trois points tiennent :
     ///
     /// - **L'enregistrement rejoint `documentLocalMedia` comme un média
     ///   ORDINAIRE** — il part par la file durable, comme tout média local
-    ///   (T2.3). La transcription voyage À CÔTÉ, jamais fondue dans le texte.
+    ///  . La transcription voyage À CÔTÉ, jamais fondue dans le texte.
     /// - **La capsule de langue est SEMÉE, jamais imposée.** Poser
     ///   `documentLanguage` au retour rend le contrôle RÉEL (loi 4) et évite
     ///   qu'une voix parte étiquetée par la langue de démarrage du meuble —
@@ -496,7 +482,7 @@ extension MeeshyComposerHost {
                            mimeType: String,
                            durationMs: Int,
                            transcription: MobileTranscriptionPayload?) {
-        // **Un son POSÉ déclenche sa pré-montée** (2026-09-06).
+        // **Un son POSÉ déclenche sa pré-montée.**
         //
         // Le balayage part de la fin de la dérivation du DOCUMENT, dont le
         // doc-comment promet qu'« une sixième porte hérite de la pré-montée
@@ -506,17 +492,17 @@ extension MeeshyComposerHost {
         //
         // > **Un déclencheur unique ne couvre que ce qui passe par lui.** La
         // > phrase qui rassure — « ici, une sixième porte hérite » — décrit un
-        // > mécanisme réel, et c'est ce qui la rend dangereuse : elle a
-        // > dispensé de vérifier que la porte suivante y passait. Un son de
-        // > fond partait donc sans fichier, et rien ne rougissait.
+        // > mécanisme réel, et c'est ce qui la rend dangereuse : elle dispense de
+        // > vérifier que la porte suivante y passe. Un son de fond partirait sans
+        // > fichier, et rien ne rougirait.
         //
         // En `defer` plutôt qu'en queue de corps : la fonction a trois
         // sorties, dont un `return` anticipé pour la pastille de scène, et le
         // balayage est idempotent — il ne coûte rien là où il n'y a rien à
         // monter.
         defer { startPendingPreUploads() }
-        // **Une ÉDITION remplace, elle n'ajoute pas** (directive porteur
-        // 2026-09-01). Le retrait précède le `switch` — et non l'une de ses
+        // **Une ÉDITION remplace, elle n'ajoute pas**
+        // Le retrait précède le `switch` — et non l'une de ses
         // branches — parce que l'auteur peut aussi avoir fait passer le son en
         // FOND depuis la feuille : l'entrée éditée doit alors quitter la liste
         // média du document quand même. Le mettre dans la branche « premier
@@ -529,7 +515,7 @@ extension MeeshyComposerHost {
         let pisteEditee = editedSoundTrack
         let edite = editedForegroundSound
         editedForegroundSound = nil
-        // **Et le son de FOND se remplace de la même façon** (#4668). Le
+        // **Et le son de FOND se remplace de la même façon**. Le
         // retrait précède le `switch` pour la raison qui vaut déjà pour son
         // jumeau : l'auteur peut avoir fait passer le son du fond au CONTENU
         // depuis la feuille, et l'objet de scène doit disparaître dans ce cas
@@ -551,7 +537,7 @@ extension MeeshyComposerHost {
             editedURL: pisteEditee?.url,
             returnedURL: url
         )
-        // **Une pastille du canvas se remplace À SA PLACE** (#4671) — avant le
+        // **Une pastille du canvas se remplace À SA PLACE** — avant le
         // `switch`, qu'elle ne concerne pas : la feuille ne lui a offert aucun
         // placement, donc `chosenSoundPlacement` porte ici le choix d'une AUTRE
         // ouverture. L'appliquer ferait déménager l'objet sans que rien ne
@@ -566,11 +552,11 @@ extension MeeshyComposerHost {
         }
         switch chosenSoundPlacement {
         case .foreground:
-            // **Où « premier plan » atterrit dépend de la SURFACE** (#4722).
+            // **Où « premier plan » atterrit dépend de la SURFACE**.
             // Sur une scène, c'est une puce posée sur la toile ; sur un
             // document sans scène, une carte sous le texte. La carte n'est
             // rendue que par `textOnlyContent` — la poser depuis la scène
-            // laissait un son qui part à la publication et qu'aucun écran ne
+            // laisserait un son qui part à la publication et qu'aucun écran ne
             // montre.
             switch ComposerSoundDestination.forForeground(on: mountedComposerView) {
             case .sceneChip:
@@ -583,10 +569,9 @@ extension MeeshyComposerHost {
                 }
                 viewModel.attachPastedAudio(url: url, role: .foreground)
             case .contentCard:
-                // **À SA place, jamais au bout** : `removeAll` + `append` disaient
-                // « supprime et repose » là où l'auteur avait dit « modifie », et la
-                // carte rouverte sautait en dernière position sans qu'un geste l'ait
-                // demandé. Mesuré au simulateur le 2026-09-01 (#4698).
+                // **À SA place, jamais au bout** : `removeAll` + `append` diraient
+                // « supprime et repose » là où l'auteur dit « modifie », et la carte rouverte
+                // sauterait en dernière position sans qu'un geste l'ait demandé.
                 documentLocalMedia = ComposerMediaOrder.replacing(
                     documentLocalMedia,
                     at: edite?.url,
@@ -621,7 +606,7 @@ extension MeeshyComposerHost {
             attachBackgroundSound(url: url)
             // Le fond range sa description sous SA piste — même carte, même clé
             // que les sons de contenu. C'est ce qui la fera réapparaître si ce
-            // fond redescend un jour en contenu (#4695).
+            // fond redescend un jour en contenu.
             documentTranscriptions[url] = transcriptionServie
             oublierLaTranscriptionDe(pisteEditee, saufSi: url)
         }
@@ -699,14 +684,12 @@ extension MeeshyComposerHost {
         )
     }
 
-    /// **Un fichier audio arrive sur la SCÈNE, avec son rôle** (#4632).
+    /// **Un fichier audio arrive sur la SCÈNE, avec son rôle.**
     ///
-    /// C'est la seconde moitié du correctif, et celle qui ne se voyait pas tant
-    /// que la première tenait le sélecteur fermé : `ingestFileImporterResult`
-    /// versait TOUT dans `documentLocalMedia`, la liste média du document. Un
-    /// audio choisi depuis la porte du son n'y devenait donc jamais un son —
-    /// exactement le défaut que #4483 a fermé pour l'enregistrement, resté
-    /// ouvert sur la branche fichier.
+    /// Sans cette branche, `ingestFileImporterResult` verserait TOUT dans
+    /// `documentLocalMedia`, la liste média du document. Un audio choisi depuis la
+    /// porte du son n'y deviendrait jamais un son — exactement le défaut que
+    /// l'enregistrement évite.
     ///
     /// Le rôle est celui que l'auteur a posé DANS la feuille (`chosenSoundRole`),
     /// et il survit à sa fermeture : c'est un état du meuble, pas de la feuille.
@@ -718,7 +701,7 @@ extension MeeshyComposerHost {
     /// échec, la copie est tentée quel que soit ce retour, et `stop…` n'est
     /// appelé que si `start` a rendu `true`.
     /// `placement` impose le rôle (un fichier audio arrivé par la porte média
-    /// est un son POSÉ, #10363) ; absent, le choix de la feuille son décide.
+    /// est un son POSÉ) ; absent, le choix de la feuille son décide.
     func ingestSoundFiles(_ urls: [URL], placement: ComposerAudioRole? = nil) async {
         for sourceURL in urls {
             let scoped = sourceURL.startAccessingSecurityScopedResource()
@@ -730,17 +713,16 @@ extension MeeshyComposerHost {
             case .background:
                 attachBackgroundSound(url: destination)
             case .foreground:
-                // **La MÊME règle que l'enregistrement** (#4722). Ce chemin
-                // posait un objet de scène quoi qu'il arrive, là où le chemin
-                // voisin posait toujours une carte de contenu : deux réponses
-                // pour une intention, et chacune fausse sur la surface de
-                // l'autre. Un fichier importé sur un post sans scène
-                // disparaissait de l'écran sans quitter la publication.
+                // **La MÊME règle que l'enregistrement.** Poser un objet de scène quoi qu'il
+                // arrive, là où le chemin voisin pose toujours une carte de contenu, donnerait
+                // deux réponses pour une intention, et chacune fausse sur la surface de
+                // l'autre. Un fichier importé sur un post sans scène disparaîtrait de l'écran
+                // sans quitter la publication.
                 switch ComposerSoundDestination.forForeground(on: mountedComposerView) {
                 case .sceneChip:
                     viewModel.attachPastedAudio(url: destination, role: .foreground)
                 case .contentCard:
-                    // `.abandonne`, même raison que la démotion du fond (#6008).
+                    // `.abandonne`, même raison que la démotion du fond.
                     ecrireDansLaListeDuDocument([ComposerDocumentMediaFactory.media(
                         url: destination, declaredMimeType: "audio/mp4")],
                         rail: .abandonne)
