@@ -33,6 +33,32 @@ struct BubbleFullscreenPlace: Identifiable {
     var id: String { "\(place.latitude),\(place.longitude)" }
 }
 
+enum BubbleAccessibilityAction: CaseIterable, Equatable {
+    case reply, react, copy, openMenu
+
+    var name: String {
+        switch self {
+        case .reply: return MessageActionVerb.reply.label
+        case .react: return String(localized: "media.react.title", defaultValue: "Réagir", bundle: .main)
+        case .copy: return MessageActionVerb.copy.label
+        case .openMenu: return String(localized: "conversation.row.menu_action", defaultValue: "Ouvrir le menu", bundle: .main)
+        }
+    }
+}
+
+enum BubbleAccessibilityActionSet {
+    static func available(canReply: Bool, canReact: Bool, canCopy: Bool, canOpenMenu: Bool) -> [BubbleAccessibilityAction] {
+        BubbleAccessibilityAction.allCases.filter { action in
+            switch action {
+            case .reply: return canReply
+            case .react: return canReact
+            case .copy: return canCopy
+            case .openMenu: return canOpenMenu
+            }
+        }
+    }
+}
+
 struct BubbleStandardLayout: View {
     // MARK: - Inputs (data + visual context)
 
@@ -79,6 +105,9 @@ struct BubbleStandardLayout: View {
     let onToggleReaction: ((String) -> Void)?
     let onOpenReactPicker: ((String) -> Void)?
     let onShowReactions: ((String) -> Void)?
+    var onAccessibilityReply: (() -> Void)? = nil
+    var onAccessibilityCopy: (() -> Void)? = nil
+    var onAccessibilityOpenMenu: (() -> Void)? = nil
     /// Tap sur les coches de livraison -> ouvre le sheet detail a l'onglet
     /// "Vues" (read receipts). Passe `nil` pour rendre les coches inertes.
     let onShowReadStatus: ((String) -> Void)?
@@ -363,6 +392,28 @@ struct BubbleStandardLayout: View {
     /// **LOI DES ZONES — la moitié VoiceOver.** Site unique des deux rangées :
     /// `QuotedZoneAccessibility` (#8320), qui y ajoute l'écoute d'un audio cité
     /// et le saut au message cité.
+    @ViewBuilder
+    private var bubbleAccessibilityActions: some View {
+        let available = BubbleAccessibilityActionSet.available(
+            canReply: onAccessibilityReply != nil,
+            canReact: onOpenReactPicker != nil,
+            canCopy: onAccessibilityCopy != nil,
+            canOpenMenu: onAccessibilityOpenMenu != nil
+        )
+        ForEach(available, id: \.self) { action in
+            Button(action.name) { performAccessibilityAction(action) }
+        }
+    }
+
+    private func performAccessibilityAction(_ action: BubbleAccessibilityAction) {
+        switch action {
+        case .reply: onAccessibilityReply?()
+        case .react: onOpenReactPicker?(message.id)
+        case .copy: onAccessibilityCopy?()
+        case .openMenu: onAccessibilityOpenMenu?()
+        }
+    }
+
     private var quotedZoneAccessibilityActions: some View {
         QuotedZoneAccessibility.actions(
             reference: content.reply?.reference,
@@ -514,7 +565,10 @@ struct BubbleStandardLayout: View {
         .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(messageAccessibilityLabel)
-        .accessibilityActions { quotedZoneAccessibilityActions }
+        .accessibilityActions {
+            bubbleAccessibilityActions
+            quotedZoneAccessibilityActions
+        }
         .sheet(isPresented: $showShareSheet) {
             if let url = shareURL {
                 ShareSheet(activityItems: [url])

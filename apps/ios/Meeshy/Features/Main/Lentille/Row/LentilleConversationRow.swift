@@ -21,6 +21,7 @@ import MeeshyUI
 // un cache local de traduction.
 
 struct LentilleConversationRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let conversation: Conversation
     var community: MeeshyCommunity? = nil
     var availableWidth: CGFloat = 200
@@ -155,7 +156,7 @@ struct LentilleConversationRow: View {
         // les marges que la respiration (`FocusCard.breathing`, la même valeur)
         // vient d'ouvrir entre l'élue et ses voisines.
         .frame(height: isMagnified ? LentilleMetrics.FocusInline.height : LentilleMetrics.Row.height)
-        .frame(height: LentilleMetrics.Row.height)
+        .frame(height: LentilleMetrics.Row.height(for: dynamicTypeSize))
         .opacity(rowOpacity)
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .animation(.easeOut(duration: 0.15), value: isDragging)
