@@ -16,25 +16,14 @@ import XCTest
 final class SilentPersistenceWriteGuardTests: XCTestCase {
 
     private static let allowance: [String: Int] = [
-        "apps/ios/Meeshy/Features/Contacts/AffiliatesViewModel.swift": 1,
-        "apps/ios/Meeshy/Features/Contacts/CallsViewModel.swift": 1,
-        "apps/ios/Meeshy/Features/Contacts/ContactsListViewModel.swift": 2,
-        "apps/ios/Meeshy/Features/Contacts/PhonebookViewModel.swift": 1,
-        "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift": 1,
-        "apps/ios/Meeshy/Features/Main/Components/MentionContactsStore.swift": 1,
-        "apps/ios/Meeshy/Features/Main/Game/GameReferralLink.swift": 1,
         "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+StoreObservation.swift": 2,
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedSocketHandler.swift": 1,
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift": 13,
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift": 1,
-        "apps/ios/Meeshy/Features/Main/Views/AffiliateView.swift": 3,
-        "apps/ios/Meeshy/Features/Main/Views/CommunityLinksView.swift": 1,
         "apps/ios/Meeshy/Features/Main/Views/FeedCommentsSheet+Loading.swift": 3,
         "apps/ios/Meeshy/Features/Main/Views/FeedCommentsSheet.swift": 2,
         "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift": 1,
         "apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift": 4,
-        "apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift": 2,
-        "apps/ios/Meeshy/Features/Main/Views/TrackingLinksView.swift": 1,
     ]
 
     private static let scannedTrees = [
