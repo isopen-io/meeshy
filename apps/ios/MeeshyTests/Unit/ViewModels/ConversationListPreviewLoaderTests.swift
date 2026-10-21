@@ -494,6 +494,21 @@ final class ConversationListPreviewLoaderTests: XCTestCase {
         XCTAssertEqual(message?.isEncrypted, true)
     }
 
+    /// `updatedAt` avance aussi pour une réaction ou une épingle (`reactionSummary`,
+    /// `pinnedAt` vivent sur la ligne Message) : seule une modification pose
+    /// `editedAt`, et c'est elle qui change la version du texte.
+    func test_encryptedRest_reactionBumpsUpdatedAt_keepsThePlaintext() async {
+        let (sut, service, _) = makeSUT(
+            cache: .fresh([makeMessage(content: "Salut en clair", isEncrypted: true, updatedAt: restVersion)], age: 10),
+            decryptedOnDevice: [messageId]
+        )
+        service.listResult = .success(page(content: ciphertext, isEncrypted: true, updatedAt: "2026-10-19T08:00:00.000Z"))
+
+        await sut.load(for: conversationId, intent: .open)
+
+        XCTAssertEqual(sut.state(for: conversationId).messages.first?.content, "Salut en clair", "une réaction ne scelle pas un message déchiffré")
+    }
+
     func test_encryptedRest_deletedAfterDecryption_staysSealed() async {
         let (sut, service, _) = makeSUT(
             cache: .fresh([makeMessage(content: "Ancien clair", isEncrypted: true, updatedAt: restVersion)], age: 10),

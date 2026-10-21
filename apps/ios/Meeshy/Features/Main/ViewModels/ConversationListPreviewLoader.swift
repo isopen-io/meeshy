@@ -362,7 +362,7 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// le déchiffrement, il reste scellé. Fail-closed.
     static func isSameVersion(_ known: Message, as rest: Message) -> Bool {
         guard known.deletedAt == nil, rest.deletedAt == nil else { return false }
-        return isSameInstant(known.updatedAt, rest.updatedAt) && isSameInstant(known.editedAt, rest.editedAt)
+        return isSameInstant(known.editedAt, rest.editedAt)
     }
 
     private static func isSameInstant(_ lhs: Date?, _ rhs: Date?) -> Bool {
