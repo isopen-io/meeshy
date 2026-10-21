@@ -71,7 +71,7 @@ struct FeedComposerAttachmentsRow: View {
                         .overlay(
                             Image(systemName: attachment.type.composerGlyph)
                                 .font(.system(size: 26))
-                                .foregroundColor(.white)
+                                .foregroundStyle(Color.white)
                                 .accessibilityHidden(true)
                         )
                 }
@@ -87,7 +87,7 @@ struct FeedComposerAttachmentsRow: View {
                     // Glyphe chrome dans un cadre de tap fixe 20×20 : figé (doctrine 82i) ; le libellé porte le sens
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(width: 20, height: 20)
                         .background(
                             Circle()
@@ -101,7 +101,7 @@ struct FeedComposerAttachmentsRow: View {
 
             Text(MediaKindLabel.attachmentLabel(for: attachment))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 72)
         }
@@ -133,7 +133,7 @@ struct FeedComposerAttachmentsRow: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(width: 20, height: 20)
                         .background(
                             Circle()
@@ -147,7 +147,7 @@ struct FeedComposerAttachmentsRow: View {
 
             Text(MediaKindLabel.placeLabel(place.name))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 72)
         }

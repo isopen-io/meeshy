@@ -190,7 +190,7 @@ struct MediaReplyComposerBar: View {
                 }
                 Text(citation.previewText)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundStyle(Color.white.opacity(0.7))
                     .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
             }
 
@@ -199,7 +199,7 @@ struct MediaReplyComposerBar: View {
             Button(action: onCancel) {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(9, weight: .bold))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundStyle(Color.white.opacity(0.6))
                     .frame(width: 22, height: 22)
                     .background(Circle().fill(Color.white.opacity(0.12)))
             }
