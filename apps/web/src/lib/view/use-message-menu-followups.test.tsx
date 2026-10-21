@@ -160,7 +160,7 @@ describe('#11370 — « Transcrire » au menu d’un vocal', () => {
     await settle();
     expect(requests.map((r) => `${r.method} ${r.path}`)).toEqual(['POST /api/v1/attachments/a-voice/transcribe']);
     const grafted = findCachedThreadMessage(queryClient, 'c-a', 'm-1')?.attachments?.[0]?.transcription;
-    expect(grafted?.transcribedText).toBe('On se voit demain');
+    expect(grafted?.type === 'audio' ? grafted.transcribedText : null).toBe('On se voit demain');
   });
 
   test('mise en file : le menu l’annonce, le résultat viendra par le temps réel', async () => {
@@ -235,6 +235,7 @@ describe('#11373 — le fil qui porte l’avis d’activation ferme le menu', ()
       originalLanguage: 'en',
       messageType: 'system',
       metadata: { kind: 'encryption-enabled', mode: 'e2ee' },
+      translations: [],
       createdAt: minutesAgo(10),
     });
     const text = messageWith([], { content: 'Bonjour' });

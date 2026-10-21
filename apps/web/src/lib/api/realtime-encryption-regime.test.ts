@@ -45,6 +45,11 @@ const seeded = (row: Conversation = conv()): QueryClient => {
   return client;
 };
 
+const plain = (partial: Partial<SocketIOMessage> = {}): SocketIOMessage => {
+  const { systemEvent: _event, ...rest } = notice();
+  return { ...rest, ...partial };
+};
+
 const notice = (partial: Partial<SocketIOMessage> = {}): SocketIOMessage => ({
   id: 'm-notice',
   conversationId: 'c-a',
@@ -71,7 +76,7 @@ describe('message:new — l’avis système ferme le régime dans la liste ET le
 
   test('l’avis porté par `metadata` (forme REST/ZMQ) a le même effet', () => {
     const client = seeded();
-    applyMessageNew(client, createOutboxStore(), notice({ systemEvent: undefined, metadata: { kind: 'encryption-enabled', mode: 'e2ee' } }));
+    applyMessageNew(client, createOutboxStore(), plain({ metadata: { kind: 'encryption-enabled', mode: 'e2ee' } }));
     expect(detailOf(client)?.encryptionMode).toBe('e2ee');
   });
 
@@ -83,7 +88,7 @@ describe('message:new — l’avis système ferme le régime dans la liste ET le
 
   test('un message ordinaire ne touche ni au régime ni au détail', () => {
     const client = seeded();
-    applyMessageNew(client, createOutboxStore(), notice({ messageType: 'text', systemEvent: undefined, content: 'salut' }));
+    applyMessageNew(client, createOutboxStore(), plain({ messageType: 'text', content: 'salut' }));
     expect(detailOf(client)?.encryptionMode).toBeNull();
     expect(detailInvalidated(client)).toBe(false);
   });
@@ -129,7 +134,7 @@ describe('conversation:updated — l’avis voyage aussi par la ligne de liste',
 
 describe('regimeAfterNotices — le fil chargé par REST dit aussi le régime', () => {
   const row = (partial: Partial<Message>): Message =>
-    message({ id: 'm-1', conversationId: 'c-a', senderId: 'p-bob', content: 'avant', originalLanguage: 'fr', createdAt: new Date('2026-10-21T08:00:00.000Z'), ...partial });
+    message({ id: 'm-1', conversationId: 'c-a', senderId: 'p-bob', content: 'avant', originalLanguage: 'fr', translations: [], createdAt: new Date('2026-10-21T08:00:00.000Z'), ...partial });
   const thread = [row({}), row({ id: 'm-2', messageType: 'system', content: '🔒', metadata: { kind: 'encryption-enabled', mode: 'e2ee' } })];
 
   test('une conversation servie en clair mais dont le fil porte l’avis est jugée chiffrée', () => {
