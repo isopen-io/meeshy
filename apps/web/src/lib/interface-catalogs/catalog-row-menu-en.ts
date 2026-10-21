@@ -40,6 +40,17 @@ const en = {
   'listFilter.pinned': 'Pinned',
   'listFilter.archived': 'Archived',
   'listRow.muted': 'Muted',
+  'listRow.announce.pin.on': 'Conversation pinned',
+  'listRow.announce.pin.off': 'Conversation unpinned',
+  'listRow.announce.mute.on': 'Conversation muted',
+  'listRow.announce.mute.off': 'Conversation unmuted',
+  'listRow.announce.archive.on': 'Conversation archived',
+  'listRow.announce.archive.off': 'Conversation unarchived',
+  'listRow.announce.read.on': 'Marked as read',
+  'listRow.announce.read.off': 'Marked as unread',
+  'listRow.announce.refused': 'Action refused, undone',
+  'listRow.members.one': 'member',
+  'listRow.members.other': 'members',
 } as const satisfies RowMenuCatalog;
 
 export default en;

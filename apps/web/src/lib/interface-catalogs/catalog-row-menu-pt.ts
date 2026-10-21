@@ -40,6 +40,17 @@ const pt = {
   'listFilter.pinned': 'Fixadas',
   'listFilter.archived': 'Arquivadas',
   'listRow.muted': 'Silenciada',
+  'listRow.announce.pin.on': 'Conversa fixada',
+  'listRow.announce.pin.off': 'Conversa desafixada',
+  'listRow.announce.mute.on': 'Conversa silenciada',
+  'listRow.announce.mute.off': 'Silêncio desativado',
+  'listRow.announce.archive.on': 'Conversa arquivada',
+  'listRow.announce.archive.off': 'Conversa desarquivada',
+  'listRow.announce.read.on': 'Marcada como lida',
+  'listRow.announce.read.off': 'Marcada como não lida',
+  'listRow.announce.refused': 'Ação recusada, desfeita',
+  'listRow.members.one': 'membro',
+  'listRow.members.other': 'membros',
 } as const satisfies RowMenuCatalog;
 
 export default pt;

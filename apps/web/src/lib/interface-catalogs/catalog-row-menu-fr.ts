@@ -38,6 +38,17 @@ const fr = {
   'listFilter.pinned': 'Épinglés',
   'listFilter.archived': 'Archivées',
   'listRow.muted': 'En sourdine',
+  'listRow.announce.pin.on': 'Conversation épinglée',
+  'listRow.announce.pin.off': 'Conversation désépinglée',
+  'listRow.announce.mute.on': 'Conversation en sourdine',
+  'listRow.announce.mute.off': 'Sourdine levée',
+  'listRow.announce.archive.on': 'Conversation archivée',
+  'listRow.announce.archive.off': 'Conversation désarchivée',
+  'listRow.announce.read.on': 'Marquée comme lue',
+  'listRow.announce.read.off': 'Marquée comme non lue',
+  'listRow.announce.refused': 'Action refusée, annulée',
+  'listRow.members.one': 'membre',
+  'listRow.members.other': 'membres',
 } as const;
 
 export default fr;

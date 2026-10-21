@@ -40,6 +40,17 @@ const de = {
   'listFilter.pinned': 'Angeheftet',
   'listFilter.archived': 'Archiviert',
   'listRow.muted': 'Stummgeschaltet',
+  'listRow.announce.pin.on': 'Unterhaltung angeheftet',
+  'listRow.announce.pin.off': 'Anheftung gelöst',
+  'listRow.announce.mute.on': 'Unterhaltung stummgeschaltet',
+  'listRow.announce.mute.off': 'Stummschaltung aufgehoben',
+  'listRow.announce.archive.on': 'Unterhaltung archiviert',
+  'listRow.announce.archive.off': 'Archivierung aufgehoben',
+  'listRow.announce.read.on': 'Als gelesen markiert',
+  'listRow.announce.read.off': 'Als ungelesen markiert',
+  'listRow.announce.refused': 'Aktion abgelehnt, rückgängig gemacht',
+  'listRow.members.one': 'Mitglied',
+  'listRow.members.other': 'Mitglieder',
 } as const satisfies RowMenuCatalog;
 
 export default de;

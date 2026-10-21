@@ -40,6 +40,17 @@ const ar = {
   'listFilter.pinned': 'المثبّتة',
   'listFilter.archived': 'المؤرشفة',
   'listRow.muted': 'مكتومة',
+  'listRow.announce.pin.on': 'تم تثبيت المحادثة',
+  'listRow.announce.pin.off': 'تم إلغاء تثبيت المحادثة',
+  'listRow.announce.mute.on': 'تم كتم المحادثة',
+  'listRow.announce.mute.off': 'تم إلغاء الكتم',
+  'listRow.announce.archive.on': 'تمت أرشفة المحادثة',
+  'listRow.announce.archive.off': 'تم إلغاء أرشفة المحادثة',
+  'listRow.announce.read.on': 'تم وضع علامة مقروءة',
+  'listRow.announce.read.off': 'تم وضع علامة غير مقروءة',
+  'listRow.announce.refused': 'تم رفض الإجراء وتراجع عنه',
+  'listRow.members.one': 'عضو',
+  'listRow.members.other': 'أعضاء',
 } as const satisfies RowMenuCatalog;
 
 export default ar;

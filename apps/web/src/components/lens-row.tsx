@@ -29,6 +29,7 @@ import {
   type RowSubmenuChoice,
 } from '@/lib/view/row-actions';
 import { useRowRoving } from '@/lib/view/row-roving';
+import { memberCountLabel, rowDateLabel } from '@/lib/view/row-extra';
 import { THREAD_SEARCH_PARAM } from '@/lib/view/thread-search-door';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { readingModeStore } from '@/lib/reading-mode/store';
@@ -779,8 +780,8 @@ function LensRowImpl({
                 color: 'var(--color-ios-ink-3)',
               }}
             >
-              <span>{at === undefined ? '' : new Date(at).toISOString().slice(0, 10)}</span>
-              {group ? <span>· {conversation.memberCount} membres</span> : null}
+              <span>{rowDateLabel(at, language)}</span>
+              {group ? <span>· {memberCountLabel(conversation.memberCount, language)}</span> : null}
             </span>
             {/*
               L'HEURE (#5694, écarts 1 et 8) — `LentilleMetrics.Time.size` = 12
