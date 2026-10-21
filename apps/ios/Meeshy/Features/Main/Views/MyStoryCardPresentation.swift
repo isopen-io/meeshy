@@ -128,41 +128,31 @@ enum MyStoryCardPresentation {
         calendar.locale = locale
         let threshold = calendar.date(byAdding: .month, value: -1, to: now) ?? now
 
-        formatterLock.lock()
-        defer { formatterLock.unlock() }
-
         if date > threshold {
-            let formatter: RelativeDateTimeFormatter
-            if let cached = relativeFormatters[locale.identifier] {
-                formatter = cached
-            } else {
+            let formatter = relativeFormatters[locale.identifier] ?? {
                 let f = RelativeDateTimeFormatter()
                 f.locale = locale
                 f.unitsStyle = .full
                 relativeFormatters[locale.identifier] = f
-                formatter = f
-            }
+                return f
+            }()
             // `localizedString(for:relativeTo:)` produit DÉJÀ « il y a … » :
             // le préfixer à la main donnait le « il y a il y a 3 jours »
             // qu'annonçait VoiceOver.
             return formatter.localizedString(for: date, relativeTo: now)
         }
 
-        let formatter: DateFormatter
-        if let cached = mediumDateFormatters[locale.identifier] {
-            formatter = cached
-        } else {
+        let formatter = mediumDateFormatters[locale.identifier] ?? {
             let f = DateFormatter()
             f.locale = locale
             f.dateStyle = .medium
             f.timeStyle = .none
             mediumDateFormatters[locale.identifier] = f
-            formatter = f
-        }
+            return f
+        }()
         return formatter.string(from: date)
     }
 
-    private static let formatterLock = NSLock()
     private static var relativeFormatters: [String: RelativeDateTimeFormatter] = [:]
     private static var mediumDateFormatters: [String: DateFormatter] = [:]
 

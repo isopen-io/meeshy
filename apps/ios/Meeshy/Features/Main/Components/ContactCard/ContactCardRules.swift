@@ -144,11 +144,11 @@ struct ContactCardField: Identifiable, Equatable {
         var filled = components
         filled.year = components.year ?? 2000
         guard let date = calendar.date(from: filled) else { return "" }
-        if hasYear {
-            return date.formatted(.dateTime.day().month(.wide).year().timeZone(calendar.timeZone))
-        } else {
-            return date.formatted(.dateTime.day().month(.wide).timeZone(calendar.timeZone))
-        }
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.setLocalizedDateFormatFromTemplate(hasYear ? "dMMMMyyyy" : "dMMMM")
+        return formatter.string(from: date)
     }
 }
 

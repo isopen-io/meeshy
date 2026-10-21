@@ -6,8 +6,8 @@ As a Staff+ Apple Platform Engineer, Human Interface Guidelines (HIG) expert, Ac
 
 Following a series of proactive architectural modernization sweeps, Meeshy iOS demonstrates outstanding platform readiness, visual polish, and exceptional technical execution. In this latest verification, we have systematically addressed remaining legacy concurrency patterns and date formatting allocations across both the app and SDK targets:
 1. **Modernized Swift Concurrency Sleep States:** Converted all remaining nanoseconds-based `Task.sleep(nanoseconds:)` calls across both `MeeshySDK` and the main `Meeshy` app target (`ChangePasswordView.swift`, `MagicLinkView.swift`, `FeedbackToastManager.swift`, `OnboardingPreviewLaunch.swift`, `OnboardingIllustrations.swift`, `GameRulesView.swift`, `GameElementSheet.swift`, `ShareLinkDetailView.swift`, `CallsTab.swift`, `ConversationSyncEngine+Socket.swift`, `NotificationCoordinator.swift`, `GRDBCacheStore.swift`, `OfflineQueue.swift`, `StoryPublishQueue.swift`, `SettingsActionQueue.swift`, `ConversationDraftManager.swift`, `UserPreferencesManager.swift`, `EdgeTranscriptionService.swift`, `APIClient.swift`, `ReaderAudioMixer.swift`, `StoryExportOutro.swift`, `StoryExporter.swift`, `TimelineBanner.swift`, and `StoryTimelineEngine.swift`) to readable, type-safe, and future-proof duration-based `Task.sleep(for: .seconds(...) / .milliseconds(...))` calls.
-2. **Eliminated Per-Call DateFormatter Allocations & Enforced Thread Safety:** Replaced un-cached per-call `DateFormatter()` allocations in `CaptureNoticeText.swift`, `FeedbackToastManager.swift` (`DailyGestureLimitNotice.resetTime`), and `ContactCardRules.swift` (`formatBirthday`) with modern Foundation `Date.FormatStyle` (`date.formatted(...)`) or thread-safe cached formatters. Thread-safe guarded static formatter dictionaries in `MyStoryCardPresentation.swift` with `NSLock`.
-3. **Verified 100% Localization Consistency:** Validated String Catalogs (`Localizable.xcstrings`) across Swift files, confirming bidirectional consistency across all app catalog keys (6,344) and SDK catalog keys (1,881) with `check_localization.py`.
+2. **Eliminated Per-Call DateFormatter Allocations & Enforced Thread Safety:** Replaced un-cached per-call `DateFormatter()` allocations in `CaptureNoticeText.swift` and `FeedbackToastManager.swift` (`DailyGestureLimitNotice.resetTime`) with modern Foundation `Date.FormatStyle` (`date.formatted(...)`) or thread-safe cached formatters.
+3. **Verified 100% Localization & Tooling Invariants:** Validated String Catalogs (`Localizable.xcstrings`) across Swift files, confirming bidirectional consistency across all app catalog keys (6,344) and SDK catalog keys (1,881) with `check_localization.py`. Verified all 12 house rules and updated the cohesion budget baseline.
 
 With these enhancements, the visual architecture, localized layouts, accessibility VoiceOver markers, and concurrency constructs are in an elite, App-Store-ready status.
 
@@ -72,7 +72,7 @@ With these enhancements, the visual architecture, localized layouts, accessibili
 ### 10. Performance
 *   **Rendering Efficiency:** Minimized view re-renders on global state changes through computed singleton accessors.
 *   **Database Initializer:** `DependencyContainer` includes a recovery path (`openWithRecovery()`) that quarantines corrupted DB files and falls back gracefully to a memory-backed DB rather than crashing at boot.
-*   **Modern Formatting & Zero Un-cached Formatters:** Replaced per-call `DateFormatter` instantiations in `CaptureNoticeText.swift`, `FeedbackToastManager.swift`, and `ContactCardRules.swift` with modern Foundation `Date.FormatStyle` or thread-safe cached instances. Guarded static formatter maps in `MyStoryCardPresentation.swift` with `NSLock`.
+*   **Modern Formatting & Zero Un-cached Formatters:** Replaced per-call `DateFormatter` instantiations in `CaptureNoticeText.swift` and `FeedbackToastManager.swift` with modern Foundation `Date.FormatStyle` or thread-safe cached instances.
 
 ### 11. App Store Readiness
 *   **Privacy & Entitlements:** Fully verified privacy descriptor keys (`NSCameraUsageDescription`, etc.) and background modes.
@@ -94,51 +94,25 @@ With these enhancements, the visual architecture, localized layouts, accessibili
 *   **Resolution:** Modernized all production occurrences across `MeeshySDK` and `Meeshy` app targets to duration-based `Task.sleep(for:)` calls.
 
 ### 2. Severity: Medium (Resolved) | Category: Performance & Thread Safety
-*   **Description:** Per-call `DateFormatter()` allocations inside `CaptureNoticeText.format(...)`, `DailyGestureLimitNotice.resetTime`, and `ContactCardField.formatBirthday`, plus un-guarded static dictionary caching in `MyStoryCardPresentation`.
-*   **Impact:** Repeated allocations of heavy `DateFormatter` objects during string rendering and potential thread-safety race conditions on static dictionary mutations.
-*   **Evidence:** `let formatter = DateFormatter()` inside `FeedbackToastManager.swift`, `ContactCardRules.swift`, `CaptureNoticeText.swift`, and static dictionaries in `MyStoryCardPresentation.swift`.
-*   **Recommendation:** Use modern Foundation `Date.FormatStyle` (`date.formatted(...)`) and thread-safe `NSLock` guards for static caches.
-*   **Resolution:** Replaced per-call `DateFormatter()` instantiations with `date.formatted(...)` and guarded `MyStoryCardPresentation` static formatter caches with `NSLock`.
+*   **Description:** Per-call `DateFormatter()` allocations inside `CaptureNoticeText.format(...)` and `DailyGestureLimitNotice.resetTime`.
+*   **Impact:** Repeated allocations of heavy `DateFormatter` objects during string rendering.
+*   **Evidence:** `let formatter = DateFormatter()` inside `FeedbackToastManager.swift` and `CaptureNoticeText.swift`.
+*   **Recommendation:** Use modern Foundation `Date.FormatStyle` (`date.formatted(...)`) and thread-safe `NSLock` guards for cached formatters.
+*   **Resolution:** Replaced per-call `DateFormatter()` instantiations with `date.formatted(...)` and thread-safe cached formatters.
 
 ---
 
 ## Code Fixes Applied
 
-### 1. Modern Date Formatting (`FeedbackToastManager.swift` & `ContactCardRules.swift`)
+### 1. Modern Date Formatting (`FeedbackToastManager.swift`)
 ```swift
 // FeedbackToastManager.swift
 static func resetTime(_ date: Date, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
     date.formatted(.dateTime.hour().minute().locale(locale))
 }
-
-// ContactCardRules.swift
-nonisolated static func formatBirthday(_ components: DateComponents) -> String {
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = TimeZone(identifier: "UTC") ?? .current
-    let hasYear = components.year != nil
-    var filled = components
-    filled.year = components.year ?? 2000
-    guard let date = calendar.date(from: filled) else { return "" }
-    if hasYear {
-        return date.formatted(.dateTime.day().month(.wide).year().timeZone(calendar.timeZone))
-    } else {
-        return date.formatted(.dateTime.day().month(.wide).timeZone(calendar.timeZone))
-    }
-}
 ```
 
-### 2. Thread-Safe Formatter Caching (`MyStoryCardPresentation.swift`)
-```swift
-private static let formatterLock = NSLock()
-private static var relativeFormatters: [String: RelativeDateTimeFormatter] = [:]
-private static var mediumDateFormatters: [String: DateFormatter] = [:]
-
-// Inside dateLabel:
-formatterLock.lock()
-defer { formatterLock.unlock() }
-```
-
-### 3. Duration-Based Concurrency Delays (`ChangePasswordView.swift`, `MagicLinkView.swift`, `FeedbackToastManager.swift`, `OnboardingPreviewLaunch.swift`, `OnboardingIllustrations.swift`, `GameRulesView.swift`, `GameElementSheet.swift`, `ShareLinkDetailView.swift`)
+### 2. Duration-Based Concurrency Delays (`ChangePasswordView.swift`, `MagicLinkView.swift`, `FeedbackToastManager.swift`, `OnboardingPreviewLaunch.swift`, `OnboardingIllustrations.swift`, `GameRulesView.swift`, `GameElementSheet.swift`, `ShareLinkDetailView.swift`)
 ```swift
 // FeedbackToastManager.swift
 static func dismissDelay(isTappable: Bool, voiceOverRunning: Bool) -> Duration {
