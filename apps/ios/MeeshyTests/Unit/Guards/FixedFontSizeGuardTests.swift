@@ -1,4 +1,6 @@
+import SwiftUI
 import XCTest
+import MeeshyUI
 
 /// **Une doctrine tenue à la main est tenue jusqu'au jour où elle ne l'est plus.**
 ///
@@ -534,6 +536,53 @@ final class FixedFontSizeGuardTests: XCTestCase {
                 + "texte) dans ce même commit :\n  " + departed.joined(separator: "\n  ")
             )
         }
+    }
+
+    // MARK: - Règle 5 — un texte de taille exacte est une exception nommée
+
+    struct ExactSizeTextSite: Hashable {
+        let file: String
+        let head: String
+    }
+
+    func test_unTexteDeTailleExacteSeLitEnTeteDeChaine() {
+        let sameLine = "Text(value).font(.system(size: 15, weight: .bold))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: sameLine), ["Text(value)"])
+
+        let chained = """
+        Text(label)
+            .foregroundColor(.white)
+            .font(.system(size: MeeshyFont.bodySize, design: .rounded))
+        """
+        XCTAssertEqual(Self.exactSizeTextHeads(in: chained), ["Text(label)"])
+
+        let glyph = "Image(systemName: x).font(.system(size: 15))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: glyph), [])
+
+        let inexact = "Text(x).font(.system(size: 10))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: inexact), [])
+
+        let dynamic = "Text(x).font(.system(size: size * k))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: dynamic), [])
+
+        let commented = "// Text(x).font(.system(size: 15))"
+        XCTAssertEqual(Self.exactSizeTextHeads(in: commented), [])
+
+        let inexactToken = """
+        Text("a")
+            .font(.system(size: MeeshyFont.labelSize))
+        """
+        XCTAssertEqual(Self.exactSizeTextHeads(in: inexactToken), [])
+    }
+
+    func test_unTexteDeTailleExacteNExisteQueCommeExceptionNommee() throws {
+        let found = try exactSizeTextSites()
+        let introduced = found.subtracting(Self.exactSizeTextExceptions)
+        let departed = Self.exactSizeTextExceptions.subtracting(found)
+        XCTAssertTrue(introduced.isEmpty,
+                      "texte de taille exacte hors liste — utiliser MeeshyFont.relative : \(introduced.sorted { ($0.file, $0.head) < ($1.file, $1.head) })")
+        XCTAssertTrue(departed.isEmpty,
+                      "exceptions sans site — élaguer la liste : \(departed.sorted { ($0.file, $0.head) < ($1.file, $1.head) })")
     }
 
     // MARK: - Bornes
