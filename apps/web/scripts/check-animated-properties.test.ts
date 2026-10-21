@@ -58,9 +58,13 @@ describe('auditRatchet — la liste tolérée ne fait que décroître', () => {
   test('un site hors liste est refusé, un site de la liste disparu aussi', () => {
     const known = { 'a.tsx': ['width'] };
     expect(auditRatchet({ found: { 'a.tsx': ['width'] }, known })).toEqual([]);
-    expect(auditRatchet({ found: { 'a.tsx': ['width', 'height'] }, known })).toEqual([expect.stringContaining('a.tsx')]);
+    const extra = auditRatchet({ found: { 'a.tsx': ['width', 'height'] }, known }) as readonly string[];
+    expect(extra).toHaveLength(1);
+    expect(extra[0]).toContain('a.tsx anime de la géométrie (height)');
     expect(auditRatchet({ found: { 'b.tsx': ['top'] }, known })).toHaveLength(2);
-    expect(auditRatchet({ found: {}, known })).toEqual([expect.stringContaining('retirer')]);
+    const gone = auditRatchet({ found: {}, known }) as readonly string[];
+    expect(gone).toHaveLength(1);
+    expect(gone[0]).toContain('retirer');
   });
 });
 
