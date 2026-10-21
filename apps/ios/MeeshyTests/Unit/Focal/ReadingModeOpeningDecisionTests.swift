@@ -212,6 +212,28 @@ final class ReadingModeOpeningDecisionTests: XCTestCase {
         ))
         XCTAssertEqual(controller.mode, .bubbles)
     }
+
+    // MARK: - Les entrées du fil ne divergent pas de celles de la liste
+
+    /// Les témoins ci-dessus reconstruisent le fil comme `ConversationView.init`
+    /// le construit. Si l'écran change l'une de ses entrées — le drapeau, la
+    /// Rivière, le compte de membres —, la liste et le fil divergeraient sans
+    /// que rien ne rougisse : cette garde lit la source de l'écran.
+    func test_conversationViewInit_feedsTheInputsTheListMirrors() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        for expected in [
+            "let isFlagEnabled = MeeshyFeatureFlags.isReadingModesEnabled",
+            "isRiverFlagEnabled: LentilleFeatureFlag.isRiviereModeEnabled",
+            "activeParticipantCount: conversation?.memberCount ?? 0",
+            "scope: identity.scope",
+            "unreadCount: conversation?.userState.unreadCount ?? 0"
+        ] {
+            XCTAssertTrue(code.contains(expected), "ConversationView.init a changé d'entrée : « \(expected) » — mettre à jour LentilleReadingModeContext.openingDecision")
+        }
+    }
 }
 
 private nonisolated final class OpeningDecisionStore: FocalReadingModePreferenceStoring {
