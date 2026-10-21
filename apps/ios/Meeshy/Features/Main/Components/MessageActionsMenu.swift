@@ -109,6 +109,12 @@ struct MessageActionsMenu: View {
         case .addSticker: return "plus.rectangle.on.rectangle"
         case .favoriteSticker: return "star"
         case .unfavoriteSticker: return "star.slash"
+        case .reply: return "arrowshape.turn.up.left"
+        case .retry: return "arrow.clockwise"
+        case .openLink: return "safari"
+        case .copyLink: return "link"
+        case .openInMaps: return "map"
+        case .copyAddress: return "mappin.and.ellipse"
         }
     }
 
@@ -131,6 +137,12 @@ struct MessageActionsMenu: View {
         case .addSticker: return String(localized: "message.sticker.add", defaultValue: "Ajouter à mes stickers", bundle: .main)
         case .favoriteSticker: return StickerFavoriteCopy.add
         case .unfavoriteSticker: return StickerFavoriteCopy.remove
+        case .reply: return String(localized: "action.reply", defaultValue: "Répondre", bundle: .main)
+        case .retry: return String(localized: "bubble.retry.resend", defaultValue: "Renvoyer le message", bundle: .main)
+        case .openLink: return String(localized: "message.action.openLink", defaultValue: "Ouvrir le lien", bundle: .main)
+        case .copyLink: return String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main)
+        case .openInMaps: return String(localized: "message.action.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .main)
+        case .copyAddress: return String(localized: "message.action.copyAddress", defaultValue: "Copier l'adresse", bundle: .main)
         }
     }
 }

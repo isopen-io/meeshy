@@ -102,7 +102,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
         )
 
         await sut.requestTextTranslation(
-            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
 
         XCTAssertEqual(sut.messageTranslations[testMessageId]?.first?.translatedContent, "Bonjour")
@@ -117,12 +118,14 @@ final class ConversationViewModelTranslationTests: XCTestCase {
 
         let first = Task { @MainActor in
             await sut.requestTextTranslation(
-                messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr"
+                messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
             )
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
         await sut.requestTextTranslation(
-            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
         _ = await first.value
 
@@ -135,7 +138,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
 
         let request = Task { @MainActor in
             await sut.requestTextTranslation(
-                messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr"
+                messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
             )
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
@@ -158,7 +162,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
             .store(in: &cancellables)
 
         await sut.requestTextTranslation(
-            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
 
         XCTAssertEqual(received.count, 1)
@@ -187,7 +192,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
         )
 
         await sut.requestAudioTranslation(
-            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
 
         XCTAssertEqual(sut.messageTranslatedAudios[testMessageId]?.first?.targetLanguage, "fr")
@@ -202,12 +208,14 @@ final class ConversationViewModelTranslationTests: XCTestCase {
 
         let first = Task { @MainActor in
             await sut.requestAudioTranslation(
-                messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr"
+                messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
             )
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
         await sut.requestAudioTranslation(
-            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
         _ = await first.value
 
@@ -220,7 +228,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
 
         let request = Task { @MainActor in
             await sut.requestAudioTranslation(
-                messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr"
+                messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
             )
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
@@ -242,7 +251,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
             .store(in: &cancellables)
 
         await sut.requestAudioTranslation(
-            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
 
         XCTAssertEqual(received.count, 1)

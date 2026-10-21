@@ -55,49 +55,32 @@ final class ConversationCommandHandlerTests: XCTestCase {
 
     // MARK: - canDeleteForEveryone
 
-    func test_canDeleteForEveryone_ownMessageWithinWindow_returnsTrue() throws {
+    /// #11214 — « Supprimer pour tous » suit `admitMessageDelete` : l'auteur,
+    /// sans fenêtre. Le client imposait 2 h que le serveur n'impose pas.
+    func test_canDeleteForEveryone_ownRecentMessage_returnsTrue() throws {
         let (sut, _, _, _) = try makeSUT()
-        let recentOwnMessage = makeMessage(isMe: true, createdAt: Date())
-
-        XCTAssertTrue(sut.canDeleteForEveryone(recentOwnMessage),
-            "Recent own message must be deletable by everyone")
+        XCTAssertTrue(sut.canDeleteForEveryone(makeMessage(isMe: true, createdAt: Date())))
     }
 
-    func test_canDeleteForEveryone_ownMessageOlderThanWindow_returnsFalse() throws {
+    func test_canDeleteForEveryone_ownMessageOlderThanTwoHours_staysTrue() throws {
         let (sut, _, _, _) = try makeSUT()
-        let oldTimestamp = Date().addingTimeInterval(-(2 * 3600 + 1))
-        let expiredOwnMessage = makeMessage(isMe: true, createdAt: oldTimestamp)
+        let old = makeMessage(isMe: true, createdAt: Date().addingTimeInterval(-(30 * 24 * 3600)))
 
-        XCTAssertFalse(sut.canDeleteForEveryone(expiredOwnMessage),
-            "Own message older than the 2-hour window must not be deletable by everyone")
+        XCTAssertTrue(sut.canDeleteForEveryone(old), "le serveur n'impose aucune fenêtre à l'auteur")
     }
 
     func test_canDeleteForEveryone_otherUserMessage_returnsFalse() throws {
         let (sut, _, _, _) = try makeSUT()
-        let otherMessage = makeMessage(isMe: false, createdAt: Date())
-
-        XCTAssertFalse(sut.canDeleteForEveryone(otherMessage),
+        XCTAssertFalse(sut.canDeleteForEveryone(makeMessage(isMe: false, createdAt: Date())),
             "Other user's message must never be deletable by everyone from this client")
     }
 
-    func test_canDeleteForEveryone_ownMessageExactlyAtWindowBoundary_returnsTrue() throws {
+    func test_canDeleteForEveryone_alreadyDeletedMessage_returnsFalse() throws {
         let (sut, _, _, _) = try makeSUT()
-        let nearBoundaryTimestamp = Date().addingTimeInterval(-(2 * 3600 - 1))
-        let boundaryMessage = makeMessage(isMe: true, createdAt: nearBoundaryTimestamp)
+        var gone = makeMessage(isMe: true, createdAt: Date())
+        gone.deletedAt = Date()
 
-        XCTAssertTrue(sut.canDeleteForEveryone(boundaryMessage),
-            "Own message within 1 second of the 2-hour boundary must still be deletable")
-    }
-
-    func test_canDeleteForEveryone_customWindow_respectsOverride() throws {
-        let (sut, _, _, _) = try makeSUT()
-        let oneHourAgo = Date().addingTimeInterval(-3600)
-        let message = makeMessage(isMe: true, createdAt: oneHourAgo)
-
-        XCTAssertFalse(sut.canDeleteForEveryone(message, window: 1800),
-            "Own message outside the custom 30-minute window must not be deletable")
-        XCTAssertTrue(sut.canDeleteForEveryone(message, window: 7200),
-            "Own message inside the custom 2-hour window must be deletable")
+        XCTAssertFalse(sut.canDeleteForEveryone(gone), "un message supprimé ne se supprime plus que pour soi")
     }
 
     // MARK: - consumeViewOnce

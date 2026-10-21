@@ -466,32 +466,24 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
-    /// Le builder du menu natif (ConversationView) : rangée d'emojis en
-    /// `.controlGroupStyle(.compactMenu)` (4 plus utilisés — plafond 1 ligne),
-    /// actions via `MessageActionResolver` (SSOT avec l'overlay).
-    func test_buildNativeMessageMenu_compactRow_resolver_confirmedDelete() throws {
-        let vSource = try source("Meeshy/Features/Main/Views/ConversationView+NativeMessageMenu.swift")
-
-        guard let range = vSource.range(of: "func buildNativeMessageMenu(for msg: Message)") else {
-            XCTFail("ConversationView doit exposer buildNativeMessageMenu(for:).")
-            return
+    /// #11214 — le builder du menu natif (`buildNativeMessageMenu`) était mort :
+    /// `private`, sans appelant, tenu vert par cette seule garde. Il a quitté le
+    /// dépôt ; la garde lit désormais le chemin VIVANT — l'overlay compose sa
+    /// liste par `MessageActionResolver`, sur le contexte que la fabrique UNIQUE
+    /// lui remet, et la feuille « Plus… » lit la même fabrique.
+    func test_liveMenus_composeFromTheResolver_onTheFactoryContext() throws {
+        let overlay = try source("Meeshy/Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertTrue(
+            overlay.contains("MessageActionResolver.primaryActions(menuContext)"),
+            "L'overlay doit composer sa liste par MessageActionResolver (SSOT)."
+        )
+        for host in ["Meeshy/Features/Main/Views/ConversationView+OverlayMenu.swift",
+                     "Meeshy/Features/Main/Views/ConversationView+MessageSheets.swift"] {
+            XCTAssertTrue(
+                try source(host).contains("MessageMenuContext.make(message: msg, viewModel: viewModel, authority: authority)"),
+                "\(host) doit lire le contexte de la fabrique unique, jamais le composer lui-même."
+            )
         }
-        let end = vSource.index(range.lowerBound, offsetBy: 4000, limitedBy: vSource.endIndex) ?? vSource.endIndex
-        let block = String(vSource[range.lowerBound ..< end])
-        XCTAssertTrue(
-            block.contains(".controlGroupStyle(.compactMenu)"),
-            "La rangée d'emojis rapides doit utiliser .controlGroupStyle(.compactMenu) " +
-            "(rangée horizontale système — sans ce style le ControlGroup empile)."
-        )
-        XCTAssertTrue(
-            block.contains("EmojiUsageTracker.topEmojis(count: 4"),
-            "La rangée rapide doit afficher 4 emojis (plafond : au-delà, " +
-            ".compactMenu passe à la ligne)."
-        )
-        XCTAssertTrue(
-            block.contains("MessageActionResolver.primaryActions(ctx)"),
-            "Les actions du menu natif doivent venir de MessageActionResolver (SSOT overlay)."
-        )
     }
 
     // MARK: - Aperçu du menu natif = la bulle « prise de sa position »
