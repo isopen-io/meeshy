@@ -309,6 +309,21 @@ describe('useMessageMenu — audit #11372', () => {
     expect(replied).toEqual([]);
   });
 
+  test('R1 — en bout en bout, un envoi en échec ne se réessaie ni par le menu, ni en ligne, ni par le geste', () => {
+    const { api, open, retried } = mount({ conversation: { encryptionMode: 'e2ee' } });
+    open('cid_failed');
+    expect(ids(api())).not.toContain('retry');
+    expect(api().retryableOf('cid_failed')).toBe(false);
+    act(() => api().onMenuAction('cid_failed', 'retry'));
+    expect(retried).toEqual([]);
+  });
+
+  test('R1 — en clair, l’envoi en échec se réessaie en ligne ; un message envoyé, non', () => {
+    const { api } = mount();
+    expect(api().retryableOf('cid_failed')).toBe(true);
+    expect(api().retryableOf('m-mine')).toBe(false);
+  });
+
   test('M1 — en clair, la réponse s’arme', () => {
     const { api, replied } = mount();
     expect(api().replyableOf('m-theirs')).toBe(true);

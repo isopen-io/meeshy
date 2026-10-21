@@ -1,7 +1,9 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import type { Message } from '@/lib/api/types';
-import { translationMayTravel } from '@/lib/device-translation/may-travel';
+import { offeredMessagesOf } from '@/lib/device-translation/offer';
+import { opusMtSupports } from '@/lib/device-translation/opus-mt-routes';
+import { offeredMessageTarget } from '@/lib/device-translation/target';
 import { navigate } from '@/lib/router';
 
 type OfferParams = {
@@ -54,18 +56,21 @@ export async function requestDeviceTranslation(input: {
   return 'queued';
 }
 
-const baseLanguageOf = (code: string): string => code.trim().toLowerCase().split(/[-_]/)[0] ?? '';
-
 /**
- * L'APPAREIL A-T-IL UNE RAISON DE TRADUIRE CE MESSAGE ? (#11372) — il voyage
- * (`translationMayTravel`, la loi de ce que `offeredMessagesOf` confie à
- * l'appareil : ni les miens, ni les protégés, ni les floutés, ni les
- * supprimés) et il n'est pas déjà écrit dans la langue PRIMAIRE du lecteur,
- * rang 1 de son Prisme : sans quoi le geste ne demanderait rien que la file
- * accepte, et l'annonce « Traduction demandée » mentirait.
+ * L'APPAREIL A-T-IL UNE RAISON DE TRADUIRE CE MESSAGE ? (#11372) — la loi de
+ * la file, et elle seule : ce que le fil confie (`offeredMessagesOf` : ni les
+ * miens, ni les protégés, ni les floutés, ni les supprimés, ni un chiffré sans
+ * clair ici), puis la langue que la file calculerait (`offeredMessageTarget`,
+ * avec ce que le moteur de l'appareil sait traduire, `opusMtSupports` — le
+ * `supports` du routeur de `runtime.ts`). Langue d'origine inconnue, rang 1
+ * déjà servi, paire hors de portée : rien que la file accepte, donc rien à
+ * offrir — sans quoi « Traduction demandée » mentirait.
  */
-export function deviceTranslationWanted(message: Message, reader: { readonly viewerId: string; readonly languages: readonly string[] }): boolean {
-  const primary = reader.languages[0];
-  if (primary === undefined || !translationMayTravel(message, reader.viewerId)) return false;
-  return message.originalLanguage == null || baseLanguageOf(message.originalLanguage) !== baseLanguageOf(primary);
+export function deviceTranslationWanted(
+  message: Message,
+  reader: { readonly viewerId: string; readonly languages: readonly string[]; readonly conversationEncryptionMode: string | null },
+): boolean {
+  return offeredMessagesOf([message], reader.viewerId, reader.conversationEncryptionMode).some(
+    (offered) => offeredMessageTarget({ message: offered, preferredLanguages: reader.languages, canTranslate: opusMtSupports }) !== null,
+  );
 }

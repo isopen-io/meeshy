@@ -45,7 +45,7 @@ import { useTypistAvatar } from '@/lib/view/use-typist-avatar';
 import { useSend } from '@/lib/view/use-send';
 import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
-import { menuConversationOf, menuViewerOf } from '@/lib/view/message-action-scope';
+import { menuConversationOf, menuViewerOf, webRepliesToMessage } from '@/lib/view/message-action-scope';
 import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useOnline } from '@/lib/net/online';
@@ -468,14 +468,14 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
 
   /**
    * LA COMPOSITION DU FIL — BROUILLON, CITATION, ENVOI (#5695, #6175, #7429)
-   * — extraite dans `useThreadCompose` (`lib/view/use-thread-compose.ts`) :
-   * un seul hook, appelé ICI, sans condition — les Rules of Hooks qui
-   * forçaient `replyToMessage`/`handleComposerSend`/`handleCancelReply` à
-   * rester déclarés APRÈS le brouillon mais AVANT les trois retours
-   * anticipés n'ont plus lieu d'être : il n'y a plus deux sites à garder
-   * synchronisés. `setReplyTarget` reste exposé — `useMessageMenu`
-   * (« Répondre ») et `summaryExits` (plus bas) l'appellent directement.
+   * — `useThreadCompose`, un seul hook appelé ICI sans condition (Rules of
+   * Hooks). `setReplyTarget` reste exposé au menu et à `summaryExits` ; la
+   * citation, d'où qu'elle vienne, ne monte que si la loi du menu l'admet
+   * (`webRepliesToMessage`, #11372 : le même lecteur, la même conversation).
    */
+  const platformRole = useServedGlobalRole();
+  const actionScope = { viewer: menuViewerOf({ viewer, participants: conversation?.participants, conversation, platformRole }), conversation: menuConversationOf(conversation) };
+  const sendFailed = (id: string) => deliveryOf(id) === 'failed' && !permanentOf(id);
   const compose = useThreadCompose({
     store: draftStore,
     scope,
@@ -484,6 +484,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     readerLanguages,
     send,
     announce: announcer.announce,
+    replyable: (m) => webRepliesToMessage(m, actionScope, { now: Date.now(), failed: sendFailed(m.id) }),
   });
   const composeSend = compose.onSend;
   const returnToPresent = threadData.returnToPresent;
@@ -505,16 +506,14 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * ne fait plus que CÂBLER le JSX sur ce qu'il rend (§5 étape 0 : le budget
    * de taille interdit d'ajouter une seconde machine ici).
    */
-  const platformRole = useServedGlobalRole();
-
   const messageMenu = useMessageMenu({
     conversationId,
     messages,
     readerLanguages,
     readerLocale,
-    viewer: menuViewerOf({ viewer, participants: conversation?.participants, conversation, platformRole }),
-    conversation: menuConversationOf(conversation),
-    send: { retry, failed: (id) => deliveryOf(id) === 'failed' && !permanentOf(id) },
+    viewer: actionScope.viewer,
+    conversation: actionScope.conversation,
+    send: { retry, failed: sendFailed },
     reply: compose,
     announce: announcer.announce,
   });
@@ -841,7 +840,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             startedAtOf={startedAtOf}
             reasonOf={reasonOf}
             permanentOf={permanentOf}
-            retry={retry}
+            retry={retry} retryableOf={messageMenu.retryableOf}
             displayLanguageOf={messageMenu.displayLanguageOf}
             myReactionsOf={messageMenu.myReactionsOf}
             selection={messageMenu.selection}

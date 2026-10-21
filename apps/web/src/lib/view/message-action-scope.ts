@@ -172,15 +172,25 @@ export function messageActionsOf(message: ActionMessage, scope: ActionScope, inp
 
 /**
  * LE WEB NE CHIFFRE PAS SES ENVOIS (#9224, #11372) — là où la loi dit que le
- * serveur ne lit pas le clair (bout en bout, régime inconnu, message chiffré),
- * une réponse ou un nouvel essai partirait en clair et serait refusé
- * (fail-closed) : ni l'un ni l'autre ne s'offre, et la mention du bout en bout
- * (`e2eeNotice`) dit pourquoi.
+ * serveur ne doit pas lire le clair (bout en bout, régime inconnu, message
+ * chiffré), une réponse ou un nouvel essai partirait EN CLAIR : le web n'arme
+ * donc ni l'un ni l'autre, et la mention du bout en bout (`e2eeNotice`) dit
+ * pourquoi. La passerelle, elle, accepte aujourd'hui ce clair et le stocke :
+ * son refus est suivi par #11216 — cette garde est la seule qui tienne d'ici là.
  */
 export const webSendsHere = (actions: MessageActions): boolean => actions.verdicts.serverFeatureAbsence === null;
 
 /** Répondre depuis le web : le droit d'écrire (`canReply`) ET un envoi que le web sait faire ici. */
 export const webRepliesTo = (actions: MessageActions): boolean => actions.verdicts.canReply && webSendsHere(actions);
+
+/**
+ * RÉPONDRE À CE MESSAGE D'ICI (#11372) — un message à vue unique ne se cite
+ * pas, et `webRepliesTo` dit le reste. LA loi de toutes les portes : le menu
+ * (`useMessageMenu.replyableOf`), le glissé, le résumé, la visionneuse et la
+ * citation que le composeur arme ou restaure (`useThreadCompose`).
+ */
+export const webRepliesToMessage = (message: ActionMessage, scope: ActionScope, input: { readonly now: number; readonly failed?: boolean }): boolean =>
+  message.isViewOnce !== true && webRepliesTo(messageActionsOf(message, scope, input));
 
 /**
  * MODIFIER DEPUIS LE WEB, EN AUTEUR SEULEMENT (#11372) — la loi admet qu'un

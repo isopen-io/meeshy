@@ -166,6 +166,7 @@ export function ThreadModes({
   reasonOf,
   permanentOf,
   retry,
+  retryableOf,
   displayLanguageOf,
   myReactionsOf,
   contentWithheld,
@@ -245,6 +246,8 @@ export function ThreadModes({
   readonly reasonOf?: (messageId: string) => string | undefined;
   readonly permanentOf?: (messageId: string) => boolean;
   readonly retry?: (messageId: string) => void;
+  /** Le web sait-il renvoyer CE message d'ici (#11372, `useMessageMenu.retryableOf`) ? Absent : aucun bouton. */
+  readonly retryableOf?: (messageId: string) => boolean;
   readonly displayLanguageOf?: (messageId: string) => string | undefined;
   readonly myReactionsOf?: (messageId: string) => readonly string[] | undefined;
   /**
@@ -538,8 +541,10 @@ export function ThreadModes({
                        permanent. Le bouton disparaît ; la cause reste affichée.
                        `permanentOf` absent retombe sur « permanent » pour la même
                        raison — fail-closed sur l'affordance, jamais un bouton qui
-                       promet un rejeu que l'hôte ne sait pas jouer. */
-                    ...(rowPermanent || retry === undefined ? {} : { onRetry: () => retry(p.message.id) }),
+                       promet un rejeu que l'hôte ne sait pas jouer. Même
+                       loi que le menu (#11372) : `retryableOf` dit si le web
+                       sait renvoyer d'ici — jamais en bout en bout. */
+                    ...(rowPermanent || retry === undefined || retryableOf?.(p.message.id) !== true ? {} : { onRetry: () => retry(p.message.id) }),
                     ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
                     ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
                   };

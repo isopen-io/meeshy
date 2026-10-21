@@ -39,7 +39,7 @@ import {
   type MessageMenuItem,
   type TranslationChoice,
 } from './message-actions';
-import { menuViewerRegistered, messageActionsOf, webRepliesTo, type ActionScope } from './message-action-scope';
+import { menuViewerRegistered, messageActionsOf, webRepliesToMessage, webSendsHere, type ActionScope } from './message-action-scope';
 import { deviceTranslationPorts, deviceTranslationWanted, requestDeviceTranslation, type DeviceTranslationPorts } from './device-translation-request';
 import { contentExitOf, exitOffers } from './content-exit';
 import { doubleTapReactable } from './double-tap';
@@ -212,15 +212,28 @@ export function useMessageMenu(params: {
   const messageOf = useCallback((id: string) => messages.find((m) => m.id === id), [messages]);
   /**
    * RÉPONDRE À CE MESSAGE EST-IL POSSIBLE D'ICI ? (#11372) — le droit d'écrire
-   * et un envoi que le web sait faire (`webRepliesTo` : jamais en bout en
+   * et un envoi que le web sait faire (`webRepliesToMessage` : jamais en bout en
    * bout). Le menu, le glissé, le résumé et la visionneuse lisent cette réponse.
    */
   const replyableOf = useCallback(
     (messageId: string): boolean => {
       const message = messageOf(messageId);
-      return message !== undefined && message.isViewOnce !== true && webRepliesTo(actionsOf(message));
+      return message !== undefined && webRepliesToMessage(message, scope, { now: Date.now(), failed: failedOf(messageId) });
     },
-    [messageOf, actionsOf],
+    [messageOf, scope, failedOf],
+  );
+  /**
+   * « RÉESSAYER » EST-IL POSSIBLE D'ICI ? (#11372) — un envoi en échec ET un
+   * envoi que le web sait faire (`webSendsHere`) : en bout en bout, le rejeu
+   * partirait en clair. Le menu, le bouton en ligne de la rangée et le geste
+   * lisent cette réponse.
+   */
+  const retryableOf = useCallback(
+    (messageId: string): boolean => {
+      const message = messageOf(messageId);
+      return message !== undefined && failedOf(messageId) && webSendsHere(actionsOf(message));
+    },
+    [messageOf, failedOf, actionsOf],
   );
   /* D7 — la source est-elle chiffrée ? Lu dans le cache de la conversation, au moment du geste. */
   const sourceEncrypted = useCallback(
@@ -585,13 +598,13 @@ export function useMessageMenu(params: {
         return;
       }
       if (id === 'retry') {
-        if (failedOf(messageId)) send?.retry(messageId);
+        if (retryableOf(messageId)) send?.retry(messageId);
         return;
       }
       if (id === 'translateOnDevice') {
         const message = messageOf(messageId);
         if (message === undefined || actionsOf(message).verdicts.translate !== 'device') return;
-        if (!deviceTranslationWanted(message, { viewerId, languages: readerLanguages })) return;
+        if (!deviceTranslationWanted(message, { viewerId, languages: readerLanguages, conversationEncryptionMode: conversation.encryptionMode ?? null })) return;
         void requestDeviceTranslation({
           ports: params.deviceTranslation ?? deviceTranslationPorts,
           queryClient: params.queryClient ?? appQueryClient,
@@ -679,7 +692,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove, actionsOf, viewerId, readerLanguages, conversation, replyableOf, menuContextOf],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove, actionsOf, viewerId, readerLanguages, conversation, replyableOf, retryableOf, menuContextOf],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -838,7 +851,7 @@ export function useMessageMenu(params: {
     const ctx = {
       ...menuContextOf(message),
       canRetry: send !== undefined,
-      deviceTranslationWanted: deviceTranslationWanted(message, { viewerId, languages: readerLanguages }),
+      deviceTranslationWanted: deviceTranslationWanted(message, { viewerId, languages: readerLanguages, conversationEncryptionMode: conversation.encryptionMode ?? null }),
       piecesLabels: isMessagePiecesCatalogLoaded(lang),
       hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
       discussionImageable: discussionImageableOf(menuTarget.messageId),
@@ -905,6 +918,7 @@ export function useMessageMenu(params: {
     scope,
     menuContextOf,
     replyableOf,
+    retryableOf,
     reactableOf,
   };
 }
