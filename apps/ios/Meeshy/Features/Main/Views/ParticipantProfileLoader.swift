@@ -93,7 +93,7 @@ final class LiveParticipantProfileData: ParticipantProfileDataProviding {
     }
 
     func storeProfile(_ profile: ConversationParticipantProfile, for key: String) async {
-        try? await CacheCoordinator.shared.participantProfiles.save([profile], for: key)
+        await bestEffort("participantProfileLoader.participantProfiles.save", category: .cache) { try await CacheCoordinator.shared.participantProfiles.save([profile], for: key) }
     }
 
     func invalidateProfile(for key: String) async {
