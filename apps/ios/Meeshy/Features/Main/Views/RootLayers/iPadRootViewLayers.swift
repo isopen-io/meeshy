@@ -244,8 +244,6 @@ struct iPadCoversAndChromeLayer: ViewModifier {
     @ObservedObject var storyViewerCoordinator: StoryViewerCoordinator
     @ObservedObject var reelsPresenter: ReelsPresenter
     let storyZoomNamespace: Namespace.ID
-    @Binding var showStoryViewerFromConv: Bool
-    let selectedStoryUserIdFromConv: String?
     let activeConversationId: String?
     /// Le fil sous les yeux — `nil` quand une route du panneau le recouvre (`iPadRightColumn`).
     let visibleConversationId: String?
@@ -260,51 +258,16 @@ struct iPadCoversAndChromeLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .fullScreenCover(isPresented: $showStoryViewerFromConv) {
-                StoryViewerContainer(
-                    viewModel: storyViewModel,
-                    userId: selectedStoryUserIdFromConv,
-                    isPresented: $showStoryViewerFromConv,
-                    onReplyToStory: { replyContext in
-                        showStoryViewerFromConv = false
-                        onStoryReply(replyContext)
-                    },
-                    startAtFirstUnviewed: true,
-                    presentationSource: "iPadRootView.conv"
-                )
-                .environmentObject(router)
-                .environmentObject(statusViewModel)
-                .meeshyConversationList(conversationViewModel)
-                .environment(\.isStoryViewerPresenting, true)
-                .zoomTransitionDestination(sourceID: selectedStoryUserIdFromConv ?? "", in: storyZoomNamespace)
-            }
-            .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
-                StoryViewerContainer(
-                    viewModel: storyViewModel,
-                    userId: request.id,
-                    isPresented: Binding(
-                        get: { storyViewerCoordinator.pendingRequest != nil },
-                        set: { if !$0 { storyViewerCoordinator.dismiss() } }
-                    ),
-                    onReplyToStory: { replyContext in
-                        storyViewerCoordinator.dismiss()
-                        onStoryReply(replyContext)
-                    },
-                    singleGroup: request.singleGroup,
-                    postId: request.postId,
-                    startAtFirstUnviewed: request.startAtFirstUnviewed,
-                    presentationSource: "iPadRootView.fromConv",
-                    initialAction: request.initialAction,
-                    // Parité RootView : une notification de réponse descend jusqu'à SON commentaire.
-                    targetCommentId: request.targetCommentId,
-                    targetParentCommentId: request.targetParentCommentId
-                )
-                .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
-                .environmentObject(router)
-                .environmentObject(statusViewModel)
-                .meeshyConversationList(conversationViewModel)
-                .environment(\.isStoryViewerPresenting, true)
-            }
+            .modifier(StoryReaderCover(
+                request: $storyViewerCoordinator.pendingRequest,
+                storyViewModel: storyViewModel,
+                statusViewModel: statusViewModel,
+                router: router,
+                conversationList: conversationViewModel,
+                presentationSource: "iPadRootView.fromConv",
+                zoomNamespace: storyZoomNamespace,
+                onReply: onStoryReply
+            ))
             // La célébration d'un palier (#5809) — l'hôte est écrit une seule
             // fois et vit chez les deux racines à l'identique.
             .engagementReveal(router: router)

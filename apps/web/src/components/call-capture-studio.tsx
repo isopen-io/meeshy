@@ -6,6 +6,7 @@ import { clipClock, MAX_CLIP_MS } from '@/lib/calls/call-capture-gesture';
 import { saveCaptures, type CaptureFile, type SaveOutcome } from '@/lib/calls/call-capture-save';
 import { translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { impact } from '@/lib/view/haptics';
 
 /**
  * **CAPTURER SANS DÉCLENCHEUR** (#8625) — ce que partagent les modes Montage
@@ -108,7 +109,7 @@ export function useCaptureStudio({ language, still, video, audio, style, save = 
     setNow(at);
     setStartedAt(at);
     setStatus(null);
-    if (typeof navigator !== 'undefined') navigator.vibrate?.(20);
+    impact('medium');
   };
 
   const photo = async (): Promise<void> => {
@@ -120,7 +121,7 @@ export function useCaptureStudio({ language, still, video, audio, style, save = 
       return;
     }
     if (!reducedMotion()) setFlashing(true);
-    if (typeof navigator !== 'undefined') navigator.vibrate?.(30);
+    impact('medium');
     const outcome = await saver.current([file]);
     if (outcome.saved > 0) setStatus({ text: t(language, 'callStudio.capture.saved'), tone: 'ok' });
     else if (outcome.cancelled > 0 && outcome.failed === 0) setStatus({ text: t(language, 'callStudio.capture.cancelled'), tone: 'ok' });
