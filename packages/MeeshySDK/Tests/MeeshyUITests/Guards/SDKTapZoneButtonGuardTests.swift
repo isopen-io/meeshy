@@ -150,7 +150,7 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
     func test_lesCyclesDuTexteOntUneActionParDefaut() {
         let text = (Self.lines(of: "Story/StoryTextEditTopBar.swift") ?? []).joined(separator: "\n")
         XCTAssertTrue(text.contains("let onActivate: () -> Void"))
-        XCTAssertTrue(text.contains(".accessibilityAction(onActivate)"))
+        XCTAssertTrue(text.contains(".accessibilityAction { onActivate() }"))
     }
 
     func test_aucuneActionDAccessibiliteNePorteLeLibellePerform() throws {
