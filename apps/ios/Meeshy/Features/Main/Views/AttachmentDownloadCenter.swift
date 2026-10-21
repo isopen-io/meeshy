@@ -58,6 +58,10 @@ final class AttachmentDownloadCenter {
     /// L'origine de chaque téléchargement en cours : seule une clé `manual`
     /// vibre à sa fin ou à son échec.
     private var origins: [String: MediaDownloadOrigin] = [:]
+    /// Le profil le plus fort demandé pour chaque clé en vol (#11283) : un
+    /// préchargement lointain rejoint par une lecture ou un tap ne garde pas
+    /// ses restrictions.
+    private var requestedProfiles: [String: MediaTransferProfile] = [:]
 
     init(haptics: @escaping @MainActor (Haptic) -> Void = { AttachmentDownloadCenter.playHaptic($0) }) {
         self.haptics = haptics
@@ -113,6 +117,7 @@ final class AttachmentDownloadCenter {
         case .finished, .failed, .cancelled:
             active[key] = nil
             tasks[key] = nil
+            requestedProfiles[key] = nil
         }
         subject.send((key: key, event: event))
     }
@@ -131,22 +136,53 @@ final class AttachmentDownloadCenter {
     /// montrera au geste suivant (le réel qui suit l'actif). Même registre,
     /// même clé, même dédoublonnage que `start` : la surface montée plus tard
     /// REJOINT ce téléchargement, ou le trouve fini. Aucune vibration, ni au
-    /// départ ni à la fin : l'utilisateur n'a rien demandé.
-    func prefetch(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) {
-        start(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, origin: .automatic)
+    /// départ ni à la fin : l'utilisateur n'a rien demandé. `profile` choisit la
+    /// session réseau (#11283) : un préchargement lointain la veut
+    /// discrétionnaire, et hors réseau facturé si le réglage vidéo le demande.
+    func prefetch(
+        urlString: String,
+        expectedSize: Int64,
+        cacheStore: CacheStoreKind,
+        profile: MediaTransferProfile = .standard
+    ) {
+        guard launch(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, profile: profile) else {
+            return
+        }
+        origins[Self.key(for: urlString)] = .automatic
     }
 
     /// `false` quand il n'y a rien à lancer — URL vide, ou clé déjà en cours.
-    private func launch(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) -> Bool {
+    private func launch(
+        urlString: String,
+        expectedSize: Int64,
+        cacheStore: CacheStoreKind,
+        profile: MediaTransferProfile = .standard
+    ) -> Bool {
         guard !urlString.isEmpty else { return false }
         let key = Self.key(for: urlString)
-        guard tasks[key] == nil else { return false }
+        guard tasks[key] == nil else {
+            requestedProfiles[key] = requestedProfiles[key].map { $0.merged(with: profile) } ?? profile
+            return false
+        }
         publish(.progress(DownloadProgress(downloadedBytes: 0, totalBytes: expectedSize)), for: key)
+        requestedProfiles[key] = profile
         tasks[key] = Task.detached { [weak self] in
             guard let self else { return }
-            await self.run(key: key, urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore)
+            await self.run(key: key, urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, profile: profile)
         }
         return true
+    }
+
+    /// Le profil le plus fort demandé pour `key` en vol, ou `nil`.
+    func requestedProfile(for key: String) -> MediaTransferProfile? {
+        requestedProfiles[key]
+    }
+
+    /// Le profil avec lequel reprendre `key` quand le transfert ouvert avec
+    /// `profile` a échoué sur le réseau — `nil` s'il couvrait déjà la demande.
+    private func escalatedProfile(for key: String, beyond profile: MediaTransferProfile) -> MediaTransferProfile? {
+        guard let requested = requestedProfiles[key], !profile.covers(requested) else { return nil }
+        return requested
     }
 
     /// Annule le téléchargement de `key` — pour TOUTES les surfaces qui le montrent.
@@ -207,7 +243,8 @@ final class AttachmentDownloadCenter {
         key resolvedKey: String,
         urlString: String,
         expectedSize: Int64,
-        cacheStore: CacheStoreKind
+        cacheStore: CacheStoreKind,
+        profile: MediaTransferProfile
     ) async {
         do {
             guard MeeshyConfig.resolveMediaURL(urlString) != nil else { throw URLError(.badURL) }
@@ -229,13 +266,7 @@ final class AttachmentDownloadCenter {
                 return
             }
 
-            // La progression arrive cadencée par le téléchargeur (au plus
-            // ~10 rapports par seconde), jamais un saut MainActor par paquet.
-            let data = try await store.data(for: resolvedKey, progress: { [weak self] written, expected in
-                Task { @MainActor in
-                    self?.report(key: resolvedKey, downloaded: written, total: expected > 0 ? expected : nil)
-                }
-            })
+            let data = try await download(from: store, resolvedKey: resolvedKey, profile: profile)
 
             if case .image = cacheStore, let image = UIImage(data: data) {
                 DiskCacheStore.cacheImageForPreview(image, key: resolvedKey)
@@ -248,6 +279,32 @@ final class AttachmentDownloadCenter {
             // sortir en échec, sinon la surface resterait sur « téléchargement ».
             guard !Task.isCancelled else { return }
             await fail(key: resolvedKey)
+        }
+    }
+
+    /// Le funnel du store, avec le profil demandé. Si le transfert échoue sur
+    /// le réseau alors qu'une demande plus forte l'a rejoint entre-temps
+    /// (palier proche, tap), il reprend UNE fois avec le profil relevé.
+    private nonisolated func download(
+        from store: DiskCacheStore,
+        resolvedKey: String,
+        profile: MediaTransferProfile
+    ) async throws -> Data {
+        do {
+            return try await store.data(for: resolvedKey, profile: profile, progress: progressReporter(for: resolvedKey))
+        } catch let error as URLError {
+            guard let stronger = await escalatedProfile(for: resolvedKey, beyond: profile) else { throw error }
+            return try await store.data(for: resolvedKey, profile: stronger, progress: progressReporter(for: resolvedKey))
+        }
+    }
+
+    /// La progression arrive cadencée par le téléchargeur (au plus ~10
+    /// rapports par seconde), jamais un saut MainActor par paquet.
+    private nonisolated func progressReporter(for resolvedKey: String) -> MediaFileDownloader.ProgressHandler {
+        { [weak self] written, expected in
+            Task { @MainActor in
+                self?.report(key: resolvedKey, downloaded: written, total: expected > 0 ? expected : nil)
+            }
         }
     }
 }
