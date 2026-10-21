@@ -100,7 +100,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                     .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(localized: "story.voiceRecorder.title", defaultValue: "Enregistrement", bundle: .module))
-                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(primaryTextColor)
                 Spacer()
             }
@@ -117,7 +117,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
             VStack(spacing: MeeshySpacing.xl) {
                 if let error = errorMessage {
                     Text(error)
-                        .font(.system(size: MeeshyFont.subheadSize))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundColor(MeeshyColors.error)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, MeeshySpacing.xl)
@@ -227,7 +227,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
                         HStack(spacing: MeeshySpacing.xs) {
                             Text(language.flag)
                             Text(language.nativeName)
-                                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                                 .lineLimit(1)
                         }
                         .foregroundColor(isActive ? .white : secondaryTextColor)

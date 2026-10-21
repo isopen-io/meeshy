@@ -190,7 +190,7 @@ final class MintCeremonyRun: ObservableObject {
 
     private func after(_ seconds: Double, _ run: @escaping @MainActor () -> Void) -> Task<Void, Never> {
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            do { try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000)) } catch { return }
             guard !Task.isCancelled else { return }
             run()
         }

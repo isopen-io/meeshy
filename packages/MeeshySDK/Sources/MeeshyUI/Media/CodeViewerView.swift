@@ -113,7 +113,7 @@ public struct CodeViewerView: View {
                     )
 
                 Text(attachment.originalName.isEmpty ? language.displayName : attachment.originalName)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(isDark ? .white : .black)
                     .lineLimit(1)
 
@@ -341,7 +341,7 @@ public struct CodeFullSheet: View {
                 .foregroundColor(langColor)
 
             Text(attachment.originalName.isEmpty ? language.displayName : attachment.originalName)
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.code.loadingFile", defaultValue: "Chargement du fichier...", bundle: .module))
