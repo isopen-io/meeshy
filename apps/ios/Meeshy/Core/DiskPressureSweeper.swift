@@ -16,7 +16,16 @@ final class DiskPressureSweeper {
     // Garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    static let shared = DiskPressureSweeper(minimumInterval: 10 * 60) {
+    static let shared = DiskPressureSweeper(
+        minimumInterval: 10 * 60,
+        sweep: DiskPressureSweeper.sweepMediaCaches
+    )
+
+    /// Hors acteur principal : une fermeture écrite dans l'initialiseur de
+    /// `shared` hérite de `@MainActor` et ne peut toucher l'acteur
+    /// `CacheCoordinator` (« default argument cannot be both main
+    /// actor-isolated and actor-isolated », Xcode 26.1).
+    nonisolated private static func sweepMediaCaches() async {
         let coordinator = CacheCoordinator.shared
         await coordinator.video.evictUnderDiskPressure()
         await coordinator.audio.evictUnderDiskPressure()
