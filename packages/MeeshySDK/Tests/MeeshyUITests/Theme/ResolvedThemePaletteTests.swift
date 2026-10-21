@@ -21,6 +21,7 @@ struct ResolvedThemePaletteTests {
     }
 
     @Test("l'environnement n'injecte aucune palette par défaut")
+    @MainActor
     func environmentDefaultIsNil() {
         #expect(EnvironmentValues().themePalette == nil)
     }
