@@ -42,6 +42,8 @@ enum ShareSheetCopy {
         case .unprepared: return unprepared
         case .overBudget(let uncopied):
             return String(format: String(localized: "share.sheet.content.over-budget", defaultValue: "Fichiers non copiés : %d. Un partage emporte au plus 20 fichiers et 500 Mo.", bundle: .meeshyShare), uncopied)
+        case .refusedSource:
+            return String(localized: "share.sheet.content.refused-source", defaultValue: "Cette app n’a remis qu’un chemin de fichier, que Meeshy n’ouvre pas. Partagez le fichier lui-même, ou enregistrez-le d’abord dans Photos ou Fichiers.", bundle: .meeshyShare)
         }
     }
     static var overLimit: String { String(localized: "share.sheet.content.over-limit", defaultValue: "dépasse la limite", bundle: .meeshyShare) }
