@@ -33,8 +33,8 @@ struct GameSparksHeadModel: Equatable {
     var facts: [ProgressionFactID] { [shadow, pocket, lifetime].compactMap { $0 }.flatMap(\.facts) }
 }
 
-/// L'HÉRITAGE : le contenant en tête (« Ton Coffret »), les Meeshes gardées en grand, le contenant suivant, les
-/// frappées depuis toujours.
+/// L'HÉRITAGE : la DERNIÈRE pièce frappée en emblème, le contenant en tête (« Ton Coffret »), les Meeshes gardées en
+/// grand, le contenant suivant, les frappées depuis toujours.
 struct GameHeritageHeadModel: Equatable {
     let label: ProgressionFactText
     let held: ProgressionFactText
@@ -42,15 +42,79 @@ struct GameHeritageHeadModel: Equatable {
     let opens: ProgressionFactText?
     /// « 91 frappées depuis toujours » ; `nil` quand rien n'a été frappé ou que le serveur ne le sert pas.
     let minted: ProgressionFactText?
+    /// La dernière pièce frappée (#11483) : son numéro est le compte des frappées depuis toujours, et elle se dessine
+    /// dans son édition d'AFFICHAGE — le n° 247, frappé après le n° 100, est d'or. `nil` : rien de frappé, le flan.
+    let coin: GameHeritageCoin?
 
     init(balance: Int, treasury: TreasuryStanding, minted: Int?) {
         label = ProgressionFactText(text: GameFicheCopy.held(treasury.tier), facts: treasury.tier == nil ? [] : [.treasuryTier])
         held = ProgressionFactText(GameCopy.meeshes(balance), .meeshHeld)
         opens = treasury.next.map { ProgressionFactText(GameFicheCopy.opens($0.key, at: $0.minHeld), .treasuryNext) }
         self.minted = minted.flatMap { $0 > 0 ? ProgressionFactText(GameFicheCopy.minted($0), .minted) : nil }
+        coin = minted.flatMap { $0 > 0 ? GameHeritageCoin(number: $0) : nil }
+    }
+
+    /// Ce que l'état SERT : les Meeshes du portefeuille (le trésor à défaut), le contenant du jeu, les frappées.
+    static func served(progress: EngagementProgress, game: GameBlock) -> GameHeritageHeadModel {
+        GameHeritageHeadModel(
+            balance: progress.meesh?.balance ?? game.treasury.held, treasury: game.treasury, minted: progress.meesh?.mintedLifetime
+        )
     }
 
     var facts: [ProgressionFactID] { [label, held, opens, minted].compactMap { $0 }.flatMap(\.facts) }
+}
+
+/// La pièce de la tête de l'Héritage : un numéro, et l'édition qu'on y DESSINE (`GameMint.displayEdition`).
+struct GameHeritageCoin: Hashable {
+    let number: Int
+    let edition: MeeshEdition
+
+    init(number: Int) {
+        self.number = number
+        edition = GameMint.displayEdition(forNumber: number)
+    }
+}
+
+/// LA TÊTE RETENUE PENDANT LA FRAPPE (#11482) — l'écran est optimiste : le compte monte dès le toucher, et la passerelle
+/// confirme pendant la cérémonie. La tête de l'Héritage garde donc ce qu'elle montrait AU TOUCHER — le compte, le
+/// contenant, la dernière pièce — tant que la cérémonie n'est pas finie (au bout, ou passée d'un toucher) ET que la
+/// passerelle n'a pas réglé la frappe. Ensuite seulement elle rattrape ce que l'état SERT : une pièce de plus, ou rien
+/// de changé après un refus (l'instantané d'avant est restauré).
+struct GameHeritageHold: Equatable {
+    /// Ce que la tête montrait au toucher.
+    let before: GameHeritageHeadModel
+    /// La dernière frappe réglée au toucher : la réponse qui libère la tête est la PREMIÈRE réglée après lui.
+    let settledKey: Int
+    /// La cérémonie est finie : au bout, ou passée d'un toucher.
+    let ceremonyEnded: Bool
+
+    init(before: GameHeritageHeadModel, settled: GameMintSettlement?, ceremonyEnded: Bool = false) {
+        self.before = before
+        settledKey = settled?.key ?? 0
+        self.ceremonyEnded = ceremonyEnded
+    }
+
+    /// La même retenue, cérémonie finie.
+    func ended() -> GameHeritageHold {
+        GameHeritageHold(before: before, settledKey: settledKey, ceremonyEnded: true)
+    }
+
+    private init(before: GameHeritageHeadModel, settledKey: Int, ceremonyEnded: Bool) {
+        self.before = before
+        self.settledKey = settledKey
+        self.ceremonyEnded = ceremonyEnded
+    }
+
+    /// La tête est libérée : la cérémonie est finie et la passerelle a répondu depuis le toucher.
+    func isReleased(by settled: GameMintSettlement?) -> Bool {
+        ceremonyEnded && (settled?.key ?? 0) > settledKey
+    }
+
+    /// Ce que la tête montre : ce qu'elle montrait au toucher tant qu'elle est retenue, sinon ce que l'état sert.
+    static func shown(served: GameHeritageHeadModel, hold: GameHeritageHold?, settled: GameMintSettlement?) -> GameHeritageHeadModel {
+        guard let hold, !hold.isReleased(by: settled) else { return served }
+        return hold.before
+    }
 }
 
 /// Le gabarit commun des deux têtes : centré, un nom en petit, UN chiffre en grand, puis le secondaire et le tertiaire.
@@ -70,7 +134,7 @@ struct GameFicheHead<Emblem: View>: View {
             if let shadow {
                 Text(shadow.text)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .fixedSize(horizontal: false, vertical: true)
                     .modifier(GameFactsTag(shadow.facts))
                     .accessibilityIdentifier("\(identifier).shadow")
@@ -81,13 +145,13 @@ struct GameFicheHead<Emblem: View>: View {
             Text(label.text)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .textCase(.uppercase)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 .modifier(GameFactsTag(label.facts))
                 .accessibilityAddTraits(.isHeader)
             Text(big.text)
                 .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .modifier(GameValueRoll(value: big.text))
                 .modifier(GameFactsTag(big.facts))
@@ -95,14 +159,14 @@ struct GameFicheHead<Emblem: View>: View {
             if let secondary {
                 Text(secondary.text)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
                     .modifier(GameFactsTag(secondary.facts))
             }
             if let tertiary {
                 Text(tertiary.text)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
                     .modifier(GameFactsTag(tertiary.facts))
             }
@@ -131,15 +195,37 @@ struct GameSparksHeadView: View {
     }
 }
 
-/// La tête de l'Héritage.
+/// La tête de l'Héritage : la dernière pièce frappée, dans son édition dessinée, prend la tête à la fin de la frappe —
+/// un mouvement court, aucun sous « Réduire les animations ».
 struct GameHeritageHeadView: View {
     let model: GameHeritageHeadModel
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GameFicheHead(
             shadow: nil, label: model.label, big: model.held, secondary: model.opens, tertiary: model.minted,
             identifier: "game.fiche.heritage"
         ) {
+            ZStack {
+                GameHeritageCoinView(coin: model.coin)
+                    .id(model.coin)
+                    .transition(reduceMotion ? .identity : .scale(scale: 0.6).combined(with: .opacity))
+            }
+            .animation(reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.7), value: model.coin)
+        }
+    }
+}
+
+/// La dernière pièce frappée, côté revers (son oiseau et son numéro) ; le flan d'argent quand rien n'a été frappé.
+private struct GameHeritageCoinView: View, Equatable {
+    let coin: GameHeritageCoin?
+
+    var body: some View {
+        if let coin {
+            MeeshCoinView(face: .reverse(number: coin.number, year: Calendar.current.component(.year, from: Date())),
+                          edition: coin.edition, figures: nil)
+        } else {
             MeeshCoinView(face: .obverse, edition: .silver, figures: nil)
         }
     }

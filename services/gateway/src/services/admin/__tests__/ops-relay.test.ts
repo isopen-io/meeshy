@@ -19,6 +19,8 @@ const NOW = new Date('2026-10-12T22:00:00.000Z');
 const ID_A = '0b4f8a0e-6f43-4a4c-9a4b-2d2c7f7d1c11';
 const ID_B = '1c5f8a0e-6f43-4a4c-9a4b-2d2c7f7d1c22';
 
+const audited = async (): Promise<boolean> => true;
+
 const roots: string[] = [];
 afterEach(() => {
   roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }));
@@ -120,11 +122,36 @@ describe('lecture de l’état publié par le runner', () => {
 });
 
 describe('createOpsRelay.submit', () => {
+  it('la trace PRÉCÈDE le dépôt : au moment où elle s’écrit, aucune demande n’existe ; refusée, rien n’est déposé', async () => {
+    const d = dirs();
+    const seen: string[][] = [];
+    const relay = createOpsRelay({ env: env(d), now: () => NOW, newId: ids(ID_A) });
+    const accepted = await relay.submit({
+      operation: 'backup',
+      requestedBy: 'x',
+      beforeDeposit: async (requestId) => {
+        seen.push([requestId, ...readdirSync(d.requests)]);
+        return true;
+      },
+    });
+    expect(accepted.kind).toBe('queued');
+    expect(seen).toEqual([[ID_A]]);
+
+    const other = dirs();
+    const refused = createOpsRelay({ env: env(other), now: () => NOW, newId: ids(ID_B) });
+    expect(await refused.submit({ operation: 'backup', requestedBy: 'x', beforeDeposit: async () => false })).toEqual({
+      kind: 'refused',
+      status: 503,
+      code: 'AUDIT_UNAVAILABLE',
+    });
+    expect(readdirSync(other.requests)).toEqual([]);
+  });
+
   it('dépose une demande stricte, nommée par son uuid, et rien d’autre', async () => {
     const d = dirs();
     writeState(d.state, { v: 1, runs: { backup: null, 'image-prune': null }, lastAcceptedAt: { backup: null, 'image-prune': null } });
     const relay = createOpsRelay({ env: env(d), now: () => NOW, newId: ids(ID_A) });
-    const result = await relay.submit({ operation: 'backup', requestedBy: 'jcnm' });
+    const result = await relay.submit({ operation: 'backup', requestedBy: 'jcnm', beforeDeposit: audited });
     expect(result).toEqual({
       kind: 'queued',
       accepted: { requestId: ID_A, operation: 'backup', status: 'queued', queuedAt: NOW.toISOString() },
@@ -145,13 +172,13 @@ describe('createOpsRelay.submit', () => {
   it('refuse 503 sans dossier de demandes, ou s’il n’est pas inscriptible', async () => {
     const d = dirs();
     const sans = createOpsRelay({ env: { ...env(d), OPS_REQUESTS_DIR: undefined }, now: () => NOW, newId: ids() });
-    expect(await sans.submit({ operation: 'backup', requestedBy: 'x' })).toEqual({ kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' });
+    expect(await sans.submit({ operation: 'backup', requestedBy: 'x', beforeDeposit: audited })).toEqual({ kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' });
     const absent = createOpsRelay({ env: { ...env(d), OPS_REQUESTS_DIR: path.join(d.requests, 'nope') }, now: () => NOW, newId: ids() });
-    expect(await absent.submit({ operation: 'backup', requestedBy: 'x' })).toEqual({ kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' });
+    expect(await absent.submit({ operation: 'backup', requestedBy: 'x', beforeDeposit: audited })).toEqual({ kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' });
     if (process.getuid?.() !== 0) {
       chmodSync(d.requests, 0o500);
       const lecture = createOpsRelay({ env: env(d), now: () => NOW, newId: ids() });
-      expect(await lecture.submit({ operation: 'backup', requestedBy: 'x' })).toEqual({ kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' });
+      expect(await lecture.submit({ operation: 'backup', requestedBy: 'x', beforeDeposit: audited })).toEqual({ kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' });
       chmodSync(d.requests, 0o700);
     }
   });
@@ -164,22 +191,22 @@ describe('createOpsRelay.submit', () => {
       lastAcceptedAt: { backup: '2026-10-12T20:00:00.000Z', 'image-prune': '2026-10-12T19:00:00.000Z' },
     });
     const relay = createOpsRelay({ env: env(d), now: () => NOW, newId: ids(ID_A) });
-    expect(await relay.submit({ operation: 'backup', requestedBy: 'x' })).toEqual({
+    expect(await relay.submit({ operation: 'backup', requestedBy: 'x', beforeDeposit: audited })).toEqual({
       kind: 'refused',
       status: 409,
       code: 'OPERATION_COOLDOWN',
       availableAt: '2026-10-13T02:00:00.000Z',
     });
     // image-prune : 1 h de délai, dernière acceptation il y a 3 h ⇒ autorisé.
-    expect((await relay.submit({ operation: 'image-prune', requestedBy: 'x' })).kind).toBe('queued');
+    expect((await relay.submit({ operation: 'image-prune', requestedBy: 'x', beforeDeposit: audited })).kind).toBe('queued');
     expect(readdirSync(d.requests)).toEqual([`${ID_A}.json`]);
   });
 
   it('refuse 409 OPERATION_IN_PROGRESS quand une demande attend ou tourne', async () => {
     const d = dirs();
     const relay = createOpsRelay({ env: env(d), now: () => NOW, newId: ids(ID_A, ID_B) });
-    expect((await relay.submit({ operation: 'image-prune', requestedBy: 'x' })).kind).toBe('queued');
-    expect(await relay.submit({ operation: 'image-prune', requestedBy: 'x' })).toEqual({
+    expect((await relay.submit({ operation: 'image-prune', requestedBy: 'x', beforeDeposit: audited })).kind).toBe('queued');
+    expect(await relay.submit({ operation: 'image-prune', requestedBy: 'x', beforeDeposit: audited })).toEqual({
       kind: 'refused',
       status: 409,
       code: 'OPERATION_IN_PROGRESS',
@@ -192,7 +219,7 @@ describe('createOpsRelay.submit', () => {
       lastAcceptedAt: { backup: null, 'image-prune': null },
     });
     const running = createOpsRelay({ env: env(e), now: () => NOW, newId: ids() });
-    expect(await running.submit({ operation: 'backup', requestedBy: 'x' })).toEqual({
+    expect(await running.submit({ operation: 'backup', requestedBy: 'x', beforeDeposit: audited })).toEqual({
       kind: 'refused',
       status: 409,
       code: 'OPERATION_IN_PROGRESS',
@@ -203,8 +230,8 @@ describe('createOpsRelay.submit', () => {
     const d = dirs();
     const relay = createOpsRelay({ env: env(d), now: () => NOW, newId: ids(ID_A, ID_B) });
     const results = await Promise.all([
-      relay.submit({ operation: 'backup', requestedBy: 'x' }),
-      relay.submit({ operation: 'backup', requestedBy: 'x' }),
+      relay.submit({ operation: 'backup', requestedBy: 'x', beforeDeposit: audited }),
+      relay.submit({ operation: 'backup', requestedBy: 'x', beforeDeposit: audited }),
     ]);
     expect(results.map((r) => r.kind).sort()).toEqual(['queued', 'refused']);
     expect(readdirSync(d.requests)).toHaveLength(1);
@@ -232,7 +259,7 @@ describe('createOpsRelay.status', () => {
     const d = dirs();
     writeState(d.state, { v: 1, runs: { backup: null, 'image-prune': null }, lastAcceptedAt: { backup: null, 'image-prune': null } });
     const relay = createOpsRelay({ env: env(d), now: () => NOW, newId: ids(ID_A) });
-    await relay.submit({ operation: 'image-prune', requestedBy: 'jcnm' });
+    await relay.submit({ operation: 'image-prune', requestedBy: 'jcnm', beforeDeposit: audited });
     const status = await relay.status();
     expect(status.runs['image-prune']).toEqual({
       requestId: ID_A,

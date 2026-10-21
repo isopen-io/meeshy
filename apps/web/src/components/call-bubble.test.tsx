@@ -128,3 +128,14 @@ describe('l’écran d’appel', () => {
     expect(renderToStaticMarkup(<CallScreen call={call({ phase: { kind: 'incoming' }, direction: 'incoming' })} />)).not.toContain('Choisir les périphériques');
   });
 });
+
+describe('la bulle ne déplace que son `translate` (#11314)', () => {
+  test('ancrée en haut à gauche, posée par `translate`, avec la seule transition de `translate`', () => {
+    const html = renderToStaticMarkup(<CallBubble call={call({ display: 'bubble' })} />);
+    expect(html).toContain('left:0');
+    expect(html).toContain('top:0');
+    expect(html).toContain('translate:');
+    expect(html).toContain('transition:translate 180ms ease-out');
+    expect(html).not.toMatch(/transition:[^;"]*(left|top|width|height)/);
+  });
+});

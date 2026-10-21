@@ -27,7 +27,7 @@ struct ProgressionView: View {
     /// **Une fiche est POUSSÉE, jamais présentée** (#5843, directive porteur 2026-09-09) : poussée dans la pile,
     /// la page reçoit le retour, l'historique et le glissement depuis le bord. Le routeur n'est lu qu'AU TOUCHER
     /// (ou au ramassage d'une ancre), jamais dans le corps : la vue se monte sans lui dans les témoins de rendu.
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     /// « Jeu masqué » (#9481) : rien du jeu ne paraît alors, ni dans la liste ni dans l'en-tête.
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
 
@@ -62,8 +62,6 @@ struct ProgressionView: View {
         .task {
             await viewModel.load()
             #if DEBUG
-            // Le routeur n'est lu QUE si la vitrine tourne : un hôte qui ne l'injecte pas (les témoins de rendu)
-            // planterait sur l'`EnvironmentObject` absent.
             if viewModel.progress != nil, VitrineLaunch.isActive {
                 let router = self.router
                 VitrineRendu.shared.progressionAffichee { router.openGame(at: $0) }

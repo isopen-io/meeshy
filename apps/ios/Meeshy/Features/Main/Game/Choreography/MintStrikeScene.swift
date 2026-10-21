@@ -8,7 +8,9 @@ import MeeshyUI
 /// sur iOS 16), et le choc net + léger rebond de `GameHapticPattern.strike`.
 ///
 /// Une scène qui se REJOUE : `play` s'incrémente à chaque frappe confirmée.
-/// Avant la première, la pièce montre son avers ; après, son revers numéroté.
+/// Avant la première, la pièce attend sur l'enclume en FLAN, vierge (épopée § 5,
+/// #11177) ; après, elle repose sur son revers numéroté. La frappe elle-même se
+/// joue en plein écran (`MintCeremonyScene`) : cette bande en est le décor.
 /// Sous « réduire les animations », l'avers laisse place au revers par un fondu.
 ///
 /// Mee et Meo sont les films du pack de stickers, en image fixe : un colibri
@@ -47,6 +49,7 @@ struct MintStrikeScene: View {
                     .rotationEffect(.degrees(reduced ? 0 : -(strike?.hammer ?? 0) * 18), anchor: .bottom)
                     .offset(x: reduced ? 0 : (strike?.hammer ?? 0) * -8, y: reduced ? 0 : (strike?.hammer ?? 0) * 6)
             }
+            anvil
             coin(strike: strike, reduced: reduced, fade: fade)
                 .gamePrismTilt(active: edition == .prism)
             if let strike, !reduced, strike.burst > 0.05 {
@@ -59,6 +62,15 @@ struct MintStrikeScene: View {
                     .accessibilityHidden(true)
             }
         }
+    }
+
+    /// L'enclume sous la pièce : la pièce s'y pose, Meo y frappe.
+    private var anvil: some View {
+        RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
+            .fill(LinearGradient(colors: MintCeremonyPalette.anvilTop, startPoint: .top, endPoint: .bottom))
+            .frame(width: coinSide * 1.05, height: max(5, coinSide * 0.08))
+            .offset(y: coinSide * 0.5 + 2)
+            .accessibilityHidden(true)
     }
 
     private func actor(_ id: String, mirrored: Bool) -> some View {
@@ -95,7 +107,7 @@ struct MintStrikeScene: View {
         } else if restsReversed {
             reverse.frame(width: coinSide, height: coinSide)
         } else {
-            obverse.frame(width: coinSide, height: coinSide)
+            MeeshCoinView(face: .blank, edition: edition, figures: nil).frame(width: coinSide, height: coinSide)
         }
     }
 }

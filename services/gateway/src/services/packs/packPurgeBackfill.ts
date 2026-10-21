@@ -19,6 +19,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ANONYMIZED_USERNAME_PREFIX, anonymizedUsername } from '../AccountPurgeService';
+import { prefixRange } from '../../utils/prefix-range';
 import { measurePackData, purgePackData, type PackFileStore, type PackPrivacyDb, type PackPurgeSummary } from './PackPrivacy';
 
 export type PackPurgeBackfillOptions = {
@@ -58,7 +59,7 @@ export async function backfillPackPurge(
 
   for (;;) {
     const accounts: readonly { id: string; username: string }[] = await prisma.user.findMany({
-      where: { username: { startsWith: ANONYMIZED_USERNAME_PREFIX }, ...(cursor ? { id: { gt: cursor } } : {}) },
+      where: { username: prefixRange(ANONYMIZED_USERNAME_PREFIX), ...(cursor ? { id: { gt: cursor } } : {}) },
       select: { id: true, username: true },
       orderBy: { id: 'asc' },
       take,

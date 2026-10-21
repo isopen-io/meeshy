@@ -347,7 +347,7 @@ final class AttachmentPreparationService {
                                  prep: PreparingAttachment,
                                  context: MediaContext) async {
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else {
+            guard let data = try await PickedMedia.loadImageData(item) else {
                 prep.fail("Image illisible")
                 return
             }
@@ -379,13 +379,11 @@ final class AttachmentPreparationService {
                                  prep: PreparingAttachment,
                                  context: MediaContext) async {
         do {
-            guard let data = try await item.loadTransferable(type: Data.self) else {
+            // Un FICHIER, jamais `Data` : le film ne traverse pas la mémoire (#9870).
+            guard let rawURL = try await PickedMedia.loadVideoFile(item) else {
                 prep.fail("Vidéo illisible")
                 return
             }
-            let rawURL = FileManager.default.temporaryDirectory
-                .appendingPathComponent("video_raw_\(prep.id).mp4")
-            try data.write(to: rawURL)
             prep.stage = .compressing
             await runVideoPreparation(prep: prep,
                                       sourceURL: rawURL,

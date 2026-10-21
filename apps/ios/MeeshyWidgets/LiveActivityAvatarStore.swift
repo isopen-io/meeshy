@@ -13,6 +13,9 @@ nonisolated struct LiveActivityAvatarStore: Sendable {
     static let maxPixelSize = 132
     private static let directoryName = "LiveActivityAvatars"
     private static let maxIdentifierLength = 64
+    /// Lisible appareil verrouillé après le premier déverrouillage : l'îlot
+    /// d'appel se peint écran éteint.
+    static let writingOptions: Data.WritingOptions = [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
 
     let directory: URL
 
@@ -37,7 +40,7 @@ nonisolated struct LiveActivityAvatarStore: Sendable {
         }
         let png = try Self.thumbnailPNG(from: imageData)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try png.write(to: target, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        try png.write(to: target, options: Self.writingOptions)
     }
 
     func thumbnail(forActivityID activityID: String) -> CGImage? {

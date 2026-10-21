@@ -163,7 +163,7 @@ O tom: o jogo trata o herói por **você** (português do Brasil), nunca por « 
 | caderno de progresso | **a Crônica** | o livro da lenda, onde cada sinal fica eternizado |
 | conquistas | **as Façanhas** | raridades inalteradas |
 | vitrine, troféus | **os Troféus** | taças de torneio e de viagem, troféus de renascimento e de Chama |
-| selos, emblemas, insígnias | **as Medalhas** | materiais: Cobre, Bronze, Prata, Ouro, Platina, Obsidiana, Prisma |
+| selos, emblemas, insígnias | **as Medalhas** | materiais: Cobre, Bronze, Prata, Ouro, Platina, Obsidiana, Prisma; cada medalha sobe sete **patamares** (nunca « estrelas » nem « níveis ») |
 | Atlas | **o Atlas** | um carimbo por idioma realmente trocado |
 | Constelação, fragmentos de estrela | **o céu dos ancestrais** | dez fragmentos de estrela acendem uma estrela; cada estrela oferece um adorno |
 

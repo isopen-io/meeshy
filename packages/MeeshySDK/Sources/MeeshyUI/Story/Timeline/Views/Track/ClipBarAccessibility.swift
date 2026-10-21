@@ -85,6 +85,7 @@ private struct ClipBarAccessibilityModifier: ViewModifier {
 
     private func actions(_ content: Content) -> some View {
         content
+            .accessibilityAddTraits(.isButton)
             .accessibilityAction { callbacks.onTap() }
             .accessibilityActions {
                 ForEach(model.actionKinds, id: \.self) { kind in

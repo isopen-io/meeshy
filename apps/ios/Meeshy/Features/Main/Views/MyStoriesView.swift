@@ -40,7 +40,7 @@ struct MyStoriesView: View {
 
     // Réinjectés par le tray sur la sheet (même raison que ses covers : la
     // sheet interne SharePickerView crasherait sur un env object manquant).
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @Environment(\.meeshyConversationList) private var conversationListViewModel
 
     /// Surfaces the failed-publish history (`failedItems`) in the drafts tab

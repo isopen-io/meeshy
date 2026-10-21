@@ -252,6 +252,168 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
         XCTAssertTrue(ConversationPreviewRenderer.isEndToEnd(conversation))
     }
 
+    // MARK: - Le fond de la conversation sous ses bulles (#11231)
+
+    /// L'aperçu dessinait toujours le dégradé de la carte : une conversation
+    /// au fond uni, à motif ou à photo montrait, sous le doigt, des bulles sur
+    /// un fond que le fil ne peint jamais. Il peint désormais le fond RÉSOLU de
+    /// la conversation — la même résolution que le fil.
+    private func conversation(
+        _ id: String = "c-backdrop-\(UUID().uuidString)",
+        appearance: ConversationAppearance?
+    ) -> Conversation {
+        var conversation = Conversation(id: id, identifier: id, type: .group, title: "T",
+                                        lastMessageAt: start, createdAt: start, updatedAt: start)
+        conversation.userState.appearance = appearance
+        return conversation
+    }
+
+    private func backdrop(_ appearance: ConversationAppearance?, isDark: Bool = false) -> ConversationPreviewRenderer.Backdrop {
+        ConversationPreviewRenderer.backdrop(for: conversation(appearance: appearance), computedAccentHex: "#123456", isDark: isDark)
+    }
+
+    func test_backdrop_signature_keepsTheCardsOwnBackground() {
+        XCTAssertEqual(backdrop(nil).resolution, .signature)
+        XCTAssertFalse(backdrop(nil).paintsOverTheCard)
+    }
+
+    func test_backdrop_solid_paintsTheConversationsColor_inBothSchemes() {
+        let solid = ConversationAppearance(background: .solid(color: "indigo"))
+
+        XCTAssertEqual(backdrop(solid).resolution, .solid(hex: "#EEF0FF"))
+        XCTAssertEqual(backdrop(solid, isDark: true).resolution, .solid(hex: "#14152E"))
+        XCTAssertTrue(backdrop(solid).paintsOverTheCard)
+    }
+
+    func test_backdrop_design_isTheThreadsBundledModel() {
+        guard case .design(let design) = backdrop(ConversationAppearance(background: .design(pack: "heritages", design: "zellige"))).resolution else {
+            return XCTFail("un motif du catalogue embarqué se peint sous les bulles de l'aperçu")
+        }
+        XCTAssertEqual(design.key, "zellige")
+    }
+
+    func test_backdrop_photo_keepsItsVeilAndBlur() {
+        let photo = ConversationAppearance(background: .photo(attachmentId: "64b7f0c2a1b2c3d4e5f60718", veil: 0.4, blur: 6))
+
+        XCTAssertEqual(backdrop(photo).resolution, .photo(attachmentId: "64b7f0c2a1b2c3d4e5f60718", veil: 0.4, blur: 6))
+    }
+
+    /// Un choix illisible (motif inconnu, couleur hors gamme) retombe sur la
+    /// carte, jamais sur un fond vide.
+    func test_backdrop_unreadableChoice_fallsBackToTheCard() {
+        XCTAssertEqual(backdrop(ConversationAppearance(background: .solid(color: "fuchsia"))).resolution, .signature)
+    }
+
+    /// Le fil ouvert relève l'apparence la plus récente : l'aperçu la suit
+    /// plutôt que la ligne de liste, qui peut encore porter l'ancienne.
+    func test_backdrop_threadsLatestChoice_winsOverTheListRow() {
+        let id = "c-backdrop-ledger-\(UUID().uuidString)"
+        BubbleSkinLedger.record(ConversationAppearance(background: .solid(color: "indigo")), for: id)
+        defer { BubbleSkinLedger.record(nil, for: id) }
+
+        let resolved = ConversationPreviewRenderer.backdrop(for: conversation(id, appearance: nil), computedAccentHex: "#123456", isDark: false)
+
+        XCTAssertEqual(resolved.resolution, .solid(hex: "#EEF0FF"))
+    }
+
+    func test_backdrop_accent_isThePersonalOneWhenChosen_otherwiseTheComputedOne() {
+        XCTAssertEqual(backdrop(ConversationAppearance(accent: "corail")).accentHex, "#E0604E")
+        XCTAssertEqual(backdrop(nil).accentHex, "#123456")
+    }
+
+    /// Une pièce CHIFFRÉE n'est jamais demandée au réseau : le serveur n'en sert
+    /// que le chiffré. L'aperçu retombe alors sur la carte, comme le fil
+    /// retombe sur Signature — jamais un aplat neutre que le fil ne montre pas.
+    func test_backdropPhoto_encryptedPiece_isNeverRequested_andFallsBackToTheCard() {
+        var piece = MeeshyMessageAttachment.image()
+        piece.isEncrypted = true
+        var carrier = message("m1")
+        carrier.attachments = [piece]
+
+        XCTAssertEqual(ConversationPreviewRenderer.backdropPhoto(
+            attachmentId: piece.id, among: [carrier], remembered: nil, serverOrigin: "https://gate.test"
+        ), .signature)
+    }
+
+    func test_backdropPhoto_knownClearPiece_usesItsOwnUrls() {
+        let piece = MeeshyMessageAttachment.image()
+        var carrier = message("m1")
+        carrier.attachments = [piece]
+
+        let photo = ConversationPreviewRenderer.backdropPhoto(
+            attachmentId: piece.id, among: [carrier], remembered: nil, serverOrigin: "https://gate.test"
+        )
+
+        XCTAssertEqual(photo, .paint(ConversationBackgroundPhoto(thumbnailUrl: piece.thumbnailUrl, fullUrl: piece.fileUrl, thumbHash: piece.thumbHash)))
+    }
+
+    /// Une pièce hors des cinq derniers messages n'est connue de personne : elle
+    /// se demande à la route qui vérifie l'appartenance, et c'est l'échec de
+    /// son chargement, sondé comme dans le fil, qui la juge.
+    func test_backdropPhoto_unknownPiece_usesTheDownloadRouteThatChecksMembership() {
+        let photo = ConversationPreviewRenderer.backdropPhoto(
+            attachmentId: "64b7f0c2a1b2c3d4e5f60718", among: [], remembered: nil, serverOrigin: "https://gate.test"
+        )
+
+        guard case .paint(let resolved) = photo else { return XCTFail("une pièce inconnue se demande à la route vérifiée") }
+        XCTAssertEqual(resolved.fullUrl, "https://gate.test/api/v1/attachments/64b7f0c2a1b2c3d4e5f60718")
+    }
+
+    /// La sonde a déjà jugé la pièce (chiffrée, disparue, refusée) : l'aperçu
+    /// ne la retélécharge pas à chaque appui long, il retombe sur la carte.
+    func test_backdropPhoto_pieceAlreadyJudgedUnreadable_isNeverRequestedAgain() {
+        XCTAssertEqual(ConversationPreviewRenderer.backdropPhoto(
+            attachmentId: "64b7f0c2a1b2c3d4e5f60718", among: [], remembered: nil, serverOrigin: "https://gate.test",
+            judgedUnreadable: true
+        ), .signature)
+    }
+
+    func test_displayedBackdrop_photoFellBack_isTheCard() {
+        let photo = backdrop(ConversationAppearance(background: .photo(attachmentId: "64b7f0c2a1b2c3d4e5f60718", veil: 0.4, blur: 6)))
+
+        let shown = ConversationPreviewRenderer.displayed(photo, photoFellBack: true)
+
+        XCTAssertFalse(shown.paintsOverTheCard, "le fil retombe sur Signature, l'aperçu sur la carte")
+        XCTAssertEqual(ConversationPreviewRenderer.displayed(photo, photoFellBack: false), photo)
+    }
+
+    func test_displayedBackdrop_notAPhoto_ignoresThePhotoVerdict() {
+        let solid = backdrop(ConversationAppearance(background: .solid(color: "indigo")))
+
+        XCTAssertEqual(ConversationPreviewRenderer.displayed(solid, photoFellBack: true), solid)
+    }
+
+    /// La photo se résout UNE fois par pièce (`.task(id:)`), jamais à chaque
+    /// réévaluation du corps : la clé ne change que si la pièce ou ce qu'on
+    /// en sait change.
+    func test_photoKey_changesOnlyWithThePieceOrWhatTheCardKnowsOfIt() {
+        var piece = MeeshyMessageAttachment.image()
+        piece.isEncrypted = true
+        let photo = backdrop(ConversationAppearance(background: .photo(attachmentId: piece.id, veil: 0.4, blur: 6)))
+        var carrier = message("m1")
+        carrier.attachments = [piece]
+
+        let unknown = ConversationPreviewRenderer.photoKey(of: photo, among: [message("m0")])
+        let known = ConversationPreviewRenderer.photoKey(of: photo, among: [message("m0"), carrier])
+
+        XCTAssertEqual(unknown, ConversationPreviewRenderer.photoKey(of: photo, among: []))
+        XCTAssertNotEqual(unknown, known)
+        XCTAssertNil(ConversationPreviewRenderer.photoKey(of: backdrop(nil), among: []))
+    }
+
+    func test_photoFallbacks_rememberTheVerdict_withinABound() {
+        let fallbacks = ConversationPreviewPhotoFallbacks(capacity: 2)
+
+        fallbacks.remember("a")
+        fallbacks.remember("b")
+        fallbacks.remember("a")
+        fallbacks.remember("c")
+
+        XCTAssertFalse(fallbacks.contains("b"), "la plus ancienne sort")
+        XCTAssertTrue(fallbacks.contains("a"))
+        XCTAssertTrue(fallbacks.contains("c"))
+    }
+
     // MARK: - Le repli < iOS 26 : l'entrée sous Réduire les animations
 
     func test_entrance_reduceMotion_neverStartsFromTheRow() {

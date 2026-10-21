@@ -323,10 +323,17 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         let sheet = ".closesForConversationOpening(.sheet"
         XCTAssertEqual(try occurrences(of: sheet, in: "Features/Main/Views/FeedCommentsSheet.swift"), 1)
         XCTAssertEqual(try occurrences(of: sheet, in: "Features/Main/Components/ConversationInfoSheet.swift"), 1)
+        // 3a7502ceda : la feuille « nouvelle conversation » est montée par
+        // `NewConversationSheetHost` (commande de scène), qui la déclare une fois ;
+        // chaque racine monte ce porteur.
+        XCTAssertEqual(try occurrences(of: sheet, in: "Features/Main/Navigation/SceneCommandHosts.swift"), 1,
+                       "SceneCommandHosts.swift : nouvelle conversation")
         for layers in ["Features/Main/Views/RootLayers/RootViewLayers.swift",
                        "Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
-            XCTAssertEqual(try occurrences(of: sheet, in: layers), 3,
-                           "\(layers) : aperçu d'un toast, sélecteur de partage, nouvelle conversation")
+            XCTAssertEqual(try occurrences(of: sheet, in: layers), 2,
+                           "\(layers) : aperçu d'un toast, sélecteur de partage")
+            XCTAssertEqual(try occurrences(of: ".modifier(NewConversationSheetHost(", in: layers), 1,
+                           "\(layers) : nouvelle conversation, par son porteur")
         }
         XCTAssertEqual(try occurrences(of: ".closesForConversationOpening(.mediaGallery)",
                                        in: "Features/Main/Components/MediaHub/ConversationMediaHubView.swift"), 1)

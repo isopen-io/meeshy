@@ -233,7 +233,7 @@ public struct VideoClipBar: View, Equatable {
             // `AVAudioFile` sait lire la piste audio d'un MP4. Un conteneur
             // sans son — ou qu'ExtAudioFile ne sait pas ouvrir — renvoie un
             // tableau vide, et la bande ne se dessine tout simplement pas.
-            loadedWaveform = await AudioWaveform.samples(url: videoURL, count: 128)
+            loadedWaveform = (try? await WaveformCache.shared.samples(from: videoURL, count: 128)) ?? []
         }
     }
 

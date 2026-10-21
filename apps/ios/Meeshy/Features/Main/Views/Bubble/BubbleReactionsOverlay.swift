@@ -159,6 +159,8 @@ struct BubbleReactionsOverlay: View, Equatable {
             .frame(height: 22)
             .accessibilityLabel(String(localized: "bubble.reactions.add", defaultValue: "Ajouter une réaction", bundle: .main))
             .accessibilityHint(String(localized: "bubble.reactions.add.hint", defaultValue: "Appuyer pour réagir rapidement, maintenir pour choisir un emoji", bundle: .main))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onAddReaction?(messageId) }
     }
 
     // MARK: - Overflow pill (was: overflowPill)
@@ -251,6 +253,8 @@ struct BubbleReactionsOverlay: View, Equatable {
             }
             .accessibilityLabel(Self.pillAccessibilityLabel(reaction))
             .accessibilityHint(String(localized: "bubble.reactions.toggle.hint", defaultValue: "Appuyer pour basculer la réaction, maintenir pour voir toutes les réactions", bundle: .main))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onToggleReaction?(reaction.emoji) }
     }
 
     // MARK: - Accessibility helper (was: reactionPillAccessibilityLabel)

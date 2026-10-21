@@ -146,7 +146,7 @@ extension FeedViewModel {
         if !cachedBookmarks.contains(where: { $0.id == postId }) {
             var updated = cachedBookmarks
             updated.insert(post, at: 0)
-            try? await feedCache.savePreservingFreshness(updated, for: bookmarksKey)
+            await bestEffort("feedViewModelReactions.feedCache.savePreservingFreshness", category: .cache) { try await feedCache.savePreservingFreshness(updated, for: bookmarksKey) }
         }
         FeedbackToastManager.shared.showSuccess(String(localized: "feed.bookmark.success", defaultValue: "Ajouté aux favoris", bundle: .main))
 
@@ -157,7 +157,7 @@ extension FeedViewModel {
             )
         } catch {
             // Rollback the optimistic cache insertion.
-            try? await feedCache.savePreservingFreshness(snapshot, for: bookmarksKey)
+            await bestEffort("feedViewModelReactions.feedCache.savePreservingFreshness.2", category: .cache) { try await feedCache.savePreservingFreshness(snapshot, for: bookmarksKey) }
             FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.error", defaultValue: "Impossible d'enregistrer le favori", bundle: .main))
         }
     }

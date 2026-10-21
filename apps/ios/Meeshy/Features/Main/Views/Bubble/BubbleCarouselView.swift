@@ -140,6 +140,7 @@ struct BubbleCarouselView: View {
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(.ultraThinMaterial.opacity(MeeshyOpacity.intense)))
                     .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
+                    .meeshyTapTarget()
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
@@ -149,8 +150,12 @@ struct BubbleCarouselView: View {
                 pageIndicator
             }
         }
-        .padding(.horizontal, MeeshySpacing.smPlus)
-        .padding(.top, MeeshySpacing.smPlus)
+        .padding(EdgeInsets(
+            top: MeeshySpacing.smPlus - MeeshyTapTarget.inset(forVisualSide: 26),
+            leading: MeeshySpacing.smPlus - MeeshyTapTarget.inset(forVisualSide: 26),
+            bottom: 0,
+            trailing: MeeshySpacing.smPlus
+        ))
     }
 
     // MARK: - Page Indicator

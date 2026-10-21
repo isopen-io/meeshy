@@ -81,7 +81,7 @@ extension StoryViewModel {
         if intro.displayName == nil && intro.bannerURL == nil,
            let fetched = try? await introProfileResolver(group.id) {
             Self.applyIntroProfile(fetched, to: &intro)
-            try? await CacheCoordinator.shared.profiles.save([fetched], for: group.id)
+            await bestEffort("storyViewModelViewing.profiles.save", category: .cache) { try await CacheCoordinator.shared.profiles.save([fetched], for: group.id) }
         }
 
         if introMoodsByUserId == nil {

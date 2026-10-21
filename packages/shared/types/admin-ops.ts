@@ -179,6 +179,7 @@ export const SERVER_OPERATION_ERROR_CODES = [
   'OPERATION_COOLDOWN',
   'OPERATION_IN_PROGRESS',
   'OPS_RELAY_UNAVAILABLE',
+  'AUDIT_UNAVAILABLE',
 ] as const;
 export type ServerOperationErrorCode = (typeof SERVER_OPERATION_ERROR_CODES)[number];
 

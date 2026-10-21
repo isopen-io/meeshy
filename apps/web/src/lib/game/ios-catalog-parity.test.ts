@@ -48,7 +48,7 @@ const TRANSLATED: readonly { readonly web: InterfaceLanguage; readonly ios: stri
  * pour sa place : un plafond, jamais une cible. Il ne monte pas ; chaque phrase
  * réalignée sur le web le fait descendre (#11334).
  */
-const IOS_OWN_FRENCH_CEILING = 62;
+const IOS_OWN_FRENCH_CEILING = 32;
 
 /**
  * Les deux seules clés communes dont une langue, sur iOS, ne peut pas dire le
@@ -168,6 +168,23 @@ const { common, ownFrench } = partition(ios, await webGameCatalog('fr'));
 describe('les clés communes au web et à iOS disent les mêmes mots, dans chaque langue', () => {
   test('le témoin voit le jeu : plus de neuf cents clés communes', () => {
     expect(common.length).toBeGreaterThan(900);
+  });
+
+  test('les phrases qui se contredisaient d’une plateforme à l’autre disent la même chose (#11334)', () => {
+    const once = [
+      'game.rules.concept.badges.body',
+      'game.guide.moment.first_mint_possible.means_free',
+      'game.concept.chip.mint_covered',
+      'game2.prestige.confirm.consent',
+      'game.concept.prestige.use',
+      'game.rules.concept.prestige.body',
+      'game.rules.3.body',
+      'game.guide.step.mint.what',
+      'game2.league.pseudonym.invalid',
+      'game.fact.strides',
+      'game.fact.rebirths',
+    ];
+    expect(once.filter((key) => !common.includes(key))).toEqual([]);
   });
 
   test(`les phrases que l’app a réécrites pour sa place ne dépassent pas ${IOS_OWN_FRENCH_CEILING}`, () => {

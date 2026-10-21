@@ -39,8 +39,8 @@ export class StatusService {
   // Caches séparés pour activité légère et connexion
   private activityCache = new Map<string, number>();
   private connectionCache = new Map<string, number>();
-  private onlineEnsureCache = new Map<string, number>(); // throttle pour ensureUserOnline
   private heartbeatCache = new Map<string, number>(); // throttle pour noteHeartbeat (60s)
+  private heartbeatBroadcastCache = new Map<string, number>(); // rediffusion du battement (4 min)
 
   // Guard contre les race conditions: empêche les updates fire-and-forget après un disconnect
   private disconnectedUsers = new Map<string, number>(); // key -> timestamp disconnect
@@ -53,8 +53,10 @@ export class StatusService {
   // Throttling différencié
   private readonly ACTIVITY_THROTTLE_MS = 5000; // 5 secondes (activité légère)
   private readonly CONNECTION_THROTTLE_MS = 60000; // 1 minute (actions significatives)
-  private readonly ONLINE_ENSURE_THROTTLE_MS = 60000; // 1 minute (mise en ligne via REST)
   private readonly HEARTBEAT_THROTTLE_MS = 60000; // 1 minute (heartbeat socket)
+  // Sous la garde anti-stale de 5 min : un connecté passif reste vert chez ses amis
+  // pour un quart des diffusions d'un battement rediffusé chaque minute (#10575).
+  private readonly HEARTBEAT_BROADCAST_INTERVAL_MS = 240000;
 
   // Callback pour broadcaster les changements de présence (set par MeeshySocketIOManager)
   private presenceCallback: ((userId: string, isOnline: boolean, isAnonymous: boolean) => void) | null = null;
@@ -90,58 +92,10 @@ export class StatusService {
   }
 
   /**
-   * S'assurer qu'un utilisateur est marqué en ligne via REST
-   * Throttling: 60 secondes — si l'utilisateur fait des requêtes REST mais n'est pas
-   * connecté via Socket.IO, on le marque en ligne et on broadcaste.
-   */
-  ensureUserOnline(userId: string, isAnonymous: boolean = false): void {
-    // The throttle window lives in `onlineEnsureCache` under `anon_online_*`
-    // (matched by markDisconnected's delete), but the disconnect race-guard must
-    // read the key markDisconnected actually WRITES into `disconnectedUsers` —
-    // `anon_activity_*` for anonymous participants (see markDisconnected + the
-    // sibling guards in updateAnonymous*). Guarding on `anon_online_*` here made
-    // the guard a permanent no-op for anonymous users, letting a REST call still
-    // in flight resurrect an "online" presence for a participant who just left.
-    const throttleKey = isAnonymous ? `anon_online_${userId}` : userId;
-    const guardKey = isAnonymous ? `anon_activity_${userId}` : userId;
-
-    if (this.disconnectedUsers.has(guardKey)) return;
-
-    const now = Date.now();
-    const lastEnsure = this.onlineEnsureCache.get(throttleKey) || 0;
-
-    if (now - lastEnsure < this.ONLINE_ENSURE_THROTTLE_MS) return;
-
-    this.onlineEnsureCache.set(throttleKey, now);
-
-    const updatePromise = isAnonymous
-      ? this.prisma.participant.update({
-          where: { id: userId },
-          data: { isOnline: true, lastActiveAt: new Date() }
-        })
-      : this.prisma.user.update({
-          where: { id: userId },
-          data: { isOnline: true, lastActiveAt: new Date() }
-        });
-
-    updatePromise
-      .then(() => {
-        logger.info(`🟢 ${isAnonymous ? 'Anonymous' : 'User'} ${userId} marked online via REST`);
-        if (this.presenceCallback) {
-          this.presenceCallback(userId, true, isAnonymous);
-        }
-      })
-      .catch(err => {
-        logger.error(`❌ Failed to ensure online for ${userId}:`, err);
-      });
-  }
-
-  /**
    * Marquer un utilisateur comme déconnecté (empêche les updates fire-and-forget post-disconnect)
    */
   markDisconnected(userId: string, isAnonymous: boolean): void {
     const key = isAnonymous ? `anon_activity_${userId}` : userId;
-    const onlineKey = isAnonymous ? `anon_online_${userId}` : userId;
     this.disconnectedUsers.set(key, Date.now());
     // Aussi le key connection pour anonymes
     if (isAnonymous) {
@@ -149,8 +103,8 @@ export class StatusService {
     }
     this.activityCache.delete(key);
     this.connectionCache.delete(isAnonymous ? `anon_connection_${userId}` : userId);
-    this.onlineEnsureCache.delete(onlineKey);
     this.heartbeatCache.delete(isAnonymous ? `anon_heartbeat_${userId}` : `heartbeat_${userId}`);
+    this.heartbeatBroadcastCache.delete(isAnonymous ? `anon_heartbeat_${userId}` : `heartbeat_${userId}`);
 
     // Supprimer la clé Redis de présence
     const redisKey = `presence:${isAnonymous ? 'anon' : 'user'}:${userId}`;
@@ -361,9 +315,9 @@ export class StatusService {
   }
 
   /**
-   * Rafraîchir lastActiveAt sur heartbeat socket (throttle 60 s, pattern
-   * ensureUserOnline). Corollaire de la garde anti-stale 5 min de la règle de
-   * présence 1/3/5 : un connecté PASSIF (app ouverte, aucune requête ni
+   * Rafraîchir lastActiveAt sur heartbeat socket (throttle 60 s) — d'une socket
+   * AU PREMIER PLAN seulement (#10575, `AuthHandler.handleEnginePong`).
+   * Corollaire de la garde anti-stale 5 min de la règle de présence 1/3/5 : un connecté PASSIF (app ouverte, aucune requête ni
    * événement) ne génère que des heartbeats — sans ce refresh il « disparaît »
    * au bout de 5 min alors qu'il est en ligne. Au plus une écriture DB par
    * minute et par utilisateur ; bypass le throttle activité 5 s via
@@ -396,7 +350,9 @@ export class StatusService {
       .then(() => {
         this.metrics.successfulUpdates++;
         this.metrics.activityUpdates++;
-        if (this.presenceCallback) {
+        // Une déconnexion arrivée PENDANT l'écriture a déjà diffusé le départ :
+        // rediffuser « en ligne » après elle ressusciterait la pastille (#10575).
+        if (this.presenceCallback && !this.disconnectedUsers.has(guardKey) && this.claimHeartbeatBroadcast(cacheKey)) {
           this.presenceCallback(userId, true, isAnonymous);
         }
         logger.debug(`✓ ${isAnonymous ? 'Anonymous' : 'User'} ${userId} lastActiveAt updated (heartbeat)`);
@@ -407,19 +363,24 @@ export class StatusService {
       });
   }
 
+  private claimHeartbeatBroadcast(cacheKey: string): boolean {
+    const now = Date.now();
+    if (now - (this.heartbeatBroadcastCache.get(cacheKey) ?? 0) < this.HEARTBEAT_BROADCAST_INTERVAL_MS) return false;
+    this.heartbeatBroadcastCache.set(cacheKey, now);
+    return true;
+  }
+
   /**
    * Taille totale des caches de throttling en mémoire.
    *
-   * Source unique du calcul de `metrics.cacheSize` : les quatre caches
-   * (`activityCache`, `connectionCache`, `onlineEnsureCache`, `heartbeatCache`)
-   * sont sommés ensemble partout, y compris dans `resetMetrics`. Centraliser
-   * cette somme évite qu'un site diverge en oubliant un cache (bug historique
-   * de `resetMetrics`, qui omettait `onlineEnsureCache`).
+   * Source unique du calcul de `metrics.cacheSize` : les trois caches
+   * (`activityCache`, `connectionCache`, `heartbeatCache`) sont sommés
+   * ensemble partout, y compris dans `resetMetrics`. Centraliser cette somme
+   * évite qu'un site diverge en oubliant un cache.
    */
   private computeCacheSize(): number {
     return this.activityCache.size
       + this.connectionCache.size
-      + this.onlineEnsureCache.size
       + this.heartbeatCache.size;
   }
 
@@ -482,18 +443,17 @@ export class StatusService {
       }
     }
 
-    // Nettoyer le cache onlineEnsure
-    for (const [key, timestamp] of this.onlineEnsureCache.entries()) {
-      if (now - timestamp > this.CACHE_MAX_AGE_MS) {
-        this.onlineEnsureCache.delete(key);
-        deletedCount++;
-      }
-    }
-
     // Nettoyer le cache heartbeat
     for (const [key, timestamp] of this.heartbeatCache.entries()) {
       if (now - timestamp > this.CACHE_MAX_AGE_MS) {
         this.heartbeatCache.delete(key);
+        deletedCount++;
+      }
+    }
+
+    for (const [key, timestamp] of this.heartbeatBroadcastCache.entries()) {
+      if (now - timestamp > this.CACHE_MAX_AGE_MS) {
+        this.heartbeatBroadcastCache.delete(key);
         deletedCount++;
       }
     }
@@ -600,8 +560,8 @@ export class StatusService {
 
     this.activityCache.clear();
     this.connectionCache.clear();
-    this.onlineEnsureCache.clear();
     this.heartbeatCache.clear();
+    this.heartbeatBroadcastCache.clear();
     this.disconnectedUsers.clear();
     logger.info('🛑 StatusService arrêté');
   }

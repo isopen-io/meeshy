@@ -7,6 +7,7 @@ import type { Participant } from '@/lib/api/types';
 
 import { createIntervalClock, type IntervalClock } from './interval-clock';
 import { presenceKeyOf, presenceOf } from './conversation';
+import { useViewer } from './use-viewer';
 
 /**
  * L'HORLOGE DE LA PRÉSENCE (#10571) — un SEUL minuteur à 30 s pour toutes les
@@ -16,13 +17,31 @@ import { presenceKeyOf, presenceOf } from './conversation';
  */
 export const presenceClock: IntervalClock = createIntervalClock(30_000);
 
-/** La présence SERVIE d'un participant : la carte vivante d'abord, la charge REST sinon. */
-export function servedPresenceOf(
+/**
+ * UNE PERSONNE QU'UNE VUE NOMME (#11412) — son identifiant quand la vue le
+ * connaît (un membre actif, un visage de la rampe), et la charge REST qui la
+ * porte quand elle a été servie. L'un ou l'autre peut manquer.
+ */
+export type PresenceSubject = {
+  readonly userId: string | undefined;
+  readonly participant: Participant | undefined;
+};
+
+/**
+ * La présence SERVIE : la carte vivante d'abord (par l'identifiant nommé, sinon
+ * la clé du participant), la charge REST sinon. SA PROPRE pastille ne se peint
+ * jamais (décision porteur 2026-10-21, #11412) : la passerelle sert sa présence
+ * à soi-même, et son propre post ou son message en groupe la portaient.
+ */
+function servedPresenceOfSubject(
   state: Pick<PresenceState, 'byUser'>,
-  participant: Participant | undefined,
+  { userId, participant }: PresenceSubject,
   now: number,
+  selfId: string | null,
 ): UserPresenceStatus {
-  return livePresenceOf(state, presenceKeyOf(participant), now) ?? presenceOf(participant, now);
+  const key = userId ?? presenceKeyOf(participant);
+  if (key !== undefined && key === selfId) return 'offline';
+  return livePresenceOf(state, key, now) ?? presenceOf(participant, now);
 }
 
 type PresenceHookOptions = {
@@ -66,11 +85,29 @@ export function usePresences(
   participants: readonly (Participant | undefined)[],
   options: PresenceHookOptions = {},
 ): readonly UserPresenceStatus[] {
-  return useResolvedPresences((state, at) => participants.map((participant) => servedPresenceOf(state, participant, at)), options);
+  return usePresencesOf(participants.map((participant) => ({ userId: undefined, participant })), options);
 }
 
 export function usePresence(participant: Participant | undefined, options?: PresenceHookOptions): UserPresenceStatus {
   return usePresences([participant], options)[0] ?? 'offline';
+}
+
+/**
+ * LES PASTILLES DE PERSONNES NOMMÉES (#11412) — un membre actif que la
+ * passerelle n'a pas compté parmi les participants servis (elle en tronque la
+ * liste), un visage de la rampe du résumé : la carte vivante les connaît par
+ * leur identifiant, même quand aucune charge REST ne les porte.
+ */
+export function usePresencesOf(
+  subjects: readonly PresenceSubject[],
+  options: PresenceHookOptions = {},
+): readonly UserPresenceStatus[] {
+  const selfId = useViewer().id;
+  return useResolvedPresences((state, at) => subjects.map((subject) => servedPresenceOfSubject(state, subject, at, selfId)), options);
+}
+
+export function usePresenceOf(subject: PresenceSubject, options?: PresenceHookOptions): UserPresenceStatus {
+  return usePresencesOf([subject], options)[0] ?? 'offline';
 }
 
 /**
@@ -84,7 +121,11 @@ export function usePresencesOfUsers(
   userIds: readonly (string | undefined)[],
   options: PresenceHookOptions = {},
 ): readonly UserPresenceStatus[] {
-  return useResolvedPresences((state, at) => userIds.map((userId) => livePresenceOf(state, userId, at) ?? 'offline'), options);
+  const selfId = useViewer().id;
+  return useResolvedPresences(
+    (state, at) => userIds.map((userId) => (userId === selfId ? 'offline' : (livePresenceOf(state, userId, at) ?? 'offline'))),
+    options,
+  );
 }
 
 export function usePresenceOfUser(userId: string | undefined, options?: PresenceHookOptions): UserPresenceStatus {

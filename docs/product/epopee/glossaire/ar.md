@@ -67,7 +67,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. La
 | نور | ta lumière, le fil entier | un état de la lumière (→ **صفاء**, Clarté) |
 | صندوق | la quatrième réserve de l'Héritage (Coffre) | le coffre du jour (→ **العطيّة**, l'Offrande) |
 | كنز | la cinquième réserve de l'Héritage (Trésor) | le concept entier (→ **الإرث**, l'Héritage) ; « كنزك » est banni |
-| نجم، نجمة | le ciel : l'état نجمة, le ciel des aïeux, les fragments d'étoile (شظية نجم), les étoiles des médailles | la Flamme (Astre → **كوكب**), la renaissance (→ عصور), le voyage (→ خطوات) |
+| نجم، نجمة | le ciel : l'état نجمة, le ciel des aïeux, les fragments d'étoile (شظية نجم), les étoiles des médailles | la Flamme (Astre → **كوكب**), la renaissance (→ عصور), le voyage (→ خطوات), le libellé des paliers d'une médaille (→ **العتبات**) |
 | مرحلة | l'accueil seulement (« المرحلة 3 من 7 ») | le seuil des dix niveaux (→ **اختبار**), le voyage (→ **محطة**), les états de la lumière (→ **حالة**) |
 | خطوة | un pas du voyage | une étape de l'accueil (→ مرحلة), un geste (→ إجراء) |
 | رتبة | le nom que le monde donne au héros | la place en joute (→ **المركز**) |
@@ -166,7 +166,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. La
 | carnet de progression | **la Chronique** | « السيرة » (la geste du héros, comme سيرة عنترة) |
 | succès | **les Hauts faits** | « المآثر » (une مأثرة, « تتحقّق ») |
 | vitrine, trophées | **les Trophées** | « الكؤوس » (une كأس) : le trophée et la coupe partagent ce mot, comme dans les textes déjà publiés ; « الواجهة » (vitrine) est retirée |
-| badges | **les Médailles** | « الأوسمة » (un وسام) ; matières : نحاس، برونز، فضة، ذهب، بلاتين، سبج، منشور |
+| badges | **les Médailles** | « الأوسمة » (un وسام) ; matières : نحاس، برونز، فضة، ذهب، بلاتين، سبج، منشور ; chaque وسام gravit sept **عتبات** (libellé : « العتبات ») |
 | Atlas | **l'Atlas** | « الأطلس » ; un tampon = « ختم » |
 | Constellation, fragments d'étoile | **le ciel des aïeux** | « سماء الأجداد » ; « عشر شظايا نجم تُضيء نجمة » ; parure = « زينة » |
 

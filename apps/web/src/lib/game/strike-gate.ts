@@ -16,7 +16,8 @@ import { prefersReducedMotion } from './haptics';
  * jusqu'à la scène (`confirm`, `refuse`, `onAnswer`) — tant qu'elle n'est pas
  * venue, Meo garde le marteau levé — et c'est la scène qui l'ouvre quand la
  * pièce arrive dans l'Héritage (`settle`). Une seule scène joue la cérémonie
- * d'une frappe (`claim`), même si deux sont montées.
+ * d'une frappe (`claim`), même si deux sont montées. Qui apprend le début d'une frappe (`onAnswer`, `pending`) lit
+ * déjà, dans `opened()`, la fin de CETTE frappe (#11482).
  *
  * Elle ne retient RIEN quand aucune scène n'est à l'écran (`registerStrikeStage`)
  * ni quand l'utilisateur limite les animations : un geste qu'on ne voit pas
@@ -113,15 +114,15 @@ export function createStrikeGate(options: GateOptions = {}): StrikeGate {
     begin: () => {
       open();
       claimed = false;
-      answered({ kind: 'pending' });
       if (!staged() || reduced()) {
         current = Promise.resolve();
-        return;
+      } else {
+        current = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        stop = schedule(open, ms);
       }
-      current = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      stop = schedule(open, ms);
+      answered({ kind: 'pending' });
     },
     opened: () => current,
     cancel: open,

@@ -117,7 +117,7 @@ enum GameDetailText {
         case .flameForm: String(localized: "game.detail.flame.how", defaultValue: "Plus elle est grande, plus elle nourrit tes rêves.", bundle: .main)
         case .freeze: String(localized: "game.detail.freeze.how", defaultValue: "Prends-la avec tes Meeshes, ou trouve-la dans l’Offrande.", bundle: .main)
         case .mission: String(localized: "game.detail.mission.how", defaultValue: "Il fait jaillir des étincelles et te rapproche de l’Offrande.", bundle: .main)
-        case .chest: String(localized: "game.detail.chest.how", defaultValue: "Un présent voilé : des étincelles selon les actes de ton rêve, de la gloire, parfois une prime en étincelles, un fragment d’étoile ou une Veilleuse.", bundle: .main)
+        case .chest: String(localized: "game.detail.chest.how", defaultValue: "Un présent voilé : des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.", bundle: .main)
         case .coin: String(localized: "game.detail.coin.how", defaultValue: "Frappe-la avec ta lumière dès qu’elle suffit : une part s’y fige.", bundle: .main)
         case .levelRing: String(localized: "game.detail.ring.how", defaultValue: "Fais jaillir des étincelles : quand l’anneau est plein, ta lumière gagne un niveau.", bundle: .main)
         case .treasuryTier: String(localized: "game.detail.treasury.how", defaultValue: "Garde tes Meeshes au lieu de les dépenser : ton héritage passe au contenant suivant.", bundle: .main)
@@ -192,7 +192,7 @@ enum GameBadgeGuideText {
     /// Le titre de la phrase de l'axe — « Ce qui compte ».
     static var countsLabel: String { String(localized: "game.badge.counts_label", defaultValue: "Ce qu’elle suit", bundle: .main) }
 
-    static var starsLabel: String { String(localized: "game.badge.stars_label", defaultValue: "Étoiles", bundle: .main) }
+    static var starsLabel: String { String(localized: "game.badge.stars_label", defaultValue: "Paliers", bundle: .main) }
 
     static var materialLabel: String { String(localized: "game.badge.material_label", defaultValue: "Matière", bundle: .main) }
 

@@ -237,7 +237,7 @@ enum FeedPostEngagementRequests {
             let resp = try await PostService.shared.getBookmarks(cursor: nil, limit: 50)
             let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
             let posts = resp.data.map { $0.toFeedPost(preferredLanguages: langs) }
-            try? await CacheCoordinator.shared.feed.save(posts, for: bookmarksCacheKey)
+            await bestEffort("feedPostEngagementState.feed.save", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: bookmarksCacheKey) }
             return posts
         } catch { return nil }
     }
@@ -260,13 +260,13 @@ enum FeedPostEngagementRequests {
         if !current.contains(where: { $0.id == postId }) {
             var updated = current
             updated.insert(p, at: 0)
-            try? await CacheCoordinator.shared.feed.save(updated, for: key)
+            await bestEffort("feedPostEngagementState.feed.save.2", category: .cache) { try await CacheCoordinator.shared.feed.save(updated, for: key) }
         }
         return current
     }
 
     static func restoreBookmarkCache(_ snapshot: [FeedPost]) async {
-        try? await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksCacheKey)
+        await bestEffort("feedPostEngagementState.feed.save.3", category: .cache) { try await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksCacheKey) }
     }
 
     static func pruneBookmarkFromCache(postId: String) async {
@@ -278,6 +278,6 @@ enum FeedPostEngagementRequests {
         case .expired, .empty: return
         }
         let updated = current.filter { $0.id != postId }
-        try? await CacheCoordinator.shared.feed.save(updated, for: key)
+        await bestEffort("feedPostEngagementState.feed.save.4", category: .cache) { try await CacheCoordinator.shared.feed.save(updated, for: key) }
     }
 }

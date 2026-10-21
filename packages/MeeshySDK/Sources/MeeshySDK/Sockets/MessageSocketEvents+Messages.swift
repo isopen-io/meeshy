@@ -244,7 +244,7 @@ public enum BridgeAnnouncement: Sendable, Equatable {
 /// reparti ; `conversationIds` nomme les fils TOUCHÉS par le drain (rejeu
 /// réussi ou entrée perdue), pour qu'un client aille les resynchroniser.
 /// I3 (#7349) : iOS ne l'écoutait pas du tout (vérifié : aucune occurrence
-/// dans `apps/ios`/`packages/MeeshySDK` avant ce lot), alors que web-v2
+/// dans `apps/ios`/`packages/MeeshySDK` avant ce lot), alors que le web
 /// l'utilise déjà pour invalider ses listes de messages
 /// (`apps/web/src/lib/api/socket.ts`).
 public struct PendingMessagesDeliveredEvent: Decodable, Sendable {

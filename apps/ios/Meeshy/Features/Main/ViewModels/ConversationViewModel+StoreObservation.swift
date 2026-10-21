@@ -246,7 +246,7 @@ extension ConversationViewModel {
 
         for i in msgs.indices {
             if let plaintext = resultsByMessageId[msgs[i].id]?.plaintext {
-                msgs[i].content = plaintext
+                msgs[i].adoptDecryptedContent(plaintext)
             }
         }
         DecryptedMessageLedger.shared.record(results.filter { $0.plaintext != nil }.map(\.messageId))

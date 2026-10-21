@@ -302,13 +302,18 @@
 // web `--game-tier-*` (`apps/web/src/styles/game.css`) — la palette fixe des paliers, pas une
 // couleur de conversation. Valeur MESURÉE le 2026-10-08.
 //
-// 2026-10-21 (#11449, la pièce Meesh sur iOS) — littéraux 145 → 158 : `d50c95c584` ajoute la
-// géométrie et les matières de la pièce Meesh (`MeeshCoinGeometry`, `MeeshCoinPainter`,
-// `MeeshCoinFaces`) dans `MeeshyUI/Game/GameMaterial.swift` — dégradés or/argent/prisme
-// (`coinGoldInk`, `coinDiamondInk`, `coinVein`, `sparkles`…), même précédent que #9636/#9688 :
-// la matière FIXE d'un objet du jeu, pas une couleur de conversation. Valeur MESURÉE le
-// 2026-10-21 en local (diff par fichier contre ed76ab6af4, seul GameMaterial.swift a bougé).
-const REFERENCE_LITERAL_COLOR_COUNT = 158;
+// 2026-10-21 (#11176, #11177, l'épopée du jeu) — littéraux 145 → 178 :
+// - `GameMaterial.swift` (+13, d50c95c584) : les matières de la Meesh rejouées du web
+//   (`packages/shared/design/meesh-coin.json`, jetons `--game-coin-*`) — or pur centre compris,
+//   or mêlé de diamant, diamant, veines d'or de l'argent — dans la palette FIXE du jeu, même
+//   précédent que #9636 et #9688 ;
+// - `MintCeremonyLayers.swift` (+20, e63e8c0f72) : la palette de la cérémonie de la frappe
+//   (`MintCeremonyPalette`, que `MintStrikeScene.swift` lit aussi pour son enclume), miroir de
+//   `apps/web/src/lib/game/choreography-mint-ceremony.ts` —
+//   acier de l'enclume et du coin, bois du marteau, poussières d'argent, d'or et de diamant, nuit
+//   du prisme, halo de la lumière. Couleurs de DESSIN du jeu, indépendantes du thème de
+//   conversation : aucun `accentColor` ne peut les remplacer. Valeur MESURÉE le 2026-10-21 en local.
+const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // 2026-10-06 (#9516, vague 2 du jeu, iOS) — variables inconnues 444 → 445 :
 // `GameAtlasViews.swift` calcule `Color(hex: $0.colorHex)` depuis
 // `LanguageData.info(for: code)` — la teinte ASSOCIÉE À UNE LANGUE de l'atlas
@@ -399,10 +404,15 @@ const REFERENCE_LITERAL_COLOR_COUNT = 158;
 // `ProfileDecorSheet.swift` (1) teinte l'aperçu de la bannière par l'accent du PROFIL (`accentHex`, déjà remis à
 // `MeeshyAvatar(accentColor:)`), hors de tout contexte de conversation. Masqué en CI derrière le gate de poids web (#10974) ;
 // valeur MESURÉE le 2026-10-19 en CI (run 39192153480) et en local, commit par commit (c61aac2d11 : +4, c242265209 : +1).
-// 478 -> 479 (2026-10-21, #11449, la pièce Meesh sur iOS) : même commit `d50c95c584` que le littéral ci-dessus,
-// `GameMaterial.swift` (1) — une des variables de matière de la pièce ne passe pas la liste admise. Même précédent
-// (palette fixe du jeu). Valeur MESURÉE le 2026-10-21 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 479;
+// 478 -> 480 (2026-10-21, #11176, #11177, l'épopée du jeu) : `GameMaterial.swift` (1, d50c95c584) teinte les éclats du
+// prisme d'une palette FIXE de cinq (`sparkles`, miroir de `gameTwinkle` du web) ; `MintCeremonyLayers.swift` (1, e63e8c0f72)
+// choisit l'encre du signe de la cérémonie selon la nuit du prisme (`night ? … : …`). Couleurs de DESSIN du jeu, pas
+// d'interface : l'accent de conversation les effacerait. Valeur MESURÉE le 2026-10-21 en local.
+// 480 -> 481 (2026-10-21, #11231, le fond de la conversation dans l'aperçu d'appui long) :
+// `ConversationRecentMessagesPreview.swift` (1) peint la couleur de fond UNIE que l'utilisateur a choisie pour la
+// conversation (`.solid(let hex)`), à l'identique de `ConversationBackgroundView` (déjà compté, 459 -> 467) : la couleur
+// est la DONNÉE choisie, l'accent de conversation la trahirait. Valeur MESURÉE en CI le 2026-10-21 (PR #11405).
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 481;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

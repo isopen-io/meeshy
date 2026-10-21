@@ -47,11 +47,15 @@ export function bindPresenceLive(params: {
     if (!isRecord(payload) || !Array.isArray(payload.users)) return;
     store.getState().putAll(payload.users.filter(isServedStatus).map(entryOf));
   };
+  /* LA FRAPPE NE RAFRAÎCHIT QUE L'ACTIVITÉ (#11412) : forcer `isOnline` gardait
+     vert cinq minutes un pair non connecté, puis plus rien — elle le fait
+     décroître vert → orange → gris, la connexion restant celle servie. */
   const onTyping = (payload: unknown): void => {
     if (!isRecord(payload) || typeof payload.userId !== 'string' || payload.userId === viewerId()) return;
-    store.getState().put(payload.userId, { isOnline: true, lastActiveAt: new Date(now()).toISOString() });
+    const isOnline = store.getState().byUser[payload.userId]?.isOnline ?? false;
+    store.getState().put(payload.userId, { isOnline, lastActiveAt: new Date(now()).toISOString() });
   };
-  const onDisconnect = (): void => store.getState().clear();
+  const onDisconnect = (): void => store.getState().markAllOffline();
 
   socket.on(SERVER_EVENTS.USER_STATUS, onStatus);
   socket.on(SERVER_EVENTS.PRESENCE_SNAPSHOT, onSnapshot);

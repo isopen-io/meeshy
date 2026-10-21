@@ -163,7 +163,8 @@ final class StoryHeaderMenuWiringGuardTests: XCTestCase {
             ("case .repostAsPost:", "StoryDirectRepost.publish(story, as: .post)"),
             ("case .repostAsReel:", "StoryDirectRepost.publish(story, as: .reel)"),
             ("case .report:", "showReportSheet = true"),
-            ("case .delete:", "deleteCurrentStory()"),
+            ("case .remove:", "ContentRemovalPresenter.present(.story) { deleteCurrentStory($0) }"),
+            ("case .delete:", "deleteCurrentStory(nil)"),
             ("case .close:", "dismissViewer()"),
         ]
         for (marker, effect) in effects {
