@@ -46,6 +46,24 @@ final class RegexLiteralsCompileGuardTests: XCTestCase {
         XCTAssertTrue(Self.failures(in: source).isEmpty)
     }
 
+    func test_aucunTryBangRegexEnProduction() throws {
+        let root = repoRoot()
+        let offenders = try Self.productionTrees
+            .flatMap { swiftFiles(under: root.appendingPathComponent($0)) }
+            .filter { url in
+                try String(contentsOf: url, encoding: .utf8)
+                    .split(separator: "\n", omittingEmptySubsequences: false)
+                    .contains { line in
+                        !line.trimmingCharacters(in: .whitespaces).hasPrefix("//") && line.contains("try! NSRegularExpression(")
+                    }
+            }
+            .map { $0.path.replacingOccurrences(of: root.path + "/", with: "") }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Un motif littéral se compile par `LiteralRegex.compile(pattern:)`, jamais par `try!` :\n\(offenders.joined(separator: "\n"))"
+        )
+    }
+
     func test_chaqueMotifRegexDeProductionCompile() throws {
         let root = repoRoot()
         let sources = Self.productionTrees.flatMap { swiftFiles(under: root.appendingPathComponent($0)) }
