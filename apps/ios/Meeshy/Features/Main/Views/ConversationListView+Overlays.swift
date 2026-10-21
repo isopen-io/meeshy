@@ -344,8 +344,9 @@ extension ConversationListView {
         // Le shrink est ANIMÉ dans la même transaction que le fondu : la carte
         // se résorbe (zoom-out + blur progressif lié au scale) pendant que le
         // menu redescend et se dissout — miroir du zoom d'ouverture.
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
-            previewScale = min(previewScale, 0.7)
+        let reduceMotion = ConversationPreviewEntranceMotion.isReducedNow
+        withAnimation(ConversationPreviewEntranceMotion.exit(reduceMotion: reduceMotion)) {
+            previewScale = reduceMotion ? previewScale : min(previewScale, 0.7)
             if !chipModeLatched && dragOffsetY <= 110 {
                 // Fermeture normale : la carte revient en place en fondant.
                 // Fermeture depuis le morph drag (chip relâchée) : la carte
@@ -377,40 +378,42 @@ extension ConversationListView {
         chipModeLatched ? 1 : min(1, max(0, dragOffsetY / 140))
     }
 
-    /// Émergence de l'aperçu depuis la ligne pressée. Tick 1 : la frame de
-    /// repos de la carte vient d'être mesurée (layout au repos, overlay
-    /// invisible) — placer la carte SUR la ligne source, sans animation.
-    /// Tick 2 : animer vers la position/taille finales avec un départ LENT,
-    /// une accélération à mi-course et un léger rebond (timingCurve à
-    /// overshoot) ; le menu remonte et le fond se floute dans la même
-    /// transaction (coordonné).
-    func runContextMenuEmergence() {
+    /// Émergence de l'aperçu depuis la ligne pressée — tick 1 : la carte se
+    /// pose, invisible, d'où elle part ; tick 2 : elle rejoint sa place, menu
+    /// et flou du fond dans la même transaction (`ConversationPreviewEntranceMotion`).
+    func runContextMenuEmergence(reduceMotion: Bool = ConversationPreviewEntranceMotion.isReducedNow) {
         DispatchQueue.main.async {
             var placement = Transaction()
             placement.disablesAnimations = true
             withTransaction(placement) {
-                if let source = contextMenuSourceFrame, previewRestFrame.height > 0 {
-                    let scale = max(0.22, min(0.7, source.height / previewRestFrame.height))
-                    previewScale = scale
-                    // scaleEffect est ancré .bottom : le centre visuel de la
-                    // carte réduite est à maxY - scale·H/2 — l'offset aligne
-                    // ce centre sur celui de la ligne pressée.
-                    previewEmergeOffset = source.midY
-                        - (previewRestFrame.maxY - scale * previewRestFrame.height / 2)
-                } else {
-                    previewScale = 0.7
-                    previewEmergeOffset = 0
-                }
+                let start = ConversationPreviewEntranceMotion.placement(
+                    source: contextMenuSourceFrame, rest: previewRestFrame, reduceMotion: reduceMotion
+                )
+                previewScale = start.scale
+                previewEmergeOffset = start.offset
             }
             DispatchQueue.main.async {
-                // Overshoot 1.3 : rebond nettement perceptible à l'arrivée de
-                // la carte (le rebond appartient au long-press/preview, pas
-                // au swipe des lignes — feedback user 2026-07-03).
-                withAnimation(.timingCurve(0.5, 0.0, 0.15, 1.3, duration: 0.55)) {
+                withAnimation(ConversationPreviewEntranceMotion.entrance(reduceMotion: reduceMotion)) {
                     contextMenuAppeared = true
                     previewScale = 1.0
                     previewEmergeOffset = 0
                 }
+            }
+        }
+    }
+
+    /// L'appel de l'en-tête de l'aperçu — conversation directe à pair connu.
+    func previewCallAction(for conversation: Conversation) -> (() -> Void)? {
+        guard conversation.type == .direct, let uid = conversation.participantUserId else { return nil }
+        return {
+            dismissContextMenu()
+            Task {
+                await CallManager.shared.requestPermissionsThenStartCall(
+                    conversationId: conversation.id,
+                    userId: uid,
+                    displayName: conversation.name,
+                    isVideo: false
+                )
             }
         }
     }
@@ -430,211 +433,208 @@ extension ConversationListView {
     @ViewBuilder
     var conversationContextMenuOverlay: some View {
         if let conversation = sheetTargets.contextMenu {
-            ZStack {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                    .overlay(Color.black.opacity(MeeshyOpacity.light).ignoresSafeArea())
-                    .contentShape(Rectangle())
-                    .onTapGesture { dismissContextMenu() }
-                    // Le blur du fond s'EFFACE pendant le morph drag : la
-                    // liste réapparaît sous la carte devenue chip draggable.
-                    .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
+            ConversationPreviewMotionReader { reduceMotion in
+                ZStack {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .ignoresSafeArea()
+                        .overlay(Color.black.opacity(MeeshyOpacity.light).ignoresSafeArea())
+                        .contentShape(Rectangle())
+                        .onTapGesture { dismissContextMenu() }
+                        // Le blur du fond s'EFFACE pendant le morph drag : la
+                        // liste réapparaît sous la carte devenue chip draggable.
+                        .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
 
-                VStack(spacing: MeeshySpacing.lg) {
-                    // Aperçu d'appui long = la carte des DERNIERS MESSAGES
-                    // (bannière, avatar/logo, titre, icônes d'en-tête, fil
-                    // récent) — drapeau Lentille ON comme OFF (décision user
-                    // 2026-08-21 : le menu des modes n'a rien à faire dans
-                    // l'aperçu ; le choix de mode garde ses deux portes,
-                    // l'encoche de la carte de focus et le sous-menu « Mode
-                    // de lecture », monté plus haut dans ce fichier).
-                    ConversationPreviewView(
-                        conversation: conversation,
-                        previewLoader: conversationViewModel.previewLoader,
-                        bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
-                        avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
-                        storyState: storyRingState(for: conversation),
-                        moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
-                        presenceState: conversation.type == .direct
-                            ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
-                            : nil,
-                        isDirect: conversation.type == .direct,
-                        onCall: (conversation.type == .direct && conversation.participantUserId != nil) ? {
+                    VStack(spacing: MeeshySpacing.lg) {
+                        // Aperçu d'appui long = la carte des DERNIERS MESSAGES
+                        // (bannière, avatar/logo, titre, icônes d'en-tête, fil
+                        // récent) — drapeau Lentille ON comme OFF (décision user
+                        // 2026-08-21 : le menu des modes n'a rien à faire dans
+                        // l'aperçu ; le choix de mode garde ses deux portes,
+                        // l'encoche de la carte de focus et le sous-menu « Mode
+                        // de lecture », monté plus haut dans ce fichier).
+                        ConversationPreviewView(
+                            conversation: conversation,
+                            previewLoader: conversationViewModel.previewLoader,
+                            bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
+                            avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                            storyState: storyRingState(for: conversation),
+                            moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
+                            presenceState: conversation.type == .direct
+                                ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
+                                : nil,
+                            isDirect: conversation.type == .direct,
+                            readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation),
+                            onCall: previewCallAction(for: conversation),
+                            onSearch: {
+                                dismissContextMenu()
+                                router.pendingOpenSearch = true
+                                onSelect(conversation)
+                            },
+                            onInfo: { dismissContextMenu(); sheetTargets.info = conversation },
+                            onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
+                        )
+                        // Preview STATIQUE (parité `.contextMenu` natif) : le
+                        // ScrollView interne des messages interceptait le pan et
+                        // volait le drag du geste de repli/morph ci-dessous — le
+                        // contenu défilait dans la carte au lieu de la déplacer
+                        // (vérifié frame par frame 2026-07-03).
+                        .scrollDisabled(true)
+                        // Toucher la carte ouvre la conversation (parité native).
+                        .contentShape(Rectangle())
+                        .onTapGesture {
                             dismissContextMenu()
-                            if let uid = conversation.participantUserId {
-                                Task {
-                                    await CallManager.shared.requestPermissionsThenStartCall(
-                                        conversationId: conversation.id,
-                                        userId: uid,
-                                        displayName: conversation.name,
-                                        isVideo: false
-                                    )
-                                }
-                            }
-                        } : nil,
-                        onSearch: {
-                            dismissContextMenu()
-                            router.pendingOpenSearch = true
                             onSelect(conversation)
-                        },
-                        onInfo: { dismissContextMenu(); sheetTargets.info = conversation },
-                        onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
-                    )
-                    // Preview STATIQUE (parité `.contextMenu` natif) : le
-                    // ScrollView interne des messages interceptait le pan et
-                    // volait le drag du geste de repli/morph ci-dessous — le
-                    // contenu défilait dans la carte au lieu de la déplacer
-                    // (vérifié frame par frame 2026-07-03).
-                    .scrollDisabled(true)
-                    // 340 pt au plus, et jamais plus large que la colonne (volet
-                    // gauche iPad étroit) : la carte débordait de ses bords.
-                    .frame(maxWidth: .infinity).frame(maxWidth: ConversationPreviewWidthLaw.maximum).padding(.horizontal, MeeshySpacing.md)
-                    // Frame de repos de la carte (mesurée overlay invisible,
-                    // hors transformation) — point d'arrivée de l'émergence.
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear
-                                .onAppear { capturePreviewRestFrameIfIdle(geo.frame(in: .global)) }
-                                .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
-                                    capturePreviewRestFrameIfIdle(frame)
-                                }
                         }
-                    )
-                    // Aperçu : émerge DEPUIS la ligne pressée (placement par
-                    // `runContextMenuEmergence` : scale ≈ hauteur ligne /
-                    // hauteur carte + offset vers la ligne) puis rejoint sa
-                    // position finale — départ lent, accélération, rebond.
-                    // Pendant le morph drag vers le bas, la carte rétrécit en
-                    // chip (multiplicateur dragMorphProgress) et suit le doigt.
-                    // Glisser vers le haut replie la carte (previewScale → 0,
-                    // ancre .bottom : elle se résorbe vers le menu) pour donner
-                    // toute la place au menu ; glisser vers le bas au-delà du
-                    // seuil ferme l'overlay (parité contextMenu natif). Ce
-                    // geste vit ICI et jamais sur les lignes de la liste : un
-                    // DragGesture plein-ligne entrait en contention avec le pan
-                    // du ScrollView et figeait le scroll (régression ff5d5649).
-                    .scaleEffect(previewScale * (1 - 0.45 * dragMorphProgress), anchor: .bottom)
-                    .offset(x: dragOffsetX, y: dragOffsetY + previewEmergeOffset)
-                    .opacity(contextMenuAppeared ? 1 : 0)
-                    // Blur PROGRESSIF lié au scale (continu, sans saut au
-                    // franchissement d'un seuil) : net à 1.0, flouté au départ
-                    // de l'émergence, jusqu'à 3.0 carte repliée — la carte se
-                    // matérialise à l'ouverture et se dissout au repli/
-                    // fermeture. max(0,…) : l'overshoot du rebond dépasse 1.0,
-                    // le radius ne doit jamais être négatif.
-                    .blur(radius: 3.0 * max(0, 1.0 - previewScale))
-                    .gesture(previewCollapseGesture)
+                        // 340 pt au plus, et jamais plus large que la colonne (volet
+                        // gauche iPad étroit) : la carte débordait de ses bords.
+                        .frame(maxWidth: .infinity).frame(maxWidth: ConversationPreviewWidthLaw.maximum).padding(.horizontal, MeeshySpacing.md)
+                        // Frame de repos de la carte (mesurée overlay invisible,
+                        // hors transformation) — point d'arrivée de l'émergence.
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear
+                                    .onAppear { capturePreviewRestFrameIfIdle(geo.frame(in: .global)) }
+                                    .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
+                                        capturePreviewRestFrameIfIdle(frame)
+                                    }
+                            }
+                        )
+                        // Aperçu : émerge DEPUIS la ligne pressée (placement par
+                        // `runContextMenuEmergence` : scale ≈ hauteur ligne /
+                        // hauteur carte + offset vers la ligne) puis rejoint sa
+                        // position finale — départ lent, accélération, rebond.
+                        // Pendant le morph drag vers le bas, la carte rétrécit en
+                        // chip (multiplicateur dragMorphProgress) et suit le doigt.
+                        // Glisser vers le haut replie la carte (previewScale → 0,
+                        // ancre .bottom : elle se résorbe vers le menu) pour donner
+                        // toute la place au menu ; glisser vers le bas au-delà du
+                        // seuil ferme l'overlay (parité contextMenu natif). Ce
+                        // geste vit ICI et jamais sur les lignes de la liste : un
+                        // DragGesture plein-ligne entrait en contention avec le pan
+                        // du ScrollView et figeait le scroll (régression ff5d5649).
+                        .scaleEffect(previewScale * (1 - 0.45 * dragMorphProgress), anchor: .bottom)
+                        .offset(x: dragOffsetX, y: dragOffsetY + previewEmergeOffset)
+                        .opacity(contextMenuAppeared ? 1 : 0)
+                        // Blur PROGRESSIF lié au scale (continu, sans saut au
+                        // franchissement d'un seuil) : net à 1.0, flouté au départ
+                        // de l'émergence, jusqu'à 3.0 carte repliée — la carte se
+                        // matérialise à l'ouverture et se dissout au repli/
+                        // fermeture. max(0,…) : l'overshoot du rebond dépasse 1.0,
+                        // le radius ne doit jamais être négatif.
+                        .blur(radius: ConversationPreviewEntranceMotion.blurRadius(previewScale: previewScale, reduceMotion: reduceMotion))
+                        .gesture(previewCollapseGesture)
 
-                    ConversationContextMenuView(
-                        accentHex: conversation.accentColor,
-                        isPinned: conversation.userState.isPinned,
-                        isMuted: conversation.userState.isMuted,
-                        hasUnread: conversation.userState.unreadCount > 0,
-                        currentReaction: conversation.userState.reaction,
-                        categories: conversationViewModel.userCategories.map {
-                            ConversationMenuCategory(id: $0.id, name: $0.name, icon: $0.icon)
-                        },
-                        currentSectionId: conversation.userState.sectionId,
-                        canInvite: canCreateShareLink(for: conversation),
-                        isLocked: ConversationLockManager.shared.isLocked(conversation.id),
-                        isArchived: conversation.userState.isArchived, canToggleArchive: !conversation.isArchiveImposed,
-                        isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
-                        isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
-                        canRename: conversation.type != .direct,
-                        onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
-                        onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
-                        onMarkReadToggle: {
-                            Task {
-                                if conversation.userState.unreadCount > 0 {
-                                    await conversationViewModel.markAsRead(conversationId: conversation.id)
-                                } else {
-                                    await conversationViewModel.markAsUnread(conversationId: conversation.id)
-                                }
-                            }
-                        },
-                        onDetails: { sheetTargets.info = conversation },
-                        onRename: {
-                            renameText = conversation.name
-                            sheetTargets.rename = conversation
-                        },
-                        onSetFavorite: { emoji in
-                            Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
-                        },
-                        onRemoveFavorite: {
-                            Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
-                        },
-                        onMove: { sectionId in
-                            conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
-                        },
-                        onInvite: { sheetTargets.inviteSheet = conversation },
-                        onLock: {
-                            if ConversationLockManager.shared.isLocked(conversation.id) {
-                                lockSheetMode = .unlockConversation
-                                sheetTargets.lockSheet = conversation
-                            } else if ConversationLockManager.shared.masterPinConfigured {
-                                lockSheetMode = .lockConversation
-                                sheetTargets.lockSheet = conversation
-                            } else {
-                                showNoMasterPinAlert = true
-                            }
-                        },
-                        onArchive: {
-                            Task {
-                                if conversation.userState.isArchived {
-                                    await conversationViewModel.unarchiveConversation(conversationId: conversation.id)
-                                } else {
-                                    await conversationViewModel.archiveConversation(conversationId: conversation.id)
-                                }
-                            }
-                        },
-                        onBlock: {
-                            if let uid = conversation.participantUserId, BlockService.shared.isBlocked(userId: uid) {
+                        ConversationContextMenuView(
+                            accentHex: conversation.accentColor,
+                            isPinned: conversation.userState.isPinned,
+                            isMuted: conversation.userState.isMuted,
+                            hasUnread: conversation.userState.unreadCount > 0,
+                            currentReaction: conversation.userState.reaction,
+                            categories: conversationViewModel.userCategories.map {
+                                ConversationMenuCategory(id: $0.id, name: $0.name, icon: $0.icon)
+                            },
+                            currentSectionId: conversation.userState.sectionId,
+                            canInvite: canCreateShareLink(for: conversation),
+                            isLocked: ConversationLockManager.shared.isLocked(conversation.id),
+                            isArchived: conversation.userState.isArchived, canToggleArchive: !conversation.isArchiveImposed,
+                            isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
+                            isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
+                            canRename: conversation.type != .direct,
+                            onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
+                            onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
+                            onMarkReadToggle: {
                                 Task {
-                                    await BlockActionCoordinator.shared.unblock(userId: uid)
-                                    await MainActor.run { HapticFeedback.success() }
+                                    if conversation.userState.unreadCount > 0 {
+                                        await conversationViewModel.markAsRead(conversationId: conversation.id)
+                                    } else {
+                                        await conversationViewModel.markAsUnread(conversationId: conversation.id)
+                                    }
                                 }
-                            } else {
-                                sheetTargets.blockTarget = conversation
-                                showBlockConfirmation = true
-                            }
-                        },
-                        onDelete: {
-                            // Destructif → confirmation système obligatoire
-                            // (dialog attaché dans ConversationListView.body).
-                            sheetTargets.deleteTarget = conversation
-                        },
-                        onOpenFocalBetaPreview: {
-                            // RETRAIT FOCAL iOS (2026-08-18) : l'item n'est
-                            // plus monté par ConversationContextMenuView —
-                            // closure conservée pour l'API, inerte.
-                        },
-                        onDismiss: { dismissContextMenu() }
-                    )
-                    // Menu : slide-up 70 pt + fondu + dé-blur, dans la MÊME
-                    // transaction que l'émergence de l'aperçu — le menu
-                    // remonte pendant que la carte rejoint sa place
-                    // (coordonné), et redescend en se dissolvant (blur) à la
-                    // fermeture. Pendant le morph drag, il glisse vers le bas
-                    // et se dissout (opacité + blur ∝ dragMorphProgress).
-                    // L'ancienne formule `70 * (1 - previewScale)` valait 0
-                    // au montage (previewScale démarrait à 1.0) : le slide-up
-                    // était inerte.
-                    .offset(y: contextMenuAppeared ? 40 * dragMorphProgress : 70)
-                    .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
-                    .blur(radius: contextMenuAppeared ? 6 * dragMorphProgress : 6)
+                            },
+                            onDetails: { sheetTargets.info = conversation },
+                            onRename: {
+                                renameText = conversation.name
+                                sheetTargets.rename = conversation
+                            },
+                            onSetFavorite: { emoji in
+                                Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
+                            },
+                            onRemoveFavorite: {
+                                Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
+                            },
+                            onMove: { sectionId in
+                                conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
+                            },
+                            onInvite: { sheetTargets.inviteSheet = conversation },
+                            onLock: {
+                                if ConversationLockManager.shared.isLocked(conversation.id) {
+                                    lockSheetMode = .unlockConversation
+                                    sheetTargets.lockSheet = conversation
+                                } else if ConversationLockManager.shared.masterPinConfigured {
+                                    lockSheetMode = .lockConversation
+                                    sheetTargets.lockSheet = conversation
+                                } else {
+                                    showNoMasterPinAlert = true
+                                }
+                            },
+                            onArchive: {
+                                Task {
+                                    if conversation.userState.isArchived {
+                                        await conversationViewModel.unarchiveConversation(conversationId: conversation.id)
+                                    } else {
+                                        await conversationViewModel.archiveConversation(conversationId: conversation.id)
+                                    }
+                                }
+                            },
+                            onBlock: {
+                                if let uid = conversation.participantUserId, BlockService.shared.isBlocked(userId: uid) {
+                                    Task {
+                                        await BlockActionCoordinator.shared.unblock(userId: uid)
+                                        await MainActor.run { HapticFeedback.success() }
+                                    }
+                                } else {
+                                    sheetTargets.blockTarget = conversation
+                                    showBlockConfirmation = true
+                                }
+                            },
+                            onDelete: {
+                                // Destructif → confirmation système obligatoire
+                                // (dialog attaché dans ConversationListView.body).
+                                sheetTargets.deleteTarget = conversation
+                            },
+                            onOpenFocalBetaPreview: {
+                                // RETRAIT FOCAL iOS (2026-08-18) : l'item n'est
+                                // plus monté par ConversationContextMenuView —
+                                // closure conservée pour l'API, inerte.
+                            },
+                            onDismiss: { dismissContextMenu() }
+                        )
+                        // Menu : slide-up 70 pt + fondu + dé-blur, dans la MÊME
+                        // transaction que l'émergence de l'aperçu — le menu
+                        // remonte pendant que la carte rejoint sa place
+                        // (coordonné), et redescend en se dissolvant (blur) à la
+                        // fermeture. Pendant le morph drag, il glisse vers le bas
+                        // et se dissout (opacité + blur ∝ dragMorphProgress).
+                        // L'ancienne formule `70 * (1 - previewScale)` valait 0
+                        // au montage (previewScale démarrait à 1.0) : le slide-up
+                        // était inerte.
+                        .offset(y: contextMenuAppeared ? 40 * dragMorphProgress : ConversationPreviewEntranceMotion.menuRestOffset(reduceMotion: reduceMotion))
+                        .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
+                        .blur(radius: contextMenuAppeared ? 6 * dragMorphProgress : ConversationPreviewEntranceMotion.menuRestBlur(reduceMotion: reduceMotion))
+                    }
+                    .padding(.horizontal, MeeshySpacing.xl)
                 }
-                .padding(.horizontal, MeeshySpacing.xl)
+                .onAppear {
+                    // Émergence depuis la ligne pressée : placement invisible sur
+                    // la ligne (tick 1, frame de repos mesurée) puis départ lent,
+                    // accélération et rebond vers la position finale (tick 2).
+                    dragOffsetY = 0
+                    dragOffsetX = 0
+                    runContextMenuEmergence(reduceMotion: reduceMotion)
+                }
             }
             .zIndex(300)
-            .onAppear {
-                // Émergence depuis la ligne pressée : placement invisible sur
-                // la ligne (tick 1, frame de repos mesurée) puis départ lent,
-                // accélération et rebond vers la position finale (tick 2).
-                dragOffsetY = 0
-                dragOffsetX = 0
-                runContextMenuEmergence()
-            }
         }
     }
 
@@ -758,5 +758,80 @@ extension ConversationListView {
             HapticFeedback.success()
             conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: targetId)
         }
+    }
+}
+
+// MARK: - L'entrée de l'aperçu sous Réduire les animations (#11213)
+
+/// Le mouvement de l'aperçu < iOS 26 : la carte ÉMERGE de la ligne pressée —
+/// départ lent, accélération à mi-course, rebond (overshoot 1.3, le rebond
+/// appartient au long-press, pas au swipe des lignes — feedback 2026-07-03) et
+/// flou progressif. Sous Réduire les animations, un FONDU sur place, sans
+/// overshoot ni flou. Les deux moitiés du réglage (système et app) se lisent
+/// par `MeeshyMotion.shouldReduce`.
+enum ConversationPreviewEntranceMotion {
+    static let fadeDuration: Double = 0.18
+
+    /// Lecture ponctuelle, hors d'une vue (réouverture rapide, fermeture) : le
+    /// corps de l'overlay, lui, lit l'environnement (`ConversationPreviewMotionReader`).
+    static var isReducedNow: Bool {
+        MeeshyMotion.shouldReduce(
+            system: UIAccessibility.isReduceMotionEnabled,
+            userForced: MeeshyAccessibilityPreferences.shared.reduceMotion
+        )
+    }
+
+    static func emergesFromRow(reduceMotion: Bool) -> Bool {
+        !reduceMotion
+    }
+
+    /// D'où la carte part : SUR la ligne pressée (scale ≈ hauteur ligne /
+    /// hauteur carte, ancre `.bottom` — l'offset aligne le centre visuel de la
+    /// carte réduite, à maxY - scale·H/2, sur celui de la ligne), zoom centré
+    /// 0.7 quand la ligne n'est pas connue (rotor), à sa place sous Réduire les
+    /// animations.
+    static func placement(source: CGRect?, rest: CGRect, reduceMotion: Bool) -> (scale: CGFloat, offset: CGFloat) {
+        guard emergesFromRow(reduceMotion: reduceMotion) else { return (1.0, 0) }
+        guard let source, rest.height > 0 else { return (0.7, 0) }
+        let scale = max(0.22, min(0.7, source.height / rest.height))
+        return (scale, source.midY - (rest.maxY - scale * rest.height / 2))
+    }
+
+    static func entrance(reduceMotion: Bool) -> Animation {
+        reduceMotion ? .easeOut(duration: fadeDuration) : .timingCurve(0.5, 0.0, 0.15, 1.3, duration: 0.55)
+    }
+
+    static func exit(reduceMotion: Bool) -> Animation {
+        reduceMotion ? .easeOut(duration: fadeDuration) : .spring(response: 0.32, dampingFraction: 0.78)
+    }
+
+    /// Le flou suit l'échelle de la carte — net à 1.0, jusqu'à 3 repliée ;
+    /// jamais négatif quand le rebond dépasse 1.0 ; nul sous Réduire les
+    /// animations.
+    static func blurRadius(previewScale: CGFloat, reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : 3.0 * max(0, 1.0 - previewScale)
+    }
+
+    /// Le menu remonte de 70 pt à l'ouverture ; sous Réduire les animations,
+    /// il apparaît à sa place.
+    static func menuRestOffset(reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : 70
+    }
+
+    static func menuRestBlur(reduceMotion: Bool) -> CGFloat {
+        reduceMotion ? 0 : 6
+    }
+}
+
+/// Lit Réduire les animations dans l'environnement — ses deux moitiés — pour
+/// l'overlay de `ConversationListView`, une extension qui ne peut pas déclarer
+/// de propriété `@Environment`.
+struct ConversationPreviewMotionReader<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    @ViewBuilder let content: (Bool) -> Content
+
+    var body: some View {
+        content(MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion))
     }
 }

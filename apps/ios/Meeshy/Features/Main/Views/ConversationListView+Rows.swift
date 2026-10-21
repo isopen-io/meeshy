@@ -159,19 +159,11 @@ struct ConversationRowItem: View {
                     .contextMenu {
                         nativeContextMenu()
                     } preview: {
-                        // Aperçu d'appui long = la carte des DERNIERS MESSAGES
-                        // (bannière, avatar/logo, titre, icônes d'en-tête, fil
-                        // récent) — drapeau Lentille ON comme OFF (décision
-                        // user 2026-08-21 : le menu des modes n'a rien à faire
-                        // dans l'aperçu ; le choix de mode garde ses deux
-                        // portes, l'encoche de la carte de focus et le
-                        // sous-menu « Mode de lecture » du menu). Preview
-                        // STATIQUE (non interactive dans un contextMenu natif)
-                        // — mêmes inputs que l'overlay custom, sans callbacks.
-                        // Largeur pilotée par le call site, comme l'overlay
-                        // (source de vérité unique). Ce closure est
-                        // long-press-only (voir le portillon `.equatable()`
-                        // plus bas), jamais évalué à chaque passe de body.
+                        // Aperçu = la carte des DERNIERS MESSAGES, drapeau Lentille
+                        // ON comme OFF (décision 2026-08-21), dessinés dans le mode
+                        // que le fil ouvrirait (#11213). STATIQUE dans un menu
+                        // natif : sans boutons (`isInteractive: false`), qui y
+                        // seraient inertes. Long-press-only (portillon `.equatable()`).
                         ConversationPreviewView(
                             conversation: conversation,
                             previewLoader: previewLoader,
@@ -181,7 +173,9 @@ struct ConversationRowItem: View {
                             storyState: storyRingState,
                             moodEmoji: moodStatus?.moodEmoji,
                             presenceState: conversation.type == .direct ? presenceState : nil,
-                            isDirect: conversation.type == .direct
+                            isDirect: conversation.type == .direct,
+                            readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation),
+                            isInteractive: false
                         )
                         .frame(width: ConversationPreviewWidthLaw.width(rowTextWidth: ConversationRowWidthLaw.textWidth(listWidth: rowWidth, windowWidth: rowWidth, isRegular: false)))
                         // L'ouverture REVALIDE en silence (#11212) : ce qui est
@@ -391,11 +385,15 @@ enum ConversationRowMetrics {
     /// cache-warm and rows beyond it fall back to the on-demand long-press
     /// load instead of firing a REST call just for scrolling into view.
     static let autoPreviewLoadRowLimit = 20
+
+    /// L'échelle de la rangée pressée (#11213) : elle s'ENFONCE, à la
+    /// iMessage, elle ne rétrécit pas — 0.90 se lisait comme un saut.
+    static let pressedScale: CGFloat = 0.97
 }
 
 // MARK: - Press feedback (réduction pendant l'appui + rebond au trigger)
 
-/// Feedback d'appui de la ligne : réduction à 0.90 dès le toucher (easeOut
+/// Feedback d'appui de la ligne : enfoncement à 0.97 dès le toucher (easeOut
 /// ≈ 0.2 s), puis rebond élastique visible quand le long-press aboutit à
 /// 0.4 s — le spring peu amorti (0.25) donne ≈ 1.05 à ~0.6 s, ≈ 0.98 à
 /// ~0.9 s, repos à ~1.5 s, pendant que l'overlay preview jaillit (zoom
@@ -438,6 +436,13 @@ private struct RowPressBounceModifier: ViewModifier {
     /// 2026-07-03).
     @State private var triggered = false
     @State private var frameBox = RowFrameBox()
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+
+    /// Réduire les animations : la rangée ne bouge pas sous le doigt.
+    private var pressedScale: CGFloat {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion) ? 1 : ConversationRowMetrics.pressedScale
+    }
 
     func body(content: Content) -> some View {
         content
@@ -455,7 +460,7 @@ private struct RowPressBounceModifier: ViewModifier {
                         }
                 }
             )
-            .scaleEffect(isPressing ? 0.90 : 1.0)
+            .scaleEffect(isPressing ? pressedScale : 1.0)
             // Appui : réduction nette, atteinte vers ~0.2 s (léger delay pour
             // que les débuts de scroll/swipe ne fassent pas flasher la ligne).
             // Relâchement : rebond visible UNIQUEMENT si le menu s'est ouvert ;

@@ -197,8 +197,7 @@ final class LongPressPreviewGuardTests: XCTestCase {
     /// l'aperçu natif.
     func test_fallback_tapOnTheCard_opensTheConversation() throws {
         let normalized = normalizedCode(try source(Self.overlayPath))
-        XCTAssertTrue(normalized.contains("openFromPreview(conversation)"))
-        XCTAssertTrue(normalized.contains("dismissContextMenu() onSelect(conversation)"))
+        XCTAssertTrue(normalized.contains(".contentShape(Rectangle()) .onTapGesture { dismissContextMenu() onSelect(conversation) }"))
     }
 
     /// Prisme (patron `ConversationPreviewPrismSourceGuardTests`) : l'aperçu

@@ -120,6 +120,21 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
         XCTAssertFalse(layout[0].showsIdentity(kind: .bubble, isDirect: false))
     }
 
+    /// L'air sépare les SUITES, pas les messages d'une même suite.
+    func test_gap_separatesGroupsOnly() {
+        let messages = [
+            message("m1", senderId: "a", offset: 0),
+            message("m2", senderId: "a", offset: 30),
+            message("m3", senderId: "b", offset: 60)
+        ]
+        let layout = ConversationPreviewRenderer.layout(of: messages)
+
+        let gaps = layout.indices.map { ConversationPreviewRenderer.gap(before: layout[$0], isFirst: $0 == 0) }
+
+        XCTAssertEqual(gaps, [0, 0, ConversationPreviewRenderer.rowSpacing])
+        XCTAssertEqual(ConversationPreviewRenderer.rowSpacing, 12)
+    }
+
     // MARK: - Les états : charger n'est jamais « vide »
 
     func test_display_loadingWithoutMessages_isTheSkeleton() {
@@ -203,6 +218,34 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
 
     func test_entrance_blur_isNeverNegativeOnOvershoot() {
         XCTAssertEqual(ConversationPreviewEntranceMotion.blurRadius(previewScale: 1.2, reduceMotion: false), 0)
+    }
+
+    func test_placement_reduceMotion_startsInPlace() {
+        let start = ConversationPreviewEntranceMotion.placement(
+            source: CGRect(x: 0, y: 500, width: 393, height: 76), rest: CGRect(x: 0, y: 100, width: 340, height: 380), reduceMotion: true
+        )
+
+        XCTAssertEqual(start.scale, 1.0)
+        XCTAssertEqual(start.offset, 0)
+    }
+
+    /// La carte part de la ligne pressée : réduite à la hauteur de la ligne,
+    /// son centre visuel posé sur celui de la ligne.
+    func test_placement_fromTheRow_centersOnThePressedRow() {
+        let rest = CGRect(x: 0, y: 100, width: 340, height: 380)
+        let source = CGRect(x: 0, y: 500, width: 393, height: 76)
+
+        let start = ConversationPreviewEntranceMotion.placement(source: source, rest: rest, reduceMotion: false)
+
+        XCTAssertEqual(start.scale, 0.22, accuracy: 0.0001, "76 / 380 = 0.2, relevé au plancher 0.22")
+        XCTAssertEqual(rest.maxY - start.scale * rest.height / 2 + start.offset, source.midY, accuracy: 0.0001)
+    }
+
+    func test_placement_unknownRow_zoomsFromTheCenter() {
+        let start = ConversationPreviewEntranceMotion.placement(source: nil, rest: CGRect(x: 0, y: 0, width: 340, height: 380), reduceMotion: false)
+
+        XCTAssertEqual(start.scale, 0.7)
+        XCTAssertEqual(start.offset, 0)
     }
 
     func test_entrance_menuRise_isNullUnderReduceMotion() {
