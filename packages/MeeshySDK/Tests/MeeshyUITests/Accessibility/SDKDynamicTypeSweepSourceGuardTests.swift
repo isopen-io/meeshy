@@ -23,7 +23,8 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Community/CommunityInviteScreen.swift",
         "Community/CommunityAddChannelScreen.swift",
         "Community/CommunityMembersScreen.swift",
-        "Community/CommunityListScreen.swift"
+        "Community/CommunityListScreen.swift",
+        "Conversation/ConversationSettingsView.swift"
     ]
 
     private static let fixedGlyphs: [FixedGlyph] = [
