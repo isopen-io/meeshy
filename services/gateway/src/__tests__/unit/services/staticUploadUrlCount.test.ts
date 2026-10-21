@@ -5,6 +5,7 @@ import {
   type StaticUploadUrlStore,
 } from '../../../services/attachments/staticUploadUrlCount';
 import { STATIC_UPLOAD_URL_COLUMNS } from '../../../services/attachments/staticUploadUrlStores';
+import { formatStaticUploadUrlReport } from '../../../services/attachments/countStaticUploadUrlsCli';
 
 /**
  * LE COMPTE QUI PRÉCÈDE LE RETRAIT DU MONTAGE (#11256).
@@ -69,7 +70,7 @@ describe('countStaticUploadUrls — #11256', () => {
     return { store, lectures };
   }
 
-  const ligne = (id: string, values: Readonly<Record<string, string | null>>): StaticUploadUrlRow => ({ id, values });
+  const ligne = (id: string, values: Readonly<Record<string, unknown>>): StaticUploadUrlRow => ({ id, values });
 
   test('compte chaque colonne déclarée, par collection', async () => {
     const attachments = fakeStore('MessageAttachment', ['fileUrl', 'thumbnailUrl'], [
@@ -87,6 +88,49 @@ describe('countStaticUploadUrls — #11256', () => {
     expect(report.total).toBe(4);
     expect(report.parCollection['MessageAttachment']).toEqual({ scanned: 3, parColonne: { fileUrl: 1, thumbnailUrl: 2 } });
     expect(report.parCollection['User']).toEqual({ scanned: 2, parColonne: { avatar: 1, banner: 0 } });
+  });
+
+  test('une colonne JSON est fouillée en profondeur : variantes, pistes TTS, scènes de story', async () => {
+    const attachments = fakeStore('MessageAttachment', ['imageVariants', 'translations'], [
+      ligne('a', {
+        imageVariants: [{ width: 640, url: STATIQUE }, { width: 1280, url: PASSERELLE }],
+        translations: { en: { text: 'hello', url: 'static:uploads/2026/09/a/tts_en.mp3' }, es: { text: 'hola' } },
+      }),
+      ligne('b', { imageVariants: [{ width: 640, url: PASSERELLE }], translations: null }),
+    ]);
+    const posts = fakeStore('Post', ['storyEffects'], [
+      ligne('p', { storyEffects: { scenes: [{ objects: [{ kind: 'image', media: { src: VIGNETTE } }] }] } }),
+    ]);
+
+    const report = await countStaticUploadUrls({ stores: [attachments.store, posts.store] });
+
+    expect(report.parCollection['MessageAttachment']).toEqual({
+      scanned: 2,
+      parColonne: { imageVariants: 1, translations: 1 },
+    });
+    expect(report.parCollection['Post']).toEqual({ scanned: 1, parColonne: { storyEffects: 1 } });
+    expect(report.total).toBe(3);
+  });
+
+  test('une ligne JSON qui grave plusieurs adresses compte UNE ligne, l’exemple nomme la première', async () => {
+    const { store } = fakeStore('PostMedia', ['imageVariants'], [
+      ligne('m', { imageVariants: [{ url: STATIQUE }, { url: VIGNETTE }] }),
+    ]);
+
+    const report = await countStaticUploadUrls({ stores: [store] });
+
+    expect(report.total).toBe(1);
+    expect(report.exemples).toEqual([`PostMedia.imageVariants  m  ${STATIQUE}`]);
+  });
+
+  test('une référence `static:uploads/…` (résolue par `MeeshyConfig.staticOrigin` côté iOS) est comptée dans un avatar', async () => {
+    const { store } = fakeStore('User', ['avatar', 'banner'], [
+      ligne('u', { avatar: 'static:uploads/2026/09/u/avatar.jpg', banner: 'static:u/i/2025/11/b.jpg' }),
+    ]);
+
+    const report = await countStaticUploadUrls({ stores: [store] });
+
+    expect(report.parCollection['User']).toEqual({ scanned: 1, parColonne: { avatar: 1, banner: 0 } });
   });
 
   test('une colonne déclarée mais absente de la ligne compte zéro, sans lever', async () => {
@@ -137,16 +181,38 @@ describe('countStaticUploadUrls — #11256', () => {
 });
 
 describe('STATIC_UPLOAD_URL_COLUMNS — les colonnes balayées (#11256)', () => {
-  test('couvre toute colonne qui peut graver une adresse de média, pas seulement les pièces jointes', () => {
+  test('couvre toute colonne qui peut graver une adresse de média, colonnes JSON comprises', () => {
     expect(STATIC_UPLOAD_URL_COLUMNS).toEqual({
-      MessageAttachment: ['fileUrl', 'thumbnailUrl'],
-      PostMedia: ['fileUrl', 'thumbnailUrl'],
-      Post: ['audioUrl'],
+      MessageAttachment: ['fileUrl', 'thumbnailUrl', 'imageVariants', 'translations', 'metadata'],
+      PostMedia: ['fileUrl', 'thumbnailUrl', 'imageVariants', 'translations'],
+      Post: ['audioUrl', 'storyEffects', 'metadata'],
       User: ['avatar', 'banner'],
       Conversation: ['avatar', 'banner'],
       Participant: ['avatar'],
       Community: ['avatar', 'banner'],
-      Sound: ['fileUrl', 'coverUrl'],
+      Sound: ['fileUrl', 'coverUrl', 'translations'],
     });
+  });
+});
+
+describe('formatStaticUploadUrlReport — la sortie lue par l’opérateur (#11256)', () => {
+  test('nomme chaque colonne, les exemples et le verdict', () => {
+    const lignes = formatStaticUploadUrlReport({
+      total: 2,
+      parCollection: { Post: { scanned: 5, parColonne: { audioUrl: 0, storyEffects: 2 } } },
+      exemples: ['Post.storyEffects  p1  static:uploads/2026/09/a/b.jpg'],
+    });
+
+    expect(lignes).toContain('  Post — lignes examinées : 5');
+    expect(lignes).toContain(`    ${'storyEffects'.padEnd(14)}: 2`);
+    expect(lignes).toContain('    Post.storyEffects  p1  static:uploads/2026/09/a/b.jpg');
+    expect(lignes).toContain('  TOTAL : 2');
+    expect(lignes.at(-1)).toContain('AVANT le retrait');
+  });
+
+  test('un total nul autorise le retrait', () => {
+    const lignes = formatStaticUploadUrlReport({ total: 0, parCollection: {}, exemples: [] });
+
+    expect(lignes.at(-1)).toContain('le montage peut être retiré');
   });
 });

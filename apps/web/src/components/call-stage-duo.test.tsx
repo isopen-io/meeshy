@@ -88,6 +88,38 @@ function Harness({ active, onSwap }: { readonly active: ActiveCall; readonly onS
   return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />;
 }
 
+/** Espionne `animate` et pose un rectangle qui suit le coin : le FLIP se lit sans moteur de mise en page. */
+function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly reducedMotion?: boolean } = {}): (readonly Keyframe[])[] {
+  const played: (readonly Keyframe[])[] = [];
+  const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+  const savedAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+  const savedRect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+  const savedMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+  proto.animate = function animate(frames: readonly Keyframe[]) {
+    played.push(frames);
+    return { cancel: () => undefined };
+  };
+  proto.getBoundingClientRect = function rect(this: HTMLElement) {
+    const moved = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(this.style.transform);
+    const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) + Number(moved?.[1] ?? 0);
+    const top = 80 + Number(moved?.[2] ?? 0);
+    return { left, top, right: left, bottom: top, width: 0, height: 0, x: left, y: top, toJSON: () => ({}) };
+  };
+  Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: reducedMotion }) });
+  try {
+    run();
+  } finally {
+    const restore = (name: string, saved: PropertyDescriptor | undefined, target: object) => {
+      if (saved === undefined) Reflect.deleteProperty(target, name);
+      else Object.defineProperty(target, name, saved);
+    };
+    restore('animate', savedAnimate, HTMLElement.prototype);
+    restore('getBoundingClientRect', savedRect, HTMLElement.prototype);
+    restore('matchMedia', savedMedia, window);
+  }
+  return played;
+}
+
 const mount = (active: ActiveCall = call()) => {
   const host = document.createElement('div');
   document.body.appendChild(host);
@@ -181,13 +213,36 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
     again.done();
   });
 
-  test('le retour au coin s’anime, sauf mouvement réduit', () => {
+  test('changer de coin se joue en FLIP : un `transform` qui revient à zéro, jamais left/top/width/height (#11314)', () => {
     fresh();
-    const view = mount();
-    const classes = view.frame().className.split(' ');
-    expect(classes).toContain('transition-[left,top,transform,width,height]');
-    expect(classes).toContain('motion-reduce:transition-none');
-    view.done();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.key('ArrowLeft');
+      expect(view.frame().className).not.toMatch(/transition/);
+      view.done();
+    });
+    expect(played).toEqual([[{ transform: 'translate(280px, 0px)' }, { transform: 'none' }]]);
+  });
+
+  test('lâchée près de son coin, elle y revient en FLIP depuis le doigt — ni saut, ni rien pendant le glissé', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.drag(-40, 60);
+      expect(view.frame().getAttribute('data-call-self-tile-corner')).toBe('top-right');
+      view.done();
+    });
+    expect(played).toEqual([[{ transform: 'translate(-40px, 60px)' }, { transform: 'none' }]]);
+  });
+
+  test('mouvement réduit : le retour au coin est sec', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.key('ArrowLeft');
+      view.done();
+    }, { reducedMotion: true });
+    expect(played).toEqual([]);
   });
 });
 

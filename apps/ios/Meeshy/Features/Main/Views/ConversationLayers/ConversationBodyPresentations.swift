@@ -14,8 +14,7 @@ struct ConversationBodyCovers: ViewModifier {
     let conversation: Conversation?
     let accentColor: String
     let isDark: Bool
-    let isGuest: Bool
-    let isAdminOrMod: Bool
+    let authority: ConversationMenuAuthority
     let mediaSaveCoordinator: MediaSaveCoordinator
     let onReply: (Message) -> Void
     let actions: ConversationMessageActions
@@ -30,8 +29,8 @@ struct ConversationBodyCovers: ViewModifier {
             .mediaSaveFlow(mediaSaveCoordinator)
             .modifier(ConversationMessageSheets(
                 viewModel: viewModel, overlayState: $overlayState, conversation: conversation,
-                accentColor: accentColor, isDark: isDark, isGuest: isGuest,
-                isAdminOrMod: isAdminOrMod, mediaSaveCoordinator: mediaSaveCoordinator,
+                accentColor: accentColor, isDark: isDark,
+                authority: authority, mediaSaveCoordinator: mediaSaveCoordinator,
                 actions: actions))
     }
 }
@@ -100,7 +99,7 @@ struct ConversationBodyOverlayMenu<Piece: View, PlaceCover: View>: ViewModifier 
     let frameTracker: MessageFrameBox
     let accentColor: String
     let isDirect: Bool
-    let isAdminOrMod: Bool
+    let authority: ConversationMenuAuthority
     let mediaSaveCoordinator: MediaSaveCoordinator
     let actions: ConversationMessageActions
     let threadLanguage: (Message) -> MessageOverlayMenu.ThreadLanguage
@@ -132,7 +131,7 @@ struct ConversationBodyOverlayMenu<Piece: View, PlaceCover: View>: ViewModifier 
             frameTracker: frameTracker,
             accentColor: accentColor,
             isDirect: isDirect,
-            isAdminOrMod: isAdminOrMod,
+            authority: authority,
             mediaSaveCoordinator: mediaSaveCoordinator,
             actions: actions,
             threadLanguage: threadLanguage,
@@ -150,7 +149,7 @@ struct ConversationOverlayMenuLayer<Piece: View>: View {
     let frameTracker: MessageFrameBox
     let accentColor: String
     let isDirect: Bool
-    let isAdminOrMod: Bool
+    let authority: ConversationMenuAuthority
     let mediaSaveCoordinator: MediaSaveCoordinator
     let actions: ConversationMessageActions
     let threadLanguage: (Message) -> MessageOverlayMenu.ThreadLanguage
@@ -177,7 +176,7 @@ struct ConversationOverlayMenuLayer<Piece: View>: View {
             bubbleFrame: overlayState.overlaySourceFrame ?? frameTracker.frame(for: msg.id) ?? .zero,
             threadLanguage: threadLanguage(msg),
             isDirect: isDirect,
-            isAdminOrMod: isAdminOrMod,
+            authority: authority,
             mediaSaveCoordinator: mediaSaveCoordinator,
             actions: actions
         )

@@ -27,6 +27,7 @@ import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
 import { AdminAnnouncement } from '@/components/admin/announcement';
 import { AdminUserCreateSheet } from './admin-user-create-sheet';
+import { AdminUserRowActions } from './admin-user-row-actions';
 import { href, navigate } from './route-table';
 
 /**
@@ -124,6 +125,7 @@ export function AdminUsersPanel({
 
   const { state } = list;
   const moment = now();
+  const announcer = useLiveAnnouncer();
   const all = { value: '', label: translateAdmin(language, 'admin.list.all') };
   const yesNo = [
     all,
@@ -225,6 +227,17 @@ export function AdminUsersPanel({
           <AdminMomentText moment={adminMomentOf(row.lastActiveAt, moment, language)} />
         ),
     },
+    /* LES GESTES SUR LA LIGNE (#11410) : déverrouiller, activer, valider l'e-mail — sans ouvrir la fiche. */
+    ...(reach.can('canManageUsers')
+      ? [
+          {
+            id: 'actions',
+            header: translateAdmin(language, 'admin.people.col.actions'),
+            priority: 1 as const,
+            cell: (row: AdminUserRow) => <AdminUserRowActions row={row} language={language} onAnnounce={announcer.announce} deps={deps} now={now} />,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -255,6 +268,7 @@ export function AdminUsersPanel({
           { value: 'lastName', label: translateAdmin(language, SORT_LABELS.lastName) },
         ]}
       />
+      <AdminAnnouncement text={announcer.text} />
     </div>
   );
 }

@@ -137,6 +137,7 @@ export const AUDIT_ACTIONS = {
   UPDATE_ENGAGEMENT_SCALE: entry('settings', 'flame', 'warning'),
   // ── Les opérations du serveur (#10396) : sauvegarde, purge des images ─────
   TRIGGER_SERVER_OPERATION: entry('settings', 'database', 'warning'),
+  SERVER_OPERATION_REFUSED: entry('settings', 'prohibit', 'danger'),
   // ── Le calendrier des saisons du Jeu (#10232, #10233) ──────────────────────
   GAME_SEASON_UPDATE: entry('settings', 'calendarBlank', 'warning'),
   GAME_SEASON_PROPOSAL_REQUEST: entry('settings', 'robot', 'info'),

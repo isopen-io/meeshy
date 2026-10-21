@@ -1,5 +1,6 @@
 import { LEAGUE_MIN_LEVEL } from '@meeshy/shared/utils/game/league';
 import { sparksReading } from '@/lib/game/ladder';
+import { meeshDisplayEdition } from '@meeshy/shared/utils/game/mint';
 import { MISSIONS_MIN_LEVEL } from '@meeshy/shared/utils/game/missions';
 import { SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
 import { progressionConcepts, type ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
@@ -287,7 +288,7 @@ function meesh(view: EngagementWithGame): Body {
       fact(
         'mint_next',
         gameText('game.fact.next_meesh'),
-        `${gameText('game.mint.number_label', { number: formatCount(mint.number) })} · ${editionName(mint.edition)}`,
+        `${gameText('game.mint.number_label', { number: formatCount(mint.number) })} · ${editionName(meeshDisplayEdition(mint.number))}`,
         about('mint_next'),
       ),
       fact('mint_price', gameText('game.mint.row.price'), pointsLabel(mint.price), about('mint_price')),
@@ -470,7 +471,7 @@ function season(view: EngagementWithGame): Body {
       fact('season', gameText('game.concept.season.name'), formatCount(served.number), about('season')),
       fact('season_week', gameText('game.fact.week'), week, about('season_week')),
       fact('season_steps', gameText('game.fact.steps'), steps, about('season_steps')),
-      fact('season_stars', gameText('game.fact.stars'), translateGamePlural(currentInterfaceLanguage(), 'game.season.stars', served.stars), about('season_stars')),
+      fact('season_stars', gameText('game.fact.strides'), translateGamePlural(currentInterfaceLanguage(), 'game.season.stars', served.stars), about('season_stars')),
     ],
   };
 }
@@ -488,7 +489,7 @@ function prestige(view: EngagementWithGame): Body {
     gauge: ratio(served.stars, served.max),
     primary: element('star'),
     facts: [
-      fact('prestige_stars', gameText('game.fact.stars'), stars, element('star')),
+      fact('prestige_stars', gameText('game.fact.rebirths'), stars, element('star')),
       fact('prestige_glory', gameText('game.mint.row.glory'), gameText('game.fmt.signed', { value: formatCount(served.gloryOnPass) }), about('prestige_glory')),
     ],
   };

@@ -14,7 +14,7 @@ import MeeshySDK
 /// ne lit aucun singleton Meeshy, ne résout aucune URL, ne décide pas quand un
 /// son mérite d'être là — c'est ce qui l'autorise à vivre dans le SDK, aux
 /// côtés de `MeeshyAudioTrimmer` dont il partage la bande et l'échelle
-/// d'affichage (`AudioWaveform.displayHeight`).
+/// d'affichage (`WaveformScale.displayHeight`).
 ///
 /// ## Les trois règles de sa forme
 ///
@@ -255,7 +255,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
         let avancement = min(1, max(0, player.playhead / dureeEffective))
         for index in 0..<nombre {
             let echantillon = samples[min(samples.count - 1, index * samples.count / nombre)]
-            let hauteur = CGFloat(AudioWaveform.displayHeight(rms: echantillon)) * (size.height - 6)
+            let hauteur = CGFloat(WaveformScale.displayHeight(rms: echantillon)) * (size.height - 6)
             let x = CGFloat(index) * (largeurBarre + ecart)
             let joue = CGFloat(index) / CGFloat(nombre) <= avancement
             let rect = CGRect(x: x, y: milieu - hauteur / 2,
@@ -271,7 +271,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
 
     private func charger() async {
         lignes = AudioTranscriptCue.phrases(from: cues)
-        samples = await AudioWaveform.samples(url: url, count: Self.resolution)
+        samples = (try? await WaveformCache.shared.samples(from: url, count: Self.resolution)) ?? []
         chargee = player.load(url: url)
     }
 

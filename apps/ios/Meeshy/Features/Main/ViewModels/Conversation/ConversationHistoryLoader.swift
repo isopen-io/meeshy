@@ -104,7 +104,7 @@ final class ConversationHistoryLoader: ConversationHistoryLoading {
     }
 
     func persist(_ messages: [APIMessage], readerPrism: [String]) async {
-        try? await persistence.upsertFromAPIMessages(messages, preferredLanguages: readerPrism)
+        await bestEffort("conversationHistoryLoader.messages.upsertFromAPIMessages", category: .grdb) { try await persistence.upsertFromAPIMessages(messages, preferredLanguages: readerPrism) }
     }
 
     func fetchMissed(after watermark: Date) async throws -> [APIMessage] {

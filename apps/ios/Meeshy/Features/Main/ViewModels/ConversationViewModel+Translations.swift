@@ -160,9 +160,11 @@ extension ConversationViewModel {
     /// detail view. Owning the in-flight flag AND the network call here
     /// (rather than in the view) is what lets the loader survive the sheet
     /// being dismissed and re-presented.
+    /// Fail-closed en E2EE (#11214) : `ServerTranslationAdmission`.
     func requestTextTranslation(
-        messageId: String, content: String, sourceLanguage: String, targetLanguage: String
+        messageId: String, content: String, sourceLanguage: String, targetLanguage: String, conversationEncryptionMode: String?
     ) async {
+        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: conversationEncryptionMode) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .text)) }
         guard !(translatingTextLanguages[messageId]?.contains(targetLanguage) ?? false) else { return }
         translatingTextLanguages[messageId, default: []].insert(targetLanguage)
         defer { translatingTextLanguages[messageId]?.remove(targetLanguage) }
@@ -173,13 +175,8 @@ extension ConversationViewModel {
                 targetLanguage: targetLanguage, messageId: messageId
             )
             let translation = MessageTranslation(
-                id: "\(messageId)-\(targetLanguage)",
-                messageId: messageId,
-                sourceLanguage: sourceLanguage,
-                targetLanguage: targetLanguage,
-                translatedContent: response.translatedText,
-                translationModel: "on-demand",
-                confidenceScore: nil
+                id: "\(messageId)-\(targetLanguage)", messageId: messageId, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage,
+                translatedContent: response.translatedText, translationModel: "on-demand", confidenceScore: nil
             )
             var existing = messageTranslations[messageId] ?? []
             if let idx = existing.firstIndex(where: { $0.targetLanguage == targetLanguage }) {
@@ -203,8 +200,9 @@ extension ConversationViewModel {
     /// `messageTranslatedAudios` so a second open of the language sheet
     /// never re-triggers the full pipeline for a language already fetched.
     func requestAudioTranslation(
-        messageId: String, attachmentId: String, sourceLanguage: String, targetLanguage: String
+        messageId: String, attachmentId: String, sourceLanguage: String, targetLanguage: String, conversationEncryptionMode: String?
     ) async {
+        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: conversationEncryptionMode) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .audio)) }
         guard !(translatingAudioLanguages[messageId]?.contains(targetLanguage) ?? false) else { return }
         translatingAudioLanguages[messageId, default: []].insert(targetLanguage)
         defer { translatingAudioLanguages[messageId]?.remove(targetLanguage) }

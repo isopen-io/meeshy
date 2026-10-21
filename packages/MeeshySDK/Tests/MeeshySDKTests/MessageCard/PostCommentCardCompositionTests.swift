@@ -153,6 +153,36 @@ final class PostCommentCardCompositionTests: XCTestCase {
         }
     }
 
+    /// #11477 — « Mes stories » ouvre les commentaires d'une story par son `FeedPost` : elle
+    /// compose alors comme dans le lecteur, par son visuel en HERO (jumelle de `composingPostOf`, web).
+    func test_postHead_aPublicStoryOrStatusPost_composesThroughItsVisual_likeTheStoryViewer() throws {
+        for type in ["STORY", "STATUS"] {
+            let post = Self.makePost(content: "Ma story", type: type, media: [Self.photo])
+            let source = PostCommentCardSource(post: post, target: Self.root, thread: [], viewer: Self.viewer, now: Self.at(60))
+            XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.postAndComment, .commentAlone], type)
+            let subject = try XCTUnwrap(Self.subject(source, .postAndComment), type)
+            XCTAssertEqual(subject.heroID, "pic", type)
+            XCTAssertEqual(subject.quoted?.author, "Awa", type)
+            XCTAssertNil(Self.subject(source, .commentAlone)?.heroID, type)
+        }
+    }
+
+    func test_postHead_aStoryPost_keepsTheStoryGuards_audienceExpiryAndCanvas() {
+        let restricted = Self.makePost(type: "STORY", media: [Self.photo], visibility: "FRIENDS")
+        let lapsed = Self.makePost(type: "STORY", media: [Self.photo])
+        var canvas = Self.makePost(type: "STORY", media: [Self.photo])
+        canvas.storyEffects = StoryEffects()
+        let cases: [(String, FeedPost, Date)] = [
+            ("audience", restricted, Self.at(60)),
+            ("échue", lapsed, Self.at(0).addingTimeInterval(StoryItem.defaultExpiryInterval + 1)),
+            ("canvas sans vignette", canvas, Self.at(60)),
+        ]
+        for (label, post, now) in cases {
+            let source = PostCommentCardSource(post: post, target: Self.root, thread: [], viewer: Self.viewer, now: now)
+            XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.commentAlone], label)
+        }
+    }
+
     func test_postHead_aPostWithOnlyAPhoto_isPutOnTopWithItsThumbnail() throws {
         let photo = FeedMedia(id: "pic", type: .image, url: "https://cdn.test/pic.jpg", width: 400, height: 300)
         let source = Self.source(post: Self.makePost(content: "  ", media: [photo]), target: Self.root)

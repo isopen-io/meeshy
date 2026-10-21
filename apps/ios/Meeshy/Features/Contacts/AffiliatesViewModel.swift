@@ -30,7 +30,7 @@ final class AffiliatesViewModel: ObservableObject {
         self.currentUserId = currentUserId
     }
 
-    deinit {
+    nonisolated deinit {
         revalidationTask?.cancel()
     }
 
@@ -75,7 +75,7 @@ final class AffiliatesViewModel: ObservableObject {
             let stats = try await affiliateService.fetchStats()
             referrals = stats.referrals ?? []
             loadState = .loaded
-            try? await CacheCoordinator.shared.affiliates.save(referrals, for: cacheKey)
+            await bestEffort("affiliatesViewModel.affiliates.save", category: .cache) { try await CacheCoordinator.shared.affiliates.save(referrals, for: cacheKey) }
         } catch {
             loadState = referrals.isEmpty
                 ? .error(String(localized: "contacts.affiliates.load-error", defaultValue: "Impossible de charger les affiliés", bundle: .main))

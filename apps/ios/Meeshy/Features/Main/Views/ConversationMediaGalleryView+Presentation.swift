@@ -196,7 +196,7 @@ struct MediaStagePausedBadge: View {
                         bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
         }
-        .foregroundColor(MeeshyColors.mediaChromeForeground)
+        .foregroundStyle(MeeshyColors.mediaChromeForeground)
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.smPlus)
         .adaptiveGlass(in: Capsule())

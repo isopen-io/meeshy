@@ -342,20 +342,47 @@ struct WaooOverlay: View {
 /// faux, l'effet est POSÉ et non animé, et il n'y a alors aucune boucle à
 /// couper (règle 6 du § Effets de message).
 
+/// **Le halo de lueur : un flou posé UNE fois, seule l'opacité respire** (#9883).
+///
+/// La lueur animait le RAYON d'une `.shadow` : le moteur de rendu refaisait un
+/// flou gaussien à chaque image pour chaque bulle à l'écran. Le halo est
+/// désormais un aplat flouté à rayon CONSTANT — le flou ne dépend d'aucun état
+/// animé, il est mis en cache — et la respiration ne touche que son opacité.
+nonisolated enum GlowHalo {
+    /// Rayon du flou, constant.
+    static let blurRadius: CGFloat = 12
+    /// Part de l'intensité qui reste au bas de la respiration.
+    static let restFactor: Double = 0.3
+
+    static func opacity(active: Bool, glowing: Bool, intensity: Double) -> Double {
+        guard active else { return 0 }
+        return glowing ? intensity : intensity * restFactor
+    }
+}
+
 /// `animated: false` (Réduire les animations) rend l'effet FIXE au lieu de le
 /// supprimer : le message garde son halo, il perd sa respiration.
 struct GlowEffect: ViewModifier {
     let active: Bool
     let intensity: Double
     let animated: Bool
+    /// Rayon de la forme éclairée : par défaut celui de la bulle, comme le
+    /// liseré arc-en-ciel — une seule source.
+    var cornerRadius: CGFloat = BubbleStandardLayout.bubbleCornerRadius
     @State private var glowing = false
 
     func body(content: Content) -> some View {
         content
-            .shadow(
-                color: MeeshyColors.indigo500.opacity(active ? (glowing ? intensity : intensity * 0.3) : 0),
-                radius: active ? (glowing ? 12 : 4) : 0
-            )
+            .background {
+                if active {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(MeeshyColors.indigo500)
+                        .blur(radius: GlowHalo.blurRadius)
+                        .opacity(GlowHalo.opacity(active: active, glowing: glowing, intensity: intensity))
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
             .onAppear {
                 guard active else { return }
                 guard animated else {
@@ -540,12 +567,16 @@ private struct RainbowCometLayer: View, Animatable {
         set { phase = newValue }
     }
 
-    private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-    }
-
     private var gradient: AngularGradient {
         AngularGradient(colors: spectrum, center: .center)
+    }
+
+    /// La forme élargie de la marge de flou : le contour garde ses proportions
+    /// (`inset(by:)` ramène le rectangle à la taille de la bulle) et le rayon
+    /// reste celui de la bulle.
+    private var paddedShape: some InsettableShape {
+        RoundedRectangle(cornerRadius: cornerRadius + RainbowCometBleed.margin, style: .continuous)
+            .inset(by: RainbowCometBleed.margin)
     }
 
     var body: some View {
@@ -553,17 +584,31 @@ private struct RainbowCometLayer: View, Animatable {
 
         ZStack {
             ForEach(Array(sweep.segments.enumerated()), id: \.offset) { _, segment in
-                let arc = shape.trim(from: segment.lowerBound, to: segment.upperBound)
+                let arc = paddedShape.trim(from: segment.lowerBound, to: segment.upperBound)
 
-                arc.stroke(gradient, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                    .blur(radius: 4)
+                arc.stroke(gradient, style: StrokeStyle(lineWidth: RainbowCometBleed.glowStroke, lineCap: .round))
+                    .blur(radius: RainbowCometBleed.glowBlur)
                 arc.stroke(.white, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     .blur(radius: 0.5)
                     .opacity(0.9)
             }
         }
+        // UNE passe hors écran pour les flous empilés : sans `drawingGroup`, chaque
+        // segment recompose deux filtres de flou à chaque image. Le groupe est
+        // plus grand que la bulle de la marge de flou (`padding` négatif ensuite),
+        // faute de quoi `drawingGroup` couperait le halo aux bornes de la vue.
+        .drawingGroup()
+        .padding(-RainbowCometBleed.margin)
         .opacity(sweep.opacity)
     }
+}
+
+/// La marge que le groupe de la comète garde autour de la bulle pour que son
+/// flou ne soit pas coupé : demi-trait + trois écarts-types du flou.
+nonisolated enum RainbowCometBleed {
+    static let glowStroke: CGFloat = 6
+    static let glowBlur: CGFloat = 4
+    static let margin: CGFloat = glowStroke / 2 + 3 * glowBlur
 }
 
 struct SparkleEffect: ViewModifier {

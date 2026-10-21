@@ -39,7 +39,7 @@ final class DiscoverViewModel: ObservableObject {
         self.directoryService = directoryService
     }
 
-    deinit {
+    nonisolated deinit {
         suggestionsRevalidationTask?.cancel()
     }
 

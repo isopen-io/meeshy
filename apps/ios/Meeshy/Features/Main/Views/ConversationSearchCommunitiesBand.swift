@@ -87,7 +87,7 @@ struct ConversationSearchCommunitiesBand: View {
     let communities: [MeeshyCommunity]
     let onClose: () -> Void
 
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {

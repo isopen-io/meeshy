@@ -494,7 +494,7 @@ public struct UserProfileSheet: View {
                     .foregroundColor(Color(hex: resolvedAccent))
             }
             Text(text)
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
@@ -515,7 +515,7 @@ public struct UserProfileSheet: View {
                 .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(MeeshyColors.success)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -552,7 +552,7 @@ public struct UserProfileSheet: View {
             Text(lang.flag)
                 .font(.system(size: MeeshyFont.labelSize))
             Text(lang.name)
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)

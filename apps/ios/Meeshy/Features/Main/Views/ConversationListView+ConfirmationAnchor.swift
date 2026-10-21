@@ -33,7 +33,9 @@ extension ConversationListView {
             // dialog système (rendu natif de l'OS courant, Liquid Glass sur
             // iOS 26), déclenchée depuis le menu custom ET le swipe « hide ».
             .confirmationDialog(
-                String(localized: "conversation.delete.confirm.title", defaultValue: "Supprimer la conversation ?", bundle: .main),
+                hidesDeleteTarget
+                    ? String(localized: "conversation.hide.confirm.title", defaultValue: "Masquer la discussion ?", bundle: .main)
+                    : String(localized: "conversation.delete.confirm.title", defaultValue: "Supprimer la conversation ?", bundle: .main),
                 isPresented: Binding(
                     get: { sheetTargets.deleteTarget != nil },
                     set: { if !$0 { sheetTargets.deleteTarget = nil } }
@@ -41,7 +43,7 @@ extension ConversationListView {
                 titleVisibility: .visible,
                 presenting: sheetTargets.deleteTarget
             ) { conversation in
-                Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
+                Button(ConversationContextMenuView.removalLabel(rowMenuCapabilities(for: conversation).removal ?? .delete), role: .destructive) {
                     HapticFeedback.heavy()
                     Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
                 }
@@ -53,5 +55,10 @@ extension ConversationListView {
                     bundle: .main
                 ))
             }
+    }
+
+    /// Le menu a dit « Masquer la discussion » : la confirmation dit le même mot (#11215).
+    private var hidesDeleteTarget: Bool {
+        sheetTargets.deleteTarget.map { rowMenuCapabilities(for: $0).removal == .hide } ?? false
     }
 }

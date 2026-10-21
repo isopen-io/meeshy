@@ -51,6 +51,14 @@ public struct PostCommentCardStory: Sendable {
                   visibility: story.visibility)
     }
 
+    /// Une story ou un statut lu par son `FeedPost` (« Mes stories », #11477) — son texte servi,
+    /// ses médias ; sans `expiresAt`, la fenêtre par défaut de `StoryItem` la borne.
+    public init(feedPost post: FeedPost) {
+        self.init(id: post.id, author: post.author, authorId: post.authorId, authorUsername: post.authorUsername,
+                  text: post.displayContent, media: post.media, timestamp: post.timestamp,
+                  hasCanvas: post.storyEffects != nil, visibility: post.visibility)
+    }
+
     /// Le visuel qui représente la story sur la carte — `nil` : aucun (voir les gardes).
     func heroMedia(now: Date) -> MessageCardSubjectMedia? {
         guard PostCommentCardComposition.isPublicAudience(visibility), !StoryItem.isExpired(createdAt: timestamp, expiresAt: expiresAt, at: now) else { return nil }

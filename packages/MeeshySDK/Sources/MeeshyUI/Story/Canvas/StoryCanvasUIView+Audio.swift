@@ -126,7 +126,7 @@ extension StoryCanvasUIView {
         guard !didRequestPlaybackSession else { return }
         didRequestPlaybackSession = true
         MediaSessionCoordinator.shared.activateContentPlayback(.audible)
-        Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
+        MediaSessionCoordinator.shared.requestPlaybackInOrder()
     }
 
     var slideHasSoundingVideo: Bool {
@@ -138,7 +138,7 @@ extension StoryCanvasUIView {
     func releasePlaybackSessionIfNeeded() {
         guard didRequestPlaybackSession else { return }
         didRequestPlaybackSession = false
-        Task { await MediaSessionCoordinator.shared.release() }
+        MediaSessionCoordinator.shared.releasePlaybackInOrder()
     }
 
     /// Subscribes to `MediaSessionCoordinator` interruption / route-change

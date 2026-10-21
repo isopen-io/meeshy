@@ -2920,8 +2920,17 @@ final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
             XCTFail("Could not bound emitCallJoinWithAckDetailed body"); return
         }
         let funcBody = String(source[funcRange.upperBound..<funcEndRange.lowerBound])
-        XCTAssertTrue(funcBody.contains("error?[\"code\"] as? String"))
-        XCTAssertTrue(funcBody.contains("error?[\"endReason\"] as? String"))
+        // 8a46c7c9b2 : l'accusé se lit par `SocketAck` — UNE lecture du fil pour
+        // tous les accusés. Le détail d'un refus y est lu, puis remis tel quel.
+        XCTAssertTrue(funcBody.contains("return Self.callJoinResult(from: ack)"))
+        XCTAssertTrue(funcBody.contains(
+            "return CallJoinAckResult(joined: false, errorCode: refusal.errorCode, endReason: refusal.endReason)"))
+        let ack = try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketAck.swift"), encoding: .utf8)
+        XCTAssertTrue(ack.contains("errorCode = error?[\"code\"] as? String"))
+        XCTAssertTrue(ack.contains("endReason = error?[\"endReason\"] as? String"))
     }
 
     /// `emitCallJoinWithAck` must delegate to the detailed variant instead of

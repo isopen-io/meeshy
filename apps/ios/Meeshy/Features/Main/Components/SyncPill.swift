@@ -255,9 +255,13 @@ struct SyncPill: View {
     /// doc `SyncPillMarquee`). Alimentée par la mesure `GeometryReader` en
     /// fond du `Text` du label.
     @State private var measuredLabelWidth: CGFloat = 0
-    /// Décalage horizontal courant du texte en défilement. `0` = position de
-    /// repos (texte visible depuis le début).
-    @State private var marqueeOffset: CGFloat = 0
+    /// Temps de défilement déjà CUMULÉ avant le dernier démarrage de l'horloge.
+    /// Le décalage affiché est une loi de ce temps (`SyncPillMarquee.offset`),
+    /// jamais un `@State` incrémenté à chaque tic : l'horloge ne réévalue que
+    /// la ligne qui défile, et ne s'abonne que tant que le texte DÉFILE.
+    @State private var marqueeBase: TimeInterval = 0
+    /// Instant du dernier (re)démarrage de l'horloge du marquee.
+    @State private var marqueeRunStart = Date()
     /// Bascule par appui long sur la pill — gèle À LA FOIS la rotation
     /// (`rotator.setAutoRotation(false)`) et le défilement du marquee.
     /// Mécanisme obligatoire (WCAG 2.2.2 Pause/Stop/Hide, niveau A) — le
@@ -265,11 +269,6 @@ struct SyncPill: View {
     /// justificatif de conformité pour cette SC (elle ne couvre que la
     /// 2.3.3). Un second appui long relance.
     @State private var isPausedByUser = false
-    /// Tick dédié au défilement du marquee — même pattern que `dotTimer`
-    /// (Timer.publish `@State`, pas `let`, pour survivre aux reconstructions
-    /// fréquentes de cette vue). 30 Hz : fluide sans coût perceptible.
-    @State private var marqueeTimer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
-
     // MARK: - Activité récente : afficher, accentuer, s'effacer (#4017 / #4018)
 
     /// Identifiants d'entrées déjà vus — sert à détecter l'arrivée d'une
@@ -499,7 +498,6 @@ struct SyncPill: View {
         .onAppear {
             dotPhase = 0
             dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
-            marqueeTimer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
         }
     }
 
@@ -523,17 +521,7 @@ struct SyncPill: View {
 
         Group {
             if scrolls {
-                // Le viewport à largeur fixe + clip ne s'applique QU'ICI : c'est
-                // ce qui borne la fenêtre visible pendant que le Text (fixedSize,
-                // donc plus large que le viewport) glisse dessous via `offset`.
-                Text(label)
-                    .font(MeeshyFont.relative(metrics.labelSize, weight: .medium))
-                    .foregroundStyle(textColor)
-                    .lineLimit(1)
-                    .fixedSize()
-                    .offset(x: marqueeOffset)
-                    .frame(width: maxTextWidth, alignment: .leading)
-                    .clipped()
+                marqueeText(label)
             } else {
                 // Pas de largeur imposée ici — un label court doit garder sa
                 // taille naturelle (comportement pré-existant), la borne de
@@ -572,23 +560,16 @@ struct SyncPill: View {
                 })
         )
         .onPreferenceChange(SyncPillLabelWidthKey.self) { measuredLabelWidth = $0 }
-        // Défilement piloté par un timer manuel (30 Hz) plutôt que par
-        // `Animation.linear(duration:).repeatForever(autoreverses: false)` (la
-        // technique littérale de la spec) : une animation `repeatForever` native
-        // ne peut pas être mise en pause à mi-cycle sans redémarrer à zéro au
-        // retrait de l'animation — ce qui romprait la garantie WCAG 2.2.2 (la
-        // pause doit geler l'état visuel courant, jamais le réinitialiser).
-        .onReceive(marqueeTimer) { _ in
-            guard scrolls, !isPausedByUser else { return }
-            let step = SyncPillMarquee.pointsPerSecond / 30.0
-            marqueeOffset -= step
-            let gap: CGFloat = 24
-            if marqueeOffset < -(measuredLabelWidth + gap) {
-                marqueeOffset = maxTextWidth
-            }
-        }
-        .adaptiveOnChange(of: scrolls) { _, newValue in
-            if !newValue { marqueeOffset = 0 }
+        // Défilement piloté par une `TimelineView` et une loi du temps écoulé
+        // plutôt que par `Animation.linear(duration:).repeatForever(autoreverses: false)`
+        // (la technique littérale de la spec) : une animation `repeatForever`
+        // native ne peut pas être mise en pause à mi-cycle sans redémarrer à zéro
+        // au retrait de l'animation — ce qui romprait la garantie WCAG 2.2.2 (la
+        // pause doit geler l'état visuel courant, jamais le réinitialiser). Ici la
+        // pause fige le temps cumulé (`marqueeBase`) : la reprise repart d'où le
+        // texte s'était arrêté.
+        .adaptiveOnChange(of: scrolls) { _, _ in
+            restartMarquee()
         }
         // `scrolls` reste `true` d'une entrée à l'autre quand deux entrées
         // consécutives de la rotation sont TOUTES DEUX assez longues pour
@@ -596,8 +577,43 @@ struct SyncPill: View {
         // second reset, le marquee du nouveau label reprendrait au décalage où
         // l'ancien s'était arrêté au lieu de repartir de zéro.
         .adaptiveOnChange(of: visibleEntry?.id) { _, _ in
-            marqueeOffset = 0
+            restartMarquee()
         }
+    }
+
+    /// Le texte qui défile. Le viewport à largeur fixe + clip ne s'applique QU'ICI :
+    /// c'est ce qui borne la fenêtre visible pendant que le Text (fixedSize, donc
+    /// plus large que le viewport) glisse dessous via `offset`.
+    ///
+    /// L'horloge n'existe QUE dans cette branche : un texte qui ne défile pas ne
+    /// paie aucun abonnement. Elle suit l'écran (30 Hz plafonné) et se met en
+    /// pause avec l'utilisateur.
+    private func marqueeText(_ label: String) -> some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isPausedByUser)) { timeline in
+            Text(label)
+                .font(MeeshyFont.relative(metrics.labelSize, weight: .medium))
+                .foregroundStyle(textColor)
+                .lineLimit(1)
+                .fixedSize()
+                .offset(x: SyncPillMarquee.offset(
+                    elapsed: marqueeElapsed(at: timeline.date),
+                    textWidth: measuredLabelWidth,
+                    availableWidth: maxTextWidth
+                ))
+                .frame(width: maxTextWidth, alignment: .leading)
+                .clipped()
+        }
+    }
+
+    /// Temps de défilement écoulé à `date` : figé tant que l'utilisateur a mis
+    /// la pill en pause.
+    private func marqueeElapsed(at date: Date) -> TimeInterval {
+        isPausedByUser ? marqueeBase : marqueeBase + max(0, date.timeIntervalSince(marqueeRunStart))
+    }
+
+    private func restartMarquee() {
+        marqueeBase = 0
+        marqueeRunStart = Date()
     }
 
     /// Courbe du pouls — une transition BORNÉE, jamais `repeatForever`.
@@ -705,6 +721,11 @@ struct SyncPill: View {
     /// système Reduce Motion. Gèle rotation ET marquee ; un second appui
     /// long relance les deux.
     private func togglePause() {
+        if isPausedByUser {
+            marqueeRunStart = Date()
+        } else {
+            marqueeBase = marqueeElapsed(at: Date())
+        }
         isPausedByUser.toggle()
         rotator.setAutoRotation(!isPausedByUser)
         HapticFeedback.light()

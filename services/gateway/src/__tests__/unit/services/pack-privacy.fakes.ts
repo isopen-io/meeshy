@@ -1,6 +1,6 @@
 /**
  * Les doubles des témoins RGPD des packs (#10151) : une petite base EN MÉMOIRE
- * qui APPLIQUE le filtre `where` (égalité, `in`, `not`, `startsWith`, `gt`) et
+ * qui APPLIQUE le filtre `where` (égalité, `in`, `not`, `startsWith`, `gt`, intervalle `gte`/`lt`) et
  * la projection `select`, et un magasin de fichiers en mémoire. Un double qui
  * répondrait `{ count: n }` à toute requête passerait au vert sur un
  * `deleteMany({})` qui viderait les bibliothèques de tout le monde.
@@ -16,6 +16,8 @@ function matchesField(value: unknown, expected: unknown): boolean {
     if ('in' in op) return (op.in as unknown[]).includes(value);
     if ('not' in op) return value !== op.not;
     if ('startsWith' in op) return typeof value === 'string' && value.startsWith(op.startsWith as string);
+    if ('gte' in op && 'lt' in op)
+      return typeof value === 'string' && value >= (op.gte as string) && value < (op.lt as string);
     if ('gt' in op) return typeof value === 'string' && value > (op.gt as string);
     throw new Error(`opérateur non simulé : ${JSON.stringify(op)}`);
   }

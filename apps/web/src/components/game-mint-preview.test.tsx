@@ -8,6 +8,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import { GameMintPreview } from './game-mint-preview';
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
+import { translateGame } from '@/lib/i18n-game-catalog';
 import { formatCount } from '@/lib/view/game-copy';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -175,6 +176,11 @@ describe('après la frappe', () => {
     const html = renderToStaticMarkup(<GameMintPreview {...props({}, { celebration: { number: 4, edition: 'silver', key: 1 } })} />);
     expect(html).toContain('role="status"');
     expect(text(html)).toContain('Meesh n° 4 frappée');
+  });
+
+  test('la phrase nomme l’édition DESSINÉE : le n° 247 est frappé « or », pas « argent » (#11483)', () => {
+    const html = renderToStaticMarkup(<GameMintPreview {...props({}, { celebration: { number: 247, edition: 'silver', key: 1 } })} />);
+    expect(text(html)).toContain(translateGame('fr', 'game.mint.minted_line', { number: '247', edition: translateGame('fr', 'game.edition.gold') }));
   });
 
   test('une SECONDE frappe montre la pièce en train d’être frappée, pas le numéro de la précédente', async () => {

@@ -78,3 +78,25 @@ describe('le geste de frappe', () => {
     expect(host.querySelector('[data-game-strike-stage] [data-game-face-wrap="reverse"]')?.getAttribute('style')).toMatch(/opacity: ?1/);
   });
 });
+
+describe('la bande montre la prochaine pièce dans son édition dessinée (#11483)', () => {
+  const restingEdition = (host: HTMLElement): string | null | undefined => host.querySelector('[data-game-strike-stage] [data-game-coin]')?.getAttribute('data-game-edition');
+
+  test('après la centième, la prochaine pièce ordinaire se dessine en or ; avant, en argent', async () => {
+    expect(restingEdition(await mounter.mount(<MintStrike size={56} strikeKey={0} next={{ number: 248, edition: 'silver' }} gate={gateFor()} />))).toBe('gold');
+    expect(restingEdition(await mounter.mount(<MintStrike size={56} strikeKey={0} next={{ number: 99, edition: 'silver' }} gate={gateFor()} />))).toBe('silver');
+    expect(restingEdition(await mounter.mount(<MintStrike size={56} strikeKey={0} next={{ number: 1001, edition: 'silver' }} gate={gateFor()} />))).toBe('prism');
+  });
+
+  test('la cérémonie du n° 248 joue la loi de l’argent et frappe une pièce d’or', async () => {
+    const gate = gateFor();
+    const coin = { number: 248, edition: 'silver' as const };
+    const host = await mounter.mount(<MintStrike size={56} strikeKey={0} next={coin} gate={gate} />);
+    gate.begin();
+    await mounter.rerender(host, <MintStrike size={56} strikeKey={1} next={coin} gate={gate} />);
+    await flush();
+    const scene = document.body.querySelector('[data-game-ceremony]');
+    expect(scene?.getAttribute('data-edition')).toBe('silver');
+    expect(scene?.querySelector('[data-ceremony-face="reverse"] [data-game-coin]')?.getAttribute('data-game-edition')).toBe('gold');
+  });
+});

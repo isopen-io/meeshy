@@ -52,13 +52,13 @@ describe('le modèle de la pastille', () => {
       kind: 'streak',
       streakDays: 4,
       totalText: '120',
-      label: 'Flamme de 4 jours, 120 étincelles dont 12 aujourd’hui',
+      label: '4 jours, 120 étincelles dont 12 aujourd’hui',
     });
   });
 
   test('le singulier se dit au singulier', () => {
     expect(engagementPillModel(snapshot({ totalPoints: 1, todayPoints: 1, streakDays: 1 }), '2026-09-30', 'fr')?.label).toBe(
-      'Flamme de 1 jour, 1 étincelle dont 1 aujourd’hui',
+      '1 jour, 1 étincelle dont 1 aujourd’hui',
     );
   });
 
@@ -87,8 +87,8 @@ describe('le modèle de la pastille', () => {
   });
 
   test('la phrase suit la langue d’interface', () => {
-    expect(engagementPillModel(snapshot(), '2026-09-30', 'en')?.label).toBe('4-day Flame, 120 sparks, 12 today');
-    expect(engagementPillModel(snapshot(), '2026-09-30', 'ar')?.label).toBe('لهب 4 أيام، 120 شرارات، منها 12 اليوم');
+    expect(engagementPillModel(snapshot(), '2026-09-30', 'en')?.label).toBe('4 days, 120 sparks, 12 today');
+    expect(engagementPillModel(snapshot(), '2026-09-30', 'ar')?.label).toBe('4 أيام، 120 شرارات، منها 12 اليوم');
   });
 
   test('aucun instantané, ou zéro point depuis toujours ⇒ rien', () => {
@@ -113,7 +113,7 @@ describe('le rendu de la pastille', () => {
     expect(html).toContain('>120<');
     expect(html).not.toContain('(12)');
     expect(html).toContain('aria-hidden="true"');
-    expect(html).toContain('<span class="sr-only">Flamme de 4 jours, 120 étincelles dont 12 aujourd’hui</span>');
+    expect(html).toContain('<span class="sr-only">4 jours, 120 étincelles dont 12 aujourd’hui</span>');
   });
 
   test('sans série : le cumul seul, sans flamme, à l’encre tertiaire — le rouge reste la couleur de la série (#9570)', () => {

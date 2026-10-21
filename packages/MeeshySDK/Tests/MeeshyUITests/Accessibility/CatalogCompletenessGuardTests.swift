@@ -118,6 +118,55 @@ final class CatalogCompletenessGuardTests: XCTestCase {
         }
     }
 
+    static func unbundledLocalizedCalls(in code: String) -> [String] {
+        let marker = "String(localized:"
+        var offenders: [String] = []
+        var cursor = code.startIndex
+        while let found = code.range(of: marker, range: cursor..<code.endIndex) {
+            let call = callBody(of: String(code[found.upperBound...]))
+            if !call.contains("bundle:") { offenders.append(String(call.prefix(80))) }
+            cursor = found.upperBound
+        }
+        return offenders
+    }
+
+    private static func callBody(of tail: String) -> String {
+        var depth = 1
+        var inString = false
+        var backslash = false
+        var resume: [Int] = []
+        var body = ""
+        for character in tail {
+            if inString {
+                let wasBackslash = backslash
+                backslash = !wasBackslash && character == "\\"
+                if wasBackslash && character == "(" {
+                    resume.append(depth)
+                    depth += 1
+                    inString = false
+                } else if !wasBackslash && character == "\"" {
+                    inString = false
+                }
+                body.append(character)
+                continue
+            }
+            if character == "\"" {
+                inString = true
+            } else if character == "(" {
+                depth += 1
+            } else if character == ")" {
+                depth -= 1
+                if depth == 0 { break }
+                if resume.last == depth {
+                    resume.removeLast()
+                    inString = true
+                }
+            }
+            body.append(character)
+        }
+        return body
+    }
+
     // MARK: - Gardes
 
     func test_chaqueCléModuleDeMeeshyUIEstCataloguéeDansLesSeptLangues() throws {
@@ -127,6 +176,21 @@ final class CatalogCompletenessGuardTests: XCTestCase {
         })
         XCTAssertFalse(keys.isEmpty)
         XCTAssertEqual(Self.defects(entries: entries, keys: Array(keys), required: Self.languages), [])
+    }
+
+    func test_chaqueStringLocalizedDeMeeshyUILitLeCatalogueDuModule() throws {
+        let offenders = swiftFiles(under: "packages/MeeshySDK/Sources/MeeshyUI").flatMap { url -> [String] in
+            let code = codeWithoutComments((try? String(contentsOf: url, encoding: .utf8)) ?? "")
+            return Self.unbundledLocalizedCalls(in: code).map { "\(url.lastPathComponent) : \($0)" }
+        }
+        XCTAssertEqual(offenders, [], "String(localized:) sans bundle: .module lit le catalogue de l'app, pas celui du SDK")
+    }
+
+    func test_leDetecteurDAppelsSansBundleVoitLesDeuxFormes() {
+        let sansBundle = #"Button(String(localized: "a.b", defaultValue: "Fait (ok)")) { }"#
+        let avecBundle = #"Text(String(localized: "a.b", defaultValue: "x", bundle: .module))"#
+        XCTAssertEqual(Self.unbundledLocalizedCalls(in: sansBundle).count, 1)
+        XCTAssertEqual(Self.unbundledLocalizedCalls(in: avecBundle).count, 0)
     }
 
     func test_chaqueCléSymboliqueDesDeuxCataloguesADesValeursNonVidesDansLesSeptLangues() throws {

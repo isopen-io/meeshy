@@ -10,7 +10,7 @@ struct AffiliatesListView: View {
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var colorScheme
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     var body: some View {
         VStack(spacing: 0) {
@@ -45,7 +45,7 @@ struct AffiliatesListView: View {
                 ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.visibleReferrals) { referral in
-                        DirectoryPersonRow(
+                        LivePresence { DirectoryPersonRow(
                             name: referral.resolvedName,
                             subtitle: referral.referredUser.map { "@\($0.username)" },
                             avatarURL: referral.referredUser?.avatar,
@@ -54,7 +54,7 @@ struct AffiliatesListView: View {
                             isDark: colorScheme == .dark,
                             onAction: { open(referral) }
                         )
-                        .equatable()
+                        .equatable() }
                     }
                 }
                 .padding(.top, MeeshySpacing.xs)

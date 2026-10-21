@@ -25,6 +25,7 @@ final class WidgetSourceGuardTests: XCTestCase {
         let forbidden = [
             "AsyncImage\\(": "une extension de widgets ne fait pas de réseau : l'image vient du conteneur App Group",
             "\\.foregroundColor\\(": "foregroundStyle est l'API courante, et le seul plancher du widget (17.0) la porte",
+            "(?<![A-Za-z0-9_])\\.cornerRadius\\(": "clipShape(.rect(cornerRadius:)) est l'API courante, plancher widget 17.0",
             "URL\\(string:[^\\n]*\\)!": "un lien profond se construit par WidgetDeepLink, jamais par force-unwrap",
             "date\\(byAdding:[^\\n]*\\)!": "la planification passe par WidgetRefreshSchedule",
         ]

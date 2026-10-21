@@ -81,10 +81,10 @@ extension MessageEditMenuAction {
     /// Meeshy. Le menu système sert les MÊMES — sans quoi deux entrées du même
     /// nom, dans deux menus du même message, feraient deux choses.
     ///
-    /// **`peutEditer` est REMIS, jamais recalculé** : la règle
-    /// (`msg.isMe || isCurrentUserAdminOrMod`) est écrite trois fois dans
-    /// `ConversationView` ; une quatrième écriture ici garantirait la
-    /// divergence. Un message qu'on ne peut pas éditer n'affiche pas l'entrée
+    /// **`peutEditer` est REMIS, jamais recalculé** : la règle vit dans la
+    /// fabrique unique `MessageMenuContext.make` (#11214), que l'overlay, la
+    /// feuille « Plus… » et ce double toucher lisent tous ; une écriture ici
+    /// garantirait la divergence. Un message qu'on ne peut pas éditer n'affiche pas l'entrée
     /// — plutôt qu'un grisé : la loi 4 se tient par la RÈGLE, pas par un
     /// contrôle inerte.
     ///

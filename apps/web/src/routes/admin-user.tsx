@@ -267,12 +267,8 @@ export function AdminUserFiche({
           onOpenBan={() => setBannissement(true)}
           deps={deps}
           now={now}
-          gestures={
-            <>
-              <AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} embedded />
-              <AdminMemberLifecycle membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} embedded />
-            </>
-          }
+          leading={<AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} embedded />}
+          trailing={<AdminMemberLifecycle membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} embedded />}
         />
         <section aria-labelledby={dossierTitle} className="@container grid gap-3" data-admin-member-cards>
           <h2 id={dossierTitle} className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>

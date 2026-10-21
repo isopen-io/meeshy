@@ -40,7 +40,7 @@ enum NearbyDiscoverySection: String, CaseIterable, Sendable {
 // MARK: - Qui peut voir Discover
 
 /// Le staff de la plateforme, et lui seul : modérateurs, admins, bigboss.
-/// Même famille que `ConversationView.isCurrentUserAdminOrMod`, mais le rôle
+/// Même famille que l'ancien `ConversationView.isCurrentUserAdminOrMod` (retiré, #11214), mais le rôle
 /// de CONVERSATION n'y entre pas — Discover est une vue de plateforme.
 ///
 /// `nonisolated` sur le TYPE : la cible app compile sous

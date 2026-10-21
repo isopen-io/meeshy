@@ -152,13 +152,9 @@ struct StickerSheetView: View {
 
 private struct StickerSheetDetents: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(iOS 16.0, *) {
-            content
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.visible)
-        } else {
-            content
-        }
+        content
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
     }
 }
 
