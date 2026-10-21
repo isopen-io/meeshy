@@ -140,7 +140,6 @@ export async function checkRowMenuMore({ browser, base, check }) {
   });
   await page.mouse.move(rowBox.x, rowBox.y);
   await page.mouse.down();
-  await page.waitForTimeout(450);
   await page.waitForSelector('[data-conversation-peek] [data-peek-card]', { timeout: 4000 });
   await page.mouse.up();
   const peek = await page.evaluate(() => {
