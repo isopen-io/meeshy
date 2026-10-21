@@ -127,4 +127,56 @@ describe('reclaimMediaRowBytes', () => {
     ).rejects.toThrow('mongo down');
     expect(storage.delete).not.toHaveBeenCalled();
   });
+
+  // #11260 — le chemin résumable écrit désormais les variantes WebP d'une photo
+  // de post à côté de l'original, et ne les désigne que dans `imageVariants` :
+  // sans ce nettoyage, chaque photo détruite laisserait des fichiers publics.
+  it('test_reclaim_deletesTheResponsiveVariantsWrittenNextToTheOriginal', async () => {
+    const prisma = buildPrisma();
+    const storage = buildStorage();
+
+    const count = await reclaimMediaRowBytes(prisma, storage, [
+      {
+        fileUrl: '2026/10/u/a.jpg',
+        thumbnailUrl: '2026/10/u/a_thumb.webp',
+        imageVariants: [
+          { width: 640, height: 427, url: '2026/10/u/a_640w.webp', size: 9000, format: 'webp' },
+          { width: 1280, height: 853, url: '2026/10/u/a_1280w.webp', size: 30000, format: 'webp' },
+        ],
+      },
+    ]);
+
+    expect(deleted(storage)).toEqual([
+      '2026/10/u/a.jpg',
+      '2026/10/u/a_1280w.webp',
+      '2026/10/u/a_640w.webp',
+      '2026/10/u/a_thumb.webp',
+    ]);
+    expect(count).toBe(4);
+  });
+
+  it('test_reclaim_legacyRowsWithoutVariants_behaveAsBefore', async () => {
+    const prisma = buildPrisma();
+    const storage = buildStorage();
+
+    const count = await reclaimMediaRowBytes(prisma, storage, [
+      { fileUrl: '2026/10/u/old.jpg', thumbnailUrl: null },
+      { fileUrl: '2026/10/u/old2.jpg', thumbnailUrl: null, imageVariants: null },
+    ]);
+
+    expect(deleted(storage)).toEqual(['2026/10/u/old.jpg', '2026/10/u/old2.jpg']);
+    expect(count).toBe(2);
+  });
+
+  it('test_reclaim_ignoresMalformedVariantJson_neverGuessesAPath', async () => {
+    const prisma = buildPrisma();
+    const storage = buildStorage();
+
+    await reclaimMediaRowBytes(prisma, storage, [
+      { fileUrl: '2026/10/u/a.jpg', imageVariants: 'not-an-array' },
+      { fileUrl: '2026/10/u/b.jpg', imageVariants: [{ width: 640 }, null, { url: 42 }, { url: '../../etc/passwd' }] },
+    ]);
+
+    expect(deleted(storage)).toEqual(['2026/10/u/a.jpg', '2026/10/u/b.jpg']);
+  });
 });

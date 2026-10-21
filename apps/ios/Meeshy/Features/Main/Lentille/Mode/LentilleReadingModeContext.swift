@@ -168,6 +168,82 @@ nonisolated enum LentilleReadingModeContext {
             )
         )
     }
+
+    // MARK: - La décision d'OUVERTURE du fil, vue de la liste (#11213)
+
+    /// **Ce que le fil ouvrirait pour cette conversation** — la décision que
+    /// `ConversationView.init` remet à `ReadingModeController`, mêmes entrées :
+    /// drapeau `reading_modes`, capacités résolues sur le compte de membres,
+    /// préférence collante du magasin scopé, puis règle de rendu iOS. La liste
+    /// ne recalcule rien : elle appelle la loi du fil
+    /// (`ReadingModeController.openingDecision`).
+    ///
+    /// Distincte de `decision(for:preference:…)` ci-dessus, qui sert l'encoche
+    /// et le sous-menu (la loi PARTAGÉE, sans règle de rendu, pour dire ce que
+    /// « Auto » choisirait) : l'aperçu, lui, doit montrer la FACE du fil.
+    static func openingDecision(
+        for conversation: Conversation,
+        identity: ConversationViewerIdentity,
+        isFlagEnabled: Bool = MeeshyFeatureFlags.isReadingModesEnabled,
+        isRiverFlagEnabled: Bool = LentilleFeatureFlag.isRiviereModeEnabled,
+        store: FocalReadingModePreferenceStoring = ReadingModePreferenceStore(),
+        now: Date = Date()
+    ) -> ReadingModeOrchestrator.OrchestratorDecision {
+        let capabilities = ReadingModeOrchestrator.resolveCapabilities(.init(
+            identity: identity.readingModeIdentity,
+            isFlagEnabled: isFlagEnabled,
+            isRiverFlagEnabled: isRiverFlagEnabled,
+            conversationType: orchestratorType(for: conversation.type),
+            activeParticipantCount: conversation.memberCount
+        ))
+        return ReadingModeController.openingDecision(
+            conversationId: conversation.id,
+            scope: identity.scope,
+            unreadCount: conversation.userState.unreadCount,
+            capabilities: capabilities,
+            isFlagEnabled: isFlagEnabled,
+            store: store,
+            now: now
+        )
+    }
+
+    /// Le mode dans lequel l'aperçu d'appui long dessine les derniers
+    /// messages : la décision d'ouverture, posée comme « Aller au message »
+    /// (`ReadingModeController.landing`) — le Résumé vivant et la Rivière ne
+    /// montrent pas le fil, l'aperçu, qui montre des messages, s'y pose en
+    /// Script.
+    static func previewMode(
+        for conversation: Conversation,
+        identity: ConversationViewerIdentity,
+        isFlagEnabled: Bool = MeeshyFeatureFlags.isReadingModesEnabled,
+        isRiverFlagEnabled: Bool = LentilleFeatureFlag.isRiviereModeEnabled,
+        store: FocalReadingModePreferenceStoring = ReadingModePreferenceStore(),
+        now: Date = Date()
+    ) -> ConversationReadingMode {
+        ReadingModeController.landing(
+            openingDecision(
+                for: conversation,
+                identity: identity,
+                isFlagEnabled: isFlagEnabled,
+                isRiverFlagEnabled: isRiverFlagEnabled,
+                store: store,
+                now: now
+            )
+        ).mode
+    }
+
+    /// Le mode de l'aperçu pour le LECTEUR COURANT, résolu par l'unique point
+    /// de branchement invité/inscrit (`ConversationViewerIdentityResolver`).
+    /// La liste n'est jamais montée pour une session invitée (voir
+    /// `LentilleScopedReadingModePreferenceStore.currentViewerScope`) : pas de
+    /// session anonyme à transmettre.
+    @MainActor
+    static func listPreviewMode(for conversation: Conversation) -> ConversationReadingMode {
+        previewMode(
+            for: conversation,
+            identity: ConversationViewerIdentityResolver.resolve(authManager: AuthManager.shared, anonymousSession: nil)
+        )
+    }
 }
 
 // MARK: - Store partagé (M-048) — UNE préférence, QUATRE points d'entrée

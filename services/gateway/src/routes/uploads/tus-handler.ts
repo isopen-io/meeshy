@@ -14,7 +14,8 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
-import { ThumbHashGenerator } from '../../services/attachments/ThumbHashGenerator';
+import { produceMediaRenditions, imageVariantsJson, type MediaRenditions } from '../../services/attachments/media-renditions';
+import { runFfmpeg } from '../../services/attachments/ffmpeg-run';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
 import {
   resolveAnonymousUploadIdentity,
@@ -165,6 +166,34 @@ function clientDeclaredTranscription(raw: string | undefined): Prisma.InputJsonV
   const verdict = ClientTranscriptionSchema.safeParse(candidate);
   if (!verdict.success) return undefined;
   return { ...verdict.data, source: 'mobile' };
+}
+
+/**
+ * Les colonnes que les rendus fixent, communes à `PostMedia` et à
+ * `MessageAttachment` (#11260).
+ *
+ * #4324 — ce qui se PERSISTE est la clé de stockage, jamais une adresse : ni
+ * hôte, ni préfixe d'API, ni version. Ce sont des décisions de déploiement, et
+ * une donnée qui les porte devient fausse dès que l'une d'elles change. Les
+ * trois clients posent la route : `buildAttachmentUrl` (web),
+ * `MeeshyConfig.resolveMediaURL` (iOS), `me.meeshy.sdk.util.resolveMediaUrl`
+ * (Android). `filePath` et `fileUrl` portent donc la MÊME valeur.
+ *
+ * `imageVariants` est un `Json?` : absent (jamais `null`, que Prisma refuse
+ * pour ce type) quand aucune variante n'existe.
+ */
+function persistedRenditionFields(rendered: MediaRenditions) {
+  return {
+    fileName: path.basename(rendered.storedPath),
+    mimeType: rendered.storedMimeType,
+    fileSize: rendered.storedSize,
+    filePath: rendered.storedPath,
+    fileUrl: rendered.storedPath,
+    thumbnailPath: rendered.thumbnailPath,
+    thumbnailUrl: rendered.thumbnailPath,
+    thumbHash: rendered.thumbHash,
+    ...(rendered.imageVariants ? { imageVariants: imageVariantsJson(rendered.imageVariants) } : {}),
+  };
 }
 
 export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoutesOptions = {}): Promise<void> {
@@ -474,13 +503,6 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         }
       }
       const relPath = path.join(year, month, userId, storedName);
-      // #4324 — ce qui se PERSISTE est la clé de stockage, jamais une adresse : ni
-      // hôte, ni préfixe d'API, ni version. Ce sont des décisions de déploiement,
-      // et une donnée qui les porte devient fausse dès que l'une d'elles change.
-      // Les trois clients posent la route : `buildAttachmentUrl` (web),
-      // `MeeshyConfig.resolveMediaURL` (iOS), `me.meeshy.sdk.util.resolveMediaUrl`
-      // (Android).
-      const fileUrl = relPath;
 
       let metadata: Record<string, any> = {};
       try {
@@ -495,42 +517,16 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         logger.warn('[TUS] Metadata extraction failed:', err);
       }
 
-      let thumbnailUrl: string | undefined;
-      let thumbnailRelPath: string | undefined;
-      try {
-        if (attachmentType === 'image') {
-          thumbnailRelPath = await metadataManager.generateThumbnail(relPath) ?? undefined;
-        } else if (attachmentType === 'video') {
-          thumbnailRelPath = await metadataManager.generateVideoThumbnail(relPath) ?? undefined;
-        }
-        if (thumbnailRelPath) {
-          thumbnailUrl = thumbnailRelPath;
-        }
-      } catch (err) {
-        logger.warn('[TUS] Thumbnail generation failed:', err);
-      }
-
-      // Generate thumbHash for visual media (images/videos)
-      // Client may provide thumbHash via TUS metadata; backend generates as fallback.
-      // Defense-in-depth length cap: ThumbHash base64 is ~28-33 chars; reject
-      // anything over MAX_THUMBHASH_LENGTH to avoid storing malformed/malicious
-      // blobs in the DB document.
-      const MAX_THUMBHASH_LENGTH = 100;
-      const rawClientThumbHash = upload.metadata?.thumbhash || null;
-      let thumbHash: string | null =
-        (rawClientThumbHash && rawClientThumbHash.length <= MAX_THUMBHASH_LENGTH)
-          ? rawClientThumbHash
-          : null;
-      if (rawClientThumbHash && rawClientThumbHash.length > MAX_THUMBHASH_LENGTH) {
-        logger.warn(`[TUS] Rejecting oversized client thumbHash (${rawClientThumbHash.length} chars)`);
-      }
-      if (!thumbHash && (attachmentType === 'image' || attachmentType === 'video')) {
-        try {
-          thumbHash = await ThumbHashGenerator.generate(destPath, mimeType);
-        } catch (err) {
-          logger.warn('[TUS] ThumbHash generation failed:', err);
-        }
-      }
+      // #11260 — les rendus (vignette, variantes WebP, plan de transcodage,
+      // thumbhash) sont décidés par la fabrique que le multipart appelle aussi :
+      // un même fichier laisse la même trace par les deux portes. Appelée
+      // APRÈS les gardes de chaque branche, jamais avant : un upload refusé ne
+      // laisse derrière lui ni variante ni sortie de transcodage.
+      const renderMedia = () =>
+        produceMediaRenditions(
+          { uploadBasePath: UPLOAD_PATH, metadataManager, runFfmpeg },
+          { relPath, mimeType, attachmentType, fileSize, metadata, clientThumbHash: upload.metadata?.thumbhash ?? null },
+        );
 
       const uploadContext = upload.metadata?.uploadcontext;
       // Les commentaires réutilisent PostMedia (FK `commentId`) — même pipeline
@@ -539,6 +535,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       const isPostMedia = isPostMediaUploadContext(uploadContext);
 
       let recordId: string;
+      let rendered: MediaRenditions;
       if (isPostMedia) {
         // Upload destiné à un post/story/status : créer PostMedia directement (postId=null = pending)
         // Propriétaire de l'upload — la seule chose qui empêchera un tiers de
@@ -558,27 +555,23 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             body: 'Post media upload requires an identifiable registered account\n',
           };
         }
+        rendered = await renderMedia();
+        metadata = rendered.metadata;
         const postMedia = await prisma.postMedia.create({
           data: {
             postId: null,
             uploaderId,
-            fileName: storedName,
             originalName: filename,
-            mimeType,
-            fileSize,
-            filePath: relPath,
-            fileUrl,
-            thumbnailPath: thumbnailRelPath || null,
-            thumbnailUrl: thumbnailUrl || null,
-            thumbHash,
+            ...persistedRenditionFields(rendered),
             width: metadata.width || null,
             height: metadata.height || null,
             duration: metadata.duration || null,
             codec: metadata.codec || null,
+            videoCodec: metadata.videoCodec || null,
           },
         });
         recordId = postMedia.id;
-        logger.info(`[TUS] PostMedia created: ${storedName} (${fileSize} bytes, postId=null pending)`);
+        logger.info(`[TUS] PostMedia created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes, postId=null pending)`);
       } else {
         // Upload destiné à un message : créer MessageAttachment
         //
@@ -624,6 +617,9 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           }
         }
 
+        rendered = await renderMedia();
+        metadata = rendered.metadata;
+
         // Lue ici, sur la branche MESSAGE et pour un AUDIO seulement :
         // `MessageProcessor` ne la lit que là, ailleurs elle ne serait qu'un
         // blob mort dans la ligne.
@@ -633,15 +629,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
 
         const attachment = await prisma.messageAttachment.create({
           data: {
-            fileName: storedName,
             originalName: filename,
-            mimeType,
-            fileSize,
-            filePath: relPath,
-            fileUrl,
-            thumbnailPath: thumbnailRelPath || null,
-            thumbnailUrl: thumbnailUrl || null,
-            thumbHash,
+            ...persistedRenditionFields(rendered),
             width: metadata.width || null,
             height: metadata.height || null,
             duration: metadata.duration || null,
@@ -672,7 +661,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = attachment.id;
-        logger.info(`[TUS] MessageAttachment created: ${storedName} (${fileSize} bytes)`);
+        logger.info(`[TUS] MessageAttachment created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes)`);
       }
 
       return {
@@ -683,13 +672,13 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           data: {
             attachment: {
               id: recordId,
-              fileName: storedName,
+              fileName: path.basename(rendered.storedPath),
               originalName: filename,
-              mimeType,
-              fileSize,
-              fileUrl,
-              thumbnailUrl,
-              thumbHash,
+              mimeType: rendered.storedMimeType,
+              fileSize: rendered.storedSize,
+              fileUrl: rendered.storedPath,
+              thumbnailUrl: rendered.thumbnailPath ?? undefined,
+              thumbHash: rendered.thumbHash,
               width: metadata.width,
               height: metadata.height,
               duration: metadata.duration,
