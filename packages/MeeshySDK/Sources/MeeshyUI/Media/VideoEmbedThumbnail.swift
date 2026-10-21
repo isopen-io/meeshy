@@ -31,7 +31,7 @@ public struct VideoEmbedThumbnail: View {
 
                 Image(systemName: "play.fill")
                     .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(MeeshySpacing.lg)
                     .background(.ultraThinMaterial, in: Circle())
                     .overlay(Circle().stroke(accent.opacity(0.6), lineWidth: MeeshyBorder.emphasis))
@@ -41,7 +41,7 @@ public struct VideoEmbedThumbnail: View {
                     HStack {
                         Text(providerLabel)
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .padding(.horizontal, MeeshySpacing.sm)
                             .padding(.vertical, MeeshySpacing.xs)
                             .background(.black.opacity(MeeshyOpacity.strong), in: Capsule())

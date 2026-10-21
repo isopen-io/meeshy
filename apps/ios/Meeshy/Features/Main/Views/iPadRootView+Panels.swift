@@ -357,7 +357,7 @@ struct iPadLeftColumnHeader: View {
 
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -370,14 +370,14 @@ struct iPadLeftColumnHeader: View {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "bell.fill")
                             .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
 
                         if notificationCount > 0 {
                             Text(NotificationBadge.displayed(notificationCount))
                                 // Doctrine 86i : le compteur reste figé face au Dynamic
                                 // Type, mais la pastille s'élargit — « 99+ » entier.
                                 .font(MeeshyFont.relative(MeeshyFont.microSize, weight: NotificationBadge.fontWeight))
-                                .foregroundColor(.white)
+                                .foregroundStyle(Color.white)
                                 .lineLimit(1)
                                 .padding(.horizontal, MeeshySpacing.xs)
                                 .frame(minWidth: 16, minHeight: 16)
@@ -398,7 +398,7 @@ struct iPadLeftColumnHeader: View {
                 } label: {
                     Image(systemName: "gearshape.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
                 .accessibilityLabel(String(localized: "root.ipad.settings", defaultValue: "Paramètres", bundle: .main))
             }

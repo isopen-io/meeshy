@@ -95,7 +95,7 @@ struct GameRulesPage: View {
                 bundle: .main
             ))
             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-            .foregroundColor(theme.textPrimary)
+            .foregroundStyle(theme.textPrimary)
             .frame(maxWidth: .infinity, alignment: .leading)
             MeeStickerFilmView(filmID: "meo-salut", animated: true, side: 84, animates: !reduceMotion, pixelCap: 240)
                 .scaleEffect(x: -1, y: 1)
@@ -108,23 +108,23 @@ struct GameRulesPage: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "game.rules.section_rules", defaultValue: "Les règles en une page", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             ForEach(GameGuideCopy.rules) { rule in
                 HStack(alignment: .top, spacing: MeeshySpacing.md) {
                     Text(GameCopy.formatCount(rule.index))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                        .foregroundColor(MeeshyColors.brandPrimary)
+                        .foregroundStyle(MeeshyColors.brandPrimary)
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(MeeshyColors.brandPrimary.opacity(0.16)))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(rule.title)
                             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                         Text(rule.body)
                             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -143,7 +143,7 @@ struct GameRulesPage: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "game.rules.section_steps", defaultValue: "Les sept étapes", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             ForEach(GameGuide.onboardingSteps, id: \.key) { step in
                 let card = GameGuideCard.ofStep(step)
@@ -157,10 +157,10 @@ struct GameRulesPage: View {
                         ))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .textCase(.uppercase)
-                        .foregroundColor(theme.textMuted)
-                        Text(card.copy.what).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold)).foregroundColor(theme.textPrimary)
-                        Text(card.copy.means).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular)).foregroundColor(theme.textPrimary)
-                        Text(card.copy.next).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold)).foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textMuted)
+                        Text(card.copy.what).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold)).foregroundStyle(theme.textPrimary)
+                        Text(card.copy.means).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular)).foregroundStyle(theme.textPrimary)
+                        Text(card.copy.next).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold)).foregroundStyle(theme.textPrimary)
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 }
@@ -202,20 +202,20 @@ struct GameRulesGlossarySection: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(GameRulesGlossary.sectionTitle)
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             Text(GameRulesGlossary.intro)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(GameRulesGlossary.entries) { entry in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.name)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(entry.body)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -260,7 +260,7 @@ struct GameRulesBadgesSection: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(GameBadgeGuideText.rulesTitle)
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
             paragraph(GameBadgeGuideText.rulesIntro, muted: false)
             paragraph(GameBadgeGuideText.rulesLadder, muted: false)
@@ -269,7 +269,7 @@ struct GameRulesBadgesSection: View {
             paragraph(GameBadgeGuideText.rulesImprint, muted: true)
             Text(GameBadgeGuideText.rulesFamilies)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
                 .padding(.top, MeeshySpacing.xs)
             ForEach(GameRulesBadges.families) { group in
@@ -300,17 +300,17 @@ struct GameRulesBadgesSection: View {
                     GameBadgeSwatch(material: material, lit: true, size: 20)
                     Text(name)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Spacer(minLength: MeeshySpacing.xs)
                     Text(String(repeating: "★", count: index + 1))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                        .foregroundColor(MeeshyColors.brandPrimary)
+                        .foregroundStyle(MeeshyColors.brandPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                         .accessibilityHidden(true)
                     Text(threshold)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .monospacedDigit()
                 }
                 .accessibilityElement(children: .ignore)
@@ -330,7 +330,7 @@ struct GameRulesBadgesSection: View {
             Text(ProgressionCopy.title(for: group.family))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .textCase(.uppercase)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 ForEach(group.guides) { guide in
@@ -342,10 +342,10 @@ struct GameRulesBadgesSection: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(ProgressionCopy.title(for: guide.axis))
                                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
                             Text(ProgressionCopy.whatCounts(for: guide.axis))
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
                         .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)

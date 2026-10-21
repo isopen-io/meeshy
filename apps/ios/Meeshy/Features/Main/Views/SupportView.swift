@@ -162,7 +162,7 @@ struct SupportView: View {
 
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
 
                 Spacer()
 
@@ -189,7 +189,7 @@ struct SupportView: View {
 
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
 
                 Spacer()
 
@@ -210,13 +210,13 @@ struct SupportView: View {
 
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Spacer()
 
             Text(value)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .textSelection(.enabled)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)

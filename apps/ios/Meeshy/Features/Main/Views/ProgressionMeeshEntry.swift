@@ -85,7 +85,7 @@ struct MeeshCoinGlyph: View {
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: size, height: size)
-            .foregroundColor(MeeshyColors.meeshSilver)
+            .foregroundStyle(MeeshyColors.meeshSilver)
             .accessibilityHidden(true)
     }
 }
@@ -160,12 +160,12 @@ struct ProgressionMeeshDetail: View {
             // la même chose.
             Text(ProgressionCopy.meeshBalance(meesh.balance))
                 .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             if meesh.mintedLifetime > 0 {
                 Text(ProgressionCopy.meeshMintedLifetime(meesh.mintedLifetime))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
 
             bornes
@@ -227,14 +227,14 @@ struct ProgressionMeeshDetail: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("progression.meesh.mint.error")
                 }
             } else {
                 Text(ProgressionCopy.meeshMissing(missing: meesh.missingPoints, floor: meesh.floorPoints))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -270,17 +270,17 @@ struct ProgressionMeeshDetail: View {
                 bundle: .main
             ))
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
         }
     }
 
     private func borne(_ titre: String, _ date: Date) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
             Text(titre)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Spacer(minLength: MeeshySpacing.xs)
             Text(date.formatted(date: .abbreviated, time: .omitted))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
         .accessibilityElement(children: .combine)

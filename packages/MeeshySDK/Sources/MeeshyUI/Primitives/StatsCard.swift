@@ -42,11 +42,11 @@ public struct StatsCard: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
 
                 Text(value)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
             }
 
             Spacer()

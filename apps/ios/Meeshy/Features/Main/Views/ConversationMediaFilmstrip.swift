@@ -341,7 +341,7 @@ private struct FilmstripThumbnail: View, Equatable {
                 Image(systemName: "photo.badge.exclamationmark")
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
             .accessibilityHidden(true)
         }
@@ -354,7 +354,7 @@ private struct FilmstripThumbnail: View, Equatable {
         if attachment.type == .video {
             Image(systemName: "play.fill")
                 .font(.system(size: 8, weight: .black))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .padding(MeeshySpacing.xxs)
                 .background(Circle().fill(MeeshyColors.mediaScrim))
                 .padding(MeeshySpacing.xxs)

@@ -870,17 +870,17 @@ struct GalleryVideoPage: View, Equatable {
         case .ready:
             Image(systemName: "play.fill")
                 .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
-                .foregroundColor(MeeshyColors.mediaChromeForeground)
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
                 .offset(x: 2)
         case .needsDownload:
             VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: MeeshyIconSize.xl, weight: .bold))
-                    .foregroundColor(MeeshyColors.mediaChromeForeground)
+                    .foregroundStyle(MeeshyColors.mediaChromeForeground)
                 if attachment.fileSize > 0 {
                     Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                        .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                 }
             }
         case .downloading(let progress):

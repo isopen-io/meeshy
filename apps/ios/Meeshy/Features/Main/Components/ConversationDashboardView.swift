@@ -124,7 +124,7 @@ struct ConversationDashboardView: View {
 
                         Text(String(localized: "dashboard.health", defaultValue: "Santé", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy, design: .rounded))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .tracking(1.0)
                     }
                     .frame(maxWidth: .infinity)
@@ -165,7 +165,7 @@ struct ConversationDashboardView: View {
                         Text(summary.text)
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular, design: .serif))
                             .italic()
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .lineLimit(6)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -175,7 +175,7 @@ struct ConversationDashboardView: View {
                     Text(summary.text)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular, design: .serif))
                         .italic()
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(4)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -200,7 +200,7 @@ struct ConversationDashboardView: View {
                         ForEach(summary.dominantEmotions, id: \.self) { emotion in
                             Text(emotion)
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                                .foregroundColor(theme.textSecondary)
+                                .foregroundStyle(theme.textSecondary)
                                 .padding(.horizontal, MeeshySpacing.sm)
                                 .padding(.vertical, MeeshySpacing.xxs)
                                 .background(
@@ -218,7 +218,7 @@ struct ConversationDashboardView: View {
                             .foregroundColor(accent)
                         Text(String(format: String(localized: "dashboard.tone", defaultValue: "Ton : %@", bundle: .main), summary.overallTone))
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                     }
                 }
 
@@ -226,7 +226,7 @@ struct ConversationDashboardView: View {
                     Text(dynamique)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular, design: .serif))
                         .italic()
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
         }
@@ -239,7 +239,7 @@ struct ConversationDashboardView: View {
                 .foregroundColor(color)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.xsPlus)

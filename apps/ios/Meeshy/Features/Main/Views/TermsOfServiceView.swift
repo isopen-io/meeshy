@@ -123,7 +123,7 @@ struct TermsOfServiceView: View {
     private var lastUpdated: some View {
         Text(selectedLanguage == "fr" ? String(localized: "legal.terms.lastUpdated.fr", defaultValue: "Dernière mise à jour : 24 février 2026", bundle: .main) : String(localized: "legal.terms.lastUpdated.en", defaultValue: "Dernière mise à jour : 24 février 2026", bundle: .main))
             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.leading, MeeshySpacing.xs)
     }
@@ -139,12 +139,12 @@ struct TermsOfServiceView: View {
 
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
             }
 
             Text(content)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
         }

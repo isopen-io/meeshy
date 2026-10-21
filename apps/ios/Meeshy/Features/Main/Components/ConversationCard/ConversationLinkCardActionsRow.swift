@@ -29,7 +29,7 @@ struct ConversationLinkCardActionsRow: View {
             if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("conversation-link-card-error")
             }

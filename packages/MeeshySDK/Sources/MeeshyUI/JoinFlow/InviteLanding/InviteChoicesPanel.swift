@@ -66,7 +66,7 @@ struct InviteChoicesPanel: View {
                 if choice == .joinWithAccount, let initials = accountInitials, !initials.isEmpty {
                     Text(verbatim: initials)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
-                        .foregroundColor(MeeshyColors.indigo600)
+                        .foregroundStyle(MeeshyColors.indigo600)
                         .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                         .background(Circle().fill(Color.white))
                         .accessibilityHidden(true)
@@ -76,7 +76,7 @@ struct InviteChoicesPanel: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
             }
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .frame(maxWidth: .infinity, minHeight: 56)
             .padding(.horizontal, MeeshySpacing.lg)
             .background(

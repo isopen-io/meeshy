@@ -41,7 +41,7 @@ struct ConversationInfoSecurityRow: View {
                                     defaultValue: "Chiffrement de bout en bout",
                                     bundle: .main))
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
 
                         Text(isEncrypted
                              ? String(localized: "conversation.encryption.menu.active",
@@ -51,7 +51,7 @@ struct ConversationInfoSecurityRow: View {
                                       defaultValue: "Conversation non chiffrée — appuyez pour activer",
                                       bundle: .main))
                             .font(.caption)
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .lineLimit(1)
                     }
 
@@ -59,7 +59,7 @@ struct ConversationInfoSecurityRow: View {
 
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.vertical, MeeshySpacing.mdPlus)
@@ -87,7 +87,7 @@ struct ConversationInfoSecurityRow: View {
                 HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: "lock.fill")
                         .font(MeeshyFont.relative(MeeshyIconSize.md))
-                        .foregroundColor(MeeshyColors.indigo400)
+                        .foregroundStyle(MeeshyColors.indigo400)
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -95,13 +95,13 @@ struct ConversationInfoSecurityRow: View {
                                     defaultValue: "Chiffrement de bout en bout",
                                     bundle: .main))
                             .font(.subheadline.weight(.semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
 
                         Text(String(localized: "conversation.encryption.legacy.subtitle",
                                     defaultValue: "Appuyez pour vérifier le numéro de sécurité",
                                     bundle: .main))
                             .font(.caption)
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .lineLimit(1)
                     }
 
@@ -109,7 +109,7 @@ struct ConversationInfoSecurityRow: View {
 
                     Image(systemName: "chevron.forward")
                         .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.vertical, MeeshySpacing.mdPlus)
