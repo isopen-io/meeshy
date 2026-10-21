@@ -375,7 +375,7 @@ struct AchievementRevealView: View {
 
                 Image(systemName: symbole)
                     .font(MeeshyFont.relative(46, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
         }
     }
@@ -389,13 +389,13 @@ struct AchievementRevealView: View {
 
             Text(titre)
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(explication)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(MeeshyColors.indigo200)
+                .foregroundStyle(MeeshyColors.indigo200)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -416,7 +416,7 @@ struct AchievementRevealView: View {
                 } label: {
                     Text(libelleProgression)
                         .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity, minHeight: 52)
                         .background(Capsule().fill(teinte))
                 }
@@ -430,7 +430,7 @@ struct AchievementRevealView: View {
                 } label: {
                     Label(libellePhoto, systemImage: "camera.fill")
                         .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(.plain)
@@ -446,7 +446,7 @@ struct AchievementRevealView: View {
             } label: {
                 Text(libelleSortie)
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity, minHeight: 52)
                     .background(
                         Capsule().fill(onVoirProgression == nil ? teinte : Color.clear)

@@ -22,7 +22,7 @@ extension CallView {
             // Name
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
                 .padding(.bottom, MeeshySpacing.sm)
 
@@ -35,11 +35,11 @@ extension CallView {
                     ? String(localized: "call.outgoing.waiting", defaultValue: "En attente du correspondant…", bundle: .main)
                     : String(localized: "call.outgoing.ringing", defaultValue: "Appel en cours...", bundle: .main))
                     .font(.callout.weight(.medium))
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 if sdpOfferSlow {
                     Text(String(localized: "call.outgoing.waiting.hint", defaultValue: "Le correspondant n'a pas encore répondu.", bundle: .main))
                         .font(.caption2)
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundStyle(Color.white.opacity(0.6))
                         .multilineTextAlignment(.center)
                         .transition(.opacity)
                 }
@@ -102,7 +102,7 @@ extension CallView {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
                 .padding(.bottom, MeeshySpacing.sm)
 
@@ -112,7 +112,7 @@ extension CallView {
                     .accessibilityHidden(true)
                 Text(String(localized: "call.connecting", defaultValue: "Connexion...", bundle: .main))
                     .font(.callout.weight(.medium))
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
             .accessibilityElement(children: .combine)
             .padding(.bottom, 60)
@@ -144,11 +144,11 @@ extension CallView {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title3, design: .rounded).weight(.semibold))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
 
             Text(endReasonText(reason))
                 .font(.callout.weight(.medium))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
 
             if callManager.callDuration > 0 {
                 Text(callManager.formattedDuration)
@@ -170,7 +170,7 @@ extension CallView {
                         systemImage: "arrow.clockwise"
                     )
                     .font(.callout.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.xxl)
                     .padding(.vertical, MeeshySpacing.md)
                     .frame(minHeight: 44)
@@ -240,7 +240,7 @@ extension CallView {
             Text(initial)
                 // Doctrine 86i : initiale d'avatar proportionnelle au cercle fixe `size` → figée.
                 .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
 
             // Vraie photo de profil par-dessus le fallback initiale (le
             // dégradé + initiale restent visibles pendant le chargement).
@@ -289,7 +289,7 @@ extension CallView {
 
             Text(initial)
                 .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
 
             if let avatar = user?.avatar, !avatar.isEmpty {
                 CachedAsyncImage(

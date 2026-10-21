@@ -122,7 +122,7 @@ struct ConversationHeaderCallButton: View {
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 CallHeaderDurationLabel()
             }
-            .foregroundColor(MeeshyColors.success)
+            .foregroundStyle(MeeshyColors.success)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .background(
@@ -162,7 +162,7 @@ struct ConversationHeaderCallButton: View {
                 Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
             }
-            .foregroundColor(MeeshyColors.success)
+            .foregroundStyle(MeeshyColors.success)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .background(

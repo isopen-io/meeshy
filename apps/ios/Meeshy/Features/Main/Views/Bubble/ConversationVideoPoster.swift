@@ -60,7 +60,7 @@ struct ConversationVideoPoster: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: playButtonDiameter * 0.3, height: playButtonDiameter * 0.3)
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .offset(x: playButtonDiameter / 24)
         }
         .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 6, y: 3)
@@ -75,7 +75,7 @@ struct ConversationVideoPoster: View {
                     Spacer()
                     Text(formatted)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(MeeshyColors.mediaScrim))

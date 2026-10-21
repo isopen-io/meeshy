@@ -107,14 +107,14 @@ struct DownloadBadgeView: View {
                     .frame(width: 48, height: 48)
                 Image(systemName: "arrow.down.to.line")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
             .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
 
             if !totalSizeText.isEmpty {
                 Text(totalSizeText)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(MeeshyColors.mediaScrim))
@@ -137,7 +137,7 @@ struct DownloadBadgeView: View {
                     if downloader.progress > 0 {
                         Text("\(Int(downloader.progress * 100))")
                             .font(MeeshyFont.relative(7, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                     } else {
                         RoundedRectangle(cornerRadius: 1.5)
                             .fill(Color.white)
@@ -148,7 +148,7 @@ struct DownloadBadgeView: View {
 
                 Text("\(AttachmentDownloader.fmt(downloader.downloadedBytes))/\(totalSizeText)")
                     .font(MeeshyFont.relative(7, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
             }
