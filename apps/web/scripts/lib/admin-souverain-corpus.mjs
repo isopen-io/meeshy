@@ -523,3 +523,64 @@ export const AGENT_LOGS = [
     userIdsUsed: ['u-alice'],
   },
 ];
+
+/**
+ * UN FIL LONG (#11457) — 75 messages, servis comme la passerelle les sert : `createdAt DESC`
+ * par offset, 30 par page. Le n°1 est le plus ANCIEN, le n°75 le plus récent ; une pièce
+ * image tous les dix messages, pour la pellicule. Assez long pour défiler sur un téléphone,
+ * assez court pour que trois pages en fassent le tour.
+ */
+export const CONVERSATION_LONGUE = '64c00000000000000000000b';
+export const FIL_LONG_TAILLE = 75;
+
+const AUTRE_MEMBRE_ID = '64b000000000000000000043';
+const auteurDuRang = (rang) => (rang % 2 === 0 ? { id: MEMBRE_ID, nom: 'Käthe' } : { id: AUTRE_MEMBRE_ID, nom: 'Jonas' });
+
+const messageDuFilLong = (rang) => ({
+  id: `m-long-${String(rang).padStart(3, '0')}`,
+  conversationId: CONVERSATION_LONGUE,
+  senderId: auteurDuRang(rang).id,
+  content: `Message n°${rang}`,
+  originalLanguage: 'fr',
+  messageType: 'text',
+  messageSource: 'user',
+  isEdited: false,
+  isViewOnce: false,
+  viewOnceCount: 0,
+  isBlurred: false,
+  reactionCount: 0,
+  isEncrypted: false,
+  isProtected: false,
+  translations: [],
+  attachmentCount: rang % 10 === 0 ? 1 : 0,
+  attachments:
+    rang % 10 === 0
+      ? [
+          {
+            id: `a-long-${rang}`,
+            messageId: `m-long-${String(rang).padStart(3, '0')}`,
+            originalName: `photo-${rang}.png`,
+            mimeType: 'image/png',
+            fileSize: 4096,
+            fileUrl: IMAGE,
+            thumbnailUrl: null,
+            transcription: null,
+            translations: null,
+            imageVariants: null,
+            isProtected: false,
+            isViewOnce: false,
+            viewOnceCount: 0,
+            isBlurred: false,
+          },
+        ]
+      : [],
+  replyTo: null,
+  createdAt: new Date(Date.UTC(2026, 5, 1, 8, 0, 0) + rang * 60_000).toISOString(),
+  sender: expediteur(auteurDuRang(rang).id, auteurDuRang(rang).nom),
+});
+
+/** La page `offset` du fil long, dans l'ordre SERVI (le plus récent d'abord). */
+export function pageDuFilLong(offset, limit) {
+  const servis = Array.from({ length: FIL_LONG_TAILLE }, (_, index) => messageDuFilLong(FIL_LONG_TAILLE - index));
+  return { data: servis.slice(offset, offset + limit), pagination: { total: FIL_LONG_TAILLE, offset, limit, hasMore: offset + limit < FIL_LONG_TAILLE } };
+}

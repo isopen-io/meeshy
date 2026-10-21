@@ -246,6 +246,9 @@ export const monitoring = '/api/v1/admin/monitoring';
 /** POST /api/v1/admin/ops/:operation */
 export const opsByOperation = (operation: string): string => `/api/v1/admin/ops/${encodeURIComponent(operation)}`;
 
+/** GET /api/v1/admin/ops/containers */
+export const opsContainers = '/api/v1/admin/ops/containers';
+
 /** GET /api/v1/admin/ops/host-metrics */
 export const opsHostMetrics = '/api/v1/admin/ops/host-metrics';
 
