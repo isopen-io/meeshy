@@ -436,8 +436,10 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.conversations, id: \.id) { conversation in
-                        conversationRow(conversation)
-                            .onTapGesture { onSelectConversation?(conversation) }
+                        Button { onSelectConversation?(conversation) } label: {
+                            conversationRow(conversation)
+                        }
+                        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .roundedRect(cornerRadius: 0)))
 
                         if conversation.id != viewModel.conversations.last?.id {
                             Divider().padding(.leading, 60)

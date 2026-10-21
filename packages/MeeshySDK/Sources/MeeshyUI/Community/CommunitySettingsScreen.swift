@@ -236,8 +236,8 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                 .foregroundColor(theme.textSecondary)
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
-                ForEach(presetColors, id: \.self) { hex in
-                    colorSwatch(hex: hex)
+                ForEach(Array(presetColors.enumerated()), id: \.element) { index, hex in
+                    colorSwatch(hex: hex, index: index)
                 }
             }
         }
@@ -282,26 +282,33 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
         )
     }
 
-    private func colorSwatch(hex: String) -> some View {
+    private func colorSwatch(hex: String, index: Int) -> some View {
         let isSelected = viewModel.localColor == hex
-        return Circle()
-            .fill(Color(hex: hex))
-            .frame(width: 38, height: 38)
-            .overlay {
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
+        return Button { viewModel.localColor = hex } label: {
+            Circle()
+                .fill(Color(hex: hex))
+                .frame(width: 38, height: 38)
+                .overlay {
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white)
+                    }
                 }
-            }
-            .overlay {
-                Circle()
-                    .stroke(Color.white.opacity(isSelected ? 0.6 : 0), lineWidth: 2)
-                    .padding(2)
-            }
-            .scaleEffect(isSelected ? 1.1 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-            .onTapGesture { viewModel.localColor = hex }
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(isSelected ? 0.6 : 0), lineWidth: 2)
+                        .padding(2)
+                }
+                .scaleEffect(isSelected ? 1.1 : 1.0)
+                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+                .contentShape(Circle())
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
+        .accessibilityLabel(String(
+            format: String(localized: "community.settings.color.swatch.a11y", bundle: .module),
+            index + 1, presetColors.count))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Edit Section
