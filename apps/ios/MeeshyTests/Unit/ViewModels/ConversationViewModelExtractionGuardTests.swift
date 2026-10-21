@@ -64,7 +64,7 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
             "func hydrateMetadataFromGRDB(",
         ]),
         ("ConversationViewModel+Send.swift", [
-            "func withSendTimeout<", "func sendMessage(content:",
+            "func withSendTimeout<", "func send(_ outgoing: OutgoingMessage)",
             "func finalizeSuccessfulSend(", "func retryMessage(",
             "func insertOptimisticMediaMessage(",
         ]),

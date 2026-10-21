@@ -64,7 +64,7 @@ final class ConversationViewModelAfterReadTests: XCTestCase {
         let (sut, messageService) = try await makeSUT()
         sut.ephemeralChoice = .afterRead
 
-        _ = await sut.sendMessage(content: "à lire une fois")
+        _ = await sut.send(outgoingMessage(content: "à lire une fois", conversationId: sut.conversationId)).isAccepted
 
         let request = try XCTUnwrap(messageService.lastSendRequest)
         XCTAssertEqual(request.effectFlags, MessageEffectFlags([.ephemeral, .ephemeralAfterRead]).rawValue)
@@ -76,7 +76,7 @@ final class ConversationViewModelAfterReadTests: XCTestCase {
         let (sut, messageService) = try await makeSUT()
         sut.ephemeralChoice = .duration(.fifteenSeconds)
 
-        _ = await sut.sendMessage(content: "vite")
+        _ = await sut.send(outgoingMessage(content: "vite", conversationId: sut.conversationId)).isAccepted
 
         let request = try XCTUnwrap(messageService.lastSendRequest)
         XCTAssertEqual(request.ephemeralDuration, 15)

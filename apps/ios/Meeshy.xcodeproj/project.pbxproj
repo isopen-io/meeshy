@@ -1305,6 +1305,7 @@
 		573062956B04331CE22622EA /* ConversationListView+ShareLinkPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAE9F539F841F2C7E703E550 /* ConversationListView+ShareLinkPicker.swift */; };
 		5762368334B735D55FE6DB9D /* CallEffectsCompanionRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07B7C382FB8D5E43E8C806B /* CallEffectsCompanionRuleTests.swift */; };
 		5762782D870E13D67DB34C0C /* JSONStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44D26F6D3E558FD458D8DCA7 /* JSONStub.swift */; };
+		DE8BE3D3AFE43441B206E8E7 /* OutgoingMessageFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52ABCBC03471694067E23646 /* OutgoingMessageFactory.swift */; };
 		577211F702E9F391328DD4EB /* CallSelfTileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D005DA81F7AA02B7BBFB4521 /* CallSelfTileTests.swift */; };
 		577CA1C97812C67C8998A6B0 /* SceneCaptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FAD89123AEC91380DAC83BB /* SceneCaptionTests.swift */; };
 		57819061AA6B1DEC5BA4FAF8 /* ComposerCaptureRefusedChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BCADFAA61770CB17E18D7C2 /* ComposerCaptureRefusedChrome.swift */; };
@@ -5058,6 +5059,7 @@
 		44A8DAAD4FB52A3176377372 /* ComposerLongPressOpensV3Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLongPressOpensV3Tests.swift; sourceTree = "<group>"; };
 		44C1AE6349CC4D3716192F74 /* ComposerMediaControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMediaControls.swift; sourceTree = "<group>"; };
 		44D26F6D3E558FD458D8DCA7 /* JSONStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONStub.swift; sourceTree = "<group>"; };
+		52ABCBC03471694067E23646 /* OutgoingMessageFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutgoingMessageFactory.swift; sourceTree = "<group>"; };
 		44F3FA0DC407380BAF35B514 /* CallFrameRenderer+Names.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallFrameRenderer+Names.swift"; sourceTree = "<group>"; };
 		44FBF8B8EB22AD824BF1C5D3 /* AttachmentQuickLookPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentQuickLookPreview.swift; sourceTree = "<group>"; };
 		44FD2C7B55066F51949BB28D /* MessageDayLabelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDayLabelTests.swift; sourceTree = "<group>"; };
@@ -12398,6 +12400,7 @@
 				B7797ECEE2CC89493CF44E97 /* DeclarationBodyScanner.swift */,
 				5BE9E3F8A2038DE0A368311C /* FriendRequestTestHelpers.swift */,
 				44D26F6D3E558FD458D8DCA7 /* JSONStub.swift */,
+				52ABCBC03471694067E23646 /* OutgoingMessageFactory.swift */,
 				9A5CF50F8C26CCD944287724 /* LentilleListFlagPin.swift */,
 				38248168C803761CB20757D4 /* MediaGalleryLotFixtures.swift */,
 				170F4C160EFCA858E403C236 /* MessageStoreObservationHelper.swift */,
@@ -16039,6 +16042,7 @@
 				26A6DF79F46B35498474BD72 /* InterpolatedLocalizationSubstitutionTests.swift in Sources */,
 				7F9497DD95FA11660A07F797 /* IslandGeometryTests.swift in Sources */,
 				5762782D870E13D67DB34C0C /* JSONStub.swift in Sources */,
+				DE8BE3D3AFE43441B206E8E7 /* OutgoingMessageFactory.swift in Sources */,
 				6BDA4753F757E06EE3CE8D2C /* JumpToMessageLandingTests.swift in Sources */,
 				4D262BE6E46C4AACF277FB78 /* ReadingModeOpeningDecisionTests.swift in Sources */,
 				30A69D192FD22D4ACCE14A2A /* JumpedWindowNewerPageTests.swift in Sources */,
