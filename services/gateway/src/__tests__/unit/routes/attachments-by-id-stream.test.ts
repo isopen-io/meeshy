@@ -184,3 +184,18 @@ describe('#11265 — original par identifiant : représentation conservée', () 
     await app.close();
   });
 });
+
+describe('#11265 — plage par chemin sur un fichier non média', () => {
+  it('répond 206 à une plage sur une image servie par chemin, avec ETag', async () => {
+    const app = await buildApp(makePrisma([], []));
+    const res = await app.inject({
+      method: 'GET',
+      url: '/attachments/file/uploads/photo.jpg',
+      headers: { range: 'bytes=0-99' },
+    });
+    expect(res.statusCode).toBe(206);
+    expect(res.headers['content-range']).toBe(`bytes 0-99/${SIZE}`);
+    expect(res.headers['etag']).toBe(ETAG);
+    await app.close();
+  });
+});
