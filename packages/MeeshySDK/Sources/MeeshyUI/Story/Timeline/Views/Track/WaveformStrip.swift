@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Bande de forme d'onde, partagée par les pistes audio et vidéo.
 ///
@@ -45,7 +46,7 @@ struct WaveformStrip: View {
                                        availableHeight: CGFloat) -> [CGFloat] {
         let usable = max(0, availableHeight - 6)
         return samples.map { sample in
-            max(2, CGFloat(AudioWaveform.displayHeight(rms: sample)) * usable)
+            max(2, CGFloat(WaveformScale.displayHeight(rms: sample)) * usable)
         }
     }
 }

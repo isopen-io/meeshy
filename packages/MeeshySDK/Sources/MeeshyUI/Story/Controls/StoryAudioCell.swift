@@ -142,7 +142,7 @@ struct StoryAudioCell: View {
 
     private var waveformView: some View {
         let raw: [Float] = {
-            if !waveform.samples.isEmpty { return waveform.samples }
+            if !waveform.samples.isEmpty { return WaveformScale.peakNormalized(waveform.samples) }
             if !audio.waveformSamples.isEmpty { return audio.waveformSamples }
             return AudioWaveformAnalyzer.generateFallback(count: Self.maxWaveformBars)
         }()

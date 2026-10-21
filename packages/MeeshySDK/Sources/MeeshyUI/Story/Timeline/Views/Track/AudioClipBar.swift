@@ -48,7 +48,7 @@ public struct AudioClipBar: View, Equatable {
     public let onTrimEndDelta: (CGFloat) -> Void
     /// URL locale du fichier — quand `waveformSamples` est vide (draft
     /// restauré, repost), la barre extrait elle-même sa forme d'onde
-    /// (AudioWaveform, RMS + cache). Sans ça la lane audio était un aplat.
+    /// (WaveformCache, RMS + cache). Sans ça la lane audio était un aplat.
     public let audioURL: URL?
     /// Points d'automation du clip — seule leur composante `volume` est
     /// tracée, en lecture seule. L'édition passe par la fiche.
@@ -189,7 +189,7 @@ public struct AudioClipBar: View, Equatable {
         .clipBarAccessibility(accessibilityModel, callbacks: accessibilityCallbacks)
         .task(id: audioURL) {
             guard waveformSamples.isEmpty, let audioURL else { return }
-            loadedSamples = await AudioWaveform.samples(url: audioURL, count: 80)
+            loadedSamples = (try? await WaveformCache.shared.samples(from: audioURL, count: 80)) ?? []
         }
     }
 

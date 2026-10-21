@@ -393,7 +393,7 @@ struct AudioFullscreenPage: View, Equatable {
             }
             playback { snapshot, _ in
                 AudioFullscreenDial(
-                    samples: waveformAnalyzer.samples,
+                    samples: WaveformScale.peakNormalized(waveformAnalyzer.samples),
                     progress: snapshot.progress,
                     isPlaying: snapshot.isPlaying,
                     portraitDiameter: diameter,

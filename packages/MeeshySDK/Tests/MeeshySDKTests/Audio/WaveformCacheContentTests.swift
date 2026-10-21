@@ -73,14 +73,14 @@ final class WaveformCacheContentTests: XCTestCase {
         samples.forEach { XCTAssertEqual($0, 0.5 / 2.0.squareRoot(), accuracy: 0.02) }
     }
 
-    func test_aSecondCallIsServedFromTheCache_andStaysEqual() async throws {
+    func test_theDiskLayer_givesBackTheSameSamplesAsTheMeasure() async throws {
         let url = try Self.makeTone(amplitude: 0.3)
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
 
-        let first = try await WaveformCache.shared.samples(from: url, count: 80)
-        try FileManager.default.removeItem(at: url)
-        let second = try await WaveformCache.shared.samples(from: url, count: 80)
+        let measured = try await WaveformCache.shared.samples(from: url, count: 80)
+        await WaveformCache.shared.clearMemoryCache()
+        let fromDisk = try await WaveformCache.shared.samples(from: url, count: 80)
 
-        XCTAssertEqual(first, second)
+        XCTAssertEqual(measured, fromDisk, "la mémoire évincée, le disque rend le relevé à l'octet près")
     }
 }
