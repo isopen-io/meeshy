@@ -130,7 +130,9 @@
       "instead": "“strides” (the journey); “ages” (rebirth)",
       "keys": [
         "game.season.",
-        "game.prestige."
+        "game.prestige.",
+        "game.fact.strides",
+        "game.fact.rebirths"
       ]
     },
     {
@@ -325,6 +327,8 @@
     "game.gauge.level": "Light",
     "game.gauge.rank": "Rank",
     "game.gauge.treasury": "Legacy",
-    "game.gauge.flame": "Flame"
+    "game.gauge.flame": "Flame",
+    "game.fact.strides": "Strides",
+    "game.fact.rebirths": "Rebirths"
   }
 }

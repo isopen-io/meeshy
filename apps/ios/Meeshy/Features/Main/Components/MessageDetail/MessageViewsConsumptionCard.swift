@@ -77,14 +77,14 @@ struct MessageViewsConsumptionCard: View {
 
                     VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                         HStack(spacing: MeeshySpacing.smPlus) {
-                            MeeshyAvatar(
+                            LivePresence { MeeshyAvatar(
                                 name: user.username,
                                 context: .userListItem,
                                 accentColor: contactColor,
                                 avatarURL: user.avatar,
                                 presenceState: MessageViewsMemberPresence.state(of: user.participantId, in: members),
                                 ring: members[user.participantId]?.avatarRing
-                            )
+                            ) }
 
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(user.username)

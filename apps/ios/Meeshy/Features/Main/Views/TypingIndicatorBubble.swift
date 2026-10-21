@@ -54,7 +54,7 @@ struct TypingIndicatorBubble: View {
     @ViewBuilder
     private func leadAvatar(size: CGFloat) -> some View {
         if let lead {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: lead.displayName,
                 context: .custom(size),
                 accentColor: accentHex,
@@ -63,7 +63,7 @@ struct TypingIndicatorBubble: View {
                 isHere: here[lead.id],
                 ring: lead.ring,
                 isDark: isDark
-            )
+            ) }
         }
     }
 

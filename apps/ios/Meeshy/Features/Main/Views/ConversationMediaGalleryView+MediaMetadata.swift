@@ -30,14 +30,14 @@ struct GalleryMediaMetadataBlock: View {
                     name: info.senderName,
                     subtitle: info.sentAt.formatted(.dateTime.day().month(.abbreviated).hour().minute())
                 ) {
-                    MeeshyAvatar(
+                    LivePresence { MeeshyAvatar(
                         name: info.senderName,
                         context: .messageBubble,
                         accentColor: info.senderColor,
                         avatarURL: info.senderAvatarURL,
                         presenceState: info.isMe ? nil : info.senderUserId.map { PresenceManager.shared.presenceState(for: $0) },
                         ring: info.senderRing
-                    )
+                    ) }
                 }
             }
             // **Une scène n'a ni format, ni dimensions, ni poids** (#6709) : sa

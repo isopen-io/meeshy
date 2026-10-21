@@ -73,6 +73,12 @@ describe('les chiffres du moment se disent', () => {
     expect(copy.means).toContain('ton niveau baisse d’autant');
     expect(copy.means).toContain('+100 de gloire');
   });
+  test('une frappe qui ne coûte aucun niveau le dit, comme sur iOS : « sans te faire perdre un niveau »', () => {
+    const free = guideMoment({ kind: 'first-mint-possible', price: 1221, levelsLost: 0, gloryGain: 100 }, []);
+    const means = momentCopy(free, 'fr').means.replace(/\s/g, ' ');
+    expect(means).toContain('sans te faire perdre un niveau');
+    expect(means).not.toContain('ton niveau baisse');
+  });
   test('la phrase ne promet plus que le niveau tient : la frappe le fait baisser', () => {
     const moment = guideMoment({ kind: 'first-mint-possible', price: 1221, levelsLost: 1, gloryGain: 100 }, []);
     expect(momentCopy(moment, 'fr').means).not.toContain('sans baisser ton niveau');

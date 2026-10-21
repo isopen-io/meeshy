@@ -117,7 +117,9 @@
       "instead": "« passos » (a viagem) ; « eras » (o renascimento)",
       "keys": [
         "game.season.",
-        "game.prestige."
+        "game.prestige.",
+        "game.fact.strides",
+        "game.fact.rebirths"
       ]
     },
     {
@@ -327,6 +329,8 @@
     "game.gauge.level": "Luz",
     "game.gauge.rank": "Título",
     "game.gauge.treasury": "Herança",
-    "game.gauge.flame": "Chama"
+    "game.gauge.flame": "Chama",
+    "game.fact.strides": "Passos",
+    "game.fact.rebirths": "Renascimentos"
   }
 }
