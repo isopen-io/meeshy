@@ -74,12 +74,13 @@ async function writeOperationAudit(
   entry: { readonly adminId: string; readonly environment: string; readonly audit: OperationAudit },
 ): Promise<void> {
   const { audit } = entry;
+  const queued = audit.kind === 'queued';
   try {
     await (request.server as unknown as { prisma: { adminAuditLog: { create: (a: unknown) => Promise<unknown> } } }).prisma.adminAuditLog.create({
       data: {
         adminId: entry.adminId,
         userId: entry.adminId,
-        action: audit.kind === 'queued' ? 'TRIGGER_SERVER_OPERATION' : 'SERVER_OPERATION_REFUSED',
+        action: queued ? 'TRIGGER_SERVER_OPERATION' : 'SERVER_OPERATION_REFUSED',
         entity: 'Server',
         entityId: entry.environment,
         metadata: JSON.stringify(
@@ -102,7 +103,7 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
     const environment = deps.relay.settings.environment;
 
     /** Journalise une tentative REFUSÉE — seulement quand il y a un acteur à nommer et une opération connue. */
-    const auditRefusal = async (request: FastifyRequest, code: string): Promise<void> => {
+    const auditRefusal = async ({ request, code }: { readonly request: FastifyRequest; readonly code: string }): Promise<void> => {
       const actor = actorOf(request);
       const operation = serverOperationSchema.safeParse((request.params as { operation?: string } | undefined)?.operation);
       if (!actor || !operation.success) return;
@@ -115,7 +116,7 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
      * réponse 403 qu'elles ont envoyée qui laisse sa trace, une fois partie.
      */
     const auditForbidden = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-      if (reply.statusCode === 403) await auditRefusal(request, 'FORBIDDEN');
+      if (reply.statusCode === 403) await auditRefusal({ request, code: 'FORBIDDEN' });
     };
 
     fastify.get(
@@ -209,7 +210,7 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
           return sendError(reply, 400, 'Demande invalide', { code: 'VALIDATION_ERROR', violations: violationsOf(body.error.issues) });
         }
         if (body.data.confirm !== operation.data) {
-          await auditRefusal(request, 'CONFIRMATION_MISMATCH');
+          await auditRefusal({ request, code: 'CONFIRMATION_MISMATCH' });
           return sendError(reply, 400, "La confirmation ne nomme pas l'opération demandée", { code: 'CONFIRMATION_MISMATCH' });
         }
 
@@ -218,7 +219,7 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
 
         const result = await deps.relay.submit({ operation: operation.data, requestedBy: actor.username });
         if (result.kind === 'refused') {
-          await auditRefusal(request, result.code);
+          await auditRefusal({ request, code: result.code });
           if (result.code === 'OPERATION_COOLDOWN') {
             return sendError(reply, 409, 'Opération trop récente', { code: result.code, details: { data: { availableAt: result.availableAt } } });
           }

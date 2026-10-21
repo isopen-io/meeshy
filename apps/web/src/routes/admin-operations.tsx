@@ -14,6 +14,7 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import type { HostMetricsSnapshot } from '@meeshy/shared/types/admin-ops';
 
 import { AdminOperationsActions } from './admin-operations-actions';
+import { AdminOperationsContainers } from './admin-operations-containers';
 
 /**
  * **LES OPÉRATIONS DU SERVEUR** (#10391, #10396) — `/admin/operations` · `/adm/operations`.
@@ -22,8 +23,10 @@ import { AdminOperationsActions } from './admin-operations-actions';
  * jauges de la dernière mesure (processeur, mémoire, disque, swap, Docker récupérable,
  * GPU), puis quatre graphes d'une heure (processeur, charge 1/5/15, mémoire et swap,
  * disque) — un axe par graphe, tableau des données au clavier. Un bandeau dit quand
- * l'hôte est PARTAGÉ (staging et production sur la même machine). Sous les graphes, la
- * sauvegarde et la purge des images (BIGBOSS, confirmation qui nomme l'opération).
+ * l'hôte est PARTAGÉ (staging et production sur la même machine). Sous les graphes, les
+ * CONTENEURS de l'environnement (état, image et sa date, durée de marche ; au toucher, la
+ * consommation et les réseaux — #11441), puis la sauvegarde et le nettoyage de Docker
+ * (rang d'administration, confirmation qui nomme l'opération).
  *
  * Rang d'administration (`requireAdminRank()` côté passerelle) : `adminRankOnly`.
  */
@@ -185,6 +188,7 @@ export function AdminOperationsPanel({
           <HostCharts language={language} snapshot={snapshot} />
         </>
       )}
+      <AdminOperationsContainers language={language} deps={deps} now={now} />
       <AdminOperationsActions language={language} deps={deps} now={now} />
     </div>
   );
