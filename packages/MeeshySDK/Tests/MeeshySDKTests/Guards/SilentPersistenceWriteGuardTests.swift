@@ -37,6 +37,8 @@ final class SilentPersistenceWriteGuardTests: XCTestCase {
 
     private static let silentWritePattern = #"try\?\s*await\s+[A-Za-z_.]*\.(save|applyEvent|upsert|write)"#
 
+    private static let boundValuePattern = #"^(?:(?:if|guard)\s+)?(?:let|var)\s+[^=]+=\s*try\?"#
+
     func test_aucuneEcriturePersistanteSilencieuseHorsTolerance() throws {
         let counts = try silentWriteCounts()
         for (path, count) in counts.sorted(by: { $0.key < $1.key }) {
@@ -87,6 +89,8 @@ final class SilentPersistenceWriteGuardTests: XCTestCase {
             "_ = try? await messagePersistence.applyEvent(localId: id, event: .retryExhausted)",
             "try? await persistence.upsertPostTranslation(",
             #"Task { try? await CacheCoordinator.shared.shareLinks.save(snapshot, for: "list") }"#,
+            #"_ = try? await db.write { db in try db.execute(sql: "DELETE FROM t") }"#,
+            #"try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: k)"#,
         ]
         let ignored = [
             #"await bestEffort("feed.cache.save", category: .cache) { try await feed.save(p, for: "k") }"#,
@@ -94,6 +98,8 @@ final class SilentPersistenceWriteGuardTests: XCTestCase {
             "// try? await x.save(y)",
             "/// try? await x.save(y)",
             "* try? await x.save(y)",
+            "let removed: Removed?? = try? await context.pool.write { db -> Removed? in",
+            "guard let saved = try? await store.save(x) else { return }",
         ]
         recognised.forEach { XCTAssertTrue(Self.isSilentWrite($0), $0) }
         ignored.forEach { XCTAssertFalse(Self.isSilentWrite($0), $0) }
@@ -102,6 +108,7 @@ final class SilentPersistenceWriteGuardTests: XCTestCase {
     static func isSilentWrite(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { return false }
+        guard trimmed.range(of: boundValuePattern, options: .regularExpression) == nil else { return false }
         return trimmed.range(of: silentWritePattern, options: .regularExpression) != nil
     }
 
