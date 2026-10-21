@@ -166,39 +166,13 @@ struct StoryRepublishComposer: View {
             },
             onDismiss: onFinish
         )
-        .fullScreenCover(item: $previewAssets, onDismiss: {
-            NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
-        }) { assets in
-            let items = assets.slides.map { $0.toPreviewStoryItem() }
-            let group = StoryGroup(
-                id: "preview",
-                username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
-                avatarColor: MeeshyColors.brandPrimaryHex,
-                stories: items
-            )
-            StoryViewerView(
-                viewModel: viewModel,
-                groups: [group],
-                currentGroupIndex: 0,
-                isPresented: Binding(
-                    get: { previewAssets != nil },
-                    set: { if !$0 { previewAssets = nil } }
-                ),
-                isPreviewMode: true,
-                preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
-                preloadedVideoURLs: assets.videoURLs,
-                preloadedAudioURLs: assets.audioURLs
-            )
-            // Les objets d'environnement ne descendent PAS à travers un
-            // `fullScreenCover` — la remarque est écrite noir sur blanc dans
-            // `StoryViewerView` (« from the parent fullScreenCover are NOT
-            // inherited automatically »). Les reposer ici n'est pas une
-            // ceinture-bretelle : sans eux, l'aperçu planterait à la première
-            // lecture d'un de ces trois modèles.
-            .environmentObject(router)
-            .conversationListObject(conversationListViewModel)
-            .environmentObject(statusViewModel)
-        }
+        .modifier(StoryPreviewReaderCover(
+            assets: $previewAssets,
+            storyViewModel: viewModel,
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationList: conversationListViewModel
+        ))
     }
 
     /// **Ancrer une republication en POST** — `POST /posts/:id/repost`, le seul

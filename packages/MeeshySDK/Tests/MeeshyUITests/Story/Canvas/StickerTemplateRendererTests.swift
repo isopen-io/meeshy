@@ -251,7 +251,7 @@ final class StickerTemplateRendererTests: XCTestCase {
     /// (« 2:32 PM ») ne doit jamais servir de source — d'où deux emplacements
     /// numériques à côté de la chaîne.
     func test_clockHands_readTheNumericSlots_notTheDisplayString() {
-        let aiguilles = StickerTemplateRenderer.clockHands([
+        let aiguilles = TimeStickerTemplates.clockHands([
             StickerSlotFiller.timeSlot: "2:32 PM",
             StickerSlotFiller.hourSlot: "14",
             StickerSlotFiller.minuteSlot: "32",
@@ -262,7 +262,7 @@ final class StickerTemplateRendererTests: XCTestCase {
 
     /// Des emplacements absents ne plantent pas : le cadran retombe sur minuit.
     func test_clockHands_missingSlots_fallBackToMidnight() {
-        let aiguilles = StickerTemplateRenderer.clockHands([:])
+        let aiguilles = TimeStickerTemplates.clockHands([:])
         XCTAssertEqual(aiguilles.heure, 0)
         XCTAssertEqual(aiguilles.minute, 0)
     }

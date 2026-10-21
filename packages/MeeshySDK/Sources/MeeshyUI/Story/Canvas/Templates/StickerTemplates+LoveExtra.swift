@@ -11,7 +11,7 @@ import MeeshySDK
 /// Fichier séparé de `StickerTemplates+Love` : sept dessins de plus l'auraient
 /// poussé hors budget pour un gain de cohésion nul — ce sont sept formes
 /// indépendantes qui ne partagent que le cœur.
-extension StickerTemplateRenderer {
+extension LoveStickerTemplates {
 
     // MARK: Les gestes partagés
 

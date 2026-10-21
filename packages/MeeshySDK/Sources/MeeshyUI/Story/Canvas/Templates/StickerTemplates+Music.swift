@@ -26,7 +26,9 @@ import MeeshySDK
 /// Les mots dessinés appartiennent donc au GABARIT, pas à l'auteur — ils
 /// viennent de `String(localized:)` à clé LITTÉRALE, et le LECTEUR lit
 /// « Now playing » là où l'auteur a posé « En écoute ».
-extension StickerTemplateRenderer {
+enum MusicStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .music
+
 
     // MARK: - Le patron des objets nus
 
@@ -607,7 +609,7 @@ extension StickerTemplateRenderer {
                    dessin: { r in Self.musicRadioArt(in: r) }),
     ]
 
-    static let musicDrawers: [StickerTemplateDrawer] = musicMotifs.map { musicMotifDrawer($0) } + [
+    static let drawers: [StickerTemplateDrawer] = musicMotifs.map { musicMotifDrawer($0) } + [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.musicNowPlaying,
             name: { Self.musicNowPlayingCaption },

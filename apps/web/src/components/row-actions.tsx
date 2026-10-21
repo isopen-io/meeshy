@@ -1,6 +1,7 @@
 import { useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
 
+import { impact } from '@/lib/view/haptics';
 import { placePopover, placePopoverVertical } from '@/lib/view/popover';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import {
@@ -320,7 +321,9 @@ export function RowActions({
    * LE MENU CONTEXTUEL DE LA LIGNE (#8109) — clic droit à la souris, appui
    * long au doigt (Chromium Android émet `contextmenu` sur l'appui long) :
    * iOS ouvre son menu par l'appui long, le web ouvre le MÊME panneau que le
-   * bouton, jamais le menu du navigateur.
+   * bouton, jamais le menu du navigateur. Il vibre comme le menu d'un
+   * message (`impact('medium')`, #11207) ; la pression et le seuil de 350 ms
+   * lui viendront avec `useLongPress` (#11211).
    */
   useEffect(() => {
     const row = buttonRef.current?.closest('li');
@@ -329,6 +332,7 @@ export function RowActions({
       event.preventDefault();
       measure();
       setOpen(true);
+      impact('medium');
     };
     row.addEventListener('contextmenu', onContextMenu);
     return () => row.removeEventListener('contextmenu', onContextMenu);
