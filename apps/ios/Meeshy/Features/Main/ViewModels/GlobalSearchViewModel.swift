@@ -241,7 +241,7 @@ final class GlobalSearchViewModel: ObservableObject {
         setupSocketInvalidation()
     }
 
-    deinit {
+    nonisolated deinit {
         // `searchTask` is `nonisolated(unsafe)` so the implicitly
         // non-isolated `deinit` can reach it without a Swift 6 isolation
         // warning. Cancel any in-flight search so we don't leak network
