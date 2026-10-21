@@ -243,7 +243,7 @@ describe('EngagementService.recordActivity', () => {
       // palier 10 » a été servi en production (2026-09-08). `route` dit où le
       // tap mène — l'écran « Progression ».
       title: '🏆 Palier 2 atteint',
-      content: 'Publications : 10 — bravo, vous êtes au palier 2 !',
+      content: 'Publications : 10 — bravo, tu atteins le palier 2 !',
       context: {},
       metadata: { action: 'view_details', route: 'progression', axisKey: 'content.post', threshold: 10, tierRank: 2, value: 10 },
     });
@@ -498,7 +498,7 @@ describe('EngagementService streak tracking (#5544)', () => {
       userId: 'user-1',
       type: 'streak_milestone',
       priority: 'normal',
-      content: '🔥 Série de 3 jours !',
+      content: '🔥 Ta Flamme brûle depuis 3 jours !',
       context: {},
       metadata: { action: 'view_details', route: 'progression', threshold: 3 },
     });

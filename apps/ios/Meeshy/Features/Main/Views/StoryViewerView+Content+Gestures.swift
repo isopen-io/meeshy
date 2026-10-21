@@ -86,7 +86,10 @@ extension StoryViewerView {
 
                 switch gestureAxis {
                 case 1:
-                    horizontalDrag = dx
+                    horizontalDrag = StoryGroupSwipeDecision.displayedTranslation(
+                        dx, width: screenW,
+                        hasNeighbor: dx < 0 ? currentGroupIndex < groups.count - 1 : currentGroupIndex > 0
+                    )
                     // Face du cube côté direction courante — recalculée à
                     // chaque tick : le geste est réversible mi-course.
                     let total = groupSlide + dx
@@ -127,45 +130,37 @@ extension StoryViewerView {
 
                 switch axis {
                 case 1: // Horizontal — group navigation
-                    // NE PAS retourner ce signe seul (#4297, tenté puis annulé).
-                    // La navigation par groupe n'est pas qu'une décision : c'est
-                    // un CUBE, dont toute la géométrie vit en espace ÉCRAN —
-                    // `horizontalDrag`, `groupSlide`, `totalSlideX`,
-                    // `exitX = forward ? -screenW : screenW`, et l'orientation des
-                    // faces voisines. Retourner la décision sans retourner le cube
-                    // ferait partir la face de commit à l'OPPOSÉ du doigt qui
-                    // vient de la pousser : une incohérence pire que le défaut
-                    // actuel, où l'arabe est simplement orienté comme le français.
-                    // Le retournement complet demande le simulateur (#4298).
-                    let dx = value.translation.width
-                    let predicted = value.predictedEndTranslation.width
+                    // NE PAS retourner ce signe seul (#4297, tenté puis annulé) :
+                    // la géométrie du CUBE vit en espace ÉCRAN (`horizontalDrag`,
+                    // `groupSlide`, `exitX`, faces voisines). Retourner la décision
+                    // sans le cube ferait partir la face de commit à l'OPPOSÉ du
+                    // doigt. Le retournement complet demande le simulateur (#4298).
 
                     // Transfer interactive drag -> groupSlide (no visual snap).
                     // 1:1 (Lot 3) — cohérent avec `totalSlideX` sans amorti.
                     groupSlide += horizontalDrag
                     horizontalDrag = 0
 
-                    if (dx < -60 || predicted < -150) && currentGroupIndex < groups.count - 1 {
-                        // Swipe left -> next group. Reprend l'auteur suivant à
-                        // sa première story non lue (parité avec l'aperçu du
-                        // cube), pas systématiquement à la slide 0.
+                    // Progressif et annulable jusqu'au bout (#11192) : le doigt
+                    // qui repart vers l'origine annule, à tout point de la course.
+                    switch StoryGroupSwipeDecision.decide(
+                        translation: value.translation.width,
+                        predictedEnd: value.predictedEndTranslation.width,
+                        width: screenW,
+                        hasNext: currentGroupIndex < groups.count - 1,
+                        hasPrevious: currentGroupIndex > 0
+                    ) {
+                    case .next:
+                        // Reprend l'auteur suivant à sa première story non lue
+                        // (parité avec l'aperçu du cube), pas à la slide 0.
                         HapticFeedback.light()
                         groupTransition(forward: true) { landOnNextGroup() }
-                    } else if (dx > 60 || predicted > 150) && currentGroupIndex > 0 {
-                        // Swipe right -> prev group
+                    case .previous:
                         HapticFeedback.light()
                         groupTransition(forward: false) { landOnPreviousGroup() }
-                    } else {
-                        // Snap back — animate groupSlide to 0. La face du cube
-                        // reste montée pendant le retour (elle sort de l'écran
-                        // avec l'animation), nettoyée une fois posée.
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            groupSlide = 0
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
-                            if !isTransitioning { neighborPreviewDirection = 0 }
-                        }
-                        resumeTimer()
+                    case .cancel:
+                        // La face du cube reste montée pendant le retour, nettoyée une fois posée.
+                        snapBackAll()
                     }
 
                 case 2: // Vertical — plein écran / dismiss
@@ -270,7 +265,7 @@ extension StoryViewerView {
 
     private func snapBackAll() {
         resetGestureTracking()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(StoryGroupCube.settleAnimation) {
             horizontalDrag = 0
             dragOffset = 0
             groupSlide = 0

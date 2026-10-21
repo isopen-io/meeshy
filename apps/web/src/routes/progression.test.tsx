@@ -238,7 +238,7 @@ describe('le hub — un compte VIDE parle quand même', () => {
   });
 
   test('le hero des élans explique ce qui multiplie, plutôt que de se taire', () => {
-    expect(empty).toContain('Vos élans');
+    expect(empty).toContain('Tes élans');
     expect(empty).toContain('multiplie');
   });
 
@@ -412,7 +412,7 @@ describe('ElansHero — le bandeau d’élan (#5749)', () => {
       activeFamilies: ['content', 'comment', 'conversation', 'tool'],
     });
     expect(rendu).toContain('Élan ×5');
-    expect(rendu).toContain('plus votre assise');
+    expect(rendu).toContain('plus ton assise');
   });
 
   test('accorde le singulier — « 1 famille active »', () => {

@@ -106,7 +106,7 @@ export const sidewaysReleve = () => {
     verrou: /(hidden|clip)/.test(style.overflowX),
     surdefilement: style.overscrollBehaviorX,
     elements: main.querySelectorAll('*').length,
-    /* La garde de vacuité des valeurs longues : la carte du niveau, sur la première page. */
-    niveau: document.querySelector('[data-concept-card="level"] [data-concept-value]')?.textContent ?? null,
+    /* La garde de vacuité des valeurs longues : le niveau que l'anneau de la carte de la Lumière dit (#11178 : la valeur nomme l'état de la lumière). */
+    niveau: document.querySelector('[data-concept-card="level"] [data-fact="level"]')?.getAttribute('aria-label') ?? null,
   };
 };

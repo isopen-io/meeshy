@@ -1,4 +1,6 @@
-import { CHOREOGRAPHY_DURATION_MS } from './choreography';
+import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
+import { mintCeremonyPlan } from '@meeshy/shared/utils/game/mint-ceremony';
+
 import { prefersReducedMotion } from './haptics';
 
 /**
@@ -9,14 +11,32 @@ import { prefersReducedMotion } from './haptics';
  * (le solde de Meeshes, le niveau, le rang) attend que la scène ait fini de
  * jouer.
  *
- * La porte ne connaît que le temps : la scène joue la chorégraphie « mint »
- * (`CHOREOGRAPHY_DURATION_MS.mint`), la porte s'ouvre à son terme. Elle ne
- * retient RIEN quand aucune scène n'est à l'écran (`registerStrikeStage`) ni
- * quand l'utilisateur limite les animations : un geste qu'on ne voit pas
- * n'attend pas. Le refus de la passerelle l'ouvre aussitôt (`cancel`) — rien ne
- * reste suspendu.
+ * LA CÉRÉMONIE (#11177, conception de l'épopée § 7) : la scène part au toucher
+ * et la passerelle répond pendant le tissage. La porte PORTE cette réponse
+ * jusqu'à la scène (`confirm`, `refuse`, `onAnswer`) — tant qu'elle n'est pas
+ * venue, Meo garde le marteau levé — et c'est la scène qui l'ouvre quand la
+ * pièce arrive dans l'Héritage (`settle`). Une seule scène joue la cérémonie
+ * d'une frappe (`claim`), même si deux sont montées.
+ *
+ * Elle ne retient RIEN quand aucune scène n'est à l'écran (`registerStrikeStage`)
+ * ni quand l'utilisateur limite les animations : un geste qu'on ne voit pas
+ * n'attend pas. Le refus de la passerelle l'ouvre aussitôt (`refuse`) — rien ne
+ * reste suspendu. Si la scène ne l'ouvre pas (démontée, module absent), elle
+ * s'ouvre d'elle-même après la plus longue cérémonie et une marge.
  */
-export const STRIKE_SETTLE_MS = CHOREOGRAPHY_DURATION_MS.mint + 60;
+const LONGEST_CEREMONY_MS = Math.max(...(['silver', 'gold', 'prism'] as const).map((edition) => mintCeremonyPlan({ edition, mode: 'normal' }).endMs));
+
+export const STRIKE_SETTLE_MS = LONGEST_CEREMONY_MS + 4000;
+
+/** La pièce que la passerelle confirme, quand sa réponse la porte. */
+export type StrikeCoin = { readonly number: number; readonly edition: MeeshEdition };
+
+/** Où en est la frappe en cours : aucune, attendue, confirmée, ou refusée avec son code. */
+export type StrikeAnswer =
+  | { readonly kind: 'idle' }
+  | { readonly kind: 'pending' }
+  | { readonly kind: 'confirmed'; readonly coin?: StrikeCoin }
+  | { readonly kind: 'refused'; readonly code: string | undefined };
 
 let stages = 0;
 
@@ -37,8 +57,19 @@ export type StrikeGate = {
   readonly begin: () => void;
   /** Résolue quand le geste est fini ; déjà résolue quand rien ne retient. */
   readonly opened: () => Promise<void>;
-  /** Ouvre tout de suite (échec de la frappe, démontage). */
+  /** Ouvre tout de suite (démontage). */
   readonly cancel: () => void;
+  /** La passerelle a confirmé : la scène peut abattre le marteau. N'ouvre pas la porte. */
+  readonly confirm: (coin?: StrikeCoin) => void;
+  /** La passerelle a refusé : la scène ramène la lumière, la porte s'ouvre. */
+  readonly refuse: (code?: string) => void;
+  /** La scène a fini (la pièce est dans l'Héritage, ou on a passé la scène) : la porte s'ouvre. */
+  readonly settle: () => void;
+  readonly answer: () => StrikeAnswer;
+  /** Écoute la réponse ; un abonné qui arrive pendant une frappe lit tout de suite celle qui est venue. */
+  readonly onAnswer: (listener: (answer: StrikeAnswer) => void) => () => void;
+  /** La première scène qui réclame la frappe en cours la joue ; les autres non. */
+  readonly claim: () => boolean;
 };
 
 type GateOptions = {
@@ -61,6 +92,14 @@ export function createStrikeGate(options: GateOptions = {}): StrikeGate {
   let current: Promise<void> = Promise.resolve();
   let release: () => void = () => undefined;
   let stop: () => void = () => undefined;
+  let answer: StrikeAnswer = { kind: 'idle' };
+  let claimed = true;
+  const listeners = new Set<(answer: StrikeAnswer) => void>();
+
+  const answered = (next: StrikeAnswer): void => {
+    answer = next;
+    listeners.forEach((listener) => listener(next));
+  };
 
   const open = (): void => {
     stop();
@@ -73,6 +112,8 @@ export function createStrikeGate(options: GateOptions = {}): StrikeGate {
     staged,
     begin: () => {
       open();
+      claimed = false;
+      answered({ kind: 'pending' });
       if (!staged() || reduced()) {
         current = Promise.resolve();
         return;
@@ -84,6 +125,23 @@ export function createStrikeGate(options: GateOptions = {}): StrikeGate {
     },
     opened: () => current,
     cancel: open,
+    confirm: (coin) => answered(coin === undefined ? { kind: 'confirmed' } : { kind: 'confirmed', coin }),
+    refuse: (code) => {
+      answered({ kind: 'refused', code });
+      open();
+    },
+    settle: open,
+    answer: () => answer,
+    onAnswer: (listener) => {
+      listeners.add(listener);
+      if (answer.kind !== 'idle') listener(answer);
+      return () => void listeners.delete(listener);
+    },
+    claim: () => {
+      if (claimed) return false;
+      claimed = true;
+      return true;
+    },
   };
 }
 

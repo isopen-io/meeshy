@@ -22,17 +22,17 @@ describe('tierReachedNotification', () => {
   it('dit en français le palier en titre, l’exploit chiffré et le palier en corps', () => {
     expect(tierReachedNotification('fr', CASES[0])).toEqual({
       title: '🏆 Palier 4 atteint',
-      body: '1\u202f000 conversations rejointes — bravo, vous êtes au palier 4 !',
+      body: '1\u202f000 conversations rejointes — bravo, tu atteins le palier 4 !',
       rank: 4,
       value: 1_000,
     });
     expect(tierReachedNotification('fr', CASES[1])).toMatchObject({
       title: '🏆 Palier 6 atteint',
-      body: 'Commentaires écrits : 1\u202f000 — bravo, vous êtes au palier 6 !',
+      body: 'Commentaires écrits : 1\u202f000 — bravo, tu atteins le palier 6 !',
     });
     expect(tierReachedNotification('fr', CASES[2])).toMatchObject({
-      title: '⭐ Niveau 3 atteint !',
-      body: '1\u202f000 étincelles — bravo, vous êtes au niveau 3 !',
+      title: '✨ Niveau 3 : ta lumière grandit !',
+      body: 'Ta lumière compte 1\u202f000 étincelles — bravo, elle atteint le niveau 3 !',
     });
   });
 

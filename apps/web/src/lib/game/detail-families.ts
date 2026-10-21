@@ -102,7 +102,6 @@ export const GAME_DETAIL_FACTS = [
   'atlas_pending',
   'spend_held',
   'spend_cost',
-  'spend_after',
   'spend_missing',
   'level_now',
   'level_required',

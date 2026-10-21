@@ -38,6 +38,8 @@ type CoinProps = {
   /** Le numéro de frappe (revers), écrit « Nº » + le nombre, dans toutes les langues. */
   readonly number?: number;
   readonly year?: number;
+  /** Le FLAN : l'avers avant la frappe, sans couronne ni Signature (la cérémonie de la frappe, #11177). */
+  readonly blank?: boolean;
 };
 
 const C = COIN.center;
@@ -76,7 +78,7 @@ const paintsOf = (metal: GamePaint, field: GamePaint, decor: readonly CoinDecor[
   ...(decor.includes('crown') ? (['gold'] as const) : []),
 ];
 
-export function MeeshCoin({ side, size, edition = 'silver', number, year }: CoinProps) {
+export function MeeshCoin({ side, size, edition = 'silver', number, year, blank = false }: CoinProps) {
   const uid = safeUid(useId());
   const spec = coinEdition(edition);
   const decor = spec.decor[side];
@@ -119,7 +121,7 @@ export function MeeshCoin({ side, size, edition = 'silver', number, year }: Coin
       ) : null}
       {has('rosette') ? <Guilloche kind="rosette" clip={fieldClip} fieldRadius={field.radius} ink={ink} /> : null}
       {has('sunburst') ? <Guilloche kind="sunburst" clip={fieldClip} fieldRadius={field.radius} ink={ink} /> : null}
-      {side === 'obverse' ? (
+      {side === 'obverse' && blank ? null : side === 'obverse' ? (
         <>
           <Inscription separator={spec.separator} ink={ink} />
           <SignatureGlyph cx={C} cy={C} size={COIN.signature.size} color={ink} mode="struck" strokeWidth={COIN.signature.strokeWidth} />

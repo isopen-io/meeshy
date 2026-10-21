@@ -1,0 +1,364 @@
+{
+  "$doc": "EL LÉXICO DE LA EPOPEYA, ESPAÑOL — traducción término por término de fr.json (#11174 ; concepción docs/superpowers/specs/2026-10-20-epopee-du-jeu-design.md § 3.1 y § 4 ; glosario docs/product/epopee/glossaire/es.md). Formato: docs/product/epopee/glossaire/README.md. Leído por la guarda web (apps/web/src/lib/game/epic-vocabulary.test.ts) y, mañana, por la guarda iOS (#11179). `banned`: los motivos que NINGÚN valor de los catálogos del juego lleva, dejando aparte los parámetros {…}; `names`: el valor exacto de cada clave de nombre.",
+  "language": "es",
+  "banned": [
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])aument\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "crecer, alimentar, despertar, brillar más"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])contador(?:es)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "el nombre del concepto: «tu gloria», «tu Llama»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])valor(?:es)?(?:\\s+reale?s?)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«tu luz»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])convertibles?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«tu luz»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])bolsillos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«tu luz»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])potencial(?:es)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nada: se dice lo que se tiene"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])deudas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«una sombra cubre N chispas de tu luz» (la Sombra)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])r[eé]cords?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«recibidas desde siempre», «tu luz más alta», «tu Llama más larga», «acuñadas desde siempre»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:aún|todavía)(?![\\p{L}\\p{N}])[^.!?:;]*(?<![\\p{L}\\p{N}])antes\\s+de(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "en pequeño, «N hasta X»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])faltan?(?![\\p{L}\\p{N}])[^.!?:;]*(?<![\\p{L}\\p{N}])para\\s+(?:el\\s+nivel|subir|la\\s+siguiente\\s+etapa)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "en pequeño, «N hasta el nivel X», «N hasta el círculo siguiente»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:cuest[ae]n?|cost(?:e|o|ó|ar|ará|aría)s?)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "una frase: «fija N chispas de tu luz»; el cálculo va a las reglas"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])quedar[áa]n?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nada: ninguna resta en una ficha"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])baremos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«cada gesto hace brotar las suyas»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])precios?\\s+(?:de\\s+)?base(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nada en una ficha: el cálculo vive en las reglas",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])porcentajes?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nada en una ficha: el cálculo vive en las reglas",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])factor(?:es)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nada en una ficha: el cálculo vive en las reglas",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])ligas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«justa»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])rangos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«puesto» (la justa habla de puesto; el rango es el nombre del héroe)",
+      "keys": [
+        "game.league.",
+        "game.state.league.",
+        "game.guide.moment.league",
+        "game.trophy.league",
+        "game.photo.title.league",
+        "game.archive.week."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:p?seud[oó]nimos?)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«nombre de justa»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])d[uú]os?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«alianza»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])temporadas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«viaje»; sus estrellas son «pasos», sus etapas «paradas»"
+    },
+    {
+      "pattern": "(?<!de\\s)(?<![\\p{L}\\p{N}])estrellas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«pasos» (el viaje); «edades» (el renacimiento)",
+      "keys": [
+        "game.season.",
+        "game.prestige."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])prestigios?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«renacimiento»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])congel\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«Vela»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])rachas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«Llama»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])misi(?:ón|ones)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«el sueño»; una misión es un «acto»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])cofres?\\s+del\\s+día(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«la Ofrenda»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])logros?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«hazañas»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])insignias?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«medallas»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])cuadernos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«la Crónica»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])constelaci(?:ón|ones)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«el cielo de los ancestros» (Constelación solo nombra el noveno estado de la luz)",
+      "except": [
+        "game.tier.constellation"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])celebraci(?:ón|ones)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«señal de los ancestros»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])etapas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«prueba» (los diez niveles), «parada» (el viaje); «etapa» solo nombra la bienvenida",
+      "keys": [
+        "game."
+      ],
+      "except": [
+        "game.guide.step_of",
+        "game.rules.section_steps"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])tramos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«estado» (la luz), «escalón» (medallas y desafíos), «recipiente» (el Legado)",
+      "keys": [
+        "game."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])tesoros?(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "«el Legado» (el Tesoro, con mayúscula, solo nombra la quinta reserva)"
+    },
+    {
+      "pattern": "\\+\\s*\\S+\\s+(?:de\\s+)?Gloria(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "«+250 de gloria»: minúscula en una frase, unida por «de»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:usted(?:es)?|vuestr[oa]s?)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«tu», «tus»: el juego tutea"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])recorridos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«camino» (el viaje)",
+      "keys": [
+        "game.season.",
+        "game.archive.season.",
+        "game.concept.season.",
+        "game.door.season",
+        "game.state.season.",
+        "game.detail.fact.season",
+        "game.guide.moment.season"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])cosm[eé]tic\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«adorno»"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:velad[oa]s?|velo)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«envuelta» (la Ofrenda), «cubre» (la Sombra): «velar» solo dice la Vela que guarda la Llama",
+      "keys": [
+        "game."
+      ]
+    }
+  ],
+  "names": {
+    "game.tier.etincelle": "Chispa",
+    "game.tier.lueur": "Destello",
+    "game.tier.lumiere": "Claridad",
+    "game.tier.eclat": "Brillo",
+    "game.tier.rayon": "Rayo",
+    "game.tier.aurore": "Aurora",
+    "game.tier.comete": "Cometa",
+    "game.tier.etoile": "Estrella",
+    "game.tier.constellation": "Constelación",
+    "game.tier.galaxie": "Galaxia",
+    "game.tier.nebuleuse": "Nebulosa",
+    "game.tier.pulsar": "Púlsar",
+    "game.tier.quasar": "Cuásar",
+    "game.tier.supernova": "Supernova",
+    "game.tier.magnetar": "Magnetar",
+    "game.tier.amas": "Cúmulo",
+    "game.tier.superamas": "Supercúmulo",
+    "game.tier.cosmos": "Cosmos",
+    "game.tier.infini": "Infinito",
+    "game.tier.singularite": "Singularidad",
+    "game.rank.murmure": "Murmullo",
+    "game.rank.echo": "Eco",
+    "game.rank.voix": "Voz",
+    "game.rank.conteur": "Narrador",
+    "game.rank.passeur": "Pasador",
+    "game.rank.polyglotte": "Políglota",
+    "game.rank.ambassadeur": "Embajador",
+    "game.rank.orateur": "Orador",
+    "game.rank.oracle": "Oráculo",
+    "game.rank.legende": "Leyenda",
+    "game.rank.mythe": "Mito",
+    "game.treasury.bourse": "Monedero",
+    "game.treasury.escarcelle": "Escarcela",
+    "game.treasury.coffret": "Cofrecillo",
+    "game.treasury.coffre": "Cofre",
+    "game.treasury.tresor": "Tesoro",
+    "game.treasury.reserve": "Reserva",
+    "game.flame.form.braise": "Brasa",
+    "game.flame.form.flamme": "Llama",
+    "game.flame.form.brasier": "Hoguera",
+    "game.flame.form.astre": "Astro",
+    "game.flame.form.soleil": "Sol",
+    "game.league.name.quartz": "Cuarzo",
+    "game.league.name.ambre": "Ámbar",
+    "game.league.name.jade": "Jade",
+    "game.league.name.saphir": "Zafiro",
+    "game.league.name.rubis": "Rubí",
+    "game.league.name.amethyste": "Amatista",
+    "game.league.name.diamant": "Diamante",
+    "game.league.name.prisme": "Prisma",
+    "game.edition.silver": "plata",
+    "game.edition.gold": "oro",
+    "game.edition.prism": "prisma",
+    "game.difficulty.easy": "Acto I",
+    "game.difficulty.medium": "Acto II",
+    "game.difficulty.hard": "Acto III",
+    "game.difficulty.gold": "Acto de oro",
+    "game.material.copper": "Cobre",
+    "game.material.bronze": "Bronce",
+    "game.material.silver": "Plata",
+    "game.material.gold": "Oro",
+    "game.material.platinum": "Platino",
+    "game.material.obsidian": "Obsidiana",
+    "game.material.prism": "Prisma",
+    "game.concept.level.name": "La Luz",
+    "game.concept.points.name": "Chispas",
+    "game.concept.meesh.name": "El Legado",
+    "game.concept.glory.name": "El Rango",
+    "game.concept.flame.name": "La Llama",
+    "game.concept.missions.name": "El Sueño",
+    "game.concept.league.name": "La Justa",
+    "game.concept.season.name": "El Viaje",
+    "game.concept.prestige.name": "El Renacimiento",
+    "game.concept.elans.name": "Impulsos",
+    "game.concept.badges.name": "Medallas",
+    "game.concept.defis.name": "Desafíos",
+    "game.concept.succes.name": "Hazañas",
+    "game.concept.showcase.name": "Trofeos",
+    "game.concept.atlas.name": "El Atlas",
+    "game.rules.concept.level.name": "La Luz",
+    "game.rules.concept.points.name": "Chispas",
+    "game.rules.concept.meesh.name": "La Meesh",
+    "game.rules.concept.glory.name": "El Rango",
+    "game.rules.concept.flame.name": "La Llama",
+    "game.rules.concept.missions.name": "El Sueño",
+    "game.rules.concept.league.name": "La Justa",
+    "game.rules.concept.season.name": "El Viaje",
+    "game.rules.concept.prestige.name": "El Renacimiento",
+    "game.rules.concept.elans.name": "Impulsos",
+    "game.rules.concept.badges.name": "Medallas",
+    "game.rules.concept.defis.name": "Desafíos",
+    "game.rules.concept.succes.name": "Hazañas",
+    "game.rules.concept.showcase.name": "Trofeos",
+    "game.rules.concept.atlas.name": "El Atlas",
+    "game.rules.concept.chest.name": "La Ofrenda",
+    "game.rules.concept.treasury.name": "El Legado",
+    "game.rules.concept.steps.name": "Las pruebas",
+    "game.rules.concept.duo.name": "La Alianza",
+    "game.chest.title": "La Ofrenda",
+    "game.notebook.page_title": "La Crónica",
+    "game.door.notebook": "La Crónica",
+    "game.constellation.title": "El cielo de los ancestros",
+    "game.league.title": "Justa",
+    "game.duo.title": "Alianza",
+    "game.season.title": "Viaje",
+    "game.prestige.title": "Renacimiento",
+    "game.gauge.level": "Luz",
+    "game.gauge.rank": "Rango",
+    "game.gauge.treasury": "Legado",
+    "game.gauge.flame": "Llama"
+  }
+}

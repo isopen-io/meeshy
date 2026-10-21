@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } fro
 
 import type { ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
+import { HeritageHead, SparksHead } from '@/components/game-fiche-heads';
 import { GameFlamePanel } from '@/components/game-flame-panel';
 import { GameHero } from '@/components/game-hero';
 import { GameHiddenCard } from '@/components/game-hidden-card';
@@ -9,9 +10,9 @@ import { GameLeagueSummary } from '@/components/game-league-summary';
 import { GameMintPreview } from '@/components/game-mint-preview';
 import { GameMissions, type MissionPhotoRef } from '@/components/game-missions';
 import { GamePhotoFlow } from '@/components/game-photo-flow';
-import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-surface';
+import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from '@/components/game-surface';
 import { GameTouch } from '@/components/game-touch';
-import { ConceptEmblem, ConceptFacts, ConceptGauge, ProgressionRow, RowEmblem } from '@/components/progression-concept';
+import { ConceptEmblem, ConceptFacts, ConceptGauge, factAttributes, ProgressionRow, RowEmblem } from '@/components/progression-concept';
 import { shownLevelOf, sparksReading } from '@/lib/game/ladder';
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { appPhotoEnv } from '@/lib/game-photo/app-env';
@@ -34,15 +35,19 @@ import { ProgressionPage } from '@/routes/progression-page';
  * LA FICHE D'UN CONCEPT (#9563) — le niveau 2 de « Progression ». UN gabarit
  * pour les quinze concepts, dans cet ordre :
  *
- *   1. le héros        — l'emblème en grand, la valeur, la jauge vers la suite ;
- *                         OU la pièce de jeu du concept, qui le REMPLACE (Niveau,
- *                         Ligue, Élans, Meeshes — amendement n° 4, règle 3) ;
+ *   1. le héros        — l'emblème en grand, la valeur, une ligne, la jauge vers
+ *                         la suite ; OU la pièce de jeu du concept, qui le
+ *                         REMPLACE (Niveau, Ligue, Élans — amendement n° 4,
+ *                         règle 3) ; OU la tête des Étincelles (ta lumière) et
+ *                         de l'Héritage (le contenant, puis le cadre de la
+ *                         frappe) — #11178, épopée § 5 ;
  *   2. « C'est quoi ? » — ce que c'est, puis à quoi ça sert et comment ça marche :
  *                         la MÊME phrase que sur la carte de la première page,
  *                         jamais une seconde ;
- *   3. « Où j'en suis » — la phrase d'état d'abord (l'étape où l'on est, ce que
- *                         le chiffre vise, #10540), puis les données que le héros
- *                         ne montre pas déjà (`ficheView`) ;
+ *   3. « Où j'en suis » — ce que la tête ne dit pas déjà, et rien d'autre : un
+ *                         fait ne paraît qu'une fois par écran (`ficheView`,
+ *                         #11178) ; la section disparaît quand elle n'a rien à
+ *                         ajouter ;
  *   4. « Comment en gagner » — deux gestes simples ;
  *      « Comment m'en servir » — l'usage du concept, en clair (#10540) ;
  *   5. les gestes — ouvrir le coffre, changer une mission, protéger la Flamme :
@@ -76,9 +81,9 @@ function FicheSection({ id, title, children }: { readonly id: string; readonly t
 }
 
 /**
- * LE HÉROS GÉNÉRIQUE : l'emblème en grand, la valeur, la jauge. L'emblème se
- * touche : il ouvre les précisions de SON élément. Les pastilles sont celles de
- * la carte ; ici, leurs données sont dans « Où j'en suis » — une fois.
+ * LE HÉROS GÉNÉRIQUE : l'emblème en grand, la valeur en grand, la ligne de la
+ * carte en petit, la jauge. L'emblème se touche : il ouvre les précisions de SON
+ * élément. « Où j'en suis » ne redit ni la valeur ni la ligne (`ficheView`).
  */
 function Hero({ concept, view }: { readonly concept: ConceptView; readonly view: EngagementWithGame }) {
   const primary = detailOfRef(concept.primary, concept.key, concept.name, concept.value, view);
@@ -95,9 +100,14 @@ function Hero({ concept, view }: { readonly concept: ConceptView; readonly view:
           <ConceptEmblem concept={concept.key} view={view} size={88} />
         </span>
       </GameTouch>
-      <p className="text-large-title font-bold" style={{ color: GAME_INK }}>
+      <p data-fiche-head="" data-fact={concept.valueId} className="max-w-full break-words text-large-title font-bold" style={{ color: GAME_INK }}>
         {concept.value}
       </p>
+      {concept.line === null ? null : (
+        <p data-fiche-line="" {...factAttributes(concept.line.facts)} className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
+          {concept.line.text}
+        </p>
+      )}
       {concept.gauge === null ? null : <ConceptGauge gaugeKey={`fiche:${concept.key}`} progress={concept.gauge} label={`${concept.name} — ${concept.value}`} />}
     </section>
   );
@@ -125,10 +135,19 @@ function pieceOf(concept: ProgressionConcept, view: EngagementWithGame, host: Fi
   switch (concept) {
     case 'level':
       return game === undefined ? <LevelHero progress={view} mintCost={view.meesh?.mintCost ?? null} /> : <GameHero game={game} guideLine={null} elan={view.elan} />;
+    case 'points':
+      return game === undefined ? null : <SparksHead level={game.level} />;
     case 'meesh':
       if (game !== undefined) {
         return (
-          <GameMintPreview
+          <>
+            <HeritageHead
+              balance={view.meesh?.balance ?? game.treasury.held}
+              tier={game.treasury.tier}
+              next={game.treasury.next}
+              minted={view.meesh?.mintedLifetime ?? null}
+            />
+            <GameMintPreview
             mint={game.mint}
             held={sparksReading(game.level).pocket}
             online={online}
@@ -137,7 +156,8 @@ function pieceOf(concept: ProgressionConcept, view: EngagementWithGame, host: Fi
             celebration={actions.celebration}
             strikeKey={actions.strikeKey}
             onMint={actions.mint}
-          />
+            />
+          </>
         );
       }
       return view.meesh === undefined ? null : (
@@ -255,7 +275,7 @@ export function ConceptFiche({
       {piece === null ? (
         <Hero concept={shown} view={view} />
       ) : (
-        <div data-fiche-section="hero" data-fiche-hero="piece" className="flex flex-col">
+        <div data-fiche-section="hero" data-fiche-hero="piece" className="flex flex-col gap-4">
           {piece}
         </div>
       )}
@@ -267,8 +287,8 @@ export function ConceptFiche({
       {where.state === null && where.facts.length === 0 ? null : (
         <FicheSection id="where" title={gameText('game.fiche.where')}>
           {where.state === null ? null : (
-            <p data-fiche-state="" className="text-body font-semibold" style={{ color: GAME_INK }}>
-              {where.state}
+            <p data-fiche-state="" {...factAttributes(where.state.facts)} className="text-body font-semibold" style={{ color: GAME_INK }}>
+              {where.state.text}
             </p>
           )}
           <ConceptFacts facts={where.facts} open={(fact) => detailOfRef(fact.ref, concept, fact.label, fact.value, view)} />
@@ -285,6 +305,14 @@ export function ConceptFiche({
         <p className="text-body" style={{ color: GAME_INK }}>
           {shown.use}
         </p>
+        {concept === 'points' && view.game !== undefined ? (
+          <ProgressionRow
+            target={{ to: 'progressionConcept', concept: 'meesh' }}
+            marker="heritage"
+            emblem={<RowEmblem tint={GAME_WARM} />}
+            name={gameText('game.fiche.light.to_heritage')}
+          />
+        ) : null}
       </FicheSection>
       {gestures === null ? null : (
         <div data-fiche-section="gestures" className="flex scroll-mt-20 flex-col gap-4">
