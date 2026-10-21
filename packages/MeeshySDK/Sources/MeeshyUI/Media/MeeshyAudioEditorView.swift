@@ -21,7 +21,7 @@ public struct MeeshyAudioEditorView: View {
 
     @StateObject private var controller: AudioEditorController
     @StateObject private var waveform = AudioWaveformAnalyzer()
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
 
     private let accentColor: String
     private let onConfirm: (URL, [StoryVoiceTranscription], TimeInterval, TimeInterval) -> Void

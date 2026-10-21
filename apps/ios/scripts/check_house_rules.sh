@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cliquets des RÈGLES MAISON Swift (#11046) : 23 compteurs sur les sources écrites
+# Cliquets des RÈGLES MAISON Swift (#11046) : 24 compteurs sur les sources écrites
 # à la main, comparés à `house-rules-baseline.json`. Un total qui monte, une règle
 # sans référence ou une référence illisible font échouer ; un total qui baisse se
 # verrouille avec `bash apps/ios/scripts/check_house_rules.sh --write-baseline`

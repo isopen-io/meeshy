@@ -77,6 +77,7 @@ RULES = (
     _named("viewmodel-shared", r"\.shared\b", r"ViewModel[^/]*\.swift$"),
     Rule("unchecked-sendable", re.compile(r"@unchecked\s+Sendable"), "unchecked"),
     Rule("available-floor", re.compile(r"#available\(\s*iOS\s+(\d+)(?:\.(\d+))?"), "floor"),
+    _pattern("environment-router", r"@EnvironmentObject\s+(?:\w+(?:\(set\))?\s+)*var\s+\w+\s*:\s*Router\b"),
     Rule(
         "narrative-comment",
         re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),

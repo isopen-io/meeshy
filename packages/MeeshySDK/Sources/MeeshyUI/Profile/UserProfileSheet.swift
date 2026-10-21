@@ -56,7 +56,7 @@ public struct UserProfileSheet: View {
     /// existing call-sites are unaffected.
     public var postsContent: ((String) -> AnyView)? = nil
 
-    @ObservedObject var theme = ThemeManager.shared
+    @ResolvedThemePalette var theme
     /// L'emplacement du jeu (#9481) — fourni par l'app, vide sinon.
     @Environment(\.profileGameSection) var gameSection
     @Environment(\.profileLoading) private var injectedProfileLoading

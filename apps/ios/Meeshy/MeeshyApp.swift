@@ -172,7 +172,7 @@ struct MeeshyApp: App {
                     .environmentObject(AuthManager.shared)
                     .environmentObject(deepLinkRouter)
                     .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
-                    .preferredColorScheme(theme.preferredColorScheme)
+                    .meeshyThemeRoot(theme)
                     .modifier(ExternalEntryHandlers(dispatcher: LiveExternalEntryDispatcher(router: deepLinkRouter)))
                     .task { await runLaunchSequence() }
                     .adaptiveOnChange(of: session.isAuthenticated) { _, isAuth in
@@ -212,7 +212,7 @@ struct MeeshyApp: App {
                 .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
                 .environmentObject(AuthManager.shared)
                 .environmentObject(deepLinkRouter)
-                .preferredColorScheme(theme.preferredColorScheme)
+                .meeshyThemeRoot(theme)
                 .publishingSceneWindowSize()
         }
         .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
