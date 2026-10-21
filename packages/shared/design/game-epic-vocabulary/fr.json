@@ -125,7 +125,9 @@
       "instead": "« pas » (le voyage) ; « âges » (la renaissance)",
       "keys": [
         "game.season.",
-        "game.prestige."
+        "game.prestige.",
+        "game.fact.strides",
+        "game.fact.rebirths"
       ]
     },
     {
@@ -319,6 +321,8 @@
     "game.gauge.level": "Lumière",
     "game.gauge.rank": "Rang",
     "game.gauge.treasury": "Héritage",
-    "game.gauge.flame": "Flamme"
+    "game.gauge.flame": "Flamme",
+    "game.fact.strides": "Pas",
+    "game.fact.rebirths": "Renaissances"
   }
 }

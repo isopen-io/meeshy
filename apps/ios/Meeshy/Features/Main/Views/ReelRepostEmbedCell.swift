@@ -160,14 +160,14 @@ struct ReelRepostEmbedCell: View {
 
             // Original author
             HStack(spacing: MeeshySpacing.sm) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: repost.author,
                     context: .postComment,
                     accentColor: repost.authorColor,
                     avatarURL: repost.authorAvatarURL,
                     presenceState: PresenceManager.shared.knownPresenceState(for: repost.authorId),
                     ring: repost.authorRing
-                )
+                ) }
                 Text("@\(repost.authorUsername ?? repost.author)")
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.accentText(repost.authorColor))

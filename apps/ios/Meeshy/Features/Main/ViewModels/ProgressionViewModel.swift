@@ -44,6 +44,8 @@ final class ProgressionViewModel: ObservableObject {
     @Published var gameErrors = GameErrors()
     /// La dernière pièce frappée, pour la scène ; `nil` tant qu'aucune n'a été frappée depuis l'ouverture.
     @Published var celebration: MintCelebration?
+    /// La dernière frappe RÉGLÉE par la passerelle — pièce ou refus —, pour la cérémonie de la frappe (#11177).
+    @Published private(set) var mintSettlement: GameMintSettlement?
     /// En ligne ou non, tel que la coupure le dit — les gestes d'écriture se taisent hors ligne.
     @Published private(set) var isOnline = true
     /// Une frappe est en vol (#5743) — le bouton reste affiché, avec son état
@@ -233,11 +235,13 @@ final class ProgressionViewModel: ObservableObject {
             mintRequestId = UUID().uuidString
             confirm(revision: result.gameRevision, minted: result.mintedLifetime)
             celebrate(result, preview: preview)
+            settle(GameMintSettlement.outcome(of: result, preview: preview))
             await load(forceNetwork: true)
         } catch {
             restore(before)
             let refusal = GameService.refusal(of: error)
             if refusal == .requestIdConflict { mintRequestId = UUID().uuidString }
+            settle(.refused(code: GameMintSettlement.refusalCode(for: error)))
             // La dette (ffbc396c92) et la réserve fermée se DISENT ; la relecture montre ensuite le blocage à l'écran.
             mintError = GameMintCostCopy.mintFailureMessage(code: refusal, debt: game?.mint.sparksDebt ?? game?.level.sparksDebt)
             // Un refus d'ÉTAT dit que l'écran était périmé : il se relit — le nouveau prix, la dette, la réserve fermée.
@@ -245,6 +249,10 @@ final class ProgressionViewModel: ObservableObject {
         }
         endGesture()
         isMinting = false
+    }
+
+    private func settle(_ outcome: GameMintSettlement.Outcome) {
+        mintSettlement = GameMintSettlement(outcome: outcome, key: (mintSettlement?.key ?? 0) + 1)
     }
 
     private func celebrate(_ result: APIMeeshMintResult, preview: GameMintPreview?) {
