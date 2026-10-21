@@ -62,9 +62,6 @@ struct ThemedBackButton: View {
     var body: some View {
         Button(action: {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = false }
-            }
             action()
         }) {
             HStack(spacing: 0) {
@@ -128,6 +125,7 @@ struct ThemedBackButton: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showsPill)
         }
         .accessibilityLabel(showsPill ? String(format: String(localized: "a11y.back.with_unread", bundle: .main), unreadCount) : String(localized: "a11y.back", bundle: .main))
+        .settling($isPressed, to: false, after: .milliseconds(100), animation: .spring(response: 0.2, dampingFraction: 0.6))
     }
 }
 
@@ -151,9 +149,6 @@ struct ThemedAvatarButton: View {
     var body: some View {
         Button(action: {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = false }
-            }
             action()
         }) {
             MeeshyAvatar(
@@ -173,6 +168,7 @@ struct ThemedAvatarButton: View {
         }
         .accessibilityLabel(String(format: String(localized: "accessibility.user_profile_of", defaultValue: "Profil de %@", bundle: .main), name))
         .accessibilityHint(String(localized: "accessibility.user_profile.hint", defaultValue: "Ouvre les détails du profil", bundle: .main))
+        .settling($isPressed, to: false, after: .milliseconds(100), animation: .spring(response: 0.2, dampingFraction: 0.6))
     }
 }
 

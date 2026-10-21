@@ -14,7 +14,9 @@ import MeeshySDK
 /// est l'ambre de tout ce qui est cuit, `pin` le rouge de tout ce qui est
 /// garni, `leaf` le vert de ce qui est frais, et `surface` sert de liseré
 /// partout — c'est lui qui détache la décoration d'une photo sombre.
-extension StickerTemplateRenderer {
+enum FoodStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .food
+
 
     // MARK: - Le socle des motifs nus
 
@@ -589,28 +591,7 @@ extension StickerTemplateRenderer {
         return StickerTemplateDrawing.rasterize(size: f.taille, screenScale: screenScale) {
             let r = f.cadre
             let l = r.width, h = r.height
-            let vapeur = UIBezierPath()
-            for côté in Self.foodDeuxCôtés {
-                let x = r.midX + côté * l * 0.13
-                vapeur.move(to: CGPoint(x: x, y: r.minY + h * 0.34))
-                vapeur.addCurve(to: CGPoint(x: x, y: r.minY + h * 0.04),
-                                controlPoint1: CGPoint(x: x + l * 0.11, y: r.minY + h * 0.26),
-                                controlPoint2: CGPoint(x: x - l * 0.11, y: r.minY + h * 0.13))
-            }
-            vapeur.lineWidth = max(1, f.bord * 0.8)
-            vapeur.lineCapStyle = .round
-            StickerTemplatePalette.surface.withAlphaComponent(0.8).setStroke()
-            vapeur.stroke()
-            for côté in Self.foodDeuxCôtés {
-                let baguette = StickerTemplateDrawing.pillPath(
-                    in: CGRect(x: r.minX + l * 0.74 + côté * l * 0.045, y: r.minY + h * 0.08,
-                               width: l * 0.045, height: h * 0.46))
-                Self.foodRotate(baguette, by: 0.30,
-                                around: CGPoint(x: r.minX + l * 0.74, y: r.minY + h * 0.40))
-                StickerTemplateDrawing.fillWithOutline(baguette, fill: StickerTemplatePalette.pin,
-                                                       outline: StickerTemplatePalette.surface,
-                                                       width: max(1, f.bord * 0.35))
-            }
+            Self.foodRamenSteamAndChopsticks(in: r, bord: f.bord)
             let bol = UIBezierPath()
             bol.move(to: CGPoint(x: r.minX + l * 0.06, y: r.minY + h * 0.40))
             bol.addLine(to: CGPoint(x: r.maxX - l * 0.06, y: r.minY + h * 0.40))
@@ -663,6 +644,33 @@ extension StickerTemplateRenderer {
             StickerTemplateDrawing.fillWithOutline(socle, fill: StickerTemplatePalette.night,
                                                    outline: StickerTemplatePalette.surface,
                                                    width: max(1, f.bord * 0.4))
+        }
+    }
+
+    @MainActor
+    private static func foodRamenSteamAndChopsticks(in r: CGRect, bord: CGFloat) {
+        let l = r.width, h = r.height
+        let vapeur = UIBezierPath()
+        for côté in Self.foodDeuxCôtés {
+            let x = r.midX + côté * l * 0.13
+            vapeur.move(to: CGPoint(x: x, y: r.minY + h * 0.34))
+            vapeur.addCurve(to: CGPoint(x: x, y: r.minY + h * 0.04),
+                            controlPoint1: CGPoint(x: x + l * 0.11, y: r.minY + h * 0.26),
+                            controlPoint2: CGPoint(x: x - l * 0.11, y: r.minY + h * 0.13))
+        }
+        vapeur.lineWidth = max(1, bord * 0.8)
+        vapeur.lineCapStyle = .round
+        StickerTemplatePalette.surface.withAlphaComponent(0.8).setStroke()
+        vapeur.stroke()
+        for côté in Self.foodDeuxCôtés {
+            let baguette = StickerTemplateDrawing.pillPath(
+                in: CGRect(x: r.minX + l * 0.74 + côté * l * 0.045, y: r.minY + h * 0.08,
+                           width: l * 0.045, height: h * 0.46))
+            Self.foodRotate(baguette, by: 0.30,
+                            around: CGPoint(x: r.minX + l * 0.74, y: r.minY + h * 0.40))
+            StickerTemplateDrawing.fillWithOutline(baguette, fill: StickerTemplatePalette.pin,
+                                                   outline: StickerTemplatePalette.surface,
+                                                   width: max(1, bord * 0.35))
         }
     }
 
@@ -869,7 +877,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille NOURRITURE
 
-    static let foodDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.foodCoffee,
             name: { Self.foodCoffeeCaption },

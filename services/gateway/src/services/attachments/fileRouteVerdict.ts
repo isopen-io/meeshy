@@ -80,6 +80,25 @@ export const VIEW_ONCE_ATTACHMENT_CACHE = 'private, no-store';
  */
 export const ORDINARY_ATTACHMENT_BY_ID_CACHE = 'private, max-age=31536000, immutable';
 
+/**
+ * L'UUID d'un envoi dans le dernier segment de la clé (`<nom>_<uuid>.<ext>`,
+ * ses miniatures et variantes) : `UploadProcessor.generateFilePath` et
+ * `tus-handler` ne réécrivent jamais une telle clé.
+ */
+const WRITE_ONCE_KEY = /_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:[_.][^/]*)?$/i;
+
+/**
+ * Le cache d'un fichier servi PAR CHEMIN (#11265) : une clé écrite une seule
+ * fois ne désigne jamais d'autres octets, son cache long devient `immutable`
+ * comme celui de l'identifiant. Seul le cache ORDINAIRE s'allonge — une vue
+ * unique, un éphémère ou un avatar à adresse stable gardent le leur.
+ */
+export function immutableWhenWriteOnce(storageKey: string, cacheControl: string): string {
+  return cacheControl === ORDINARY_ATTACHMENT_CACHE && WRITE_ONCE_KEY.test(storageKey)
+    ? ORDINARY_ATTACHMENT_BY_ID_CACHE
+    : cacheControl;
+}
+
 const TRANSLATED_TRACK = /^translated\/([0-9a-f]{24})_[^/]+$/;
 const RESPONSIVE_VARIANT = /^(.+)_\d+w\.webp$/;
 

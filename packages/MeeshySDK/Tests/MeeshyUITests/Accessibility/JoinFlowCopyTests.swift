@@ -16,10 +16,6 @@ final class JoinFlowCopyTests: XCTestCase {
         return try XCTUnwrap(Bundle(path: path))
     }
 
-    private func value(_ key: String, _ code: String) throws -> String {
-        try lproj(code).localizedString(forKey: key, value: key, table: nil)
-    }
-
     func test_joinedSentence_substitueTitreEtPseudo() throws {
         XCTAssertEqual(
             JoinFlowCopy.joinedSentence(conversationTitle: "Lisbonne", username: "aiko", in: try lproj("fr")),
@@ -48,12 +44,12 @@ final class JoinFlowCopyTests: XCTestCase {
 
         XCTAssertEqual(
             JoinFlowCopy.loadFailure(MeeshyError.server(statusCode: 404, message: "x"), in: bundle),
-            try value("joinFlow.error.linkNotFound", "fr")
+            "Ce lien de conversation est introuvable"
         )
         XCTAssertEqual(JoinFlowCopy.loadFailure(MeeshyError.server(statusCode: 410, message: "fermé"), in: bundle), "fermé")
         XCTAssertEqual(
             JoinFlowCopy.loadFailure(NSError(domain: "t", code: 1), in: bundle),
-            try value("joinFlow.error.loadFailed", "fr")
+            "Impossible de charger les informations du lien"
         )
     }
 
@@ -64,11 +60,11 @@ final class JoinFlowCopyTests: XCTestCase {
         XCTAssertEqual(JoinFlowCopy.joinFailure(MeeshyError.server(statusCode: 410, message: "expiré"), in: bundle), "expiré")
         XCTAssertEqual(
             JoinFlowCopy.joinFailure(MeeshyError.server(statusCode: 429, message: "x"), in: bundle),
-            try value("joinFlow.error.tooManyUsers", "fr")
+            "Trop d'utilisateurs connectes"
         )
         XCTAssertEqual(
             JoinFlowCopy.joinFailure(NSError(domain: "t", code: 1), in: bundle),
-            try value("joinFlow.error.unexpected", "fr")
+            "Erreur inattendue"
         )
     }
 }

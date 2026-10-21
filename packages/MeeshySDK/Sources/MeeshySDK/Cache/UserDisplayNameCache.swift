@@ -7,7 +7,7 @@ public struct MentionedUser: Codable, Sendable {
     public let avatar: String?
 }
 
-public final class UserDisplayNameCache: @unchecked Sendable {
+public final class UserDisplayNameCache: Sendable {
     public static let shared = UserDisplayNameCache()
 
     /// Borne de la table : au-delà, les plus anciennes entrées partent. Les
@@ -15,35 +15,40 @@ public final class UserDisplayNameCache: @unchecked Sendable {
     /// fin, et `allMappings()` recopie toute la table à chaque reconstruction.
     public static let defaultCapacity = 2_000
 
-    private let lock = NSLock()
-    private var cache: [String: String] = [:]
-    /// Ordre d'arrivée des clés, pour l'éviction.
-    private var order: [String] = []
-    private let capacity: Int
+    private struct Table {
+        var cache: [String: String] = [:]
+        /// Ordre d'arrivée des clés, pour l'éviction.
+        var order: [String] = []
+        let capacity: Int
 
-    init(capacity: Int = UserDisplayNameCache.defaultCapacity) {
-        self.capacity = max(1, capacity)
+        mutating func store(_ key: String, _ value: String) {
+            guard cache.updateValue(value, forKey: key) == nil else { return }
+            order.append(key)
+            guard cache.count > capacity else { return }
+            // Évince par paquet (un quart) pour amortir le décalage du tableau.
+            let overflow = cache.count - capacity + capacity / 4
+            for old in order.prefix(overflow) { cache.removeValue(forKey: old) }
+            order.removeFirst(min(overflow, order.count))
+        }
     }
 
-    /// Range une entrée — verrou TENU par l'appelant.
-    private func storeLocked(_ key: String, _ value: String) {
-        if cache.updateValue(value, forKey: key) == nil {
-            order.append(key)
-            if cache.count > capacity {
-                // Évince par paquet (un quart) pour amortir le décalage du tableau.
-                let overflow = cache.count - capacity + capacity / 4
-                for old in order.prefix(overflow) { cache.removeValue(forKey: old) }
-                order.removeFirst(min(overflow, order.count))
-            }
+    private let table: Locked<Table>
+
+    init(capacity: Int = UserDisplayNameCache.defaultCapacity) {
+        self.table = Locked(Table(capacity: max(1, capacity)))
+    }
+
+    private func store(_ pairs: [(String, String)]) {
+        table.mutate { state in
+            for pair in pairs { state.store(pair.0, pair.1) }
         }
     }
 
     // MARK: - Lookup
 
     public func displayName(for username: String) -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-        return cache[username.lowercased()]
+        let key = username.lowercased()
+        return table.read { $0.cache[key] }
     }
 
     public subscript(username: String) -> String? {
@@ -51,9 +56,7 @@ public final class UserDisplayNameCache: @unchecked Sendable {
     }
 
     public func allMappings() -> [String: String] {
-        lock.lock()
-        defer { lock.unlock() }
-        return cache
+        table.read { $0.cache }
     }
 
     // MARK: - Single Entry
@@ -61,9 +64,7 @@ public final class UserDisplayNameCache: @unchecked Sendable {
     public func track(username: String, displayName: String) {
         let key = username.lowercased()
         guard !username.isEmpty, !displayName.isEmpty, displayName != username else { return }
-        lock.lock()
-        storeLocked(key, displayName)
-        lock.unlock()
+        store([(key, displayName)])
     }
 
     // MARK: - Batch Ingestion
@@ -76,15 +77,13 @@ public final class UserDisplayNameCache: @unchecked Sendable {
     }
 
     public func trackFromMessages(_ messages: [MeeshyMessage]) {
-        lock.lock()
-        for msg in messages {
+        store(messages.compactMap { msg -> (String, String)? in
             guard let username = msg.senderUsername,
                   let displayName = msg.senderName,
                   !username.isEmpty, !displayName.isEmpty,
-                  displayName != username else { continue }
-            storeLocked(username.lowercased(), displayName)
-        }
-        lock.unlock()
+                  displayName != username else { return nil }
+            return (username.lowercased(), displayName)
+        })
     }
 
     public func trackFromAPIMessage(_ apiMessage: APIMessage) {
@@ -110,14 +109,12 @@ public final class UserDisplayNameCache: @unchecked Sendable {
     }
 
     public func trackFromMentionSuggestions(_ suggestions: [MentionSuggestion]) {
-        lock.lock()
-        for s in suggestions {
-            guard let displayName = s.displayName,
-                  !s.username.isEmpty, !displayName.isEmpty,
-                  displayName != s.username else { continue }
-            storeLocked(s.username.lowercased(), displayName)
-        }
-        lock.unlock()
+        store(suggestions.compactMap { suggestion -> (String, String)? in
+            guard let displayName = suggestion.displayName,
+                  !suggestion.username.isEmpty, !displayName.isEmpty,
+                  displayName != suggestion.username else { return nil }
+            return (suggestion.username.lowercased(), displayName)
+        })
     }
 
     public func trackFromParticipant(_ participant: PaginatedParticipant) {
@@ -127,34 +124,30 @@ public final class UserDisplayNameCache: @unchecked Sendable {
     }
 
     public func trackFromParticipants(_ participants: [PaginatedParticipant]) {
-        lock.lock()
-        for p in participants {
-            guard let username = p.username,
-                  let displayName = p.displayName,
+        store(participants.compactMap { participant -> (String, String)? in
+            guard let username = participant.username,
+                  let displayName = participant.displayName,
                   !username.isEmpty, !displayName.isEmpty,
-                  displayName != username else { continue }
-            storeLocked(username.lowercased(), displayName)
-        }
-        lock.unlock()
+                  displayName != username else { return nil }
+            return (username.lowercased(), displayName)
+        })
     }
 
     public func trackFromMentionedUsers(_ users: [MentionedUser]) {
-        lock.lock()
-        for u in users {
-            guard let displayName = u.displayName,
-                  !u.username.isEmpty, !displayName.isEmpty,
-                  displayName != u.username else { continue }
-            storeLocked(u.username.lowercased(), displayName)
-        }
-        lock.unlock()
+        store(users.compactMap { user -> (String, String)? in
+            guard let displayName = user.displayName,
+                  !user.username.isEmpty, !displayName.isEmpty,
+                  displayName != user.username else { return nil }
+            return (user.username.lowercased(), displayName)
+        })
     }
 
     // MARK: - Reset
 
     public func clear() {
-        lock.lock()
-        cache.removeAll()
-        order.removeAll()
-        lock.unlock()
+        table.mutate { state in
+            state.cache.removeAll()
+            state.order.removeAll()
+        }
     }
 }

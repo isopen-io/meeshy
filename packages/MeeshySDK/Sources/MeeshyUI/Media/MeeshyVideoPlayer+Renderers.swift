@@ -106,7 +106,7 @@ internal struct _FullscreenRenderer: View {
     /// local ; un KVO manqué ne fige jamais le poster sur une vidéo qui joue.
     private static let surfaceReadyFailsafe: Duration = .milliseconds(2500)
 
-    internal enum SaveState { case idle, saving, saved, failed }
+    internal nonisolated enum SaveState: Equatable, Sendable { case idle, saving, saved, failed }
 
     var body: some View {
         ZStack {
@@ -171,6 +171,7 @@ internal struct _FullscreenRenderer: View {
         }
         .onDisappear { onDisappearTeardown() }
         .statusBarHidden(true)
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })
     }
 
     private var isActive: Bool {

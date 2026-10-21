@@ -45,7 +45,13 @@ struct ConversationRowItem: View {
     /// the list (`AuthManager.currentUser?.preferredContentLanguages`)
     /// instead of read per-row to keep the row equatable.
     let preferredContentLanguages: [String]
-    let cachedPreviewMessages: [Message]
+    /// Empreinte de l'aperçu (ids + `updatedAt` + `deletedAt` + langue servie) :
+    /// un message MODIFIÉ ré-évalue la rangée, le seul nombre de messages, non.
+    let previewFingerprint: ConversationPreviewFingerprint
+    /// Le chargeur de l'aperçu, PAR RÉFÉRENCE : seule la section des messages
+    /// de l'aperçu l'observe (`ConversationPreviewStateReader`), jamais la
+    /// rangée — il ne participe donc pas au `==`.
+    let previewLoader: ConversationListPreviewLoader
     let leadingActions: [SwipeAction]
     let trailingActions: [SwipeAction]
     /// Le glisser de la ligne commence : la liste replie ses catégories et marque celle d'origine.
@@ -56,7 +62,11 @@ struct ConversationRowItem: View {
     let onMoodBadgeTap: (CGPoint) -> Void
     let onCreateShareLink: (() -> Void)?
     let onTap: () -> Void
-    let onLoadPreview: @MainActor () async -> Void
+    /// Charge l'aperçu (#11212) : `.prefetch` pour une rangée visible (cache
+    /// GRDB SEUL, jamais le réseau — l'aperçu natif est déjà servi à sa
+    /// présentation), `.open` quand l'aperçu s'ouvre (ce qui est servi reste,
+    /// le réseau revalide en silence : un message modifié apparaît).
+    let onLoadPreview: @MainActor (ConversationListPreviewLoader.LoadIntent) async -> Void
     /// Gates the opportunistic `.task { onLoadPreview() }` prefetch below to
     /// a bounded PREFIX of the list (`ConversationRowMetrics
     /// .autoPreviewLoadRowLimit`, computed by the caller via
@@ -164,7 +174,7 @@ struct ConversationRowItem: View {
                         // plus bas), jamais évalué à chaque passe de body.
                         ConversationPreviewView(
                             conversation: conversation,
-                            cachedMessages: cachedPreviewMessages,
+                            previewLoader: previewLoader,
                             bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner)
                                 .flatMap { MeeshyConfig.resolveMediaURL($0) },
                             avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
@@ -174,17 +184,14 @@ struct ConversationRowItem: View {
                             isDirect: conversation.type == .direct
                         )
                         .frame(width: ConversationPreviewWidthLaw.width(rowTextWidth: ConversationRowWidthLaw.textWidth(listWidth: rowWidth, windowWidth: rowWidth, isRegular: false)))
-                        // Les derniers messages se chargent À L'OUVERTURE de
-                        // l'aperçu (au-delà des `autoPreviewLoadRowLimit`
-                        // premières rangées, rien ne les a préchargés) : le
-                        // chargement est idempotent côté VM, et la rangée se
-                        // re-rend sur le compte de messages (`==`), ce qui
-                        // rafraîchit l'aperçu encore présenté.
-                        .task { await onLoadPreview() }
+                        // L'ouverture REVALIDE en silence (#11212) : ce qui est
+                        // servi reste à l'écran, la section des messages
+                        // observe le chargeur et suit le réseau d'elle-même.
+                        .task { await onLoadPreview(.open) }
                     }
                     .task {
                         guard enableAutoPreviewLoad else { return }
-                        await onLoadPreview()
+                        await onLoadPreview(.prefetch)
                     }
             } else {
                 countedRowCore
@@ -226,7 +233,7 @@ struct ConversationRowItem: View {
                     .modifier(RowPressBounceModifier(onTap: onTap, onTrigger: onLongPress))
                     .task {
                         guard enableAutoPreviewLoad else { return }
-                        await onLoadPreview()
+                        await onLoadPreview(.prefetch)
                     }
             }
         }
@@ -561,7 +568,7 @@ extension ConversationRowItem: @MainActor Equatable {
         zip(lhs.leadingActions, rhs.leadingActions).allSatisfy { $0.icon == $1.icon } &&
         zip(lhs.trailingActions, rhs.trailingActions).allSatisfy { $0.icon == $1.icon } &&
         (lhs.onCreateShareLink == nil) == (rhs.onCreateShareLink == nil) &&
-        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count &&
+        lhs.previewFingerprint == rhs.previewFingerprint &&
         lhs.enableAutoPreviewLoad == rhs.enableAutoPreviewLoad
     }
 }
@@ -649,5 +656,21 @@ struct ConversationPaginationFooterContent: View {
                     .onAppear { onLoadMore() }
             }
         }
+    }
+}
+
+// MARK: - Aperçu vivant (#11212)
+
+/// La SEULE vue qui observe `ConversationListPreviewLoader` : posée dans la
+/// section des messages de l'aperçu, elle rend l'état de SA conversation et se
+/// ré-évalue seule quand il change. La liste et les rangées tiennent le
+/// chargeur par référence sans s'y abonner.
+struct ConversationPreviewStateReader<Content: View>: View {
+    @ObservedObject var loader: ConversationListPreviewLoader
+    let conversationId: String
+    @ViewBuilder let content: (ConversationListPreviewLoader.PreviewState) -> Content
+
+    var body: some View {
+        content(loader.state(for: conversationId))
     }
 }

@@ -117,25 +117,24 @@ extension OfflineQueue {
 
 /// Les envois en cours, par id de ligne, pour que l'annulation d'une ligne EN
 /// VOL coupe aussi la requête (URLSession s'arrête quand sa `Task` est annulée).
-final class OutboxInflightDispatches: @unchecked Sendable {
+final class OutboxInflightDispatches: Sendable {
     static let shared = OutboxInflightDispatches()
 
-    private let lock = NSLock()
-    private var tasks: [String: Task<Void, Error>] = [:]
+    private let tasks = Locked([String: Task<Void, Error>]())
 
     func register(_ task: Task<Void, Error>, for id: String) {
-        lock.withLock { tasks[id] = task }
+        tasks.mutate { $0[id] = task }
     }
 
     func unregister(_ task: Task<Void, Error>, for id: String) {
-        lock.withLock {
-            guard tasks[id] == task else { return }
-            tasks[id] = nil
+        tasks.mutate { table in
+            guard table[id] == task else { return }
+            table[id] = nil
         }
     }
 
     func cancel(_ id: String) {
-        let task = lock.withLock { tasks[id] }
+        let task = tasks.read { $0[id] }
         task?.cancel()
     }
 }
