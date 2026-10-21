@@ -8,10 +8,12 @@ import MeeshyUI
 ///
 /// Complément porteur du 2026-09-26 : « l'appui long sur un message protégé ne
 /// montre plus son contenu ». En Focal et en Script, l'aperçu élevé
-/// (`MessageOverlayMenu`, chemin sans cadre source) rendait `message.content`
+/// (`MessageOverlayMenu`, alors sans cadre source) rendait `message.content`
 /// et les pièces EN CLAIR : l'appui long contournait le flou et la vue unique
 /// que le fil venait de poser. L'aperçu montre désormais la forme protégée — la
-/// puce de la vue unique, ou le flou — et ne consomme rien.
+/// puce de la vue unique, ou le flou — et ne consomme rien. Depuis #11208, la
+/// forme se lit EN AMONT des deux faces de l'aperçu, rangée plate comme bulle
+/// (`MessageOverlayCellPreview`).
 nonisolated enum OverlayPreviewProtection: Equatable {
     /// Rien de protégé : l'aperçu rend le message.
     case clear
