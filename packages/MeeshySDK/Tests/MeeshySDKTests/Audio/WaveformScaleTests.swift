@@ -64,4 +64,16 @@ final class WaveformScaleTests: XCTestCase {
         XCTAssertEqual(WaveformScale.publishedHeight(1.7), 1, accuracy: 0.0001)
         XCTAssertEqual(WaveformScale.publishedHeight(-0.2), 0, accuracy: 0.0001)
     }
+
+    // MARK: - La lecture : ce qu'une série EST décide de son échelle
+
+    func test_reading_measured_isTheDecibelScale() {
+        XCTAssertEqual(WaveformReading.measured.height(0.1), WaveformScale.displayHeight(rms: 0.1), accuracy: 0.0001)
+    }
+
+    func test_reading_published_isLinear_neverTheDecibelScale() {
+        XCTAssertEqual(WaveformReading.published.height(0.1), 0.1, accuracy: 0.0001,
+                       "un champ normalisé au pic lu en décibels écrase ses barres vers le haut")
+        XCTAssertEqual(WaveformReading.published.height(1.4), 1, accuracy: 0.0001)
+    }
 }
