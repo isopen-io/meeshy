@@ -499,7 +499,7 @@ enum GameCopy {
         case .mintBlockedByDebt:
             String(localized: "game.mint.blocked.debt_plain", defaultValue: "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont. Tant qu’elle est là, on ne frappe pas.", bundle: .main)
         case .treasuryLocked:
-            String(localized: "game.error.treasury_locked", defaultValue: "Cette Meesh entrerait dans un contenant de ton Héritage que ton rang n’ouvre pas encore.", bundle: .main)
+            String(localized: "game.error.treasury_locked", defaultValue: "Ce contenant de ton Héritage s’ouvre avec un rang plus haut.", bundle: .main)
         case .freezeAtMaximum:
             String(localized: "game.error.freeze_at_maximum", defaultValue: "Deux Veilleuses gardent déjà ta Flamme : c’est le plus possible.", bundle: .main)
         case .relightNotAllowed:
@@ -523,15 +523,15 @@ enum GameCopy {
         case .leagueConsentRequired:
             String(localized: "game.error.league_consent_required", defaultValue: "Accepte d’abord de rejoindre la joute publique.", bundle: .main)
         case .leaguePseudonymInvalid:
-            String(localized: "game.error.league_pseudonym_invalid", defaultValue: "Ce nom de joute n’est pas valable : 3 à 20 lettres, chiffres, points, tirets ou tirets bas.", bundle: .main)
+            String(localized: "game.error.league_pseudonym_invalid", defaultValue: "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret, tiret bas.", bundle: .main)
         case .leaguePseudonymTaken:
             String(localized: "game.error.league_pseudonym_taken", defaultValue: "Ce nom de joute est déjà pris.", bundle: .main)
         case .leaguePseudonymForbidden:
-            String(localized: "game.error.league_pseudonym_forbidden", defaultValue: "Ce nom de joute n’est pas permis : ni un nom réservé, ni ton nom.", bundle: .main)
+            String(localized: "game.error.league_pseudonym_forbidden", defaultValue: "Ce nom de joute n’est pas permis : choisis-en un qui ne te désigne pas.", bundle: .main)
         case .duoLocked:
             String(localized: "game.error.duo_locked", defaultValue: "L’alliance s’ouvre au niveau 20, pour vous deux.", bundle: .main)
         case .duoNotFriends:
-            String(localized: "game.error.duo_not_friends", defaultValue: "L’alliance se fait avec un ami accepté.", bundle: .main)
+            String(localized: "game.error.duo_not_friends", defaultValue: "L’alliance se fait entre amis acceptés.", bundle: .main)
         case .duoAlreadyActive:
             String(localized: "game.error.duo_already_active", defaultValue: "L’un de vous a déjà une alliance cette semaine.", bundle: .main)
         case .duoNotFound:
@@ -539,13 +539,13 @@ enum GameCopy {
         case .duoTransitionRefused:
             String(localized: "game.error.duo_transition_refused", defaultValue: "Ce geste n’a pas de sens pour cette alliance.", bundle: .main)
         case .seasonNotOpen:
-            String(localized: "game.error.season_not_open", defaultValue: "Aucun voyage n’est en cours pour l’instant.", bundle: .main)
+            String(localized: "game.error.season_not_open", defaultValue: "Aucun voyage n’est en cours.", bundle: .main)
         case .seasonStepNotFound:
             String(localized: "game.error.season_step_not_found", defaultValue: "Cette halte n’existe pas.", bundle: .main)
         case .seasonStepLocked:
             String(localized: "game.error.season_step_locked", defaultValue: "Cette halte n’est pas encore atteinte.", bundle: .main)
         case .seasonStepAlreadyClaimed:
-            String(localized: "game.error.season_step_already_claimed", defaultValue: "Cette récompense est déjà réclamée.", bundle: .main)
+            String(localized: "game.error.season_step_already_claimed", defaultValue: "Cette halte est déjà réclamée.", bundle: .main)
         case .sealAlreadyOwned:
             String(localized: "game.error.seal_already_owned", defaultValue: "Tu as déjà le Sceau de ce voyage.", bundle: .main)
         case .prestigeLevelTooLow:

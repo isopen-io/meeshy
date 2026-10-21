@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { presenceStore } from '@/lib/api/presence-store';
 import type { Conversation } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
@@ -206,5 +207,35 @@ describe('l’en-tête d’un direct porte le mood du pair (#9065)', () => {
       );
     });
     expect(container.querySelector('[data-mood]')?.getAttribute('data-mood')).toBe('😎');
+  });
+});
+
+/**
+ * UN MEMBRE ACTIF HORS DES PARTICIPANTS SERVIS GARDE SA PASTILLE (#11412) — la
+ * passerelle tronque `conversation.participants` à cinq : un plus actif qu'elle
+ * n'y a pas compté prend sa présence de la carte vivante, par son identifiant.
+ */
+describe('la pastille des plus actifs lit la carte vivante (#11412)', () => {
+  afterEach(() => act(() => presenceStore.getState().clear()));
+
+  const pastilleDe = (id: string): string | null =>
+    container.querySelector(`[data-active-member="${id}"] [data-presence]`)?.getAttribute('data-presence') ?? null;
+
+  test('un membre absent des participants servis prend sa présence de la carte vivante', () => {
+    act(() => presenceStore.getState().put('u-ali', { isOnline: true, lastActiveAt: new Date().toISOString() }));
+
+    monte({ expanded: true });
+
+    expect(pastilleDe('u-ali')).toBe('online');
+    expect(pastilleDe('u-sara')).toBeNull();
+  });
+
+  test('sa pastille suit le temps réel sans remonter l’en-tête', () => {
+    monte({ expanded: true });
+    expect(pastilleDe('u-nour')).toBeNull();
+
+    act(() => presenceStore.getState().put('u-nour', { isOnline: true, lastActiveAt: new Date().toISOString() }));
+
+    expect(pastilleDe('u-nour')).toBe('online');
   });
 });

@@ -4,8 +4,8 @@ import UIKit
 @testable import Meeshy
 import MeeshySDK
 
-/// **Aucune page de Progression ne glisse de côté** (#9564, amendement n° 3) — ni la page, ni une rangée à
-/// l'intérieur. Trois instruments, parce qu'aucun ne voit tout :
+/// **Aucune page du jeu ne glisse de côté** (#9564, amendement n° 3 ; étendu à TOUTES les pages et fiches du jeu par
+/// l'épopée, § 3.3, #11180) — ni la page, ni une rangée à l'intérieur. Trois instruments, parce qu'aucun ne voit tout :
 ///
 ///  - la LARGEUR QUE LE CONTENU RÉCLAME à 320 pt (`sizeThatFits`) : un élément qui garde sa largeur de force
 ///    élargit tout ce qui le contient — c'est le défaut qu'un `fixedSize()` sur une pastille avait produit ;
@@ -64,8 +64,14 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
             .replacing(wave2: summit().wave2)
     }
 
+    /// Les étincelles aux plus grands nombres, une Ombre comprise : la tête des Étincelles et la ligne de l'Ombre (#11180).
+    private static func shadowed() -> GameBlock {
+        GameFixture.sparked(summit(), pocket: 9_999_999, cycle: 99_999_999, lifetime: 999_999_999, debt: 9_999_999)
+    }
+
     private static var longCases: [(String, GameBlock)] {
-        [("au sommet", summit()), ("redescendu", redescended()), ("au plafond du rang", capped()), ("quatre chiffres", fourDigits())]
+        [("au sommet", summit()), ("redescendu", redescended()), ("au plafond du rang", capped()), ("quatre chiffres", fourDigits()),
+         ("une Ombre sur de grands nombres", shadowed())]
     }
 
     private static let richMeesh = GameFixture.meesh(balance: 9_999, minted: 99_999, debitable: 9_999_999)
@@ -188,17 +194,17 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     }
 
-    /// Les fichiers des pages de Progression : la première page et ses pièces, les fiches, les
-    /// sous-pages de la vague 2, les règles, le carnet. La capture photo du carnet (`Game/Photo`) n'est pas une page.
+    /// Les fichiers de TOUTES les pages et fiches du jeu (#11180) : la première page de Progression et ses pièces, les
+    /// fiches, leurs têtes, le cadre de la frappe, les sous-pages de la vague 2, les règles, la Chronique et sa capture
+    /// photo, les cadres, la chorégraphie — tout `Game/`, sous-dossiers compris, et les vues `Progression*`.
     private func pageSources() throws -> [(name: String, code: String)] {
         let main = iosRoot.appendingPathComponent("Meeshy/Features/Main")
         let views = try FileManager.default.contentsOfDirectory(at: main.appendingPathComponent("Views"), includingPropertiesForKeys: nil)
-            .filter { $0.lastPathComponent.hasPrefix("Progression") && $0.pathExtension == "swift" }
-        let game = try FileManager.default.contentsOfDirectory(at: main.appendingPathComponent("Game"), includingPropertiesForKeys: nil)
+            .filter { ($0.lastPathComponent.hasPrefix("Progression") || $0.lastPathComponent.hasPrefix("ProfileProgression")) && $0.pathExtension == "swift" }
+        let game = (FileManager.default.enumerator(at: main.appendingPathComponent("Game"), includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL } ?? [])
             .filter { $0.pathExtension == "swift" }
-        let wave2 = try FileManager.default.contentsOfDirectory(at: main.appendingPathComponent("Game/Wave2"), includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "swift" }
-        return try (views + game + wave2).map { url in
+        return try (views + game).map { url in
             let code = try String(contentsOf: url, encoding: .utf8)
                 .components(separatedBy: "\n")
                 .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
@@ -209,7 +215,11 @@ final class ProgressionNoSidewaysScrollTests: XCTestCase {
 
     func test_noProgressionPage_scrollsSideways() throws {
         let sources = try pageSources()
-        XCTAssertGreaterThan(sources.count, 40, "les fichiers des pages sont introuvables : la garde ne lirait rien")
+        XCTAssertGreaterThan(sources.count, 100, "les fichiers des pages du jeu sont introuvables : la garde ne lirait rien")
+        for page in ["GameFicheHeads.swift", "GameMintPreviewView.swift", "ProgressionConceptPage.swift", "GamePhotoFlowView.swift",
+                     "GameLeagueViews.swift", "MintStrikeScene.swift", "ProgressionView.swift"] {
+            XCTAssertTrue(sources.contains { $0.name == page }, "« \(page) » échappe à la garde")
+        }
         for source in sources {
             for forbidden in ["ScrollView(.horizontal", "ScrollView([", "ScrollView(Axis.Set"] {
                 XCTAssertFalse(source.code.contains(forbidden),

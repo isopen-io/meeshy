@@ -33,7 +33,7 @@ extension MeeshyComposerHost {
             } label: {
                 Image(systemName: "plus")
                     .font(.footnote.weight(.bold))
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                     .frame(width: ComposerControlMetrics.visualDiameter,
                            height: ComposerControlMetrics.visualDiameter)
                     .contentShape(Circle())
@@ -50,7 +50,7 @@ extension MeeshyComposerHost {
     // MARK: - Le rail gauche : l'éclair puis le Cadre, après le lieu (#8713)
 
     var sceneToggleEntries: [ComposerSceneToggleEntry] {
-        ComposerLeadingSceneToggles.served(animated: !returnsToConversation,
+        ComposerLeadingSceneToggles.served(animated: true,
                                            frame: sceneHasBackgroundMedia)
             .map { bouton in
                 switch bouton {

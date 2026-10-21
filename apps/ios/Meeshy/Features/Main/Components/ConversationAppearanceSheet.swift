@@ -81,7 +81,7 @@ struct ConversationAppearanceSheet: View {
         }
         .onAppear { syncDrafts() }
         // Un refus (retour arrière) ou l'écho d'un autre appareil remet aussi les curseurs à leur place.
-        .onChange(of: viewModel.appearance) { _ in syncDrafts() }
+        .adaptiveOnChange(of: viewModel.appearance) { _, _ in syncDrafts() }
     }
 
     private func loadInstalledWallpapers() async {
@@ -236,7 +236,7 @@ struct ConversationAppearanceSheet: View {
             }
             .accessibilityLabel(String(localized: "conversation.appearance.photo.veil", defaultValue: "Voile", bundle: .main))
             // VoiceOver et le clavier ajustent le curseur sans geste de glissement : la valeur s'enregistre aussitôt.
-            .onChange(of: veilDraft) { value in
+            .adaptiveOnChange(of: veilDraft) { _, value in
                 if !draggingSlider { viewModel.setPhotoVeil(value) }
             }
             Text(String(localized: "conversation.appearance.photo.blur", defaultValue: "Flou", bundle: .main))
@@ -246,7 +246,7 @@ struct ConversationAppearanceSheet: View {
                 if !editing { viewModel.setPhotoBlur(Int(blurDraft.rounded())) }
             }
             .accessibilityLabel(String(localized: "conversation.appearance.photo.blur", defaultValue: "Flou", bundle: .main))
-            .onChange(of: blurDraft) { value in
+            .adaptiveOnChange(of: blurDraft) { _, value in
                 if !draggingSlider { viewModel.setPhotoBlur(Int(value.rounded())) }
             }
         }

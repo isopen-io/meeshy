@@ -390,7 +390,7 @@ enum GameElementDetails {
             status: status,
             facts: [
                 fact(ConceptText.name(.season), count(season.number)),
-                fact(ConceptText.factStars, count(season.stars)),
+                fact(ConceptText.factStrides, count(season.stars)),
             ],
             concept: .season
         )
@@ -459,7 +459,7 @@ enum GameElementDetails {
             name: GameText.trophyPrestige(number: count(index)),
             status: index <= prestige.stars ? .obtained(since: nil) : .locked(missing: missing, progress: nil),
             facts: [
-                fact(ConceptText.factStars, ConceptText.ratio(count(prestige.stars), count(prestige.max))),
+                fact(ConceptText.factRebirths, ConceptText.ratio(count(prestige.stars), count(prestige.max))),
                 fact(ConceptText.factGloryOnPass, count(prestige.gloryOnPass)),
             ],
             concept: .prestige

@@ -259,7 +259,7 @@ struct ParticipantsView: View {
         } else {
             LazyVStack(spacing: 0) {
                 ForEach(participants) { participant in
-                    participantRow(participant)
+                    liveParticipantRow(participant)
                         .onAppear {
                             Task { await loadMoreIfNeeded(currentItem: participant) }
                         }
@@ -290,6 +290,10 @@ struct ParticipantsView: View {
     }
 
     // MARK: - Participant Row
+
+    private func liveParticipantRow(_ participant: PaginatedParticipant) -> some View {
+        LivePresence { participantRow(participant) }
+    }
 
     private func participantRow(_ participant: PaginatedParticipant) -> some View {
         let color = DynamicColorGenerator.colorForName(participant.name)
