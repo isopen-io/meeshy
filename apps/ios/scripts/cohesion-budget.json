@@ -396,7 +396,7 @@
   "types": {
     "Meeshy::BubbleStandardLayout": 1664,
     "Meeshy::CallFrameRenderer": 2583,
-    "Meeshy::CallManager": 6678,
+    "Meeshy::CallManager": 6674,
     "Meeshy::CallView": 3379,
     "Meeshy::ComposerCaptureSession": 1651,
     "Meeshy::ConversationListView": 1945,
@@ -418,7 +418,7 @@
     "MeeshySDK::AuthManager": 1898,
     "MeeshySDK::ConversationSyncEngine": 2953,
     "MeeshySDK::MessagePersistenceActor": 2374,
-    "MeeshySDK::MessageSocketManager": 2679,
+    "MeeshySDK::MessageSocketManager": 2677,
     "MeeshySDK::OfflineQueue": 2985,
     "MeeshyUI::AudioPlayerView": 1542,
     "MeeshyUI::StickerPickerView": 1604,

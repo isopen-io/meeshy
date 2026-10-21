@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+@testable import MeeshySDK
 
 // MARK: - Level catch-up of `.connected` (#8270)
 
@@ -132,3 +133,68 @@ final class CallAudioSessionActivationPolicyTests: XCTestCase {
         XCTAssertTrue(source.contains("if activation == true { audioSessionSelfActivated = true }"))
     }
 }
+
+// MARK: - D2 (#11468) — le raccroché arrive au serveur avant le démontage
+
+private final class RecordingAckEmitter: SocketAckEmitting, @unchecked Sendable {
+    private(set) var sentEvents: [String] = []
+    private(set) var pendingAck: (([Any]) -> Void)?
+
+    func sendAck(_ event: String, _ payload: SocketAckPayload, timeout: Double, onAck: @escaping ([Any]) -> Void) {
+        sentEvents.append(event)
+        pendingAck = onAck
+    }
+}
+
+private final class AckBox: @unchecked Sendable {
+    var values: [Bool] = []
+}
+
+final class CallEndEmissionTests: XCTestCase {
+
+    func test_callEnd_isOnTheWire_beforeTheEmitterReturns() {
+        let emitter = RecordingAckEmitter()
+        let box = AckBox()
+        CallEndEmission.emit(on: emitter, callId: "call-1", reason: nil) { box.values.append($0) }
+        XCTAssertEqual(emitter.sentEvents, ["call:end"], "l'émission ne doit attendre ni une Task ni le fil principal")
+        XCTAssertTrue(box.values.isEmpty, "seul l'accusé reste à venir")
+        emitter.pendingAck?([["success": true]])
+        XCTAssertEqual(box.values, [true])
+    }
+
+    func test_refusedOrTimedOutAck_reportsFalse() {
+        let emitter = RecordingAckEmitter()
+        let box = AckBox()
+        CallEndEmission.emit(on: emitter, callId: "call-1", reason: nil) { box.values.append($0) }
+        emitter.pendingAck?(["NO ACK"])
+        XCTAssertEqual(box.values, [false])
+    }
+
+    func test_hangup_emitsCallEndSynchronously_beforeTheLocalTeardown() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+Hangup.swift")
+        guard let reliably = source.range(of: "func emitCallEndReliably("),
+              let endCall = source.range(of: "func endCall() {") else { return XCTFail("hangup functions not found") }
+        let reliableBody = source[reliably.upperBound..<endCall.lowerBound]
+        guard let emit = reliableBody.range(of: "MessageSocketManager.shared.emitCallEndWithAck(callId: callId) {") else {
+            return XCTFail("call:end must be emitted through the synchronous ack variant")
+        }
+        XCTAssertNil(reliableBody[..<emit.lowerBound].range(of: "Task {"), "no Task may defer the call:end emission")
+        let endBody = source[endCall.upperBound...]
+        guard let announce = endBody.range(of: "emitCallEndReliably(callId: callId)"),
+              let teardown = endBody.range(of: "endCallInternal(") else { return XCTFail("endCall shape changed") }
+        XCTAssertLessThan(announce.lowerBound, teardown.lowerBound, "call:end leaves before the teardown starts")
+    }
+
+    func test_audioDeactivation_leavesTheMainThread() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+AudioSession.swift")
+        guard let start = source.range(of: "func deactivateAudioSession() {") else { return XCTFail("missing") }
+        let body = source[start.upperBound...]
+        let end = body.range(of: "\n    }\n")?.lowerBound ?? body.endIndex
+        let fn = body[..<end]
+        guard let queue = fn.range(of: "audioSessionQueue.async {"),
+              let setActive = fn.range(of: "setActive(false") else { return XCTFail("setActive(false) must run on the audio session queue") }
+        XCTAssertLessThan(queue.lowerBound, setActive.lowerBound)
+        XCTAssertNil(fn.range(of: "audioSessionQueue.sync"), "the main thread never waits on the audio session queue at hangup")
+    }
+}
+

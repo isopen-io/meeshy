@@ -253,26 +253,21 @@ extension CallManager {
         }
     }
 
+    /// Avec CallKit, `provider:didDeactivate:` désactive la session ; sans lui
+    /// (app au premier plan, Mac), on la libère nous-mêmes. D2 (#11468) : sur la
+    /// file audio, jamais le fil principal (« AVAudioSession Hang Risk ») ; file
+    /// sérielle, donc la configuration d'un appel suivant passe après.
     func deactivateAudioSession() {
-        // CallKit deactivates the AVAudioSession on its own when the call ends.
-        // We only flip RTCAudioSession.isAudioEnabled; setActive(false) is the
-        // job of provider:didDeactivate:.
-        audioSessionQueue.sync {
-            CallManager.isAudioSessionExpectedActive = false
+        CallManager.isAudioSessionExpectedActive = false
+        let releaseSession = CallAudioSessionPolicy.shouldDeactivateOnEnd(
+            usesCallKit: callUsesCallKit, sessionSelfActivated: audioSessionSelfActivated)
+        audioSessionSelfActivated = false
+        audioSessionQueue.async {
             let session = RTCAudioSession.sharedInstance()
             session.lockForConfiguration()
             session.isAudioEnabled = false
             session.unlockForConfiguration()
-        }
-        // Sans CallKit (appel entrant app au premier plan, iOS-app-on-Mac),
-        // `provider:didDeactivate:` ne viendra JAMAIS : la session
-        // `.playAndRecord` + `.duckOthers` auto-activée restait active après
-        // raccrochage — l'audio des autres apps restait ducké jusqu'à une
-        // reconfiguration fortuite. Désactivation explicite symétrique.
-        let releaseSession = CallAudioSessionPolicy.shouldDeactivateOnEnd(
-            usesCallKit: callUsesCallKit, sessionSelfActivated: audioSessionSelfActivated)
-        audioSessionSelfActivated = false
-        if releaseSession {
+            guard releaseSession else { return }
             do {
                 try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             } catch {

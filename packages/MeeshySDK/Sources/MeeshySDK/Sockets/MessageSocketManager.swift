@@ -365,7 +365,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // (ringing) call so a user who comes online / opens the app mid-ring
             // sees the incoming banner immediately, instead of missing the call
             // that started while they were offline/backgrounded.
-            self.socket?.emit("call:check-active")
+            self.emitCallCheckActive()
 
             // Re-join all tracked conversations (active-first for fastest UX).
             for convId in self.roomsToRejoinOnConnect() {

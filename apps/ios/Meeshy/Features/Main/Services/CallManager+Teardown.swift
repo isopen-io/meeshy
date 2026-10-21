@@ -56,13 +56,15 @@ extension CallManager {
         UserDefaults.standard.set(data, forKey: lastCallSummaryDefaultsKey)
     }
 
-    private func emitCallAnalyticsIfNeeded(reason: CallEndReason) {
+    private func emitCallAnalyticsIfNeeded(reason: CallEndReason, reports: Bool) {
         guard let callId = currentCallId else { return }
         // Émission finale — le snapshot est PUR (la fenêtre de niveau ouverte
         // est repliée virtuellement par qualityDistribution, plus de flush
         // mutatif ici) ; le gateway écrase le dernier snapshot in_progress
         // avec la raison terminale réelle.
-        emitCallAnalyticsSnapshot(callId: callId, endReasonLabel: String(describing: reason))
+        if reports {
+            emitCallAnalyticsSnapshot(callId: callId, endReasonLabel: String(describing: reason))
+        }
 
         // Reset accumulators so a subsequent call starts clean.
         analyticsCallInitiatedDate = nil
@@ -191,7 +193,8 @@ extension CallManager {
         endCallInternal(reason: .failed(reasonMessage))
     }
 
-    func endCallInternal(reason: CallEndReason) {
+    /// `reportsAnalytics: false` : effacé devant un autre appareil qui a décroché (#11468).
+    func endCallInternal(reason: CallEndReason, reportsAnalytics: Bool = true) {
         // CALL-FIX 2026-06-06 — stop any ringing loop + play the "ended" cue, but
         // ONLY if the call was actually active (ringing/connecting/connected). The
         // `isActive` guard means a re-entrant endCallInternal (already .ended/.idle)
@@ -274,7 +277,7 @@ extension CallManager {
         thermalMonitor.stopMonitoring()
         // Snapshot analytics before state is torn down so the payload has access
         // to callId, callDuration, callStartDate, etc.
-        emitCallAnalyticsIfNeeded(reason: reason)
+        emitCallAnalyticsIfNeeded(reason: reason, reports: reportsAnalytics)
         hasLocalVideoTrack = false
         hasRemoteVideoTrack = false
         remoteTranscriptionActive = false

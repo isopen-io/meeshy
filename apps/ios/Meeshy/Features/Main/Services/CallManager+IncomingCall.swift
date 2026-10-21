@@ -312,7 +312,7 @@ extension CallManager {
         if callUsesCallKit, let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .answeredElsewhere)
         }
-        endCallInternal(reason: .remote)
+        endCallInternal(reason: .remote, reportsAnalytics: false)
     }
 
     // MARK: - Phantom VoIP Call (defense-in-depth)
