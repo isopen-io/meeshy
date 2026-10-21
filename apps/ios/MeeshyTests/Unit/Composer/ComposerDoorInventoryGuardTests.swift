@@ -81,13 +81,8 @@ final class ComposerDoorInventoryGuardTests: XCTestCase {
     /// `conversationCapture` y est entrée le 2026-10-04 (#9295 faisait prendre
     /// la caméra de la barre en plein écran, hors scène) et en est sortie par
     /// son RETRAIT (#9298) — le troisième état que la garde admet.
-    ///
-    /// `conversationDraftMedia` y est entrée le 2026-10-20 : la retouche d'une
-    /// pièce de brouillon (message, commentaire, post) passe par la caméra, et
-    /// plus aucun site ne compose cette origine. Son retrait est #11422.
     private static let declareesSansAppelant: [String: String] = [
         "draft": "c'est elle qui n'a pas d'appelant",
-        "conversationDraftMedia": "la retouche d'une pièce passe par la caméra",
     ]
 
     // MARK: - Lecture des sources

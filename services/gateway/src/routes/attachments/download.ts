@@ -20,7 +20,7 @@ import { stat } from 'fs/promises';
 import { relative as pathRelative, resolve as pathResolve, sep as pathSep } from 'path';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { ifNoneMatchMatches } from '../../utils/etag';
+import { ifNoneMatchMatches, storedFileETag } from '../../utils/etag';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
 
@@ -600,7 +600,7 @@ function attachmentRepresentation(attachment: { readonly mimeType: string; reado
  * les mêmes octets sous les mêmes gardes (#11265).
  *
  * Toute réponse porte `Vary: Accept` et `Accept-Ranges` ; une réponse RÉUSSIE
- * (200, 206, 304) y ajoute `ETag` (faible, mtime + taille) et le
+ * (200, 206, 304) y ajoute `ETag` (FORT : taille, mtime et inode hachés) et le
  * `cacheControl` que le fichier autorise, jamais un 416. Une plage
  * valide rend 206 — un lecteur vidéo peut démarrer avant la fin du
  * téléchargement. Le cache n'est jamais assoupli ici : `immutable` ou
@@ -619,8 +619,8 @@ function streamStoredFile(
   const { filePath, cacheControl, representation } = input;
   const fileSize = input.fileStats.size;
 
-  // Weak ETag based on mtime+size — revalidation (If-None-Match → 304).
-  const etag = `W/"${fileSize}-${Math.floor(input.fileStats.mtimeMs)}"`;
+  // ETag FORT : `If-Range` ne s'honore qu'avec un validateur fort (RFC 9110 §13.1.5).
+  const etag = storedFileETag(input.fileStats);
   reply.header('Accept-Ranges', 'bytes');
   appendVary(reply, 'Accept');
 
@@ -681,9 +681,11 @@ function streamStoredFile(
 }
 
 /**
- * La plage à servir, ou rien. `If-Range` (RFC 7233 §3.2) qui ne désigne pas la
- * version servie demande le fichier ENTIER : recoller la fin d'une nouvelle
- * version au début d'une ancienne corromprait le média.
+ * La plage à servir, ou rien. `If-Range` (RFC 9110 §13.1.5) qui ne désigne pas
+ * la version servie demande le fichier ENTIER : recoller la fin d'une nouvelle
+ * version au début d'une ancienne corromprait le média. La comparaison est
+ * FORTE : `etag` est un validateur fort, et un `W/"…"` ne l'égale jamais. Une
+ * date HTTP en `If-Range` n'est pas comparée : le fichier entier part.
  */
 function honouredRange(request: FastifyRequest, etag: string): string | undefined {
   const range = request.headers.range;

@@ -3,6 +3,7 @@ import type { PendingUpload } from '@/lib/api/attachments';
 import type { ImageJob } from './image-job';
 import { imageJobClient } from './image-job-client';
 import { PHOTO_MAX_EDGE } from './photo-develop-core';
+import { isServedMedia } from './served-media';
 
 /**
  * **RECOMPRESSER AVANT D'ENVOYER** (#11310) — une photo de téléphone pèse 3 à
@@ -20,8 +21,16 @@ import { PHOTO_MAX_EDGE } from './photo-develop-core';
  * les images ANIMÉES (APNG, WebP animé), dont l'encodage ne garderait qu'une
  * image.
  *
+ * **Un média déjà servi par la passerelle n'est jamais touché** (`served-media.ts`,
+ * décision #11247) : transfert, republication, sticker — une seule génération.
+ *
  * **Ce que l'encodage retire en passant** : les métadonnées EXIF — dont la
- * position GPS d'une photo prise au téléphone. C'est pourquoi une image qui
+ * position GPS d'une photo prise au téléphone — MAIS SEULEMENT quand il a lieu.
+ * Tout chemin qui ne ré-encode pas les LAISSE PARTIR : HEIC, GIF et tout format
+ * non préparable, une image animée, Safari avant 16.4 (pas de worker), un
+ * worker en panne. Le client ne prétend donc pas les avoir retirées ; leur
+ * retrait sans ré-encodage, pour tous les formats, est l'affaire de la
+ * passerelle (#11258). C'est pourquoi une image qui
  * PORTE des métadonnées part TOUJOURS ré-encodée, même si le résultat pèse
  * davantage : un JPEG (présumé), un PNG à bloc `eXIf`, un WebP dont l'en-tête
  * `VP8X` lève le drapeau EXIF. Un PNG ou un WebP SANS métadonnées qui ne
@@ -83,7 +92,7 @@ const EXTENSIONS: Readonly<Record<string, string>> = { 'image/webp': 'webp', 'im
 const renamed = (name: string, type: string): string => `${name.replace(/\.[^./]+$/, '') || 'photo'}.${EXTENSIONS[type] ?? 'jpg'}`;
 
 async function prepared(file: File, port: ImagePort): Promise<File> {
-  if (!PREPARABLE.has(file.type)) return file;
+  if (!PREPARABLE.has(file.type) || isServedMedia(file)) return file;
   const head = new Uint8Array(await file.slice(0, HEAD_BYTES).arrayBuffer());
   if (isAnimated(head, file.type)) return file;
   const opaque = file.type === 'image/jpeg';

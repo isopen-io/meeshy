@@ -120,27 +120,6 @@ nonisolated enum ComposerOrigin: Equatable {
     /// `mediaId` est optionnel, comme `attachmentId` ci-dessus : une story ou un
     /// post sans média sème sa seule description.
     case socialMedia(postId: String, mediaId: String?)
-    /// **La retouche d'une image ou d'une vidéo du BROUILLON d'un message**
-    /// (#8416, #9124) : elle s'ouvre dans la même scène plein écran que toute
-    /// composition, et « Terminé » la rend au message
-    /// (`MeeshyComposerHost.onReturnMedia`) — elle ne se publie jamais.
-    /// `staged` : la pièce est DÉJÀ en attente (intacte ⇒ elle reste) ; sinon
-    /// elle vient de la bande des médias récents (intacte ⇒ elle repart telle
-    /// quelle, `ComposerReturnMedia.returnsUntouchedMedia`).
-    ///
-    /// La caméra de la barre n'ouvre plus le composer (#9295) : elle prend en
-    /// plein écran, hors scène, et verse sa prise au message
-    /// (`ComposerReturnedMedia(capture:)`). Sa porte d'origine (#9123) a été
-    /// retirée avec ce qui n'existait que pour elle (#9298).
-    ///
-    /// **Porte DÉCLARÉE SANS APPELANT depuis le 2026-10-20** :
-    /// la retouche d'une pièce passe par la caméra — une pièce en attente du message
-    /// (263d9c3c86, cb0d932b24), d'un commentaire (d4baaa5037) ou d'un post du
-    /// fil (34420e170b) ouvre la retouche d'après la prise, et la série de
-    /// scènes du composer a disparu (décision porteur : pas de Studio). Son
-    /// retrait, avec le mode retouche du meuble qui n'existe que pour elle, est
-    /// un lot à lui (#11422). Inventaire gardé : `ComposerDoorInventoryGuardTests`.
-    case conversationDraftMedia(staged: Bool)
 }
 
 nonisolated extension ComposerFormat {
@@ -187,8 +166,7 @@ nonisolated extension ComposerOrigin {
         switch self {
         case .repost(let postId, _):
             return postId
-        case .storyTray, .feedComposer, .moodChip, .edit, .draft, .share, .conversationMedia, .socialMedia,
-             .conversationDraftMedia:
+        case .storyTray, .feedComposer, .moodChip, .edit, .draft, .share, .conversationMedia, .socialMedia:
             return nil
         }
     }
@@ -216,8 +194,7 @@ nonisolated extension ComposerOrigin {
         switch self {
         case .draft(let id):
             return id
-        case .storyTray, .feedComposer, .moodChip, .edit, .repost, .share, .conversationMedia, .socialMedia,
-             .conversationDraftMedia:
+        case .storyTray, .feedComposer, .moodChip, .edit, .repost, .share, .conversationMedia, .socialMedia:
             return nil
         }
     }
@@ -841,21 +818,6 @@ nonisolated extension ComposerProfile {
                 allowsCapture: true,
                 routesToLegacy: nil
             )
-
-        case .conversationDraftMedia:
-            // Un média, et aucun format : elle repart dans le fil. Les
-            // diapositives suivent le FORMAT (loi éprouvée) ; c'est le mode
-            // retouche du meuble qui retire « nouvelle slide » (`onReturnMedia`).
-            return ComposerProfile(
-                initialFormat: .story,
-                offeredFormats: [.story],
-                showsSlides: true,
-                showsTimeline: true,
-                opensWith: .mediaSeeded,
-                allowsCapture: true,
-                routesToLegacy: nil
-            )
-
         }
     }
 }
