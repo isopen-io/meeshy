@@ -75,8 +75,8 @@ final class NotificationVoiceBanner {
         Map<String, String> data = new HashMap<>();
         if (extras == null) return data;
         for (String key : KEYS) {
-            Object value = extras.get(key);
-            if (value != null) data.put(key, String.valueOf(value));
+            String value = extras.getString(key);
+            if (value != null) data.put(key, value);
         }
         return data;
     }
