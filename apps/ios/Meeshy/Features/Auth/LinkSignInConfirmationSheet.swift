@@ -132,7 +132,7 @@ struct LinkSignInConfirmationView: View {
         .accessibilityIdentifier("signInLink.confirmation")
         .onAppear { titleFocused = true }
         .task {
-            try? await Task.sleep(for: Self.armingDelay)
+            _ = await cancellableSleep(for: Self.armingDelay)
             armed = true
         }
     }
@@ -243,7 +243,7 @@ final class LinkSignInConfirmationSheet: LinkSignInConfirming {
             }
             sheet.onDisappear = { [weak sheet] in
                 Task { @MainActor [weak sheet] in
-                    try? await Task.sleep(for: Self.unansweredDismissalGrace)
+                    _ = await cancellableSleep(for: Self.unansweredDismissalGrace)
                     guard sheet?.presentingViewController == nil else { return }
                     answer.give(.declined)
                 }

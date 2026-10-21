@@ -305,7 +305,7 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withTaskGroup(of: Bool.self) { group in
             group.addTask { await operation(); return true }
             group.addTask {
-                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                _ = await cancellableSleep(for: .seconds(seconds))
                 return false
             }
             let finishedFirst = await group.next() ?? false

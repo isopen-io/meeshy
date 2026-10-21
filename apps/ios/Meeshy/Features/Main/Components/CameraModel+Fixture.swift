@@ -2,6 +2,7 @@
 import AVFoundation
 import CoreImage
 import UIKit
+import MeeshySDK
 
 /// **Une caméra de recette au simulateur** (#9351) — `-MeeshyCaptureFixture` au
 /// lancement. Le simulateur n'a pas d'objectif : sans elle, ni le viseur, ni la
@@ -92,7 +93,7 @@ nonisolated enum ComposerCaptureFixture {
         guard writer.startWriting() else { return false }
         writer.startSession(atSourceTime: .zero)
         for index in 0..<movieFrameCount {
-            while !entree.isReadyForMoreMediaData { try? await Task.sleep(nanoseconds: 2_000_000) }
+            while !entree.isReadyForMoreMediaData { _ = await cancellableSleep(for: .milliseconds(2)) }
             let image = ComposerLookPainter.filled(scene(phase: Double(index) / Double(movieFrameCount)),
                                                    framing: .identity, into: movieCanvas)
             guard let tampon = buffer(image),
@@ -235,7 +236,7 @@ extension CameraModel {
     func deliverFixtureMovie(_ driver: ComposerCaptureFixtureDriver) {
         let jeton = recordingId
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: ComposerCaptureFixture.finalization)
+            _ = await cancellableSleep(for: .nanoseconds(ComposerCaptureFixture.finalization))
             isRecordingVideo = false
             guard let url = await driver.movieCopy() else { return abandonRecording(token: jeton) }
             capturedVideoURL = url

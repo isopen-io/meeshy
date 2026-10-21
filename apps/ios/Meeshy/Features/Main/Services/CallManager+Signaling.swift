@@ -444,8 +444,7 @@ extension CallManager {
     private func scheduleRemoteQualityReset() {
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.remoteQualityResetSeconds))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(QualityThresholds.remoteQualityResetSeconds)), !Task.isCancelled else { return }
             guard let self else { return }
             self.remoteMedia = self.remoteMedia.applying(.qualityDegraded(false))
         }

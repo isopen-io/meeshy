@@ -188,7 +188,7 @@ struct ArrivalFireworksCanvas: View {
             isOver = false
             let elapsed = Date().timeIntervalSince(startDate)
             if !ArrivalFireworks.isOver(at: elapsed) {
-                try? await Task.sleep(for: .seconds(ArrivalFireworks.showDuration - elapsed))
+                _ = await cancellableSleep(for: .seconds(ArrivalFireworks.showDuration - elapsed))
             }
             guard !Task.isCancelled else { return }
             isOver = true

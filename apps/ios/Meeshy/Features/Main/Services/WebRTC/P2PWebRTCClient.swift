@@ -4,6 +4,7 @@ import os
 
 #if canImport(WebRTC)
 @preconcurrency import WebRTC
+import MeeshySDK
 
 // `@unchecked Sendable` contract: every property mutation is serialised on the
 // main queue — callers arrive via @MainActor (WebRTCService / CallManager), and
@@ -889,8 +890,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // disconnect()'s synchronous teardown of the same property (see toggleVideo).
         dataChannelPingTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(QualityThresholds.dataChannelPingIntervalSeconds))
-                guard !Task.isCancelled, let self else { break }
+                guard await cancellableSleep(for: .seconds(QualityThresholds.dataChannelPingIntervalSeconds)), !Task.isCancelled, let self else { break }
                 self.sendDataChannelMessage(Data("{\"type\":\"ping\"}".utf8))
             }
         }
@@ -957,7 +957,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             while ContinuousClock.now < deadline {
                 guard let self, self.sessionGeneration == generation else { return }
                 guard (self.transcriptionDataChannel?.bufferedAmount ?? 0) > 0 else { break }
-                try? await Task.sleep(for: pollInterval)
+                _ = await cancellableSleep(for: pollInterval)
             }
             guard let self, self.sessionGeneration == generation else { return }
             self.disconnect()

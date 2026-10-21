@@ -165,8 +165,7 @@ struct ComposerSceneThumbnailTile: View {
             isCached: SceneThumbnailStore.shared.cached(empreinte) != nil,
             isBlank: SceneThumbnailContent.isBlank(slide, bgImage: bgImage))
         if attend {
-            try? await Task.sleep(nanoseconds: ComposerSceneThumbnailRefresh.debounceNanoseconds)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .nanoseconds(ComposerSceneThumbnailRefresh.debounceNanoseconds)), !Task.isCancelled else { return }
         }
         shown = SceneThumbnailRenderer.thumbnail(slide: slide, bgImage: bgImage, loadedImages: loadedImages,
                                                  size: size, scale: displayScale)

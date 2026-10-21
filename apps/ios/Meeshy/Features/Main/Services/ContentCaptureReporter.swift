@@ -322,7 +322,7 @@ final class OutboxContentCaptureDeclarer: ContentCaptureDeclaring {
                     logger.error("capture declaration not queued conv=\(report.conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 }
             }
-            try? await Task.sleep(for: delay)
+            _ = await cancellableSleep(for: delay)
             await OutboxFlushTrigger.flushNow()
         }
     }

@@ -674,8 +674,7 @@ struct GalleryVideoPage: View, Equatable {
         // sur une vidéo qui joue.
         .task(id: isPlayerActive) {
             guard isPlayerActive, !surfaceReady else { return }
-            try? await Task.sleep(for: .milliseconds(2500))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(2500)), !Task.isCancelled else { return }
             surfaceReady = true
         }
         .adaptiveOnChange(of: isPlayerAttached) { _, attached in

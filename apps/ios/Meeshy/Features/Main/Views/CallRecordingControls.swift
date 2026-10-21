@@ -215,8 +215,7 @@ struct CallRecordingOverlay: View, Equatable {
         .padding(.leading, MeeshySpacing.mdPlus)
         .background(.ultraThinMaterial, in: Capsule())
         .task(id: notice) {
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(4)), !Task.isCancelled else { return }
             onDismiss()
         }
     }

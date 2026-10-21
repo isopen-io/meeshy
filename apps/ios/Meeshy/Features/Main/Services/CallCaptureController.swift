@@ -218,7 +218,7 @@ final class CallCaptureController: ObservableObject {
             while !Task.isCancelled {
                 guard let controller = self else { return }
                 await controller.refreshPreviews()
-                try? await Task.sleep(nanoseconds: Self.previewIntervalNanoseconds)
+                _ = await cancellableSleep(for: .nanoseconds(Self.previewIntervalNanoseconds))
             }
         }
     }
@@ -390,7 +390,7 @@ final class CallCaptureController: ObservableObject {
             while !Task.isCancelled {
                 guard let controller = self else { return }
                 await controller.recordFrame(style: fixed)
-                try? await Task.sleep(nanoseconds: Self.recordingFrameIntervalNanoseconds)
+                _ = await cancellableSleep(for: .nanoseconds(Self.recordingFrameIntervalNanoseconds))
             }
         }
     }
@@ -475,8 +475,7 @@ final class CallCaptureController: ObservableObject {
         if case .facesSaved = outcome { HapticFeedback.success() }
         if case .videoSaved = outcome { HapticFeedback.success() }
         statusTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: Self.statusDisplayNanoseconds)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .nanoseconds(Self.statusDisplayNanoseconds)), !Task.isCancelled else { return }
             self?.status = .idle
         }
     }

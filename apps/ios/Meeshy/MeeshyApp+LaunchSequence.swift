@@ -203,11 +203,11 @@ extension MeeshyApp {
             do {
                 let count = try await retentionPersistence.purgeOldMessages()
                 if count > 0 {
-                    Logger(subsystem: "com.meeshy.app", category: "retention")
+                    MeeshyLog.logger(.retention, subsystem: .legacyApp)
                         .info("Purged \(count) messages older than \(MessagePersistenceActor.defaultRetentionMonths) months")
                 }
             } catch {
-                Logger(subsystem: "com.meeshy.app", category: "retention")
+                MeeshyLog.logger(.retention, subsystem: .legacyApp)
                     .error("purgeOldMessages failed: \(error.localizedDescription, privacy: .public)")
             }
         }

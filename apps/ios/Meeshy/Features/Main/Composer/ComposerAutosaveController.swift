@@ -79,8 +79,7 @@ final class ComposerAutosaveController: ObservableObject {
         guard pending == nil else { return }
         pending = Task { @MainActor [weak self] in
             while let attente = self?.remainingWait(), attente > 0 {
-                try? await Task.sleep(nanoseconds: attente)
-                if Task.isCancelled { return }
+                guard await cancellableSleep(for: .nanoseconds(attente)), !Task.isCancelled else { return }
             }
             self?.fireScheduledWrite()
         }

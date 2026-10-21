@@ -27,15 +27,13 @@ struct ConversationHighlightConsumer {
         }
         router.pendingHighlightMessageId = nil
         router.pendingHighlightConversationId = nil
-        try? await Task.sleep(for: .milliseconds(300))
-        guard !Task.isCancelled else { return }
+        guard await cancellableSleep(for: .milliseconds(300)), !Task.isCancelled else { return }
         if viewModel.messages.contains(where: { $0.id == messageId }) {
             scrollTo(messageId)
         } else {
             await viewModel.loadMessagesAround(messageId: messageId)
             if Task.isCancelled { return }
-            try? await Task.sleep(for: .milliseconds(100))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(100)), !Task.isCancelled else { return }
             scrollTo(messageId)
         }
     }

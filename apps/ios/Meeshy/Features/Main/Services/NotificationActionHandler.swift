@@ -845,7 +845,7 @@ final class NotificationActionHandler: NotificationActionHandling {
                     logger.error("Retrait de bannières non confirmé avant expiration du délai (\(identifiers.count, privacy: .public) id(s))")
                     break
                 }
-                try? await Task.sleep(for: removalConfirmationPollInterval)
+                _ = await cancellableSleep(for: removalConfirmationPollInterval)
             }
             completion?()
         }
