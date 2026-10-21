@@ -81,10 +81,11 @@ struct ConversationContextMenuView: View {
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
         .animation(.easeInOut(duration: 0.2), value: panel)
         .accessibilityElement(children: .contain)
-        // Toutes les entrées, sous-panneaux compris, en actions NOMMÉES
-        // (#11215) : elles complètent l'action « Ouvrir le menu » de la rangée,
-        // et VoiceOver atteint Quitter, Signaler ou l'administration sans
-        // naviguer d'un panneau à l'autre.
+        // Toutes les entrées, favoris et destinations de « Déplacer vers »
+        // compris, en actions NOMMÉES (#11215) : elles complètent l'action
+        // « Ouvrir le menu » de la rangée. Chaque rangée visible reste un
+        // bouton focalisable ; ces actions vivent sur le CONTENEUR, et leur
+        // annonce depuis un enfant focalisé se recette sur appareil.
         .accessibilityActions {
             ForEach(accessibilityEntries.map { entry in
                         AsyncRenderRow(id: entry.id, content: Button(entry.label) { entry.perform() })
@@ -345,12 +346,14 @@ struct ConversationContextMenuView: View {
         let block = isBlocked
             ? String(localized: "context.unblock", defaultValue: "Débloquer", bundle: .main)
             : String(localized: "context.block", defaultValue: "Bloquer", bundle: .main)
-        let entries: [ConversationMenuAccessibilityEntry?] = [
+        let root: [ConversationMenuAccessibilityEntry?] = [
             entry("pin", pin, actions.onPin),
             entry("mute", mute, actions.onMute),
             entry("read", read, actions.onMarkReadToggle),
             entry("details", String(localized: "context.details", defaultValue: "Détails", bundle: .main), actions.onDetails),
-            entry("rename", String(localized: "context.rename", defaultValue: "Renommer", bundle: .main), actions.onRename, when: capabilities.rename),
+            entry("rename", String(localized: "context.rename", defaultValue: "Renommer", bundle: .main), actions.onRename, when: capabilities.rename)
+        ]
+        let more: [ConversationMenuAccessibilityEntry?] = [
             entry("invite", String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main), actions.onInvite, when: capabilities.invite),
             entry("lock", lock, actions.onLock),
             entry("archive", archive, actions.onArchive, when: canToggleArchive),
@@ -360,7 +363,25 @@ struct ConversationContextMenuView: View {
             entry("leave", Self.leaveLabel, actions.onLeave, when: capabilities.leave),
             entry("removal", Self.removalLabel(capabilities.removal ?? .delete), actions.onDelete, when: capabilities.removal != nil)
         ]
-        return entries.compactMap { $0 }
+        return (root + favoriteEntries + moveEntries + more).compactMap { $0 }
+    }
+
+    /// Le sous-panneau « Favori », à plat : les huit emojis, puis le retrait.
+    private var favoriteEntries: [ConversationMenuAccessibilityEntry?] {
+        Self.favoriteEmojis.map { emoji in
+            entry("favorite.\(emoji)", Self.favoriteLabel(emoji), { actions.onSetFavorite(emoji) })
+        } + [
+            entry("removeFavorite", String(localized: "context.remove_favorite", defaultValue: "Retirer le favori", bundle: .main), actions.onRemoveFavorite, when: currentReaction != nil)
+        ]
+    }
+
+    /// Le sous-panneau « Déplacer vers », à plat : chaque section, puis « Mes conversations ».
+    private var moveEntries: [ConversationMenuAccessibilityEntry?] {
+        categories.map { category in
+            entry("move.\(category.id)", Self.moveLabel(category.name), { actions.onMove(category.id) })
+        } + [
+            entry("move.inbox", Self.moveLabel(String(localized: "context.my_conversations", defaultValue: "Mes conversations", bundle: .main)), { actions.onMove("") })
+        ]
     }
 
     /// Une entrée qui fait ce que fait sa rangée visible, puis ferme le menu.
@@ -381,8 +402,18 @@ struct ConversationContextMenuView: View {
     static let reportIcon = "exclamationmark.bubble"
     static let adminOpenIcon = "checkmark.shield"
 
+    /// Le titre de la confirmation de départ : un seul mot pour un seul geste,
+    /// groupe, conversation publique ou chaîne.
     static var leaveLabel: String {
-        String(localized: "context.leave_group", defaultValue: "Quitter le groupe", bundle: .main)
+        String(localized: "conversation.info.leave.title", defaultValue: "Quitter la conversation", bundle: .main)
+    }
+
+    static func favoriteLabel(_ emoji: String) -> String {
+        String(format: String(localized: "context.favorite_named", defaultValue: "Favori %@", bundle: .main), emoji)
+    }
+
+    static func moveLabel(_ destination: String) -> String {
+        String(format: String(localized: "context.move_to_named", defaultValue: "Déplacer vers %@", bundle: .main), destination)
     }
 
     static var reportLabel: String {

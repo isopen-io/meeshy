@@ -72,18 +72,22 @@ extension ConversationListView {
 /// `ConversationViewerAuthority` construit pour la rangée : le rôle de
 /// PLATEFORME servi (`MeeshyUser.role`) et le rôle DANS la conversation
 /// (`currentUserRole`). Une liste de conversations ne montre que celles dont le
-/// lecteur est membre : la ligne est active dès que le lecteur est chargé.
+/// lecteur est membre : la ligne est active dès que le lecteur est chargé. Le
+/// rang de la ligne se lit casse pliée, comme `effectiveConversationRole`.
 ///
 /// Fermé par défaut : un lecteur pas encore chargé n'est membre de rien et n'a
 /// pas de compte, donc rien de ce qu'un rôle ouvrirait ne s'offre avant.
 nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
 
-    /// Ce que « Supprimer » fait réellement pour ce lecteur.
+    /// Ce que l'entrée qui retire DIT, pour un geste qui ne masque que pour soi
+    /// (`deleteConversation` → `.deleteForUser`).
     nonisolated enum Removal: Equatable, Sendable {
-        /// « Supprimer » — direct, ou membre qui a le droit de supprimer pour tous.
+        /// « Supprimer » — une conversation directe, comme dans toute messagerie.
         case delete
-        /// « Masquer la discussion » — membre de groupe sans ce droit : la
-        /// discussion disparaît de SA liste, les autres la gardent.
+        /// « Masquer la discussion » — tout autre type : la discussion disparaît
+        /// de SA liste, les autres membres la gardent. Le droit `deleteForAll`
+        /// n'y change rien tant que la liste n'appelle pas la suppression pour
+        /// tous : « Supprimer » affirmerait un effet que le geste n'a pas.
         case hide
     }
 
@@ -115,7 +119,7 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
             leave: actions.leave,
             report: actions.report && !talksToSelf,
             adminOpen: actions.adminOpen,
-            removal: removal(of: conversation, actions: actions)
+            removal: actions.hide ? (conversation.type == .direct ? .delete : .hide) : nil
         )
     }
 
@@ -138,10 +142,5 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
     /// La fiche de la conversation dans la console d'administration web.
     static func adminConsoleURL(conversationId: String, webOrigin: String) -> URL? {
         URL(string: "\(webOrigin)/admin/conversations/\(conversationId)")
-    }
-
-    private static func removal(of conversation: MeeshyConversation, actions: ConversationActionPolicy.Actions) -> Removal? {
-        guard actions.hide else { return nil }
-        return conversation.type == .direct || actions.deleteForAll ? .delete : .hide
     }
 }

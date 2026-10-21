@@ -804,7 +804,7 @@
       "expected": {
         "rename": false,
         "invite": false,
-        "leave": true,
+        "leave": false,
         "deleteForAll": false,
         "hide": false,
         "report": false,
@@ -840,7 +840,7 @@
       },
       "expected": {
         "rename": false,
-        "invite": false,
+        "invite": true,
         "leave": true,
         "deleteForAll": false,
         "hide": true,
@@ -1062,7 +1062,7 @@
       },
       "expected": {
         "rename": false,
-        "invite": false,
+        "invite": true,
         "leave": true,
         "deleteForAll": false,
         "hide": true,
@@ -1099,7 +1099,7 @@
       },
       "expected": {
         "rename": false,
-        "invite": false,
+        "invite": true,
         "leave": true,
         "deleteForAll": false,
         "hide": true,
@@ -1136,7 +1136,7 @@
       },
       "expected": {
         "rename": false,
-        "invite": false,
+        "invite": true,
         "leave": true,
         "deleteForAll": false,
         "hide": true,
@@ -1173,7 +1173,7 @@
       },
       "expected": {
         "rename": false,
-        "invite": false,
+        "invite": true,
         "leave": true,
         "deleteForAll": false,
         "hide": true,
@@ -1211,7 +1211,7 @@
       "expected": {
         "rename": false,
         "invite": false,
-        "leave": true,
+        "leave": false,
         "deleteForAll": false,
         "hide": false,
         "report": false,
@@ -2025,7 +2025,7 @@
       "expected": {
         "rename": false,
         "invite": false,
-        "leave": true,
+        "leave": false,
         "deleteForAll": false,
         "hide": false,
         "report": false,
@@ -2728,7 +2728,7 @@
       "expected": {
         "rename": false,
         "invite": false,
-        "leave": true,
+        "leave": false,
         "deleteForAll": false,
         "hide": false,
         "report": false,
@@ -2736,6 +2736,117 @@
         "adminOpen": false,
         "call": false,
         "videoCall": false,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "groupe-rang-de-ligne-en-majuscules-modere",
+      "input": {
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "MODERATOR",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": true,
+        "invite": true,
+        "leave": true,
+        "deleteForAll": false,
+        "hide": true,
+        "report": true,
+        "manageMembers": true,
+        "adminOpen": false,
+        "call": true,
+        "videoCall": true,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "groupe-createur-en-majuscules-supprime-pour-tous",
+      "input": {
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "CREATOR",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": true,
+        "invite": true,
+        "leave": true,
+        "deleteForAll": true,
+        "hide": true,
+        "report": true,
+        "manageMembers": true,
+        "adminOpen": false,
+        "call": true,
+        "videoCall": true,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "public-rang-de-ligne-en-majuscules-invite",
+      "input": {
+        "conversation": {
+          "type": "public",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "ADMIN",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": true,
+        "invite": true,
+        "leave": true,
+        "deleteForAll": true,
+        "hide": true,
+        "report": true,
+        "manageMembers": true,
+        "adminOpen": false,
+        "call": true,
+        "videoCall": true,
         "e2eeBadge": false
       }
     }
