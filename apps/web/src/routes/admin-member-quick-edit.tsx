@@ -40,14 +40,21 @@ import { GLASS_CARD_CLASS, GLASS_CARD_EDGE, refusalOf } from './admin-member-par
  * confirmation, où l'ADMIN trouve le motif déjà proposé (`useAdminMotive`).
  *
  * Ce qui ne s'édite pas se LIT : la présence (calculée par la loi partagée, dite en mots). Les
- * GESTES du compte sont des boutons DANS la carte, et restent visibles carte repliée : les
- * actions en un clic (activer, valider une preuve) et la suppression y sont rangées par la fiche
- * (`gestures`), à côté de « Régénérer le mot de passe » et « Bannir », qui ouvrent leurs
- * feuilles ; « Remettre à zéro » les tentatives (le même `unlock` que la section Sécurité, qui
+ * GESTES du compte sont des boutons DANS la carte, SOUS les champs, et restent visibles carte
+ * repliée, du plus courant au plus lourd : les actions en un clic (`leading` : activer, valider
+ * une preuve), « Régénérer le mot de passe » et « Bannir », qui ouvrent leurs feuilles, puis la
+ * suppression (`trailing`), en dernier ; « Remettre à zéro » les tentatives (le même `unlock` que la section Sécurité, qui
  * vide aussi le verrou) vit sous leur compteur. Sans `canManageUsers`, tout se lit et rien ne
  * s'offre.
  */
 const FOLD_KEY = 'meeshy.admin.quickEdit.folded';
+
+/**
+ * LA RANGÉE DES GESTES (#11410, relu sur la capture de la recette à 430 px) — sur un téléphone,
+ * une COLONNE de gros boutons de même largeur ; dès 28 rem de carte, une rangée qui passe à la
+ * ligne. Les gestes intégrés (actions en un clic, suppression) prennent la même grille.
+ */
+export const GESTURE_ROW = 'grid grid-cols-1 gap-2 @md:flex @md:flex-wrap @md:items-center';
 
 function readFolded(): boolean {
   try {
@@ -127,7 +134,8 @@ export function AdminMemberQuickEdit({
   onAnnounce,
   onOpenPassword,
   onOpenBan,
-  gestures: extraGestures,
+  leading,
+  trailing,
   deps = apiDeps,
   now = () => new Date(),
 }: {
@@ -136,8 +144,10 @@ export function AdminMemberQuickEdit({
   readonly onAnnounce: (texte: string) => void;
   readonly onOpenPassword: () => void;
   readonly onOpenBan: () => void;
-  /** Les autres gestes du compte (activer, valider une preuve, supprimer), rangés avec ceux de la carte. */
-  readonly gestures?: ReactNode;
+  /** Les gestes COURANTS du compte (activer, valider une preuve), rangés en tête de la rangée. */
+  readonly leading?: ReactNode;
+  /** Le geste le plus LOURD (supprimer, restaurer), rangé en dernier — jamais celui qu'on touche d'abord. */
+  readonly trailing?: ReactNode;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 }) {
@@ -258,24 +268,6 @@ export function AdminMemberQuickEdit({
         </button>
       </div>
 
-      {writable || extraGestures !== undefined ? (
-        <div role="group" aria-label={t('admin.quickEdit.gestures')} className="flex flex-wrap items-center gap-2" data-admin-quick-gestures="">
-          {extraGestures}
-          {writable ? (
-            <>
-              <AdminButton tone="secondary" size="lg" disabled={gestures.offline} data={{ 'data-admin-quick-password': '' }} onClick={onOpenPassword}>
-                <AdminGlyph name="lock" size={18} />
-                {t('admin.quickEdit.regeneratePassword')}
-              </AdminButton>
-              <AdminButton tone="danger" size="lg" disabled={gestures.offline} data={{ 'data-admin-quick-ban': '' }} onClick={onOpenBan}>
-                <AdminGlyph name="prohibit" size={18} />
-                {t('admin.ban.open')}
-              </AdminButton>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-
       {folded ? null : (
         <div id={bodyId} className="grid gap-4">
           <div className="grid grid-cols-1 gap-3 @xl:grid-cols-2 @4xl:grid-cols-3">
@@ -395,6 +387,24 @@ export function AdminMemberQuickEdit({
 
         </div>
       )}
+      {writable || leading !== undefined || trailing !== undefined ? (
+        <div role="group" aria-label={t('admin.quickEdit.gestures')} className={GESTURE_ROW} data-admin-quick-gestures="">
+          {leading}
+          {writable ? (
+            <>
+              <AdminButton tone="secondary" size="lg" disabled={gestures.offline} data={{ 'data-admin-quick-password': '' }} onClick={onOpenPassword}>
+                <AdminGlyph name="lock" size={18} />
+                {t('admin.quickEdit.regeneratePassword')}
+              </AdminButton>
+              <AdminButton tone="danger" size="lg" disabled={gestures.offline} data={{ 'data-admin-quick-ban': '' }} onClick={onOpenBan}>
+                <AdminGlyph name="prohibit" size={18} />
+                {t('admin.ban.open')}
+              </AdminButton>
+            </>
+          ) : null}
+          {trailing}
+        </div>
+      ) : null}
       {gestures.sheet}
     </section>
   );

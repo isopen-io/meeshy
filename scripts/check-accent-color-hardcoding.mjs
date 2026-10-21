@@ -408,7 +408,11 @@ const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // prisme d'une palette FIXE de cinq (`sparkles`, miroir de `gameTwinkle` du web) ; `MintCeremonyLayers.swift` (1, e63e8c0f72)
 // choisit l'encre du signe de la cérémonie selon la nuit du prisme (`night ? … : …`). Couleurs de DESSIN du jeu, pas
 // d'interface : l'accent de conversation les effacerait. Valeur MESURÉE le 2026-10-21 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 480;
+// 480 -> 481 (2026-10-21, #11231, le fond de la conversation dans l'aperçu d'appui long) :
+// `ConversationRecentMessagesPreview.swift` (1) peint la couleur de fond UNIE que l'utilisateur a choisie pour la
+// conversation (`.solid(let hex)`), à l'identique de `ConversationBackgroundView` (déjà compté, 459 -> 467) : la couleur
+// est la DONNÉE choisie, l'accent de conversation la trahirait. Valeur MESURÉE en CI le 2026-10-21 (PR #11405).
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 481;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

@@ -20,6 +20,9 @@ nonisolated protocol ConversationCommandPersisting: Sendable {
         aggregateCount: Int?, aggregateParticipantIds: [String]?
     ) async throws
     func updateViewOnceCount(localId: String, count: Int) async throws
+    /// « Supprimer pour moi » (#11221) : la ligne quitte le fil, comme sur un autre
+    /// appareil du lecteur à la réception de `message:hidden-for-me`.
+    func purgeMessages(ids: [String]) async throws
 }
 
 extension MessagePersistenceActor: ConversationCommandPersisting {}

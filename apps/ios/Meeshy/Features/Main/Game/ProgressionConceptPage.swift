@@ -373,6 +373,9 @@ struct ProgressionConceptGestures: View {
     let onReveal: (ProgressionRevealRequest) -> Void
     var onPhotoMission: ((GameBlock.Mission) -> Void)?
 
+    /// La tête de l'Héritage retenue pendant la cérémonie de la frappe (#11482).
+    @State private var heritageHold: GameHeritageHold?
+
     private var theme: ThemeManager { ThemeManager.shared }
 
     /// Le concept a-t-il quelque chose à faire ou à toucher dans sa fiche ?
@@ -395,6 +398,26 @@ struct ProgressionConceptGestures: View {
         }
     }
 
+    /// L'HÉRITAGE (#11180) : ce que tu gardes en tête, puis LE cadre de frappe — le SEUL du jeu (#9537). La tête garde ce
+    /// qu'elle montrait au toucher jusqu'à la fin de la cérémonie (#11482).
+    @ViewBuilder
+    private func heritage(_ game: GameBlock) -> some View {
+        let served = GameHeritageHeadModel.served(progress: progress, game: game)
+        GameHeritageHeadView(model: GameHeritageHold.shown(served: served, hold: heritageHold, settled: viewModel.mintSettlement))
+            // Le contenant se touche : ce que les Meeshes gardées remplissent, et le suivant.
+            .gameElement(GameElementDetails.treasuryTier(game.treasury), identifier: "game.fiche.heritage")
+        GameMintPreviewView(
+            game: game, online: viewModel.isOnline,
+            minting: viewModel.isMinting, error: viewModel.mintError,
+            celebration: viewModel.celebration, settlement: viewModel.mintSettlement,
+            onMint: {
+                heritageHold = GameHeritageHold(before: served, settled: viewModel.mintSettlement)
+                Task { await viewModel.mint() }
+            },
+            onCeremonyEnded: { heritageHold = heritageHold?.ended() }
+        )
+    }
+
     var body: some View {
         switch concept {
         case .level:
@@ -411,19 +434,7 @@ struct ProgressionConceptGestures: View {
             }
         case .meesh:
             if let game {
-                // L'HÉRITAGE (#11180) : ce que tu gardes en tête, puis LE cadre de frappe — le SEUL du jeu (#9537).
-                GameHeritageHeadView(model: GameHeritageHeadModel(
-                    balance: progress.meesh?.balance ?? game.treasury.held, treasury: game.treasury,
-                    minted: progress.meesh?.mintedLifetime
-                ))
-                // Le contenant se touche : ce que les Meeshes gardées remplissent, et le suivant.
-                .gameElement(GameElementDetails.treasuryTier(game.treasury), identifier: "game.fiche.heritage")
-                GameMintPreviewView(
-                    game: game, online: viewModel.isOnline,
-                    minting: viewModel.isMinting, error: viewModel.mintError,
-                    celebration: viewModel.celebration, settlement: viewModel.mintSettlement,
-                    onMint: { Task { await viewModel.mint() } }
-                )
+                heritage(game)
             } else if let meesh = progress.meesh {
                 ProgressionMeeshDetail(
                     meesh: meesh,

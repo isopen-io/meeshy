@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 import MeeshySDK
 
@@ -15,11 +16,11 @@ final class MintCeremonyTests: XCTestCase {
         var now: TimeInterval = 100
     }
 
-    private func makeRun(edition: MeeshEdition = .silver, number: Int = 92, reduced: Bool = false,
+    private func makeRun(edition: MeeshEdition = .silver, look: MeeshEdition? = nil, number: Int = 92, reduced: Bool = false,
                          clock: Clock = Clock()) -> (run: MintCeremonyRun, haptics: MockGameHaptics, finished: () -> Int) {
         let haptics = MockGameHaptics()
         var finishes = 0
-        let run = MintCeremonyRun(edition: edition, number: number, reduced: reduced, modest: false, haptics: haptics,
+        let run = MintCeremonyRun(edition: edition, look: look, number: number, reduced: reduced, modest: false, haptics: haptics,
                                   clock: { clock.now }, onFinish: { finishes += 1 })
         return (run, haptics, { finishes })
     }
@@ -31,19 +32,19 @@ final class MintCeremonyTests: XCTestCase {
     // MARK: - La réponse qui compte est la première après le toucher
 
     func test_answer_beforeAnySettlement_isPending() {
-        let request = MintCeremonyRequest(edition: .silver, number: 92, settled: settled(.refused(code: "NETWORK"), key: 3))
+        let request = MintCeremonyRequest(number: 92, edition: .silver, settled: settled(.refused(code: "NETWORK"), key: 3))
         XCTAssertEqual(request.answer(settled(.refused(code: "NETWORK"), key: 3)), .pending, "le refus d'AVANT le toucher ne compte pas")
         XCTAssertEqual(request.answer(nil), .pending)
     }
 
     func test_answer_aCoinSettledAfterTheTap_confirmsItsNumber() {
-        let request = MintCeremonyRequest(edition: .silver, number: 92, settled: nil)
+        let request = MintCeremonyRequest(number: 92, edition: .silver, settled: nil)
         XCTAssertEqual(request.answer(settled(.minted(number: 93), key: 1)), .confirmed(number: 93))
         XCTAssertEqual(request.answer(settled(.minted(number: nil), key: 1)), .confirmed(number: 92), "un ancien serveur : la pièce annoncée")
     }
 
     func test_answer_aRefusalSettledAfterTheTap_carriesItsCode() {
-        let request = MintCeremonyRequest(edition: .gold, number: 100, settled: settled(.minted(number: 99), key: 4))
+        let request = MintCeremonyRequest(number: 100, edition: .gold, settled: settled(.minted(number: 99), key: 4))
         XCTAssertEqual(request.answer(settled(.refused(code: "MINT_BLOCKED_BY_DEBT"), key: 5)), .refused(code: "MINT_BLOCKED_BY_DEBT"))
     }
 
@@ -204,6 +205,59 @@ final class MintCeremonyTests: XCTestCase {
         XCTAssertTrue(run.isFinished)
         XCTAssertEqual(finishes(), 1)
         XCTAssertEqual(run.number, 92, "passée, la scène n'écoute plus")
+    }
+
+    // MARK: - La loi frappe, le dessin habille (#11483)
+
+    func test_theNumber247_isStruckOnceLikeSilver_butInGoldDust() {
+        let request = MintCeremonyRequest(number: 247, edition: .silver, settled: nil)
+        XCTAssertEqual(request.edition, .silver, "la LOI du n° 247 : une pièce ordinaire")
+        XCTAssertEqual(request.look, .gold, "le DESSIN du n° 247, frappé après le n° 100 : l'or")
+
+        let (run, _, _) = makeRun(edition: request.edition, look: request.look, number: 247)
+        let plan = run.plan(atMs: 0)
+        XCTAssertEqual(plan.strikes.count, 1, "un seul coup : la chorégraphie suit la loi")
+        XCTAssertFalse(plan.grand, "ni aïeux ni rayons pour une pièce ordinaire")
+        XCTAssertEqual(Set(plan.particles.dust.map(\.material)), [.gold], "la poussière suit le dessin : l'or pur")
+        XCTAssertEqual(run.look, .gold, "la pièce de la scène se dessine en or")
+    }
+
+    func test_aHundredthCoin_keepsItsThreeBlows_andAThousandthItsTwoHitters() {
+        XCTAssertEqual(MintCeremonyRequest(number: 300, edition: .gold, settled: nil).look, .gold)
+        let gold = makeRun(edition: .gold, look: .gold, number: 300).run.plan(atMs: 0)
+        XCTAssertEqual(gold.strikes.count, 3)
+        let prism = makeRun(edition: .silver, look: .prism, number: 1_247).run.plan(atMs: 0)
+        XCTAssertEqual(prism.strikes.count, 1, "le n° 1 247 se frappe d'un coup")
+        XCTAssertEqual(Set(prism.particles.dust.map(\.material)), [.gold, .diamond], "… dans l'or et le diamant du prisme")
+    }
+
+    func test_theStruckCoin_isNamedByTheEditionItIsDrawnIn() {
+        let line = GameMintFrameModel.mintedLine(MintCelebration(number: 247, edition: .silver, key: 1))
+        XCTAssertTrue(line.contains(GameCopy.editionName(.gold)), "le n° 247 se voit en or, il se nomme en or : \(line)")
+        XCTAssertFalse(line.contains(GameCopy.editionName(.silver)), line)
+    }
+
+    // MARK: - Un toucher n'importe où passe la scène (#11482)
+
+    func test_aTouchAnywhereOnTheScreen_skipsTheScene_safeAreasIncluded() throws {
+        let (run, _, finishes) = makeRun()
+        let size = CGSize(width: 402, height: 874)
+        let screen = RenderedScreen(
+            MintCeremonyScene(run: run)
+                .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: 62) }
+                .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 34) },
+            size: size
+        )
+        defer { screen.dismount() }
+
+        let surface = try XCTUnwrap(screen.frame(of: "game.mint.ceremony"), "la surface qui passe la scène n'est pas rendue")
+        XCTAssertEqual(surface, CGRect(origin: .zero, size: size),
+                       "la surface du toucher couvre tout l'écran, sous la barre d'état et au-dessus de l'indicateur d'accueil")
+        let touchable: [String] = screen.nodes.filter { $0.frame.width > 0 }.compactMap { $0.identifier }
+        XCTAssertEqual(touchable, ["game.mint.ceremony"],
+                       "rien d'autre ne se pose sur la scène pour prendre un toucher")
+        run.skip()
+        XCTAssertEqual(finishes(), 1)
     }
 
     func test_theCeremony_saysItsLinesInTheCatalogsWords() {

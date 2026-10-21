@@ -75,7 +75,7 @@ struct ConversationMessageSheets: ViewModifier {
                     onDeleteMessage: { actions.requestDelete(msg.id) },
                     onEdit: { actions.edit(msg) },
                     onCopy: {
-                        guard MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg) else { return }
+                        guard MessageExitTransport.copyDisplayed(msg, in: viewModel) else { return }
                         HapticFeedback.success()
                     },
                     onShare: { if MessageExitTransport.mayShare(msg) { overlayState.shareMessage = msg } }, onImagine: { actions.export(msg, false) },

@@ -176,7 +176,7 @@ extension ConversationViewModel {
 
     // MARK: - Delete Message
 
-    /// `local` masque le message sur cet appareil seulement ; `everyone` le supprime côté
+    /// `local` retire le message de la vue de CE lecteur, sur tous ses appareils (#11221) ; `everyone` le supprime côté
     /// serveur et diffuse `message:deleted`. L'UI conditionne `everyone` à `canDeleteForEveryone(_:)`.
     typealias DeleteMode = MessageDeleteMode
 
@@ -185,17 +185,16 @@ extension ConversationViewModel {
     }
 
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
+        // `.failed` : pas d'id serveur, donc retrait local seulement, outbox annulée d'abord.
+        guard outgoingState(of: messageId)?.isFailed != true else {
+            await commands.withdrawUnsent(messageId: messageId)
+            removeFailedMessage(messageId: messageId)
+            return
+        }
         switch mode {
         case .local:
-            commands.deleteLocally(messageId: messageId)
+            report(await ConversationForMeRemoval(viewModel: self).run(messageId))
         case .everyone:
-            // Un message `.failed` n'a pas d'id serveur : un DELETE REST viserait un id bidon et son
-            // rollback ressusciterait le message. Retrait local seulement, outbox annulée d'abord.
-            guard outgoingState(of: messageId)?.isFailed != true else {
-                await commands.withdrawUnsent(messageId: messageId)
-                removeFailedMessage(messageId: messageId)
-                return
-            }
             report(await commands.deleteForEveryone(messageId: messageId, serverId: serverId(for: messageId)))
         }
     }

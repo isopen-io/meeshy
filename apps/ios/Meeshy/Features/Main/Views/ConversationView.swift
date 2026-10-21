@@ -561,7 +561,7 @@ struct ConversationView: View {
             scrollState: $scrollState,
             overlayState: $overlayState,
             showScript: { readingModeController.select(.script) },
-            reply: { triggerReply(for: $0) },
+            reply: { triggerReply(for: $0) }, presentMenu: { presentLongPressMenu(for: $0, cellFrame: nil) },
             openViewOnce: { openViewOnce(messageId: $0) },
             openMedia: openMediaFullscreen
         )
