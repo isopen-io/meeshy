@@ -297,8 +297,7 @@ struct CallBubbleView: View {
     private func armAutoDismiss() {
         menuDismissTask?.cancel()
         menuDismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(3)), !Task.isCancelled else { return }
             closeMenu()
         }
     }

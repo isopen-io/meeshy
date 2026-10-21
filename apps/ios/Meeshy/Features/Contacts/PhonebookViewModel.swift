@@ -227,8 +227,7 @@ final class PhonebookViewModel: ObservableObject {
         let debounce = searchDebounce
         let userService = self.userService
         platformSearchTask = Task { [weak self] in
-            try? await Task.sleep(for: debounce)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: debounce), !Task.isCancelled else { return }
             await self?.runPlatformSearch(query: query, using: userService)
         }
         await platformSearchTask?.value

@@ -465,8 +465,7 @@ struct MagicLinkView: View {
         countdownTask?.cancel()
         countdownTask = Task {
             while countdownRemaining > 0 {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .seconds(1)), !Task.isCancelled else { return }
                 countdownRemaining -= 1
             }
             linkExpired = true

@@ -465,8 +465,7 @@ final class CallManager: ObservableObject {
         pendingAnswerAction = action
         pendingAnswerSafetyTask?.cancel()
         pendingAnswerSafetyTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.pendingAnswerActionSafetyNetSeconds))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(QualityThresholds.pendingAnswerActionSafetyNetSeconds)), !Task.isCancelled else { return }
             self?.settlePendingAnswerAction(fulfilled: true, reason: "safety-net \(Int(QualityThresholds.pendingAnswerActionSafetyNetSeconds))s — still not connected")
         }
     }

@@ -20,7 +20,7 @@ enum NotificationContactPresenter {
 
     static func present(_ card: NotificationContactCard) {
         Task { @MainActor in
-            try? await Task.sleep(for: presentationDelay)
+            _ = await cancellableSleep(for: presentationDelay)
             guard let host = topViewController() else { return }
             let controller = CNContactViewController(forUnknownContact: contact(from: card))
             controller.contactStore = CNContactStore()

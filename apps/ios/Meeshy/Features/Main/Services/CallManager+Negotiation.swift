@@ -211,7 +211,7 @@ extension CallManager {
             }
             Logger.calls.warning("[CALL-DIAG] offer ACK timed out (attempt \(attempt)/\(maxAttempts)) call=\(callId)")
             if attempt < maxAttempts {
-                try? await Task.sleep(for: .seconds(delay))
+                _ = await cancellableSleep(for: .seconds(delay))
                 delay *= 2
             }
         }
@@ -263,7 +263,7 @@ extension CallManager {
                 Logger.calls.info("[CALL-DIAG] answer gen=\(generation) superseded/cancelled — stop retry")
                 return
             }
-            try? await Task.sleep(for: .seconds(delay))
+            _ = await cancellableSleep(for: .seconds(delay))
             delay *= 2
             guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else { return }
             let acked = await MessageSocketManager.shared.emitCallSignalWithAck(

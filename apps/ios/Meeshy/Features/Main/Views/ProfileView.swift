@@ -72,7 +72,7 @@ struct ProfileView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .task {
-                    try? await Task.sleep(for: .seconds(3))
+                    _ = await cancellableSleep(for: .seconds(3))
                     withAnimation { self.errorMessage = nil }
                 }
             }

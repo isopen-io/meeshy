@@ -215,8 +215,7 @@ struct AudioFullscreenPage: View, Equatable {
             }
             let delay = AudioFullscreenPaging.playbackDelay(turnedTo: wasNeighbour)
             if delay > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .seconds(delay)), !Task.isCancelled else { return }
             }
             startPlayback()
         }

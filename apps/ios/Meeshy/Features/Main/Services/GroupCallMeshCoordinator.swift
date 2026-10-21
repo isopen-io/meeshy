@@ -463,8 +463,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         let interval = samplingInterval
         samplingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: interval)
-                guard !Task.isCancelled, let self else { return }
+                guard await cancellableSleep(for: interval), !Task.isCancelled, let self else { return }
                 await self.sampleAudioLevels()
             }
         }

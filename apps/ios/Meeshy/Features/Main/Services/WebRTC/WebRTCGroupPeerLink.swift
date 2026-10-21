@@ -1,6 +1,7 @@
 import Foundation
 import os
 @preconcurrency import WebRTC
+import MeeshySDK
 
 /// La fabrique des connexions du maillage (#3585) : toutes naissent de la
 /// fabrique WebRTC du processus (`WebRTCSharedFactory`, la même que le pair
@@ -363,8 +364,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
     private func scheduleRestart(after grace: Duration) {
         guard restartTask == nil else { return }
         restartTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: grace)
-            guard let self, !Task.isCancelled else { return }
+            guard await cancellableSleep(for: grace), let self, !Task.isCancelled else { return }
             guard let pc = self.peerConnection,
                   pc.connectionState == .disconnected || pc.connectionState == .failed else {
                 self.restartTask = nil
@@ -376,8 +376,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
                 return
             }
             self.onEvent(.state(.reconnecting))
-            try? await Task.sleep(for: Self.restartBackoff(attempt: self.restartAttempts))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: Self.restartBackoff(attempt: self.restartAttempts)), !Task.isCancelled else { return }
             self.restartTask = nil
             await self.enqueue { [weak self] in await self?.makeOffer(iceRestart: true) }
         }

@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshyUI
+import MeeshySDK
 
 /// LA VAGUE DE FRAPPE — la barre du composeur universel ondule à chaque
 /// frappe, et le verre du téléphone de l'inscription rejoue le même effet
@@ -59,8 +60,7 @@ struct TypingWaveOnChange<Value: Equatable>: ViewModifier {
             }
             .task(id: pulse) {
                 guard pulse > 0 else { return }
-                try? await Task.sleep(for: TypingWave.holdDuration)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: TypingWave.holdDuration), !Task.isCancelled else { return }
                 waving = false
             }
     }

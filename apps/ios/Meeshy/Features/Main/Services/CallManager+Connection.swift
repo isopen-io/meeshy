@@ -52,8 +52,7 @@ extension CallManager {
             let nanos = UInt64(QualityThresholds.rtpGatePollIntervalSeconds * 1_000_000_000)
 
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: nanos)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .nanoseconds(nanos)), !Task.isCancelled else { return }
 
                 switch self.callState {
                 case .offering:
@@ -290,8 +289,7 @@ extension CallManager {
         durationTask?.cancel()
         durationTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .seconds(1)), !Task.isCancelled else { return }
                 guard let self else { return }
                 // Défense en profondeur : un callStartDate momentanément nil ne
                 // doit PAS tuer la boucle (l'ancien `return` gelait le chrono à
@@ -330,8 +328,7 @@ extension CallManager {
         heartbeatTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 let nanos = UInt64(interval * 1_000_000_000)
-                try? await Task.sleep(nanoseconds: nanos)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .nanoseconds(nanos)), !Task.isCancelled else { return }
                 guard let self, let callId = self.currentCallId else { return }
                 // Use the dedicated `call:heartbeat` event. The previous
                 // `call:signal` with a "heartbeat" type was rejected by the

@@ -117,8 +117,7 @@ final class NewConversationViewModel: ObservableObject {
         isSearching = true
         searchFailed = false
         searchTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .milliseconds(350)), !Task.isCancelled, let self else { return }
             await self.performSearch(query: trimmed)
         }
     }

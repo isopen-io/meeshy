@@ -39,8 +39,9 @@ public final class StoryBackgroundLayer: CALayer {
         case topToBottom, leftToRight, topLeftToBottomRight
     }
 
-    public private(set) nonisolated(unsafe) var kind: Kind = .solidColor(.black)
-    public private(set) nonisolated(unsafe) var transform3D: BackgroundTransform = BackgroundTransform()
+    private nonisolated let layerState = Locked(uncheckedState: StoryBackgroundLayerState())
+    public private(set) nonisolated var kind: Kind { get { layerState[unchecked: \.kind] } set { layerState[unchecked: \.kind] = newValue } }
+    public private(set) nonisolated var transform3D: BackgroundTransform { get { layerState[unchecked: \.transform3D] } set { layerState[unchecked: \.transform3D] = newValue } }
 
     /// Reflète l'état mute global du reader (bouton Mute / Son de la sidebar).
     /// Le canvas (`StoryCanvasUIView`) synchronise cette propriété à chaque
@@ -101,27 +102,27 @@ public final class StoryBackgroundLayer: CALayer {
 
     static let timelineSeekDriftThreshold: Double = 0.30
 
-    nonisolated(unsafe) var contentLayer: CALayer?
+    nonisolated var contentLayer: CALayer? { get { layerState[unchecked: \.contentLayer] } set { layerState[unchecked: \.contentLayer] = newValue } }
     /// Le flou qui habille les bandes d'un média AJUSTÉ — voir
     /// `StoryBackgroundLayer+LetterboxFill.swift`. Stocké ici parce qu'une
     /// extension ne porte pas de propriété.
-    nonisolated(unsafe) var letterboxFillLayer: CALayer?
+    nonisolated var letterboxFillLayer: CALayer? { get { layerState[unchecked: \.letterboxFillLayer] } set { layerState[unchecked: \.letterboxFillLayer] = newValue } }
     /// Les sources candidates, RETENUES pour le chemin rapide : lui ne repasse
     /// pas par la branche qui les connaît.
-    nonisolated(unsafe) var letterboxFillHashes: [String] = []
+    nonisolated var letterboxFillHashes: [String] { get { layerState[unchecked: \.letterboxFillHashes] } set { layerState[unchecked: \.letterboxFillHashes] = newValue } }
     /// Le bitmap de fond DÉJÀ posé — la source la plus fidèle de la bande, et
     /// la seule dont dispose l'atelier : `StoryThumbHashEnricher` ne calcule les
     /// hachages qu'à la PUBLICATION.
-    nonisolated(unsafe) var letterboxSourceImage: UIImage?
+    nonisolated var letterboxSourceImage: UIImage? { get { layerState[unchecked: \.letterboxSourceImage] } set { layerState[unchecked: \.letterboxSourceImage] = newValue } }
     /// Le lecteur présente l'image SEULE : la bande sort du cadre visible
     /// et ne se peint plus — voir `setLetterboxFillSuppressed(_:)`.
-    nonisolated(unsafe) var isLetterboxFillSuppressed = false
+    nonisolated var isLetterboxFillSuppressed: Bool { get { layerState[unchecked: \.isLetterboxFillSuppressed] } set { layerState[unchecked: \.isLetterboxFillSuppressed] = newValue } }
     /// Fournisseur du player du média porteur (O16), posé par `configure` depuis
     /// le contexte de LECTURE. `nil` en composition : la couche ouvre le sien.
-    nonisolated(unsafe) var playerProvider: (any StoryCarrierPlayerProviding)?
-    nonisolated(unsafe) var avPlayer: AVPlayer?
-    nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
-    nonisolated(unsafe) var avPlayerLooper: AVPlayerLooper?
+    nonisolated var playerProvider: (any StoryCarrierPlayerProviding)? { get { layerState[unchecked: \.playerProvider] } set { layerState[unchecked: \.playerProvider] = newValue } }
+    nonisolated var avPlayer: AVPlayer? { get { layerState[unchecked: \.avPlayer] } set { layerState[unchecked: \.avPlayer] = newValue } }
+    nonisolated var avPlayerLayer: AVPlayerLayer? { get { layerState[unchecked: \.avPlayerLayer] } set { layerState[unchecked: \.avPlayerLayer] = newValue } }
+    nonisolated var avPlayerLooper: AVPlayerLooper? { get { layerState[unchecked: \.avPlayerLooper] } set { layerState[unchecked: \.avPlayerLooper] = newValue } }
 
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free au démontage hors d'une tâche. Garde :
@@ -190,11 +191,11 @@ public final class StoryBackgroundLayer: CALayer {
     @MainActor var liveLookStorage: StoryLiveLook?
     /// La composition posée sur les items du player de fond : quel player, pour
     /// quels réglages — rien ne se refait tant que les deux sont les mêmes.
-    nonisolated(unsafe) var appliedBackgroundVideoLook: (player: ObjectIdentifier, signature: String)?
-    nonisolated(unsafe) var backgroundVideoLookTask: Task<Void, Never>?
+    nonisolated var appliedBackgroundVideoLook: (player: ObjectIdentifier, signature: String)? { get { layerState[unchecked: \.appliedBackgroundVideoLook] } set { layerState[unchecked: \.appliedBackgroundVideoLook] = newValue } }
+    nonisolated var backgroundVideoLookTask: Task<Void, Never>? { get { layerState[unchecked: \.backgroundVideoLookTask] } set { layerState[unchecked: \.backgroundVideoLookTask] = newValue } }
     /// L'asset que la dernière attache a ouvert — la source de la composition
     /// quand aucun item n'est encore en file.
-    nonisolated(unsafe) var attachedVideoAsset: AVAsset?
+    nonisolated var attachedVideoAsset: AVAsset? { get { layerState[unchecked: \.attachedVideoAsset] } set { layerState[unchecked: \.attachedVideoAsset] = newValue } }
     /// Monotonic token from the composer (`loadedImagesVersion`); a change forces
     /// a re-fetch + re-stamp even when the media identity is unchanged, so an
     /// in-place bitmap edit under the same id is reflected on the canvas.

@@ -191,7 +191,7 @@ public actor TusUploadManager {
     /// Les envois en cours, par `fileId` : l'annulation de l'appelant les atteint (`cancelUpload`).
     private var activeTasks: [String: Task<Void, Never>] = [:]
     private var progressMap: [String: FileUploadProgress] = [:]
-    nonisolated(unsafe) private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
+    private let progressSubject = Locked(uncheckedState: PassthroughSubject<UploadQueueProgress, Never>())
     private let urlSession: URLSession
     private let checkpointStore: TusUploadCheckpointStore
     /// Recovery from a stale bearer token mid-PATCH (single-session policy —
@@ -210,7 +210,7 @@ public actor TusUploadManager {
     private let digestMemo: FileDigestMemo
 
     public nonisolated var progressPublisher: AnyPublisher<UploadQueueProgress, Never> {
-        progressSubject.eraseToAnyPublisher()
+        progressSubject.mutateUnchecked { $0.eraseToAnyPublisher() }
     }
 
     public init(
@@ -866,11 +866,13 @@ public actor TusUploadManager {
     }
 
     private func emitProgress() {
-        progressSubject.send(Self.computeQueueProgress(
+        let progress = Self.computeQueueProgress(
             from: Array(progressMap.values),
             expectedTotalFiles: expectedTotalFiles,
             expectedTotalBytes: expectedTotalBytes
-        ))
+        )
+        let subject = progressSubject.mutateUnchecked { $0 }
+        subject.send(progress)
     }
 
     /// Pure aggregation of per-file progress into the batch-level

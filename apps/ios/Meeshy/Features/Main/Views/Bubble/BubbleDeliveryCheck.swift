@@ -169,7 +169,7 @@ struct BubbleDeliveryCheck: View, Equatable {
                 guard !isRevealed, let sendStartedAt else { return }
                 let remaining = Self.revealDelay - Date().timeIntervalSince(sendStartedAt)
                 if remaining > 0 {
-                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                    _ = await cancellableSleep(for: .seconds(remaining))
                 }
                 guard !Task.isCancelled else { return }
                 isRevealed = true
