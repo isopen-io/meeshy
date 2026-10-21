@@ -879,7 +879,17 @@ struct ConversationListView: View {
 
     // MARK: - Handle Conversation Info View
     private func handleConversationInfoView(_ conversation: Conversation) {
-        // Open conversation info sheet (works for all conversation types)
+        presentInfo(of: conversation)
+    }
+
+    /// **Les détails d'une conversation verrouillée demandent le PIN comme son
+    /// fil** : la fiche monte le hub des médias partagés (membres, médias,
+    /// liens). Verrouillée, l'entrée passe par la porte d'ouverture — la feuille
+    /// PIN —, jamais directement par `sheetTargets.info`.
+    func presentInfo(of conversation: Conversation) {
+        guard ConversationOpenRoute.mayShowInfo(conversation.id) else {
+            return openConversation(conversation)
+        }
         sheetTargets.info = conversation
     }
 

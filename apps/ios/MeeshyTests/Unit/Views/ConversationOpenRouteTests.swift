@@ -77,4 +77,9 @@ final class ConversationOpenRouteTests: XCTestCase {
             .open(searching: false)
         )
     }
+
+    func test_mayShowInfo_lockedConversation_isRefusedUntilThePinIsGiven() {
+        XCTAssertFalse(ConversationOpenRoute.mayShowInfo(isLocked: true), "la fiche monte le hub des médias : membres, médias, liens")
+        XCTAssertTrue(ConversationOpenRoute.mayShowInfo(isLocked: false))
+    }
 }

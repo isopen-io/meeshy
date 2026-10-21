@@ -39,6 +39,14 @@ enum ConversationOpenRoute: Equatable {
         mayDetach(isLocked: locks.isLocked(conversationId))
     }
 
+    /// La fiche de détails (membres, médias, liens) ne s'ouvre pas devant un PIN
+    /// que le fil exigerait : même règle que la fenêtre détachée.
+    static func mayShowInfo(isLocked: Bool) -> Bool { !isLocked }
+
+    static func mayShowInfo(_ conversationId: String, locks: ConversationLockManager = .shared) -> Bool {
+        mayShowInfo(isLocked: locks.isLocked(conversationId))
+    }
+
     /// L'aperçu d'un toast de notification (appui long) monte le fil en lecture
     /// sans passer la porte du routeur (#11386) : même règle qu'une fenêtre
     /// détachée. Refusé, l'appui long se replie sur le toucher, qui la passe.
