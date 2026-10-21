@@ -62,7 +62,7 @@ public struct FeedbackToastView: View {
                 .foregroundColor(.white)
 
             Text(toast.message)
-                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(.white)
                 .lineLimit(2)
 

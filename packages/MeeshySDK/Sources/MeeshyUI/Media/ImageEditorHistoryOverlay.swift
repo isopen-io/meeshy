@@ -26,7 +26,7 @@ struct ImageEditorHistoryOverlay: View {
             VStack(spacing: 0) {
                 HStack {
                     Text(String(localized: "media.editor.history", defaultValue: "Historique", bundle: .module))
-                        .font(.system(size: MeeshyFont.bodySize, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     Button {
@@ -78,7 +78,7 @@ struct ImageEditorHistoryOverlay: View {
                         .foregroundColor(isCurrent ? .white : theme.textSecondary)
                 }
                 Text(step.label)
-                    .font(.system(size: MeeshyFont.subheadSize, weight: isCurrent ? .semibold : .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isCurrent ? .semibold : .regular))
                     .foregroundColor(isCurrent ? theme.textPrimary : theme.textSecondary)
                 Spacer()
                 if isCurrent {

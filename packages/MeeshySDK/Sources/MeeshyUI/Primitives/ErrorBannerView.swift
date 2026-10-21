@@ -38,7 +38,7 @@ public struct ErrorBannerView: View {
                 .foregroundColor(.white)
 
             Text(currentError.errorDescription ?? "")
-                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(.white)
                 .lineLimit(2)
 
