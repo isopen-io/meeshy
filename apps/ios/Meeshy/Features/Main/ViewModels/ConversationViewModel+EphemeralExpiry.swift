@@ -79,59 +79,16 @@ final class EphemeralExpiryCoordinator {
 
 extension ConversationViewModel {
 
-    /// L'échéance de chaque éphémère encore affiché, par identifiant.
-    ///
-    /// La résolution passe par `MeeshyMessage.protection`, le site UNIQUE de la
-    /// règle : l'ordonnanceur ne réécrit pas sa propre arithmétique d'échéance,
-    /// sans quoi il pourrait retirer un message que le chrome montre encore
-    /// vivant — deux horloges pour un même message, le défaut que ce lot ferme.
-    ///
-    /// #10433 — une RÉPONSE meurt au même instant que ce qu'elle cite
-    /// (`QuoteCascade`, miroir de la loi TS) : son échéance est la sienne
-    /// rapprochée de celle de sa chaîne citée, lue dans ce fil et dans la
-    /// citation embarquée — un éphémère sorti de la fenêtre emporte encore ses
-    /// réponses.
     var ephemeralDeadlines: [String: Date] {
-        var table: [String: Date] = [:]
-        let quotes = QuoteCascade.MessageThread(messages, ledger: EphemeralReceiptLedger.shared, now: Date())
-        for message in messages {
-            // Filtre bon marché d'abord : cette propriété est relue à CHAQUE
-            // changement de `messages`, et l'écrasante majorité des messages
-            // d'un fil n'est ni éphémère ni une réponse. Sans lui, chaque passe
-            // construirait un descripteur par message.
-            let declaresEphemeral = message.effects.flags.contains(.ephemeral) || message.expiresAt != nil
-            let own = declaresEphemeral ? message.protection().ephemeralState.deadline : nil
-            guard let deadline = QuoteCascade.inheritedExpiresAt([own, quotes.inheritedDeath(of: message)]) else { continue }
-            table[message.id] = deadline
-        }
-        return table
+        EphemeralExpiryLaw.deadlines(of: messages, now: Date())
     }
 
-    /// **Les éphémères DÉJÀ échus** (#7552).
-    ///
-    /// `ephemeralDeadlines` répond à « quand me réveiller ? » ; cette table-ci
-    /// répond à « qu'est-ce qui doit partir MAINTENANT ? ». Les deux vivaient
-    /// dans une seule table, et `.expired` est le cas où elles divergent : son
-    /// échéance vaut `nil` — il n'y a plus rien à attendre —, si bien qu'un
-    /// message échu pendant que l'app était fermée n'était jamais dû, donc
-    /// jamais retiré. Le serveur le servant encore une heure après l'échéance
-    /// (contrat : indisponible à `D(u) + 1 h`), chaque démarrage à froid de
-    /// cette heure-là le réaffichait intact.
     var elapsedEphemeralIds: Set<String> {
-        var ids: Set<String> = []
-        let now = Date()
-        let quotes = QuoteCascade.MessageThread(messages, ledger: EphemeralReceiptLedger.shared, now: now)
-        for message in messages {
-            // #10433 — ce que la réponse cite est déjà mort : elle l'est aussi.
-            if let inherited = quotes.inheritedDeath(of: message), inherited <= now {
-                ids.insert(message.id)
-                continue
-            }
-            guard message.effects.flags.contains(.ephemeral) || message.expiresAt != nil else { continue }
-            guard message.protection().ephemeralState.hasElapsed else { continue }
-            ids.insert(message.id)
-        }
-        return ids
+        EphemeralExpiryLaw.elapsedIds(in: messages, now: Date())
+    }
+
+    var scheduledEphemeralDeadlines: [String: Date] {
+        EphemeralExpiryLaw.scheduled(for: messages, now: Date())
     }
 
     /// Retire de l'écran les éphémères échus, et purge ce qu'un texte DÉRIVÉ
@@ -262,22 +219,5 @@ extension ConversationViewModel {
     /// Réarme l'unique réveil du fil. Appelé à chaque changement de `messages`.
     func refreshEphemeralExpirySchedule() {
         ephemeralExpiry.refresh(deadlines: scheduledEphemeralDeadlines)
-    }
-
-    /// **Ce que l'ordonnanceur voit : les échéances ET les échus** (#8352).
-    ///
-    /// Un éphémère DÉJÀ échu — mort gravée au registre, ou échéance passée
-    /// pendant que l'app dormait — n'a plus d'échéance future : rechargé au
-    /// fil (base, réseau), il n'était dû pour personne, et seules les Bulles
-    /// le masquaient. Il entre au plan comme dû (`.distantPast`), donc retiré
-    /// de la liste que les quatre modes lisent — sauf s'il brûle déjà, pour ne
-    /// jamais rallumer une combustion en cours.
-    var scheduledEphemeralDeadlines: [String: Date] {
-        var table = ephemeralDeadlines
-        for id in elapsedEphemeralIds {
-            guard let index = messageIndex(for: id), !messages[index].isBurning else { continue }
-            table[id] = .distantPast
-        }
-        return table
     }
 }

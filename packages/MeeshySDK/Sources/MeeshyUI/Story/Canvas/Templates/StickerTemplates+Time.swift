@@ -9,7 +9,10 @@ import MeeshySDK
 /// dans les emplacements au moment où l'auteur a posé la décoration — c'est ce
 /// qui fait que tout lecteur voit la même heure que lui, et qu'une story
 /// archivée garde son sens.
-extension StickerTemplateRenderer {
+enum TimeStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .time
+    static let drawers: [StickerTemplateDrawer] = timeDrawers + timeExtraDrawers
+
 
     static func timeText(_ slots: [String: String]) -> String {
         slots[StickerSlotFiller.timeSlot] ?? ""

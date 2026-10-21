@@ -8,7 +8,9 @@ import MeeshySDK
 /// légende à droite — sur un fond qui dit le temps : ciel pour le soleil, encre
 /// pour la nuit. La légende vient de `String(localized:)`, donc de la langue du
 /// LECTEUR : l'id porte le sens, le dessin le dit dans chaque langue.
-extension StickerTemplateRenderer {
+enum WeatherStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .weather
+
 
     // MARK: Le patron d'un cartouche météo
 
@@ -134,7 +136,7 @@ extension StickerTemplateRenderer {
 
     // MARK: Les dix cartes
 
-    static let weatherDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         WeatherCard(id: StickerTemplateCatalog.ID.weatherSunny,
                     name: { String(localized: "sticker.template.weather.sunny", defaultValue: "Grand soleil", bundle: .module) },
                     haut: StickerTemplatePalette.sky, bas: StickerTemplatePalette.accent,

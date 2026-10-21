@@ -11,7 +11,9 @@ import MeeshySDK
 /// disque pour un verdict, hexagone pour un badge, éclat pour un bravo, bulle
 /// de pensée pour un « Oups ». La légende vient de `String(localized:)`, donc
 /// de la langue du LECTEUR.
-extension StickerTemplateRenderer {
+enum ReactionStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .reaction
+
 
     // MARK: Le mot nu — halo, dégradé, inclinaison
 
@@ -542,6 +544,6 @@ extension StickerTemplateRenderer {
             draw: { _, m, échelle in Self.oopsImage(metrics: m, screenScale: échelle) }),
     ]
 
-    static let reactionDrawers: [StickerTemplateDrawer] =
+    static let drawers: [StickerTemplateDrawer] =
         wordDrawers + discs.map { discDrawer($0) } + shapeDrawers
 }
