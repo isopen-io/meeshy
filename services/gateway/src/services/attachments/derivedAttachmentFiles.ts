@@ -35,6 +35,16 @@ export function resolveInsideUploadRoot(uploadRoot: string, candidate: string): 
   return resolved.startsWith(root + path.sep) ? resolved : null;
 }
 
+/**
+ * Les clés de stockage des variantes WebP d'une ligne (`PostMedia` comme
+ * `MessageAttachment`, #11260). Même lecture défensive que ci-dessus, et une
+ * garde de plus : une clé qui remonte (`..`) n'est jamais rendue, parce que
+ * l'appelant la passe à un stockage qui efface.
+ */
+export function imageVariantKeys(imageVariants: unknown): readonly string[] {
+  return variantCandidates(imageVariants).filter((key) => !key.split('/').includes('..'));
+}
+
 function translationTrackCandidates(translations: unknown): readonly string[] {
   if (!isRecord(translations)) return [];
   return Object.values(translations).flatMap((track) => {
