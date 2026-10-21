@@ -369,6 +369,13 @@ export class MeeshySocketIOManager {
         this._broadcastUserStatus(userId, isOnline, isAnonymous);
       }
     );
+    // #10575 — le battement d'un connecté passif rediffuse sa présence : sans ce
+    // câblage, il s'éteignait chez ses amis au bout de la garde anti-stale de 5 min.
+    // Un battement fini APRÈS le départ en arrière-plan ne rallume rien.
+    this.statusService.setPresenceCallback((userId, isOnline, isAnonymous) => {
+      if (isOnline && !this.authHandler.isPresent(userId)) return;
+      this._broadcastUserStatus(userId, isOnline, isAnonymous);
+    });
 
     // PRÉSENCE FIX: protéger les sockets vivants du cleanup périodique.
     // Sans ça, un client passif (pas de heartbeat depuis 30min) se voit marqué
@@ -1334,11 +1341,12 @@ export class MeeshySocketIOManager {
 
   /**
    * Source de vérité runtime pour la présence : true si l'id (userId pour registered,
-   * participantId pour anonyme) est actuellement dans `connectedUsers` Map. Utilisé par
-   * les routes REST pour overrider le `isOnline` de la DB (potentiellement obsolète).
+   * participantId pour anonyme) a une socket AU PREMIER PLAN (#10575 — un onglet caché
+   * n'est pas « en ligne »). Utilisé par les routes REST pour overrider le `isOnline`
+   * de la DB (potentiellement obsolète).
    */
   public isPresenceOnline(idOrUserId: string): boolean {
-    return this.connectedUsers.has(idOrUserId);
+    return this.authHandler.isPresent(idOrUserId);
   }
 
   /**
@@ -1429,7 +1437,7 @@ export class MeeshySocketIOManager {
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
         const users = await this._applyPresenceVisibility(
           viewer,
-          cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) })),
+          cached.users.map(u => ({ ...u, isOnline: this.authHandler.isPresent(u.userId) })),
         );
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
         logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts (cache) sent to ${userId}`);
@@ -1470,7 +1478,7 @@ export class MeeshySocketIOManager {
             if (seen.has(presenceKey)) continue;
             seen.add(presenceKey);
 
-            const isOnline = this.connectedUsers.has(presenceKey);
+            const isOnline = this.authHandler.isPresent(presenceKey);
             const username = c.user?.username ?? c.user?.displayName ?? c.displayName ?? presenceKey;
             const lastActiveAt = c.user?.lastActiveAt ?? c.lastActiveAt ?? null;
 
@@ -1685,7 +1693,7 @@ export class MeeshySocketIOManager {
   public getPresenceForIds(ids: readonly string[]): Map<string, boolean> {
     const out = new Map<string, boolean>();
     for (const id of ids) {
-      out.set(id, this.connectedUsers.has(id));
+      out.set(id, this.authHandler.isPresent(id));
     }
     return out;
   }
@@ -1696,7 +1704,7 @@ export class MeeshySocketIOManager {
    * construire le snapshot `presence:snapshot` émis à l'auth.
    */
   public listOnlineAmong(candidateIds: readonly string[]): string[] {
-    return candidateIds.filter(id => this.connectedUsers.has(id));
+    return candidateIds.filter(id => this.authHandler.isPresent(id));
   }
 
   async initialize(): Promise<void> {
@@ -1896,6 +1904,11 @@ export class MeeshySocketIOManager {
 
       socket.on(CLIENT_EVENTS.TYPING_STOP, (data) => {
         this.statusHandler.handleTypingStop(socket, data).catch((error) => logger.error('[TYPING_STOP] Error:', error));
+      });
+
+      // #10575 — un onglet caché ou une app en arrière-plan n'est plus « en ligne ».
+      socket.on(CLIENT_EVENTS.PRESENCE_APP_STATE, (data?: { foreground?: unknown }) => {
+        this.authHandler.handleAppState(socket, data).catch((error) => logger.error('[PRESENCE_APP_STATE] Error:', error));
       });
 
       socket.on(CLIENT_EVENTS.HEARTBEAT, (data?: { clientTime?: number }) => {

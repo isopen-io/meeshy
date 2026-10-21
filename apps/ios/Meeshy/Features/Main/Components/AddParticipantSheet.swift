@@ -188,14 +188,14 @@ struct AddParticipantSheet: View {
         let color = DynamicColorGenerator.colorForName(user.name)
 
         return HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: user.name,
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: user.avatar,
                 presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
                 ring: user.avatarRing
-            )
+            ) }
             // Presentational avatar — MeeshyAvatar carries its own .accessibilityLabel(name),
             // which the adjacent name/username block already reads. Hide it so VoiceOver
             // announces the name once, not twice (doctrine 143i). Safe: this avatar has no

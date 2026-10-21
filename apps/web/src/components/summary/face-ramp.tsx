@@ -4,6 +4,7 @@ import { RingedAvatar } from '@/components/peer-avatar';
 import { AuthorRingsContext } from '@/lib/profile-decor/author-ring';
 import type { FaceRampEntry } from '@/lib/summary/types';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { usePresenceOf } from '@/lib/view/use-presence';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { faceTargetOf } from '@/lib/view/summary-exits';
@@ -97,10 +98,13 @@ export default FaceRamp;
 /**
  * LE VISAGE ET SON CONTOUR ÉQUIPÉ (#10946) — celui que la conversation sert avec
  * ses participants (`AuthorRingsContext`). Un composant à part : la rampe reste
- * sans hook, donc dépliable par ses témoins.
+ * sans hook, donc dépliable par ses témoins. Sa pastille est VIVANTE (#11412) :
+ * la carte vivante par son identifiant, la charge REST sinon, à l'horloge de
+ * toutes les pastilles — jamais le statut figé au montage du résumé.
  */
 function FaceAvatar({ entry, photo }: { readonly entry: FaceRampEntry; readonly photo: string | undefined }) {
   const rings = useContext(AuthorRingsContext);
+  const presence = usePresenceOf({ userId: entry.id, participant: entry.participant });
   return (
     <RingedAvatar
       ringRef={rings.get(entry.id)}
@@ -108,7 +112,7 @@ function FaceAvatar({ entry, photo }: { readonly entry: FaceRampEntry; readonly 
       color={entry.colorHex}
       size={44}
       {...(photo === undefined ? {} : { src: photo })}
-      presence={entry.presence}
+      presence={presence}
     />
   );
 }

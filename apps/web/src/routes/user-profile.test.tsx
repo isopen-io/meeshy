@@ -10,6 +10,7 @@ import { friendRequestsQueryKey } from '@/lib/api/friend-requests';
 import { fixtureAuthorPosts } from '@/lib/api/fixtures-rich-text';
 import { sharedConversationsQueryKey } from '@/lib/api/shared-conversations';
 import { presenceStore } from '@/lib/api/presence-store';
+import { sessionStore } from '@/lib/api/session';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -176,6 +177,17 @@ describe('la présence sur la fiche', () => {
     const el = await mount('bruno.laurent');
     expect(el.querySelector('[data-user-hero] [data-presence="online"]')).not.toBeNull();
     expect(text(el.querySelector('[data-user-presence]'))).toBe('En ligne');
+  });
+
+  test('SA PROPRE fiche : ni pastille ni « En ligne », même servis (décision porteur 2026-10-21, #11412)', async () => {
+    sessionStore.getState().establish({ user: { id: 'u-bruno', username: 'bruno.laurent', displayName: 'Bruno Laurent' }, token: 't', sessionToken: 's', expiresIn: 3600 });
+    try {
+      const el = await mount('bruno.laurent');
+      expect(el.querySelector('[data-user-presence]')).toBeNull();
+      expect(el.querySelector('[data-user-hero] [data-presence="online"]')).toBeNull();
+    } finally {
+      sessionStore.getState().clearSession();
+    }
   });
 
   test('un TIERS : ni pastille ni ligne — rien de servi, rien de peint', async () => {

@@ -153,13 +153,13 @@ struct MessageReactionsDetailView: View {
 
     private func reactionUserRow(_ item: ReactionUserItem) -> some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: item.username,
                 context: .userListItem,
                 accentColor: contactColor,
                 avatarURL: item.avatar,
                 presenceState: PresenceManager.shared.presenceState(for: item.userId)
-            )
+            ) }
             // Avatar duplicates the username text below — hide it so the
             // combined row reads once (name, emoji, when) instead of twice.
             .accessibilityHidden(true)

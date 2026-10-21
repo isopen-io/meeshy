@@ -204,7 +204,7 @@ extension GameText {
 
     /// Ce que le Prestige NE retire PAS : le consentement à la ligue publique reste enregistré — le niveau record repart à 1, la
     /// ligue (10) et le duo (20) se referment, mais le joueur retrouve sa ligue sans rien reconsentir (décision porteur).
-    static var prestigeConfirmConsent: String { String(localized: "game2.prestige.confirm.consent", defaultValue: "Ton accord pour la joute publique reste enregistré : tu retrouves ta joute au niveau 10.", bundle: .main) }
+    static var prestigeConfirmConsent: String { String(localized: "game2.prestige.confirm.consent", defaultValue: "Ton accord pour la joute publique reste enregistré.", bundle: .main) }
 
     /// Les lignes de la confirmation, dans l'ordre où elles se lisent : ce qui repart, ce qui reste, la porte qui se referme, et ce
     /// qui survit à cette porte.

@@ -118,6 +118,34 @@ describe('le lexique partagé de l’épopée', () => {
   });
 });
 
+/**
+ * L'angle mort de `game.fact.stars` (#11173) : le libellé d'un fait du Voyage ou de la Renaissance vit sous
+ * `game.fact.*`, hors des familles `game.season.*` et `game.prestige.*` que le motif de l'étoile gardait — « Étoiles »
+ * y a survécu à toute la vague. Les deux faits sont désormais sous ce motif, dans chaque langue.
+ */
+const STAR_OF: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'Étoiles',
+  en: 'Stars',
+  es: 'Estrellas',
+  de: 'Sterne',
+  it: 'Stelle',
+  pt: 'Estrelas',
+  ar: 'النجوم',
+};
+
+describe('les faits du Voyage et de la Renaissance ne disent jamais « étoile »', () => {
+  for (const vocabulary of vocabularies) {
+    test(`${vocabulary.language} : la garde voit une étoile sur le fait des pas comme sur celui des renaissances`, () => {
+      const star = STAR_OF[vocabulary.language];
+      const caught = bannedWordsIn(vocabulary, { 'game.fact.strides': star, 'game.fact.rebirths': star }).map((violation) => violation.key);
+      expect({ language: vocabulary.language, caught: [...new Set(caught)].sort() }).toEqual({
+        language: vocabulary.language,
+        caught: ['game.fact.rebirths', 'game.fact.strides'],
+      });
+    });
+  }
+});
+
 describe('aucune valeur du jeu ne porte un mot banni, dans aucune langue posée', () => {
   for (const vocabulary of vocabularies) {
     test(`${vocabulary.language} : aucun mot banni`, async () => {

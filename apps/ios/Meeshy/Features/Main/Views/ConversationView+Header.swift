@@ -373,6 +373,14 @@ struct ConversationHeaderAvatarView: View {
 
     private var isDirect: Bool { conversation?.type == .direct }
 
+    /// La pastille de l'interlocuteur, RELUE à chaque battement de `presencePulse`
+    /// (#11412) : `headerPresenceState` est résolu par `ConversationView`, qui
+    /// n'observe pas la présence — passé tel quel, il figeait le point replié.
+    private var livePresenceState: PresenceState {
+        guard isDirect, let userId = conversation?.participantUserId else { return headerPresenceState }
+        return PresenceManager.shared.presenceState(for: userId)
+    }
+
     /// Le pair a l'écran de CETTE conversation ouvert (#8892), et y est
     /// peut-être actif (#9061).
     private func isHere(_ userId: String?) -> ConversationHere {
@@ -589,7 +597,7 @@ struct ConversationHeaderAvatarView: View {
                 avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
                 storyState: collapsedStoryState,
                 moodEmoji: headerMoodEmoji,
-                presenceState: headerPresenceState,
+                presenceState: livePresenceState,
                 isHere: isDirect ? isHere(conversation?.participantUserId) : .absent,
                 ring: isDirect ? conversation?.participantRing : nil,
                 onTap: openDoor,
