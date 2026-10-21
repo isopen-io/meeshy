@@ -37,11 +37,10 @@ extension StoryComposerView {
 
     var mainContent: some View {
         ZStack {
-            // BUG-2 (C-DIR4, user 2026-07-04) : en présentation LIBRE (chrome
-            // plein), le canvas 9:16 aspect-fit laisse des bandes letterbox
-            // haut/bas sur les écrans 19.5:9 — celle du haut se cache sous le
-            // header, celle du bas restait NOIRE et nue (« zone noire en
-            // bas »). Un 9:16 ne peut pas remplir l'écran ; le letterbox prend
+            // En présentation LIBRE (chrome plein), le canvas 9:16 aspect-fit laisse
+            // des bandes letterbox haut/bas sur les écrans 19.5:9 — celle du haut se
+            // cache sous le header, celle du bas resterait NOIRE et nue (« zone noire
+            // en bas »). Un 9:16 ne peut pas remplir l'écran ; le letterbox prend
             // donc la COULEUR DU FOND du slide : le canvas paraît occuper tout
             // l'écran. Noir conservé en carded (contraste voulu de la carte)
             // et sur fond MÉDIA (letterbox cinéma).
@@ -98,7 +97,7 @@ extension StoryComposerView {
                 .allowsHitTesting(!isFloatingEditorActive)
 
             // Annuler/rétablir — colonne verticale flottante en bas à droite
-            // sur le flanc droit (directive user 2026-07-10), levée au-dessus
+            // sur le flanc droit, levée au-dessus
             // de la barre horizontale de FABs. Suit la même règle de chrome
             // que le header (`showTopBar`) : visible uniquement canvas plein
             // écran au repos.
@@ -129,7 +128,7 @@ extension StoryComposerView {
                 .padding(.bottom, keyboardHeight)
                 .environment(\.colorScheme, canvasChromeScheme)
 
-            // E3 (#3888) — la langue par élément pour les objets NON-TEXTE.
+            // La langue par élément pour les objets NON-TEXTE.
             // Apparaît quand un média/audio/sticker/lieu est sélectionné ; le
             // texte garde sa pastille dans son éditeur inline.
             StoryElementLanguageBar(viewModel: viewModel)
@@ -137,8 +136,8 @@ extension StoryComposerView {
 
             // Le dessin utilise le band PARTAGÉ (`ComposerBottomBand` →
             // `drawingPanel` = liste éditable des traits), comme tous les autres
-            // outils — plus de bande dédiée `DrawingBand` qui doublonnait
-            // (2 sheets, l'une au grabber occulté/inactif — bug user 2026-06-01).
+            // outils — pas de bande dédiée `DrawingBand` qui doublonnerait
+            // (2 sheets, l'une au grabber occulté/inactif).
 
             // Floating drawing controls — mirror du toolbar texte. Vide quand
             // `drawingEditingMode == .inactive`. Les bulles (pinceau/couleur/
@@ -152,7 +151,7 @@ extension StoryComposerView {
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.drawingEditingMode)
         .adaptiveOnChange(of: viewModel.activeTool) { oldTool, newTool in
-            // Dessin en DEUX temps (user 2026-07-11 v2) : entrer = mode
+            // Dessin en DEUX temps : entrer = mode
             // LISTE (band ouvert sur la liste des traits, rien d'activé) ;
             // le plein écran de tracé ne s'active qu'à la sélection d'un
             // pinceau (cf. onChange de `isDrawingImmersive` ci-dessous).
@@ -185,11 +184,11 @@ extension StoryComposerView {
             }
         }
         // Le band s'ouvre à la hauteur de l'outil, pas à celle du précédent.
-        // `composerBandHeight` (état du grabber, semé à 280) était appliqué tel
-        // quel à TOUS les panneaux via `panelHeightOverride` : la timeline, qui
-        // demande 392 pt pour ses opérations + transport + scrubber + 3 pistes
-        // + footer, se retrouvait dans une fenêtre de 230 pt et son bas partait
-        // hors de l'écran (constat user 2026-07-30 « des contrôleurs coupés »).
+        // `composerBandHeight` (état du grabber, semé à 280) appliqué tel
+        // quel à TOUS les panneaux via `panelHeightOverride` mettrait la timeline,
+        // qui demande 392 pt pour ses opérations + transport + scrubber + 3 pistes
+        // + footer, dans une fenêtre de 230 pt dont le bas partirait
+        // hors de l'écran.
         .adaptiveOnChange(of: activeBandTool) { _, tool in
             guard let tool else { return }
             composerBandHeight = Self.bandHeight(for: tool)
@@ -344,8 +343,8 @@ extension StoryComposerView {
     }
 
     /// Un éditeur flottant plein-canvas est ouvert → le band compact standard
-    /// est masqué et non-interactif. TEXTE : depuis toujours. DESSIN : en
-    /// PLEIN ÉCRAN de tracé uniquement (user 2026-07-11 v2) — le mode liste
+    /// est masqué et non-interactif. TEXTE : toujours. DESSIN : en
+    /// PLEIN ÉCRAN de tracé uniquement — le mode liste
     /// garde le band visible (liste des traits).
     var isFloatingEditorActive: Bool {
         viewModel.textEditingMode != .inactive
@@ -372,8 +371,8 @@ extension StoryComposerView {
 
     /// Scheme épinglé sur le chrome posé sur le canvas (header, bulles,
     /// FABs) : suit la luminance du FOND de la slide, pas le thème de l'app
-    /// — icônes claires sur fond sombre, sombres sur fond clair (capture
-    /// user 2026-07-11 : indigo950 illisible sur bleu nuit). Délègue au VM,
+    /// — icônes claires sur fond sombre, sombres sur fond clair (indigo950
+    /// illisible sur bleu nuit). Délègue au VM,
     /// source unique partagée avec `ComposerControlsLayer`.
     var canvasChromeScheme: ColorScheme {
         viewModel.canvasChromeScheme
@@ -398,8 +397,8 @@ extension StoryComposerView {
             case .audio(let url):
                 addRecordingToBackground(url: url)
             case .text(let contenu):
-                // **La destination du texte est une RÈGLE, pas un `if` ici**
-                // (#4378) : « pourquoi mon texte est-il parti en description ? »
+                // **La destination du texte est une RÈGLE, pas un `if` ici** :
+                // « pourquoi mon texte est-il parti en description ? »
                 // se répond en lisant `StoryPastePolicy`, pas en instrumentant
                 // un écran.
                 //
@@ -440,16 +439,16 @@ extension StoryComposerView {
     /// doesn't time out on the parent body.
     @ViewBuilder
     var canvasComposerLayer: some View {
-        // **Parité 9:16 composer ↔ reader / preview / export (2026-06-01).**
-        // Le canvas d'édition était auparavant plein écran (`.ignoresSafeArea()`
-        // sans contrainte de ratio), donc plus haut que 9:16 sur la plupart des
+        // **Parité 9:16 composer ↔ reader / preview / export.**
+        // Un canvas d'édition plein écran (`.ignoresSafeArea()` sans contrainte de
+        // ratio) serait plus haut que 9:16 sur la plupart des
         // iPhone (ex. 402×874 sur iPhone 16 Pro). Le reader, lui, contraint le
         // canvas à 9:16 (402×714). Comme `StoryRenderer` projette en design→écran
-        // sur la largeur (`scaleFactor = width/1080`), texte/média round-trippaient
+        // sur la largeur (`scaleFactor = width/1080`), texte/média round-trippent
         // (même largeur) mais : (1) le **dessin** (projection bounds non-uniforme
-        // `1920/bounds.height`, cf. `StrokeCaptureLayer`) se compressait du ratio
-        // `714/874` au reader et se détachait du texte qu'il entourait ; (2) le
-        // contenu placé dans la hauteur excédentaire du composer était rogné par
+        // `1920/bounds.height`, cf. `StrokeCaptureLayer`) se compresserait du ratio
+        // `714/874` au reader et se détacherait du texte qu'il entourait ; (2) le
+        // contenu placé dans la hauteur excédentaire du composer serait rogné par
         // le reader 9:16. On contraint donc le canvas à `aspectFitSize` (source de
         // vérité partagée avec le reader), centré dans la zone disponible — les
         // bandes letterbox haut/bas accueillent la top bar et le toolbar flottant.
@@ -502,19 +501,17 @@ extension StoryComposerView {
                 .overlay(alignment: .topTrailing) { canvasZoomResetButton }
                 .overlay(alignment: .leading) {
                     // Sélecteur de couche manipulable (« Arrière-plan » /
-                    // « Premier plan ») — flanc GAUCHE, textes verticaux
-                    // (directive user 2026-07-11), miroir de la colonne
+                    // « Premier plan ») — flanc GAUCHE, textes verticaux, miroir de la colonne
                     // annuler/rétablir du flanc droit. Rotation -90° du rail :
                     // lecture de bas en haut, convention « dos de livre ».
                     // `fixedSize` fige la mesure horizontale naturelle avant
                     // rotation ; le frame carré sert d'ancre de centrage — le
                     // contenu tourné déborde symétriquement et reste TAPPABLE
-                    // (directive user 2026-07-14 : les chips pilotent la
-                    // manipulation).
+                    // (les chips pilotent la manipulation).
                     // Montés SEULEMENT là où leur override change réellement la
                     // couche manipulée (fond ET premier plan peuplés) : sur une
                     // slide à une seule couche, `resolveManipulationLayer` ignore
-                    // l'override et les chips n'étaient que décoratifs.
+                    // l'override et les chips ne seraient que décoratifs.
                     if showsCanvasLayerIndicator {
                         CanvasLayerIndicator(layer: manipulationLayer)
                             .fixedSize()
@@ -528,7 +525,7 @@ extension StoryComposerView {
                            value: showsCanvasLayerIndicator)
                 // Contours du canvas : matérialisés en pointillé dès que le
                 // fond ne remplit PAS tout le canvas (mode « fit », ou aucun
-                // média de fond) — directive user 2026-07-14. Le rayon épouse
+                // média de fond). Le rayon épouse
                 // celui de `canvasCore` (compensé par `framing.scale`) pour
                 // coller exactement au bord de la carte.
                 .overlay {
@@ -557,9 +554,9 @@ extension StoryComposerView {
                 .clipShape(RoundedRectangle(cornerRadius: framing.cornerRadius, style: .continuous))
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
                 // `.offset` APRÈS le `.frame(.center)` : sinon le recentrage du
-                // frame absorbait le décalage vertical du framing et la carte
-                // restait CENTRÉE — quand le sheet montait, sa moitié basse
-                // passait sous le sheet (troncature dynamique, user 2026-07-20).
+                // frame absorberait le décalage vertical du framing et la carte
+                // resterait CENTRÉE — quand le sheet monterait, sa moitié basse
+                // passerait sous le sheet (troncature dynamique).
                 // Appliqué après, l'offset déplace réellement la carte centrée.
                 .offset(x: framing.offset.width, y: framing.offset.height - canvasEditShift)
                 // Le suivi du framing est INSTANTANÉ (pas de spring) : pendant un
@@ -574,7 +571,7 @@ extension StoryComposerView {
 
     /// Fraction d'écran occupée par une sheet SYSTÈME partielle présentée
     /// au-dessus du canvas — sticker / vocal / transitions (`.medium` ≈ 0.5).
-    /// La timeline n'est plus une sheet système (2026-07-14, présentée inline
+    /// La timeline n'est pas une sheet système (présentée inline
     /// dans le band comme les autres outils — cf. `canvasIsCarded`'s
     /// `timelineActive`). Exclut l'audience picker (`.large` par défaut) et
     /// les `.fullScreenCover` (éditeurs) : ils couvrent l'écran, le canvas
@@ -627,8 +624,8 @@ extension StoryComposerView {
     }
 
     /// Petit espace (pt) laissé entre le BAS de la carte canvas et le haut du
-    /// sheet d'édition — la carte ne doit pas être collée au sheet (user
-    /// 2026-07-20). Ajouté au `bottomInset` du solveur de framing.
+    /// sheet d'édition — la carte ne doit pas être collée au sheet.
+    /// Ajouté au `bottomInset` du solveur de framing.
     static let canvasSheetGap: CGFloat = 14
 
     /// Bitmap du média de fond courant, source du flou de `StoryCanvasLetterbox`.
@@ -648,14 +645,12 @@ extension StoryComposerView {
 
     /// Ce qui DÉTACHE le canvas de son plateau, hors mode dessin plein écran.
     ///
-    /// **Une OMBRE portée, plus un liseré (directive porteur 2026-08-28,
-    /// #4124 : « le canvas sans bordure, juste un effet d'ombrage pour
-    /// remarquer ses arrondis »).** Trois formes se sont succédé ici — trait
-    /// pointillé, puis contour blanc solide (2026-08-27), puis ceci — et
-    /// l'ombre est celle qui tient la promesse des deux autres sans en payer le
-    /// prix : un liseré blanc à 55 % DESSINE une ligne qui n'appartient pas à la
-    /// composition, et l'auteur la voit sur son aperçu alors que le lecteur ne
-    /// la verra jamais. C'est la loi 6 prise au mot.
+    /// **Une OMBRE portée, pas un liseré** : le canvas est sans bordure, juste un
+    /// effet d'ombrage pour remarquer ses arrondis. Un trait pointillé ou un
+    /// contour blanc solide DESSINERAIT une ligne qui n'appartient pas à la
+    /// composition — l'auteur la verrait sur son aperçu alors que le lecteur ne
+    /// la verra jamais (un liseré blanc à 55 % en est le cas). L'ombre tient la
+    /// promesse sans en payer le prix. C'est la loi 6 prise au mot.
     ///
     /// L'ombre, elle, ne dessine rien SUR la carte : elle la décolle du fond, et
     /// les arrondis se lisent par le décrochage. Deux passes — une large et
@@ -719,7 +714,7 @@ extension StoryComposerView {
                 case .sticker, .place, .audio:
                     // L'atelier n'ouvre pas d'éditeur audio : sa timeline porte
                     // déjà le rognage et le volume d'une piste. Le composer
-                    // unifié, lui, le câble (#4671) — `editableKinds` est ce qui
+                    // unifié, lui, le câble — `editableKinds` est ce qui
                     // les distingue, pas ce `switch`.
                     break
                 }
@@ -734,8 +729,8 @@ extension StoryComposerView {
                     if let img = viewModel.loadedImages[oldId] {
                         // `registerLoadedImage` bump la version → le canvas reader se
                         // rafraîchit et stampe la vignette du clone tout de suite. Un
-                        // simple `loadedImages[newId] = img` laissait le duplicata noir
-                        // (reader périmé, même cause 2026-07-20).
+                        // simple `loadedImages[newId] = img` laisserait le duplicata noir
+                        // (reader périmé).
                         viewModel.registerLoadedImage(img, for: newId)
                     }
                     if let url = viewModel.loadedVideoURLs[oldId] {
@@ -762,7 +757,7 @@ extension StoryComposerView {
             },
             // Bornes de la ZONE d'édition texte : le canvas y centre le bloc
             // édité et l'y borne en hauteur, un texte plus long défilant à
-            // l'intérieur (spec 2026-08-01).
+            // l'intérieur.
             inlineEditFloorGlobalY: measuredTextToolbarTopY,
             inlineEditCeilingGlobalY: measuredTextTopBarBottomY,
             onManipulationLayerChanged: { layer in
@@ -800,9 +795,9 @@ extension StoryComposerView {
                 }
             },
             // Routé par `ComposerChromePolicy.backgroundTapAction` : le toggle
-            // inconditionnel d'avant n'avait aucun effet visible panneau ouvert
-            // (la politique masquait déjà le chrome), puis « Retour » découvrait
-            // un écran sans « Fermer » ni « Publier » (bug terrain 2026-07-31).
+            // inconditionnel n'aurait aucun effet visible panneau ouvert
+            // (la politique masque déjà le chrome), puis « Retour » découvrirait
+            // un écran sans « Fermer » ni « Publier ».
             onBackgroundTapped: { handleCanvasBackgroundTap() },
             onBackgroundTransformChanged: { transform in
                 viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
@@ -814,7 +809,7 @@ extension StoryComposerView {
                 )
                 viewModel.saveBackgroundTransform()
             },
-            // C4 — sortie gestuelle du zoom : double-tap fond en état zoomé
+            // Sortie gestuelle du zoom : double-tap fond en état zoomé
             // = reset viewport (même action que canvasZoomResetButton, qui
             // reste visible — invariant « ne jamais retirer d'affordance »).
             isViewportZoomed: viewModel.isCanvasZoomed,
@@ -826,16 +821,16 @@ extension StoryComposerView {
             // Quand le drawing overlay est actif, le canvas doit supprimer
             // son drawingLayer persisté — sinon double rendu (ancien drawing
             // au mauvais endroit dans le design space + nouveau drawing live
-            // du PKCanvasView en bounds space). Bug "écrit en double", 2026-05-27.
+            // du PKCanvasView en bounds space).
             isDrawingOverlayActive: isImmersiveDrawingSurface,
             // Pont vers `StoryCanvasUIView.readerContext.imageCache` —
             // `StoryMediaLayer.configureImage` consulte d'abord ce cache
             // (clé = media.id) avant le file:// path, donc le main canvas
-            // reflète immédiatement les éditions image (bug 2026-05-27).
+            // reflète immédiatement les éditions image.
             // La version sert de cookie au Coordinator pour ne déclencher
             // un rebuild qu'aux mutations utiles.
             loadedImages: viewModel.loadedImages,
-            // #3956 — un GIF collé anime DANS le composer : sans ce fil,
+            // Un GIF collé anime DANS le composer : sans ce fil,
             // l'aperçu montrerait une image fixe de ce que la publication
             // envoie animé.
             loadedStickerAnimations: viewModel.loadedStickerAnimations,
@@ -847,16 +842,16 @@ extension StoryComposerView {
         .allowsHitTesting(!isImmersiveDrawingSurface)
         .overlay {
             if isImmersiveDrawingSurface {
-                // Refonte dessin (2026-05-30) : capture single-stroke (PencilKit) +
+                // Capture single-stroke (PencilKit) +
                 // rendu live des traits éditables (avec halo sélection). Le canvas
                 // sous-jacent suppress son propre drawingLayer pendant ce temps
                 // (`suppressDrawingOverlay`), donc pas de double rendu.
-                // **La surface de dessin est EXTRAITE** (#4092) : ce bloc fut
+                // **La surface de dessin est EXTRAITE** : ce bloc serait
                 // cinq vues et sept lectures de ViewModel, écrites ici. Le
-                // composer unifié en avait besoin à l'identique ; les recopier
-                // aurait produit deux surfaces de dessin à faire diverger au
+                // composer unifié en a besoin à l'identique ; les recopier
+                // produirait deux surfaces de dessin à faire diverger au
                 // premier réglage ajouté. Un corps, deux montages — règle
-                // d'emprunt du #4035, qui exige que l'ancien site consomme la
+                // d'emprunt, qui exige que l'ancien site consomme la
                 // vue extraite LUI AUSSI.
                 //
                 // Le pincement d'inspection reste servi par l'atelier, seul à
