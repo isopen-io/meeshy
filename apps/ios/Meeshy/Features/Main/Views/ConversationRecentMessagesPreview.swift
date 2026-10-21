@@ -184,21 +184,60 @@ enum ConversationPreviewRenderer {
         )
     }
 
+    /// Ce que l'aperçu peint pour la photo d'un fond : la photo, ou la carte —
+    /// le repli du fil (Signature), jamais un aplat qu'il ne montre pas.
+    enum BackdropPhoto: Equatable {
+        case paint(ConversationBackgroundPhoto)
+        case signature
+    }
+
     /// La photo d'un fond, dans l'aperçu : la pièce connue parmi les messages
     /// servis, sinon la mémoire de l'appareil, sinon la route qui vérifie
-    /// l'appartenance. Une pièce CHIFFRÉE n'est jamais demandée au réseau
-    /// (`ConversationBackgroundPhotoVerdict`) : `nil`, le voile reste seul.
+    /// l'appartenance. Une pièce CHIFFRÉE connue n'est jamais demandée au
+    /// réseau (`ConversationBackgroundPhotoVerdict`), ni une pièce que la sonde
+    /// a déjà jugée illisible (`ConversationPreviewPhotoFallbacks`) : la carte.
+    /// Une pièce INCONNUE se demande, et l'échec de son chargement est sondé
+    /// comme dans le fil (`ConversationBackgroundPhotoProbe`).
     static func backdropPhoto(
         attachmentId: String,
         among messages: [Message],
         remembered: ConversationBackgroundPhoto?,
-        serverOrigin: String
-    ) -> ConversationBackgroundPhoto? {
-        let known = messages.lazy.flatMap(\.attachments).first { $0.id == attachmentId }
-        guard ConversationBackgroundPhotoVerdict.source(for: known) == .clear else { return nil }
-        return ConversationBackgroundPhoto.resolve(
+        serverOrigin: String,
+        judgedUnreadable: Bool = false
+    ) -> BackdropPhoto {
+        let known = knownPiece(attachmentId, among: messages)
+        guard !judgedUnreadable, ConversationBackgroundPhotoVerdict.source(for: known) == .clear else { return .signature }
+        return .paint(ConversationBackgroundPhoto.resolve(
             attachmentId: attachmentId, known: known, remembered: remembered, serverOrigin: serverOrigin
+        ))
+    }
+
+    /// Le fond MONTRÉ : une photo que l'aperçu n'a pas pu peindre rend la carte.
+    static func displayed(_ backdrop: Backdrop, photoFellBack: Bool) -> Backdrop {
+        guard case .photo = backdrop.resolution, photoFellBack else { return backdrop }
+        return .card
+    }
+
+    /// Ce qui fait résoudre la photo à nouveau : la pièce, et ce que les
+    /// messages servis en disent — jamais une réévaluation du corps.
+    struct PhotoKey: Equatable {
+        let attachmentId: String
+        let source: ConversationBackgroundPhotoVerdict.Source
+        let isKnown: Bool
+    }
+
+    static func photoKey(of backdrop: Backdrop, among messages: [Message]) -> PhotoKey? {
+        guard case .photo(let attachmentId, _, _) = backdrop.resolution else { return nil }
+        let known = knownPiece(attachmentId, among: messages)
+        return PhotoKey(
+            attachmentId: attachmentId,
+            source: ConversationBackgroundPhotoVerdict.source(for: known),
+            isKnown: known != nil
         )
+    }
+
+    private static func knownPiece(_ attachmentId: String, among messages: [Message]) -> MeeshyMessageAttachment? {
+        messages.lazy.flatMap(\.attachments).first { $0.id == attachmentId }
     }
 
     private static func landed(_ mode: ConversationReadingMode) -> ConversationReadingMode {
@@ -235,6 +274,9 @@ struct ConversationRecentMessagesPreview: View {
     @StateObject private var timestampReveal = FocalTimestampRevealState()
     @State private var contentHeight: CGFloat = 0
     @State private var viewportHeight: CGFloat = 0
+    /// La photo du fond, résolue UNE fois par pièce (`.task(id:)`), comme le fil.
+    @State private var photo: ConversationBackgroundPhoto?
+    @State private var photoFellBack = false
 
     private var kind: ConversationPreviewRenderer.Kind { ConversationPreviewRenderer.kind(mode: readingMode) }
 
@@ -244,20 +286,50 @@ struct ConversationRecentMessagesPreview: View {
             content
         }
         .background {
-            if backdrop.paintsOverTheCard {
-                ConversationPreviewBackdrop(backdrop: backdrop, photo: backdropPhoto, isDark: isDark)
+            let shown = ConversationPreviewRenderer.displayed(backdrop, photoFellBack: photoFellBack)
+            if shown.paintsOverTheCard {
+                ConversationPreviewBackdrop(backdrop: shown, photo: photo, isDark: isDark) { attachmentId in
+                    settleFailedPhoto(attachmentId)
+                }
             }
+        }
+        .task(id: ConversationPreviewRenderer.photoKey(of: backdrop, among: messages)) {
+            resolvePhoto()
         }
     }
 
-    private var backdropPhoto: ConversationBackgroundPhoto? {
-        guard case .photo(let attachmentId, _, _) = backdrop.resolution else { return nil }
-        return ConversationPreviewRenderer.backdropPhoto(
+    private func resolvePhoto() {
+        guard case .photo(let attachmentId, _, _) = backdrop.resolution else {
+            photo = nil
+            photoFellBack = false
+            return
+        }
+        switch ConversationPreviewRenderer.backdropPhoto(
             attachmentId: attachmentId,
             among: messages,
             remembered: ConversationBackgroundPhotoMemory().photo(for: attachmentId),
-            serverOrigin: MeeshyConfig.shared.serverOrigin
-        )
+            serverOrigin: MeeshyConfig.shared.serverOrigin,
+            judgedUnreadable: ConversationPreviewPhotoFallbacks.shared.contains(attachmentId)
+        ) {
+        case .paint(let resolved):
+            photo = resolved
+            photoFellBack = false
+        case .signature:
+            photo = nil
+            photoFellBack = true
+        }
+    }
+
+    /// Comme le fil : une panne passagère garde le voile ; une pièce disparue,
+    /// refusée ou chiffrée rend la carte — et le verdict est retenu, pour que
+    /// l'appui long suivant ne la retélécharge pas.
+    private func settleFailedPhoto(_ attachmentId: String) {
+        Task {
+            guard await ConversationBackgroundPhotoProbe.live.fallsBackToSignature(attachmentId: attachmentId) else { return }
+            ConversationPreviewPhotoFallbacks.shared.remember(attachmentId)
+            guard ConversationBackgroundPhotoVerdict.settles(probed: attachmentId, current: backdrop.resolution) else { return }
+            photoFellBack = true
+        }
     }
 
     @ViewBuilder
@@ -444,6 +516,7 @@ private struct ConversationPreviewBackdrop: View {
     let backdrop: ConversationPreviewRenderer.Backdrop
     let photo: ConversationBackgroundPhoto?
     let isDark: Bool
+    let onPhotoFailure: @MainActor (String) -> Void
 
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -468,12 +541,12 @@ private struct ConversationPreviewBackdrop: View {
                 .equatable()
         case .solid(let hex):
             Color(hex: hex)
-        case .photo(_, let veil, let blur):
-            photoLayer(veil: veil, blur: blur)
+        case .photo(let attachmentId, let veil, let blur):
+            photoLayer(attachmentId: attachmentId, veil: veil, blur: blur)
         }
     }
 
-    private func photoLayer(veil: Double, blur: Int) -> some View {
+    private func photoLayer(attachmentId: String, veil: Double, blur: Int) -> some View {
         ZStack {
             MeeshyColors.backgroundPrimary(isDark: isDark)
             if let photo {
@@ -484,7 +557,8 @@ private struct ConversationPreviewBackdrop: View {
                             thumbnailUrl: photo.thumbnailUrl,
                             fullUrl: photo.fullUrl,
                             autoLoad: true,
-                            targetSize: Self.photoTargetSize
+                            targetSize: Self.photoTargetSize,
+                            onFullImageFailure: { onPhotoFailure(attachmentId) }
                         ) {
                             Color.clear
                         }
@@ -496,5 +570,30 @@ private struct ConversationPreviewBackdrop: View {
             MeeshyColors.backgroundPrimary(isDark: isDark)
                 .opacity(ConversationBackgroundResolution.effectiveVeil(veil, reduceTransparency: reduceTransparency))
         }
+    }
+}
+
+// MARK: - Les pièces de fond que la sonde a jugées illisibles
+
+/// Une pièce disparue, refusée ou chiffrée ne redevient pas lisible d'un appui
+/// long à l'autre : le verdict de la sonde est retenu, borné, pour la session.
+/// Une panne passagère n'est jamais retenue (la sonde rend `false`).
+@MainActor
+final class ConversationPreviewPhotoFallbacks {
+    static let shared = ConversationPreviewPhotoFallbacks()
+
+    private let capacity: Int
+    private var attachmentIds: [String] = []
+
+    init(capacity: Int = 32) {
+        self.capacity = capacity
+    }
+
+    func contains(_ attachmentId: String) -> Bool {
+        attachmentIds.contains(attachmentId)
+    }
+
+    func remember(_ attachmentId: String) {
+        attachmentIds = Array((attachmentIds.filter { $0 != attachmentId } + [attachmentId]).suffix(capacity))
     }
 }

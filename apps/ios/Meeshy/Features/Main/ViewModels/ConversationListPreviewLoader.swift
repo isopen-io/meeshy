@@ -243,7 +243,9 @@ final class ConversationListPreviewLoader: ObservableObject {
     /// déchiffré, et personne ne l'a réécrit depuis — le moteur de
     /// synchronisation peut réécrire le cache depuis le REST (le
     /// cryptogramme), et le serveur forger un texte qui n'en a pas la forme.
-    /// Jamais deviné à la forme du texte.
+    /// Jamais deviné à la forme du texte. Un message qui se DÉCLARE en clair
+    /// (`isEncrypted == false`) dans une conversation chiffrée n'est pas jugé
+    /// ici : le fil le montre aussi, et sa loi, commune aux deux, est #11404.
     static func isReadableOnDevice(_ message: Message) -> Bool {
         message.isEncrypted && message.isContentDecryptedOnDevice
     }

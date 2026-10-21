@@ -17,7 +17,14 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public let clientMessageId: String?
     public let conversationId: String
     public var senderId: String
-    public var content: String
+    /// Réécrire le texte sans repasser par le déchiffrement emporte sa
+    /// provenance : aucune empreinte ne survit au clair qu'elle couvrait.
+    public var content: String {
+        didSet {
+            guard contentOrigin != .wire, !contentOrigin.vouches(for: content, messageId: id) else { return }
+            contentOrigin = .wire
+        }
+    }
     public var originalLanguage: String = "fr"
     public var messageType: MessageType = .text
     public var messageSource: MessageSource = .user
@@ -154,9 +161,10 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
 
     /// **D'où vient `content` SUR CET APPAREIL** (#11382) : `.wire` pour tout
     /// texte reçu, `.decryptedOnDevice` posée par le SEUL déchiffrement
-    /// (`adoptDecryptedContent`) et liée par empreinte au clair. Hors de
-    /// l'init : aucun producteur ne la déclare. Persistée dans le cache,
-    /// absente (`.wire`) sur une ligne écrite avant elle.
+    /// (`adoptDecryptedContent`) et liée par empreinte au clair ET à l'id.
+    /// Hors de l'init : aucun producteur ne la déclare. Persistée dans le
+    /// cache SEULEMENT à côté du clair qu'elle couvre, absente (`.wire`) sur
+    /// une ligne écrite avant elle ; réécrire `content` la retire.
     public internal(set) var contentOrigin: MessageContentOrigin = .wire
 
     public enum DeliveryStatus: String, Codable, Sendable {
@@ -350,7 +358,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         sticker = cachedSticker?.ifWireWorthy
         // Backward-compatible: rows cached before this field decode to `[:]`.
         trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
-        contentOrigin = (try? c.decodeIfPresent(MessageContentOrigin.self, forKey: .contentOrigin)) ?? .wire
+        let cachedOrigin = (try? c.decodeIfPresent(MessageContentOrigin.self, forKey: .contentOrigin)) ?? .wire
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
         if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
             effects.flags.insert(.viewOnce)
@@ -358,6 +366,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         if let legacyBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred), legacyBlurred {
             effects.flags.insert(.blurred)
         }
+        // Une empreinte qui ne couvre plus le texte relu se perd (#11382).
+        contentOrigin = adoptingCachedOrigin(cachedOrigin)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -416,7 +426,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         if !trackedLinkMap.isEmpty {
             try c.encode(trackedLinkMap, forKey: .trackedLinkMap)
         }
-        if contentOrigin != .wire {
+        if isContentDecryptedOnDevice {
             try c.encode(contentOrigin, forKey: .contentOrigin)
         }
     }
