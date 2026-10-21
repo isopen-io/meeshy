@@ -104,7 +104,7 @@
     "lottie-web": "5.13.0",
     "preact-render-to-string": "6.8.1",
     "react": "19.3.1",
-    "react-dom": "19.3.0",
+    "react-dom": "19.3.1",
     "tailwindcss": "4.3.3",
     "typescript": "^6.0.3",
     "vite": "8.3.4",
