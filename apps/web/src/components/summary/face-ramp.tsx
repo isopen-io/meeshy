@@ -6,6 +6,9 @@ import type { FaceRampEntry } from '@/lib/summary/types';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { faceTargetOf } from '@/lib/view/summary-exits';
+
+import { entryPressAttributes, type SummaryEntryPress } from './summary-entry-press';
 
 /**
  * « ILS T'ATTENDENT » — miroir `FaceRampView.swift` (#5695, étape 8). Rail
@@ -17,13 +20,18 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * « 1 messages t'attendent » au singulier. Le web accorde le nom ET le verbe :
  * un lecteur d'écran est la seule voix de ce libellé, une faute d'accord s'y
  * entend.
+ *
+ * `press` (#11225) : l'appui long, le clic droit et `Maj+F10` ouvrent le menu
+ * de l'entrée (Aller au message · Répondre) — étalés par l'hôte, jamais tenus ici.
  */
 export function FaceRamp({
   entries,
   onTap,
+  press,
 }: {
   readonly entries: readonly FaceRampEntry[];
   readonly onTap: (entry: FaceRampEntry) => void;
+  readonly press?: SummaryEntryPress;
 }) {
   if (entries.length === 0) return null;
   return (
@@ -47,6 +55,7 @@ export function FaceRamp({
               data-face
               data-user={entry.id}
               onClick={() => onTap(entry)}
+              {...entryPressAttributes({ press, target: faceTargetOf(entry), label: entry.displayName })}
               aria-label={
                 entry.awaitingCount === 1
                   ? translate(currentInterfaceLanguage(), 'summary.face.one', { name: entry.displayName })
