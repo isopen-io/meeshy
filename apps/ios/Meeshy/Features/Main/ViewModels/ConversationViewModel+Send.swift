@@ -243,20 +243,18 @@ extension ConversationViewModel {
     /// L'envoi d'un `OutgoingMessage`, étape par étape : valider, poser la
     /// ligne (hors ligne ou optimiste), sceller, émettre, réconcilier.
     ///
-    /// Le verrou `inFlightSendCount` couvre toutes les étapes : des messages
+    /// Le compteur `sendActivity` couvre toutes les étapes : des messages
     /// DISTINCTS partent en parallèle, aucun contenu n'est dédoublonné (#7985)
     /// — la seule clé de déduplication est le `clientMessageId`.
     func send(_ outgoing: OutgoingMessage) async -> Result<SentMessageReceipt, SendFailure> {
         Logger.messages.info("SendFlow enter convId=\(self.conversationId, privacy: .public) textLen=\(outgoing.text.count, privacy: .public) attachmentIds=\((outgoing.attachments.ids ?? []).count, privacy: .public) existingTempId=\(outgoing.reusedClientMessageId?.rawValue ?? "nil", privacy: .public) isSending=\(self.isSending, privacy: .public)")
         if let failure = validate(outgoing) { return .failure(failure) }
 
-        inFlightSendCount += 1
-        isSending = true
-        Logger.messages.info("SendFlow LOCK inFlight=\(self.inFlightSendCount, privacy: .public) convId=\(self.conversationId, privacy: .public) textLen=\(outgoing.text.count, privacy: .public)")
+        sendActivity = sendActivity.began()
+        Logger.messages.info("SendFlow LOCK inFlight=\(self.sendActivity.inFlight, privacy: .public) convId=\(self.conversationId, privacy: .public) textLen=\(outgoing.text.count, privacy: .public)")
         defer {
-            inFlightSendCount = max(0, inFlightSendCount - 1)
-            isSending = inFlightSendCount > 0
-            Logger.messages.info("SendFlow UNLOCK inFlight=\(self.inFlightSendCount, privacy: .public) convId=\(self.conversationId, privacy: .public)")
+            sendActivity = sendActivity.ended()
+            Logger.messages.info("SendFlow UNLOCK inFlight=\(self.sendActivity.inFlight, privacy: .public) convId=\(self.conversationId, privacy: .public)")
         }
 
         socketHandler?.stopTypingEmission()

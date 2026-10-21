@@ -12,7 +12,7 @@ import MeeshySDK
 /// détail est VIDE pour un lieu sans nom, et aucun d'eux ne dessine alors une
 /// seconde ligne. Fichier séparé de `+LocationExtra`, qui tenait déjà son
 /// budget — ce sont quatre formes indépendantes, sans code commun avec lui.
-extension StickerTemplateRenderer {
+extension LocationStickerTemplates {
 
     // MARK: Les deux lignes d'un lieu, mesurées une fois
 

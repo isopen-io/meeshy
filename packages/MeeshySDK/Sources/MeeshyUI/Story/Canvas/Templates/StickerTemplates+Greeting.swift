@@ -12,7 +12,9 @@ import MeeshySDK
 /// La légende vient de `String(localized:)`, avec une clé LITTÉRALE par mot :
 /// le LECTEUR lit « Thanks » là où l'auteur a posé « Merci ». Aucun
 /// emplacement, donc rien à remplir et rien à traduire.
-extension StickerTemplateRenderer {
+enum GreetingStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .greeting
+
 
     // MARK: Les mots
 
@@ -552,7 +554,7 @@ extension StickerTemplateRenderer {
                      décor: { _, _, _ in }),
     ]
 
-    static let greetingDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.greetingHello,
             name: { Self.helloCaption },
