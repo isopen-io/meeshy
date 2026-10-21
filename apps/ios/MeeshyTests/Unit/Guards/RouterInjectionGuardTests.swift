@@ -35,7 +35,35 @@ final class RouterInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/MyStoriesView.swift",
         "Meeshy/Features/Main/Views/StoryViewerSheets.swift",
         "Meeshy/Features/Main/Views/FeedPostRow.swift",
-        "Meeshy/Features/Main/Views/PostDetailView.swift"
+        "Meeshy/Features/Main/Views/PostDetailView.swift",
+        "Meeshy/Features/Contacts/ContactsListTab.swift",
+        "Meeshy/Features/Contacts/DiscoverTab.swift",
+        "Meeshy/Features/Contacts/KeypadTab.swift",
+        "Meeshy/Features/Main/Views/ConversationListView.swift",
+        "Meeshy/Features/Main/Views/ConversationListView+Tail.swift",
+        "Meeshy/Features/Main/Views/ConversationView+ReaderLayers.swift",
+        "Meeshy/Features/Main/Views/ProfileView.swift",
+        "Meeshy/Features/Main/Views/StarredMessagesView.swift",
+        "Meeshy/Features/Main/Views/WidgetPreviewView.swift"
+    ]
+
+    private enum RouterObjectHolder {
+        case stateReader
+        case relay
+    }
+
+    private static let routerObjectHolders: [(path: String, role: RouterObjectHolder)] = [
+        ("Meeshy/Features/Main/Views/ConversationView.swift", .stateReader),
+        ("Meeshy/Features/Main/Views/RootViewComponents.swift", .stateReader),
+        ("Meeshy/Features/Main/Composer/StoryEditComposer.swift", .relay),
+        ("Meeshy/Features/Main/Composer/StoryRepublishComposer.swift", .relay),
+        ("Meeshy/Features/Main/Views/BookmarksView.swift", .relay),
+        ("Meeshy/Features/Main/Views/ConversationListView+Presentations.swift", .relay),
+        ("Meeshy/Features/Main/Views/ConversationView+Presentations.swift", .relay),
+        ("Meeshy/Features/Main/Views/ConversationView+StoryCovers.swift", .relay),
+        ("Meeshy/Features/Main/Views/FeedView.swift", .relay),
+        ("Meeshy/Features/Main/Views/MessageListView.swift", .relay),
+        ("Meeshy/Features/Main/Views/StoryTrayView.swift", .relay)
     ]
 
     private func declaresRouterObject(_ source: String) -> Bool {
@@ -66,5 +94,24 @@ final class RouterInjectionGuardTests: XCTestCase {
     func test_bottomBar_doesNotDeclareAnUnusedRouter() throws {
         let source = try code("Meeshy/Features/Main/Views/ConversationListView+BottomBar.swift")
         XCTAssertFalse(declaresRouterObject(source))
+    }
+
+    func test_creationSheets_readRouterCommands() throws {
+        let source = try code("Meeshy/Features/Main/Views/ConversationListView+Presentations.swift")
+        let start = try XCTUnwrap(source.range(of: "struct ConversationListCreationSheets"))
+        let tail = source[start.lowerBound...]
+        let end = tail.dropFirst().range(of: "\nstruct ")?.lowerBound ?? tail.endIndex
+        let body = String(tail[..<end])
+        XCTAssertFalse(declaresRouterObject(body))
+        XCTAssertTrue(body.contains("@Environment(\\.routerCommands)"))
+    }
+
+    func test_routerObjectHolders_areTheListedReadersAndRelays() throws {
+        for holder in Self.routerObjectHolders {
+            let source = try code(holder.path)
+            XCTAssertTrue(declaresRouterObject(source), "\(holder.path) ne déclare plus le Router : sortir de la liste")
+            guard holder.role == .stateReader else { continue }
+            XCTAssertTrue(source.contains("router.pending") || source.contains("router.consumePending"), "\(holder.path) ne lit pas l'état du Router")
+        }
     }
 }
