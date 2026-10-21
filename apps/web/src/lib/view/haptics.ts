@@ -1,3 +1,5 @@
+import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
+
 /**
  * L'HAPTIQUE DU WEB — UN SITE, UN VOCABULAIRE (#11207).
  *
@@ -53,6 +55,40 @@ export const vibrationDriver = (host: VibrateHost | undefined): HapticsDriver =>
   pattern: (ms) => vibrateWith(host, ms),
 });
 
+type NativeCue = { readonly method: 'impact' | 'notification'; readonly options: object };
+
+const NATIVE_CUES: Readonly<Record<HapticCue, NativeCue>> = {
+  light: { method: 'impact', options: { style: 'LIGHT' } },
+  medium: { method: 'impact', options: { style: 'MEDIUM' } },
+  success: { method: 'notification', options: { type: 'SUCCESS' } },
+};
+
+const sendNative = (call: (options: object) => Promise<unknown>, options: object): boolean => {
+  try {
+    call(options).catch(() => undefined);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Le moteur de la coque Capacitor : `Haptics.impact` / `Haptics.notification`
+ * quand la coque les déclare, la vibration du navigateur sinon. Un motif libre
+ * reste au navigateur : le plugin ne joue qu'un retour nommé.
+ */
+export const shellHapticsDriver = (coque: CoqueNative | undefined, host: VibrateHost | undefined): HapticsDriver => {
+  const fallback = vibrationDriver(host);
+  return {
+    cue: (name) => {
+      const native = NATIVE_CUES[name];
+      const call = appelNatifMethode(coque, 'Haptics', native.method);
+      return call === null ? fallback.cue(name) : sendNative(call, native.options);
+    },
+    pattern: fallback.pattern,
+  };
+};
+
 const browserHost = (): VibrateHost | undefined => (typeof navigator === 'undefined' ? undefined : navigator);
 
 /**
@@ -67,7 +103,7 @@ export function installHapticsDriver(driver: HapticsDriver | null): void {
 
 /** Un hôte EXPLICITE (témoin, appelant qui sait) passe avant tout moteur installé. */
 const driverFor = (host: VibrateHost | undefined): HapticsDriver =>
-  host !== undefined ? vibrationDriver(host) : (registry.driver ?? vibrationDriver(browserHost()));
+  host !== undefined ? vibrationDriver(host) : (registry.driver ?? shellHapticsDriver(coqueCourante(), browserHost()));
 
 export const impact = (strength: ImpactStrength, host?: VibrateHost): boolean => driverFor(host).cue(strength);
 
