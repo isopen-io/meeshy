@@ -93528,43 +93528,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سلسلة الأيام: %1$lld · الشرارات: %2$lld · اليوم: %3$lld"
+            "value": "%1$@ · الشرارات: %2$lld · اليوم: %3$lld"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tage in Folge: %1$lld · Funken: %2$lld · Heute: %3$lld"
+            "value": "%1$@ · Funken: %2$lld · Heute: %3$lld"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Day streak: %1$lld · Sparks: %2$lld · Today: %3$lld"
+            "value": "%1$@ · Sparks: %2$lld · Today: %3$lld"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Racha de días: %1$lld · Chispas: %2$lld · Hoy: %3$lld"
+            "value": "%1$@ · Chispas: %2$lld · Hoy: %3$lld"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Série de jours : %1$lld · Étincelles : %2$lld · Aujourd'hui : %3$lld"
+            "value": "%1$@ · Étincelles : %2$lld · Aujourd'hui : %3$lld"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giorni di fila: %1$lld · Scintille: %2$lld · Oggi: %3$lld"
+            "value": "%1$@ · Scintille: %2$lld · Oggi: %3$lld"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sequência de dias: %1$lld · Faíscas: %2$lld · Hoje: %3$lld"
+            "value": "%1$@ · Faíscas: %2$lld · Hoje: %3$lld"
+          }
+        }
+      }
+    },
+    "conversation.engagement.a11y.streak_days.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld يوم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Tag"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld day"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld día"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld jour"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld giorno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld dia"
+          }
+        }
+      }
+    },
+    "conversation.engagement.a11y.streak_days.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld أيام"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Tage"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld days"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld días"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld jours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld giorni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld dias"
           }
         }
       }
@@ -236349,43 +236443,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النجوم"
+            "value": "العتبات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sterne"
+            "value": "Stufen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stars"
+            "value": "Marks"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estrellas"
+            "value": "Escalones"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étoiles"
+            "value": "Paliers"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stelle"
+            "value": "Gradini"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estrelas"
+            "value": "Patamares"
           }
         }
       }
@@ -236631,7 +236725,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المستويات السبعة"
+            "value": "العتبات السبع"
           }
         },
         "de": {
@@ -236643,7 +236737,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The seven tiers"
+            "value": "The seven marks"
           }
         },
         "es": {
@@ -236661,13 +236755,13 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I sette livelli"
+            "value": "I sette gradini"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Os sete níveis"
+            "value": "Os sete patamares"
           }
         }
       }
@@ -242050,7 +242144,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pasador"
+            "value": "Barquero"
           }
         },
         "fr": {
