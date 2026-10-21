@@ -137,6 +137,8 @@ final class MessageOverlayFlatRowMemo {
 
     private var stored: (key: Key, row: FocalRowInput)?
 
+    nonisolated deinit {}
+
     func row(for key: Key, build: () -> FocalRowInput) -> FocalRowInput {
         if let stored, stored.key == key { return stored.row }
         let row = build()
