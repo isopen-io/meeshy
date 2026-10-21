@@ -9,6 +9,10 @@
  * ou longueur mensongère ne survit. Le profil de couleur `iCCP` reste, mais
  * son NOM — texte libre — est remplacé, et il n'est gardé que s'il se
  * décompresse vraiment (borné) : un profil illisible part.
+ *
+ * Quand la lecture s'arrête avant le premier `IDAT`, le résultat n'a aucun
+ * pixel : `hasPngPixels` le dit, et l'appelant tente d'abord un ré-encodage
+ * plutôt que de remplacer une photo lisible par un fichier vide.
  */
 import { crc32, inflateSync } from 'zlib';
 
@@ -76,6 +80,10 @@ function anonymousIccProfile(chunk: PngChunk): Buffer | null {
 function keptChunk(chunk: PngChunk): Buffer | null {
   if (PNG_IMAGE_CHUNKS.has(chunk.type)) return chunk.bytes;
   return chunk.type === 'iCCP' ? anonymousIccProfile(chunk) : null;
+}
+
+export function hasPngPixels(read: PngRead): boolean {
+  return read.chunks.some((chunk) => chunk.type === 'IDAT');
 }
 
 export function stripPngMetadataChunks(buffer: Buffer, read: PngRead = readPngChunks(buffer)): Buffer {

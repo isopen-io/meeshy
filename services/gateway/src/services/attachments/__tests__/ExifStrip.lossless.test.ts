@@ -173,6 +173,17 @@ describe('stripExifFromImageBuffer — GIF et HEIC sans ré-encodage (#11258, co
     expect(stripped.equals(base)).toBe(true);
   });
 
+  it('garde le profil de couleur d’un GIF (extension ICCRGBG1012)', async () => {
+    const base = await canvas(20, 10).gif().toBuffer();
+    const header = 13 + 3 * 2 ** ((base[10] & 0x07) + 1);
+    const icc = gifBlock(0xff, Buffer.from('ICCRGBG1012', 'latin1'), Buffer.from('icc-profile-bytes', 'latin1'));
+    const original = Buffer.concat([base.subarray(0, header), icc, base.subarray(header)]);
+
+    const stripped = await stripExifFromImageBuffer(original, 'image/gif');
+
+    expect(stripped.equals(original)).toBe(true);
+  });
+
   it('remet à zéro l’item EXIF d’un HEIF sans toucher aux pixels ni aux décalages', async () => {
     const original = await canvas(20, 10).withExif({ IFD0: { Copyright: SECRET } }).heif({ compression: 'av1', lossless: true })
       .toBuffer();
@@ -189,5 +200,53 @@ describe('stripExifFromImageBuffer — GIF et HEIC sans ré-encodage (#11258, co
     const garbage = Buffer.from('not-an-isobmff-file');
 
     expect((await stripExifFromImageBuffer(garbage, 'image/heic')).equals(garbage)).toBe(true);
+  });
+});
+
+describe('stripExifFromImageBuffer — une structure abîmée perd quand même ses métadonnées (#11258)', () => {
+  it('referme un JPEG tronqué (sans fin d’image) au lieu de laisser partir son EXIF', async () => {
+    const complete = await jpegWithIccExifGpsXmp();
+    const truncated = complete.subarray(0, complete.length - 2);
+
+    const stripped = await stripExifFromImageBuffer(truncated, 'image/jpeg');
+
+    expect(stripped.toString('latin1')).not.toContain(SECRET);
+    expect(stripped.equals(withoutSegments(complete, [0xe1]))).toBe(true);
+  });
+
+  it('retire l’EXIF d’un JPEG tronqué ORIENTÉ même quand sa rotation échoue', async () => {
+    const complete = await canvas(64, 32).withExif({ IFD0: { Copyright: SECRET } }).jpeg().withMetadata({ orientation: 6 }).toBuffer();
+    const truncated = complete.subarray(0, complete.length - 2);
+
+    const stripped = await stripExifFromImageBuffer(truncated, 'image/jpeg');
+
+    expect(stripped.toString('latin1')).not.toContain(SECRET);
+    expect(stripped.subarray(-2).equals(Buffer.from([0xff, 0xd9]))).toBe(true);
+  });
+
+  it('ré-encode un PNG dont un chunk incohérent précède les pixels, au lieu de le rendre vide', async () => {
+    const original = await canvas(16, 16).withExif({ IFD0: { Copyright: SECRET } }).png().toBuffer();
+    const headerEnd = 8 + 25;
+    const lyingGamma = Buffer.from([0, 0, 0, 5, 0x67, 0x41, 0x4d, 0x41, 0, 0, 0xb1, 0x8f, 0, 0, 0, 0, 0]);
+    const odd = Buffer.concat([original.subarray(0, headerEnd), lyingGamma, original.subarray(headerEnd)]);
+
+    const stripped = await stripExifFromImageBuffer(odd, 'image/png');
+
+    expect((await pixels(stripped)).equals(await pixels(original))).toBe(true);
+    expect(stripped.toString('latin1')).not.toContain(SECRET);
+  });
+
+  it('retire la vignette d’un segment JFIF, image de la photo d’avant toute retouche', async () => {
+    const base = await canvas(16, 16).jpeg().toBuffer();
+    const thumbnail = Buffer.alloc(2 * 2 * 3, 0x41);
+    const jfif = Buffer.concat([Buffer.from('JFIF\0', 'latin1'), Buffer.from([1, 2, 0, 0, 1, 0, 1, 2, 2]), thumbnail]);
+    const app0 = Buffer.concat([Buffer.from([0xff, 0xe0, 0x00, jfif.length + 2]), jfif]);
+    const headerSegments = jpegHeaderSegments(base);
+    const original = Buffer.concat([base.subarray(0, 2), app0, base.subarray(headerSegments[0].marker === 0xe0 ? headerSegments[0].end : 2)]);
+
+    const stripped = await stripExifFromImageBuffer(original, 'image/jpeg');
+
+    expect(stripped.includes(thumbnail)).toBe(false);
+    expect((await pixels(stripped)).equals(await pixels(original))).toBe(true);
   });
 });

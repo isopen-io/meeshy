@@ -4,9 +4,10 @@
  *
  * Liste BLANCHE : en-tête, descripteur d'écran et tables de couleurs,
  * descripteurs d'image et leurs données, extensions de contrôle graphique et
- * de texte, et la seule extension d'application qui règle l'animation
- * (`NETSCAPE2.0` / `ANIMEXTS1.0`). Commentaires, XMP, toute autre application
- * et tout octet après le terminateur partent. Une structure qui cesse de se
+ * de texte, et les deux extensions d'application qui touchent l'image :
+ * l'animation (`NETSCAPE2.0` / `ANIMEXTS1.0`) et le profil de couleur
+ * (`ICCRGBG1012`). Commentaires, XMP, toute autre application et tout octet
+ * après le terminateur partent. Une structure qui cesse de se
  * lire est refermée là où elle cesse.
  *
  * Rend `null` quand l'en-tête n'est pas celui d'un GIF.
@@ -18,7 +19,7 @@ const IMAGE = 0x2c;
 const TRAILER = 0x3b;
 const KEPT_EXTENSIONS = new Set([0xf9, 0x01]);
 const APPLICATION = 0xff;
-const LOOP_APPLICATIONS = ['NETSCAPE2.0', 'ANIMEXTS1.0'];
+const IMAGE_APPLICATIONS = ['NETSCAPE2.0', 'ANIMEXTS1.0', 'ICCRGBG1012'];
 
 const colorTableLength = (flags: number): number => (flags & 0x80 ? 3 * 2 ** ((flags & 0x07) + 1) : 0);
 
@@ -37,7 +38,7 @@ function keepsExtension(buffer: Buffer, offset: number): boolean {
   if (KEPT_EXTENSIONS.has(label)) return true;
   if (label !== APPLICATION) return false;
   const size = buffer[offset + 2];
-  return LOOP_APPLICATIONS.includes(buffer.toString('latin1', offset + 3, offset + 3 + Math.min(size, 11)));
+  return IMAGE_APPLICATIONS.includes(buffer.toString('latin1', offset + 3, offset + 3 + Math.min(size, 11)));
 }
 
 function blockEnd(buffer: Buffer, offset: number): number | null {

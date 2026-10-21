@@ -13,8 +13,12 @@
  *   parte, le profil ICC gardé (`keepIccProfile`), dans un encodage aussi
  *   fidèle que le format le permet (JPEG q92 4:4:4, WebP sans perte si la
  *   source l'était, PNG à palette si la source l'était) ;
- * - une structure JPEG ou WebP illisible : ré-encodage plutôt que de laisser
- *   partir l'original.
+ * - une structure illisible (JPEG avant toute donnée d'image, WebP sans image,
+ *   PNG sans pixels) : ré-encodage plutôt que de laisser partir l'original.
+ * Une rotation qui échoue (pixels tronqués) retombe sur le retrait des octets :
+ * la photo garde son orientation d'origine, jamais son GPS. Un PNG que ni la
+ * lecture ni sharp ne déchiffrent rend sa liste blanche refermée, même sans
+ * pixels (audit #10639) : jamais l'original.
  * Une image ANIMÉE n'est jamais pivotée : sur plusieurs pages, sharp refuse,
  * et l'appelant garderait l'original AVEC son EXIF (audit #10639).
  *
@@ -26,7 +30,7 @@ import sharp, { type Metadata, type Sharp } from 'sharp';
 import { stripGifMetadataBlocks } from './metadata-strip/gif-blocks';
 import { blankIsobmffMetadataItems } from './metadata-strip/isobmff-items';
 import { stripJpegMetadataSegments } from './metadata-strip/jpeg-segments';
-import { isAnimatedPng, readPngChunks, stripPngMetadataChunks } from './metadata-strip/png-chunks';
+import { hasPngPixels, isAnimatedPng, readPngChunks, stripPngMetadataChunks } from './metadata-strip/png-chunks';
 import { isLosslessWebp, stripWebpMetadataChunks } from './metadata-strip/webp-chunks';
 
 type ImageFormat = 'jpeg' | 'png' | 'webp' | 'gif' | 'heif';
@@ -64,8 +68,16 @@ function encode(image: Sharp, format: ReencodableFormat, source: Buffer, metadat
 
 function stripBytes(format: ReencodableFormat, buffer: Buffer): Buffer | null {
   if (format === 'jpeg') return stripJpegMetadataSegments(buffer);
-  if (format === 'png') return stripPngMetadataChunks(buffer);
+  if (format === 'png') {
+    const read = readPngChunks(buffer);
+    return hasPngPixels(read) ? stripPngMetadataChunks(buffer, read) : null;
+  }
   return stripWebpMetadataChunks(buffer);
+}
+
+function withoutMetadataOrFail(format: ReencodableFormat, buffer: Buffer, error: unknown): Buffer {
+  if (format === 'png') return stripPngMetadataChunks(buffer);
+  throw error;
 }
 
 async function reencoded(buffer: Buffer, format: ReencodableFormat, metadata: ImageFacts): Promise<Buffer> {
@@ -76,8 +88,11 @@ async function reencoded(buffer: Buffer, format: ReencodableFormat, metadata: Im
 async function stripStillOrReencode(buffer: Buffer, format: ReencodableFormat): Promise<Buffer> {
   const metadata: ImageFacts = await sharp(buffer).metadata().catch((): ImageFacts => ({}));
   const still = (metadata.pages ?? 1) <= 1;
-  if (still && (metadata.orientation ?? 1) !== 1) return reencoded(buffer, format, metadata);
-  return stripBytes(format, buffer) ?? reencoded(buffer, format, metadata);
+  const unreadable = (error: unknown): Buffer => withoutMetadataOrFail(format, buffer, error);
+  if (still && (metadata.orientation ?? 1) !== 1) {
+    return reencoded(buffer, format, metadata).catch((error: unknown) => stripBytes(format, buffer) ?? unreadable(error));
+  }
+  return stripBytes(format, buffer) ?? reencoded(buffer, format, metadata).catch(unreadable);
 }
 
 /**
@@ -92,7 +107,9 @@ export async function stripExifFromImageBuffer(buffer: Buffer, mimeType: string)
   if (format === 'heif') return blankIsobmffMetadataItems(buffer);
   if (format === 'png') {
     const read = readPngChunks(buffer);
-    if (isAnimatedPng(read.chunks)) return stripPngMetadataChunks(buffer, read);
+    if (isAnimatedPng(read.chunks)) {
+      return hasPngPixels(read) ? stripPngMetadataChunks(buffer, read) : stripStillOrReencode(buffer, format);
+    }
   }
   return stripStillOrReencode(buffer, format);
 }

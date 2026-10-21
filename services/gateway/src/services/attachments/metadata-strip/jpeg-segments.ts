@@ -7,9 +7,12 @@
  * `JFIF`) reste ; tout le reste part — APP1 (EXIF, GPS, XMP), APP2 MPF, APP3 à
  * APP13 (IPTC), APP15, commentaires, et TOUT octet après la fin de l'image :
  * c'est là que les appareils annexent leurs images secondaires (MPF, carte de
- * gain), qui portent chacune leur propre EXIF.
+ * gain), qui portent chacune leur propre EXIF. Le segment `JFIF` perd sa
+ * vignette : une image de la photo d'avant toute retouche.
  *
- * Rend `null` quand la structure ne se lit pas jusqu'à la fin de l'image :
+ * Une structure qui cesse de se lire APRÈS un premier balayage est refermée là
+ * où elle cesse (fin d'image ajoutée) : un JPEG tronqué perd ses métadonnées
+ * comme les autres. Rend `null` quand elle cesse avant toute donnée d'image :
  * l'appelant ré-encode alors plutôt que de laisser partir l'original.
  */
 
@@ -17,19 +20,34 @@ const MARKER = 0xff;
 const SOI = 0xd8;
 const EOI = 0xd9;
 const SOS = 0xda;
+const APP0 = 0xe0;
+const END_OF_IMAGE = Buffer.from([MARKER, EOI]);
+const SEGMENT_HEADER_LENGTH = 4;
+const JFIF_HEADER_LENGTH = 14;
+const JFIF_THUMBNAIL_SIZE_OFFSET = 12;
 const DECODING_MARKERS = new Set([0xdb, 0xdc, 0xdd, 0xde, 0xdf, SOS]);
 const COLOUR_SEGMENTS: ReadonlyMap<number, Buffer> = new Map([
-  [0xe0, Buffer.from('JFIF\0', 'latin1')],
+  [APP0, Buffer.from('JFIF\0', 'latin1')],
   [0xe2, Buffer.from('ICC_PROFILE\0', 'latin1')],
   [0xee, Buffer.from('Adobe', 'latin1')],
 ]);
 
 const isStandalone = (marker: number): boolean => marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7);
 
-function keepsSegment(marker: number, payload: Buffer): boolean {
-  if ((marker >= 0xc0 && marker <= 0xcf) || DECODING_MARKERS.has(marker)) return true;
+function withoutJfifThumbnail(segment: Buffer): Buffer {
+  if (segment.length <= SEGMENT_HEADER_LENGTH + JFIF_HEADER_LENGTH) return segment;
+  const header = Buffer.from(segment.subarray(0, SEGMENT_HEADER_LENGTH + JFIF_HEADER_LENGTH));
+  header.writeUInt16BE(2 + JFIF_HEADER_LENGTH, 2);
+  header.fill(0, SEGMENT_HEADER_LENGTH + JFIF_THUMBNAIL_SIZE_OFFSET);
+  return header;
+}
+
+function keptSegment(marker: number, segment: Buffer): Buffer | null {
+  if ((marker >= 0xc0 && marker <= 0xcf) || DECODING_MARKERS.has(marker)) return segment;
   const signature = COLOUR_SEGMENTS.get(marker);
-  return signature !== undefined && payload.subarray(0, signature.length).equals(signature);
+  if (signature === undefined) return null;
+  if (!segment.subarray(SEGMENT_HEADER_LENGTH, SEGMENT_HEADER_LENGTH + signature.length).equals(signature)) return null;
+  return marker === APP0 ? withoutJfifThumbnail(segment) : segment;
 }
 
 function entropyEnd(buffer: Buffer, from: number): number {
@@ -46,9 +64,11 @@ function entropyEnd(buffer: Buffer, from: number): number {
 export function stripJpegMetadataSegments(buffer: Buffer): Buffer | null {
   if (buffer.length < 4 || buffer[0] !== MARKER || buffer[1] !== SOI) return null;
   const kept: Buffer[] = [buffer.subarray(0, 2)];
+  let scanned = false;
+  const closed = (): Buffer | null => (scanned ? Buffer.concat([...kept, END_OF_IMAGE]) : null);
   let offset = 2;
   while (offset + 1 < buffer.length) {
-    if (buffer[offset] !== MARKER) return null;
+    if (buffer[offset] !== MARKER) return closed();
     const marker = buffer[offset + 1];
     if (marker === MARKER) {
       offset += 1;
@@ -59,14 +79,18 @@ export function stripJpegMetadataSegments(buffer: Buffer): Buffer | null {
       kept.push(buffer.subarray(offset, offset + 2));
       offset += 2;
     } else {
-      if (offset + 4 > buffer.length) return null;
+      if (offset + SEGMENT_HEADER_LENGTH > buffer.length) return closed();
       const length = buffer.readUInt16BE(offset + 2);
       const end = offset + 2 + length;
-      if (length < 2 || end > buffer.length) return null;
-      if (keepsSegment(marker, buffer.subarray(offset + 4, end))) kept.push(buffer.subarray(offset, end));
+      if (length < 2 || end > buffer.length) return closed();
+      const segment = keptSegment(marker, buffer.subarray(offset, end));
+      if (segment !== null) kept.push(segment);
       offset = marker === SOS ? entropyEnd(buffer, end) : end;
-      if (marker === SOS) kept.push(buffer.subarray(end, offset));
+      if (marker === SOS) {
+        kept.push(buffer.subarray(end, offset));
+        scanned = true;
+      }
     }
   }
-  return null;
+  return closed();
 }
