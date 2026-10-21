@@ -173,11 +173,12 @@ export type OpsRelay = {
    * `beforeDeposit` (#11441, #10459 point 3) — appelé une fois les délais et la file vérifiés,
    * JUSTE AVANT le dépôt, dans la section sérialisée : la trace d'une demande acceptée est
    * écrite AVANT qu'elle n'existe, et un `false` (journal indisponible) n'en dépose aucune.
+   * Obligatoire : aucun appelant ne dépose sans trace.
    */
   readonly submit: (input: {
     readonly operation: ServerOperation;
     readonly requestedBy: string;
-    readonly beforeDeposit?: (requestId: string) => Promise<boolean>;
+    readonly beforeDeposit: (requestId: string) => Promise<boolean>;
   }) => Promise<SubmitResult>;
   readonly status: () => Promise<ServerOperationStatus>;
   readonly containers: () => Promise<OpsContainersView>;
@@ -203,7 +204,7 @@ export function createOpsRelay(options: OpsRelayOptions): OpsRelay {
   const submitNow = async (
     operation: ServerOperation,
     requestedBy: string,
-    beforeDeposit?: (requestId: string) => Promise<boolean>,
+    beforeDeposit: (requestId: string) => Promise<boolean>,
   ): Promise<SubmitResult> => {
     const requestsDir = settings.requestsDir;
     if (!requestsDir || !(await isWritableDirectory(requestsDir))) {
@@ -231,7 +232,7 @@ export function createOpsRelay(options: OpsRelayOptions): OpsRelay {
     if (Buffer.byteLength(body) > OPS_REQUEST_FILE_MAX_BYTES) {
       return { kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' };
     }
-    if (beforeDeposit !== undefined && !(await beforeDeposit(request.id))) {
+    if (!(await beforeDeposit(request.id))) {
       return { kind: 'refused', status: 503, code: 'AUDIT_UNAVAILABLE' };
     }
     const temporary = path.join(requestsDir, `.${request.id}.json.tmp`);

@@ -42,7 +42,7 @@ if [[ "$1" == "ps" ]]; then
   [[ -n "\${FAKE_PS:-}" ]] && cat "$FAKE_PS"
   exit 0
 fi
-if [[ "$1" == "inspect" ]]; then cat "$FAKE_INSPECT"; exit "\${FAKE_INSPECT_EXIT:-0}"; fi
+if [[ "$1" == "inspect" ]]; then [[ "\${FAKE_INSPECT_EMPTY:-}" == 1 ]] || cat "$FAKE_INSPECT"; exit "\${FAKE_INSPECT_EXIT:-0}"; fi
 if [[ "$1 $2" == "image inspect" ]]; then [[ -n "\${FAKE_IMAGES:-}" ]] && cat "$FAKE_IMAGES"; exit "\${FAKE_IMAGES_EXIT:-0}"; fi
 if [[ "$1" == "stats" ]]; then cat "$FAKE_STATS"; exit "\${FAKE_STATS_EXIT:-0}"; fi
 if [[ "$1 $2" == "system df" ]]; then
@@ -521,6 +521,14 @@ describe('docker-df publie les conteneurs de SON environnement (#11441)', () => 
     assert.equal(result.status, 0, result.stderr);
     const gateway = published().containers.find((c) => c.name === 'meeshy-gateway-staging');
     assert.equal(gateway.stats.pids, 24);
+  });
+
+  it('un inspect en échec qui n’imprime rien garde la dernière publication (jamais une liste vidée)', () => {
+    run('docker-df', stage());
+    const before = readFileSync(path.join(base, 'state', 'containers.json'), 'utf8');
+    const result = run('docker-df', { ...stage(), FAKE_INSPECT_EXIT: '1', FAKE_INSPECT_EMPTY: '1' });
+    assert.equal(result.status, 1);
+    assert.equal(readFileSync(path.join(base, 'state', 'containers.json'), 'utf8'), before);
   });
 
   it('reste sous le plafond de lecture de la passerelle (256 Ko), même à 64 conteneurs pleins', () => {

@@ -15,7 +15,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { HostMetricsSnapshot } from '@meeshy/shared/types/admin-ops';
-import { buildAdminOpsRoutes } from '../ops';
+import { buildAdminOpsRoutes, memoryRefusalGate } from '../ops';
 import { createOpsRelay } from '../../../services/admin/ops-relay';
 import type { HostMetricsProbe } from '../../../services/admin/host-metrics-probe';
 
@@ -106,6 +106,23 @@ async function buildApp({ role = 'BIGBOSS', relayDirs, backupDir, backupSchedule
   await app.ready();
   return { app, audit, snapshot, dirs };
 }
+
+describe('memoryRefusalGate', () => {
+  it('admet une clé une fois par fenêtre, la réadmet après, et cède la plus ancienne au-delà du plafond', () => {
+    let at = 0;
+    const gate = memoryRefusalGate({ windowMs: 1_000, maxKeys: 2, now: () => at });
+    expect(gate.admit('a')).toBe(true);
+    expect(gate.admit('a')).toBe(false);
+    at = 999;
+    expect(gate.admit('a')).toBe(false);
+    at = 1_000;
+    expect(gate.admit('a')).toBe(true);
+    expect(gate.admit('b')).toBe(true);
+    expect(gate.admit('c')).toBe(true);
+    expect(gate.admit('b')).toBe(false);
+    expect(gate.admit('a')).toBe(true);
+  });
+});
 
 describe('GET /host-metrics', () => {
   it.each(['BIGBOSS', 'ADMIN'])('sert l’instantané complet à un %s', async (role) => {

@@ -61,6 +61,7 @@ const f = {
   'admin.ops.refused.cooldown': 'Too early: this operation ran recently.',
   'admin.ops.refused.inProgress': 'This operation is already running.',
   'admin.ops.refused.relay': 'The operations relay is not installed on this host.',
+  'admin.ops.refused.audit': 'The admin log is unavailable: the operation was not requested. Try again in a moment.',
   'admin.ops.relay.missing': 'The operations relay is not installed: operations cannot start from here.',
   'admin.ops.dash.title': 'The machine',
   'admin.ops.dash.more': 'See operations',

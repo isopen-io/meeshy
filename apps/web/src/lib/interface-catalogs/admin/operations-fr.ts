@@ -62,6 +62,7 @@ const f = {
   'admin.ops.refused.cooldown': 'Trop tôt : cette opération a été lancée récemment.',
   'admin.ops.refused.inProgress': 'Cette opération est déjà en cours.',
   'admin.ops.refused.relay': 'Le relais d’opérations n’est pas installé sur cet hôte.',
+  'admin.ops.refused.audit': 'Le journal d’administration est indisponible : l’opération n’a pas été demandée. Réessayez dans un instant.',
   'admin.ops.relay.missing': 'Le relais d’opérations n’est pas installé : les opérations ne peuvent pas partir d’ici.',
   'admin.ops.dash.title': 'La machine',
   'admin.ops.dash.more': 'Voir les opérations',

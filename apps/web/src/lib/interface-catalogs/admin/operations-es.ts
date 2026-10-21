@@ -61,6 +61,7 @@ const f = {
   'admin.ops.refused.cooldown': 'Demasiado pronto: esta operación se lanzó hace poco.',
   'admin.ops.refused.inProgress': 'Esta operación ya está en curso.',
   'admin.ops.refused.relay': 'El relé de operaciones no está instalado en este servidor.',
+  'admin.ops.refused.audit': 'El registro de administración no está disponible: la operación no se solicitó. Vuelva a intentarlo en un momento.',
   'admin.ops.relay.missing': 'El relé de operaciones no está instalado: las operaciones no pueden lanzarse desde aquí.',
   'admin.ops.dash.title': 'La máquina',
   'admin.ops.dash.more': 'Ver las operaciones',

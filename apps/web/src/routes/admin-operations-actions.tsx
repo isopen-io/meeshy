@@ -30,7 +30,7 @@ import { BackupsSection } from './admin-monitoring-backups';
  * garde la même règle, et journalise chaque tentative). Le motif est proposé à l'ADMIN
  * (`useAdminMotive`), facultatif. La confirmation exige de TAPER le nom de l'opération (`backup`,
  * `image-prune`) — la passerelle compare le même mot. Les refus se disent en mots :
- * trop tôt (409), déjà en cours (409), relais absent (503). Le statut se relit toutes les
+ * trop tôt (409), déjà en cours (409), relais absent ou journal indisponible (503). Le statut se relit toutes les
  * 5 s tant qu'une opération est en file ou en cours, 30 s sinon.
  */
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -38,6 +38,7 @@ const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 function refusalOf(failure: ApiFailure, language: AdminLanguage): string {
   if (failure.code === 'OPERATION_COOLDOWN') return translateAdmin(language, 'admin.ops.refused.cooldown');
   if (failure.code === 'OPERATION_IN_PROGRESS') return translateAdmin(language, 'admin.ops.refused.inProgress');
+  if (failure.code === 'AUDIT_UNAVAILABLE') return translateAdmin(language, 'admin.ops.refused.audit');
   if (failure.code === 'OPS_RELAY_UNAVAILABLE' || failure.status === 503) return translateAdmin(language, 'admin.ops.refused.relay');
   if (failure.status === 403) return translateAdmin(language, 'admin.kit.refused.permission');
   if (failure.status === 0) return translateAdmin(language, 'admin.kit.refused.network');

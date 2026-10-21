@@ -418,7 +418,11 @@ def containers_usage(paths):
     if not ids:
         return {"measuredAt": iso(now_utc()), "containers": []}
     # Un conteneur retire entre `ps` et `inspect` fait sortir inspect en erreur, mais il imprime les autres.
-    inspected = json.loads(docker_json(["inspect"] + ids, check=False) or "[]")
+    result = subprocess.run(["docker", "inspect"] + ids, capture_output=True, text=True, timeout=120)
+    if result.returncode != 0 and not result.stdout.strip():
+        # Rien d'inspecte : une collecte ratee, pas une liste vide — la derniere publication reste.
+        raise subprocess.SubprocessError("inspect")
+    inspected = json.loads(result.stdout or "[]")
     # Le filtre de `ps` est revérifié sur CHAQUE conteneur : rien d'un autre environnement ne se publie.
     details = [
         d for d in inspected

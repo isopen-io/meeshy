@@ -190,6 +190,16 @@ describe('la sauvegarde et la purge', () => {
     expect(document.querySelector('[data-admin-ops-error]')?.textContent).toContain('Trop tôt');
   });
 
+  test('un journal indisponible (503 AUDIT_UNAVAILABLE) ne se dit pas « relais absent » (#11441)', async () => {
+    const { host } = await open(undefined, { trigger: () => ({ ok: false, status: 503, error: 'x', code: 'AUDIT_UNAVAILABLE' }) });
+    await click(host.querySelector('[data-admin-ops-trigger="backup"]'));
+    mounter.type(document, '[data-admin-ops-typed]', 'backup');
+    await click(document.querySelector('[data-admin-ops-go="backup"]'));
+    const text = document.querySelector('[data-admin-ops-error]')?.textContent ?? '';
+    expect(text).toContain('journal');
+    expect(text).not.toContain('relais');
+  });
+
   test('une demande acceptée se dit « en file » tout de suite, même avant que le relais ne la publie (#10467)', async () => {
     const { host } = await open(undefined, { trigger: () => ({ ok: true, data: { requestId: 'r9', operation: 'image-prune', status: 'queued', queuedAt: NOW.toISOString() } }) });
     expect(host.querySelector('[data-admin-ops-operation="image-prune"]')?.getAttribute('data-admin-ops-run')).toBe('none');
