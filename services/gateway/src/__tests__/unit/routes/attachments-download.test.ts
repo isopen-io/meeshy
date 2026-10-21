@@ -551,6 +551,28 @@ describe('GET /attachments/file/*', () => {
     });
   });
 
+  describe('#11265 — plages sur tout fichier, pas seulement sur les médias', () => {
+    let app: FastifyInstance;
+    const fileStats = { size: 4096, mtimeMs: 1700000003000 };
+
+    beforeAll(async () => {
+      mockStat.mockResolvedValue(fileStats);
+      app = await buildApp();
+    });
+    afterAll(async () => { await app.close(); });
+
+    it('répond 206 à une plage sur une image servie par chemin', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/attachments/file/uploads/photo.jpg',
+        headers: { range: 'bytes=0-99' },
+      });
+      expect(res.statusCode).toBe(206);
+      expect(res.headers['content-range']).toBe(`bytes 0-99/${fileStats.size}`);
+      expect(res.headers['etag']).toBe(`W/"${fileStats.size}-${Math.floor(fileStats.mtimeMs)}"`);
+    });
+  });
+
   describe('regular file (non-media)', () => {
     let app: FastifyInstance;
     const fileStats = { size: 512, mtimeMs: 1700000002000 };
