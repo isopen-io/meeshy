@@ -259,31 +259,14 @@ extension ConversationViewModel {
         // ne vide pas ce cache).
         let windowOrigin = messageIndex(for: messageId)
             .map { messages[$0].originalLanguage.lowercased() }
-        let originalLang = windowOrigin ?? Self.translatedFromLanguage(of: translations)
-        let resolved = Self.prismTranslation(
+        let originalLang = windowOrigin ?? PrismTranslationLaw.translatedFromLanguage(of: translations)
+        let resolved = PrismTranslationLaw.prismTranslation(
             in: translations, originalLanguage: originalLang, preferredLanguages: readerPrism
         )
         if windowOrigin != nil {
             translationResolutionCache.updateValue(resolved, forKey: messageId)
         }
         return resolved
-    }
-
-    /// Descente du Prisme sur UN message — règle 3 : la langue d'origine
-    /// concourt à son RANG. La première langue du lecteur servie gagne, par une
-    /// traduction ou parce que le message est déjà écrit dedans (⇒ `nil`,
-    /// l'original). Aucune traduction servie ⇒ `nil`, jamais `translations.first`.
-    static func prismTranslation(
-        in translations: [MessageTranslation], originalLanguage: String?, preferredLanguages: [String]
-    ) -> MessageTranslation? {
-        for lang in preferredLanguages {
-            let langLower = lang.lowercased()
-            if originalLanguage == langLower { return nil }
-            if let match = translations.first(where: { $0.targetLanguage.lowercased() == langLower }) {
-                return match
-            }
-        }
-        return nil
     }
 
     /// #9191 — une résolution mise en cache a été calculée sur la langue
@@ -294,29 +277,9 @@ extension ConversationViewModel {
     /// se retire, la bulle redescend le Prisme sur la bonne origine.
     func forgetPrismResolutions(whoseOriginChangedFrom previous: [Message]?) {
         guard let previous, !translationResolutionCache.isEmpty else { return }
-        for id in Self.messageIdsWhoseOriginChanged(from: previous, to: messages) {
+        for id in PrismTranslationLaw.messageIdsWhoseOriginChanged(from: previous, to: messages) {
             translationResolutionCache.removeValue(forKey: id)
         }
-    }
-
-    /// Les messages présents des deux côtés dont la langue d'origine a changé.
-    nonisolated static func messageIdsWhoseOriginChanged(from previous: [Message], to current: [Message]) -> [String] {
-        let before = Dictionary(
-            previous.map { ($0.id, $0.originalLanguage.lowercased()) },
-            uniquingKeysWith: { first, _ in first }
-        )
-        return current.compactMap { message in
-            guard let origin = before[message.id], origin != message.originalLanguage.lowercased() else { return nil }
-            return message.id
-        }
-    }
-
-    /// Langue SOURCE déclarée par les traductions d'un message — repli quand le
-    /// message n'est pas dans la fenêtre. « auto » n'est pas une langue.
-    static func translatedFromLanguage(of translations: [MessageTranslation]) -> String? {
-        translations.lazy
-            .map { $0.sourceLanguage.lowercased() }
-            .first { !$0.isEmpty && $0 != "auto" }
     }
 
     /// Version linguistique que le lecteur a RÉELLEMENT sous les yeux pour ce
@@ -347,23 +310,10 @@ extension ConversationViewModel {
     func splitConsumedLanguages(
         for messageIds: [String]
     ) -> (language: String?, exceptions: [String: String]) {
-        var resolved: [String: String] = [:]
-        var counts: [String: Int] = [:]
-        for id in messageIds {
-            guard let code = consumedLanguage(for: id) else { continue }
-            resolved[id] = code
-            counts[code, default: 0] += 1
+        let resolved = messageIds.reduce(into: [String: String]()) { resolved, id in
+            resolved[id] = consumedLanguage(for: id)
         }
-
-        // À égalité, le code alphabétiquement premier : deux exécutions sur les
-        // mêmes données doivent produire le même corps de requête.
-        guard let dominant = counts
-            .sorted(by: { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key })
-            .first?.key
-        else { return (nil, [:]) }
-
-        let exceptions = resolved.filter { $0.value != dominant }
-        return (dominant, exceptions)
+        return PrismTranslationLaw.dominantSplit(resolved)
     }
 
     // MARK: - Transcription Retry for Audio Messages

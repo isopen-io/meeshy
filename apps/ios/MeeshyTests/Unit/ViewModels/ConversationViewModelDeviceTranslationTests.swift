@@ -297,7 +297,7 @@ final class ConversationViewModelDeviceTranslationTests: XCTestCase {
         let before = [makeKoreanMessage(originalLanguage: "fr"), makeMessage(id: Ids.messageB)]
         let after = [makeKoreanMessage(originalLanguage: "KO"), makeMessage(id: Ids.messageB)]
 
-        XCTAssertEqual(ConversationViewModel.messageIdsWhoseOriginChanged(from: before, to: after), [Ids.messageA])
+        XCTAssertEqual(PrismTranslationLaw.messageIdsWhoseOriginChanged(from: before, to: after), [Ids.messageA])
     }
 
     func test_deviceTranslationConversationId_ofAConversation_isItsId() throws {
