@@ -88,24 +88,18 @@ extension ConversationViewModel {
 
     // MARK: - Consentement vocal
 
-    /// Pure, testable: maps a `hasConsent` fetch to "missing", fail-safe to false.
     nonisolated static func resolveVoiceConsentMissing(_ fetchHasConsent: () async throws -> Bool) async -> Bool {
-        do { return try await !fetchHasConsent() } catch { return false }
+        await VoiceConsentGate.missing(fetchHasConsent)
     }
 
     private func loadVoiceConsentStatus() {
-        // Source primaire : les consentements que la passerelle a CONFIRMÉS
-        // (`PUT /me/consents` à l'octroi, `GET /me/consents` à chaque relecture
-        // des préférences — #6624). Repli : le statut REST voice-profile, pour
-        // un compte dont la relecture n'a pas encore eu lieu sur cet appareil.
-        if UserPreferencesManager.shared.voiceConsentGranted {
+        let gate = collaborators.voiceConsent
+        if gate.isKnownGranted {
             voiceConsentMissing = false
             return
         }
         Task { [weak self] in
-            let missing = await Self.resolveVoiceConsentMissing {
-                try await VoiceProfileService.shared.getConsentStatus().hasConsent
-            }
+            let missing = await gate.fetchMissing()
             self?.voiceConsentMissing = missing
         }
     }
@@ -126,9 +120,8 @@ extension ConversationViewModel {
         grant: (@MainActor () async throws -> Void)? = nil,
         toast: FeedbackToastSurfacing? = nil
     ) -> Task<Void, Never> {
-        let grant: @MainActor () async throws -> Void = grant ?? {
-            try await UserPreferencesManager.shared.grantVoiceAutoTranslationConsent()
-        }
+        let gate = collaborators.voiceConsent
+        let grant: @MainActor () async throws -> Void = grant ?? { try await gate.grant() }
         let toast: FeedbackToastSurfacing = toast ?? FeedbackToastManager.shared
         let consentMissingBeforeGrant = voiceConsentMissing
         voiceConsentMissing = false
