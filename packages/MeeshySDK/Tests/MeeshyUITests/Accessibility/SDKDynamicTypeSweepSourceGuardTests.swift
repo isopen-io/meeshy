@@ -24,7 +24,10 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Community/CommunityAddChannelScreen.swift",
         "Community/CommunityMembersScreen.swift",
         "Community/CommunityListScreen.swift",
-        "Conversation/ConversationSettingsView.swift"
+        "Conversation/ConversationSettingsView.swift",
+        "VoiceProfile/VoiceProfileWizardView.swift",
+        "VoiceProfile/VoiceProfileManageView.swift",
+        "VoiceProfile/VoiceRecordingView.swift"
     ]
 
     private static let fixedGlyphs: [FixedGlyph] = [

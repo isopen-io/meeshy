@@ -58,11 +58,11 @@ public struct VoiceProfileManageView: View {
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(statusTitle)
-                        .font(.system(size: MeeshyFont.calloutSize, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                         .foregroundColor(.primary)
 
                     Text(statusSubtitle)
-                        .font(.system(size: MeeshyFont.smallSize))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(.secondary)
                 }
 
@@ -89,7 +89,7 @@ public struct VoiceProfileManageView: View {
     private func statItem(label: String, value: String) -> some View {
         VStack(spacing: MeeshySpacing.xxs) {
             Text(value)
-                .font(.system(size: MeeshyFont.calloutSize, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                 .foregroundColor(Color(hex: accentColor))
             Text(label)
                 .font(.system(size: MeeshyFont.captionSize, weight: .medium))
@@ -138,7 +138,7 @@ public struct VoiceProfileManageView: View {
                     .font(.system(size: MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(.primary)
                 Text(String(localized: "voiceProfile.manage.cloningSubtitle", defaultValue: "Utiliser votre voix pour les traductions", bundle: .module))
-                    .font(.system(size: MeeshyFont.footnoteSize))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundColor(.secondary)
             }
 
@@ -167,14 +167,14 @@ public struct VoiceProfileManageView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                 Text(String(localized: "voiceProfile.manage.samplesHeader", defaultValue: "ECHANTILLONS VOCAUX", bundle: .module))
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: accentColor))
                     .tracking(1.0)
             }
 
             if viewModel.samples.isEmpty {
                 Text(String(localized: "voiceProfile.manage.noSamples", defaultValue: "Aucun échantillon enregistré", bundle: .module))
-                    .font(.system(size: MeeshyFont.subheadSize))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, MeeshySpacing.xl)
@@ -186,13 +186,13 @@ public struct VoiceProfileManageView: View {
                             .foregroundColor(Color(hex: accentColor))
 
                         Text(String(localized: "voiceProfile.manage.sample", defaultValue: "Échantillon", bundle: .module))
-                            .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                             .foregroundColor(.primary)
 
                         Spacer()
 
                         Text("\(sample.durationSeconds)s")
-                            .font(.system(size: MeeshyFont.smallSize, weight: .medium, design: .monospaced))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium, design: .monospaced))
                             .foregroundColor(.secondary)
 
                         Button {
