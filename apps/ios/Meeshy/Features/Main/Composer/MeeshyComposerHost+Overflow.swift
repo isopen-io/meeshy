@@ -38,7 +38,7 @@ extension MeeshyComposerHost {
             // déjà.
             hasScene: sceneIsPresent,
             backgroundPickerIsReachable: backgroundPaletteIsReachable
-        ), locked: viewModel.isBackgroundLocked)
+        ), lock: viewModel.backgroundLock)
     }
 
     /// **La palette a-t-elle DÉJÀ un chemin à l'écran ?** (#4064)

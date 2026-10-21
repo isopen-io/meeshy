@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
 
@@ -8,42 +9,54 @@ import MeeshyUI
 /// l'autre moitié : aucune commande du fond ne reste à l'écran sans effet.
 final class ComposerBackgroundLockOfferTests: XCTestCase {
 
+    /// Le verrou d'une scène dont le média de fond est l'objet `bg`.
+    private func lock() -> StoryBackgroundLock {
+        let bg = StoryMediaObject(id: "bg", mediaURL: "file:///bg.jpg", mediaType: "image",
+                                  aspectRatio: 0.5625, isBackground: true)
+        return StoryBackgroundLock(locking: StorySlide(id: "s1", effects: StoryEffects(mediaObjects: [bg])))
+    }
+
     func test_laPorteFond_disparaitSousUnFondFige() {
         let portes: [ComposerRailDoor] = [.text, .background, .sticker]
-        XCTAssertEqual(ComposerBackgroundLockOffer.doors(portes, locked: true), [.text, .sticker])
-        XCTAssertEqual(ComposerBackgroundLockOffer.doors(portes, locked: false), portes)
+        XCTAssertEqual(ComposerBackgroundLockOffer.doors(portes, hasBackgroundMedia: false, lock: lock()),
+                       [.text, .sticker])
+        XCTAssertEqual(ComposerBackgroundLockOffer.doors(portes, hasBackgroundMedia: false, lock: nil), portes)
+    }
+
+    /// La règle d'avant le verrou tient toujours : sous un média de fond, la
+    /// porte « Fond » (une couleur) n'a plus d'objet.
+    func test_laPorteFond_disparaitSousUnMediaDeFond_memeSansVerrou() {
+        XCTAssertEqual(ComposerBackgroundLockOffer.doors([.text, .background], hasBackgroundMedia: true, lock: nil),
+                       [.text])
     }
 
     func test_leMenuDuFond_neSOuvrePasSousUnFondFige() {
-        XCTAssertFalse(ComposerBackgroundLockOffer.opensBackgroundMenu(locked: true))
-        XCTAssertTrue(ComposerBackgroundLockOffer.opensBackgroundMenu(locked: false))
+        XCTAssertNil(ComposerBackgroundLockOffer.backgroundMenuTarget("bg", lock: lock()))
+        XCTAssertEqual(ComposerBackgroundLockOffer.backgroundMenuTarget("bg", lock: nil), "bg")
     }
 
     func test_lObjetDeFondFige_naAucuneAction() {
         let offertes: [StoryCanvasContextAction] = [.duplicate, .delete]
-        XCTAssertEqual(ComposerBackgroundLockOffer.objectActions(
-            offertes, selectedId: "bg", lockedBackgroundId: "bg", locked: true), [])
+        XCTAssertEqual(ComposerBackgroundLockOffer.objectActions(offertes, selectedId: "bg", lock: lock()), [])
     }
 
     func test_unPremierPlan_gardeSesActions_saufDevenirLeFond() {
         let offertes: [StoryCanvasContextAction] = [.duplicate, .setAsBackground, .replaceBackground, .delete]
-        XCTAssertEqual(ComposerBackgroundLockOffer.objectActions(
-            offertes, selectedId: "fg", lockedBackgroundId: "bg", locked: true), [.duplicate, .delete])
-        XCTAssertEqual(ComposerBackgroundLockOffer.objectActions(
-            offertes, selectedId: "fg", lockedBackgroundId: "bg", locked: false), offertes)
+        XCTAssertEqual(ComposerBackgroundLockOffer.objectActions(offertes, selectedId: "fg", lock: lock()),
+                       [.duplicate, .delete])
+        XCTAssertEqual(ComposerBackgroundLockOffer.objectActions(offertes, selectedId: "fg", lock: nil), offertes)
     }
 
     func test_leMenuPlus_neChoisitNiNeRetireLeFond() {
         let entrees: [ComposerOverflowEntry] = [.preview, .pickBackground, .removeBackground, .clearAll]
-        XCTAssertEqual(ComposerBackgroundLockOffer.overflow(entrees, locked: true), [.preview, .clearAll])
-        XCTAssertEqual(ComposerBackgroundLockOffer.overflow(entrees, locked: false), entrees)
+        XCTAssertEqual(ComposerBackgroundLockOffer.overflow(entrees, lock: lock()), [.preview, .clearAll])
+        XCTAssertEqual(ComposerBackgroundLockOffer.overflow(entrees, lock: nil), entrees)
     }
 
     /// L'effet VISUEL filtre le fond ; l'effet d'ouverture anime la slide.
     func test_seulLEffetVisuel_disparait() {
-        XCTAssertEqual(ComposerBackgroundLockOffer.sceneEffects([.opening, .visual], locked: true), [.opening])
-        XCTAssertEqual(ComposerBackgroundLockOffer.sceneEffects([.opening, .visual], locked: false),
-                       [.opening, .visual])
+        XCTAssertEqual(ComposerBackgroundLockOffer.sceneEffects([.opening, .visual], lock: lock()), [.opening])
+        XCTAssertEqual(ComposerBackgroundLockOffer.sceneEffects([.opening, .visual], lock: nil), [.opening, .visual])
     }
 
     /// **Chaque site LIT la règle.** Une règle juste qu'un site n'appelle pas
@@ -51,13 +64,12 @@ final class ComposerBackgroundLockOfferTests: XCTestCase {
     func test_leMeuble_litLaRegleAChaqueSite() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
         for appel in ["ComposerBackgroundLockOffer.doors(",
-                      "ComposerBackgroundLockOffer.opensBackgroundMenu(",
-                      "ComposerBackgroundLockOffer.objectActions(",
+                      "ComposerBackgroundLockOffer.backgroundMenuTarget(",
                       "ComposerBackgroundLockOffer.overflow(",
                       "ComposerBackgroundLockOffer.sceneEffects("] {
             XCTAssertTrue(code.contains(appel), "le meuble ne lit pas \(appel)")
         }
-        XCTAssertEqual(code.components(separatedBy: "sceneObjectActions(ComposerTrailingRailPolicy.actions(").count - 1, 2,
+        XCTAssertEqual(code.components(separatedBy: "ComposerBackgroundLockOffer.objectActions(ComposerTrailingRailPolicy.actions(").count - 1, 2,
                        "les DEUX listes d'actions d'objet (colonne et menu) passent par le filtre du fond figé")
     }
 }

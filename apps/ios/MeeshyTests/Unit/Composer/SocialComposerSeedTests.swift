@@ -314,7 +314,7 @@ final class SocialComposerSeedTests: XCTestCase {
                 locksBackground: cible.locksBackground,
                 resolver: resolver))
 
-            XCTAssertEqual(StoryComposerViewModel(seeding: graine).isBackgroundLocked, locks)
+            XCTAssertEqual(StoryComposerViewModel(seeding: graine).backgroundLock != nil, locks)
         }
     }
 

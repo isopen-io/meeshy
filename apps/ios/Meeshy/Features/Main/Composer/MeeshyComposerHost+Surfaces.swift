@@ -368,12 +368,7 @@ extension MeeshyComposerHost {
             // (#5041). La règle du canvas retombe sur le viseur tant que ce
             // rappel est nil — donc le geste n'est jamais muet, même le jour
             // où le meuble ne sert pas encore le menu.
-            // Sous un fond figé (#9994), le menu du fond ne s'ouvre pas : tout
-            // y changerait le fond. Le geste reste muet plutôt que d'ouvrir le viseur.
-            onBackgroundMediaLongPressed: { id in
-                guard ComposerBackgroundLockOffer.opensBackgroundMenu(locked: viewModel.isBackgroundLocked) else { return }
-                backgroundMenuObjectId = id
-            },
+            onBackgroundMediaLongPressed: { backgroundMenuObjectId = ComposerBackgroundLockOffer.backgroundMenuTarget($0, lock: viewModel.backgroundLock) },
             onBackgroundLongPressChanged: { handleSceneCaptureLongPressChanged($0) },
             onBackgroundLongPressEnded: { handleSceneCaptureLongPressEnded() },
             // **Le viseur n'est plus remis à la surface — il est MONTÉ par le

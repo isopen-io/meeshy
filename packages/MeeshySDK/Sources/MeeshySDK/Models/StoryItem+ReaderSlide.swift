@@ -130,28 +130,38 @@ extension StoryItem {
             effects.audioPlayerObjects = audios
         }
 
-        // `slide.mediaURL` porte le fond IMAGE/VIDÉO statique (chemin BG legacy
-        // de `StoryRenderer.renderBackground`, routé via `directURLIfAny`).
-        //
-        // - Story purement legacy (aucun `mediaObject`) : le fond vit directement
-        //   dans `media[0]` → on le garde.
-        // - Story moderne (au moins un `mediaObject`) : un fond photo statique est
-        //   une entrée `media` qui n'est référencée par AUCUN objet (foreground,
-        //   background, audio ou variante TTS). Si une telle entrée existe, c'est
-        //   le backdrop → on route son URL (sinon `renderBackground` retombe sur
-        //   `.solidColor(.black)` = fond NOIR sur la story d'un autre). Quand
-        //   chaque `media` est référencée (story foreground-only), il n'y a pas de
-        //   backdrop statique → `nil`, et le fond vient de `effects.background`.
-        //
-        // Un fond porté par un `StoryMediaObject isBackground:true` référence sa
-        // `media`, donc il n'est jamais choisi ici : `renderBackground` le traite
-        // en amont (branche isBackground), et `mediaURL` reste `nil` — pas de
-        // double routage ni de post id fourni au resolver keyé sur `FeedMedia.id`.
-        // L'image d'un STICKER est un média du post (la publication la rattache
-        // avec le premier plan) : elle n'est jamais un candidat au fond (#9994).
+        let legacyMediaURL = legacyBackdropURL(migrating: &effects)
+        return StorySlide(
+            id: self.id,
+            mediaURL: legacyMediaURL,
+            content: resolvedContent,
+            effects: effects
+        )
+    }
+
+    /// `slide.mediaURL` porte le fond IMAGE/VIDÉO statique (chemin BG legacy
+    /// de `StoryRenderer.renderBackground`, routé via `directURLIfAny`).
+    ///
+    /// - Story purement legacy (aucun `mediaObject`) : le fond vit directement
+    ///   dans `media[0]` → on le garde.
+    /// - Story moderne (au moins un `mediaObject`) : un fond photo statique est
+    ///   une entrée `media` qui n'est référencée par AUCUN objet (foreground,
+    ///   background, audio ou variante TTS). Si une telle entrée existe, c'est
+    ///   le backdrop → on route son URL (sinon `renderBackground` retombe sur
+    ///   `.solidColor(.black)` = fond NOIR sur la story d'un autre). Quand
+    ///   chaque `media` est référencée (story foreground-only), il n'y a pas de
+    ///   backdrop statique → `nil`, et le fond vient de `effects.background`.
+    ///
+    /// Un fond porté par un `StoryMediaObject isBackground:true` référence sa
+    /// `media`, donc il n'est jamais choisi ici : `renderBackground` le traite
+    /// en amont (branche isBackground), et `mediaURL` reste `nil` — pas de
+    /// double routage ni de post id fourni au resolver keyé sur `FeedMedia.id`.
+    ///
+    /// L'image d'un STICKER est un média du post (la publication la rattache
+    /// avec le premier plan) : elle n'est jamais un candidat au fond (#9994).
+    private func legacyBackdropURL(migrating effects: inout StoryEffects) -> String? {
         let stickerMediaIds = Set((effects.stickerObjects ?? []).map(\.postMediaId).filter { !$0.isEmpty })
         let backdropCandidates = self.media.filter { !stickerMediaIds.contains($0.id) }
-        let legacyMediaURL: String?
         if let mediaObjects = effects.mediaObjects, !mediaObjects.isEmpty {
             var referencedIds = Set(mediaObjects.map(\.postMediaId))
             for audio in effects.audioPlayerObjects ?? [] {
@@ -160,20 +170,14 @@ extension StoryItem {
                     referencedIds.insert(variant.postMediaId)
                 }
             }
-            legacyMediaURL = backdropCandidates.first(where: { !referencedIds.contains($0.id) })?.url
-        } else if let carrier = Self.legacyVideoCarrier(in: backdropCandidates) {
+            return backdropCandidates.first(where: { !referencedIds.contains($0.id) })?.url
+        }
+        if let carrier = Self.legacyVideoCarrier(in: backdropCandidates) {
             // TRANSITOIRE — forme legacy « média seul ». À SUPPRIMER quand le
             // parc ne sert plus que le canvas v3 (voir `legacyVideoCarrier`).
             effects.mediaObjects = [carrier]
-            legacyMediaURL = nil
-        } else {
-            legacyMediaURL = backdropCandidates.first?.url
+            return nil
         }
-        return StorySlide(
-            id: self.id,
-            mediaURL: legacyMediaURL,
-            content: resolvedContent,
-            effects: effects
-        )
+        return backdropCandidates.first?.url
     }
 }

@@ -139,8 +139,10 @@ final class ComposerBackgroundMenuTests: XCTestCase {
     /// **Le fond ouvre son menu, pas le viseur.** C'est le câblage qui fait
     /// basculer la règle du canvas : tant que ce rappel est nil, elle retombe
     /// sur le viseur — donc le geste n'est jamais muet, mais il reste faux.
+    /// Depuis #9994, l'objet visé passe par la règle du fond figé : sous la
+    /// story recomposée d'autrui, le menu ne s'ouvre pas.
     func test_leMeuble_sertLeMenu_doncLaRègleDuCanvasBascule() throws {
         XCTAssertTrue(try source("MeeshyComposerHost+Surfaces.swift")
-            .contains("onBackgroundMediaLongPressed:{backgroundMenuObjectId=$0}"))
+            .contains("onBackgroundMediaLongPressed:{backgroundMenuObjectId=ComposerBackgroundLockOffer.backgroundMenuTarget($0,lock:viewModel.backgroundLock)}"))
     }
 }

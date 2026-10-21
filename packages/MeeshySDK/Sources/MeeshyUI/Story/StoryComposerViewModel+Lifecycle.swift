@@ -61,7 +61,7 @@ extension StoryComposerViewModel {
     /// d'autre ; quand l'effacer et ce qu'il faut effacer À CÔTÉ (le média du
     /// document, le lieu, la transcription) reste une décision app.
     public func reset() {
-        releaseBackgroundLock()
+        backgroundKeeper = nil
         // **`carriedContentSources` DOIT tomber ici, et ne tombait pas.**
         // C'est le cache d'idempotence d'`applyContentMedia` : « cette URL a
         // déjà été portée dans CETTE composition ». Une composition remise à

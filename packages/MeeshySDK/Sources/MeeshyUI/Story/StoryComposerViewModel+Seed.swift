@@ -260,6 +260,38 @@ public struct StoryComposerRecomposedScene {
     public let stickerAnimations: [String: Data]
     /// Le fond se fige : la story est celle d'une autre personne (#9994).
     public let locksBackground: Bool
+
+    /// **La scène REMPLACE l'ardoise** : une story reprise se pose comme elle a
+    /// été publiée, sa description déjà résolue par le Prisme du lecteur. Les
+    /// médias arrivent en UNE passe (un seul bump du canvas) ; une vidéo ne
+    /// reçoit que sa VIGNETTE — la mesurer réécrirait la durée que l'auteur
+    /// d'origine avait rognée. Le verrou se pose APRÈS la pose : il fige le fond
+    /// tel qu'il a été semé, image héritée comprise.
+    @MainActor
+    func pose(into composer: StoryComposerViewModel) {
+        composer.slides = [slide]
+        composer.currentSlideIndex = 0
+        if let backgroundImage {
+            composer.setImage(backgroundImage, for: slide.id)
+            composer.hasBackgroundImage = true
+        }
+        composer.mergeRestoredMedia(images: images, videoURLs: videoURLs, audioURLs: audioURLs)
+        for (objectId, fileURL) in videoURLs {
+            composer.videoMeasureTasks[objectId] = Task { [weak composer] in
+                let mesure = await StoryComposerViewModel.videoMeasurement(of: fileURL)
+                guard !Task.isCancelled, let composer, let thumbnail = mesure.thumbnail else { return }
+                composer.registerLoadedImage(thumbnail, for: objectId)
+            }
+        }
+        for (stickerId, data) in stickerAnimations {
+            composer.registerLoadedStickerAnimation(data, for: stickerId)
+        }
+        if locksBackground {
+            composer.backgroundKeeper = StoryComposerBackgroundKeeper(
+                lock: StoryBackgroundLock(locking: slide), image: backgroundImage)
+        }
+        composer.isSeededSession = true
+    }
 }
 
 /// La copie sous la convention de nom du composer, isolée pour être lisible
@@ -326,7 +358,7 @@ public extension StoryComposerViewModel {
     /// n'envoie un fond que depuis `slideImages`, et une story publiée perdrait
     /// le sien.
     func detachSeededBackgroundImage() {
-        guard !locksBackground(ofSlideId: currentSlide.id) else { return }
+        guard backgroundKeeper?.refuses(slideId: currentSlide.id) != true else { return }
         setImage(nil, for: currentSlide.id)
         hasBackgroundImage = false
     }
@@ -350,32 +382,7 @@ public extension StoryComposerViewModel {
             break
 
         case .scene(let scene)?:
-            // La scène REMPLACE l'ardoise : une story reprise se pose comme
-            // elle a été publiée, et sa description y est déjà — résolue par le
-            // Prisme du lecteur. Les médias arrivent en UNE passe (un seul bump
-            // du canvas), et une vidéo ne reçoit que sa VIGNETTE : la mesurer
-            // réécrirait la durée que l'auteur d'origine avait rognée.
-            slides = [scene.slide]
-            currentSlideIndex = 0
-            if let background = scene.backgroundImage {
-                setImage(background, for: scene.slide.id)
-                hasBackgroundImage = true
-            }
-            mergeRestoredMedia(images: scene.images,
-                               videoURLs: scene.videoURLs,
-                               audioURLs: scene.audioURLs)
-            for (objectId, fileURL) in scene.videoURLs {
-                loadVideoThumbnail(objectId: objectId, fileURL: fileURL)
-            }
-            for (stickerId, data) in scene.stickerAnimations {
-                registerLoadedStickerAnimation(data, for: stickerId)
-            }
-            // Le verrou se pose APRÈS la pose : il fige le fond tel qu'il a été
-            // semé, image héritée comprise.
-            if scene.locksBackground {
-                lockBackground(of: scene.slide, image: scene.backgroundImage)
-            }
-            isSeededSession = true
+            scene.pose(into: self)
 
         case .audio(let copied)?:
             // **Le son devient le SON de la scène** (#4461), par le chemin que

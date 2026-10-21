@@ -16,7 +16,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     // le tableau, les mutations passant par `addSlide` / `removeSlide` /
     // `selectSlide`. Déjà exposées par le protocole `StoryComposerProviding`.
     @Published public internal(set) var slides: [StorySlide] = [StorySlide()] {
-        didSet { enforceBackgroundLock() }
+        didSet { if let kept = backgroundKeeper?.kept(slides) { slides = kept } }
     }
     @Published public internal(set) var currentSlideIndex: Int = 0
     /// `public internal(set)` comme ses voisines (`loadedImages`, `loadedVideoURLs`,
@@ -24,15 +24,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// l'atelier — `snapshotAllSlides()` vit sur la VUE, donc hors de portée d'un
     /// meuble qui incruste la scène. En écriture, le ViewModel reste seul maître.
     @Published public internal(set) var slideImages: [String: UIImage] = [:] {
-        didSet { enforceLockedBackgroundImage() }
+        didSet { if let kept = backgroundKeeper?.kept(slideImages) { slideImages = kept } }
     }
-
-    /// **Le fond figé d'une story recomposée d'AUTRUI** (#9994) — `nil` partout
-    /// ailleurs. Posé une fois, par la graine de scène ; voir
-    /// `StoryComposerViewModel+BackgroundLock.swift`.
-    public internal(set) var backgroundLock: StoryBackgroundLock?
-    /// Le bitmap de fond hérité que le verrou garde dans `slideImages`.
-    var lockedBackgroundImage: UIImage?
+    /// Le fond figé d'une story recomposée d'AUTRUI (#9994) — `nil` partout ailleurs.
+    var backgroundKeeper: StoryComposerBackgroundKeeper?
+    public var backgroundLock: StoryBackgroundLock? { backgroundKeeper?.lock }
 
     // MARK: - Repost source (Patch B.6 — exposed publicly so the iOS caller in Phase C
     // can read them before invoking PostService.create / createStory with repostOfId).

@@ -358,18 +358,18 @@ final class StoryRecompositionTests: XCTestCase {
         sut.applyBackground(hex: "#FFFFFF")
         sut.toggleBackground(id: "bg")
 
-        XCTAssertFalse(sut.isBackgroundLocked)
+        XCTAssertNil(sut.backgroundLock)
         XCTAssertEqual(sut.currentSlide.effects.background, "FFFFFF")
         XCTAssertNil(sut.currentSlide.effects.resolvedBackgroundMedia)
     }
 
     func test_fondFige_tombeAvecUneRemiseAZero() throws {
         let sut = try backgroundScene(locks: true)
-        XCTAssertTrue(sut.isBackgroundLocked)
-        XCTAssertTrue(sut.isLockedBackground(objectId: "bg"))
+        XCTAssertNotNil(sut.backgroundLock)
+        XCTAssertEqual(sut.backgroundLock?.backgroundObjectId, "bg")
 
         sut.reset()
 
-        XCTAssertFalse(sut.isBackgroundLocked)
+        XCTAssertNil(sut.backgroundLock)
     }
 }

@@ -79,12 +79,12 @@ extension MeeshyComposerHost {
         guard let edition = activeInlineEdit, let objet = slide.sceneObject(id: edition.objectId) else {
             return nil
         }
-        let offertes = sceneObjectActions(ComposerTrailingRailPolicy.actions(
+        let offertes = ComposerBackgroundLockOffer.objectActions(ComposerTrailingRailPolicy.actions(
             slide: slide,
             selectedId: edition.objectId,
             served: ComposerTrailingColumn.servedActions,
             hasEditor: editableSceneKindsServed.contains(Self.canvasKind(objet.kind)),
-            canLeaveScene: false), of: edition.objectId)
+            canLeaveScene: false), selectedId: edition.objectId, lock: viewModel.backgroundLock)
         return (inlineSections(for: edition.objectId, family: edition.family),
                 edition.openSection,
                 ComposerInlineEditing.actions(for: edition.family, offered: offertes))
@@ -117,19 +117,7 @@ extension MeeshyComposerHost {
     }
 
     var sceneEffects: [ComposerSceneEffect] {
-        ComposerBackgroundLockOffer.sceneEffects(ComposerSceneEffects.served(background: sceneEffectBackground),
-                                                 locked: viewModel.isBackgroundLocked)
-    }
-
-    /// Les actions d'un objet, moins celles que le fond figé interdit (#9994) —
-    /// le seul filtre que les deux listes d'actions (colonne et menu) partagent.
-    func sceneObjectActions(_ offertes: [StoryCanvasContextAction],
-                            of objectId: String) -> [StoryCanvasContextAction] {
-        ComposerBackgroundLockOffer.objectActions(
-            offertes,
-            selectedId: objectId,
-            lockedBackgroundId: viewModel.backgroundLock?.backgroundObjectId,
-            locked: viewModel.isBackgroundLocked)
+        ComposerBackgroundLockOffer.sceneEffects(ComposerSceneEffects.served(background: sceneEffectBackground), lock: viewModel.backgroundLock)
     }
 
     /// Le carrousel RÉELLEMENT ouvert — la règle le referme dès que la scène
