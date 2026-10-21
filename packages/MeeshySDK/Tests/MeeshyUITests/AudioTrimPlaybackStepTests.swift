@@ -7,6 +7,7 @@ import QuartzCore
 /// Le pas de la lecture est une loi pure : tenir la borne haute, revenir à la
 /// borne basse. L'horloge qui l'appelle (CADisplayLink, plage 30…60) est
 /// remplaçable ; la loi, non.
+@MainActor
 final class AudioTrimPlaybackStepTests: XCTestCase {
 
     func test_insideTheSegment_keepsPlayingAtTheCurrentTime() {

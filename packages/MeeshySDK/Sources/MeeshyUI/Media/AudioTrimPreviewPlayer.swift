@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import QuartzCore
 
 /// **La lecture d'un SEGMENT, pour le rognage** (#4657).
 ///
@@ -29,7 +30,7 @@ public final class AudioTrimPreviewPlayer: ObservableObject {
     @Published public private(set) var isPlaying = false
 
     private var player: AVAudioPlayer?
-    private var horloge: Timer?
+    private var horloge: CADisplayLink?
     private var borneHaute: TimeInterval = .infinity
     private var borneBasse: TimeInterval = 0
 
@@ -93,16 +94,23 @@ public final class AudioTrimPreviewPlayer: ObservableObject {
 
     // MARK: - L'horloge
 
-    /// 60 Hz : c'est la cadence à laquelle la bande défile sous le curseur, et
-    /// une valeur plus lâche se verrait comme un défilement saccadé — le
-    /// contraire de ce que ce composant existe pour offrir.
+    /// Un `CADisplayLink` sur la plage 30…60 Hz (`CAFrameRateRange.visualClock`),
+    /// pas un `Timer` : la bande défile sous le curseur au rythme de l'ÉCRAN, et
+    /// l'horloge d'affichage est déjà sur le fil principal — plus de `Task` par
+    /// tic. Le proxy `WeakDisplayLinkTarget` ne retient pas `self` : un joueur
+    /// abandonné ne reste pas vivant par sa propre horloge.
     private func demarrerHorloge() {
         arreterHorloge()
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.battre() }
+        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+            guard let self else {
+                link.invalidate()
+                return
+            }
+            self.battre()
         }
-        RunLoop.main.add(timer, forMode: .common)
-        horloge = timer
+        link.preferredFrameRateRange = .visualClock
+        link.add(to: .main, forMode: .common)
+        horloge = link
     }
 
     private func arreterHorloge() {
@@ -112,12 +120,19 @@ public final class AudioTrimPreviewPlayer: ObservableObject {
 
     private func battre() {
         guard let player, isPlaying else { return }
-        playhead = player.currentTime
         // La borne haute est tenue ICI, faute d'API de lecture par intervalle.
-        if player.currentTime >= borneHaute || !player.isPlaying {
+        switch AudioTrimPlaybackStep.next(
+            currentTime: player.currentTime,
+            playerIsPlaying: player.isPlaying,
+            lowerBound: borneBasse,
+            upperBound: borneHaute
+        ) {
+        case .playing(let position):
+            playhead = position
+        case .finished(let repos):
             player.pause()
-            player.currentTime = borneBasse
-            playhead = borneBasse
+            player.currentTime = repos
+            playhead = repos
             isPlaying = false
             arreterHorloge()
         }
@@ -139,4 +154,20 @@ public final class AudioTrimPreviewPlayer: ObservableObject {
     // `stop()` — appelé par `onDisappear` de l'hôte — reste le site qui éteint
     // le minuteur ; rien ne change de ce côté.
     nonisolated deinit {}
+}
+
+/// **Le pas de la lecture d'un segment, en loi pure** : tenir la borne haute,
+/// revenir à la borne basse. Séparé de l'horloge pour qu'elle reste
+/// remplaçable sans que la règle ne bouge.
+nonisolated enum AudioTrimPlaybackStep: Equatable {
+    case playing(at: TimeInterval)
+    case finished(restingAt: TimeInterval)
+
+    static func next(currentTime: TimeInterval,
+                                 playerIsPlaying: Bool,
+                                 lowerBound: TimeInterval,
+                                 upperBound: TimeInterval) -> AudioTrimPlaybackStep {
+        guard currentTime < upperBound, playerIsPlaying else { return .finished(restingAt: lowerBound) }
+        return .playing(at: currentTime)
+    }
 }

@@ -46,3 +46,12 @@ public final class WeakDisplayLinkTarget: NSObject {
         return CADisplayLink(target: target, selector: #selector(WeakDisplayLinkTarget.tick(_:)))
     }
 }
+
+extension CAFrameRateRange {
+    /// **La plage des horloges VISUELLES qui n'ont pas besoin du taux plein**
+    /// (#9883) : une lecture de rognage, un défilement automatique. 30…60 Hz,
+    /// 60 de préférence — un écran ProMotion ne les réveille plus à 120 Hz, et
+    /// le système peut descendre à 30 en économie d'énergie. Un seul endroit
+    /// pour la plage : les horloges ne la recopient pas.
+    public static let visualClock = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+}
