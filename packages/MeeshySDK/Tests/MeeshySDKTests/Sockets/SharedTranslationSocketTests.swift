@@ -52,22 +52,17 @@ final class SharedTranslationSocketTests: XCTestCase {
         XCTAssertEqual(received, [shared])
     }
 
-    func test_socketManager_registersTheTranslationHandlersFromItsExtension() throws {
-        let manager = try sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager+EventHandlers.swift")
+    func test_messageTable_carriesBothTranslationRoutes() {
+        let events = Set(MessageSocketRoutes.all(for: .shared).map(\.event))
 
-        XCTAssertTrue(manager.contains("registerTranslationHandlers(on: socket)"))
-        XCTAssertFalse(
-            manager.contains("socket.on(\"message:translation\")"),
-            "l'écouteur a déménagé dans MessageSocketManager+Translations.swift, le gestionnaire est hors budget"
-        )
+        XCTAssertTrue(events.contains(.messageTranslation), "la traduction du serveur arrive sur la room de la conversation")
+        XCTAssertTrue(events.contains(.messageTranslationShared), "celle qu'un membre partage a son propre nom d'événement")
     }
 
-    func test_translationExtension_listensToBothEventsAndRoutesEachToItsOwnChannel() throws {
+    func test_translationRoutes_areDeclaredByTheirExtensionNotByTheManager() throws {
         let source = try sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager+Translations.swift")
 
-        XCTAssertTrue(source.contains("socket.on(\"message:translation\")"))
-        XCTAssertTrue(source.contains("self?.translationReceived.send(event)"))
-        XCTAssertTrue(source.contains("socket.on(\"message:translation-shared\")"))
+        XCTAssertTrue(source.contains("route(.messageTranslation, TranslationEvent.self) { $0.translationReceived.send($1) }"))
         XCTAssertTrue(source.contains("SharedTranslationSocketChannel.events.send(shared)"))
     }
 }

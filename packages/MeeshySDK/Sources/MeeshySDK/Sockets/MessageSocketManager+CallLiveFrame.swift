@@ -81,12 +81,12 @@ extension MessageSocketManager: CallLiveFrameSocketProviding {
         CallLiveFrameSocketChannel.events.eraseToAnyPublisher()
     }
 
-    func registerCallLiveFrameHandlers(on socket: SocketIOClient) {
-        socket.on("call:frame-selected") { [weak self] data, _ in
-            self?.decode(CallLiveFrameSelectedEvent.self, from: data) { event in
+    var callLiveFrameRoutes: [SocketInboundRoute] {
+        [
+            route(.callFrameSelected, CallLiveFrameSelectedEvent.self) { _, event in
                 CallLiveFrameSocketChannel.events.send(event)
-            }
-        }
+            },
+        ]
     }
 
     public func selectCallLiveFrame(callId: String, frameId: String?, texts: CallLiveFrameTexts?, reply: CallLiveFrameReply? = nil) async throws {
