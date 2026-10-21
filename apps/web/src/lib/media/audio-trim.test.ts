@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { audioTrimUntouched, trimmedAudioFileName, trimmedWav } from './audio-trim';
+import { audioTrimUntouched, decodeAudioFile, MAXIMUM_TRIM_SOURCE_BYTES, trimmedAudioFileName, trimmedWav, trimSourceFits } from './audio-trim';
 
 /** COUPER UN AUDIO EN ATTENTE (#9136, miroir de l'éditeur audio iOS) — la
  * fenêtre gardée seule repart, à la bonne durée, en WAV PCM 16 bits. */
@@ -40,4 +40,51 @@ describe('audioTrimUntouched', () => {
 
 test('le nom dit la coupe et le conteneur', () => {
   expect(trimmedAudioFileName('vocal.webm')).toBe('vocal-coupe.wav');
+});
+
+describe('decodeAudioFile', () => {
+  const withAudioContext = async (run: (constructed: number[]) => Promise<void>) => {
+    const constructed: number[] = [];
+    const scope = globalThis as unknown as { AudioContext?: unknown };
+    const previous = scope.AudioContext;
+    scope.AudioContext = class {
+      constructor() {
+        constructed.push(1);
+      }
+      decodeAudioData() {
+        return Promise.resolve({ sampleRate: 8000, numberOfChannels: 1, length: 8000, getChannelData: () => new Float32Array(8000) });
+      }
+      close() {
+        return Promise.resolve();
+      }
+    };
+    try {
+      await run(constructed);
+    } finally {
+      scope.AudioContext = previous;
+    }
+  };
+
+  test('un son au-delà de la borne n’ouvre aucun décodeur et rend null', async () => {
+    await withAudioContext(async (constructed) => {
+      const decoded = await decodeAudioFile({ size: MAXIMUM_TRIM_SOURCE_BYTES + 1, arrayBuffer: async () => new ArrayBuffer(0) });
+      expect(decoded).toBeNull();
+      expect(constructed).toEqual([]);
+    });
+  });
+
+  test('un son dans la borne est décodé', async () => {
+    await withAudioContext(async (constructed) => {
+      const decoded = await decodeAudioFile({ size: 1024, arrayBuffer: async () => new ArrayBuffer(0) });
+      expect(decoded?.length).toBe(8000);
+      expect(constructed).toEqual([1]);
+    });
+  });
+});
+
+describe('trimSourceFits', () => {
+  test('la borne est incluse, un octet de plus est refusé', () => {
+    expect(trimSourceFits({ size: MAXIMUM_TRIM_SOURCE_BYTES })).toBe(true);
+    expect(trimSourceFits({ size: MAXIMUM_TRIM_SOURCE_BYTES + 1 })).toBe(false);
+  });
 });
