@@ -86,7 +86,7 @@ struct KeypadTab: View {
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.matches) { user in
-                        resultRow(user)
+                        liveResultRow(user)
                     }
                 }
                 .padding(.top, MeeshySpacing.xsPlus)
@@ -130,6 +130,10 @@ struct KeypadTab: View {
                 .padding(.horizontal, 40)
         }
         .padding(.top, MeeshySpacing.xxl)
+    }
+
+    private func liveResultRow(_ user: UserSearchResult) -> some View {
+        LivePresence { resultRow(user) }
     }
 
     private func resultRow(_ user: UserSearchResult) -> some View {

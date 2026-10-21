@@ -51,8 +51,8 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
                 .font(.system(size: MeeshyFont.calloutSize, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .textFieldStyle(.plain)
-                .autocapitalization(.none)
-                .disableAutocorrection(true)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
                 .onSubmit { Task { await viewModel.searchUsers() } }
         }
         .padding(MeeshySpacing.md)

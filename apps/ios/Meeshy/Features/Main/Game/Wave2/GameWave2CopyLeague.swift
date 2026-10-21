@@ -67,7 +67,7 @@ extension GameText {
         String(localized: "game2.league.pseudonym.current", defaultValue: "Tu joues sous le nom \(name).", bundle: .main)
     }
 
-    static var leaguePseudonymInvalid: String { String(localized: "game2.league.pseudonym.invalid", defaultValue: "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret.", bundle: .main) }
+    static var leaguePseudonymInvalid: String { String(localized: "game2.league.pseudonym.invalid", defaultValue: "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret, tiret bas.", bundle: .main) }
 
     static var leagueWaiting: String { String(localized: "game2.league.waiting", defaultValue: "C’est noté. Un groupe t’est attribué au début de la semaine prochaine.", bundle: .main) }
 

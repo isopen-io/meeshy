@@ -289,7 +289,7 @@ public final class AudioMixer: AudioMixerProviding {
         }
     }
 
-    deinit {
+    nonisolated deinit {
         // We CANNOT call MainActor-isolated teardown() from deinit safely —
         // ARC may release AudioMixer from any thread. The owner should call
         // shutdown() explicitly. We log a warning when forgotten; ARC will

@@ -8,18 +8,26 @@
  * vérifiée — pas un effet de bord de ce compte.
  *
  * Il balaie TOUTE colonne qui peut graver une adresse de média (pièces
- * jointes, médias de post, piste d'un post, avatars et bannières, sons) :
- * la liste vit dans `STATIC_UPLOAD_URL_COLUMNS`.
+ * jointes, médias de post, piste d'un post, avatars et bannières, sons), et
+ * fouille en profondeur les colonnes JSON (`imageVariants`, pistes TTS de
+ * `translations`, scènes de `storyEffects`, `metadata`) : la liste vit dans
+ * `STATIC_UPLOAD_URL_COLUMNS`. Les références `static:uploads/…` (écrites par
+ * la migration 017, résolues par `MeeshyConfig.staticOrigin` côté iOS et
+ * `media-ref.ts` côté web) comptent comme les adresses absolues.
  *
  * FAÇADE MINCE : la décision et le balayage vivent dans
  * `src/services/attachments/staticUploadUrlCount.ts`, les requêtes dans
- * `staticUploadUrlStores.ts` (sous `src/`, donc lues par `tsc`).
+ * `staticUploadUrlStores.ts`, la ligne de commande dans
+ * `countStaticUploadUrlsCli.ts` (sous `src/`, donc lues par `tsc` et
+ * compilées dans l'image).
  *
- * ⚠ Lancé depuis un poste de travail, `DATABASE_URL` cible la base LOCALE. À
- * exécuter DANS le conteneur du gateway de l'environnement visé :
+ * ⚠ Lancé depuis un poste de travail, `DATABASE_URL` cible la base LOCALE.
+ * L'image du gateway ne porte que `dist/` (ni `scripts/` ni `tsx`) : dans le
+ * conteneur de l'environnement visé, lancer la version COMPILÉE de
+ * `src/services/attachments/countStaticUploadUrlsCli.ts` :
  *
- *   docker exec -it meeshy-gateway-staging sh -lc 'cd /app && bunx tsx scripts/count-static-upload-urls.ts'
- *   docker exec -it meeshy-gateway sh -lc 'cd /app && bunx tsx scripts/count-static-upload-urls.ts'
+ *   docker exec meeshy-gateway-staging node dist/src/services/attachments/countStaticUploadUrlsCli.js
+ *   docker exec meeshy-gateway         node dist/src/services/attachments/countStaticUploadUrlsCli.js
  *
  * Code de sortie : 0 = aucune ligne, le retrait peut suivre ; 3 = des lignes
  * existent (migration de données d'abord) ; 1 = erreur.
@@ -40,36 +48,9 @@
  * Zéro ligne en `200` : rien ne lit plus ce chemin, le retrait ne casse
  * personne. Sinon, l'agent utilisateur dit QUEL client grave encore l'adresse.
  */
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { runStaticUploadUrlCount } from '../src/services/attachments/countStaticUploadUrlsCli';
 
-import { countStaticUploadUrls } from '../src/services/attachments/staticUploadUrlCount';
-import { staticUploadUrlStores } from '../src/services/attachments/staticUploadUrlStores';
-
-async function main(): Promise<number> {
-  const prisma = new PrismaClient();
-  try {
-    const report = await countStaticUploadUrls({ stores: staticUploadUrlStores(prisma) });
-
-    console.log('Adresses static.<domaine>/uploads en base (#11256)');
-    for (const [nom, tally] of Object.entries(report.parCollection)) {
-      console.log(`  ${nom} — lignes examinées : ${tally.scanned}`);
-      for (const [colonne, n] of Object.entries(tally.parColonne)) console.log(`    ${colonne.padEnd(14)}: ${n}`);
-    }
-    for (const exemple of report.exemples) console.log(`    ${exemple}`);
-    console.log('');
-    console.log(`  TOTAL : ${report.total}`);
-    console.log(
-      report.total === 0
-        ? '  Aucune adresse à migrer : le montage peut être retiré.'
-        : '  Des adresses existent : migration de données (feu vert du porteur) AVANT le retrait.',
-    );
-    return report.total === 0 ? 0 : 3;
-  } finally {
-    await prisma.$disconnect();
-  }
-}
-
-main()
+runStaticUploadUrlCount()
   .then((code) => process.exit(code))
   .catch((error: unknown) => {
     console.error(error);

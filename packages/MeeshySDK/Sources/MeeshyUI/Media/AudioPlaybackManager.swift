@@ -645,7 +645,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     // call them directly. `MainActor.assumeIsolated` from a non-main thread is
     // a precondition crash (see lesson feedback_swift6_concurrency_pitfalls:
     // @MainActor deinit pitfall) and the last release can happen off-main.
-    deinit {
+    nonisolated deinit {
         cleanupHandle.timer?.invalidate()
         cleanupHandle.loadTask?.cancel()
         if let observer = cleanupHandle.lifecycleObserver {

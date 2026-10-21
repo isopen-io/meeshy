@@ -459,14 +459,14 @@ struct ReelFeedCard: View, Equatable {
     private var authorRow: some View {
         Button { onTapAuthor(repostedReel?.authorId ?? post.authorId) } label: {
             HStack(spacing: MeeshySpacing.sm) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: displayAuthor,
                     context: .custom(34),
                     accentColor: displayAuthorColor,
                     avatarURL: displayAvatarURL,
                     presenceState: PresenceManager.shared.knownPresenceState(for: repostedReel?.authorId ?? post.authorId),
                     ring: repostedReel == nil ? post.authorRing : repostedReel?.authorRing
-                )
+                ) }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(displayAuthor)
                         .font(.subheadline.weight(.semibold))

@@ -162,8 +162,8 @@ public struct MeeshyAudioTrimmer: View {
             .gesture(scrollGesture)
             .simultaneousGesture(pinchGesture)
             .onAppear { stripWidth = proxy.size.width }
-            .onChange(of: proxy.size.width) { largeur in stripWidth = largeur }
-            .onChange(of: player.playhead) { tete in
+            .adaptiveOnChange(of: proxy.size.width) { _, largeur in stripWidth = largeur }
+            .adaptiveOnChange(of: player.playhead) { _, tete in
                 guard player.isPlaying, draggedHandle == nil else { return }
                 offset = geometry.offsetCentering(tete)
             }

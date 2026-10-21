@@ -124,7 +124,7 @@ final class GameElementDetailTests: XCTestCase {
     /// Une ligne de donnée porte SA phrase quand le catalogue en a une ; sinon celle de son concept.
     func test_aDataLine_saysItsOwnSentence_orTheOneOfItsConcept() {
         let served = progress()
-        let facts = ProgressionConceptModel.facts(.glory, progress: served, game: game)
+        let facts = ProgressionConceptFiche.rows(.glory, progress: served, game: game)
         let glory = facts.first { $0.detail == .glory }
         XCTAssertNotNil(glory, "la ligne de la Gloire porte sa clé")
         XCTAssertEqual(glory.map { GameElementDetails.fact($0, of: .glory).what }, GameDetailText.fact(.glory))
@@ -405,13 +405,15 @@ final class GameElementDetailTests: XCTestCase {
 
     // MARK: - Ce qu'un geste dépense ou exige, avant le geste (#9705)
 
-    func test_theSpendRow_saysWhatIsHeld_whatItCosts_andWhatRemains() {
+    /// Aucun calcul sur une fiche (épopée § 3.3, #11180) : la rangée dit ce qu'on a et ce qu'il faut, jamais ce qui
+    /// RESTERA — la soustraction vit dans les règles.
+    func test_theSpendRow_saysWhatIsHeld_andWhatItCosts_neverWhatWillRemain() {
         let items = GameSpendRows.spend(GameSpend.preview(held: 5, cost: 3), format: GameCopy.meeshes,
                                         missing: { ConceptText.spendMissingFreeze(missing: $0) })
-        XCTAssertEqual(items.map(\.label), [ConceptText.factBalance, ConceptText.factCost, ConceptText.factAfter])
+        XCTAssertEqual(items.map(\.label), [ConceptText.factBalance, ConceptText.factCost])
         XCTAssertFalse(items.contains { $0.sentence != nil }, "rien ne manque : aucune phrase de manque")
-        XCTAssertEqual(items.map(\.value), [GameCopy.meeshes(5), GameCopy.meeshes(3), GameCopy.meeshes(2)])
-        XCTAssertEqual(items.map(\.detail), [.spendHeld, .spendCost, .spendAfter])
+        XCTAssertEqual(items.map(\.value), [GameCopy.meeshes(5), GameCopy.meeshes(3)])
+        XCTAssertFalse(items.contains { $0.detail == .spendAfter || $0.label == ConceptText.factAfter }, "« Restera » est un calcul")
         XCTAssertFalse(items.contains { $0.short })
     }
 
@@ -443,43 +445,20 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertTrue(sentences[5].contains("79"), "le manque d'une frappe nomme la pièce : \(sentences[5])")
     }
 
-    /// Le compte du porteur (#10540) : 77 099 points en poche, 5 823 à convertir, la Meesh n° 79 à 7 662. La rangée
-    /// de la frappe nomme les DEUX soldes, et « il manque 1 839 » dit qu'il vise la Meesh n° 79.
-    func test_theMintRow_namesBothBalances_andTheMissingAmountNamesTheCoin() {
+    /// Le compte du porteur (#10540) : la Meesh n° 79 à 7 662, il en manque 1 839. Le cadre de la frappe dit le prix UNE
+    /// fois, dans la phrase, et le manque nomme sa pièce (#11180).
+    func test_theMintFrame_saysThePriceOnce_andTheMissingAmountNamesTheCoin() {
         let game = GameFixture.game(score: 77_099, levelRecord: 27, minted: 78, debitable: 5_823, held: 3)
         XCTAssertEqual(game.mint.number, 79)
         XCTAssertEqual(game.mint.price, 7_662)
         XCTAssertEqual(game.mint.missingPoints, 1_839)
-        let view = GameMintPreviewView(game: game, convertible: 5_823, online: true, minting: false, error: nil, celebration: nil, onMint: {})
 
-        let items = view.spendItems
+        let frame = GameMintPreviewView(game: game, online: true, minting: false, error: nil, celebration: nil, onMint: {}).model
 
-        XCTAssertEqual(items.map(\.detail), [.score, .convertible, .spendCost, .mintMissing])
-        XCTAssertEqual(items[0].value, GameCopy.points(77_099))
-        XCTAssertEqual(items[1].label, ConceptText.factToConvert)
-        XCTAssertEqual(items[1].value, GameCopy.points(5_823))
-        XCTAssertEqual(items[2].value, GameCopy.points(7_662))
-        XCTAssertEqual(items[3].sentence, ConceptText.spendMissingMint(missing: GameCopy.convertiblePoints(1_839), number: GameCopy.formatCount(79)))
-
-        // Sans porte-monnaie servi, une frappe impossible DIT le solde (le prix moins le manque) ; possible, il se tait.
-        let bare = GameMintPreviewView(game: game, online: true, minting: false, error: nil, celebration: nil, onMint: {})
-        XCTAssertEqual(bare.spendItems[1].value, GameCopy.points(5_823))
-        let rich = GameMintPreviewView(game: GameFixture.game(score: 5000, debitable: 5000), online: true, minting: false,
-                                       error: nil, celebration: nil, onMint: {})
-        XCTAssertEqual(rich.spendItems.map(\.detail), [.score, .spendCost, .spendAfter], "le solde à convertir n'est jamais deviné depuis le score")
-    }
-
-    func test_theMintHero_spendsThePocket_butIsPaidByConvertiblePointsOnly() {
-        let rich = GameMintPreviewView(game: GameFixture.game(score: 5000, debitable: 5000), online: true, minting: false,
-                                       error: nil, celebration: nil, onMint: {})
-        XCTAssertEqual(rich.spend.held, 5000)
-        XCTAssertEqual(rich.spend.after, 5000 - rich.spend.cost)
-        XCTAssertTrue(rich.spend.affordable)
-
-        let locked = GameMintPreviewView(game: GameFixture.game(score: 5000, debitable: 900), online: true, minting: false,
-                                         error: nil, celebration: nil, onMint: {})
-        XCTAssertFalse(locked.spend.affordable, "des points de conversation ne paient pas la frappe")
-        XCTAssertEqual(locked.spend.missing, locked.spend.cost - 900)
+        XCTAssertEqual(frame.sentence.text, GameFicheCopy.mintSentence(price: GameCopy.points(7_662), held: GameCopy.formatCount(game.level.sparkFacts.pocket)))
+        XCTAssertEqual(frame.missing?.text, GameFicheCopy.mintMissing(GameCopy.formatCount(1_839)))
+        XCTAssertNil(frame.glory, "frappe impossible : pas de bouton, donc pas de gloire promise")
+        XCTAssertEqual(frame.texts.filter { $0.contains(GameCopy.formatCount(7_662)) }.count, 1, "le prix paraît UNE fois")
     }
 
     func test_theRequirementRow_saysTheGap_andFallsSilentOnceMet() {
@@ -493,11 +472,24 @@ final class GameElementDetailTests: XCTestCase {
         XCTAssertEqual(met.map(\.label), [ConceptText.factRecord, ConceptText.factRequired])
     }
 
+    /// Le Voyage compte des PAS et la Renaissance des RENAISSANCES : « étoile » n'appartient qu'au ciel des aïeux
+    /// (épopée § 4). La clé `game.concept.fact.stars` servait les deux, et disait « Étoiles » aux deux (#11173).
+    func test_theVoyageCountsStrides_andTheRebirthCountsRebirths_neverStars() throws {
+        let season = try XCTUnwrap(game.season)
+        let prestige = try XCTUnwrap(game.prestige)
+        XCTAssertEqual(ConceptText.factStrides, "Pas")
+        XCTAssertEqual(ConceptText.factRebirths, "Renaissances")
+        XCTAssertTrue(GameElementDetails.seasonStep(1, in: season).facts.map(\.label).contains(ConceptText.factStrides))
+        XCTAssertTrue(GameElementDetails.prestigeStar(1, in: prestige).facts.map(\.label).contains(ConceptText.factRebirths))
+        let labels = GameElementDetails.seasonStep(1, in: season).facts.map(\.label) + GameElementDetails.prestigeStar(1, in: prestige).facts.map(\.label)
+        XCTAssertFalse(labels.contains { $0.localizedCaseInsensitiveContains("étoile") }, "\(labels)")
+    }
+
     func test_thePrestigeConfirmation_givesTheValuesBeforeAndAfter() throws {
         let game = GameWave2Fixture.atLevel100(prestige: 1)
         let values = GamePrestigeScreen.passValues(game: game)
         XCTAssertEqual(values.map(\.label), [
-            GameSparksCopy.pocketLabel, ConceptText.name(.level), ConceptText.factRecord, ConceptText.factStars, ConceptText.name(.glory),
+            GameSparksCopy.pocketLabel, ConceptText.name(.level), ConceptText.factRecord, ConceptText.factRebirths, ConceptText.name(.glory),
         ])
         XCTAssertEqual(values.first?.value, "\(GameCopy.points(game.level.score)) → \(GameCopy.points(0))")
         XCTAssertEqual(values[3].value, "\(GameCopy.formatCount(1)) → \(GameCopy.formatCount(2))")

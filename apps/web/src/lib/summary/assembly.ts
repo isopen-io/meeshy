@@ -4,7 +4,6 @@ import { parseMentions, type MentionParticipant } from '@meeshy/shared/utils/men
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 
 import type { Message, Participant } from '@/lib/api/types';
-import { presenceOf } from '@/lib/view/conversation';
 import { isSystemMessage } from '@/lib/view/message-badges';
 
 import { buildDigest } from './digest';
@@ -116,11 +115,7 @@ function digestInput(message: Message, viewer: LivingSummaryViewer): DigestInput
  * `Participant` connu de `participants` → `{ displayName: senderId }`
  * (repli honnête, jamais un nom fabriqué).
  */
-function deriveParticipants(
-  messages: readonly Message[],
-  participants: readonly Participant[],
-  now: number,
-): readonly DigestParticipant[] {
+function deriveParticipants(messages: readonly Message[], participants: readonly Participant[]): readonly DigestParticipant[] {
   const byUserId = new Map(participants.map((p) => [p.userId ?? p.id, p] as const));
   const seen = new Set<string>();
   const result: DigestParticipant[] = [];
@@ -140,7 +135,7 @@ function deriveParticipants(
       // alors `<img src="">`, qui RECHARGE la page courante.
       avatarUrl: resolveParticipantAvatar(known),
       colorHex: authorAccentColor(message.senderId, displayName),
-      presence: presenceOf(known, now),
+      participant: known,
     });
   }
   return result;
@@ -151,7 +146,7 @@ export function buildLivingSummary(input: LivingSummaryInput): LivingSummaryMode
   const episodes: readonly ConversationEpisode[] = segmentEpisodes(episodeInputs, { locale: input.locale });
 
   const digestInputs = input.messages.map((m) => digestInput(m, input.viewer));
-  const participants = deriveParticipants(input.messages, input.participants, input.now);
+  const participants = deriveParticipants(input.messages, input.participants);
 
   const digest = buildDigest({
     messages: digestInputs,
