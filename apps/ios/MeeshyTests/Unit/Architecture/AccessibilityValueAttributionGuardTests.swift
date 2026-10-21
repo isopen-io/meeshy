@@ -222,3 +222,147 @@ final class AccessibilityValueAttributionGuardTests: XCTestCase {
         }
     }
 }
+
+enum IconOnlyButtonScan {
+
+    static func mutedButtons(in source: String) -> [Int] { [] }
+
+    static func iconButtonCount(in source: String) -> Int { 0 }
+}
+
+/// Garde d'analyse de source : **un bouton dont le libellé n'est qu'une icône
+/// porte un libellé d'accessibilité.**
+///
+/// Un `Button { … } label: { Image(systemName:) }` sans `.accessibilityLabel`
+/// n'a aucun nom : muet pour Voice Control et Full Keyboard Access, et pour
+/// VoiceOver dès que son conteneur n'expose pas une action équivalente. Le
+/// libellé se lit dans la CHAÎNE de modificateurs qui suit le label, sauts de
+/// ligne compris. La garde est heuristique (analyse de texte) : un libellé rendu
+/// par une fonction ou une propriété calculée n'est pas reconnu comme icône.
+final class IconOnlyButtonLabelGuardTests: XCTestCase {
+
+    private func repoRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func appSources() -> [URL] {
+        let root = repoRoot()
+        let roots = [
+            "apps/ios/Meeshy",
+            "apps/ios/MeeshyNotificationExtension",
+            "apps/ios/MeeshyNotificationContentExtension",
+            "apps/ios/MeeshyWidgets",
+            "apps/ios/MeeshyShareExtension",
+            "apps/ios/MeeshyBroadcastExtension",
+        ].map { root.appendingPathComponent($0) }
+
+        var found: [URL] = []
+        for dir in roots {
+            guard let walker = FileManager.default.enumerator(
+                at: dir, includingPropertiesForKeys: nil
+            ) else { continue }
+            for case let url as URL in walker where url.pathExtension == "swift" {
+                found.append(url)
+            }
+        }
+        return found
+    }
+
+    func test_unBoutonDontLeLibelleNEstQuUneIcone_estSignale() {
+        let source = #"""
+        Button { go() } label: { Image(systemName: "xmark").font(.caption) }
+        """#
+        XCTAssertEqual(IconOnlyButtonScan.mutedButtons(in: source), [1])
+    }
+
+    func test_unBoutonActionDontLeLibelleEstUnePileIconeSurForme_estSignale() {
+        let source = #"""
+        Button(action: go) { ZStack { Circle().fill(.red); Image(systemName: "play.fill") } }
+        """#
+        XCTAssertEqual(IconOnlyButtonScan.mutedButtons(in: source), [1])
+    }
+
+    func test_unBoutonLibelleApresUneChaineMultiligne_nEstPasSignale() {
+        let source = #"""
+        Button {
+            go()
+        } label: {
+            Image(systemName: "play.fill")
+                .background(
+                    Circle()
+                        .fill(Color.red)
+                )
+        }
+        .simultaneousGesture(LongPressGesture().onEnded { _ in })
+        .accessibilityLabel(Text(label))
+        """#
+        XCTAssertEqual(IconOnlyButtonScan.mutedButtons(in: source), [])
+    }
+
+    func test_unBoutonATitreOuALibelleTexte_nEstPasSignale() {
+        let sources = [
+            #"Button("Fermer") {}"#,
+            #"Button(title) {}"#,
+            #"Button(String(localized: "k")) {}"#,
+            #"Button {} label: { Label("Annuler", systemImage: "xmark") }"#,
+            #"Button {} label: { HStack { Image(systemName: "x"); Text("Annuler") } }"#,
+        ]
+        for source in sources {
+            XCTAssertEqual(IconOnlyButtonScan.mutedButtons(in: source), [], source)
+        }
+    }
+
+    func test_unLibelleDansUnCommentaire_neCompteJamais() {
+        let source = #"""
+        Button { } label: { Image(systemName: "x") } // .accessibilityLabel("k")
+        """#
+        XCTAssertEqual(IconOnlyButtonScan.mutedButtons(in: source), [1])
+    }
+
+    func test_unLibelleHelperDontLeCorpsPorteUnTitre_nEstPasSignale() {
+        let source = #"""
+        Button { } label: { settingsRow(icon: "a", title: t) { Image(systemName: "chevron.forward") } }
+        """#
+        XCTAssertEqual(IconOnlyButtonScan.mutedButtons(in: source), [])
+    }
+
+    func test_aucunBoutonIconeDeLApplicationNEstMuet() {
+        var offenders: [String] = []
+        for url in appSources() {
+            guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let relative = url.path.replacingOccurrences(of: repoRoot().path + "/", with: "")
+            for line in IconOnlyButtonScan.mutedButtons(in: raw) {
+                offenders.append("\(relative):\(line)")
+            }
+        }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            """
+            Bouton-icône sans libellé d'accessibilité. Utiliser \
+            MeeshyIconButton(systemName:label:action:) ou poser \
+            `.accessibilityLabel(String(localized: …))` sur le Button :
+            \(offenders.joined(separator: "\n"))
+            """
+        )
+    }
+
+    func test_leBalayageVoitVraimentLesBoutonsIcones() {
+        let sources = appSources()
+        XCTAssertGreaterThan(sources.count, 400, "Le balayage ne trouve presque aucun fichier Swift")
+
+        let recognised = sources.reduce(0) { total, url in
+            guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return total }
+            return total + IconOnlyButtonScan.iconButtonCount(in: raw)
+        }
+        XCTAssertGreaterThanOrEqual(
+            recognised, 120,
+            "L'extracteur ne reconnaît presque aucun bouton-icône — la garde passerait au vert en silence"
+        )
+    }
+}
