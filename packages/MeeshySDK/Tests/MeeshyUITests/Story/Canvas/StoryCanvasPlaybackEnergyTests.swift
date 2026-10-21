@@ -238,8 +238,8 @@ final class StoryCanvasPlaybackEnergyTests: XCTestCase {
     }
 
     func test_lowRange_staysBelowSixtyHertz_highRangeKeepsProMotion() {
-        let low = StoryPlaybackCadence.frameRateRange(for: .low)
-        let high = StoryPlaybackCadence.frameRateRange(for: .high)
+        let low = StoryPlaybackCadence.frameRateRange(for: .low, mediaTier: .high)
+        let high = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .high)
         XCTAssertLessThanOrEqual(low.maximum, 30)
         XCTAssertGreaterThanOrEqual(low.minimum, 10)
         XCTAssertEqual(high.maximum, 120)
@@ -259,15 +259,8 @@ final class StoryCanvasPlaybackEnergyTests: XCTestCase {
         XCTAssertEqual([pro.minimum, pro.maximum, pro.preferred], [60, 120, 60])
     }
 
-    func test_highCadence_withoutATier_isTheHistoricalRange() {
-        let historical = StoryPlaybackCadence.frameRateRange(for: .high)
-        let high = StoryPlaybackCadence.frameRateRange(for: .high, mediaTier: .high)
-        XCTAssertEqual([historical.minimum, historical.maximum, historical.preferred],
-                       [high.minimum, high.maximum, high.preferred])
-    }
-
     func test_lowCadence_isTheSameOnEveryTier() {
-        let reference = StoryPlaybackCadence.frameRateRange(for: .low)
+        let reference = StoryPlaybackCadence.frameRateRange(for: .low, mediaTier: .high)
         for tier in DeviceMediaTier.allCases {
             let range = StoryPlaybackCadence.frameRateRange(for: .low, mediaTier: tier)
             XCTAssertEqual([range.minimum, range.maximum, range.preferred],

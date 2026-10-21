@@ -64,10 +64,12 @@ final class ReelResumeWiringGuardTests: XCTestCase {
     }
 
     func test_pool_overflowsByTheFarthest() throws {
-        let insert = try body(of: "private func insert(",
-                              in: source("Sources/MeeshyUI/Story/StoryMediaLoader.swift"))
-        XCTAssertTrue(insert.contains("PlayerPoolEviction.victim("),
+        let loader = try source("Sources/MeeshyUI/Story/StoryMediaLoader.swift")
+        let insert = try body(of: "private func insert(", in: loader)
+        let trim = try body(of: "private func trimToCapacity(", in: loader)
+        XCTAssertTrue(insert.contains("trimToCapacity()"), "toute insertion rend le pool à sa taille")
+        XCTAssertTrue(trim.contains("PlayerPoolEviction.victim("),
                       "le pool rend le plus loin du réel affiché, pas le plus ancien")
-        XCTAssertFalse(insert.contains("removeFirst()"))
+        XCTAssertFalse(trim.contains("removeFirst()"))
     }
 }

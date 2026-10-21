@@ -5,22 +5,28 @@ import Foundation
 /// lois de lecture lisent ce rang au lieu de réinventer chacune son seuil de
 /// mémoire.
 ///
-/// Jumelle de `apps/web/src/lib/device/capability-tier.ts` (lot W11) : mêmes
-/// paliers, mêmes seuils, mêmes vecteurs (`DeviceMediaTierTests`).
+/// Jumelle de `apps/web/src/lib/device/capability-tier.ts` (lot W10) : les deux
+/// rejouent le MÊME fichier, `packages/shared/fixtures/device-tier-vectors.json`
+/// (`DeviceMediaTierVectorTests`). La loi ne lit donc que des entrées NEUTRES
+/// (`DeviceMediaInputs`) — mémoire, cœurs, cadence, décodeurs, énergie, chaleur —
+/// que le web sait aussi produire. La famille de puce (`AppleChip`) ne sert plus
+/// qu'à PRODUIRE ces entrées quand l'appareil ne les mesure pas (simulateur).
 ///
 /// Le tier est ASYMÉTRIQUE par construction : `high` est le comportement
 /// historique de toutes les lois, `pro` ne le dépasse que là où c'est gratuit,
-/// et seuls `low` et `mid` BAISSENT un plafond. Un appareil que la loi ne sait
-/// pas ranger ne perd donc rien qu'il avait déjà.
+/// et seuls `low` et `mid` BAISSENT un plafond. Une entrée inconnue (`nil`) ne
+/// baisse rien : un appareil que la loi ne sait pas ranger ne perd donc rien
+/// qu'il avait déjà.
 ///
-/// Ce qui est lu, et pourquoi :
-/// - **la famille de puce** (`AppleChip`, depuis `utsname.machine`) — la
-///   puissance de calcul, que ni la mémoire ni l'écran ne disent ;
-/// - **la mémoire physique** — ce que `ProcessInfo` RAPPORTE (un « 4 Go » rend
-///   ~3,7 Gio), d'où des seuils à 2,5 / 3,5 / 5,5 Gio et non 3 / 4 / 6 ;
-/// - **la cadence maximale de l'écran** — 120 Hz est ProMotion ;
-/// - **le décodage matériel HEVC et AV1** — AV1 matériel n'existe que depuis
-///   l'A17 Pro et le M3 : c'est une mesure de la puce quand l'identifiant manque.
+/// Les seuils :
+/// - **la mémoire** — ce que l'appareil RAPPORTE (un « 4 Go » rend ~3,7 Gio),
+///   d'où 2,5 / 3,5 / 5,5 Gio et non 3 / 4 / 6 ;
+/// - **les cœurs** — moins de quatre plafonne à `mid`, moins de six interdit `pro` ;
+/// - **la cadence** — 120 Hz est ProMotion, exigé pour `pro` ;
+/// - **les décodeurs** — sans HEVC matériel, `low` ; AV1 matériel exigé pour `pro` ;
+/// - **l'énergie et la chaleur** — l'économie d'énergie plafonne à `mid`, une
+///   chaleur `serious` ou pire rend `low`. Ces deux-là bougent pendant la vie du
+///   processus : le tier vivant (`current`) les relit à chaque lecture.
 ///
 /// La sonde de l'appareil vivant est `DeviceMediaTier+Live.swift` ; ce fichier
 /// n'ouvre ni `utsname`, ni `UIScreen`, ni VideoToolbox.
@@ -34,27 +40,36 @@ public enum DeviceMediaTier: Int, Sendable, Comparable, CaseIterable {
     static let midMemoryGb: Double = 2.5
     static let highMemoryGb: Double = 3.5
     static let proMemoryGb: Double = 5.5
-    static let highChipClass = 5
+    static let highCores = 4
+    static let proCores = 6
     static let proChipClass = 7
     static let proFramesPerSecond = 120
 
-    public static func classify(_ signals: DeviceMediaSignals) -> DeviceMediaTier {
-        let memory = ReelPreloadWindow.gigabytes(physicalMemory: signals.physicalMemory)
-        let chipClass = signals.chipClass
-        guard signals.hardwareDecodesHEVC, memory >= midMemoryGb else { return .low }
-        if chipClass >= proChipClass, signals.hardwareDecodesAV1, memory >= proMemoryGb,
-           signals.maximumFramesPerSecond >= proFramesPerSecond {
+    public static func classify(_ inputs: DeviceMediaInputs) -> DeviceMediaTier {
+        if inputs.thermal == .serious || inputs.thermal == .critical { return .low }
+        let hardware = hardwareTier(inputs)
+        return inputs.lowPower ? min(hardware, .mid) : hardware
+    }
+
+    private static func hardwareTier(_ inputs: DeviceMediaInputs) -> DeviceMediaTier {
+        func memory(atLeast threshold: Double) -> Bool { inputs.memoryGB.map { $0 >= threshold } ?? true }
+        func cores(atLeast threshold: Int) -> Bool { inputs.cores.map { $0 >= threshold } ?? true }
+        guard inputs.hwHEVC, memory(atLeast: midMemoryGb) else { return .low }
+        if inputs.hwAV1, inputs.maxFps >= proFramesPerSecond,
+           memory(atLeast: proMemoryGb), cores(atLeast: proCores) {
             return .pro
         }
-        if chipClass >= highChipClass, memory >= highMemoryGb { return .high }
+        if memory(atLeast: highMemoryGb), cores(atLeast: highCores) { return .high }
         return .mid
     }
 }
 
-/// Ce qu'un appareil déclare de lui-même — l'ENTRÉE de la loi.
+/// Ce qu'un appareil iOS déclare de lui-même, avant normalisation : la sonde
+/// le lit, `inputs(lowPower:thermal:)` le rend NEUTRE pour la loi.
 public struct DeviceMediaSignals: Sendable, Equatable {
     public let machine: String
     public let physicalMemory: UInt64
+    public let processorCount: Int
     public let maximumFramesPerSecond: Int
     public let hardwareDecodesHEVC: Bool
     public let hardwareDecodesAV1: Bool
@@ -62,23 +77,31 @@ public struct DeviceMediaSignals: Sendable, Equatable {
     public init(
         machine: String,
         physicalMemory: UInt64,
+        processorCount: Int,
         maximumFramesPerSecond: Int,
         hardwareDecodesHEVC: Bool,
         hardwareDecodesAV1: Bool
     ) {
         self.machine = machine
         self.physicalMemory = physicalMemory
+        self.processorCount = processorCount
         self.maximumFramesPerSecond = maximumFramesPerSecond
         self.hardwareDecodesHEVC = hardwareDecodesHEVC
         self.hardwareDecodesAV1 = hardwareDecodesAV1
     }
 
-    /// Un identifiant que la loi ne sait pas ranger se juge sur ce que
-    /// l'appareil MESURE : un décodeur AV1 matériel est une puce de classe A17.
-    var chipClass: Int {
-        let chip = AppleChip(machine: machine)
-        guard chip == .unknown else { return chip.performanceClass }
-        return hardwareDecodesAV1 ? DeviceMediaTier.proChipClass : chip.performanceClass
+    /// Les entrées neutres de la loi, avec l'état d'énergie et de chaleur du
+    /// moment. Un compte de cœurs nul n'est pas une mesure : inconnu.
+    public func inputs(lowPower: Bool, thermal: DeviceMediaInputs.Thermal) -> DeviceMediaInputs {
+        DeviceMediaInputs(
+            memoryGB: ReelPreloadWindow.gigabytes(physicalMemory: physicalMemory),
+            cores: processorCount > 0 ? processorCount : nil,
+            maxFps: maximumFramesPerSecond,
+            hwAV1: hardwareDecodesAV1,
+            hwHEVC: hardwareDecodesHEVC,
+            lowPower: lowPower,
+            thermal: thermal
+        )
     }
 
     /// `utsname.machine` rend « arm64 » ou « x86_64 » sur simulateur : le
@@ -92,12 +115,18 @@ public struct DeviceMediaSignals: Sendable, Equatable {
     /// hôte — une VM de CI n'a aucun décodeur matériel, et chaque simulateur
     /// tomberait en `low` —, donc les décodeurs se déduisent de la puce simulée :
     /// HEVC sur tout appareil qu'iOS 16 accepte, AV1 depuis la classe A17 Pro / M3.
-    /// La mémoire reste celle de l'hôte : un vieil iPhone simulé peut monter d'un
-    /// tier, aucun appareil récent n'en descend.
-    public static func simulated(machine: String, physicalMemory: UInt64, maximumFramesPerSecond: Int) -> DeviceMediaSignals {
+    /// C'est le seul usage de la puce : PRODUIRE une entrée que l'appareil
+    /// simulé ne mesure pas. La mémoire et les cœurs restent ceux de l'hôte.
+    public static func simulated(
+        machine: String,
+        physicalMemory: UInt64,
+        processorCount: Int,
+        maximumFramesPerSecond: Int
+    ) -> DeviceMediaSignals {
         DeviceMediaSignals(
             machine: machine,
             physicalMemory: physicalMemory,
+            processorCount: processorCount,
             maximumFramesPerSecond: maximumFramesPerSecond,
             hardwareDecodesHEVC: true,
             hardwareDecodesAV1: AppleChip(machine: machine).performanceClass >= DeviceMediaTier.proChipClass
@@ -108,6 +137,7 @@ public struct DeviceMediaSignals: Sendable, Equatable {
         DeviceMediaSignals(
             machine: machine,
             physicalMemory: physicalMemory,
+            processorCount: processorCount,
             maximumFramesPerSecond: framesPerSecond,
             hardwareDecodesHEVC: hardwareDecodesHEVC,
             hardwareDecodesAV1: hardwareDecodesAV1

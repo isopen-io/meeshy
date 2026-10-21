@@ -94,6 +94,8 @@ public enum ReelPreloadWindow {
         public let lowPower: Bool
         public let thermalState: ProcessInfo.ThermalState
         /// Le tier média de l'appareil (#11281) ; `nil` = non classé, aucun plafond.
+        /// REQUIS, sans défaut : un site qui construit le contexte doit dire le
+        /// tier (ou dire explicitement `nil`), jamais l'oublier en silence.
         public let tier: DeviceMediaTier?
 
         public init(
@@ -102,7 +104,7 @@ public enum ReelPreloadWindow {
             deviceMemoryGb: Double? = nil,
             lowPower: Bool = false,
             thermalState: ProcessInfo.ThermalState = .nominal,
-            tier: DeviceMediaTier? = nil
+            tier: DeviceMediaTier?
         ) {
             self.visits = visits
             self.network = network
