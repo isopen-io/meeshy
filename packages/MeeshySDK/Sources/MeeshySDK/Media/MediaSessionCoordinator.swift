@@ -619,9 +619,7 @@ public actor MediaSessionCoordinator {
     nonisolated func enqueue(_ op: PlaybackSessionOp) {
         let continuation = _opsLock.withLock { state -> AsyncStream<PlaybackSessionOp>.Continuation in
             if let existing = state { return existing }
-            var created: AsyncStream<PlaybackSessionOp>.Continuation?
-            let stream = AsyncStream<PlaybackSessionOp> { created = $0 }
-            let continuation = created!
+            let (stream, continuation) = AsyncStream.makeStream(of: PlaybackSessionOp.self)
             state = continuation
             Task { [weak self] in
                 for await next in stream {
