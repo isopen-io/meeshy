@@ -14,7 +14,7 @@ import os
 /// to the in-memory queues.
 struct OutboxDispatcher: OutboxDispatching {
 
-    let logger = Logger(subsystem: "com.meeshy.ios", category: "outbox-dispatcher")
+    let logger = MeeshyLog.logger(.outboxDispatcher, subsystem: .legacyIOS)
 
     // `internal` et non `private` : la famille « messages » vit dans
     // `OutboxDispatcher+Messages.swift` depuis l'extraction du budget, et une

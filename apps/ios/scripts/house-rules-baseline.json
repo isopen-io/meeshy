@@ -9,7 +9,7 @@
     "fixed-font": 760,
     "foreground-color": 3101,
     "idiom": 0,
-    "logger-subsystem": 4,
+    "logger-subsystem": 0,
     "nonisolated-unsafe": 150,
     "nslock": 48,
     "nslog": 0,
