@@ -102,6 +102,12 @@ extension MessageMenuContext {
         return make(message: message, facts: facts, authority: authority, now: now)
     }
 
+    /// Le message visé par son id — un message disparu entre-temps n'ouvre rien.
+    static func make(messageId: String, viewModel: ConversationViewModel, authority: ConversationMenuAuthority) -> MessageMenuContext {
+        guard let index = viewModel.messageIndex(for: messageId) else { return .closed }
+        return make(message: viewModel.messages[index], viewModel: viewModel, authority: authority)
+    }
+
     /// La projection PURE de la loi : aucun singleton, `now` injecté.
     static func make(
         message: Message,

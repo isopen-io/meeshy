@@ -385,6 +385,7 @@ final class MessageMenuContextMakeTests: XCTestCase {
         XCTAssertTrue(menu.contains("canDelete: menu.canDeleteOnServer"))
         XCTAssertTrue(menu.contains("canForward: menu.canForward"))
         XCTAssertFalse(menu.contains("viewModel.canDeleteForEveryone("), "la confirmation lit `canDeleteForEveryone` de la fabrique")
+        XCTAssertTrue(menu.contains("let verdicts = MessageMenuContext.make(messageId: msgId"))
         XCTAssertTrue(menu.contains("verdicts.canDeleteForEveryone"))
         XCTAssertTrue(menu.contains("verdicts.canRemove"))
         XCTAssertTrue(menu.contains("verdicts.canDeleteForMe"))

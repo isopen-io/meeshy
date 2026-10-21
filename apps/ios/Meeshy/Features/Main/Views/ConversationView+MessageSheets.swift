@@ -62,9 +62,7 @@ struct ConversationMessageSheets: ViewModifier {
                         overlayState.replyThreadParentId = msg.id
                         overlayState.showReplyThread = true
                     },
-                    onSaveMedia: {
-                        if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() }
-                    },
+                    onSaveMedia: { if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() } },
                     onDeleteMedia: { actions.deleteMedia(msg) },
                     onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                     onToggleStar: {
