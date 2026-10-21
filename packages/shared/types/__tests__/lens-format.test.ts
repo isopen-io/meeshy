@@ -111,7 +111,7 @@ describe('MeeshyLens v1 — le contrat', () => {
     expect(outcome.lens.layers[3]).toMatchObject({ anchor: { type: 'screen', x: 0.85, y: 0.12 } });
   });
 
-  it('ne rend jamais plus que ce qu\'il a lu : le résultat est gelé en lecture seule', () => {
+  it('ne mute jamais son entrée', () => {
     const input = baseLens();
     const before = JSON.stringify(input);
     parseLens(input);
@@ -142,6 +142,19 @@ describe('MeeshyLens v1 — le contrat', () => {
     const text = outcome.lens.layers.find((layer) => layer.kind === 'text');
     expect(text?.kind === 'text' ? Object.keys(text.text) : []).toEqual(['fr']);
     expect([...PACK_LANGUAGES]).toHaveLength(7);
+  });
+
+  it('garde le texte et le nom dans chacune des sept langues du Prisme', () => {
+    const input = baseLens();
+    const layers = input.layers as Record<string, unknown>[];
+    const texts = Object.fromEntries(PACK_LANGUAGES.map((language) => [language, `texte ${language}`]));
+    layers[4] = { ...layers[4], text: texts };
+    input.names = Object.fromEntries(PACK_LANGUAGES.filter((language) => language !== 'fr').map((language) => [language, `nom ${language}`]));
+    const outcome = parseLens(input);
+    if (outcome.status !== 'ok') throw new Error('attendu ok');
+    const text = outcome.lens.layers.find((layer) => layer.kind === 'text');
+    expect(text?.kind === 'text' ? text.text : {}).toEqual(texts);
+    expect(outcome.lens.names).toEqual(input.names);
   });
 
   it('chaque déclencheur de la liste fermée est lisible', () => {
