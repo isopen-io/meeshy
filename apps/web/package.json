@@ -82,6 +82,7 @@
   },
   "dependencies": {
     "@capacitor-community/media": "9.1.0",
+    "@capacitor/haptics": "8.0.2",
     "@capacitor/push-notifications": "8.1.2",
     "@mediapipe/tasks-vision": "1.1.0",
     "@meeshy/shared": "workspace:*",
