@@ -128,12 +128,47 @@ final class ComposerFramePacingTests: XCTestCase {
         XCTAssertFalse(surface.contains("CIContext("), "un seul CIContext, partagé")
     }
 
+    /// **Deux contextes Core Image pour la création, pas trente** (#9873) : le
+    /// canvas story du SDK (`StoryRenderingContext`) et la capture de l'app
+    /// (`ComposerLookGPU`). Les appels, le partage d'écran et les QR gardent les
+    /// leurs : hors du domaine que cette garde balaie.
+    func test_storyAndComposerDomains_ownAtMostTwoCIContexts() throws {
+        let proprietaires = try ["packages/MeeshySDK/Sources/MeeshyUI", "apps/ios/Meeshy/Features/Main/Composer"]
+            .flatMap { try Self.sources(under: $0) }
+            .filter { $0.code.contains("CIContext(") }
+            .map(\.path)
+            .sorted()
+        XCTAssertEqual(proprietaires, [
+            "apps/ios/Meeshy/Features/Main/Composer/ComposerLookPainter.swift",
+            "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderingContext.swift",
+        ], "un CIContext par domaine : StoryRenderingContext.shared (SDK), ComposerLookGPU (app)")
+    }
+
     private static func drawn(fps: Int, camera: Double = 30, frames: Int = 30,
                               jitter: [TimeInterval] = [0]) -> Int {
         var cadence = ComposerFramePacer(fps: fps)
         return (0..<frames).map { trame in
             cadence.admit(presentedAt: 10 + Double(trame) / camera + jitter[trame % jitter.count])
         }.filter { $0 }.count
+    }
+
+    private static var repoRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private static func sources(under relative: String) throws -> [(path: String, code: String)] {
+        let racine = repoRoot
+        guard let walker = FileManager.default.enumerator(at: racine.appendingPathComponent(relative),
+                                                          includingPropertiesForKeys: nil) else { return [] }
+        return try walker.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .map { url in
+                (url.path.replacingOccurrences(of: racine.path + "/", with: ""),
+                 AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
+            }
     }
 
     private static func code(_ relative: String) throws -> String {

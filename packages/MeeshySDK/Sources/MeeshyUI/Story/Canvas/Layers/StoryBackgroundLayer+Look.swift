@@ -14,14 +14,19 @@ extension StoryBackgroundLayer {
     /// C'est ce qui rend un curseur de réglage fluide sur le fond : une image
     /// repart du bitmap BRUT que le dernier stamp a retenu — ni ThumbHash, ni
     /// rechargement —, une vidéo garde son player et reçoit la composition de
-    /// ses réglages, sans que la lecture ne saute.
+    /// ses réglages, sans que la lecture ne saute. Dans le canvas interactif
+    /// (`bakesLookOffMainThread`), l'image se cuit HORS du fil principal (#9873).
     @MainActor
     func restyleInPlace(filter: StoryFilter?, filterIntensity: Float, adjustments: ImageAdjustments?) -> Bool {
         switch kind {
         case .image:
             guard let source = stampedSource, let img = contentLayer else { return false }
             setLook(filter: filter, filterIntensity: filterIntensity, adjustments: adjustments)
-            stampFinalImage(source.image, imageId: source.imageId, on: img)
+            guard bakesLookOffMainThread else {
+                stampFinalImage(source.image, imageId: source.imageId, on: img)
+                return true
+            }
+            repaintLookOffMainThread(source, on: img)
             return true
         case .video:
             guard avPlayer != nil else { return false }
@@ -31,6 +36,38 @@ extension StoryBackgroundLayer {
         case .solidColor, .gradient:
             return false
         }
+    }
+
+    /// **Le repeint d'un curseur, hors du fil principal** (#9873).
+    ///
+    /// Un look déjà cuit (ou l'absence de look) se pose sur place ; sinon le
+    /// bitmap affiché reste à l'écran et la cuisson part hors du MainActor —
+    /// un rendu en vol, le dernier cran gagne —, posée dès qu'elle est prête
+    /// si la couche montre encore la même source. Aucun `createCGImage` ne
+    /// tombe dans l'image où le doigt bouge.
+    @MainActor
+    func repaintLookOffMainThread(_ source: (image: UIImage, imageId: String?), on img: CALayer) {
+        let request = StoryLookBakeRequest(image: source.image, filter: activeFilter, intensity: activeFilterIntensity,
+                                           adjustments: activeAdjustments, imageId: source.imageId)
+        if let pret = StoryLookBake.ready(request) {
+            liveLookStorage?.supersede()
+            stampDisplay(pret, on: img)
+            return
+        }
+        liveLook.bake(request) { [weak self, weak img] cuit in
+            guard let self, let img, self.contentLayer === img,
+                  self.stampedSource?.image === request.image else { return }
+            self.stampDisplay(cuit, on: img)
+        }
+    }
+
+    /// L'outil de cuisson hors du fil principal — monté au premier glissé.
+    @MainActor
+    var liveLook: StoryLiveLook {
+        if let existant = liveLookStorage { return existant }
+        let monte = StoryLiveLook()
+        liveLookStorage = monte
+        return monte
     }
 
     /// **Pose sur les items du player de fond la composition de ses réglages.**
