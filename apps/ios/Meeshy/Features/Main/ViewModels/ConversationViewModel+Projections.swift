@@ -158,31 +158,16 @@ extension ConversationViewModel {
 
     // MARK: - Conversation-Wide Media
 
-    /// La fiche d'auteur vient de `ConversationMediaRules.senderInfo(of:)` —
-    /// la même règle que l'index des médias (#8095) applique aux porteurs que
-    /// la fenêtre n'a pas chargés.
     var mediaSenderInfoMap: [String: MediaSenderInfo] {
         if let cached = derived.mediaSenderInfoMap { return cached }
-        var map = [String: MediaSenderInfo](minimumCapacity: messages.count)
-        for msg in messages {
-            let info = ConversationMediaRules.senderInfo(of: msg)
-            for att in msg.attachments {
-                map[att.id] = info
-            }
-        }
+        let map = ConversationMessageProjector.mediaSenderInfo(of: messages)
         derived.mediaSenderInfoMap = map
         return map
     }
 
-    /// #7618 — une vue unique n'entre pas dans le défilement du plein écran :
-    /// on ne l'atteint pas en balayant depuis une autre photo. Elle s'ouvre
-    /// seule, par sa puce (`ConversationMediaGalleryLayer`). Un STICKER n'y entre
-    /// pas non plus : son image jointe n'est pas une photo (#10630).
     var allVisualAttachments: [MessageAttachment] {
         if let cached = derived.allVisualAttachments { return cached }
-        let result = messages.filter { !$0.holdsViewOnce && !ReceivedSticker.isGalleryExcluded($0) }.flatMap { msg in
-            msg.attachments.filter { [.image, .video].contains($0.type) }
-        }
+        let result = ConversationMessageProjector.visualAttachments(of: messages)
         derived.allVisualAttachments = result
         return result
     }
@@ -191,22 +176,12 @@ extension ConversationViewModel {
 
     var allAudioItems: [AudioItem] {
         if let cached = derived.allAudioItems { return cached }
-        let result = messages.filter { !$0.holdsViewOnce }.flatMap { msg in
-            msg.attachments
-                .filter { $0.type == .audio }
-                .map { att in
-                    AudioItem(
-                        id: att.id,
-                        attachment: att,
-                        message: msg,
-                        // #10801 — la transcription de CETTE piste : celle du
-                        // message n'appartient qu'à la pièce qu'elle nomme.
-                        transcription: originalTranscription(for: att, messageId: msg.id),
-                        translatedAudios: messageTranslatedAudiosByAttachment[att.id]
-                            ?? (messageTranslatedAudios[msg.id] ?? []).filter { $0.attachmentId == att.id }
-                    )
-                }
-        }
+        let result = ConversationMessageProjector.audioItems(
+            of: messages,
+            transcription: { originalTranscription(for: $0, messageId: $1) },
+            translatedByAttachment: messageTranslatedAudiosByAttachment,
+            translatedByMessage: messageTranslatedAudios
+        )
         derived.allAudioItems = result
         return result
     }
@@ -221,17 +196,10 @@ extension ConversationViewModel {
         return index
     }
 
-    /// La règle de légende est `ConversationMediaRules.captions(of:servedText:)`
-    /// (#8095), partagée avec l'index des médias ; le texte servi est celui du
-    /// Prisme de la fenêtre, bascules manuelles comprises.
     var mediaCaptionMap: [String: String] {
         if let cached = derived.mediaCaptionMap { return cached }
-        let map = messages.reduce(into: [String: String]()) { map, msg in
-            let captions = ConversationMediaRules.captions(
-                of: msg,
-                servedText: self.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
-            )
-            map.merge(captions) { _, latest in latest }
+        let map = ConversationMessageProjector.captions(of: messages) { msg in
+            self.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
         }
         derived.mediaCaptionMap = map
         return map
@@ -251,19 +219,7 @@ extension ConversationViewModel {
 
     var mentionCandidates: [MentionCandidate] {
         if let cached = derived.mentionCandidates { return cached }
-        var seen = Set<String>()
-        var candidates: [MentionCandidate] = []
-        for msg in messages {
-            guard let username = msg.senderUsername, !seen.contains(username) else { continue }
-            seen.insert(username)
-            candidates.append(MentionCandidate(
-                id: msg.viewingKey.isEmpty ? username : msg.viewingKey,
-                username: username,
-                displayName: msg.senderName ?? username,
-                avatarURL: msg.senderAvatarURL,
-                ring: msg.senderRing
-            ))
-        }
+        let candidates = ConversationMessageProjector.mentionCandidates(of: messages)
         derived.mentionCandidates = candidates
         return candidates
     }
