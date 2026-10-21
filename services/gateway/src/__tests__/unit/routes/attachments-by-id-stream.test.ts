@@ -70,9 +70,12 @@ function makePrisma(rows: Row[], carriers: Carrier[]) {
         const row = rows.find((r) => r.id === where.id);
         return row ? project(row, select) : null;
       }),
-      findMany: jest.fn<any>().mockImplementation(async ({ where, select }: Query) =>
-        rows.filter((r) => r.filePath === where.filePath).map((r) => project(r, select))
-      ),
+      findMany: jest.fn<any>().mockImplementation(async ({ where, select }: Query) => {
+        const clauses = (where.OR as Record<string, unknown>[] | undefined) ?? [where];
+        return rows
+          .filter((r) => clauses.some((clause) => clause.filePath === r.filePath))
+          .map((r) => project(r, select));
+      }),
     },
     message: {
       findUnique: jest.fn<any>().mockImplementation(async ({ where }: Query) => {
@@ -88,8 +91,14 @@ function makePrisma(rows: Row[], carriers: Carrier[]) {
   };
 }
 
-async function buildApp(prisma: unknown): Promise<FastifyInstance> {
+async function buildApp(prisma: unknown, options: { readonly varyBefore?: string } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  if (options.varyBefore) {
+    const vary = options.varyBefore;
+    app.addHook('onRequest', async (_req, rep) => {
+      rep.header('Vary', vary);
+    });
+  }
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as unknown as Record<string, unknown>).authContext = {
       isAuthenticated: true,
@@ -196,6 +205,87 @@ describe('#11265 — plage par chemin sur un fichier non média', () => {
     expect(res.statusCode).toBe(206);
     expect(res.headers['content-range']).toBe(`bytes 0-99/${SIZE}`);
     expect(res.headers['etag']).toBe(ETAG);
+    await app.close();
+  });
+});
+
+describe.each(ROUTES)('#11265 — %s par identifiant : en-têtes de transport justes', (_label, url) => {
+  it('ne promet aucun cache ni validateur sur un 416', async () => {
+    const app = await buildApp(makePrisma(ordinaryRows(), ordinaryCarriers()));
+    const res = await app.inject({ method: 'GET', url, headers: { range: `bytes=${SIZE}-${SIZE + 10}` } });
+    expect(res.statusCode).toBe(416);
+    expect(res.headers['content-range']).toBe(`bytes */${SIZE}`);
+    expect(res.headers['etag']).toBeUndefined();
+    expect(res.headers['cache-control'] ?? '').not.toMatch(/max-age|immutable/);
+    await app.close();
+  });
+
+  it('répond 304 quand l ETag figure dans une liste If-None-Match, en comparaison faible', async () => {
+    const app = await buildApp(makePrisma(ordinaryRows(), ordinaryCarriers()));
+    const listed = await app.inject({ method: 'GET', url, headers: { 'if-none-match': `"autre", ${ETAG}` } });
+    const strong = await app.inject({ method: 'GET', url, headers: { 'if-none-match': ETAG.replace(/^W\//, '') } });
+    expect(listed.statusCode).toBe(304);
+    expect(strong.statusCode).toBe(304);
+    await app.close();
+  });
+
+  it('sert le fichier entier quand If-Range ne désigne pas la version servie', async () => {
+    const app = await buildApp(makePrisma(ordinaryRows(), ordinaryCarriers()));
+    const res = await app.inject({
+      method: 'GET',
+      url,
+      headers: { range: 'bytes=0-99', 'if-range': 'W/"1-1"' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-range']).toBeUndefined();
+    expect(res.headers['content-length']).toBe(String(SIZE));
+    await app.close();
+  });
+
+  it('sert les N derniers octets pour une plage suffixe bytes=-N', async () => {
+    const app = await buildApp(makePrisma(ordinaryRows(), ordinaryCarriers()));
+    const suffix = await app.inject({ method: 'GET', url, headers: { range: 'bytes=-100' } });
+    const empty = await app.inject({ method: 'GET', url, headers: { range: 'bytes=-' } });
+    expect(suffix.statusCode).toBe(206);
+    expect(suffix.headers['content-range']).toBe(`bytes ${SIZE - 100}-${SIZE - 1}/${SIZE}`);
+    expect(empty.statusCode).toBe(416);
+    await app.close();
+  });
+
+  it('ajoute Accept au Vary déjà posé au lieu de l effacer', async () => {
+    const app = await buildApp(makePrisma(ordinaryRows(), ordinaryCarriers()), { varyBefore: 'Origin' });
+    const res = await app.inject({ method: 'GET', url });
+    expect(res.headers['vary']).toMatch(/Origin/);
+    expect(res.headers['vary']).toMatch(/Accept/);
+    await app.close();
+  });
+});
+
+const UUID_KEY = '2026/10/68f2a81417a557e8ce4ddfc1/post_0b4c1d2e-aaaa-4bbb-8ccc-123456789abc.jpg';
+
+describe('#11265 — par chemin : une clé UUID est écrite une fois, donc immuable', () => {
+  it('sert une clé UUID ordinaire avec immutable', async () => {
+    const app = await buildApp(makePrisma([], []));
+    const res = await app.inject({ method: 'GET', url: `/attachments/file/${encodeURIComponent(UUID_KEY)}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
+    await app.close();
+  });
+
+  it('garde la revalidation possible pour une clé sans UUID', async () => {
+    const app = await buildApp(makePrisma([], []));
+    const res = await app.inject({ method: 'GET', url: '/attachments/file/uploads/photo.jpg' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+    await app.close();
+  });
+
+  it('ne rend jamais immuable la clé UUID d une vue unique', async () => {
+    const app = await buildApp(
+      makePrisma([{ id: ID, filePath: UUID_KEY, messageId: 'm1', isViewOnce: true }], [{ id: 'm1', isViewOnce: true }])
+    );
+    const res = await app.inject({ method: 'GET', url: `/attachments/file/${encodeURIComponent(UUID_KEY)}` });
+    expect(res.headers['cache-control']).toBe(VIEW_ONCE_ATTACHMENT_CACHE);
     await app.close();
   });
 });
