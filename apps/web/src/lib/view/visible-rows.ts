@@ -10,6 +10,12 @@
  * les lui reprend pas, et une liste qui pagine sans `unobserve` garderait en
  * mémoire toutes les rangées qu'elle a jamais montées.
  *
+ * UN DÉPLACEMENT N'EST PAS UN DÉMONTAGE : Preact déplace une rangée par
+ * `insertBefore`, que le `MutationObserver` rapporte comme une suppression
+ * suivie d'un ajout. Une rangée retirée de l'ensemble mais encore montée
+ * passe par `onLeave` (la scène la rend à l'identité), puis est réobservée :
+ * elle ne garde jamais l'opacité ni l'échelle de son ancienne place.
+ *
  * TANT QUE L'OBSERVATEUR N'A RIEN DIT (son premier rapport arrive à l'image
  * qui suit `observe`), et partout où il n'existe pas, `current()` rend TOUTES
  * les rangées : on paie une passe complète, jamais une passe vide qui
@@ -63,15 +69,16 @@ export function trackVisibleRows(root: HTMLElement, options: VisibleRowsOptions)
   const mo =
     typeof MutationObserver === 'function'
       ? new MutationObserver((records) => {
-          for (const record of records) {
-            record.removedNodes.forEach((node) =>
-              rowsWithin(node, selector).forEach((row) => {
-                io.unobserve(row);
-                inView.delete(row);
-              }),
-            );
-            record.addedNodes.forEach((node) => rowsWithin(node, selector).forEach((row) => io.observe(row)));
-          }
+          const removed = records.flatMap((record) => [...record.removedNodes].flatMap((node) => rowsWithin(node, selector)));
+          const moved = removed.filter((row) => inView.has(row) && row.isConnected);
+          removed.forEach((row) => {
+            io.unobserve(row);
+            inView.delete(row);
+          });
+          if (moved.length > 0) onLeave?.(moved);
+          records.forEach((record) =>
+            record.addedNodes.forEach((node) => rowsWithin(node, selector).forEach((row) => io.observe(row))),
+          );
         })
       : null;
   mo?.observe(root, { childList: true, subtree: true });

@@ -201,6 +201,35 @@ describe('useScene — la passe est bornée aux rangées visibles (+ la marge)',
     expect(visual.style.transform).toBe('translateY(0px) scale(1)');
   });
 
+  /**
+   * UN DÉPLACEMENT N'EST PAS UN DÉMONTAGE (revue #11207). Preact déplace une
+   * rangée par `insertBefore` : le `MutationObserver` voit une suppression,
+   * et la rangée quittait l'ensemble SANS être rendue à l'identité — un saut
+   * instantané la ramenait à l'écran avec l'opacité et l'échelle de son
+   * ancienne place.
+   */
+  test('une rangée DÉPLACÉE (insertBefore) est rendue à l’identité, puis réobservée', async () => {
+    const { frame, rows } = mount(20);
+    const observer = sceneObserver();
+    report(observer, rows.slice(0, VISIBLE), true);
+    act(() => {
+      frame.dispatchEvent(new Event('scroll'));
+    });
+    await nextFrames();
+    const moving = rows[VISIBLE - 1];
+    if (moving === undefined) throw new Error('rangée absente');
+    const visual = moving.firstElementChild as HTMLElement;
+    visual.style.transform = 'translateY(3px) scale(0.9)';
+    visual.style.opacity = '0.5';
+    await act(async () => {
+      frame.insertBefore(moving, frame.firstChild);
+      await Promise.resolve();
+    });
+    expect(visual.style.opacity).toBe('1');
+    expect(visual.style.transform).toBe('translateY(0px) scale(1)');
+    expect(observer.observed.has(moving)).toBe(true);
+  });
+
   test('une rangée montée APRÈS coup est observée ; une rangée démontée ne l’est plus', async () => {
     const { root, host, rows } = mount(10);
     const observer = sceneObserver();

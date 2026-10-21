@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { installHapticsDriver, type HapticCue } from './haptics';
-import { LONG_PRESS_MAX_DISTANCE_PX, LONG_PRESS_MS, pressReducer, useLongPress, type PressState } from './long-press';
+import { LONG_PRESS_MAX_DISTANCE_PX, LONG_PRESS_MS, PRESS_RETURN_MS, pressReducer, useLongPress, type PressState } from './long-press';
 
 const at = (state: PressState, ...events: Parameters<typeof pressReducer>[1][]): PressState =>
   events.reduce((s, e) => pressReducer(s, e), state);
@@ -84,12 +84,22 @@ describe('useLongPress — la pression se voit, l’ouverture se sent', () => {
     await releaseHappyDomIfRegistered();
   });
 
-  const Row = ({ onOpen }: { readonly onOpen: () => void }) => {
-    const press = useLongPress({ onOpen });
+  type RowOptions = {
+    readonly opens?: boolean;
+    readonly enabled?: boolean;
+    readonly pressFeedback?: boolean;
+  };
+
+  const Row = ({ onOpen, enabled, pressFeedback }: RowOptions & { readonly onOpen: () => boolean | void }) => {
+    const press = useLongPress({
+      onOpen,
+      ...(enabled === undefined ? {} : { enabled }),
+      ...(pressFeedback === undefined ? {} : { pressFeedback }),
+    });
     return createElement('div', { 'data-testid': 'row', ...press }, 'rangée');
   };
 
-  const mount = () => {
+  const mount = (options: RowOptions = {}) => {
     const cues: HapticCue[] = [];
     installHapticsDriver({ cue: (name) => (cues.push(name), true), pattern: () => true });
     const opened: number[] = [];
@@ -97,7 +107,11 @@ describe('useLongPress — la pression se voit, l’ouverture se sent', () => {
     document.body.append(host);
     const root = createRoot(host);
     mounted.push({ root, host });
-    act(() => root.render(createElement(Row, { onOpen: () => opened.push(Date.now()) })));
+    const onOpen = (): boolean | void => {
+      opened.push(Date.now());
+      if (options.opens === false) return false;
+    };
+    act(() => root.render(createElement(Row, { ...options, onOpen })));
     const row = host.querySelector<HTMLElement>('[data-testid="row"]');
     if (row === null) throw new Error('rangée absente');
     return { row, cues, opened };
@@ -155,6 +169,29 @@ describe('useLongPress — la pression se voit, l’ouverture se sent', () => {
     expect(cues).toEqual(['medium']);
   });
 
+  test('Android : le contextmenu de la tenue qui tombe sur le VOILE (hors de la rangée) est avalé — la WebView n’ouvre pas son menu', async () => {
+    const { row, opened } = mount();
+    const veil = document.createElement('div');
+    document.body.append(veil);
+    pointer(row, 'pointerdown');
+    await wait(LONG_PRESS_MS + 40);
+    const held = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 0 });
+    act(() => {
+      veil.dispatchEvent(held);
+    });
+    expect(held.defaultPrevented).toBe(true);
+    expect(opened.length).toBe(1);
+    act(() => {
+      document.body.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0 }));
+    });
+    const later = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
+    act(() => {
+      veil.dispatchEvent(later);
+    });
+    expect(later.defaultPrevented).toBe(false);
+    veil.remove();
+  });
+
   test('après un appui long RELÂCHÉ (sur le voile du menu), un clic droit rouvre — rien ne reste avalé', async () => {
     const { row, cues, opened } = mount();
     pointer(row, 'pointerdown');
@@ -183,5 +220,98 @@ describe('useLongPress — la pression se voit, l’ouverture se sent', () => {
     pointer(row, 'pointerdown');
     pointer(row, 'pointercancel');
     expect(row.hasAttribute('data-pressing')).toBe(false);
+  });
+
+  /**
+   * LE RETOUR À LA TAILLE SE VOIT AUSSI (revue #11207). La transition de
+   * retour vit sur `data-press-host`, qui reste posé après un relâcher ou une
+   * annulation : un toucher ordinaire ne fait plus sauter la rangée, puis
+   * tombe une fois le retour joué (il ne garde pas la main sur les
+   * transitions propres de l'élément). À
+   * l'OUVERTURE, les deux tombent ensemble — l'ancre se mesure à taille
+   * réelle, sans transition en cours.
+   */
+  test('relâcher ou annuler garde data-press-host (retour animé) ; ouvrir retire les deux (ancre nette)', async () => {
+    const { row } = mount();
+    pointer(row, 'pointerdown');
+    expect(row.hasAttribute('data-press-host')).toBe(true);
+    pointer(row, 'pointerup');
+    expect(row.hasAttribute('data-pressing')).toBe(false);
+    expect(row.hasAttribute('data-press-host')).toBe(true);
+    pointer(row, 'pointerdown');
+    pointer(row, 'pointercancel');
+    expect(row.hasAttribute('data-press-host')).toBe(true);
+    await wait(PRESS_RETURN_MS + 40);
+    expect(row.hasAttribute('data-press-host')).toBe(false);
+    pointer(row, 'pointerdown');
+    await wait(LONG_PRESS_MS + 40);
+    expect(row.hasAttribute('data-pressing')).toBe(false);
+    expect(row.hasAttribute('data-press-host')).toBe(false);
+  });
+
+  test('un hôte sans boîte (display: contents, l’avatar) presse son premier enfant — scale n’agit pas sans boîte', async () => {
+    const ContentsHost = () => {
+      const press = useLongPress({ onOpen: () => {} });
+      return createElement(
+        'span',
+        { 'data-testid': 'host', style: { display: 'contents' }, ...press },
+        createElement('span', { 'data-testid': 'face' }, 'A'),
+      );
+    };
+    installHapticsDriver({ cue: () => true, pattern: () => true });
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    mounted.push({ root, host });
+    act(() => root.render(createElement(ContentsHost)));
+    const gestureHost = host.querySelector<HTMLElement>('[data-testid="host"]');
+    const face = host.querySelector<HTMLElement>('[data-testid="face"]');
+    if (gestureHost === null || face === null) throw new Error('avatar absent');
+    pointer(face, 'pointerdown');
+    expect(face.hasAttribute('data-pressing')).toBe(true);
+    expect(gestureHost.hasAttribute('data-pressing')).toBe(false);
+    pointer(face, 'pointerup');
+    expect(face.hasAttribute('data-pressing')).toBe(false);
+  });
+
+  test('pressFeedback: false — aucun attribut de pression, mais le geste ouvre et vibre', async () => {
+    const { row, cues, opened } = mount({ pressFeedback: false });
+    pointer(row, 'pointerdown');
+    expect(row.hasAttribute('data-pressing')).toBe(false);
+    expect(row.hasAttribute('data-press-host')).toBe(false);
+    await wait(LONG_PRESS_MS + 40);
+    expect(opened.length).toBe(1);
+    expect(cues).toEqual(['medium']);
+  });
+
+  /** UN GESTE QUI N'OUVRE RIEN NE SE SENT PAS (loi 4, revue #11207). */
+  test('onOpen qui rend false (rien ne s’est ouvert) ⇒ aucune vibration', async () => {
+    const { row, cues, opened } = mount({ opens: false });
+    pointer(row, 'pointerdown');
+    await wait(LONG_PRESS_MS + 40);
+    expect(opened.length).toBe(1);
+    expect(cues).toEqual([]);
+    act(() => {
+      row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
+    });
+    expect(cues).toEqual([]);
+  });
+
+  test('enabled: false (mode sélection) ⇒ ni pression, ni ouverture, ni vibration — le menu natif reste coupé', async () => {
+    const { row, cues, opened } = mount({ enabled: false });
+    pointer(row, 'pointerdown');
+    expect(row.hasAttribute('data-pressing')).toBe(false);
+    await wait(LONG_PRESS_MS + 40);
+    pointer(row, 'pointerup');
+    const context = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
+    act(() => {
+      row.dispatchEvent(context);
+    });
+    act(() => {
+      row.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ContextMenu' }));
+    });
+    expect(context.defaultPrevented).toBe(true);
+    expect(opened).toEqual([]);
+    expect(cues).toEqual([]);
   });
 });

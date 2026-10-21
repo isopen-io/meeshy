@@ -11,16 +11,24 @@
  * (`lib/view/list-reorder-flip.ts`). Les propriétés individuelles se composent
  * sans se connaître.
  *
- * Le délai (90 ms) laisse passer un simple toucher sans clignoter. Aucune
- * transition au RELÂCHER : l'attribut est retiré avant que l'ancre du menu ne
- * soit mesurée, et l'aperçu clone la rangée à sa taille réelle.
+ * L'ENFONCEMENT attend 150 ms : un toucher ordinaire (un lien, un audio, un
+ * défilement qui commence) ne presse presque rien. Le RETOUR est animé lui
+ * aussi : `data-press-host` porte sa transition et reste posé après un
+ * relâcher ou une annulation, l'élément reprend donc sa taille sans saut. À
+ * l'OUVERTURE, le hook retire les deux attributs ensemble : sans transition
+ * dans le style d'arrivée, l'élément reprend sa taille dans la même image, et
+ * l'ancre du menu se mesure à taille réelle.
  *
  * Sous `prefers-reduced-motion`, rien ne bouge : la vibration et le menu
  * restent les seuls retours.
  */
 @media (prefers-reduced-motion: no-preference) {
-  [data-pressing] {
+  [data-press-host] {
+    transition: scale 180ms cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  [data-press-host][data-pressing] {
     scale: 0.97;
-    transition: scale 260ms cubic-bezier(0.2, 0, 0, 1) 90ms;
+    transition: scale 220ms cubic-bezier(0.2, 0, 0, 1) 150ms;
   }
 }

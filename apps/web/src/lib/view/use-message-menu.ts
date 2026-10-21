@@ -311,12 +311,12 @@ export function useMessageMenu(params: {
   const focusTakenRef = useRef(false);
 
   const openMenuFor = useCallback(
-    (anchor: LongPressAnchor & { readonly origin: EventTarget | null }) => {
-      if (selection !== null) return; // en sélection, un tap bascule déjà (§ hôte).
+    (anchor: LongPressAnchor & { readonly origin: EventTarget | null }): boolean => {
+      if (selection !== null) return false; // en sélection, un tap bascule déjà (§ hôte).
       const messageId = anchor.element.dataset.row;
-      if (messageId === undefined) return;
+      if (messageId === undefined) return false;
       const message = messageOf(messageId);
-      if (message === undefined) return;
+      if (message === undefined) return false;
       const active = document.activeElement;
       restoreFocusRef.current = active instanceof HTMLElement ? active : null;
       if (active instanceof HTMLTextAreaElement) active.blur();
@@ -331,6 +331,7 @@ export function useMessageMenu(params: {
         isMine: isMineOf(message, viewerId),
         ...(targetedPieceOf(message, pieceId, Date.now()) === null || pieceId === undefined ? {} : { pieceId }),
       });
+      return true;
     },
     [selection, messageOf, viewerId],
   );
@@ -340,8 +341,14 @@ export function useMessageMenu(params: {
    * touche Menu a TOUCHÉ, retenu avant que `useLongPress` ne remonte la rangée
    * (`currentTarget`). Retenu ici plutôt que dans `long-press.ts`, qui vit dans
    * la première peinture (menu de l'avatar) : le fil seul en paie le poids.
+   *
+   * EN SÉLECTION, LE GESTE N'EXISTE PAS (#11207) : iOS y coupe le menu
+   * contextuel. Ni pression, ni vibration — un tap y bascule la coche.
    */
-  const gesture = useLongPress({ onOpen: (anchor) => openMenuFor({ ...anchor, origin: originRef.current }) });
+  const gesture = useLongPress({
+    onOpen: (anchor) => openMenuFor({ ...anchor, origin: originRef.current }),
+    enabled: selection === null,
+  });
 
   const onCloseMenu = useCallback(() => {
     setMenuTarget(null);

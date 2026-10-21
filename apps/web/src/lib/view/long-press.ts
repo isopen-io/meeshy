@@ -105,28 +105,94 @@ export function isContextMenuKey(event: { readonly key: string; readonly shiftKe
 /**
  * LA PRESSION SE VOIT PENDANT L'ATTENTE (#11207). `data-pressing` est posé sur
  * l'élément tenu dès `pointerdown` ; `styles/press-feedback.css` le presse à
- * 0,97 (coupé sous `prefers-reduced-motion`). Il est retiré AVANT la mesure de
- * l'ancre : l'aperçu du menu clone la rangée à sa taille réelle, jamais
- * pressée.
+ * 0,97 (coupé sous `prefers-reduced-motion`).
+ *
+ * `data-press-host` porte la transition de RETOUR et RESTE après un relâcher
+ * ou une annulation : un toucher ordinaire, ou un doigt posé avant de faire
+ * défiler, ramène l'élément à sa taille sans saut. Il tombe `PRESS_RETURN_MS`
+ * plus tard, le retour joué : sa `transition` ne reste pas posée sur celles
+ * que l'élément porte pour lui-même. À l'OUVERTURE, les deux
+ * tombent ensemble, AVANT la mesure de l'ancre : sans transition dans le
+ * style d'arrivée, l'élément reprend sa taille réelle dans la même image, et
+ * l'aperçu du menu le clone jamais pressé.
  */
 export const PRESSING_ATTRIBUTE = 'data-pressing';
+export const PRESS_HOST_ATTRIBUTE = 'data-press-host';
+/** La durée du retour à la taille (`press-feedback.css`, 180 ms) et une image de marge. */
+export const PRESS_RETURN_MS = 200;
+
+const pendingReturns = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
+
+const holdPress = (surface: HTMLElement): void => {
+  const pending = pendingReturns.get(surface);
+  if (pending !== undefined) clearTimeout(pending);
+  pendingReturns.delete(surface);
+  surface.setAttribute(PRESS_HOST_ATTRIBUTE, '');
+  surface.setAttribute(PRESSING_ATTRIBUTE, '');
+};
+
+const settlePress = (surface: HTMLElement, settle: 'animate' | 'snap'): void => {
+  surface.removeAttribute(PRESSING_ATTRIBUTE);
+  const pending = pendingReturns.get(surface);
+  if (pending !== undefined) clearTimeout(pending);
+  pendingReturns.delete(surface);
+  if (settle === 'snap') {
+    surface.removeAttribute(PRESS_HOST_ATTRIBUTE);
+    return;
+  }
+  pendingReturns.set(
+    surface,
+    setTimeout(() => {
+      pendingReturns.delete(surface);
+      surface.removeAttribute(PRESS_HOST_ATTRIBUTE);
+    }, PRESS_RETURN_MS),
+  );
+};
 
 const HELD_CONTEXTMENU_GRACE_MS = 300;
 
 /**
- * Avale le `contextmenu` du doigt qui vient d'ouvrir, jusqu'à ce qu'il se
- * lève. Écouté sur la FENÊTRE : le menu ouvert couvre la rangée, et le
- * relâcher tombe sur son voile, jamais sur l'élément qui a ouvert.
+ * L'élément qui porte la pression — l'hôte lui-même, ou son premier enfant
+ * quand l'hôte n'a pas de boîte (`display: contents`, l'avatar d'un auteur) :
+ * `scale` n'agit pas sur un élément sans boîte.
  */
-const swallowHeldContextMenu = (until: { current: number }): void => {
+const pressSurfaceOf = (host: HTMLElement): HTMLElement => {
+  if (typeof getComputedStyle !== 'function' || getComputedStyle(host).display !== 'contents') return host;
+  const first = host.firstElementChild;
+  return first instanceof HTMLElement ? first : host;
+};
+
+/**
+ * Avale le `contextmenu` du doigt qui vient d'ouvrir, jusqu'à ce qu'il se
+ * lève. Écouté sur la FENÊTRE, en capture : le menu ouvert couvre la rangée,
+ * et Chromium recalcule la cible du `contextmenu` au moment de l'appui long
+ * natif — il tombe sur le voile ou sur l'aperçu (une image, un lien), jamais
+ * sur l'élément qui a ouvert. L'écouter sur la rangée laissait la WebView
+ * ouvrir son propre menu (« Télécharger l'image ») par-dessus celui de Meeshy.
+ */
+const swallowHeldContextMenu = (until: { current: number }): (() => void) => {
   until.current = Number.POSITIVE_INFINITY;
-  const settle = (event: Event): void => {
+  const swallow = (event: Event): void => {
+    if (Date.now() >= until.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const detach = (): void => {
+    window.removeEventListener('contextmenu', swallow, true);
     window.removeEventListener('pointerup', settle, true);
     window.removeEventListener('pointercancel', settle, true);
-    until.current = event.type === 'pointercancel' ? Date.now() + HELD_CONTEXTMENU_GRACE_MS : 0;
   };
+  function settle(event: Event): void {
+    window.removeEventListener('pointerup', settle, true);
+    window.removeEventListener('pointercancel', settle, true);
+    const graceUntil = event.type === 'pointercancel' ? Date.now() + HELD_CONTEXTMENU_GRACE_MS : 0;
+    until.current = graceUntil;
+    if (graceUntil === 0) detach();
+  }
+  window.addEventListener('contextmenu', swallow, true);
   window.addEventListener('pointerup', settle, true);
   window.addEventListener('pointercancel', settle, true);
+  return detach;
 };
 
 /**
@@ -140,7 +206,14 @@ const swallowHeldContextMenu = (until: { current: number }): void => {
  * répond au clic droit.
  *
  * L'OUVERTURE SE SENT, UNE FOIS : `impact('medium')` (`haptics.ts`), le retour
- * d'iOS à l'ouverture d'un menu contextuel. Un appui tenu au doigt sur Android
+ * d'iOS à l'ouverture d'un menu contextuel — et SEULEMENT si quelque chose
+ * s'est ouvert : `onOpen` rend `false` quand l'hôte n'a rien ouvert (message
+ * introuvable, page audio de la visionneuse), et le geste ne vibre pas. Un
+ * hôte qui SAIT d'avance qu'il n'ouvrira rien (mode sélection du fil) passe
+ * `enabled: false` : ni pression, ni minuteur, ni vibration — le menu du
+ * navigateur reste coupé. `pressFeedback: false` retire la seule pression
+ * (la visionneuse plein écran, dont chaque toucher bascule le chrome).
+ * Un appui tenu au doigt sur Android
  * émet AUSSI `contextmenu` pendant la tenue (vers 500 ms, avant ou juste
  * après un `pointercancel` selon le moteur) : tant que le doigt qui a ouvert
  * est posé — et `HELD_CONTEXTMENU_GRACE_MS` après son `pointercancel` —, il
@@ -148,12 +221,16 @@ const swallowHeldContextMenu = (until: { current: number }): void => {
  * lève l'avalement aussitôt : un clic droit qui suit un appui long ouvre.
  */
 export function useLongPress(options: {
-  readonly onOpen: (anchor: LongPressAnchor) => void;
+  /** Rendre `false` dit « rien ne s'est ouvert » ; toute autre valeur est ignorée. */
+  readonly onOpen: (anchor: LongPressAnchor) => unknown;
+  readonly enabled?: boolean;
+  readonly pressFeedback?: boolean;
 }) {
   const stateRef = useRef<PressState>({ phase: 'idle' });
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pressedRef = useRef<HTMLElement | null>(null);
   const swallowContextMenuUntil = useRef(0);
+  const detachSwallowRef = useRef<(() => void) | null>(null);
   /**
    * LES SIX GESTIONNAIRES SONT STABLES (revue #5814) — ils sont étalés sur
    * CHAQUE rangée montée, et l'écran du fil se re-rend à chaque tick d'horloge
@@ -164,22 +241,27 @@ export function useLongPress(options: {
    */
   const onOpenRef = useRef(options.onOpen);
   onOpenRef.current = options.onOpen;
+  const enabledRef = useRef(options.enabled ?? true);
+  enabledRef.current = options.enabled ?? true;
+  const pressFeedbackRef = useRef(options.pressFeedback ?? true);
+  pressFeedbackRef.current = options.pressFeedback ?? true;
 
-  const release = useCallback(() => {
+  const release = useCallback((settle: 'animate' | 'snap' = 'animate') => {
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    pressedRef.current?.removeAttribute(PRESSING_ATTRIBUTE);
+    const pressed = pressedRef.current;
     pressedRef.current = null;
+    if (pressed !== null) settlePress(pressed, settle);
   }, []);
 
   const open = useCallback(
     (target: HTMLElement) => {
-      release();
+      release('snap');
       stateRef.current = { phase: 'open' };
-      impact('medium');
-      onOpenRef.current({ element: target, rect: target.getBoundingClientRect() });
+      const opened = onOpenRef.current({ element: target, rect: target.getBoundingClientRect() });
+      if (opened !== false) impact('medium');
     },
     [release],
   );
@@ -188,12 +270,20 @@ export function useLongPress(options: {
     if (event.button !== 0 || !claims(event)) return;
     const target = event.currentTarget;
     release();
+    if (!enabledRef.current) {
+      stateRef.current = { phase: 'idle' };
+      return;
+    }
     stateRef.current = { phase: 'pressing', x: event.clientX, y: event.clientY, at: Date.now() };
-    target.setAttribute(PRESSING_ATTRIBUTE, '');
-    pressedRef.current = target;
+    if (pressFeedbackRef.current) {
+      const surface = pressSurfaceOf(target);
+      holdPress(surface);
+      pressedRef.current = surface;
+    }
     timerRef.current = setTimeout(() => {
       if (stateRef.current.phase !== 'pressing') return;
-      swallowHeldContextMenu(swallowContextMenuUntil);
+      detachSwallowRef.current?.();
+      detachSwallowRef.current = swallowHeldContextMenu(swallowContextMenuUntil);
       open(target);
     }, LONG_PRESS_MS);
   }, [release, open]);
@@ -216,13 +306,14 @@ export function useLongPress(options: {
   const onContextMenu = useCallback((event: ReactMouseEvent<HTMLElement>) => {
     if (!claims(event)) return;
     event.preventDefault();
-    if (Date.now() < swallowContextMenuUntil.current) return;
+    if (!enabledRef.current || Date.now() < swallowContextMenuUntil.current) return;
     open(event.currentTarget);
   }, [open]);
 
   const onKeyDown = useCallback((event: ReactKeyboardEvent<HTMLElement>) => {
     if (!isContextMenuKey(event) || !claims(event)) return;
     event.preventDefault();
+    if (!enabledRef.current) return;
     open(event.currentTarget);
   }, [open]);
 
