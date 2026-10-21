@@ -154,10 +154,16 @@ public struct StoryComposerSeed {
     /// `stickerAnimations` porte les octets ANIMÉS (GIF, APNG) des stickers qui
     /// bougent : sans eux, la publication téléverse la seule image fixe et le
     /// sticker repart figé. Seuls ceux d'un sticker de la scène sont gardés.
+    ///
+    /// `locksBackground` FIGE le fond de la scène reprise : c'est la story d'une
+    /// AUTRE personne, dont seuls le premier plan et les textes se recomposent
+    /// (règle du porteur, #9994). L'appelant le décide, parce que lui seul sait
+    /// à qui appartient la story.
     public static func scene(_ recomposition: StoryRecomposition,
                              images: [String: UIImage],
                              files: [String: URL],
-                             stickerAnimations: [String: Data] = [:]) -> StoryComposerSeed? {
+                             stickerAnimations: [String: Data] = [:],
+                             locksBackground: Bool = false) -> StoryComposerSeed? {
         var background: UIImage?
         var bitmaps: [String: UIImage] = [:]
         var animations: [String: Data] = [:]
@@ -195,7 +201,8 @@ public struct StoryComposerSeed {
                                                  images: bitmaps,
                                                  videoURLs: videos,
                                                  audioURLs: audios,
-                                                 stickerAnimations: animations)
+                                                 stickerAnimations: animations,
+                                                 locksBackground: locksBackground)
         return StoryComposerSeed(payload: .scene(scene), description: recomposition.description)
     }
 
@@ -251,6 +258,8 @@ public struct StoryComposerRecomposedScene {
     public let audioURLs: [String: URL]
     /// Les octets animés des stickers qui bougent, sous l'id du sticker.
     public let stickerAnimations: [String: Data]
+    /// Le fond se fige : la story est celle d'une autre personne (#9994).
+    public let locksBackground: Bool
 }
 
 /// La copie sous la convention de nom du composer, isolée pour être lisible
@@ -317,6 +326,7 @@ public extension StoryComposerViewModel {
     /// n'envoie un fond que depuis `slideImages`, et une story publiée perdrait
     /// le sien.
     func detachSeededBackgroundImage() {
+        guard !locksBackground(ofSlideId: currentSlide.id) else { return }
         setImage(nil, for: currentSlide.id)
         hasBackgroundImage = false
     }
@@ -359,6 +369,11 @@ public extension StoryComposerViewModel {
             }
             for (stickerId, data) in scene.stickerAnimations {
                 registerLoadedStickerAnimation(data, for: stickerId)
+            }
+            // Le verrou se pose APRÈS la pose : il fige le fond tel qu'il a été
+            // semé, image héritée comprise.
+            if scene.locksBackground {
+                lockBackground(of: scene.slide, image: scene.backgroundImage)
             }
             isSeededSession = true
 

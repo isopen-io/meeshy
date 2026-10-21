@@ -26,7 +26,7 @@ extension MeeshyComposerHost {
     /// (`ComposerOverflowPolicy`) et se lit ici ; le `body` ne fait que
     /// consommer, et ne peut donc pas en écrire une seconde version.
     var documentOverflowEntries: [ComposerOverflowEntry] {
-        ComposerOverflowPolicy.entries(
+        ComposerBackgroundLockOffer.overflow(ComposerOverflowPolicy.entries(
             hasBackground: documentBackground != nil,
             hasMedia: !documentLocalMedia.isEmpty,
             hasText: !documentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -38,7 +38,7 @@ extension MeeshyComposerHost {
             // déjà.
             hasScene: sceneIsPresent,
             backgroundPickerIsReachable: backgroundPaletteIsReachable
-        )
+        ), locked: viewModel.isBackgroundLocked)
     }
 
     /// **La palette a-t-elle DÉJÀ un chemin à l'écran ?** (#4064)

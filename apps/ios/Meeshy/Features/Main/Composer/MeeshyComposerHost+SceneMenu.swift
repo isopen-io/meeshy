@@ -30,12 +30,12 @@ extension MeeshyComposerHost {
     func sceneMenuEntries(_ target: ComposerSceneMenuTarget) -> [ComposerSceneMenu.Entry] {
         switch target {
         case .object(let id, let kind):
-            return ComposerSceneMenu.entries(objectActions: ComposerTrailingRailPolicy.actions(
+            return ComposerSceneMenu.entries(objectActions: sceneObjectActions(ComposerTrailingRailPolicy.actions(
                 slide: viewModel.currentSlide,
                 selectedId: id,
                 served: ComposerTrailingColumn.servedActions,
                 hasEditor: ComposerSceneSurface.defaultEditableSceneKinds.contains(kind),
-                canLeaveScene: false))
+                canLeaveScene: false), of: id))
         case .background:
             return ComposerSceneMenu.entries(backgroundActions: ComposerBackgroundMenuAction.served(
                 offersPhoto: ComposerSceneCamera.modes(for: selectedFormat).contains(.photo)))

@@ -310,6 +310,8 @@ extension StoryComposerViewModel {
         if currentEffects.textObjects.first(where: { $0.id == id })?.isLocked == true {
             return
         }
+        // Le fond figé d'une story recomposée d'autrui (#9994) ne se supprime pas.
+        if isLockedBackground(objectId: id) { return }
         // Supprimer la pastille au doigt RETIRE la référence : sans cette
         // boucle, l'auteur notifie quelqu'un dont plus rien ne témoigne dans la
         // story. Lu AVANT la suppression, seule fenêtre où l'objet existe
@@ -496,6 +498,9 @@ extension StoryComposerViewModel {
     /// Toggle ON sur un élément → les autres du même type sont repassés en foreground.
     /// Toggle OFF → l'élément redevient foreground (aucun autre n'est promu automatiquement).
     public func toggleBackground(id: String) {
+        // Sur la slide au fond figé (#9994), aucune bascule : ni rétrograder le
+        // fond, ni promouvoir un premier plan à sa place.
+        guard !locksBackground(ofSlideId: currentSlide.id) else { return }
         var effects = currentEffects
 
         if let idx = effects.mediaObjects?.firstIndex(where: { $0.id == id }) {

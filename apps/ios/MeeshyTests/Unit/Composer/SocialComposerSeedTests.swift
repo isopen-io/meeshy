@@ -189,7 +189,7 @@ final class SocialComposerSeedTests: XCTestCase {
     }
 
     func test_story_aPlusieursObjets_offreComposer_etEmporteToutesSesCouches() throws {
-        let cible = try XCTUnwrap(ComposerSeedTarget(story: storyScene(), preferredLanguages: []),
+        let cible = try XCTUnwrap(ComposerSeedTarget(story: storyScene(), preferredLanguages: [], locksBackground: false),
                                   "une slide à plusieurs médias doit offrir « Composer »")
         let scene = try XCTUnwrap(cible.recomposition)
 
@@ -202,9 +202,9 @@ final class SocialComposerSeedTests: XCTestCase {
     func test_story_laDescription_descendLePrismeDuLecteur() throws {
         let traduite = storyScene(content: "Sunset",
                                   translations: [StoryTranslation(language: "fr", content: "Coucher de soleil")])
-        XCTAssertEqual(ComposerSeedTarget(story: traduite, preferredLanguages: ["fr"])?.plan.description,
+        XCTAssertEqual(ComposerSeedTarget(story: traduite, preferredLanguages: ["fr"], locksBackground: false)?.plan.description,
                        "Coucher de soleil")
-        XCTAssertEqual(ComposerSeedTarget(story: traduite, preferredLanguages: ["de"])?.plan.description,
+        XCTAssertEqual(ComposerSeedTarget(story: traduite, preferredLanguages: ["de"], locksBackground: false)?.plan.description,
                        "Sunset",
                        "aucune traduction pour la langue lue ⇒ l'ORIGINAL, jamais translations.first")
     }
@@ -221,7 +221,7 @@ final class SocialComposerSeedTests: XCTestCase {
     func test_cibleDeStory_porteLOrigineSociale() throws {
         let cible = try XCTUnwrap(
             ComposerSeedTarget(story: story(media: [media()], content: "Coucher de soleil"),
-                               preferredLanguages: [])
+                               preferredLanguages: [], locksBackground: false)
         )
         XCTAssertEqual(cible.id, "story/story-1")
         XCTAssertEqual(cible.origin, .socialMedia(postId: "story-1", mediaId: nil))
@@ -229,7 +229,7 @@ final class SocialComposerSeedTests: XCTestCase {
 
     func test_cible_refuseCeQuiNeSemeRien_surLesDeuxSurfaces() {
         XCTAssertNil(ComposerSeedTarget(post: post()))
-        XCTAssertNil(ComposerSeedTarget(story: story(), preferredLanguages: []))
+        XCTAssertNil(ComposerSeedTarget(story: story(), preferredLanguages: [], locksBackground: false))
     }
 
     /// **Deux surfaces, deux identités.** Un `.fullScreenCover(item:)` ne
@@ -238,7 +238,7 @@ final class SocialComposerSeedTests: XCTestCase {
     func test_cible_deuxSurfaces_neSeConfondentPas() throws {
         let p = try XCTUnwrap(ComposerSeedTarget(post: post(media: [media()], content: "x")))
         let s = try XCTUnwrap(
-            ComposerSeedTarget(story: story(media: [media()], content: "x"), preferredLanguages: [])
+            ComposerSeedTarget(story: story(media: [media()], content: "x"), preferredLanguages: [], locksBackground: false)
         )
         XCTAssertNotEqual(p.id, s.id)
     }
@@ -266,10 +266,11 @@ final class SocialComposerSeedTests: XCTestCase {
         resolver.result = .success(try makeJPEG())
         let cible = try XCTUnwrap(
             ComposerSeedTarget(story: story(media: [media()], content: "Coucher de soleil"),
-                               preferredLanguages: [])
+                               preferredLanguages: [], locksBackground: false)
         )
 
         let graine = await StoryRecompositionSeeding.seed(for: try XCTUnwrap(cible.recomposition),
+                                                          locksBackground: false,
                                                           resolver: resolver)
 
         XCTAssertEqual(graine?.description, "Coucher de soleil")
@@ -283,9 +284,10 @@ final class SocialComposerSeedTests: XCTestCase {
     func test_graineDUneStory_aPlusieursMedias_lesRapatrieTous() async throws {
         let resolver = StubSocialMediaResolver()
         resolver.result = .success(try makeJPEG())
-        let cible = try XCTUnwrap(ComposerSeedTarget(story: storyScene(), preferredLanguages: []))
+        let cible = try XCTUnwrap(ComposerSeedTarget(story: storyScene(), preferredLanguages: [], locksBackground: false))
 
         let graine = await StoryRecompositionSeeding.seed(for: try XCTUnwrap(cible.recomposition),
+                                                          locksBackground: false,
                                                           resolver: resolver)
 
         guard case .scene(let scene)? = graine?.payload else {
@@ -297,13 +299,33 @@ final class SocialComposerSeedTests: XCTestCase {
         XCTAssertEqual(resolver.callCount, 2)
     }
 
+    /// **La story d'AUTRUI arrive dans l'atelier avec son fond figé** (#9994) :
+    /// le drapeau que le lecteur pose sur la cible traverse la graine jusqu'au
+    /// ViewModel. Sa propre story, elle, arrive libre.
+    func test_laCibleDUneStoryDAutrui_figeLeFondDeLAtelier() async throws {
+        for locks in [true, false] {
+            let resolver = StubSocialMediaResolver()
+            resolver.result = .success(try makeJPEG())
+            let cible = try XCTUnwrap(ComposerSeedTarget(story: storyScene(), preferredLanguages: [],
+                                                         locksBackground: locks))
+
+            let graine = try XCTUnwrap(await StoryRecompositionSeeding.seed(
+                for: try XCTUnwrap(cible.recomposition),
+                locksBackground: cible.locksBackground,
+                resolver: resolver))
+
+            XCTAssertEqual(StoryComposerViewModel(seeding: graine).isBackgroundLocked, locks)
+        }
+    }
+
     /// **Une scène amputée serait pire qu'un refus.** Un média qui ne se rapatrie
     /// pas referme la porte, et la porte le dit.
     func test_graineDUneStory_unMediaIntrouvable_neSemeRien() async throws {
         let resolver = StubSocialMediaResolver()
-        let cible = try XCTUnwrap(ComposerSeedTarget(story: storyScene(), preferredLanguages: []))
+        let cible = try XCTUnwrap(ComposerSeedTarget(story: storyScene(), preferredLanguages: [], locksBackground: false))
 
         let graine = await StoryRecompositionSeeding.seed(for: try XCTUnwrap(cible.recomposition),
+                                                          locksBackground: false,
                                                           resolver: resolver)
 
         XCTAssertNil(graine)

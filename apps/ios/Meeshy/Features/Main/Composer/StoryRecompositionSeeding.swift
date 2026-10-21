@@ -21,6 +21,7 @@ enum StoryRecompositionSeeding {
 
     @MainActor
     static func seed(for recomposition: StoryRecomposition,
+                     locksBackground: Bool,
                      resolver: MediaSaveSourceResolving) async -> StoryComposerSeed? {
         let local = await localFiles(for: recomposition.assets, resolver: resolver)
 
@@ -43,7 +44,8 @@ enum StoryRecompositionSeeding {
             }
         }
         return StoryComposerSeed.scene(recomposition, images: images, files: files,
-                                       stickerAnimations: stickerAnimations)
+                                       stickerAnimations: stickerAnimations,
+                                       locksBackground: locksBackground)
     }
 
     /// Les fichiers locaux, par identifiant d'objet. Un média introuvable est

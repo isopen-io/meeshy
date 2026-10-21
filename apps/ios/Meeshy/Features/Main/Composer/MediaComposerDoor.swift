@@ -153,6 +153,9 @@ struct ComposerSeedTarget: Identifiable {
     /// porte matérialise, et le plan n'en garde que la description.
     let recomposition: StoryRecomposition?
 
+    /// Le fond de la scène reprise est figé : la story est celle d'autrui (#9994).
+    let locksBackground: Bool
+
     /// La pièce à poser, pour les lecteurs qui n'ont besoin que d'elle.
     /// `nil` pour un porteur sans média composable.
     var attachment: MessageAttachment? { plan.media }
@@ -164,11 +167,13 @@ struct ComposerSeedTarget: Identifiable {
     private init(id: String,
                  plan: ComposableAttachment.SeedPlan,
                  origin: ComposerOrigin,
-                 recomposition: StoryRecomposition? = nil) {
+                 recomposition: StoryRecomposition? = nil,
+                 locksBackground: Bool = false) {
         self.id = id
         self.plan = plan
         self.origin = origin
         self.recomposition = recomposition
+        self.locksBackground = locksBackground
     }
 
     init?(message: Message) {
@@ -207,14 +212,20 @@ struct ComposerSeedTarget: Identifiable {
     /// SCÈNE, et c'est la scène entière — textes posés, stickers, effets, tous
     /// ses médias — qui part dans le composer. `preferredLanguages` descend le
     /// Prisme du lecteur sur le texte qui pré-remplira la description.
-    init?(story: StoryItem, preferredLanguages: [String]) {
+    ///
+    /// `locksBackground` : la story est celle d'une AUTRE personne, et son fond
+    /// ne se recompose pas (#9994). Sans défaut, à dessein : seul le lecteur
+    /// sait à qui appartient la story, et un défaut laisserait un nouvel
+    /// appelant libérer le fond d'autrui sans l'avoir décidé.
+    init?(story: StoryItem, preferredLanguages: [String], locksBackground: Bool) {
         guard let recomposition = StoryRecomposition(story: story,
                                                      preferredLanguages: preferredLanguages)
         else { return nil }
         self.init(id: "story/\(story.id)",
                   plan: ComposableAttachment.seedPlan(recomposingStoryWith: recomposition.description),
                   origin: .socialMedia(postId: story.id, mediaId: nil),
-                  recomposition: recomposition)
+                  recomposition: recomposition,
+                  locksBackground: locksBackground)
     }
 }
 
@@ -466,7 +477,9 @@ struct MediaComposerDoor: View {
         guard case .pending = materialisation else { return }
         let semee: StoryComposerSeed?
         if let recomposition = target.recomposition {
-            semee = await StoryRecompositionSeeding.seed(for: recomposition, resolver: resolver)
+            semee = await StoryRecompositionSeeding.seed(for: recomposition,
+                                                         locksBackground: target.locksBackground,
+                                                         resolver: resolver)
         } else {
             semee = await ComposerMediaSeeding.seed(for: target.plan, resolver: resolver)
         }

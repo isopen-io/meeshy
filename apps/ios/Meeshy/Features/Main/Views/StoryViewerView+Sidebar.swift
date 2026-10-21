@@ -305,7 +305,8 @@ struct StoryActionSidebarView: View {
         guard demanderComposer != nil, !isOwnStory, let story = currentStory else { return nil }
         return ComposerSeedTarget(
             story: story,
-            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            locksBackground: true
         )
     }
 

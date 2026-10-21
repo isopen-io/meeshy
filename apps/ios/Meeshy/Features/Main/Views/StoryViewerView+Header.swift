@@ -590,7 +590,9 @@ struct StoryHeaderView: View {
         guard demanderComposer != nil, let story = currentStory else { return nil }
         return ComposerSeedTarget(
             story: story,
-            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            // Le fond de la story d'AUTRUI ne se recompose pas (#9994).
+            locksBackground: !isOwnStory
         )
     }
 }

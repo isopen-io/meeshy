@@ -22,7 +22,9 @@ extension MeeshyComposerHost {
                                                 allowsCapture: profile.allowsCapture)
         // La porte « Fond » peint une COULEUR : sous un média de fond, elle
         // n'a plus d'objet — le Cadre du rail droit prend le relais.
-        let utiles = sceneHasBackgroundMedia ? offertes.filter { $0 != .background } : offertes
+        let peintes = sceneHasBackgroundMedia ? offertes.filter { $0 != .background } : offertes
+        // Le fond d'une story recomposée d'autrui est figé (#9994).
+        let utiles = ComposerBackgroundLockOffer.doors(peintes, locked: viewModel.isBackgroundLocked)
         guard returnsToConversation else { return utiles }
         return utiles.filter(ComposerReturnImage.paintingDoors.contains)
     }

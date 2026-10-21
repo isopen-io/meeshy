@@ -83,7 +83,8 @@ extension StoryComposerViewModel {
     }
 
     public func removeSlide(at index: Int) {
-        guard slides.count > 1, slides.indices.contains(index) else { return }
+        guard slides.count > 1, slides.indices.contains(index),
+              !locksBackground(ofSlideId: slides[index].id) else { return }
         let slide = slides[index]
         let slideId = slide.id
         let mediaIds = (slide.effects.mediaObjects ?? []).map(\.id)

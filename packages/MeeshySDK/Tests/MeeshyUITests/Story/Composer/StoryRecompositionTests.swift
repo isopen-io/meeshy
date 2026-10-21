@@ -262,4 +262,114 @@ final class StoryRecompositionTests: XCTestCase {
                       "`runStoryUpload` n'envoie un fond que depuis `slideImages[slide.id]`")
         XCTAssertTrue(sut.hasBackgroundImage)
     }
+
+    // MARK: - Le FOND d'une story d'autrui est figé (#9994)
+
+    /// Une story d'AUTRUI avec un fond coloré, un média de fond et un premier plan.
+    private func backgroundScene(locks: Bool) throws -> StoryComposerViewModel {
+        var bg = image(id: "bg", postMediaId: "pm-bg", url: "https://cdn.example/bg.jpg")
+        bg.isBackground = true
+        let source = story(effects: StoryEffects(
+            background: "#112233",
+            filter: "vivid",
+            textObjects: [StoryTextObject(id: "tx-1", text: "Bonjour")],
+            mediaObjects: [bg, image(id: "fg", postMediaId: "pm-fg", url: "https://cdn.example/fg.jpg")]
+        ))
+        let recomposition = try XCTUnwrap(StoryRecomposition(story: source, preferredLanguages: []))
+        let seed = try XCTUnwrap(StoryComposerSeed.scene(
+            recomposition,
+            images: ["bg": makeImage(), "fg": makeImage()],
+            files: [:],
+            locksBackground: locks
+        ))
+        return StoryComposerViewModel(seeding: seed)
+    }
+
+    func test_fondFige_laPaletteNeLeRecolorePas() throws {
+        let sut = try backgroundScene(locks: true)
+
+        sut.applyBackground(hex: "#FFFFFF")
+        sut.clearBackground()
+
+        XCTAssertEqual(sut.currentSlide.effects.background, "#112233")
+    }
+
+    func test_fondFige_aucuneEcritureEnBlocNeLeModifie() throws {
+        let sut = try backgroundScene(locks: true)
+        var touched = sut.currentSlide
+        touched.effects.filter = "mono"
+        touched.effects.backgroundTransform = StoryBackgroundTransform(scale: 3)
+        touched.effects.mediaObjects?[0].x = 0.9
+
+        sut.currentSlide = touched
+
+        XCTAssertEqual(sut.currentSlide.effects.filter, "vivid")
+        XCTAssertNil(sut.currentSlide.effects.backgroundTransform?.scale)
+        XCTAssertEqual(sut.currentSlide.effects.resolvedBackgroundMedia?.x, 0.3)
+    }
+
+    func test_fondFige_ilNeSeSupprimeNiNeSeRetrograde() throws {
+        let sut = try backgroundScene(locks: true)
+
+        sut.deleteElement(id: "bg")
+        sut.toggleBackground(id: "bg")
+        sut.toggleBackground(id: "fg")
+
+        XCTAssertEqual(sut.currentSlide.effects.resolvedBackgroundMedia?.id, "bg")
+        XCTAssertEqual(sut.currentSlide.effects.mediaObjects?.filter(\.isBackground).map(\.id), ["bg"])
+    }
+
+    func test_fondFige_lePremierPlanEtLesTextesRestentLibres() throws {
+        let sut = try backgroundScene(locks: true)
+
+        var moved = sut.currentSlide
+        moved.effects.mediaObjects?[1].x = 0.8
+        moved.effects.textObjects.append(StoryTextObject(id: "tx-2", text: "Salut"))
+        sut.currentSlide = moved
+        sut.deleteElement(id: "fg")
+
+        XCTAssertNil(sut.currentSlide.effects.mediaObjects?.first { $0.id == "fg" })
+        XCTAssertEqual(sut.currentSlide.effects.textObjects.map(\.id), ["tx-1", "tx-2"])
+    }
+
+    /// L'image de fond HÉRITÉE vit hors de la slide : le verrou la garde aussi.
+    func test_fondFige_lImageHeriteeNeSeRemplaceNiNeSeRetire() throws {
+        let legacy = story(media: [FeedMedia(id: "pm-1", type: .image, url: "https://cdn.example/bg.jpg")],
+                           content: "Plage")
+        let recomposition = try XCTUnwrap(StoryRecomposition(story: legacy, preferredLanguages: []))
+        let original = makeImage()
+        let sut = StoryComposerViewModel(seeding: try XCTUnwrap(StoryComposerSeed.scene(
+            recomposition, images: [recomposition.slide.id: original], files: [:], locksBackground: true
+        )))
+
+        sut.setImage(makeImage(), for: recomposition.slide.id)
+        XCTAssertTrue(sut.imageForCurrentSlide() === original)
+
+        sut.detachSeededBackgroundImage()
+        XCTAssertTrue(sut.imageForCurrentSlide() === original)
+        XCTAssertTrue(sut.hasBackgroundImage)
+    }
+
+    /// Sa PROPRE story se recompose librement : le verrou n'est posé que sur
+    /// celle d'autrui.
+    func test_sansVerrou_leFondSeRecompose() throws {
+        let sut = try backgroundScene(locks: false)
+
+        sut.applyBackground(hex: "#FFFFFF")
+        sut.toggleBackground(id: "bg")
+
+        XCTAssertFalse(sut.isBackgroundLocked)
+        XCTAssertEqual(sut.currentSlide.effects.background, "FFFFFF")
+        XCTAssertNil(sut.currentSlide.effects.resolvedBackgroundMedia)
+    }
+
+    func test_fondFige_tombeAvecUneRemiseAZero() throws {
+        let sut = try backgroundScene(locks: true)
+        XCTAssertTrue(sut.isBackgroundLocked)
+        XCTAssertTrue(sut.isLockedBackground(objectId: "bg"))
+
+        sut.reset()
+
+        XCTAssertFalse(sut.isBackgroundLocked)
+    }
 }
