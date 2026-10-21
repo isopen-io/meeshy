@@ -8,29 +8,46 @@ struct ClipVolumeAutomation: View {
     /// Points déjà triés par instant (`ClipInspector.sortedVolumePoints`).
     let points: [ClipInspector.ClipSnapshot.VolumePoint]
     let playheadTime: Float
+    /// Tête de lecture observée par le SEUL libellé du bouton (#9874) : quand
+    /// elle est fournie, `playheadTime` est ignoré et l'inspecteur ne se
+    /// réévalue plus à chaque tick. `nil` = valeur figée.
+    var playhead: PlayheadClock?
     let volume: Float
     let onAddVolumePoint: (Float) -> Void
     let onRemoveVolumePoint: (String) -> Void
 
+    @ViewBuilder
+    private var addPointButton: some View {
+        if let playhead {
+            PlayheadTimeReader(clock: playhead) { addPointButton(at: $0) }
+        } else {
+            addPointButton(at: playheadTime)
+        }
+    }
+
+    private func addPointButton(at seconds: Float) -> some View {
+        Button {
+            onAddVolumePoint(volume)
+        } label: {
+            Label(
+                String(format: String(localized: "story.timeline.inspector.volume.addPoint",
+                                      defaultValue: "Point de volume à %@",
+                                      bundle: .module),
+                       ClipInspector.formatTime(seconds: seconds)),
+                systemImage: "plus.circle"
+            )
+            .font(.caption.weight(.semibold))
+        }
+        .buttonStyle(.bordered)
+        .tint(MeeshyColors.warning)
+        .accessibilityHint(String(localized: "story.timeline.inspector.volume.addPoint.hint",
+                                  defaultValue: "Fige le volume courant à la position de lecture",
+                                  bundle: .module))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-            Button {
-                onAddVolumePoint(volume)
-            } label: {
-                Label(
-                    String(format: String(localized: "story.timeline.inspector.volume.addPoint",
-                                          defaultValue: "Point de volume à %@",
-                                          bundle: .module),
-                           ClipInspector.formatTime(seconds: playheadTime)),
-                    systemImage: "plus.circle"
-                )
-                .font(.caption.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .tint(MeeshyColors.warning)
-            .accessibilityHint(String(localized: "story.timeline.inspector.volume.addPoint.hint",
-                                      defaultValue: "Fige le volume courant à la position de lecture",
-                                      bundle: .module))
+            addPointButton
 
             if points.isEmpty {
                 Text(String(localized: "story.timeline.inspector.volume.automation.caption",
