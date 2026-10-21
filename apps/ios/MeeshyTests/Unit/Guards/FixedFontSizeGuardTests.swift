@@ -92,14 +92,9 @@ final class FixedFontSizeGuardTests: XCTestCase {
                 return Site(line: index + 1, receiver: receiver(of: sameLineHead))
             }
 
-            var above = index - 1
-            while above >= 0 {
-                let trimmed = lines[above].trimmingCharacters(in: .whitespaces)
-                guard trimmed.isEmpty || trimmed.hasPrefix(".") || trimmed.hasPrefix(")") else { break }
-                above -= 1
-            }
+            let above = chainHeadIndex(lines: lines, index: index)
             return Site(line: index + 1,
-                        receiver: receiver(of: above >= 0 ? lines[above] : ""))
+                        receiver: receiver(of: above.map { lines[$0] } ?? ""))
         }
     }
 
@@ -619,7 +614,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         return raw[above].trimmingCharacters(in: .whitespaces)
     }
 
-    private static func chainHeadIndex(lines: [String], index: Int) -> Int? {
+    static func chainHeadIndex(lines: [String], index: Int) -> Int? {
         (0..<index).reversed().first { candidate in
             let trimmed = lines[candidate].trimmingCharacters(in: .whitespaces)
             return !(trimmed.isEmpty || trimmed.hasPrefix(".") || trimmed.hasPrefix(")"))
