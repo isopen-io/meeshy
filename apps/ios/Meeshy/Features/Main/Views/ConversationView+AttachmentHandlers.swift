@@ -147,7 +147,7 @@ extension ConversationView {
         // eux perdrait la protection sans qu'aucun message ne parte, et le
         // popup relance ce même tap sur un état qu'il doit retrouver intact.
         let protection = viewModel.captureArmedProtection(replyingTo: replyId)
-        let relation = MessageRelation.legacy(replyToId: replyId, storyReplyToId: storyReplyId, storyReference: storyRef, forwardedFromId: nil, forwardedFromConversationId: nil, attachmentReplyTo: replyAnchor)
+        let relation = ComposerSendRelation.of(route, citing: replyAnchor)
 
         if attachments.isEmpty {
             // Text-only send: clear UI immediately
