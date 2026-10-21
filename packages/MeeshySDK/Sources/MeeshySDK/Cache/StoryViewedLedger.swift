@@ -66,7 +66,7 @@ public protocol StoryViewedLedgerProviding: AnyObject, Sendable {
 /// Registre durable des stories vues, adossé à `UserDefaults` (même régime que
 /// `MediaConsumptionStore` : un état de lecture, non secret). L'écriture est
 /// SYNCHRONE : la vue est sur disque avant que l'utilisateur puisse tuer l'app.
-public final class StoryViewedLedger: StoryViewedLedgerProviding, @unchecked Sendable {
+public final class StoryViewedLedger: StoryViewedLedgerProviding, Sendable {
     public static let shared = StoryViewedLedger()
 
     public static let storageKey = "me.meeshy.storyViewedLedger"
@@ -75,39 +75,50 @@ public final class StoryViewedLedger: StoryViewedLedgerProviding, @unchecked Sen
     /// cache du tray lui-même ne la garde pas plus (`CachePolicy.stories`).
     public static let retention: TimeInterval = 72 * 3600
 
-    private let userDefaults: UserDefaults
-    private let key: String
+    private struct Backing {
+        let userDefaults: UserDefaults
+        let key: String
+        var entries: StoryViewedEntries
+
+        mutating func record(storyId: String, ownerId: String, at date: Date, floor: Date) {
+            let updated = entries
+                .recording(storyId: storyId, ownerId: ownerId, at: date)
+                .pruned(olderThan: floor)
+            guard updated != entries else { return }
+            entries = updated
+            persist(updated)
+        }
+
+        private func persist(_ value: StoryViewedEntries) {
+            do {
+                userDefaults.set(try JSONEncoder().encode(value), forKey: key)
+            } catch {
+                Logger.cache.error("StoryViewedLedger write failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     private let now: @Sendable () -> Date
-    private let lock = NSLock()
-    private var entries: StoryViewedEntries
+    private let backing: Locked<Backing>
 
     public init(
         userDefaults: UserDefaults = .standard,
         key: String = StoryViewedLedger.storageKey,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
-        self.userDefaults = userDefaults
-        self.key = key
         self.now = now
-        self.entries = Self.load(from: userDefaults, key: key)
-            .pruned(olderThan: now().addingTimeInterval(-Self.retention))
+        let loaded = StoryViewedLedger.load(from: userDefaults, key: key)
+            .pruned(olderThan: now().addingTimeInterval(-StoryViewedLedger.retention))
+        self.backing = Locked(uncheckedState: Backing(userDefaults: userDefaults, key: key, entries: loaded))
     }
 
     public func record(storyId: String, ownerId: String, at date: Date) {
-        lock.lock()
-        defer { lock.unlock() }
-        let updated = entries
-            .recording(storyId: storyId, ownerId: ownerId, at: date)
-            .pruned(olderThan: now().addingTimeInterval(-Self.retention))
-        guard updated != entries else { return }
-        entries = updated
-        persist(updated)
+        let floor = now().addingTimeInterval(-StoryViewedLedger.retention)
+        backing.mutate { $0.record(storyId: storyId, ownerId: ownerId, at: date, floor: floor) }
     }
 
     public func viewedStories(ownerId: String) -> [String: Date] {
-        lock.lock()
-        defer { lock.unlock() }
-        return entries.viewedStories(ownerId: ownerId)
+        backing.read { $0.entries.viewedStories(ownerId: ownerId) }
     }
 
     // MARK: - Persistence
@@ -119,14 +130,6 @@ public final class StoryViewedLedger: StoryViewedLedgerProviding, @unchecked Sen
         } catch {
             Logger.cache.error("StoryViewedLedger unreadable, starting empty: \(error.localizedDescription, privacy: .public)")
             return StoryViewedEntries()
-        }
-    }
-
-    private func persist(_ value: StoryViewedEntries) {
-        do {
-            userDefaults.set(try JSONEncoder().encode(value), forKey: key)
-        } catch {
-            Logger.cache.error("StoryViewedLedger write failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 }

@@ -208,20 +208,19 @@ struct SocialEventsBody: Encodable {
 /// D'où un lot de COMPTAGE tient le consentement d'analyse (#10552). Le SDK ne
 /// lit aucun réglage : l'app installe sa règle une fois au lancement. Sans
 /// source installée (extension, test), le lot part sans `context.consent`.
-public final class SocialEventsConsentSource: @unchecked Sendable {
+public final class SocialEventsConsentSource: Sendable {
     public static let shared = SocialEventsConsentSource()
 
-    private let lock = NSLock()
-    private var standing: (@MainActor @Sendable () -> SocialEventContext.Consent?)?
+    private let standingSlot = Locked<(@MainActor @Sendable () -> SocialEventContext.Consent?)?>(nil)
 
     public init() {}
 
     public func install(_ standing: @escaping @MainActor @Sendable () -> SocialEventContext.Consent?) {
-        lock.withLock { self.standing = standing }
+        standingSlot.mutate { $0 = standing }
     }
 
     public func current() async -> SocialEventContext.Consent? {
-        guard let standing = lock.withLock({ self.standing }) else { return nil }
+        guard let standing = standingSlot.read({ $0 }) else { return nil }
         return await standing()
     }
 }

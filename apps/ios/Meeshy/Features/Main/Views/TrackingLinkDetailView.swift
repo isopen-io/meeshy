@@ -107,7 +107,6 @@ struct TrackingLinkDetailView: View {
                 HapticFeedback.success()
                 UIAccessibility.post(notification: .announcement, argument: String(localized: "tracking.link.detail.a11y.copied", defaultValue: "Lien copié", bundle: .main))
                 withAnimation { copiedFeedback = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
             shareActionButton
             detailActionButton(String(localized: "tracking.link.detail.qr", defaultValue: "QR code", bundle: .main), icon: "qrcode", color: MeeshyColors.brandPrimary) {
@@ -117,6 +116,7 @@ struct TrackingLinkDetailView: View {
                 showDeleteConfirm = true
             }
         }
+        .settling($copiedFeedback, to: false, after: .seconds(2), animation: .default)
     }
 
     private func detailActionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {

@@ -802,10 +802,22 @@ describe('MessageMenu — le sous-menu de « Transférer » (#9039)', () => {
 
 /**
  * #9043 — SANS CADRE, COMME LA STORY, ET GLISSER VERS LE HAUT RÉDUIT L'APERÇU.
- * Un message LONG (1 500 px) pousse la liste sous le bas de l'écran : on
- * impose cette géométrie à l'ancre, `happy-dom` ne mesurant rien.
+ * Un message LONG (1 500 px) sur un écran COURT (un téléphone en paysage,
+ * 360 px) : même tronqué à `PREVIEW_MIN_VISIBLE`, l'aperçu pousse la liste sous
+ * le bas de l'écran — sur un écran de téléphone en portrait, la troncature
+ * fait tenir le cluster entier (#11206). On impose cette géométrie à l'ancre et
+ * à la fenêtre, `happy-dom` ne mesurant rien.
  */
 describe('MessageMenu — le rail sans cadre, la liste dans sa carte, et l’aperçu se réduit au glissement (#9043)', () => {
+  /* `window` n'existe qu'après le `beforeAll` (happy-dom) : la fenêtre se lit
+     dans le témoin, jamais au chargement du module. */
+  const shortened: { real: PropertyDescriptor | undefined; active: boolean } = { real: undefined, active: false };
+  afterEach(() => {
+    if (!shortened.active) return;
+    shortened.active = false;
+    if (shortened.real === undefined) Reflect.deleteProperty(window, 'innerHeight');
+    else Object.defineProperty(window, 'innerHeight', shortened.real);
+  });
   const surface = (): HTMLElement => document.querySelector('[data-message-menu-drag-surface]')!;
   const list = (): HTMLElement => document.querySelector('.message-menu-list')!;
   const previewScale = (): number =>
@@ -817,6 +829,9 @@ describe('MessageMenu — le rail sans cadre, la liste dans sa carte, et l’ape
     });
 
   const openLong = (): void => {
+    shortened.real = Object.getOwnPropertyDescriptor(window, 'innerHeight');
+    shortened.active = true;
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 360 });
     const el = mount();
     const rect = { top: 120, bottom: 1620, left: 20, right: 370, width: 350, height: 1500, x: 20, y: 120 };
     row(el).getBoundingClientRect = () => ({ ...rect, toJSON: () => rect }) as DOMRect;

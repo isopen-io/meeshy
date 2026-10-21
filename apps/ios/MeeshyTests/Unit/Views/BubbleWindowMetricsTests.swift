@@ -152,15 +152,16 @@ final class BubbleWindowMetricsTests: XCTestCase {
     /// Sur iPad la conversation occupe une COLONNE (~62 % de la fenêtre) : la
     /// bulle réelle se plafonne contre la liste, l'aperçu contre la fenêtre — il
     /// était plus large que la bulle qu'il reproduit, et le texte se recoupait.
-    /// L'aperçu se plafonne contre la largeur de son overlay.
+    /// L'aperçu se plafonne contre la largeur de son overlay — depuis #11208, il
+    /// rend la bulle du fil elle-même, à qui l'overlay remet la largeur de sa
+    /// colonne comme la liste la remet à la cellule.
     func test_messageOverlayMenu_previewCapsAgainstItsOwnWidth() throws {
         let code = codeLines(try source(Self.messageOverlayMenu))
 
         XCTAssertTrue(
-            code.contains("containerWidth: containerWidth > 0 ? containerWidth : nil"),
+            code.contains(".environment(\\.bubbleContainerWidth, geometry.size.width > 0 ? geometry.size.width : nil)"),
             "The long-press preview must cap against the column it is drawn in, like the bubble it mirrors."
         )
-        XCTAssertTrue(code.contains("messagePreview(containerWidth: geometry.size.width)"))
         XCTAssertFalse(
             code.contains("UIScreen.main"),
             "MessageOverlayMenu already reads its own GeometryReader for every other metric."

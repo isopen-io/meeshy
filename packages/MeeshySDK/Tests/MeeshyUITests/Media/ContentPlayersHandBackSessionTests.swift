@@ -37,6 +37,7 @@ final class ContentPlayersHandBackSessionTests: XCTestCase {
 
     func test_anExternalPlayerThatStillSounds_holdsTheSession() {
         let player = FakeExternalPlayer()
+        let withoutThisPlayer = RecordingPlaybackDucker.shared.meeshyStillPlays
         PlaybackCoordinator.shared.registerExternal(player)
         addTeardownBlock { @MainActor in PlaybackCoordinator.shared.unregisterExternal(player) }
 
@@ -44,7 +45,7 @@ final class ContentPlayersHandBackSessionTests: XCTestCase {
         XCTAssertTrue(RecordingPlaybackDucker.shared.meeshyStillPlays)
 
         player.isPlayingAudibly = false
-        XCTAssertEqual(RecordingPlaybackDucker.shared.meeshyStillPlays, SharedAVPlayerManager.shared.audibleVolumeTarget != nil)
+        XCTAssertEqual(RecordingPlaybackDucker.shared.meeshyStillPlays, withoutThisPlayer, "un lecteur externe redevenu muet ne retient plus la session")
     }
 
     /// Une story qui sonnait rend la session au bout de ≈ 3 s de pause, et sa

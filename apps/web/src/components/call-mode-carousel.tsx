@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 
-import { captureIntent, keyIntent, LONG_PRESS_MS, PRESS_SLOP_PX, tapGesture, type LastTap, type PressGesture } from '@/lib/calls/call-capture-gesture';
+import { CAPTURE_HOLD_MS, captureIntent, keyIntent, PRESS_SLOP_PX, tapGesture, type LastTap, type PressGesture } from '@/lib/calls/call-capture-gesture';
 import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
 
 /**
@@ -253,7 +253,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       consumed.current = id;
       lastTap.current = null;
       act(id, 'long-press');
-    }, capture.longPressMs ?? LONG_PRESS_MS);
+    }, capture.longPressMs ?? CAPTURE_HOLD_MS);
     press.current = { id, x: event.clientX, y: event.clientY, timer };
   };
 

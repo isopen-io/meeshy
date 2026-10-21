@@ -21,7 +21,9 @@ import MeeshySDK
 /// `heartPath` existe. Les mots viennent de `String(localized:)` à clé
 /// LITTÉRALE : ils appartiennent au GABARIT, donc le LECTEUR lit « Done » là
 /// où l'auteur a posé « Terminé ». Aucun emplacement, donc rien à remplir.
-extension StickerTemplateRenderer {
+enum WorkStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .work
+
 
     // MARK: - Le patron des cartouches de travail
 
@@ -742,7 +744,7 @@ extension StickerTemplateRenderer {
                  icône: { r in Self.workHouseIcon(in: r) }),
     ]
 
-    static let workDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.workLaptop,
             name: { String(localized: "sticker.template.work.laptop", defaultValue: "Au clavier", bundle: .module) },

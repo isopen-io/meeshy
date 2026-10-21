@@ -10,7 +10,9 @@ import MeeshySDK
 /// aboie, un timbre de sommet, une carte de plage, une capsule de nuit. La
 /// palette est celle de la marque — `leaf` pour ce qui pousse, `warmBulb` pour
 /// ce qui brille, `surface` en liseré pour se détacher d'une photo sombre.
-extension StickerTemplateRenderer {
+enum NatureStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .nature
+
 
     // MARK: - Le socle des glyphes nus
 
@@ -804,7 +806,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille NATURE & ANIMAUX
 
-    static let natureDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.natureFlower,
             name: { String(localized: "sticker.template.nature.flower", defaultValue: "Fleur", bundle: .module) },

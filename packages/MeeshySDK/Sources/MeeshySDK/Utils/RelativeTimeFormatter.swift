@@ -182,41 +182,45 @@ public enum RelativeTimeFormatter {
 /// thread-safe, mirroring `TimeStringCache` in `MessageRecord.swift`. The
 /// time zone is applied per call so the absolute date stays consistent with the
 /// calendar used for the day-delta computation (UTC in tests, local in prod).
-private final class AbsoluteDateFormatterBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private let dayMonth: DateFormatter
-    private let dayMonthYear: DateFormatter
-    private let clock: DateFormatter
+private final class AbsoluteDateFormatterBox: Sendable {
+    private struct Formatters {
+        let dayMonth: DateFormatter
+        let dayMonthYear: DateFormatter
+        let clock: DateFormatter
 
-    init() {
-        // Locale.current → the absolute date follows the user's regional format
-        // (component order, separators) and is translated into their language
-        // (month name). `setLocalizedDateFormatFromTemplate` reorders the
-        // template per locale ("4 nov." fr, "Nov 4" en, etc.).
-        let locale = Locale.current
-        dayMonth = DateFormatter()
-        dayMonth.locale = locale
-        dayMonth.setLocalizedDateFormatFromTemplate("d MMM")
-        dayMonthYear = DateFormatter()
-        dayMonthYear.locale = locale
-        dayMonthYear.setLocalizedDateFormatFromTemplate("d MMM yyyy")
-        clock = DateFormatter()
-        clock.locale = locale
-        clock.setLocalizedDateFormatFromTemplate("jmm")
+        static func make() -> Formatters {
+            // Locale.current → the absolute date follows the user's regional format
+            // (component order, separators) and is translated into their language
+            // (month name). `setLocalizedDateFormatFromTemplate` reorders the
+            // template per locale ("4 nov." fr, "Nov 4" en, etc.).
+            let locale = Locale.current
+            let dayMonth = DateFormatter()
+            dayMonth.locale = locale
+            dayMonth.setLocalizedDateFormatFromTemplate("d MMM")
+            let dayMonthYear = DateFormatter()
+            dayMonthYear.locale = locale
+            dayMonthYear.setLocalizedDateFormatFromTemplate("d MMM yyyy")
+            let clock = DateFormatter()
+            clock.locale = locale
+            clock.setLocalizedDateFormatFromTemplate("jmm")
+            return Formatters(dayMonth: dayMonth, dayMonthYear: dayMonthYear, clock: clock)
+        }
     }
 
+    private let formatters = Locked(uncheckedState: Formatters.make())
+
     func string(from date: Date, includingYear: Bool, timeZone: TimeZone) -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        let formatter = includingYear ? dayMonthYear : dayMonth
-        formatter.timeZone = timeZone
-        return formatter.string(from: date)
+        formatters.mutate { state -> String in
+            let formatter = includingYear ? state.dayMonthYear : state.dayMonth
+            formatter.timeZone = timeZone
+            return formatter.string(from: date)
+        }
     }
 
     func timeString(from date: Date, timeZone: TimeZone) -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        clock.timeZone = timeZone
-        return clock.string(from: date)
+        formatters.mutate { state -> String in
+            state.clock.timeZone = timeZone
+            return state.clock.string(from: date)
+        }
     }
 }

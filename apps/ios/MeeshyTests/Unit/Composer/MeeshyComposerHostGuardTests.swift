@@ -299,9 +299,16 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "L'aperçu doit être RETENU par la porte — sans état, le cover n'a rien à présenter."
         )
         XCTAssertTrue(
-            compacted.contains("StoryViewerView(") && compacted.contains("isPreviewMode:true"),
-            "L'aperçu doit être rendu par le LECTEUR en mode aperçu, jamais par un composant maison "
-                + "(loi 6 — un troisième chemin de rendu mentirait tôt ou tard)."
+            compacted.contains(".modifier(StoryPreviewReaderCover("),
+            "L'aperçu doit être présenté par LE lecteur partagé (`StoryPreviewReaderCover`, #11197), "
+                + "jamais par un composant maison (loi 6 — un troisième chemin de rendu mentirait tôt ou tard)."
+        )
+        let lecteur = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerContainer.swift")
+        ).components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(
+            lecteur.contains("StoryViewerView(") && lecteur.contains("isPreviewMode:true"),
+            "L'aperçu partagé doit rendre le LECTEUR en mode aperçu (loi 6)."
         )
     }
 

@@ -482,28 +482,17 @@ struct DetachedWindowView: View {
             .environmentObject(statusViewModel)
             .meeshyConversationList(conversationVMOwner.viewModel)
         }
-        .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: request.id,
-                isPresented: Binding(
-                    get: { storyViewerCoordinator.pendingRequest != nil },
-                    set: { if !$0 { storyViewerCoordinator.dismiss() } }
-                ),
-                onReplyToStory: { _ in storyViewerCoordinator.dismiss() },
-                singleGroup: request.singleGroup,
-                postId: request.postId,
-                startAtFirstUnviewed: request.startAtFirstUnviewed,
-                presentationSource: "DetachedWindow",
-                initialAction: request.initialAction,
-                targetCommentId: request.targetCommentId,
-                targetParentCommentId: request.targetParentCommentId
-            )
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .meeshyConversationList(conversationVMOwner.viewModel)
-            .environment(\.isStoryViewerPresenting, true)
-        }
+        .modifier(StoryReaderCover(
+            request: $storyViewerCoordinator.pendingRequest,
+            storyViewModel: storyViewModel,
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationList: conversationVMOwner.viewModel,
+            presentationSource: "DetachedWindow",
+            onReply: { replyContext in
+                router.navigateToStoryReply(replyContext, conversationList: conversationVMOwner.viewModel)
+            }
+        ))
         .fullScreenCover(isPresented: .constant(upgradeGate.isBlocked)) {
             if let requirement = upgradeGate.requirement {
                 UpgradeGateView(requirement: requirement)
