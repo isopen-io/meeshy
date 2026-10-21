@@ -392,6 +392,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         for urlString: String,
         url: URL,
         transfer: NetworkTransfer? = nil,
+        profile: MediaTransferProfile = .standard,
         progress: MediaFileDownloader.ProgressHandler? = nil,
         cancelsWithCaller: Bool = false
     ) async throws -> Data {
@@ -415,7 +416,7 @@ public actor DiskCacheStore: ReadableCacheStore {
                 sessionToken: APIClient.shared.anonymousSessionToken
             )
             if transfer == .streamedToFile {
-                return try await streamedNetworkData(for: urlString, request: request, progress: progress)
+                return try await streamedNetworkData(for: urlString, request: request, profile: profile, progress: progress)
             }
             let (data, response) = try await urlSession.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else {
