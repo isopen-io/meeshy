@@ -21,6 +21,7 @@ import SwiftUI
 /// par une couleur de thème éteindrait en silence les trois surfaces sur média,
 /// sans qu'aucune ne rougisse — elles rendraient une couleur parfaitement
 /// valide, simplement invisible sur une photo claire.
+@MainActor
 struct AudioChipMarqueeTintTests {
 
     @Test("Le défaut RESTE le blanc — les surfaces posées sur un média en dépendent")

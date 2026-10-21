@@ -73,7 +73,7 @@ public struct FullscreenImageView: View {
             }
             .opacity(dismissDrag > 0 ? 0 : 1)
         }
-        .statusBar(hidden: true)
+        .statusBarHidden(true)
         .modifier(SeeThroughPresentation())
     }
 

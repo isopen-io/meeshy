@@ -420,12 +420,9 @@ export class AuthMiddleware {
         throw new ActivationBlockedError();
       }
 
-      if (this.statusService) {
-        this.statusService.updateUserLastSeen(user.id);
-        if (!user.isOnline) {
-          this.statusService.ensureUserOnline(user.id, false);
-        }
-      }
+      // REST date l'activité, jamais la présence (#10575) : les extensions iOS
+      // l'appellent en arrière-plan, et seule la socket au premier plan est « là ».
+      this.statusService?.updateUserLastSeen(user.id);
 
       // #9607 — la dernière activité avance sur la session NOMMÉE par le JWT,
       // échantillonnée (une écriture par session et par quart d'heure au plus)

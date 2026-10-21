@@ -13,6 +13,7 @@ internal struct _FlatRenderer: View {
     @State private var avPlayer: AVQueuePlayer?
     @State private var looper: AVPlayerLooper?
     @State private var aspectRatio: CGFloat?
+    @State private var audioTracks = AudioTrackActivator()
 
     var body: some View {
         ZStack {
@@ -34,6 +35,7 @@ internal struct _FlatRenderer: View {
         item.preferredForwardBufferDuration = player.performance.preferredForwardBufferDuration
         let queue = AVQueuePlayer(playerItem: item)
         queue.isMuted = true
+        audioTracks.bind(to: queue, effectiveMuted: { true })
         /* UN LECTEUR EN BOUCLE NE VEILLE PAS L'ÉCRAN (#6221, volet énergie).
            `preventsDisplaySleepDuringVideoPlayback` vaut `true` par DÉFAUT :
            cette vignette muette, qui boucle indéfiniment dans chaque bulle,
@@ -53,6 +55,7 @@ internal struct _FlatRenderer: View {
     private func teardown() {
         looper?.disableLooping()
         looper = nil
+        audioTracks.release()
         avPlayer?.pause()
         avPlayer = nil
     }

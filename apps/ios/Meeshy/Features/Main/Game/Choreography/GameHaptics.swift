@@ -28,6 +28,12 @@ nonisolated enum GameHapticPattern {
         GameHapticTap(time: 0.09, intensity: 0.45, sharpness: 0.55),
     ]
 
+    /// Un coup de la cérémonie de la frappe (#11177), joué à son impact : une tape franche, et au DERNIER coup le choc
+    /// net de la frappe avec son léger rebond.
+    static func ceremonyBlow(final: Bool) -> [GameHapticTap] {
+        final ? strikeInPlace : [GameHapticTap(time: 0, intensity: 0.6, sharpness: 0.75)]
+    }
+
     /// Une tape par trait de la Signature qui se grave.
     static let rank: [GameHapticTap] = [
         GameHapticTap(time: 0.55, intensity: 0.55, sharpness: 0.6),

@@ -223,7 +223,7 @@ struct ConversationPreviewView: View {
                 HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
                     Text(conversation.displayName)
                         .font(.callout.weight(.bold))
-                        .foregroundColor(headerContentColor)
+                        .foregroundStyle(headerContentColor)
                         .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3, y: 1)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -231,14 +231,14 @@ struct ConversationPreviewView: View {
                     if conversation.userState.isPinned {
                         Image(systemName: "pin.fill")
                             .font(.caption2)
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                             .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
                     }
 
                     if conversation.userState.isMuted {
                         Image(systemName: "bell.slash.fill")
                             .font(.caption2)
-                            .foregroundColor(headerContentColor.opacity(MeeshyOpacity.heavy))
+                            .foregroundStyle(headerContentColor.opacity(MeeshyOpacity.heavy))
                             .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
                             .accessibilityLabel(Text(String(localized: "preview.muted.a11y", defaultValue: "Notifications désactivées", bundle: .main)))
                     }
@@ -254,7 +254,7 @@ struct ConversationPreviewView: View {
                                                     capped: conversation.memberCountCapped))
                             .font(.caption2.weight(.medium))
                     }
-                    .foregroundColor(headerContentColor.opacity(MeeshyOpacity.intense))
+                    .foregroundStyle(headerContentColor.opacity(MeeshyOpacity.intense))
                     .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
                 }
 
@@ -377,7 +377,7 @@ struct ConversationPreviewView: View {
             if ConversationPreviewRenderer.isEndToEnd(conversation) {
                 Image(systemName: "lock.fill")
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(headerContentColor.opacity(MeeshyOpacity.heavy))
+                    .foregroundStyle(headerContentColor.opacity(MeeshyOpacity.heavy))
                     .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
                     .accessibilityLabel(Text(String(localized: "preview.e2ee.a11y", defaultValue: "Chiffrée de bout en bout", bundle: .main)))
             }

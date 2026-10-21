@@ -120,7 +120,7 @@ public struct ConversationSettingsView: View {
             Spacer()
 
             Text(String(localized: "conversation.settings.title", defaultValue: "Réglages", bundle: .module))
-                .font(.system(size: MeeshyFont.calloutSize, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -140,7 +140,7 @@ public struct ConversationSettingsView: View {
                         .tint(MeeshyColors.indigo500)
                 } else {
                     Text(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module))
-                        .font(.system(size: MeeshyFont.calloutSize, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold, design: .rounded))
                         .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }
             }
@@ -174,7 +174,7 @@ public struct ConversationSettingsView: View {
 
                 PhotosPicker(selection: $bannerItem, matching: .images) {
                     Label(bannerEditLabel, systemImage: "photo.fill")
-                        .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.smPlus)
                         .padding(.vertical, MeeshySpacing.xsPlus)
@@ -263,13 +263,13 @@ public struct ConversationSettingsView: View {
             VStack(spacing: MeeshySpacing.md) {
                 settingsField(label: String(localized: "conversation.settings.field.title", defaultValue: "Titre", bundle: .module)) {
                     TextField(String(localized: "conversation.settings.field.title.placeholder", defaultValue: "Titre de la conversation", bundle: .module), text: $viewModel.title)
-                        .font(.system(size: MeeshyFont.calloutSize, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                 }
 
                 settingsField(label: String(localized: "conversation.settings.field.description", defaultValue: "Description", bundle: .module)) {
                     TextField(String(localized: "conversation.settings.field.description", defaultValue: "Description", bundle: .module), text: $viewModel.descriptionText, axis: .vertical)
-                        .font(.system(size: MeeshyFont.calloutSize, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(3...6)
                 }
@@ -301,7 +301,7 @@ public struct ConversationSettingsView: View {
                             .font(.system(size: MeeshyFont.labelSize, weight: .medium, design: .rounded))
                             .foregroundColor(theme.textPrimary)
                         Text(String(localized: "conversation.settings.permissions.announcement.subtitle", defaultValue: "Seuls les admins peuvent écrire", bundle: .module))
-                            .font(.system(size: MeeshyFont.footnoteSize, design: .rounded))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
                             .foregroundColor(theme.textMuted)
                     }
                     Spacer()
@@ -330,7 +330,7 @@ public struct ConversationSettingsView: View {
                             .font(.system(size: MeeshyFont.labelSize, weight: .medium, design: .rounded))
                             .foregroundColor(theme.textPrimary)
                         Text(String(localized: "conversation.settings.permissions.autoTranslate.subtitle", defaultValue: "Les messages sont traduits automatiquement", bundle: .module))
-                            .font(.system(size: MeeshyFont.footnoteSize, design: .rounded))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
                             .foregroundColor(theme.textMuted)
                     }
                     Spacer()
@@ -379,7 +379,7 @@ public struct ConversationSettingsView: View {
                     let filtered = filteredMembers
                     if filtered.isEmpty {
                         Text(String(localized: "conversation.settings.members.empty", defaultValue: "Aucun membre trouvé", bundle: .module))
-                            .font(.system(size: MeeshyFont.subheadSize, weight: .medium, design: .rounded))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .rounded))
                             .foregroundColor(theme.textMuted)
                             .padding(.vertical, MeeshySpacing.xl)
                     } else {
@@ -452,17 +452,17 @@ public struct ConversationSettingsView: View {
         case .creator:
             HStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "crown.fill").font(.system(size: MeeshyIconSize.xxs))
-                Text(String(localized: "conversation.role.creator", defaultValue: "Créateur", bundle: .module)).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                Text(String(localized: "conversation.role.creator", defaultValue: "Créateur", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundColor(MeeshyColors.tileSaffron)
         case .admin:
             HStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "shield.fill").font(.system(size: MeeshyIconSize.xxs))
-                Text(String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .module)).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                Text(String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundColor(MeeshyColors.blue500)
         case .moderator:
             HStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "checkmark.shield.fill").font(.system(size: MeeshyIconSize.xxs))
-                Text(String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .module)).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                Text(String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .module)).font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundColor(MeeshyColors.success)
         case .member:
             EmptyView()
@@ -583,7 +583,7 @@ public struct ConversationSettingsView: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: MeeshyFont.subheadSize, weight: .bold, design: .rounded))
+            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded))
             .foregroundColor(theme.textMuted)
             .textCase(.uppercase)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -592,7 +592,7 @@ public struct ConversationSettingsView: View {
     private func settingsField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(label)
-                .font(.system(size: MeeshyFont.smallSize, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textSecondary)
             content()
                 .textFieldStyle(.plain)

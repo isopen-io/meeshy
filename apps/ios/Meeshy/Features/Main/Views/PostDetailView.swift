@@ -635,7 +635,7 @@ struct PostDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Author header
             HStack(spacing: MeeshySpacing.md) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: post.author,
                     context: .postAuthor,
                     accentColor: post.authorColor,
@@ -650,7 +650,7 @@ struct PostDetailView: View {
                             selectedProfileUser = .from(feedPost: post)
                         }
                     ]
-                )
+                ) }
                 .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {

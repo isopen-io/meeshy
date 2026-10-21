@@ -48,11 +48,11 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
             Image(systemName: "magnifyingglass")
                 .foregroundColor(theme.textMuted)
             TextField(String(localized: "community.invite.search.placeholder", defaultValue: "Search users...", bundle: .module), text: $viewModel.searchText)
-                .font(.system(size: MeeshyFont.calloutSize, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .textFieldStyle(.plain)
-                .autocapitalization(.none)
-                .disableAutocorrection(true)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
                 .onSubmit { Task { await viewModel.searchUsers() } }
         }
         .padding(MeeshySpacing.md)
@@ -92,7 +92,7 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
         if !viewModel.recentlyInvited.isEmpty {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(String(localized: "community.invite.recentlyInvited", defaultValue: "Recently Invited", bundle: .module))
-                    .font(.system(size: MeeshyFont.smallSize, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textMuted)
                     .textCase(.uppercase)
                     .padding(.horizontal, MeeshySpacing.lg)
@@ -132,12 +132,12 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.displayName ?? user.username)
-                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
-                    .font(.system(size: MeeshyFont.smallSize, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                     .foregroundColor(theme.textSecondary)
             }
 
@@ -152,7 +152,7 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
                     Task { await viewModel.inviteUser(userId: user.id) }
                 } label: {
                     Text(String(localized: "community.invite.button", defaultValue: "Invite", bundle: .module))
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.vertical, MeeshySpacing.xsPlus)

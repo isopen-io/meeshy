@@ -110,7 +110,7 @@ final class VideoPlayerCoordinator: ObservableObject {
         url = nil
     }
 
-    deinit {
+    nonisolated deinit {
         player?.pause()
         looper?.disableLooping()
     }

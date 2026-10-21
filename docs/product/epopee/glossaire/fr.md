@@ -144,6 +144,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. Da
 - **A** : « Voyage 1 · halte 9/40 ».
 - **B** : « En terre française · 9ᵉ halte », puis en petit « 2 pas jusqu'à la halte suivante ».
 - **Bannis** : « saison » → « voyage » ; « étoiles de saison » → « pas » ; « étape de saison » → « halte ».
+- **Le fait** qui compte les pas s'intitule « Pas » (clé `game.fact.strides`, la même sur le web et sur iOS).
 
 ### La Renaissance (`game.prestige.*`)
 
@@ -152,6 +153,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. Da
 - **A** : « Âge II ».
 - **B** : « Ta légende vit son Deuxième Âge ».
 - **Bannis** : « prestige » → « renaissance » ; « étoiles » de prestige → « âges ».
+- **Le fait** qui compte les passages s'intitule « Renaissances » (clé `game.fact.rebirths`) : il dit « 2 sur 5 », et l'Âge vécu est ce nombre plus un (Troisième Âge après deux renaissances). « Âges » y serait faux d'un rang.
 
 ### Les traces de la légende
 

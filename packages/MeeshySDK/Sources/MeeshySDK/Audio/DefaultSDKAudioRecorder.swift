@@ -37,7 +37,7 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
 
     public init() {}
 
-    deinit {
+    nonisolated deinit {
         teardown.update(RecordingResources.invalidateTimer)
         // `recorder` non-nil ⟺ mort mid-recording (stop/cancel posent nil) :
         // sémantique cancel — micro stoppé, fichier partiel jeté (dérivé de

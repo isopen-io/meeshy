@@ -10,7 +10,7 @@ function entryOf(evidenceMessageIds: readonly string[]): FaceRampEntry {
     displayName: 'Bruno',
     avatarUrl: null,
     colorHex: '#000000',
-    presence: 'offline',
+    participant: undefined,
     awaitingCount: evidenceMessageIds.length,
     needScore: 1,
     evidenceMessageIds,
