@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import SocketIO
 
 // Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #7939
 // ajoute `message:starred`, on extrait d'abord l'épinglage, on ajoute ensuite.
@@ -52,26 +51,11 @@ public struct MessageStarredEvent: Decodable, Sendable, Equatable {
 
 extension MessageSocketManager {
 
-    func registerMessageMarkHandlers(on socket: SocketIOClient) {
-        socket.on("message:pinned") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(MessagePinnedEvent.self, from: data) { [weak self] event in
-                self?.messagePinned.send(event)
-            }
-        }
-
-        socket.on("message:unpinned") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(MessageUnpinnedEvent.self, from: data) { [weak self] event in
-                self?.messageUnpinned.send(event)
-            }
-        }
-
-        socket.on("message:starred") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(MessageStarredEvent.self, from: data) { [weak self] event in
-                self?.messageStarred.send(event)
-            }
-        }
+    var markRoutes: [SocketInboundRoute] {
+        [
+            route(.messagePinned, MessagePinnedEvent.self) { $0.messagePinned.send($1) },
+            route(.messageUnpinned, MessageUnpinnedEvent.self) { $0.messageUnpinned.send($1) },
+            route(.messageStarred, MessageStarredEvent.self) { $0.messageStarred.send($1) },
+        ]
     }
 }

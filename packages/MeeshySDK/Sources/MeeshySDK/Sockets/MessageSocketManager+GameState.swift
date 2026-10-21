@@ -1,5 +1,4 @@
 import Foundation
-import SocketIO
 
 // Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #10898 ajoute `game:updated` (#10900).
 // Responsabilité tenue ici : l'état du Jeu changé AILLEURS — une frappe, un gain, une reprise, un prestige ou une dépense
@@ -37,12 +36,11 @@ public extension Notification.Name {
 
 extension MessageSocketManager {
 
-    func registerGameStateHandlers(on socket: SocketIOClient) {
-        socket.on("game:updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(GameUpdatedEvent.self, from: data) { event in
+    var gameStateRoutes: [SocketInboundRoute] {
+        [
+            route(.gameUpdated, GameUpdatedEvent.self) { _, event in
                 NotificationCenter.default.post(name: .gameStateUpdated, object: event)
-            }
-        }
+            },
+        ]
     }
 }

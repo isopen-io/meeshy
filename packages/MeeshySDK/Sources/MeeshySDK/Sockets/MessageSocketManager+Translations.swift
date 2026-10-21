@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import SocketIO
 
 // Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #9899
 // ajoute `message:translation-shared`. Responsabilité tenue ici : les
@@ -62,18 +61,12 @@ extension MessageSocketManager {
         SharedTranslationSocketChannel.events.eraseToAnyPublisher()
     }
 
-    func registerTranslationHandlers(on socket: SocketIOClient) {
-        socket.on("message:translation") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(TranslationEvent.self, from: data) { [weak self] event in
-                self?.translationReceived.send(event)
-            }
-        }
-
-        socket.on("message:translation-shared") { [weak self] data, _ in
-            self?.decode(SharedTranslation.self, from: data) { shared in
+    var translationRoutes: [SocketInboundRoute] {
+        [
+            route(.messageTranslation, TranslationEvent.self) { $0.translationReceived.send($1) },
+            route(.messageTranslationShared, SharedTranslation.self) { _, shared in
                 SharedTranslationSocketChannel.events.send(shared)
-            }
-        }
+            },
+        ]
     }
 }

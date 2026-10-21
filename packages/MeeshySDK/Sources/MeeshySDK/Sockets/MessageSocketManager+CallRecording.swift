@@ -4,7 +4,7 @@ import SocketIO
 
 // #8064 — le consentement à l'enregistrement d'un appel, vu du socket. Dans
 // son propre fichier : `MessageSocketManager.swift` est hors budget de taille,
-// il n'y porte que la ligne `registerCallRecordingHandlers(on:)`.
+// la table des routes n'y porte que `callRecordingRoutes`.
 //
 // La passerelle est l'AUTORITÉ (`CallRecordingService`) : ce fichier ne
 // décide rien. Il émet les trois verbes (demander, répondre, arrêter), rend
@@ -143,22 +143,18 @@ extension MessageSocketManager: CallRecordingSocketProviding {
         CallRecordingSocketChannel.events.eraseToAnyPublisher()
     }
 
-    func registerCallRecordingHandlers(on socket: SocketIOClient) {
-        socket.on("call:recording-requested") { [weak self] data, _ in
-            self?.decode(CallRecordingRequestedEvent.self, from: data) { event in
+    var callRecordingRoutes: [SocketInboundRoute] {
+        [
+            route(.callRecordingRequested, CallRecordingRequestedEvent.self) { _, event in
                 CallRecordingSocketChannel.events.send(.requested(event))
-            }
-        }
-        socket.on("call:recording-started") { [weak self] data, _ in
-            self?.decode(CallRecordingStartedEvent.self, from: data) { event in
+            },
+            route(.callRecordingStarted, CallRecordingStartedEvent.self) { _, event in
                 CallRecordingSocketChannel.events.send(.started(event))
-            }
-        }
-        socket.on("call:recording-stopped") { [weak self] data, _ in
-            self?.decode(CallRecordingStoppedEvent.self, from: data) { event in
+            },
+            route(.callRecordingStopped, CallRecordingStoppedEvent.self) { _, event in
                 CallRecordingSocketChannel.events.send(.stopped(event))
-            }
-        }
+            },
+        ]
     }
 
     public func requestCallRecording(callId: String, kind: CallRecordingKind) async throws -> String {
