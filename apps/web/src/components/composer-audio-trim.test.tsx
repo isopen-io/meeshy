@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { typeInto } from '@/test-support/act-mount';
 import { pendingAttachmentOf } from '@/lib/send/attachments';
-import type { DecodedAudio } from '@/lib/media/audio-trim';
+import type { DecodeAudioOptions, DecodedAudio } from '@/lib/media/audio-trim';
 
 import ComposerAudioTrim from './composer-audio-trim';
 
@@ -173,5 +173,27 @@ describe('la scission (#9161)', () => {
     slide(host.querySelector<HTMLInputElement>('[data-audio-cut-start]'), 1);
     act(() => host.querySelector<HTMLButtonElement>('[data-audio-cut-reset]')!.click());
     expect(host.querySelector<HTMLInputElement>('[data-audio-cut-start]')!.value).toBe('4');
+  });
+});
+
+describe('la mémoire de la coupe (#11312)', () => {
+  test('la durée d’un vocal enregistré part au décodeur, qui en tire sa fréquence', async () => {
+    const asked: Array<Pick<DecodeAudioOptions, 'durationMs'>> = [];
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    mounted.push({ root, host });
+    const recorded = pendingAttachmentOf(new File([new Uint8Array([1, 2])], 'vocal.webm', { type: 'audio/webm' }), { durationMs: 1_200_000 });
+    await act(async () => {
+      root.render(
+        <ComposerAudioTrim
+          attachment={recorded}
+          decode={async (_file, options) => (asked.push(options), tenSeconds())}
+          onDone={() => undefined}
+          onCancel={() => undefined}
+        />,
+      );
+    });
+    expect(asked).toEqual([{ durationMs: 1_200_000 }]);
   });
 });

@@ -4,7 +4,7 @@ import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { AUDIO_GAIN, audioEditUntouched, defaultAudioCut, editedWav, keptAudioSeconds, MINIMUM_AUDIO_CUT, untouchedAudioEdit, volumePercent, type AudioEdit } from '@/lib/media/audio-edit';
 import { AUDIO_SPEEDS, speedLabel } from '@/lib/media/audio-stretch';
-import { decodeAudioFile, MINIMUM_AUDIO_WINDOW, trimmedAudioFileName, type DecodedAudio } from '@/lib/media/audio-trim';
+import { decodeAudioFile, MINIMUM_AUDIO_WINDOW, trimmedAudioFileName, type DecodeAudioOptions, type DecodedAudio } from '@/lib/media/audio-trim';
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
 import type { PendingAttachment } from '@/lib/send/attachments';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -204,7 +204,7 @@ export default function ComposerAudioTrim({
   readonly onDone: (file: File) => void;
   readonly onCancel: () => void;
   /** Injectable pour les témoins ; la production décode par Web Audio. */
-  readonly decode?: (file: Blob) => Promise<DecodedAudio | null>;
+  readonly decode?: (file: Blob, options: Pick<DecodeAudioOptions, 'durationMs'>) => Promise<DecodedAudio | null>;
 }) {
   useBackDismiss(onCancel, { escape: true, held: true });
   const lang = currentInterfaceLanguage();
@@ -216,7 +216,7 @@ export default function ComposerAudioTrim({
   const player = useRef<HTMLAudioElement>(null);
   useEffect(() => {
     let live = true;
-    void decode(attachment.file).then((audio) => {
+    void decode(attachment.file, { durationMs: attachment.durationMs }).then((audio) => {
       if (!live) return;
       if (audio === null) return setFailed(true);
       setDecoded(audio);
@@ -225,7 +225,7 @@ export default function ComposerAudioTrim({
     return () => {
       live = false;
     };
-  }, [attachment.file, decode]);
+  }, [attachment.file, attachment.durationMs, decode]);
 
   const gain = edit?.gain ?? 1;
   const speed = edit?.speed ?? 1;
