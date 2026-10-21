@@ -26129,31 +26129,31 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يكفي لليوم"
+            "value": "يكفي لهذا اليوم"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Für heute reicht's"
+            "value": "Genug für heute"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "That's it for today"
+            "value": "That’s it for today"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Por hoy está bien"
+            "value": "Suficiente por hoy"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "C'est bon pour aujourd'hui"
+            "value": "C’est bon pour aujourd’hui"
           }
         },
         "it": {
@@ -26165,7 +26165,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Por hoje é isso"
+            "value": "Chega por hoje"
           }
         }
       }
@@ -244617,37 +244617,37 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ستدخل هذه الـMeesh وعاءً من إرثك لم تفتحه رتبتك بعد."
+            "value": "هذا الوعاء من إرثك يُفتح برتبة أعلى."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Meesh käme in ein Behältnis deines Erbes, das dein Rang noch nicht öffnet."
+            "value": "Dieses Behältnis deines Erbes öffnet sich mit einem höheren Rang."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This Meesh would go into a container of your Legacy that your rank doesn’t open yet."
+            "value": "This container of your Legacy opens with a higher rank."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta Meesh entraría en un recipiente de tu Legado que tu rango aún no abre."
+            "value": "Este recipiente de tu Legado se abre con un rango más alto."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette Meesh entrerait dans un contenant de ton Héritage que ton rang n’ouvre pas encore."
+            "value": "Ce contenant de ton Héritage s’ouvre avec un rang plus haut."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa Meesh entrerebbe in una custodia della tua Eredità che il tuo rango non apre ancora."
+            "value": "Questa custodia della tua Eredità si apre con un rango più alto."
           }
         },
         "pt": {
@@ -244659,7 +244659,7 @@
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta Meesh entraria num recipiente da sua Herança que seu título ainda não abre."
+            "value": "Este recipiente da sua Herança se abre com um título mais alto."
           }
         },
         "zh-Hans": {
@@ -248718,43 +248718,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سُكّت أول Meesh: مجدك يكبر."
+            "value": "سُكّت Meesh: رتبتك باقية، ونورك سينمو من جديد."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Erste Meesh geprägt: Dein Ruhm wächst."
+            "value": "Meesh geprägt: Dein Rang bleibt, dein Licht wächst wieder."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "First Meesh minted: your glory grows."
+            "value": "Meesh minted: your rank stays, your light will grow again."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Primera Meesh acuñada: tu gloria crece."
+            "value": "Meesh acuñada: tu rango se queda, tu luz volverá a crecer."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Première Meesh frappée : ta gloire grandit."
+            "value": "Meesh frappée : ton rang reste, ta lumière regrandira."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Prima Meesh coniata: la tua gloria cresce."
+            "value": "Meesh coniata: il tuo rango resta, la tua luce ricrescerà."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Primeira Meesh cunhada: sua glória cresce."
+            "value": "Meesh cunhada: seu título fica, sua luz vai crescer de novo."
           }
         }
       }
@@ -251021,43 +251021,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "ابتداءً من 1٬221 شرارة من نورك، تُسَكّ Meesh."
+            "value": "حين يكبر نورك بما يكفي، نسكّ Meesh."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ab 1.221 Funken deines Lichts prägt man eine Meesh."
+            "value": "Ist dein Licht groß genug, prägt man eine Meesh."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "From 1,221 sparks of your light, you mint a Meesh."
+            "value": "When your light has grown enough, you can mint a Meesh."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "A partir de 1.221 chispas de tu luz, se acuña una Meesh."
+            "value": "Cuando tu luz es lo bastante grande, se acuña una Meesh."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "À partir de 1 221 étincelles de ta lumière, on frappe une Meesh."
+            "value": "Quand ta lumière est assez grande, on frappe une Meesh."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "A partire da 1.221 scintille della tua luce si conia una Meesh."
+            "value": "Quando la tua luce è abbastanza grande, si conia una Meesh."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A partir de 1.221 faíscas da sua luz, cunha-se uma Meesh."
+            "value": "Quando sua luz está grande o bastante, cunha-se uma Meesh."
           }
         }
       }
@@ -251538,43 +251538,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تُسكّ Meesh يدويًا: يُصاغ فيها جزء من نورك. في العشر الأولى يبلغ هذا الجزء 1٬221 شرارة، ثم يكبر بمقدار ⁦30%⁩ كل عشر مرات سكّ."
+            "value": "تُسكّ Meesh يدويًا: يُصاغ فيها جزء من نورك. ويتبع هذا الجزء رقم القطعة ومستواك الحالي: أصغر حين يكون مستواك منخفضًا، وكاملًا ابتداءً من المستوى 100. ويكبر بمقدار ⁦30%⁩ كل عشر مرات سكّ."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine Meesh prägst du von Hand: Ein Teil deines Lichts wird darin gebannt. Bei den ersten zehn sind es 1.221 Funken, danach wächst der Teil alle zehn Prägungen um 30 %."
+            "value": "Eine Meesh prägst du von Hand: Ein Teil deines Lichts wird darin gebannt. Dieser Teil hängt von der Nummer der Münze und von deinem aktuellen Level ab: kleiner bei niedrigem Level, ganz ab Level 100. Alle zehn Prägungen wächst er um 30 %."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A Meesh is minted by hand: part of your light is bound into it. For the first ten, that part is 1,221 sparks, then it grows by 30 % every ten mints."
+            "value": "A Meesh is minted by hand: part of your light is bound into it. That part depends on the coin’s number and on your current level: smaller when your level is low, whole from level 100. It grows by 30 % every ten mints."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una Meesh se acuña a mano: una parte de tu luz se fija en ella. Para las diez primeras, esa parte es de 1.221 chispas; luego crece un 30 % cada diez acuñaciones."
+            "value": "Una Meesh se acuña a mano: una parte de tu luz se fija en ella. Esa parte depende del número de la pieza y de tu nivel actual: más pequeña con un nivel bajo, entera desde el nivel 100. Crece un 30 % cada diez acuñaciones."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une Meesh se frappe à la main : une part de ta lumière s’y fige. Pour les dix premières, cette part est de 1 221 étincelles, puis elle grandit de 30 % toutes les dix frappes."
+            "value": "Une Meesh se frappe à la main : une part de ta lumière s’y fige. Cette part dépend du numéro de la pièce et de ton niveau actuel : plus petite quand ton niveau est bas, entière dès le niveau 100. Elle grandit de 30 % toutes les dix frappes."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una Meesh si conia a mano: una parte della tua luce vi si fissa. Per le prime dieci, questa parte è di 1.221 scintille, poi cresce del 30 % ogni dieci coni."
+            "value": "Una Meesh si conia a mano: una parte della tua luce vi si fissa. Questa parte dipende dal numero della moneta e dal tuo livello attuale: più piccola quando il tuo livello è basso, intera dal livello 100. Cresce del 30 % ogni dieci coni."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma Meesh se cunha à mão: uma parte da sua luz se cristaliza nela. Nas dez primeiras, essa parte é de 1.221 faíscas; depois ela cresce 30% a cada dez cunhagens."
+            "value": "Uma Meesh se cunha à mão: uma parte da sua luz se cristaliza nela. Essa parte depende do número da moeda e do seu nível atual: menor quando o seu nível é baixo, inteira a partir do nível 100. Ela cresce 30% a cada dez cunhagens."
           }
         }
       }
@@ -251632,43 +251632,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الجزء المصوغ يخرج من نورك: فينخفض مستواك بقدره، ورتبتك لا تنخفض أبدًا، وكل سكّ يُنمّي مجدك. وما تلقّيته يبقى لك. ولا ينطفئ أي وسام ولا ينخفض."
+            "value": "الجزء المصوغ يخرج من نورك، ومنه وحده: فينخفض مستواك بقدره. أما رتبتك وأوسمتك فلا تنخفض. وما تلقّيته يبقى لك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der gebannte Teil verlässt dein Licht: Dein Level sinkt um ebenso viel, dein Rang nie, und jede Prägung lässt deinen Ruhm wachsen. Was du empfangen hast, bleibt empfangen. Keine Medaille erlischt oder steigt ab."
+            "value": "Der gebannte Teil verlässt dein Licht, und nur dieses: Dein Level sinkt um ebenso viel. Dein Rang und deine Medaillen sinken nicht. Was du empfangen hast, bleibt empfangen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The bound part leaves your light: your level drops by as much, your rank never does, and every mint grows your glory. What you received stays received. No medal goes out or drops back."
+            "value": "The bound part leaves your light, and only that part: your level drops by as much. Your rank and your medals don’t drop. What you received stays received."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La parte fijada sale de tu luz: tu nivel baja otro tanto, tu rango nunca, y cada acuñación hace crecer tu gloria. Lo recibido sigue recibido. Ninguna medalla se apaga ni baja."
+            "value": "La parte fijada sale de tu luz, y solo de ella: tu nivel baja otro tanto. Tu rango y tus medallas no bajan. Lo recibido sigue recibido."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "La part figée quitte ta lumière : ton niveau baisse d’autant, ton rang jamais, et chaque frappe fait grandir ta gloire. Ce que tu as reçu reste reçu. Aucune médaille ne s’éteint ni ne redescend."
+            "value": "La part figée quitte ta lumière, et seulement elle : ton niveau baisse d’autant. Ton rang et tes médailles ne baissent pas. Ce que tu as reçu reste reçu."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "La parte fissata lascia la tua luce: il tuo livello scende di altrettanto, il tuo rango mai, e ogni conio fa crescere la tua gloria. Ciò che hai ricevuto resta ricevuto. Nessuna medaglia si spegne né scende."
+            "value": "La parte fissata lascia la tua luce, e solo lei: il tuo livello scende di altrettanto. Il tuo rango e le tue medaglie non scendono. Ciò che hai ricevuto resta ricevuto."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A parte cristalizada sai da sua luz: seu nível baixa na mesma medida, seu título nunca, e cada cunhagem faz sua glória crescer. O que você recebeu continua recebido. Nenhuma medalha se apaga nem desce."
+            "value": "A parte cristalizada sai da sua luz, e só ela: seu nível baixa na mesma medida. Seu título e suas medalhas não baixam. O que você recebeu continua recebido."
           }
         }
       }
@@ -261550,43 +261550,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسم المبارزة هذا غير صالح: من 3 إلى 20 حرفًا أو رقمًا أو نقطة أو شرطة."
+            "value": "اسم المبارزة هذا غير صالح: من 3 إلى 20 حرفًا، حروف وأرقام ونقطة وشرطة وشرطة سفلية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Turniername ist ungültig: 3 bis 20 Buchstaben, Ziffern, Punkte, Bindestriche oder Unterstriche."
+            "value": "Dieser Turniername ist ungültig: 3 bis 20 Zeichen, Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This joust name isn’t valid: 3 to 20 letters, digits, dots, hyphens or underscores."
+            "value": "This joust name isn’t valid: 3 to 20 characters, letters, digits, dot, dash, underscore."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este nombre de justa no es válido: de 3 a 20 letras, cifras, puntos, guiones o guiones bajos."
+            "value": "Este nombre de justa no es válido: de 3 a 20 caracteres, letras, números, punto, guion, guion bajo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce nom de joute n’est pas valable : 3 à 20 lettres, chiffres, points, tirets ou tirets bas."
+            "value": "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret, tiret bas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo nome di torneo non è valido: da 3 a 20 lettere, cifre, punti, trattini o trattini bassi."
+            "value": "Questo nome di torneo non è valido: da 3 a 20 caratteri, lettere, cifre, punto, trattino, trattino basso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este nome de torneio não é válido: de 3 a 20 letras, números, pontos, hifens ou sublinhados."
+            "value": "Este nome de torneio não é válido: de 3 a 20 caracteres, letras, números, ponto, hífen, sublinhado."
           }
         }
       }
@@ -261644,43 +261644,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسم المبارزة هذا غير مسموح: لا اسمًا محجوزًا ولا اسمك."
+            "value": "اسم المبارزة هذا غير مسموح: اختر اسمًا لا يدلّ عليك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Turniername ist nicht erlaubt: weder ein reservierter Name noch dein eigener."
+            "value": "Dieser Turniername ist nicht erlaubt: Wähle einen, der dich nicht verrät."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This joust name isn’t allowed: neither a reserved name nor your own name."
+            "value": "This joust name isn’t allowed: choose one that doesn’t point to you."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este nombre de justa no está permitido: ni un nombre reservado ni tu nombre."
+            "value": "Este nombre de justa no está permitido: elige uno que no te identifique."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce nom de joute n’est pas permis : ni un nom réservé, ni ton nom."
+            "value": "Ce nom de joute n’est pas permis : choisis-en un qui ne te désigne pas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo nome di torneo non è permesso: né un nome riservato né il tuo nome."
+            "value": "Questo nome di torneo non è consentito: scegline uno che non ti identifichi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este nome de torneio não é permitido: nem um nome reservado, nem o seu nome."
+            "value": "Este nome de torneio não é permitido: escolha um que não identifique você."
           }
         }
       }
@@ -261738,43 +261738,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "التحالف يُعقد مع صديق مقبول."
+            "value": "التحالف يُعقد بين الأصدقاء المقبولين."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Bündnis schließt man mit einem bestätigten Freund."
+            "value": "Ein Bündnis schließt man unter bestätigten Freunden."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "An alliance is formed with an accepted friend."
+            "value": "An alliance is formed between accepted friends."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La alianza se sella con un amigo aceptado."
+            "value": "La alianza se sella entre amigos aceptados."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’alliance se fait avec un ami accepté."
+            "value": "L’alliance se fait entre amis acceptés."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "L’alleanza si stringe con un amico accettato."
+            "value": "L’alleanza si stringe tra amici accettati."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "A aliança se faz com um amigo aceito."
+            "value": "A aliança se faz entre amigos aceitos."
           }
         }
       }
@@ -261926,7 +261926,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "لا رحلة جارية الآن."
+            "value": "لا رحلة جارية."
           }
         },
         "de": {
@@ -261938,31 +261938,31 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No journey is under way right now."
+            "value": "No journey is under way."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No hay ningún viaje en curso por ahora."
+            "value": "No hay ningún viaje en curso."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun voyage n’est en cours pour l’instant."
+            "value": "Aucun voyage n’est en cours."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Al momento non c’è nessun viaggio in corso."
+            "value": "Nessun viaggio è in corso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nenhuma viagem está em andamento por enquanto."
+            "value": "Nenhuma viagem está em andamento."
           }
         }
       }
@@ -262067,43 +262067,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تم استلام هذه المكافأة بالفعل."
+            "value": "استلمت هذه المحطة بالفعل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Belohnung wurde schon abgeholt."
+            "value": "Diese Rast wurde bereits abgeholt."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This reward has already been claimed."
+            "value": "This stop has already been claimed."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta recompensa ya fue reclamada."
+            "value": "Esta parada ya se reclamó."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cette récompense est déjà réclamée."
+            "value": "Cette halte est déjà réclamée."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questa ricompensa è già stata riscossa."
+            "value": "Questa sosta è già stata riscattata."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Esta recompensa já foi resgatada."
+            "value": "Esta parada já foi resgatada."
           }
         }
       }
@@ -267097,43 +267097,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "موافقتك على المبارزة العامة تبقى مسجّلة: تستعيد مبارزتك عند المستوى 10."
+            "value": "موافقتك على المبارزة العامة تبقى مسجّلة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Zustimmung zum öffentlichen Turnier bleibt gespeichert: Du bekommst dein Turnier ab Level 10 zurück."
+            "value": "Deine Zustimmung zum öffentlichen Turnier bleibt gespeichert."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your consent to the public joust stays on file: you find your joust again at level 10."
+            "value": "Your consent to the public joust stays on file."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu consentimiento para la justa pública sigue registrado: recuperas tu justa en el nivel 10."
+            "value": "Tu consentimiento para la justa pública sigue registrado."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ton accord pour la joute publique reste enregistré : tu retrouves ta joute au niveau 10."
+            "value": "Ton accord pour la joute publique reste enregistré."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo consenso al torneo pubblico resta registrato: ritrovi il tuo torneo al livello 10."
+            "value": "Il tuo consenso al torneo pubblico resta registrato."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu acordo para o torneio público continua registrado: você reencontra seu torneio no nível 10."
+            "value": "Seu acordo para o torneio público continua registrado."
           }
         }
       }
@@ -272549,43 +272549,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "اسم المبارزة هذا غير صالح: من 3 إلى 20 حرفًا، حروف وأرقام ونقطة وشرطة."
+            "value": "اسم المبارزة هذا غير صالح: من 3 إلى 20 حرفًا، حروف وأرقام ونقطة وشرطة وشرطة سفلية."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dieser Turniername ist ungültig: 3 bis 20 Zeichen, Buchstaben, Ziffern, Punkt, Bindestrich."
+            "value": "Dieser Turniername ist ungültig: 3 bis 20 Zeichen, Buchstaben, Ziffern, Punkt, Bindestrich, Unterstrich."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This joust name isn’t valid: 3 to 20 characters, letters, digits, dot, dash."
+            "value": "This joust name isn’t valid: 3 to 20 characters, letters, digits, dot, dash, underscore."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este nombre de justa no es válido: de 3 a 20 caracteres, letras, números, punto, guion."
+            "value": "Este nombre de justa no es válido: de 3 a 20 caracteres, letras, números, punto, guion, guion bajo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret."
+            "value": "Ce nom de joute n’est pas valable : 3 à 20 caractères, lettres, chiffres, point, tiret, tiret bas."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo nome di torneo non è valido: da 3 a 20 caratteri, lettere, cifre, punto, trattino."
+            "value": "Questo nome di torneo non è valido: da 3 a 20 caratteri, lettere, cifre, punto, trattino, trattino basso."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este nome de torneio não é válido: de 3 a 20 caracteres, letras, números, ponto, hífen."
+            "value": "Este nome de torneio não é válido: de 3 a 20 caracteres, letras, números, ponto, hífen, sublinhado."
           }
         }
       }
@@ -275604,43 +275604,43 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une proposition d’alliance, le résultat de ta joute, une halte de voyage : au plus une notification de jeu par jour."
+            "value": "Une proposition d’alliance, un résultat de joute, une halte de voyage : au plus une notification du jeu par jour. Ce réglage vaut pour ton compte, sur tous tes appareils."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "An alliance offer, your joust result, a journey stop: at most one game notification a day."
+            "value": "An alliance offer, a joust result, a journey stop: at most one game notification a day. This setting applies to your account, on all your devices."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una propuesta de alianza, el resultado de tu justa, una parada del viaje: como máximo una notificación del juego al día."
+            "value": "Una propuesta de alianza, un resultado de justa, una parada del viaje: como máximo una notificación del juego al día. Este ajuste vale para tu cuenta, en todos tus dispositivos."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein Bündnis-Angebot, das Ergebnis deines Turniers, eine Rast auf der Reise: höchstens eine Spielbenachrichtigung pro Tag."
+            "value": "Ein Bündnis-Angebot, ein Turnierergebnis, eine Rast auf der Reise: höchstens eine Spielbenachrichtigung pro Tag. Diese Einstellung gilt für dein Konto, auf allen deinen Geräten."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una proposta di alleanza, il risultato del tuo torneo, una sosta del viaggio: al massimo una notifica del gioco al giorno."
+            "value": "Una proposta di alleanza, un risultato del torneo, una sosta del viaggio: al massimo una notifica del gioco al giorno. Questa impostazione vale per il tuo account, su tutti i tuoi dispositivi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uma proposta de aliança, o resultado do seu torneio, uma parada de viagem: no máximo uma notificação do jogo por dia."
+            "value": "Uma proposta de aliança, um resultado de torneio, uma parada de viagem: no máximo uma notificação do jogo por dia. Este ajuste vale para a sua conta, em todos os seus aparelhos."
           }
         },
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عرض تحالف، أو نتيجة مبارزتك، أو محطة رحلة: إشعار واحد للعبة في اليوم على الأكثر."
+            "value": "عرض تحالف، نتيجة مبارزة، محطة رحلة: إشعار واحد للعبة في اليوم على الأكثر. يسري هذا الإعداد على حسابك في جميع أجهزتك."
           }
         }
       }
@@ -277807,49 +277807,96 @@
         }
       }
     },
-    "game.concept.fact.stars": {
+    "game.fact.strides": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النجوم"
+            "value": "الخطوات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sterne"
+            "value": "Schritte"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stars"
+            "value": "Strides"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estrellas"
+            "value": "Pasos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étoiles"
+            "value": "Pas"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stelle"
+            "value": "Passi"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estrelas"
+            "value": "Passos"
+          }
+        }
+      }
+    },
+    "game.fact.rebirths": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الانبعاثات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiedergeburten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebirths"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renacimientos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renaissances"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rinascite"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renascimentos"
           }
         }
       }
@@ -285380,43 +285427,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هدية محجوبة: شرارات حسب فصول حلمك، ومجد، وأحيانًا علاوة من الشرارات، أو شظية نجم، أو قنديل."
+            "value": "هدية محجوبة: شرارات، ومجد، وأحيانًا علاوة، أو شظية نجم، أو قنديل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein verhülltes Geschenk: Funken je nach den Akten deines Traums, Ruhm, manchmal ein Funkenbonus, ein Sternfragment oder eine Hüterin."
+            "value": "Ein verhülltes Geschenk: Funken, Ruhm, manchmal ein Bonus, ein Sternfragment oder eine Hüterin."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A veiled gift: sparks according to the acts of your dream, glory, sometimes a sparks bonus, a star fragment or a Vigil."
+            "value": "A veiled gift: sparks, glory, sometimes a bonus, a star fragment or a Vigil."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un regalo envuelto: chispas según los actos de tu sueño, gloria y, a veces, una prima en chispas, un fragmento de estrella o una Vela."
+            "value": "Un regalo envuelto: chispas, gloria y, a veces, una prima, un fragmento de estrella o una Vela."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un présent voilé : des étincelles selon les actes de ton rêve, de la gloire, parfois une prime en étincelles, un fragment d’étoile ou une Veilleuse."
+            "value": "Un présent voilé : des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un dono velato: scintille secondo gli atti del tuo sogno, gloria, a volte un premio in scintille, un frammento di stella o una Lucerna."
+            "value": "Un dono velato: scintille, gloria, a volte un premio, un frammento di stella o una Lucerna."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um presente velado: faíscas conforme os atos do seu sonho, glória, às vezes um prêmio em faíscas, um fragmento de estrela ou uma Lamparina."
+            "value": "Um presente velado: faíscas, glória, às vezes um prêmio, um fragmento de estrela ou uma Lamparina."
           }
         }
       }
@@ -297518,43 +297565,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عند المستوى 100 اختر: أن تنبعث، أو أن تواصل السطوع. الانبعاث يعيد مستواك إلى 1 ونورك إلى الصفر. وتحتفظ بالشرارات التي تلقّيتها منذ البداية، وذروة نورك، ورتبتك، ومجدك، وعملات Meesh، ولهبك، وكؤوسك."
+            "value": "عند المستوى 100 اختر: أن تنبعث، أو أن تواصل السطوع. الانبعاث يعيد مستواك إلى 1 ونورك إلى الصفر. وتحتفظ بالشرارات التي تلقّيتها منذ البداية، وذروة نورك، ورتبتك، ومجدك، وعملات Meesh، ولهبك، وكؤوسك؛ وتبقى مبارزتك وتحالفك مفتوحين."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bei Level 100 entscheidest du: wiedergeboren werden oder weiter strahlen. Die Wiedergeburt setzt dein Level auf 1 und dein Licht auf null. Du behältst deine seit jeher empfangenen Funken, dein hellstes Licht, deinen Rang, deinen Ruhm, deine Meeshes, deine Flamme und deine Trophäen."
+            "value": "Bei Level 100 entscheidest du: wiedergeboren werden oder weiter strahlen. Die Wiedergeburt setzt dein Level auf 1 und dein Licht auf null. Du behältst deine seit jeher empfangenen Funken, dein hellstes Licht, deinen Rang, deinen Ruhm, deine Meeshes, deine Flamme und deine Trophäen; dein Turnier und dein Bündnis bleiben offen."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "At level 100, choose: be reborn, or keep shining. Being reborn sets your level back to 1 and your light to zero. You keep the sparks received since the beginning, your highest light, your rank, your glory, your Meeshes, your Flame and your trophies."
+            "value": "At level 100, choose: be reborn, or keep shining. Being reborn sets your level back to 1 and your light to zero. You keep the sparks received since the beginning, your highest light, your rank, your glory, your Meeshes, your Flame and your trophies; your joust and your alliance stay open."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "En el nivel 100, elige: renacer o seguir brillando. Renacer devuelve tu nivel a 1 y tu luz a cero. Conservas tus chispas recibidas desde siempre, tu luz más alta, tu rango, tu gloria, tus Meeshes, tu Llama y tus trofeos."
+            "value": "En el nivel 100, elige: renacer o seguir brillando. Renacer devuelve tu nivel a 1 y tu luz a cero. Conservas tus chispas recibidas desde siempre, tu luz más alta, tu rango, tu gloria, tus Meeshes, tu Llama y tus trofeos; tu justa y tu alianza siguen abiertas."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro. Tu gardes tes étincelles reçues depuis toujours, ta plus haute lumière, ton rang, ta gloire, tes Meeshes, ta Flamme et tes trophées."
+            "value": "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro. Tu gardes tes étincelles reçues depuis toujours, ta plus haute lumière, ton rang, ta gloire, tes Meeshes, ta Flamme et tes trophées ; ta joute et ton alliance restent ouvertes."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Al livello 100, scegli: rinascere, o continuare a brillare. Rinascere riporta il tuo livello a 1 e la tua luce a zero. Tieni le tue scintille ricevute da sempre, la tua luce più alta, il tuo rango, la tua gloria, le tue Meesh, la tua Fiamma e i tuoi trofei."
+            "value": "Al livello 100, scegli: rinascere, o continuare a brillare. Rinascere riporta il tuo livello a 1 e la tua luce a zero. Tieni le tue scintille ricevute da sempre, la tua luce più alta, il tuo rango, la tua gloria, le tue Meesh, la tua Fiamma e i tuoi trofei; il tuo torneo e la tua alleanza restano aperti."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "No nível 100, escolha: renascer, ou continuar a brilhar. Renascer leva o seu nível a 1 e a sua luz a zero. Você guarda as faíscas recebidas desde sempre, o auge da sua luz, seu título, sua glória, suas Meeshes, sua Chama e seus troféus."
+            "value": "No nível 100, escolha: renascer, ou continuar a brilhar. Renascer leva o seu nível a 1 e a sua luz a zero. Você guarda as faíscas recebidas desde sempre, o auge da sua luz, seu título, sua glória, suas Meeshes, sua Chama e seus troféus; seu torneio e sua aliança continuam abertos."
           }
         }
       }
@@ -297706,43 +297753,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المس وسامًا لترى ما يتبعه، ومعدنه، وما ينقص للنجمة التالية. السكّ لا يطفئ أي وسام."
+            "value": "المس وسامًا لترى ما يتبعه، ومعدنه، وما ينقص للنجمة التالية. السكّ لا يطفئ أيًّا منها: الوسام يعكس مجموعك الحقيقي."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tippe auf eine Medaille, um zu sehen, was sie verfolgt, ihr Material und was bis zum nächsten Stern fehlt. Eine Prägung löscht keine Medaille."
+            "value": "Tippe auf eine Medaille, um zu sehen, was sie verfolgt, ihr Material und was bis zum nächsten Stern fehlt. Eine Prägung löscht keine: Eine Medaille zeigt deine echte Gesamtzahl."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap a medal to see what it follows, its material and what’s missing for the next star. A mint never puts a medal out."
+            "value": "Tap a medal to see what it follows, its material and what’s missing for the next star. A mint never puts one out: a medal tells your real total."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca una medalla para ver qué sigue, su material y lo que falta para la próxima estrella. Acuñar no apaga ninguna medalla."
+            "value": "Toca una medalla para ver qué sigue, su material y lo que falta para la próxima estrella. Acuñar no apaga ninguna: una medalla dice tu total real."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touche une médaille pour voir ce qu’elle suit, sa matière et ce qu’il manque pour la prochaine étoile. Une frappe n’éteint aucune médaille."
+            "value": "Touche une médaille pour voir ce qu’elle suit, sa matière et ce qu’il manque pour la prochaine étoile. Une frappe n’en éteint aucune : une médaille dit ton total réel."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca una medaglia per vedere che cosa segue, la sua materia e che cosa manca per la prossima stella. Un conio non spegne nessuna medaglia."
+            "value": "Tocca una medaglia per vedere che cosa segue, la sua materia e che cosa manca per la prossima stella. Un conio non ne spegne nessuna: una medaglia dice il tuo totale reale."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque numa medalha para ver o que ela acompanha, o seu material e o que falta para a próxima estrela. Uma cunhagem não apaga nenhuma medalha."
+            "value": "Toque numa medalha para ver o que ela acompanha, o seu material e o que falta para a próxima estrela. Uma cunhagem não apaga nenhuma: uma medalha mostra o seu total de verdade."
           }
         }
       }
@@ -298505,43 +298552,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "انبعاث اختياري يُعرض عند المستوى 100، خمس مرات على الأكثر. يعود مستواك إلى 1 ونورك إلى الصفر: يعود شرارةً من جديد، وتدخل أسطورتك عصرًا جديدًا. وتبقى الشرارات التي تلقّيتها منذ البداية وذروة نورك. ويهديك أجدادك كأسًا مرقّمة ومجدًا. وتبقى رتبتك وعملات Meesh ولهبك."
+            "value": "انبعاث اختياري يُعرض عند المستوى 100، خمس مرات على الأكثر. يعود مستواك إلى 1 ونورك إلى الصفر: يعود شرارةً من جديد، وتدخل أسطورتك عصرًا جديدًا. وتبقى الشرارات التي تلقّيتها منذ البداية وذروة نورك، وتظل المبارزة والتحالف مفتوحين. ويهديك أجدادك كأسًا مرقّمة ومجدًا. وتبقى رتبتك وعملات Meesh ولهبك."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine freiwillige Wiedergeburt, ab Level 100, höchstens fünfmal. Dein Level beginnt wieder bei 1 und dein Licht bei null: Es wird wieder zum Funken, und deine Legende tritt in ein neues Zeitalter. Deine seit jeher empfangenen Funken und dein hellstes Licht bleiben. Deine Ahnen schenken dir eine nummerierte Trophäe und Ruhm. Dein Rang, deine Meeshes und deine Flamme bleiben."
+            "value": "Eine freiwillige Wiedergeburt, ab Level 100, höchstens fünfmal. Dein Level beginnt wieder bei 1 und dein Licht bei null: Es wird wieder zum Funken, und deine Legende tritt in ein neues Zeitalter. Deine seit jeher empfangenen Funken und dein hellstes Licht bleiben, und Turnier wie Bündnis bleiben offen. Deine Ahnen schenken dir eine nummerierte Trophäe und Ruhm. Dein Rang, deine Meeshes und deine Flamme bleiben."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "An optional rebirth, offered at level 100, five times at most. Your level starts over at 1 and your light at zero: it becomes a Spark again, and your legend enters a new Age. The sparks you received since the beginning and your highest light stay. Your ancestors offer you a numbered trophy and glory. Your rank, your Meeshes and your Flame stay."
+            "value": "An optional rebirth, offered at level 100, five times at most. Your level starts over at 1 and your light at zero: it becomes a Spark again, and your legend enters a new Age. The sparks you received since the beginning and your highest light stay, and the joust and the alliance stay open. Your ancestors offer you a numbered trophy and glory. Your rank, your Meeshes and your Flame stay."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un renacimiento opcional, que se ofrece en el nivel 100, cinco veces como máximo. Tu nivel vuelve a 1 y tu luz a cero: vuelve a ser Chispa, y tu leyenda entra en una nueva Edad. Tus chispas recibidas desde siempre y tu luz más alta se quedan. Tus ancestros te ofrecen un trofeo numerado y gloria. Tu rango, tus Meeshes y tu Llama se quedan."
+            "value": "Un renacimiento opcional, que se ofrece en el nivel 100, cinco veces como máximo. Tu nivel vuelve a 1 y tu luz a cero: vuelve a ser Chispa, y tu leyenda entra en una nueva Edad. Tus chispas recibidas desde siempre y tu luz más alta se quedan, y la justa y la alianza siguen abiertas. Tus ancestros te ofrecen un trofeo numerado y gloria. Tu rango, tus Meeshes y tu Llama se quedan."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Une renaissance facultative, offerte au niveau 100, cinq fois au plus. Ton niveau repart à 1 et ta lumière à zéro : elle redevient Étincelle, et ta légende entre dans un nouvel Âge. Tes étincelles reçues depuis toujours et ta plus haute lumière restent. Tes aïeux t’offrent un trophée numéroté et de la gloire. Ton rang, tes Meeshes et ta Flamme restent."
+            "value": "Une renaissance facultative, offerte au niveau 100, cinq fois au plus. Ton niveau repart à 1 et ta lumière à zéro : elle redevient Étincelle, et ta légende entre dans un nouvel Âge. Tes étincelles reçues depuis toujours et ta plus haute lumière restent, et la joute comme l’alliance restent ouvertes. Tes aïeux t’offrent un trophée numéroté et de la gloire. Ton rang, tes Meeshes et ta Flamme restent."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Una rinascita facoltativa, offerta al livello 100, cinque volte al massimo. Il tuo livello riparte da 1 e la tua luce da zero: torna Scintilla, e la tua leggenda entra in una nuova Era. Le tue scintille ricevute da sempre e la tua luce più alta restano. I tuoi antenati ti offrono un trofeo numerato e gloria. Il tuo rango, le tue Meesh e la tua Fiamma restano."
+            "value": "Una rinascita facoltativa, offerta al livello 100, cinque volte al massimo. Il tuo livello riparte da 1 e la tua luce da zero: torna Scintilla, e la tua leggenda entra in una nuova Era. Le tue scintille ricevute da sempre e la tua luce più alta restano, e il torneo come l’alleanza restano aperti. I tuoi antenati ti offrono un trofeo numerato e gloria. Il tuo rango, le tue Meesh e la tua Fiamma restano."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Um renascimento opcional, oferecido no nível 100, no máximo cinco vezes. Seu nível recomeça em 1 e a sua luz em zero: ela volta a ser Faísca, e a sua lenda entra numa nova Era. Suas faíscas recebidas desde sempre e o auge da sua luz ficam. Seus ancestrais oferecem a você um troféu numerado e glória. Seu título, suas Meeshes e sua Chama ficam."
+            "value": "Um renascimento opcional, oferecido no nível 100, no máximo cinco vezes. Seu nível recomeça em 1 e a sua luz em zero: ela volta a ser Faísca, e a sua lenda entra numa nova Era. Suas faíscas recebidas desde sempre e o auge da sua luz ficam, e o torneio como a aliança continuam abertos. Seus ancestrais oferecem a você um troféu numerado e glória. Seu título, suas Meeshes e sua Chama ficam."
           }
         }
       }
@@ -298858,7 +298905,7 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Elle apparaît quand les trois actes du rêve sont réalisés. C’est un présent voilé : des étincelles selon tes actes, de la gloire, parfois une prime en étincelles, un fragment d’étoile ou une Veilleuse."
+            "value": "Elle apparaît quand les trois actes du rêve sont réalisés. C’est un présent voilé : des étincelles selon tes actes, de la gloire, parfois une prime d’étincelles, un fragment d’étoile ou une Veilleuse."
           }
         },
         "it": {

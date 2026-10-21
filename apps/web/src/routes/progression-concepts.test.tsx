@@ -8,7 +8,7 @@ import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
 import { GAME_EXTRAS_TODAY, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { gamePrefs } from '@/lib/game/preferences';
-import { loadGameCatalog } from '@/lib/i18n-game-catalog';
+import { loadGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
 import { interfaceDirection, SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { conceptView, ficheView } from '@/lib/view/progression-concepts';
@@ -392,6 +392,17 @@ describe('règle 1 — une donnée appartient à un seul concept', () => {
     expect(owners(windy, 'prestige_stars')).toEqual(['prestige']);
     expect(owners(windy, 'mint_price')).toEqual(['meesh']);
     expect(owners(windy, 'mint_next')).toEqual(['meesh']);
+  });
+
+  test('le Voyage compte des pas, jamais des « étoiles » (épopée § 4, #11173 ; la Renaissance : game-prestige.test.tsx)', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      document.documentElement.lang = language;
+      const label = (concept: ProgressionConcept, id: string): string | undefined =>
+        ficheView(concept, windy, NOW).facts.find((fact) => fact.id === id)?.label;
+      expect({ language, label: label('season', 'season_stars') }).toEqual({ language, label: translateGame(language, 'game.fact.strides') });
+    }
+    document.documentElement.lang = 'fr';
+    expect(ficheView('season', windy, NOW).facts.find((fact) => fact.id === 'season_stars')?.label).toBe('Pas');
   });
 
   test('ce qui manque pour frapper est à l’Héritage, comme la frappe possible : la fiche des Étincelles y mène (#11178)', () => {
