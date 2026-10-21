@@ -1,0 +1,2294 @@
+{
+ "milestones": {
+  "M164": {
+   "numero": 164,
+   "titre": "Meeshy iOS lit, ajoute et édite ses médias sans chauffer — mesuré sur appareil"
+  },
+  "MB": {
+   "titre": "Un média envoyé pèse le minimum sans perdre une génération, et se lit sur toutes les plateformes",
+   "due": "2026-12-20",
+   "description": "Compression et préparation à l'envoi sur les trois chaînes (iOS, web/coque, passerelle) : passthrough de ce qui tient dans le budget, une seule génération d'encodage, rendus de compatibilité fabriqués par le serveur sans toucher l'original, EXIF/GPS retirés sans ré-encoder. Antécédent : analyse 360° du 2026-10-20. E2EE : le chemin chiffré actuel chiffre côté serveur (ce n'est pas du E2EE au sens de #9224) ; chaque lot serveur le dit."
+  },
+  "MC": {
+   "titre": "La passerelle ingère, transforme et sert les médias comme une plateforme — sans état, mesurée, derrière une interface S3",
+   "due": "2027-01-15",
+   "description": "Chaîne média serveur : exposition publique fermée, histogrammes par étape, traitement hors requête HTTP (file + worker), Range/ETag partout, quotas par rôle, S3 (staging autonome, production sur feu vert du porteur). Directive #9232. E2EE : idem MB."
+  },
+  "MD": {
+   "titre": "Un appel vidéo tient en qualité et en énergie, passe derrière tout pare-feu, et dit sa qualité",
+   "due": "2026-12-31",
+   "description": "Maillage encodé à sa juste taille, caméra qui descend avec le palier, gels mesurés et MOS, TURN sur 443, web négocié comme iOS, isolation vocale, cadres en groupe."
+  },
+  "ME": {
+   "titre": "Un partenaire crée un filtre d'événement sans code, et il joue sur la caméra, la story et l'appel — iOS et web",
+   "due": "2027-02-28",
+   "description": "MeeshyLens v1 : contrat Zod partagé, un seul peintre de lens (Core Image/Metal, sans ARKit), cinq primitives, déclencheurs simples, moteur de packs étendu, portail partenaire web, modération avec créneau/lieu/communauté, crédit et usage agrégé."
+  },
+  "MF": {
+   "titre": "Cadres, contours, bannières et fonds se débloquent par le jeu et les événements, et l'admin les publie sans déploiement",
+   "due": "2027-01-31",
+   "description": "Voie A (gratuit, gagné, jamais acheté) : droit d'usage par jeu/octroi/événement, parures par rang, fenêtre et ciblage, console admin, vitrine « à débloquer ». La voie B (payant) attend #9227 et une décision du porteur."
+  },
+  "MG": {
+   "titre": "Le web et la coque Android lisent, ajoutent et animent les médias comme iOS — mesurés",
+   "due": "2026-12-31",
+   "description": "Animations sur transform/opacity seulement, photo développée hors fil principal, envoi reprenable, trim par fenêtre, Web Vitals + QoE, tiers de capacité jumeau d'iOS, WebView minimale déclarée."
+  }
+ },
+ "numeros": {
+  "S1": 11256,
+  "S2": 11257,
+  "S3": 11258,
+  "S4": 11259,
+  "S5": 11260,
+  "S6": 11261,
+  "S7": 11262,
+  "S8": 11263,
+  "S9": 11264,
+  "S10": 11265,
+  "S11": 11266,
+  "S12": 11267,
+  "S13": 11268,
+  "S14": 11269,
+  "S15": 11270,
+  "S16": 11271,
+  "S17": 11272,
+  "S18": 11273,
+  "S19": 11274,
+  "S20": 11275,
+  "S21": 11276,
+  "S22": 11277,
+  "S23": 11278,
+  "S24": 11279,
+  "S25": 11280,
+  "IL1": 9892,
+  "IL2": 11281,
+  "IL3": 9880,
+  "IL4": 11282,
+  "IL5": 11283,
+  "IL6": 11284,
+  "IL7": 11285,
+  "IL8": 11286,
+  "IL9": 9872,
+  "IL10": 9883,
+  "IL11": 9882,
+  "IL12": 11287,
+  "IL13": 9879,
+  "IL14": 9878,
+  "IL15": 9881,
+  "IL16": 11288,
+  "IL17": 9890,
+  "IL18": 9891,
+  "IL19": 9865,
+  "IL20": 11289,
+  "IC1": 9870,
+  "IC2": 9885,
+  "IC3": 11290,
+  "IC4": 9912,
+  "IC5": 11291,
+  "IC6": 9873,
+  "IC7": 9874,
+  "IC8": 9884,
+  "IC9": 9886,
+  "IC10": 9887,
+  "IC11": 9877,
+  "IC12": 9889,
+  "IC13": 11292,
+  "IC14": 11293,
+  "IC15": 11294,
+  "IC16": 11295,
+  "IC17": 11296,
+  "IC18": 9777,
+  "IC19": 11297,
+  "IC20": 11298,
+  "IC21": 11299,
+  "IC22": 11300,
+  "IC23": 11301,
+  "IC24": 11302,
+  "IC25": 11303,
+  "IC26": 11304,
+  "IC27": 11305,
+  "IC28": 11306,
+  "W1": 11307,
+  "W2": 11308,
+  "W3": 11309,
+  "W4": 11310,
+  "W5": 11311,
+  "W6": 11312,
+  "W7": 11313,
+  "W8": 11314,
+  "W9": 11315,
+  "W10": 11316,
+  "W11": 11317,
+  "W12": 11318,
+  "W13": 11319,
+  "W14": 11320,
+  "W15": 11321,
+  "W16": 11322,
+  "W17": 11323,
+  "W18": 11324,
+  "W19": 11325,
+  "W20": 11326,
+  "S26": 11327,
+  "IC29": 11328,
+  "S27": 11329,
+  "IL21": 11330,
+  "W21": 11331
+ },
+ "decisions": {
+  "DEC-COMPRESSION": 11247,
+  "DEC-LECTURE": 11248,
+  "DEC-SERVEUR": 11249,
+  "DEC-APPELS": 11250,
+  "DEC-LENS": 11251,
+  "DEC-UPSELL": 11252,
+  "DEC-WEB": 11253,
+  "DEC-MODERATION": 11254,
+  "DEC-SONS": 11255
+ },
+ "milestone_numeros": {
+  "M164": 164,
+  "MB": 196,
+  "MC": 197,
+  "MD": 198,
+  "ME": 199,
+  "MF": 200,
+  "MG": 201
+ },
+ "lots": [
+  {
+   "cle": "S1",
+   "chaine": "serveur",
+   "ms": "MC",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "infrastructure",
+    "sécurité"
+   ],
+   "titre": "Les octets d'un média de message ne sont joignables que par la passerelle — plus jamais par le domaine statique public",
+   "critere": "PRÉALABLE : un script (services/gateway/scripts/count-static-upload-urls.ts) compte en base les fileUrl/thumbnailUrl qui portent `static.<domaine>/uploads` ; s'il en trouve, c'est une MIGRATION DE DONNÉES (feu vert du porteur, #9223) avant tout retrait. Puis : docker-compose.prod.yml ET docker-compose.staging.yml (gateway_staging_uploads:480) ne montent plus les uploads de la passerelle dans `static-files` (seul `frontend_uploads` legacy reste) ; static-files.conf ne sert plus `/uploads` ; garde de source (test) refuse le retour du montage ; la PR explique le risque (vue unique, éphémère, lecteur-gate contournés ; nginx sert tout en octet-stream, vocaux et documents compris) et ce qui doit être lu dans l'accesslog Traefik 7 jours AVANT le déploiement en production (feu vert du porteur ; staging autonome). Aucun 302 : nginx ne signe pas et un <img> ne porte pas de Bearer.",
+   "existe": "infrastructure/docker/compose/docker-compose.prod.yml:490-491 monte gateway_uploads:ro dans nginx ; static-files.conf:26-49 sert `/` en public, immutable, sans auth",
+   "fichiers": [
+    "infrastructure/docker/compose/docker-compose.prod.yml",
+    "infrastructure/docker/nginx/static-files.conf",
+    "infrastructure/docker/compose/docker-compose.staging.yml"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "S2",
+   "chaine": "serveur",
+   "ms": "MC",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "translator",
+    "observabilité",
+    "performance"
+   ],
+   "titre": "Chaque étape de la chaîne média a son histogramme : probe, vignette, variantes, exif, audio, transcodage, whisper, nllb, tts",
+   "critere": "prom-client exposé sur une route interne `/metrics` (non routée par Traefik) avec `media_stage_seconds{stage,kind}` ; translator expose `audio_pipeline_seconds{stage}` ; un script k6 (`tests/load/media-upload.js`, `tests/load/vocal-30s.js`) joue un upload de 5 Mo et un vocal de 30 s ; témoins sur l'enregistrement des mesures ; aucune mesure ne quitte le serveur",
+   "existe": "aucune métrique Prometheus, aucun k6 (find nul) ; seuls objectifs dans docs/video-calls/README.md:164",
+   "fichiers": [
+    "services/gateway/src/services/attachments/UploadProcessor.ts",
+    "services/translator/src/"
+   ],
+   "depend": [
+    "S5",
+    "S4"
+   ]
+  },
+  {
+   "cle": "S3",
+   "chaine": "serveur",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "performance"
+   ],
+   "titre": "Une photo ou une vidéo perd ses GPS et son EXIF sans perdre une génération ni son profil de couleur",
+   "critere": "ExifStrip ne ré-encode plus : `sharp().keepIccProfile().withExif({})`, `rotate()` seulement si orientation ≠ 1, WebP lossless préservé (`webp({lossless:true})`), PNG palette non gonflé ; témoins : octets identiques (hors segments APP1/XMP) quand orientation = 1, ICC conservé, GPS absent ; appliqué aux deux portes (TUS et multipart) ; VIDÉO (#9746) : remux sans ré-encodage `ffmpeg -map_metadata -1 -c copy -movflags +faststart` qui retire ©xyz/GPS QuickTime, sur TUS et multipart (tus-handler.ts:466 ne strippe que image aujourd'hui) ; témoins ffprobe. S'applique AUSSI au chemin `uploadEncryptedFile` (UploadProcessor.ts:607-640), qui reçoit le clair et chiffre côté serveur : la PR dit noir sur blanc que ce chemin n'est pas du E2EE au sens de #9224.",
+   "existe": "services/gateway/src/services/attachments/ExifStrip.ts:53-61 ré-encode JPEG q80, jette l'ICC, rend lossy un WebP lossless",
+   "fichiers": [
+    "services/gateway/src/services/attachments/ExifStrip.ts",
+    "services/gateway/src/routes/uploads/tus-handler.ts"
+   ],
+   "depend": [
+    "S5"
+   ]
+  },
+  {
+   "cle": "S4",
+   "chaine": "serveur",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "voix"
+   ],
+   "titre": "Un audio déjà en AAC n'est plus ré-encodé, un Opus/WebM est remuxé en M4A pour iOS, et le gain est une mesure, pas un +9 dB",
+   "critere": "normalizeAudio : ffprobe d'abord ; AAC mono ≤ 96 kb/s ⇒ `-c:a copy -movflags +faststart` ; WebM/Opus ⇒ transcodage AAC 64k (seul cas) ; le `volume=9dB` aveugle est remplacé par `loudnorm` deux passes vers −16 LUFS (même niveau perçu, sans écrêtage) UNIQUEMENT quand un ré-encodage a lieu, et la mesure (`loudnessLufs`) est persistée et servie pour les fichiers copiés ; appliqué aussi au chemin TUS ; témoins sur les trois cas (ffmpeg absent du job CI ⇒ témoins sur un ffmpeg factice, dit dans la PR). S'applique AUSSI au chemin `uploadEncryptedFile` (UploadProcessor.ts:607-640), qui reçoit le clair et chiffre côté serveur : la PR dit noir sur blanc que ce chemin n'est pas du E2EE au sens de #9224.",
+   "existe": "UploadProcessor.ts:240-266 ré-encode tout audio/* multipart en AAC 64k mono +9 dB sans limiteur ; tus-handler n'appelle pas normalizeAudio",
+   "fichiers": [
+    "services/gateway/src/services/attachments/UploadProcessor.ts",
+    "services/gateway/src/routes/uploads/tus-handler.ts"
+   ],
+   "depend": [
+    "S5",
+    "S3"
+   ]
+  },
+  {
+   "cle": "S5",
+   "chaine": "serveur",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "gateway"
+   ],
+   "titre": "Le chemin TUS produit les mêmes rendus que le chemin multipart — variantes, plan de transcodage, codec persisté",
+   "critere": "TUS génère déjà la vignette (tus-handler.ts:502-504) et persiste le videoCodec client (:653) : le lot extrait une fabrique commune `media-renditions.ts` (variantes WebP, thumbhash serveur, plan vidéo) appelée par `onUploadFinish` ET `UploadProcessor` ; `PostMedia` porte `imageVariants` (champ OPTIONNEL) ; témoins de parité multipart/TUS et de sérialisation « ancien client ». S'applique AUSSI au chemin `uploadEncryptedFile` (UploadProcessor.ts:607-640), qui reçoit le clair et chiffre côté serveur : la PR dit noir sur blanc que ce chemin n'est pas du E2EE au sens de #9224.",
+   "existe": "tus-handler.ts n'appelle ni maybeTranscodeVideo ni generateImageVariants ; PostMedia sans videoCodec/imageVariants (schema.prisma:4150-4158)",
+   "fichiers": [
+    "services/gateway/src/routes/uploads/tus-handler.ts",
+    "services/gateway/src/services/attachments/UploadProcessor.ts",
+    "packages/shared/prisma/schema.prisma"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "S6",
+   "chaine": "serveur",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "web"
+   ],
+   "decision": "DEC-COMPRESSION",
+   "defaut": "HEVC conservé pour iOS, rendu H.264 1080p CRF 23 +faststart fabriqué pour le web, original jamais touché",
+   "titre": "Une vidéo HEVC envoyée depuis un iPhone se lit sur le web et la coque Android grâce à un rendu H.264 de compatibilité, l'original restant servi à iOS",
+   "critere": "video-transcode-plan : HEVC ⇒ rendu ADDITIONNEL H.264 High 1080p CRF 23 `medium` +faststart ; H.264 conforme ⇒ aucun rendu ; champ `renditions[{codec,url,width,height}]` sur l'attachment et PostMedia ; `VIDEO_TRANSCODE=true` posé dans le compose de staging (prod : porteur) ; témoins sur le plan et la sélection de rendu ; mesure CPU/durée par Mo via S2 ; `renditions` sur MessageAttachment ET PostMedia (optionnel) dans ce seul lot ; la charge push (push-media-fields.ts) continue de servir l'URL d'origine ; le serveur est PARTAGÉ avec la prod (#9232) : le flag reste staging tant que S2 n'a pas chiffré le CPU. S'applique AUSSI au chemin `uploadEncryptedFile` (UploadProcessor.ts:607-640), qui reçoit le clair et chiffre côté serveur : la PR dit noir sur blanc que ce chemin n'est pas du E2EE au sens de #9224.",
+   "existe": "UploadProcessor.ts:302 flag OFF ; video-transcode-plan.ts:78 ne tient que H.264 pour efficace et ré-encoderait HEVC en 720p CRF 26",
+   "fichiers": [
+    "services/gateway/src/services/attachments/video-transcode-plan.ts",
+    "services/gateway/src/services/attachments/UploadProcessor.ts"
+   ],
+   "depend": [
+    "S5",
+    "S2"
+   ]
+  },
+  {
+   "cle": "S7",
+   "chaine": "serveur",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "performance"
+   ],
+   "titre": "Les images servies ont un rendu AVIF à côté du WebP, sur les deux portes, et les clients savent le choisir",
+   "critere": "`sharp().avif({quality:60, effort:4})` aux tailles 640/1080/1920 dans un tableau SÉPARÉ `avifVariants` (jamais dans `imageVariants`, lu sans filtre de format par les anciens iOS — MeeshyMessageAttachment.swift — et par attachmentSrcSet web) ; `Vary: Accept` ; la charge push NSE reste WebP/JPEG (NSEAttachmentPolicy.swift:70-83) ; coût CPU mesuré par S2 ; témoins ; les clients choisissent (W12, IC29). S'applique AUSSI au chemin `uploadEncryptedFile` (UploadProcessor.ts:607-640), qui reçoit le clair et chiffre côté serveur : la PR dit noir sur blanc que ce chemin n'est pas du E2EE au sens de #9224.",
+   "existe": "thumbnail.ts:30-31 WebP q78 multipart seulement ; AVIF « follow-up » :65",
+   "fichiers": [
+    "services/gateway/src/services/attachments/thumbnail.ts"
+   ],
+   "depend": [
+    "S5",
+    "S2"
+   ]
+  },
+  {
+   "cle": "S8",
+   "chaine": "serveur",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "gateway"
+   ],
+   "titre": "Un HEIC ou un AVIF est accepté à l'envoi et converti par le serveur — l'iPhone cesse de fabriquer un JPEG q0.8 de compatibilité",
+   "critere": "IMAGE admet image/heic, image/heif, image/avif ; sniff `ftyp heic/avif` dans ContentSignature ; conversion serveur en WebP/AVIF/JPEG q90 si `sharp.format.heif.input` le permet (sinon l'issue dit la limite et le lot IC31 reste sur conversion client à q0.92) ; témoins ; un HEIC accepté est TOUJOURS converti pour les lecteurs (fileUrl servi en JPEG/WebP, l'original HEIC conservé) : un ancien web ou la NSE ne reçoivent jamais image/heic. S'applique AUSSI au chemin `uploadEncryptedFile` (UploadProcessor.ts:607-640), qui reçoit le clair et chiffre côté serveur : la PR dit noir sur blanc que ce chemin n'est pas du E2EE au sens de #9224.",
+   "existe": "packages/shared/types/attachment.ts:519 IMAGE = jpeg/png/gif/webp ; ContentSignature.ts sans ftyp heic",
+   "fichiers": [
+    "packages/shared/types/attachment.ts",
+    "services/gateway/src/services/attachments/ContentSignature.ts"
+   ],
+   "depend": [
+    "S7"
+   ]
+  },
+  {
+   "cle": "S9",
+   "chaine": "serveur",
+   "ms": "MC",
+   "taille": "lourd",
+   "labels": [
+    "gateway",
+    "infrastructure",
+    "performance"
+   ],
+   "titre": "Le traitement d'un média sort de la requête HTTP : une file sur Redis, un worker, des priorités, une reprise",
+   "critere": "BullMQ sur le Redis existant ; worker `meeshy-media-worker` (même image, CMD différent, compose staging) ; files `media:voice` (1) > `media:thumb` (2) > `media:transcode` (3) ; idempotence par attachmentId ; `processingState` persisté ; événement socket `attachment:ready` (packages/shared/types/socketio-events) ; la route ne fait plus que sniff + persist ; rétrocompat : `thumbnailUrl` déjà nullable ; témoins ; mesure p95 par S2 ; `attachment:ready` entre aussi dans event-maps.ts ; un chemin SYNCHRONE reste pour les images < 2 Mo (un ancien client n'écoute pas l'événement) ; bullmq ajouté à package.json ; Redis absent du job CI ⇒ témoins sur un mock de file, dit dans la PR. S'applique AUSSI au chemin `uploadEncryptedFile` (UploadProcessor.ts:607-640), qui reçoit le clair et chiffre côté serveur : la PR dit noir sur blanc que ce chemin n'est pas du E2EE au sens de #9224.",
+   "existe": "UploadProcessor.ts:486-535 tout inline, séquentiel, sans reprise",
+   "fichiers": [
+    "services/gateway/src/services/attachments/",
+    "services/gateway/src/workers/",
+    "infrastructure/docker/compose/"
+   ],
+   "depend": [
+    "S2",
+    "S4",
+    "S23"
+   ]
+  },
+  {
+   "cle": "S10",
+   "chaine": "serveur",
+   "ms": "MB",
+   "taille": "petit",
+   "labels": [
+    "gateway",
+    "performance"
+   ],
+   "titre": "Toute route de fichier sert les plages, un ETag et `immutable` — un lecteur vidéo posé sur GET /attachments/:id joue avant la fin du téléchargement",
+   "critere": "`GET /attachments/:id` passe par `streamStoredFile` (Range, 206, ETag) ; `Cache-Control: private, max-age=31536000, immutable` sur les clés UUID ; `Vary: Accept` ; témoins 206/304",
+   "existe": "download.ts:136-161 createReadStream entier ; :563-617 fait déjà le bon travail pour /file/*",
+   "fichiers": [
+    "services/gateway/src/routes/attachments/download.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "S11",
+   "chaine": "serveur",
+   "ms": "MC",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "sécurité"
+   ],
+   "titre": "Les limites d'envoi dépendent du rôle, un quota journalier existe, et une vidéo est sniffée avant d'être acceptée",
+   "critere": "la limite par rôle atteint le TUS à `onCreate` (tus-handler.ts:86,279 : maxSize = max(UPLOAD_LIMITS) aujourd'hui) ET le multipart ; sniff vidéo ftyp/EBML en réutilisant ContentSignature.ts:19-37,192 (déjà écrit pour les invités) ; compteur Redis `uploads:bytes:{userId}:{jour}` (mock en CI) ; 413/429 typés ; AnonymousUploadIdentity relu ; les PLAFONDS eux-mêmes sont une décision du porteur (DEC-SERVEUR) : le lot les rend configurables et ne les abaisse pas",
+   "existe": "attachment.ts:447-454 4 Go pour tout, ContentSignature.ts:329-333 vidéo verified:true sans lecture",
+   "fichiers": [
+    "packages/shared/types/attachment.ts",
+    "services/gateway/src/services/attachments/ContentSignature.ts",
+    "services/gateway/src/routes/uploads/"
+   ],
+   "depend": [
+    "S8"
+   ],
+   "decision": "DEC-SERVEUR"
+  },
+  {
+   "cle": "S12",
+   "chaine": "serveur",
+   "ms": "MC",
+   "taille": "lourd",
+   "labels": [
+    "gateway",
+    "infrastructure"
+   ],
+   "decision": "DEC-SERVEUR",
+   "defaut": "MinIO interne en staging, écriture double pendant la transition ; la migration de production attend le feu vert du porteur",
+   "titre": "Les médias vivent derrière une interface S3 — MinIO en staging, écriture en double, migration par lots",
+   "critere": "`S3MediaStorage` (aws-sdk v3) implémente `MediaStorage` ; MinIO conteneur interne non exposé dans le compose staging ; lecture via la passerelle ; écriture double local+S3 derrière un flag ; script de migration par lot avec comptage et reprise ; sauvegarde `mc mirror` hors site documentée ; témoins contre MinIO en CI (service docker) ou mock ; la prod n'est pas migrée par ce lot",
+   "existe": "storage/MediaStorage.ts interface, unique implémentation locale MediaService.ts:27 ; aucun S3",
+   "fichiers": [
+    "services/gateway/src/services/storage/",
+    "infrastructure/docker/compose/"
+   ],
+   "depend": [
+    "S9",
+    "S23",
+    "S1"
+   ]
+  },
+  {
+   "cle": "S13",
+   "chaine": "serveur",
+   "ms": "MC",
+   "taille": "developper",
+   "labels": [
+    "translator",
+    "voix",
+    "performance"
+   ],
+   "titre": "Un vocal de 30 s est transcrit et traduit en un temps mesuré, avec un modèle plus rapide et une diarization seulement quand il y a plusieurs voix",
+   "critere": "WHISPER_MODEL et ENABLE_DIARIZATION sont déjà des variables d'environnement (settings.py:33, transcription_service.py:210) : le lot change le DÉFAUT vers large-v3-turbo (ou distil-large-v3) après mesure de qualité sur le jeu de test du translator, rend la diarization conditionnelle à une détection multi-locuteurs, et donne la priorité au vocal de message sur le média de post dans les files ; p95 d'un vocal de 30 s avant/après consigné dans l'issue (staging, via S2)",
+   "existe": "large-v3 CPU int8 par défaut ; diarization défaut true ; files sans priorité (connection_manager.py:36-38)",
+   "fichiers": [
+    "services/translator/src/"
+   ],
+   "depend": [
+    "S2"
+   ]
+  },
+  {
+   "cle": "S14",
+   "chaine": "serveur",
+   "ms": "MC",
+   "taille": "petit",
+   "labels": [
+    "gateway",
+    "sécurité"
+   ],
+   "titre": "Un média à vue unique est effacé du disque après lecture par tous ses destinataires",
+   "critere": "PURGE DE DONNÉES DE PRODUCTION : attend le feu vert du porteur (#9223). Quand il est donné : hook sur `viewedByAllAt` ⇒ suppression différée 24 h SEULEMENT si aucune autre ligne ne cite les octets (copies transférées : unlinkIfUnreferenced AttachmentService.ts:388), en énumérant pistes TTS, variantes, avifVariants, renditions, entrées Redis, charges de notification ; témoins ; journal de purge",
+   "existe": "octets conservés jusqu'à expiration (AttachmentService.ts:388-394)",
+   "fichiers": [
+    "services/gateway/src/services/attachments/AttachmentService.ts"
+   ],
+   "depend": [
+    "S9"
+   ],
+   "decision": "DEC-SERVEUR"
+  },
+  {
+   "cle": "S15",
+   "chaine": "serveur",
+   "ms": "ME",
+   "taille": "developper",
+   "labels": [
+    "shared",
+    "composer"
+   ],
+   "titre": "MeeshyLens v1 est un contrat Zod partagé, toléré, relu par vitest et par un miroir Swift généré",
+   "critere": "packages/shared/types/lens-format.ts (schema 1 ; credits ; surfaces ; cost ; window{startsAt,endsAt,geo?,communities?} ; layers ≤12 ∈ lut|frame|sticker(anchor screen|face point)|text|particles ; triggers ≤8 ; fallbacks) ; interdits v1 (shader, script, URL, réseau, 3D) ; couche inconnue ignorée, schema inconnu ⇒ « mettre à jour » ; vecteurs JSON rejoués par vitest ET par le Swift généré (script sur le modèle de generate-call-frames-swift.ts) ; documentation docs/product/meeshy-lens-v1.md",
+   "existe": "frame-spec.ts (vocabulaire fermé), glory-frame-format.ts, frame-decor.ts (parse tolérant) ; generate-call-frames-swift.ts:474",
+   "fichiers": [
+    "packages/shared/types/lens-format.ts",
+    "packages/shared/scripts/",
+    "docs/product/"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "S16",
+   "chaine": "serveur",
+   "ms": "ME",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "shared",
+    "modération"
+   ],
+   "titre": "Un pack de lens se propose, se modère avec un créneau, un lieu et une communauté, et s'installe par le moteur de packs",
+   "critere": "`lens` dans PACK_DOMAINS (le glob packs-*.ts est retiré : seuls packs-shop.ts et un nouveau packs-lens.ts bougent) ; SubmissionSpec (manifeste + assets) ; routes `POST /packs/lens/submissions`, `GET /pending`, `POST /:slug/review` (fixe window/geo/communities, prix 0) sous canModerateContent, fail-closed ; validation : taille, `cost` mesuré par rendu headless (fixtures), contenu ; un ancien client ignore le domaine inconnu (PackDomain.swift:28 ; vérifier le web) ; témoins. L'identité partenaire, le crédit et le comptage d'usage sont le lot S26 (décision DEC-LENS).",
+   "existe": "pack-routes.ts, sticker-packs.ts (submissions/pending/review), PackSubmissions.ts ; aucun rôle PARTNER",
+   "fichiers": [
+    "packages/shared/types/content-pack.ts",
+    "services/gateway/src/routes/packs-shop.ts",
+    "services/gateway/src/routes/packs-lens.ts",
+    "packages/shared/prisma/schema.prisma"
+   ],
+   "depend": [
+    "S15",
+    "S21"
+   ]
+  },
+  {
+   "cle": "S17",
+   "chaine": "serveur",
+   "ms": "MF",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "shared"
+   ],
+   "decision": "DEC-UPSELL",
+   "defaut": "gagné, octroyé ou issu d'un événement ; jamais acheté en argent réel",
+   "titre": "Un pack se possède aussi par le jeu, un octroi admin ou un événement — jamais seulement par l'achat",
+   "critere": "`UserPackOwnership.source` ∈ purchase|game|grant|event (champ OPTIONNEL dans schema.prisma — Prisma est en MongoDB, pas de migration SQL ; un champ requis sans @default casse les documents existants) ; `isPackOwned` lit toute source ; une règle d'éligibilité (rang, trophée, saison) évaluée serveur ; export/purge RGPD (PackPrivacy) couvre les nouvelles lignes ; idempotence ; témoins",
+   "existe": "UserPackOwnership exige un requestId de dépense (schema.prisma:6109-6127) ; isPackOwned content-pack.ts:90",
+   "fichiers": [
+    "packages/shared/prisma/schema.prisma",
+    "services/gateway/src/services/packs/",
+    "packages/shared/types/content-pack.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "S18",
+   "chaine": "serveur",
+   "ms": "MF",
+   "taille": "petit",
+   "labels": [
+    "shared",
+    "gateway"
+   ],
+   "titre": "Un contour d'avatar ou un cadre de bannière peut récompenser un rang du jeu",
+   "critere": "la garde « domaine libre, jamais une récompense » de content-pack-index.ts:44,62 devient une règle par pack (`reward?: {rank|trophy|season}`) ; #11181 (parures par rang) peut s'y appuyer ; témoins",
+   "existe": "content-pack-index.ts:44,62-66 interdit ; #11181 demande l'inverse",
+   "fichiers": [
+    "packages/shared/types/content-pack-index.ts"
+   ],
+   "depend": [
+    "S17"
+   ]
+  },
+  {
+   "cle": "S19",
+   "chaine": "serveur",
+   "ms": "MF",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "shared"
+   ],
+   "decision": "DEC-UPSELL",
+   "defaut": "un objet manqué revient : aucune exclusivité définitive",
+   "titre": "Un pack a une fenêtre de disponibilité et un ciblage (communauté, pays, langue), et peut récompenser une saison",
+   "critere": "`PackIndexEntrySchema` gagne `availability{startsAt,endsAt}`, `targeting{communities,countries,languages}`, `reward{season}` ; la boutique et `isPackOwned` les lisent ; GameSeasonDefinition peut nommer un pack récompense ; un pack hors fenêtre reste possédé s'il l'a été ; témoins",
+   "existe": "content-pack-index.ts:99-130 ni date ni ciblage ; GameSeasonDefinition sans récompense cosmétique",
+   "fichiers": [
+    "packages/shared/types/content-pack-index.ts",
+    "services/gateway/src/routes/packs-shop.ts"
+   ],
+   "depend": [
+    "S17"
+   ]
+  },
+  {
+   "cle": "S20",
+   "chaine": "serveur",
+   "ms": "MF",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "modération",
+    "sécurité"
+   ],
+   "titre": "L'administration publie, retire, date, cible et modère un pack par l'API, avec une piste d'audit — sans déploiement",
+   "critere": "registre des packs lisible depuis la base (table `PackRegistryEntry` qui surcharge PackIndex versionné : hidden, order, price, availability, targeting) ; routes admin sous le rôle requis ; chaque action journalisée (AdminAuditLog existant ou équivalent) ; packs officiels du dépôt toujours chargés au démarrage ; témoins fail-closed",
+   "existe": "PackIndex.ts:1-28 figé dans le dépôt ; modération tiers sans écran",
+   "fichiers": [
+    "services/gateway/src/routes/admin/",
+    "services/gateway/src/services/packs/"
+   ],
+   "depend": [
+    "S19",
+    "S16"
+   ]
+  },
+  {
+   "cle": "S21",
+   "chaine": "serveur",
+   "ms": "MF",
+   "taille": "petit",
+   "labels": [
+    "gateway"
+   ],
+   "titre": "La boutique dit ce qui reste à débloquer et comment l'obtenir",
+   "critere": "`GET /packs/shop` rend pour chaque pack non possédé `requirementPreview` (rang, trophée, saison, fenêtre) ; témoins",
+   "existe": "requirementPreview dans utils/game/spend.ts ; non servi par la boutique",
+   "fichiers": [
+    "services/gateway/src/routes/packs-shop.ts"
+   ],
+   "depend": [
+    "S17",
+    "S19"
+   ]
+  },
+  {
+   "cle": "S22",
+   "chaine": "serveur",
+   "ms": "MD",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "shared",
+    "appels",
+    "observabilité"
+   ],
+   "titre": "La qualité d'un appel est persistée et lisible : gels, limitation, MOS, relais, codec, plateforme",
+   "critere": "extraire d'abord le schéma d'analytics d'appel vers packages/shared/types/call-analytics.ts (video-call.ts fait 1127 lignes) ; étendre `socketCallAnalyticsSchema` (freezeCount, totalFreezesDuration, qualityLimitationReason, jitterBufferDelay, concealedSamples, nack, pli, mos — tous optionnels) ; `CallQualitySummary` persistée par l'agrégateur EXISTANT callAnalyticsAggregate.ts (CallEventsHandler.ts, 4071 lignes, ne reçoit RIEN) ; route admin de lecture agrégée ; export et purge RGPD (routes/me/export-sections.ts) étendus : deviceModel + plateforme + userId par appel sont des données personnelles ; témoins",
+   "existe": "call-schemas.ts:444-470 RTT/perte moyens, aucun agrégat",
+   "fichiers": [
+    "packages/shared/types/video-call.ts",
+    "packages/shared/types/call-analytics.ts",
+    "services/gateway/src/validation/call-schemas.ts",
+    "services/gateway/src/services/callAnalyticsAggregate.ts",
+    "packages/shared/prisma/schema.prisma"
+   ],
+   "depend": [
+    "S17"
+   ]
+  },
+  {
+   "cle": "S23",
+   "chaine": "serveur",
+   "ms": "MD",
+   "taille": "developper",
+   "labels": [
+    "infrastructure",
+    "appels"
+   ],
+   "titre": "Un appel passe derrière un pare-feu qui ne laisse sortir que le 443",
+   "critere": "coturn n'existe pas dans docker-compose.staging.yml (prod seulement :584) : le lot l'ajoute au staging (mêmes réglages, secrets séparés) PUIS écoute TLS sur 443 par IP secondaire OU route TCP SNI Traefik `turn.<domaine>` → 5349 (certificat pour turn.<domaine> à provisionner : dit dans la PR, infra = feu vert porteur pour la prod) ; TURNCredentialService sert `turns:…:443?transport=tcp` en plus ; témoins sur la liste d'URLs ; vérification relayProtocol=tls documentée",
+   "existe": "turnserver.prod.conf 3478/5349 ; TURNCredentialService.ts:265-287 sans 443",
+   "fichiers": [
+    "infrastructure/",
+    "services/gateway/src/services/TURNCredentialService.ts"
+   ],
+   "depend": [
+    "S1"
+   ]
+  },
+  {
+   "cle": "S24",
+   "chaine": "serveur",
+   "ms": "MD",
+   "taille": "petit",
+   "labels": [
+    "gateway",
+    "appels"
+   ],
+   "titre": "Un cadre en direct peut être choisi dans un appel de groupe (3 à 6)",
+   "critere": "call-live-frame-events.ts lève la garde `> 2 ⇒ PERMISSION_DENIED` ; le choix voyage à tous les membres ; témoins ; un ancien iOS en groupe recevant `call:frame-selected` pour N > 2 : comportement vérifié par lecture de CallView+LiveFrame.swift (ignore ou plante ?) et, si besoin, l'événement n'est émis qu'aux clients qui annoncent la capacité",
+   "existe": "call-live-frame-events.ts:56-63 duo seulement",
+   "fichiers": [
+    "services/gateway/src/socketio/call-live-frame-events.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "S25",
+   "chaine": "serveur",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "observabilité",
+    "performance"
+   ],
+   "titre": "Le temps-à-première-image et le rebuffer de chaque surface remontent en p50/p95 par tier d'appareil",
+   "critere": "`surface` existe déjà dans l'enveloppe v2 (eventsV2Schemas.ts:184-191, social-events-v2.ts:330) : le lot ajoute `deviceTier` (optionnel) au QoE, une agrégation serveur (quantiles par surface×tier×jour, k-anonymat : aucune ligne servie sous 20 appareils) et une route admin ; témoins ; sous le consentement existant (telemetryEnabled iOS, analytics-consent.ts web)",
+   "existe": "QoE v2 (playback-qoe) sans deviceTier ; aucune agrégation ; surface déjà présente",
+   "fichiers": [
+    "packages/shared/types/",
+    "services/gateway/src/services/social/socialEventsV2.ts"
+   ],
+   "depend": [
+    "S22"
+   ]
+  },
+  {
+   "cle": "IL1",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "issue": 9892,
+   "titre": "La piste son d'un réel est élue par le Prisme strict du lecteur, pas par les défauts de composition",
+   "critere": "ReelsPlayerView+Scene.swift, ReelsPlayerView.swift, ReelFeedCard.swift et ReelPrewarm.prefetchAudio lisent la projection ReaderPrism.resolve ; témoin sur un rang autre que le premier ; préchargement et lecture élisent la même URL",
+   "existe": "quatre sites sur preferredContentLanguages (ReelsPlayerView+Scene.swift:94, ReelsPlayerView.swift:916, ReelFeedCard.swift:303, ReelPrewarm.swift:350)",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ReelFeedCard.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ReelPrewarm.swift"
+   ],
+   "depend": [
+    "IL17"
+   ]
+  },
+  {
+   "cle": "IL2",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "titre": "Chaque iPhone connaît son tier média (bas, moyen, haut, pro) et toutes les lois de lecture le lisent",
+   "critere": "loi PURE `DeviceMediaTier` (packages/MeeshySDK/Sources/MeeshySDK/Media/DeviceMediaTier.swift) depuis utsname.machine → famille de chip, physicalMemory, UIScreen.maximumFramesPerSecond, VTIsHardwareDecodeSupported(AV1/HEVC) ; jumelle TS `apps/web/src/lib/device/capability-tier.ts` (W11) : mêmes paliers, mêmes vecteurs ; lue par ReelPreloadWindow.constraintCap, StoryMediaLoader (pool), StoryPlaybackCadence, DecodedBitmapStore (plafond de pixels) ; écran de diagnostic l'affiche ; témoins par tier ; iPad couvert (TARGETED_DEVICE_FAMILY 1,2 : utsname iPad → tier par chip)",
+   "existe": "aucun tier (grep vide) ; seule adaptation : physicalMemory ≤ 2 Go dans la loi de fenêtre",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Media/DeviceMediaTier.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Media/ReelPreloadWindow.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IL3",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "issue": 9880,
+   "titre": "La politique média suit la chaleur, le mode Économie d'énergie et le tier EN COURS de lecture, sur tous les lecteurs",
+   "critere": "un observateur unique (thermalStateDidChange + NSProcessInfoPowerStateDidChange + tier) publie `MediaPolicy` ; SharedAVPlayerManager, StoryMediaLoader, StoryMediaLayer, StoryBackgroundLayer+Playback, MeeshyVideoCanvasLayer, FeedViewModel, ReelPrewarm s'y abonnent (tampon d'avance, cadence d'observateur, rayon, autoplay voisin, animations décoratives) ; seuils alignés entre MediaThermalPolicy et ReelPreloadWindow ; le levier `preferredPeakBitRate` disparaît (sans effet sur du MP4) au profit du nombre de lecteurs préparés et de preferredMaximumResolution quand S6 sert des renditions ; témoins purs : nominal→serious en cours de lecture change un lecteur vivant ; argumenté, non mesuré : scénario Instruments (état thermique forcé, Économie d'énergie) laissé dans l'issue",
+   "existe": "thermalState lu une fois par les lecteurs (SharedAVPlayerManager.swift:771,780 …) ; NSProcessInfoPowerStateDidChange observé par FrameMotionLayers.swift:197 et ConversationBackgroundView.swift:55 mais par AUCUN lecteur ; ReelPrewarm.swift:261 lit isLowPowerModeEnabled une fois ; tampon fixe 2 s dans StoryMediaLayer/StoryBackgroundLayer",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Media/MediaThermalPolicy.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Media/SharedAVPlayerManager.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryMediaLoader.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryMediaLayer.swift"
+   ],
+   "depend": [
+    "IL2",
+    "IL4",
+    "IL17",
+    "IL11"
+   ]
+  },
+  {
+   "cle": "IL4",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "titre": "Un réel ou une bulle muets ne décodent pas leur piste audio",
+   "critere": "sur les surfaces muettes (autoplay du fil, aperçu, réel muet), `AVPlayerItemTrack.isEnabled = false` sur les pistes audio, réactivé au démute sans coupure ; témoin sur la loi d'activation",
+   "existe": "aucun AVPlayerItemTrack.isEnabled dans le dépôt",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Media/SharedAVPlayerManager.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IL5",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "titre": "La session réseau des médias est typée vidéo, respecte les données mobiles et rend la fenêtre lointaine discrétionnaire",
+   "critere": "URLSessionConfiguration des téléchargements média : networkServiceType .video, allowsExpensiveNetworkAccess selon le réglage de données, isDiscretionary pour les paliers prime/idle ; témoins sur la configuration par palier",
+   "existe": "aucune de ces propriétés hors NSE",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Cache/MediaFileDownloader.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IL6",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "performance"
+   ],
+   "titre": "Le préchargement des réels et des stories s'arrête quand l'app passe en arrière-plan ou que l'écran est couvert, et reprend au retour",
+   "critere": "ReelPagerPreloader et StoryReaderPrefetcher annulent leurs tâches sur scenePhase ≠ active et relancent le plan au retour ; témoin sur la loi",
+   "existe": "HYPOTHÈSE à prouver d'abord : ReelPrewarm ne lit pas didEnterBackground",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Views/ReelPrewarm.swift",
+    "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Prefetch.swift",
+    "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel+MediaPreload.swift"
+   ],
+   "depend": [
+    "IL1"
+   ]
+  },
+  {
+   "cle": "IL7",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "titre": "Tout lien d'affichage déclare sa plage de cadence, et une garde interdit le retour d'un lien sans plage",
+   "critere": "RE-MESURER d'abord (grep `CADisplayLink(` et `WeakDisplayLinkTarget(` : 2 constructeurs directs, 19 sites, 5 plages déclarées le 2026-10-20) ; WeakDisplayLinkTarget exige une CAFrameRateRange à la construction (paramètre sans défaut) ; les sites sans plage en reçoivent une (30/60 pour une horloge, 60/120 pendant un geste) ; StoryTimelineEngine.startDriveClock inclus ; garde de source : aucun CADisplayLink( nu ; ne touche QUE les lignes de construction des liens",
+   "existe": "5 fichiers déclarent preferredFrameRateRange sur 19 sites ; Info.plist:60 CADisableMinimumFrameDurationOnPhone = true",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Utilities/WeakDisplayLinkTarget.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IL8",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "titre": "Le cache média s'évince sous pression DISQUE réelle, pas seulement au-dessus de son budget",
+   "critere": "DiskCacheStore réagit à volumeAvailableCapacityForImportantUsage bas (éviction LRU jusqu'à une marge, jamais une épingle ni un fichier en cours de lecture) ; la pression MÉMOIRE est déjà traitée (DiskCacheStore.swift:91-99 observe didReceiveMemoryWarning) et ne fait pas partie du lot ; témoins purs ; argumenté, non mesuré",
+   "existe": "evictOverBudget à l'écriture seulement (DiskCacheStore.swift:581) ; mémoire déjà couverte :91-99",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Cache/DiskCacheStore.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IL9",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "issue": 9872,
+   "titre": "Les avatars et vignettes se décodent à la taille affichée, hors du fil principal et en parallèle — suite",
+   "critere": "warmedPixelCap descend au palier pixelBucket(for: targetSize) ; décodage `nonisolated` à concurrence bornée hors de l'acteur ; kCGImageSourceShouldCacheImmediately réservé au palier affiché ; StoryMediaLayer+ImageLoading ne fait plus Data(contentsOf:) sous @MainActor ; témoins",
+   "existe": "DiskCacheStore.swift:743 warmedPixelCap=2048, acteur :6, :758 ; DecodedBitmapStore.swift:119 ; StoryMediaLayer+ImageLoading.swift:53",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Cache/DiskCacheStore.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Cache/DecodedBitmapStore.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryMediaLayer+ImageLoading.swift"
+   ],
+   "depend": [
+    "IL8"
+   ]
+  },
+  {
+   "cle": "IL10",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "performance"
+   ],
+   "issue": 9883,
+   "titre": "Les effets de bulle et les horloges visuelles ne refiltrent plus à chaque image et suivent l'écran, pas un Timer",
+   "critere": "GlowEffect anime l'opacité d'un halo flouté une fois ; RainbowCometLayer sous drawingGroup ou TimelineView plafonnée ; SyncPill, AudioTrimPreviewPlayer, ChipAutoScrollDriver passent par TimelineView(.animation(minimumInterval:paused:)) ou WeakDisplayLinkTarget avec plage ; StickerMotionMark et ArrivalCelebrationView posent paused ; garde de source : aucun Timer ne pilote une valeur visuelle ; témoins",
+   "existe": "MessageEffectModifiers.swift:347,533-561 ; SyncPill.swift:271 ; StickerMotionMark.swift:71",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Components/MessageEffectModifiers.swift",
+    "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/StickerMotionMark.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Media/AudioTrimPreviewPlayer.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IL11",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "issue": 9882,
+   "titre": "Seuls les fichiers sur le disque deviennent des lecteurs préparés, le pool garde en priorité les voisins du réel affiché, et la fin d'un fichier se signale au lieu d'être interrogée",
+   "critere": "prerollSource ne prépare jamais depuis une URL distante ; ConversationMediaHandler et FeedViewModel passent la garde disque + thermique ; pool à priorité par propriétaire ; awaitFile remplacé par une notification de fin du registre ; témoins",
+   "existe": "StoryMediaLoader.swift:170-191 prerollSource distant ; :290 maxCachedPlayers=3 partagé ; ConversationMediaHandler.swift:103 ; ReelPrewarm.swift:130 polling 120 ms",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryMediaLoader.swift",
+    "apps/ios/Meeshy/Features/Main/ViewModels/Conversation/ConversationMediaHandler.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ReelPrewarm.swift"
+   ],
+   "depend": [
+    "IL6"
+   ]
+  },
+  {
+   "cle": "IL12",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "titre": "La fin de la lecture des stories remonte un QoE comme les réels, avec le temps-à-première-image mesuré depuis isReadyForDisplay",
+   "critere": "PlaybackQoEObserver branché sur StoryMediaLoader/StoryCanvas (startup depuis isReadyForDisplay, rebuffer, surface, deviceTier) ; témoins ; le serveur agrège (S25)",
+   "existe": "PlaybackQoEObserver sur SharedAVPlayerManager seulement (#10504)",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Services/PlaybackQoE.swift"
+   ],
+   "depend": [
+    "IL2",
+    "S25"
+   ]
+  },
+  {
+   "cle": "IL13",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "issue": 9879,
+   "titre": "La libération et la requête de session audio d'un canvas sont ordonnées — plus de baisse-remontée de la musique des autres apps au balayage",
+   "critere": "StoryCanvasUIView+Audio sérialise release/request dans l'acteur du coordinateur (un seul Task ordonné) ; témoin : balayage N→N+1 ⇒ zéro setActive(false) suivi de setActive(true) ; le reste de #9879 (profil unique d'options) est déjà livré par #11039/#11040 : le lot le dit et ferme l'issue",
+   "existe": "StoryCanvasUIView+Audio.swift:129,141 deux Task non ordonnées",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Audio.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IL14",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "lourd",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "issue": 9878,
+   "titre": "Le lecteur de stories et de réels partage un seul moteur audio, et le son reprend seul après un changement de sortie",
+   "critere": "un AVAudioEngine par lecteur, chaque canvas attache/détache ses AVAudioPlayerNode ; la fenêtre se prépare en octets (AVAudioFile ouvert hors fil principal) ; AVAudioEngineConfigurationChange observé ⇒ start + replanification depuis l'ancre ; mediaServicesWereReset ⇒ reconstruction ; témoins : au plus un moteur vivant par lecteur, replanification sur notification",
+   "existe": "StoryCanvasUIView.swift:532 un mixer par canvas ; configuration change observé seulement par CallTranscriptionService",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/ReaderAudioMixer.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Audio.swift"
+   ],
+   "depend": [
+    "IL13"
+   ]
+  },
+  {
+   "cle": "IL15",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "lourd",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "issue": 9881,
+   "titre": "Une story vidéo ne se télécharge qu'une fois et ne redémarre pas en pleine lecture ; une bulle vidéo joue avant la fin du téléchargement",
+   "critere": "un AVAssetResourceLoaderDelegate (schéma meeshy-cache://) sert les plages demandées par le lecteur depuis UN téléchargement en flux (MediaFileDownloader) et écrit le fichier de cache ; StoryBackgroundLayer et StoryMediaLayer n'ont plus de double chemin ni de replaceCurrentItem en lecture ; SharedAVPlayerManager joue dès la tête ; témoins : une URL ⇒ une requête ; honorer #9478 (no-store/no-cache)",
+   "existe": "StoryBackgroundLayer.swift:821-829, StoryMediaLayer.swift:454-465 ; aucun AVAssetResourceLoaderDelegate",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Cache/MediaFileDownloader.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Media/SharedAVPlayerManager.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryMediaLayer.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer.swift"
+   ],
+   "depend": [
+    "IL11",
+    "IL3",
+    "IL5"
+   ]
+  },
+  {
+   "cle": "IL16",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "performance"
+   ],
+   "titre": "La fenêtre lointaine des réels (N±3 à N±10) ne charge que la tête du fichier, et le reste arrive en flux à l'élection",
+   "critere": "le palier prime demande `Range: bytes=0-<n>` (moov + premier GOP, borne par tier) ; le fichier partiel est servi par le chargeur de IL15 puis complété ; Network : octets par balayage de 20 réels divisés (estimé, à mesurer) ; témoins sur la loi de tête",
+   "existe": "ReelPrewarm.swift:222-223 fichiers entiers ; MediaFileDownloader sans Range",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Views/ReelPrewarm.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Cache/MediaFileDownloader.swift"
+   ],
+   "depend": [
+    "IL15",
+    "IL11",
+    "IL2"
+   ]
+  },
+  {
+   "cle": "IL17",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "sdk",
+    "dette-technique"
+   ],
+   "issue": 9890,
+   "titre": "Le code média mort quitte le dépôt, et l'aperçu plein écran du composer passe par le lecteur commun",
+   "critere": "StoryAudioPlayerView, StoryVideoPlayerView + VideoPlayerCoordinator, _FlatRenderer, _MiniRenderer, MeeshyVideoCanvasLayer, PerformanceOptions.{sharedPlayer,preloadOnAppear,preferredPeakBitRate}, AttachmentUploader, DissolveVideoCompositor, CustomTransitionCompositor, StoryTimelineEngine.export (notImplemented), .timelineDidStart/StopPlaying retirés ; VideoFullscreenPlayer absorbé par MeeshyVideoPlayer(.fullscreen) en GARDANT son usage AUDIO (ConversationView+Presentations.swift:102 vidéo, :104 audio) ; gardes de source qui les citent ajustées ; xcodegen régénéré ; CORRECTION de l'issue : ConversationAnimatedBackground n'est PAS mort (appelé par ConversationBackgroundView.swift:63) — il reste",
+   "existe": "les 9 fichiers existent sur dev",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryAudioPlayerView.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryVideoPlayerView.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer+FlatRenderer.swift",
+    "apps/ios/Meeshy/Features/Main/Views/VideoLegacySupport.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IL18",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "dette-technique"
+   ],
+   "issue": 9891,
+   "titre": "Une seule implémentation par brique média : vignettes vidéo, sous-échantillonnage, reflet de chargement, points de frappe, pulsation",
+   "critere": "un atome SDK par brique (générateur de vignettes en lot et en cache ; sous-échantillonneur ImageIO unique ; un reflet ; un indicateur de frappe ; un PulseEffect) ; appelants migrés ; garde de source anti-retour ; aucun comportement visible changé (captures de référence décrites)",
+   "existe": "20 fichiers AVAssetImageGenerator, 20 AVPlayer(, 3 PulseEffect, 9 points de frappe",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Media/",
+    "packages/MeeshySDK/Sources/MeeshyUI/Primitives/"
+   ],
+   "depend": [
+    "IL17",
+    "IC6"
+   ]
+  },
+  {
+   "cle": "IL19",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "lourd",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "issue": 9865,
+   "titre": "Les keyframes d'une story sont jouées par Core Animation, synchronisées à la vidéo — plus réévaluées par le CPU à chaque image",
+   "critere": "CAKeyframeAnimation posées une fois par slide, pilotées par speed/timeOffset/beginTime (pause, seek, parcours au doigt exacts) ; AVSynchronizedLayer sur fond vidéo ; rebuildLayers ne reconstruit plus l'arbre par tick ; l'export (StoryRenderer) lit la MÊME description (loi 6 : le player est l'aperçu) ; témoin de parité rendu à t donné ; Animation Hitches à mesurer sur Mac",
+   "existe": "StoryCanvasUIView+Playback.swift:417-420 « aucune CAAnimation autonome »",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Playback.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+Rendering.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift"
+   ],
+   "depend": [
+    "IL14"
+   ]
+  },
+  {
+   "cle": "IL20",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk"
+   ],
+   "decision": "DEC-LECTURE",
+   "defaut": "3 jours, en Wi-Fi seulement, budget 1 Go",
+   "titre": "Un média vu récemment reste lisible hors ligne pendant N jours",
+   "critere": "la POLITIQUE (« vu ⇒ épinglé N jours, Wi-Fi seul, budget ») est app-side (apps/ios/Meeshy/Core ou Features/Main/Services : elle lit le réseau et le réglage — SDK Purity) ; le SDK n'expose que des épingles à durée ; EXCLUS : clés no-store/no-cache (#9478), isViewOnce, isBlurred, éphémères, route signée par lecteur (#9600) ; réglage utilisateur ; témoins purs",
+   "existe": "épingles sans politique (DiskCacheStore)",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/OfflineMediaPolicy.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Cache/DiskCacheStore+Eviction.swift"
+   ],
+   "depend": [
+    "IL8",
+    "IL9",
+    "IL5",
+    "IL16"
+   ]
+  },
+  {
+   "cle": "IC1",
+   "chaine": "ios-creation",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "performance"
+   ],
+   "issue": 9870,
+   "titre": "Importer une vidéo de la photothèque passe par un fichier, sans transcodage caché ni gel de l'interface",
+   "critere": "un seul site d'ingestion (Transferable à FileRepresentation .movie copié dans tmp) ; PhotosPicker preferredItemEncoding .current ; les 13 sites loadTransferable(type: Data.self) migrés (AttachmentPreparationService:350,382, MeeshyComposerHost+Ingestion:21, FeedComposerSheet:535, CommentAttachmentIntake:178, ProfileView:793, GamePhotoFlowView:37, et les autres : grep) ; garde de source ; témoins",
+   "existe": "8 sites, aucun preferredItemEncoding ; modèle correct : ComposerDropResolver.swift:273, ShareViewController.swift:316",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/AttachmentPreparationService.swift",
+    "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Ingestion.swift",
+    "apps/ios/Meeshy/Features/Main/Views/FeedComposerSheet.swift",
+    "apps/ios/MeeshyShareExtension/ShareViewController.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC2",
+   "chaine": "ios-creation",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "performance"
+   ],
+   "issue": 9885,
+   "decision": "DEC-COMPRESSION",
+   "defaut": "GPS retiré au client par défaut ; un réglage explicite « conserver le lieu » existe ; le serveur garde son filet",
+   "titre": "Une photo n'est encodée qu'une fois entre la caméra et l'envoi : passthrough d'un JPEG dans le budget, octets d'origine préservés, PNG jamais converti en JPEG, GPS retiré au client",
+   "critere": "compressImageData : needsResize appliqué au JPEG (octets identiques sous le budget) ; la caméra et le sélecteur remettent leurs OCTETS (prepareImageData), plus de UIImage→jpegData(0.8) ; PhotoCaptureProcessor unique encodeur ; ComposerPhotoEncoding ne ré-encode que si un look a peint ; PNG/WebP lossless passthrough (alpha intact) ; ThumbHash depuis l'aperçu 1 024 px ; décodage hors @MainActor ; la préférence compressImagesOnUpload/imageCompressionQuality est câblée (false ⇒ passthrough strict sous le plafond de taille) ; témoins : nombre de CGImageDestinationFinalize par photo = 1",
+   "existe": "4 générations JPEG (CameraModel.swift:508, PhotoCaptureProcessor.swift:111, ComposerPhotoEncoding.swift:35, MediaCompressor.swift:115-147) ; compressImageData:183-190 sans needsResize ; préférence lue nulle part",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/MediaCompressor.swift",
+    "apps/ios/Meeshy/Features/Main/Services/AttachmentPreparationService.swift",
+    "apps/ios/Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift",
+    "apps/ios/Meeshy/Features/Main/Composer/ComposerPhotoEncoding.swift",
+    "packages/MeeshySDK/Sources/MeeshySDK/Media/PhotoCaptureProcessor.swift"
+   ],
+   "depend": [
+    "IC1"
+   ]
+  },
+  {
+   "cle": "IC3",
+   "chaine": "ios-creation",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "performance"
+   ],
+   "decision": "DEC-COMPRESSION",
+   "defaut": "HDR HLG conservé en 10 bits (iOS↔iOS), le serveur fabrique le SDR pour le web",
+   "titre": "Une vidéo compressée sur iPhone garde sa stéréo, son 48 kHz, son HDR, et vise une qualité plutôt qu'un débit",
+   "critere": "MediaCompressor : AVNumberOfChannelsKey = source, 48 000 Hz, 128 kb/s ; AVVideoQualityKey ≈ 0.6 avec AVVideoAverageBitRateKey en plafond ; HLG/PQ ⇒ x420 10 bits + HEVC Main10, sinon BT.709 explicite ; VTIsHardwareEncodeSupported (pas Decode) ; ≤ 30 fps conservé ; témoins sur la loi de réglages par source",
+   "existe": "MediaCompressor.swift:285-313 mono 44,1 kHz, 8 bits, débit fixe ; :257 mauvais proxy",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/MediaCompressor.swift"
+   ],
+   "depend": [
+    "IC2"
+   ]
+  },
+  {
+   "cle": "IC4",
+   "chaine": "ios-creation",
+   "ms": "MB",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "composer"
+   ],
+   "issue": 9912,
+   "titre": "La pré-montée d'une vidéo du composer part compressée, avec son vrai type MIME",
+   "critere": "MeeshyComposerHost+PreUpload passe par MediaCompressor.compressVideo(context:) (passthrough si dans le budget) ; mime déduit du conteneur ; témoin",
+   "existe": "MeeshyComposerHost+PreUpload.swift:64-66 fichier brut, mime par extension",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+PreUpload.swift"
+   ],
+   "depend": [
+    "IC3",
+    "IC12"
+   ]
+  },
+  {
+   "cle": "IC5",
+   "chaine": "ios-creation",
+   "ms": "MB",
+   "taille": "petit",
+   "labels": [
+    "ios"
+   ],
+   "titre": "L'iPhone envoie ses HEIC tels quels dès que la passerelle les accepte",
+   "critere": "quand S8 est dans dev : MediaCompressor ne convertit plus HEIC→JPEG ; mime image/heic ; repli q0.92 si le serveur refuse (capability servie) ; témoins",
+   "existe": "MediaCompressor.swift:170-190 conversion JPEG q0.8",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/MediaCompressor.swift"
+   ],
+   "depend": [
+    "IC3",
+    "S8"
+   ]
+  },
+  {
+   "cle": "IC6",
+   "chaine": "ios-creation",
+   "ms": "M164",
+   "taille": "lourd",
+   "labels": [
+    "ios",
+    "sdk",
+    "composer",
+    "performance"
+   ],
+   "issue": 9873,
+   "titre": "Glisser un curseur de filtre ou de réglage répond à chaque image : aperçu GPU sur une image réduite, un seul CIContext par domaine",
+   "critere": "source réduite à la toile (CGImageSourceCreateThumbnailAtIndex) ; chaîne CIImage jusqu'à l'écran (MTKView + CIRenderDestination) sans délai ni createCGImage dans la boucle du curseur ; CIImage.oriented ; les 30 CIContext( (compte du 2026-10-20) convergent sur StoryRenderingContext.shared (SDK) et ComposerLookGPU (app), espace de couleur P3 vérifié ; l'export appelle la même fonction (loi 6) ; garde : nombre de CIContext ≤ 2 ; témoins de parité aperçu/export",
+   "existe": "StoryFilterProcessor.swift:19,38 ; 30 CIContext( sur dev (8 le 2026-10-10)",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryFilterProcessor.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer+Look.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyImageEditorView.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderingContext.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC7",
+   "chaine": "ios-creation",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "composer",
+    "performance"
+   ],
+   "issue": 9874,
+   "titre": "La timeline du composer ne réévalue plus toute la vue à chaque tick de tête de lecture",
+   "critere": "currentTime isolé dans un petit objet observé par la tête de lecture et le libellé seuls ; résolveurs mémoïsés sur project ; display link du moteur avec plage ; geste pinch/rotate propagé à cadence bornée ; témoins ; compte des body à mesurer sur Mac",
+   "existe": "TimelineViewModel.swift:52 @Published currentTime observé par 6 vues ; StoryTimelineEngine.swift:348 sans plage",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/StoryTimelineView.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC8",
+   "chaine": "ios-creation",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "composer"
+   ],
+   "issue": 9884,
+   "titre": "Le composer démarre vidéo et son ensemble même quand la vidéo n'est pas prête, n'empile jamais deux recalages de dérive, et n'emprunte le tampon de 5 ms que pendant la lecture",
+   "critere": "attendre readyToPlay/isReadyForDisplay avant d'ancrer setRate(atHostTime:) + play(at:) ; drapeau « seek en vol » levé dans le completionHandler de VideoDriftCorrection ; setPreferredIOBufferDuration(5 ms) posé à play/scrub et rendu à pause/fin ; session du composer via MediaSessionCoordinator ; témoins purs",
+   "existe": "StoryTimelineEngine.swift:339-341 play() sans ancre ; :153,162 tampon tenu ; StoryMediaLayer+Drift.swift:28",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryMediaLayer+Drift.swift"
+   ],
+   "depend": [
+    "IC7"
+   ]
+  },
+  {
+   "cle": "IC9",
+   "chaine": "ios-creation",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "composer"
+   ],
+   "issue": 9886,
+   "titre": "Une seule forme d'onde, calculée par Accelerate, dessinée à la bonne échelle dans le composer",
+   "critere": "une fonction pure vectorisée (vDSP_rmsqv par compartiment), un cache borné à clé de contenu (hash), une échelle d'affichage ; WaveformGenerator, AudioWaveformAnalyzer, AudioWaveform (timeline) retirés ; ComposerSoundTraceRow dessine la bonne mesure ; témoins : même fichier ⇒ mêmes échantillons partout",
+   "existe": "4 fichiers coexistent ; ComposerSoundTraceRow.swift:122 mauvaise échelle",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshySDK/Audio/WaveformCache.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Util/AudioWaveform.swift",
+    "apps/ios/Meeshy/Features/Main/Composer/ComposerSoundTraceRow.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC10",
+   "chaine": "ios-creation",
+   "ms": "M164",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "voix"
+   ],
+   "issue": 9887,
+   "titre": "Le niveau du micro pendant un vocal suit l'écran, pas un Timer à 20 Hz",
+   "critere": ".voiceChat n'est déjà conditionnel qu'au vocal sans son Meeshy (AudioRecorderManager.swift:88-91, RecordingSessionLaw) : le lot ne touche pas la session ; il remplace le Timer 50 ms du vumètre par WeakDisplayLinkTarget plafonné 30 Hz ; le format reste AAC jusqu'à la décision Opus (DEC-COMPRESSION) ; témoin ; ferme #9887 en disant ce que #11042 a déjà livré",
+   "existe": "AudioRecorderManager.swift:124 Timer 50 ms",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/AudioRecorderManager.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC11",
+   "chaine": "ios-creation",
+   "ms": "M164",
+   "taille": "lourd",
+   "labels": [
+    "ios",
+    "sdk",
+    "composer",
+    "performance"
+   ],
+   "issue": 9877,
+   "titre": "L'export d'une story se compose sur le GPU, hors du fil principal, et décode ses vidéos superposées en séquence",
+   "critere": "plus aucun DispatchQueue.main.sync dans StoryAVCompositor ; fond vidéo et marque en CIImage rendues par CIContext.render(to: CVPixelBuffer) ; arbre de calques tramé une fois par signature ; vidéos superposées en pistes de la composition (sourceFrame(byTrackID:)) ; témoin de parité image par image avec l'export actuel ; durée/thermique à mesurer sur Mac",
+   "existe": "StoryAVCompositor.swift:180 main.sync ; StoryForegroundVideoFrameSource.swift:70-81",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryAVCompositor.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryForegroundVideoFrameSource.swift"
+   ],
+   "depend": [
+    "IC6",
+    "IL19"
+   ]
+  },
+  {
+   "cle": "IC12",
+   "chaine": "ios-creation",
+   "ms": "M164",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "composer"
+   ],
+   "issue": 9889,
+   "decision": "DEC-COMPRESSION",
+   "defaut": "passthrough quand rien d'autre que la longueur ne change : la coupe tombe sur l'image clé précédente (≤ 1 s) et l'interface le dit",
+   "titre": "Couper la longueur d'une vidéo sans la retoucher ne la ré-encode plus",
+   "critere": "ComposerLookVideoExporter : look neutre, cadrage identité, gain 1 ⇒ AVAssetExportPresetPassthrough + timeRange ; sinon une seule passe au débit cible ; témoin ; l'interface dit la précision",
+   "existe": "ComposerLookVideoExporter.swift:38-39 composition complète dès qu'un timeRange existe",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC13",
+   "chaine": "ios-creation",
+   "ms": "MD",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "appels",
+    "performance"
+   ],
+   "titre": "Chaque lien du maillage d'un appel de groupe encode à sa juste taille — plus cinq encodages 720p pour six participants",
+   "critere": "WebRTCGroupPeerLink : scaleResolutionDownBy, maxBitrateBps = budget/(N−1), maxFramerate 20, setCodecPreferences H264, iceCandidatePoolSize ; VideoSurvivalController appliqué à tous les liens ; témoins sur la loi de budget par lien",
+   "existe": "WebRTCGroupPeerLink.swift sans applyVideoEncoding ni codec prefs (grep vide)",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCGroupPeerLink.swift",
+    "apps/ios/Meeshy/Features/Main/Services/GroupCallMeshCoordinator.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC14",
+   "chaine": "ios-creation",
+   "ms": "MD",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "appels",
+    "performance"
+   ],
+   "titre": "La caméra d'un appel descend avec le palier de qualité et l'état thermique, pas seulement l'encodeur",
+   "critere": "RTCVideoSource.adaptOutputFormat à chaque applyVideoEncoding ; format AVCapture rebaissé (640×480@24) en .serious ; les 4 sites startCapture passent par une seule loi de format ; témoins",
+   "existe": "P2PWebRTCClient+CaptureFormat.swift:9-50 format fixe ≤ 720p30 ; 4 sites startCapture",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient+CaptureFormat.swift",
+    "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC15",
+   "chaine": "ios-creation",
+   "ms": "MD",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "appels",
+    "observabilité"
+   ],
+   "titre": "Les gels d'un appel se mesurent, et un MOS les résume",
+   "critere": "CallStats lit freezeCount, totalFreezesDuration, framesPerSecond, qualityLimitationReason, jitterBufferDelay, concealedSamples, nackCount, pliCount ; MOS E-model simplifié (G.107) ; envoyé dans call:analytics (S22) ; témoins sur le calcul",
+   "existe": "CallStats.swift:171-180 RTT, débit, jitter seulement",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/WebRTC/CallStats.swift"
+   ],
+   "depend": [
+    "S22"
+   ]
+  },
+  {
+   "cle": "IC16",
+   "chaine": "ios-creation",
+   "ms": "MD",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "appels",
+    "voix"
+   ],
+   "titre": "L'isolation vocale d'Apple s'active en un geste depuis le panneau d'appel",
+   "critere": "LIRE d'abord CallManager+CallKitProxy.swift:236 (un commentaire dit que l'API n'a pas compilé) : si AVCaptureDevice.showSystemUserInterface(.microphoneModes) compile sur la cible, bouton dans le panneau d'appel qui reflète activeMicrophoneMode (iOS 15+) ; sinon fermer l'issue motivée avec la preuve de compilation CI ; témoin",
+   "existe": "grep preferredMicrophoneMode vide",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Views/CallDeviceControls.swift",
+    "apps/ios/Meeshy/Features/Main/Services/CallManager+CallKitProxy.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC17",
+   "chaine": "ios-creation",
+   "ms": "MD",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "appels",
+    "sécurité"
+   ],
+   "titre": "Un réglage « masquer mon adresse IP dans les appels » force le relais TURN",
+   "critere": "préférence ⇒ iceTransportPolicy = .relay sur toutes les PC ; réglage dans Confidentialité ; témoin ; équivalent web dans W14",
+   "existe": "aucune iceTransportPolicy",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift"
+   ],
+   "depend": [
+    "IC14"
+   ]
+  },
+  {
+   "cle": "IC18",
+   "chaine": "ios-creation",
+   "ms": "MD",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "appels"
+   ],
+   "issue": 9777,
+   "titre": "Les contrôles posés sur un cadre d'appel restent lisibles : la réserve de chrome protège les textes du cadre",
+   "critere": "témoin de géométrie CallFrameLayoutGeometry × CallFrameChromeReserve ; contraste automatique des contrôles sur la luminance de la bande ; recette #9755 décrite",
+   "existe": "CallLiveFrameRule.swift:28 reserve existe, non appliqué aux contrôles",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Models/CallFrames/CallLiveFrameRule.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC19",
+   "chaine": "ios-creation",
+   "ms": "MD",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "appels"
+   ],
+   "titre": "Les cadres d'appel servent le groupe (3 à 6) sur la grille, sous le même budget GPU",
+   "critere": "composition récepteur sur GroupCallGridLayout ; CallLiveFrameBudgetMeter p95 ≤ 2,5 ms à 6 vignettes (à mesurer) ; témoins",
+   "existe": "duo seulement (S24 lève la garde serveur)",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/CallFrames/CallLiveFrameCompositor.swift"
+   ],
+   "depend": [
+    "S24",
+    "IC18"
+   ]
+  },
+  {
+   "cle": "IC20",
+   "chaine": "ios-creation",
+   "ms": "ME",
+   "taille": "lourd",
+   "labels": [
+    "ios",
+    "sdk",
+    "composer"
+   ],
+   "titre": "Un seul peintre de lens rend l'aperçu caméra, la photo, la vidéo, la retouche et l'appel",
+   "critere": "LensPainter (packages/MeeshySDK/Sources/MeeshyUI/Lens/) extrait de ComposerLookPainter + CallFaceEffectsRenderer : paramètres opaques (image, LensFaceFrame, masque), Core Image sur le CIContext Metal partagé, sans ARKit ; ordre segmentation → LUT → couches visage → cadre → stickers/texte → particules ; golden images identiques sur les hôtes ; témoins",
+   "existe": "ComposerLookPainter.swift:34-49, CallFaceEffectsRenderer.swift, VideoFilterPipeline.swift:496-557",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Lens/",
+    "apps/ios/Meeshy/Features/Main/Composer/ComposerLookPainter.swift"
+   ],
+   "depend": [
+    "IC6"
+   ]
+  },
+  {
+   "cle": "IC21",
+   "chaine": "ios-creation",
+   "ms": "ME",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "appels",
+    "composer"
+   ],
+   "titre": "Le visage se lit en 76 points avec son orientation, sur une file à part, et sert les déclencheurs",
+   "critere": "CallFaceTracker expose les 76 landmarks + yaw/roll/pitch (VNDetectFaceLandmarksRequest révision 3) sur sonde réduite ; LensFaceFrame partagé ; ≤ 3 ms sur sonde 320 px (à mesurer) ; témoins sur fixtures",
+   "existe": "CallFaceTracker.swift:31-40 boîte + 3 centres",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/CallFaceTracker.swift"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "IC22",
+   "chaine": "ios-creation",
+   "ms": "ME",
+   "taille": "lourd",
+   "labels": [
+    "ios",
+    "sdk",
+    "composer"
+   ],
+   "titre": "Les cinq primitives de MeeshyLens se rendent à l'identique sur iOS : LUT, cadre, sticker ancré, texte, particules",
+   "critere": "LensPainter lit le contrat S15 (Swift généré) ; LUT .cube → CIColorCube ; cadre via les vocabulaires existants ; sticker ancré à un point de visage (IC21) avec rotation ; texte aux polices fermées ; particules bornées ; goldens par primitive ; budget par tier (A ≤ 6 ms, B ≤ 10 ms à 720p, C LUT+cadre) à mesurer",
+   "existe": "rien pour l'ancrage visage ; LUT via CallColorLook.swift:6-15",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Lens/"
+   ],
+   "depend": [
+    "IC20",
+    "IC21",
+    "S15"
+   ]
+  },
+  {
+   "cle": "IC23",
+   "chaine": "ios-creation",
+   "ms": "ME",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk"
+   ],
+   "titre": "Les déclencheurs simples animent une lens : bouche ouverte, sourcils, sourire, clignement, toucher, temps, parole",
+   "critere": "ratios de landmarks avec hystérésis ; actions show/hide/burst/play ; témoins sur fixtures (faux positifs) ; budget tenu",
+   "existe": "frame-spec § 4.6 déclare behaviors, jamais rendus",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Lens/"
+   ],
+   "depend": [
+    "IC22"
+   ]
+  },
+  {
+   "cle": "IC24",
+   "chaine": "ios-creation",
+   "ms": "ME",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "sdk"
+   ],
+   "titre": "Un pack de lens s'installe sur iOS par le moteur de packs, avec son crédit et son créneau",
+   "critere": "PackIndex / FramePackShelfLoader lisent le domaine lens (le SDK tolère déjà .unknown, PackDomain.swift:28) ; le tri par fenêtre/lieu est une règle « quand » : il vit app-side (apps/ios/Meeshy/Features/Main/…), résolu SUR l'appareil (position jamais envoyée, précision grossière, opt-in) ; crédit affiché ; témoins",
+   "existe": "FramePackShelfLoader.swift, PacksSettingsView.swift",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Packs/FramePackShelfLoader.swift",
+    "apps/ios/Meeshy/Features/Main/Services/LensAvailabilityPolicy.swift"
+   ],
+   "depend": [
+    "S16",
+    "IC22",
+    "IC28"
+   ]
+  },
+  {
+   "cle": "IC25",
+   "chaine": "ios-creation",
+   "ms": "ME",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "composer"
+   ],
+   "titre": "La caméra du composer propose les lens à côté des filtres, effets et cadres, et les cuit dans la photo et la vidéo",
+   "critere": "rail existant (#10311) ; capture + export vidéo portent la lens (ComposerLookVideoExporter) ; lensId en métadonnée du média ; un ancien client voit les pixels cuits ; témoins",
+   "existe": "rail des effets visage ComposerFaceEffects.swift:6-14",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Composer/"
+   ],
+   "depend": [
+    "IC23",
+    "IC24",
+    "IC4",
+    "IC9"
+   ]
+  },
+  {
+   "cle": "IC26",
+   "chaine": "ios-creation",
+   "ms": "ME",
+   "taille": "petit",
+   "labels": [
+    "ios",
+    "composer"
+   ],
+   "titre": "Une lens s'applique sur une image existante — story et retouche",
+   "critere": "mode still de LensPainter branché dans la retouche et le composeur de story ; < 100 ms estimé ; témoin",
+   "existe": "ComposerFaceEffects.still",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Composer/"
+   ],
+   "depend": [
+    "IC25"
+   ]
+  },
+  {
+   "cle": "IC27",
+   "chaine": "ios-creation",
+   "ms": "ME",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "appels"
+   ],
+   "titre": "Une lens tient dans l'appel sans sortir de l'échelle de dégradation",
+   "critere": "LensPainter dans VideoFilterPipeline avant l'encodeur ; palier descendu sous charge (budget 25/15 ms) ; témoins ; énergie 10 min à mesurer",
+   "existe": "VideoFilterPipeline.swift:496-557",
+   "fichiers": [
+    "apps/ios/Meeshy/Features/Main/Services/VideoFilterPipeline.swift"
+   ],
+   "depend": [
+    "IC23",
+    "IC14",
+    "IC20"
+   ]
+  },
+  {
+   "cle": "IC28",
+   "chaine": "ios-creation",
+   "ms": "MF",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk"
+   ],
+   "titre": "La boutique iOS montre ce qui reste à débloquer et comment, et une parure de rang s'équipe",
+   "critere": "UnifiedShopView lit requirementPreview (S21) ; un pack possédé par le jeu s'équipe (ProfileDecorSheet) ; témoins",
+   "existe": "UnifiedShopView.swift:108, ProfileDecorSheet.swift",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Packs/UnifiedShopView.swift"
+   ],
+   "depend": [
+    "S21",
+    "S18"
+   ]
+  },
+  {
+   "cle": "W1",
+   "chaine": "web",
+   "ms": "MG",
+   "taille": "developper",
+   "labels": [
+    "web",
+    "performance"
+   ],
+   "decision": "DEC-WEB",
+   "defaut": "parité iOS : sous la feuille, le réel se met en pause sous son poster flouté",
+   "titre": "Un réel sous la feuille de commentaires ne se refiltre plus à chaque image",
+   "critere": "scene-yields.ts / reels.tsx : plus de filter: blur avec transition sur le pager qui contient la vidéo ; poster flouté une fois + vidéo en pause (défaut) ; témoins bun test ; frames perdues à mesurer (Chrome distant)",
+   "existe": "apps/web/src/lib/view/scene-yields.ts:94-97, routes/reels.tsx:343-348,471",
+   "fichiers": [
+    "apps/web/src/lib/view/scene-yields.ts",
+    "apps/web/src/routes/reels.tsx"
+   ],
+   "depend": [
+    "W10"
+   ]
+  },
+  {
+   "cle": "W2",
+   "chaine": "web",
+   "ms": "MG",
+   "taille": "developper",
+   "labels": [
+    "web",
+    "android",
+    "performance"
+   ],
+   "decision": "DEC-WEB",
+   "defaut": "N±2 préparé en octets, monté en preload=none avec poster ; N±1 reste auto",
+   "titre": "La coque Android ne monte que les lecteurs vidéo qu'elle peut décoder : N±1 décodés, N±2 en octets",
+   "critere": "pageModeOf : N±2 ⇒ preload=none + poster (préparé par media-primer) ; loi pure témoignée ; argumenté, non mesuré : l'issue garde le scénario chrome://media-internals",
+   "existe": "apps/web/src/lib/reels/thread.ts:149-151 cinq HTMLMediaElement montés",
+   "fichiers": [
+    "apps/web/src/lib/reels/thread.ts"
+   ],
+   "depend": [
+    "W1"
+   ]
+  },
+  {
+   "cle": "W3",
+   "chaine": "web",
+   "ms": "MB",
+   "taille": "petit",
+   "labels": [
+    "web",
+    "voix"
+   ],
+   "titre": "Le vocal, la vidéo et l'export suivent une seule loi de codecs, et un vocal pèse 32 kb/s",
+   "critere": "recordingMimeOf(kind, isTypeSupported) unique ; audioBitsPerSecond 32 000 pour les vocaux et les enregistrements d'appel ; témoins",
+   "existe": "trois listes (studio-quick-capture.ts:134, call-recording-runtime.ts:147, call-capture-live.ts:24) ; use-recorder.ts:50 sans débit",
+   "fichiers": [
+    "apps/web/src/lib/view/use-recorder.ts",
+    "apps/web/src/lib/stories/studio-quick-capture.ts",
+    "apps/web/src/lib/calls/call-recording-runtime.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "W4",
+   "chaine": "web",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "web",
+    "android",
+    "performance"
+   ],
+   "titre": "Une photo se développe et se recompresse hors du fil principal, et part recompressée partout où le profil le fait déjà",
+   "critere": "createImageBitmap(resizeWidth) + OffscreenCanvas dans un Worker (convertToBlob WebP 0.85, repli JPEG, PNG alpha conservé) ; généralisé aux pièces de message (send-sheet-ports.ts) et au TUS des posts ; EXIF retiré ; témoins ; LoAF à mesurer",
+   "existe": "photo-develop.ts:46-58 convolution sur le fil principal ; attachments.ts:43-47 brut ; image-recompress.ts bon modèle",
+   "fichiers": [
+    "apps/web/src/lib/media/photo-develop.ts",
+    "apps/web/src/lib/profile/image-recompress.ts",
+    "apps/web/src/lib/api/attachments.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "W5",
+   "chaine": "web",
+   "ms": "MG",
+   "taille": "developper",
+   "labels": [
+    "web",
+    "android"
+   ],
+   "decision": "DEC-WEB",
+   "defaut": "checkpoint IndexedDB maintenant ; Background Fetch sur Chrome/WebView quand il existe, Safari reste en premier plan",
+   "titre": "Un envoi coupé reprend après rechargement ou mise en arrière-plan",
+   "critere": "checkpoint IndexedDB {location, offset, fingerprint} pour le TUS maison ; reprise au rechargement ; Background Fetch si disponible ; témoins",
+   "existe": "post-media-upload.ts:12 « la reprise ne survit pas à un rechargement »",
+   "fichiers": [
+    "apps/web/src/lib/api/post-media-upload.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "W6",
+   "chaine": "web",
+   "ms": "MG",
+   "taille": "petit",
+   "labels": [
+    "web",
+    "performance"
+   ],
+   "titre": "Le trim audio décode par fenêtre, jamais le fichier entier en mémoire",
+   "critere": "borne de taille + décodage par tranches (OfflineAudioContext) ou waveform servie ; témoins",
+   "existe": "audio-trim.ts:73-83",
+   "fichiers": [
+    "apps/web/src/lib/media/audio-trim.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "W7",
+   "chaine": "web",
+   "ms": "MD",
+   "taille": "petit",
+   "labels": [
+    "web",
+    "appels",
+    "performance"
+   ],
+   "titre": "Les compositeurs d'appel peignent au rythme des images, pas d'un setInterval",
+   "critere": "requestVideoFrameCallback avec repli rAF dans call-capture-live.ts, call-recording-compositor.ts, call-montage-mode.tsx ; témoins",
+   "existe": "setInterval dans les trois",
+   "fichiers": [
+    "apps/web/src/lib/calls/call-capture-live.ts",
+    "apps/web/src/lib/calls/call-recording-compositor.ts",
+    "apps/web/src/components/call-montage-mode.tsx"
+   ],
+   "depend": [
+    "W3"
+   ]
+  },
+  {
+   "cle": "W8",
+   "chaine": "web",
+   "ms": "MG",
+   "taille": "developper",
+   "labels": [
+    "web",
+    "performance"
+   ],
+   "titre": "Les animations de géométrie passent sur transform et opacity — six sites",
+   "critere": "long-message-text.tsx (FLIP), app.css grid-template-rows, conversation-row-swipe.css width, call-bubble.tsx, call-stage.tsx, comments-zone.ts ; garde check-*.mjs sur les propriétés animées ; témoins",
+   "existe": "six sites listés",
+   "fichiers": [
+    "apps/web/src/components/long-message-text.tsx",
+    "apps/web/src/styles/app.css",
+    "apps/web/src/lib/view/comments-zone.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "W9",
+   "chaine": "web",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "web",
+    "android"
+   ],
+   "titre": "Un HEIC choisi sur Android ou Chrome part et s'affiche, jamais en échec silencieux",
+   "critere": "essai createImageBitmap ; sinon envoi tel quel au serveur qui convertit (S8) et aperçu depuis la vignette servie ; refus motivé si le serveur ne sait pas ; témoins",
+   "existe": "image-upload.ts:9 accepte HEIC sans conversion",
+   "fichiers": [
+    "apps/web/src/lib/profile/image-upload.ts",
+    "apps/web/src/lib/api/attachments.ts"
+   ],
+   "depend": [
+    "S8",
+    "W4"
+   ]
+  },
+  {
+   "cle": "W10",
+   "chaine": "web",
+   "ms": "MG",
+   "taille": "developper",
+   "labels": [
+    "web",
+    "android",
+    "performance"
+   ],
+   "titre": "L'appareil déclare un tier de capacité unique, jumeau de la loi iOS, et tous les consommateurs le lisent",
+   "critere": "apps/web/src/lib/device/capability-tier.ts pure (deviceMemory, hardwareConcurrency, saveData, prefers-reduced-data, connection) avec les MÊMES paliers et vecteurs que DeviceMediaTier.swift (IL2) ; consommé par réels, looks, effets d'appel, Lottie ; témoins",
+   "existe": "signaux lus seulement par les réels",
+   "fichiers": [
+    "apps/web/src/lib/device/capability-tier.ts",
+    "apps/web/src/lib/reels/preload-signals.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "W11",
+   "chaine": "web",
+   "ms": "MG",
+   "taille": "petit",
+   "labels": [
+    "web",
+    "observabilité"
+   ],
+   "titre": "Les Web Vitals et les tâches longues remontent avec le QoE de lecture",
+   "critere": "web-vitals (LCP/INP/CLS) + LoAF joints au résumé playback-qoe (surface, tier) ; témoins ; trace Chrome distante documentée pour la coque",
+   "existe": "aucun PerformanceObserver en production",
+   "fichiers": [
+    "apps/web/src/lib/telemetry/playback-qoe.ts"
+   ],
+   "depend": [
+    "W10",
+    "S25"
+   ]
+  },
+  {
+   "cle": "W12",
+   "chaine": "web",
+   "ms": "MB",
+   "taille": "developper",
+   "labels": [
+    "web",
+    "performance"
+   ],
+   "titre": "Le web choisit le rendu servi : AVIF puis WebP en <picture>, et la vidéo H.264 de compatibilité",
+   "critere": "media-grid.tsx:67 et media-url.ts:212 : <picture>/srcset avec `avifVariants` (S7) puis `imageVariants` WebP ; renditions vidéo H.264 (S6) choisies par tier (W10) ; témoins de sélection",
+   "existe": "variantes WebP lues ; AVIF absent",
+   "fichiers": [
+    "apps/web/src/components/media-grid.tsx",
+    "apps/web/src/lib/api/media-url.ts"
+   ],
+   "depend": [
+    "S7",
+    "S6",
+    "W10"
+   ]
+  },
+  {
+   "cle": "W13",
+   "chaine": "web",
+   "ms": "MD",
+   "taille": "petit",
+   "labels": [
+    "web",
+    "appels"
+   ],
+   "titre": "Le web négocie comme iOS : max-bundle, rtcp-mux, pool ICE, H264 d'abord, et « masquer mon IP »",
+   "critere": "peer-link.ts : bundlePolicy max-bundle, rtcpMuxPolicy require, iceCandidatePoolSize 4, setCodecPreferences VIDÉO H264 > VP8 > VP9 (l'audio Opus/RED de preferOpusRed :79-90 reste intact, ADR-4), degradationPreference, iceTransportPolicy relay sur la préférence « masquer mon IP » ; témoins",
+   "existe": "peer-link.ts:104 RTCPeerConnection({ iceServers }) seul ; préférences audio déjà posées :79-90, aucune préférence vidéo",
+   "fichiers": [
+    "apps/web/src/lib/calls/peer-link.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "W14",
+   "chaine": "web",
+   "ms": "ME",
+   "taille": "lourd",
+   "labels": [
+    "web",
+    "composer"
+   ],
+   "titre": "Le web rend LUT, cadre, sticker, texte et particules d'une lens, ancrés à la boîte du visage",
+   "critere": "le worker video-effects-frames.ts lit le contrat S15 ; canvas 2D + WebGL2 (LUT texture 3D, flou) ; goldens ; ≤ 12 ms à 720p estimé",
+   "existe": "video-effects-frames.ts, media-filter.ts",
+   "fichiers": [
+    "apps/web/src/lib/calls/video-effects-frames.ts",
+    "apps/web/src/lib/meeshy-lens/"
+   ],
+   "depend": [
+    "S15",
+    "W13"
+   ]
+  },
+  {
+   "cle": "W15",
+   "chaine": "web",
+   "ms": "ME",
+   "taille": "developper",
+   "labels": [
+    "web"
+   ],
+   "titre": "Le web lit 478 points de visage, chargé à la première lens de visage seulement",
+   "critere": "MediaPipe Face Landmarker en chunk lazy (servi par Meeshy comme le segmenter), tier A seulement ; témoins ; +Mo et ms/image documentés",
+   "existe": "FaceDetector boîte seule",
+   "fichiers": [
+    "apps/web/src/lib/calls/face-tracker.ts"
+   ],
+   "depend": [
+    "W14"
+   ]
+  },
+  {
+   "cle": "W16",
+   "chaine": "web",
+   "ms": "ME",
+   "taille": "lourd",
+   "labels": [
+    "web",
+    "modération"
+   ],
+   "titre": "Un partenaire propose une lens depuis le web, avec un aperçu caméra, et la modération la publie avec créneau, lieu et crédit",
+   "critere": "éditeur étendu de sticker-pack-submit.tsx (manifeste composé sans code, assets, aperçu live par le worker) ; POST /packs/lens/submissions ; page admin pending/review avec window/geo/communities ; témoins",
+   "existe": "sticker-pack-submit.tsx, lib/sticker-packs/draft.ts",
+   "fichiers": [
+    "apps/web/src/components/sticker-pack-submit.tsx",
+    "apps/web/src/components/lens-submit.tsx",
+    "apps/web/src/components/admin/"
+   ],
+   "depend": [
+    "S16",
+    "W14",
+    "W17"
+   ]
+  },
+  {
+   "cle": "W17",
+   "chaine": "web",
+   "ms": "MF",
+   "taille": "developper",
+   "labels": [
+    "web",
+    "modération"
+   ],
+   "titre": "L'administration web publie, retire, date, cible et modère les packs sans déploiement",
+   "critere": "page admin-packs (liste, édition availability/targeting/hidden/order/price, modération pending) sur les routes S20 ; piste d'audit visible ; témoins",
+   "existe": "aucune page admin packs",
+   "fichiers": [
+    "apps/web/src/components/admin/"
+   ],
+   "depend": [
+    "S20"
+   ]
+  },
+  {
+   "cle": "W18",
+   "chaine": "web",
+   "ms": "MF",
+   "taille": "petit",
+   "labels": [
+    "web"
+   ],
+   "titre": "La boutique web montre ce qui reste à débloquer et comment",
+   "critere": "unified-shop.tsx lit requirementPreview (S21) ; témoins",
+   "existe": "unified-shop.tsx:140",
+   "fichiers": [
+    "apps/web/src/components/unified-shop.tsx"
+   ],
+   "depend": [
+    "S21"
+   ]
+  },
+  {
+   "cle": "W19",
+   "chaine": "web",
+   "ms": "MG",
+   "taille": "petit",
+   "labels": [
+    "web",
+    "android"
+   ],
+   "titre": "La coque Android déclare la version minimale de WebView qu'elle exige et le dit à l'utilisateur en dessous",
+   "critere": "MainActivity.java est GÉNÉRÉ par Capacitor (CLAUDE.md : 0 Kotlin, Java généré) : la version minimale de WebView passe par capacitor.config.ts et un contrôle au démarrage côté web (navigator.userAgent Chrome/<n>) qui affiche l'écran « mettre à jour Android System WebView » ; garde check-capacitor-config.mjs ; témoin",
+   "existe": "aucune version déclarée",
+   "fichiers": [
+    "apps/web/capacitor.config.ts",
+    "apps/web/src/lib/shell/webview-floor.ts"
+   ],
+   "depend": []
+  },
+  {
+   "cle": "W20",
+   "chaine": "web",
+   "ms": "MG",
+   "taille": "developper",
+   "labels": [
+    "web",
+    "android"
+   ],
+   "decision": "DEC-WEB",
+   "defaut": "3 jours, Wi-Fi seulement, 500 Mo",
+   "titre": "Un média vu récemment reste lisible hors ligne sur le web et la coque, avec les plages servies depuis le cache",
+   "critere": "vite.config.ts:925-945 REFUSE RangeRequestsPlugin sur le seau médias et n'autorise qu'un seau DÉDIÉ : le lot extrait d'abord la config SW/PWA (vite.config.ts fait 1165 lignes) vers apps/web/vite/pwa.ts, puis crée un seau dédié « récents » avec RangeRequestsPlugin, borné (budget, Wi-Fi), EXCLUANT no-store/no-cache (#9478), vue unique, floutés, éphémères et la route signée par lecteur (#9600) ; SW aussi dans la coque pour ce seul seau ; témoins",
+   "existe": "SW images seulement ; coque sans SW",
+   "fichiers": [
+    "apps/web/vite.config.ts",
+    "apps/web/vite/pwa.ts"
+   ],
+   "depend": [
+    "W10"
+   ]
+  },
+  {
+   "cle": "S26",
+   "chaine": "serveur",
+   "ms": "ME",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "shared",
+    "conformité"
+   ],
+   "decision": "DEC-LENS",
+   "titre": "Un partenaire a une identité vérifiée, son crédit voyage avec le média, et l'usage d'une lens se compte sans identifier personne",
+   "critere": "ATTEND DEC-LENS (qui vérifie l'identité — KYB —, crédit visible, filigrane, rémunération). Puis : `PartnerProfile` (optionnel) lié au submitterId ; crédit « Lens par X » servi ; `LensUsage` agrégé lens×jour×surface avec k-anonymat (aucune ligne sous 20 appareils, une lens à fenêtre géographique étroite ré-identifie une petite cohorte) ; export/purge RGPD ; témoins fail-closed",
+   "existe": "aucun rôle PARTNER ; aucun comptage",
+   "fichiers": [
+    "packages/shared/prisma/schema.prisma",
+    "services/gateway/src/routes/packs-lens.ts"
+   ],
+   "depend": [
+    "S16"
+   ]
+  },
+  {
+   "cle": "IC29",
+   "chaine": "ios-creation",
+   "ms": "MB",
+   "taille": "petit",
+   "labels": [
+    "ios"
+   ],
+   "titre": "L'écran verrouillé continue d'attacher une image quand le serveur fabrique des rendus AVIF, HEIC ou H.264 de compatibilité",
+   "critere": "NSEAttachmentPolicy.swift:70-83 : n'attache que ce que la NSE sait décoder (WebP/JPEG/PNG, H.264), ignore avifVariants/renditions inconnus ; témoins sur la politique ; aligné sur push-media-fields.ts (S6/S7/S8 gardent l'URL d'origine dans la charge push)",
+   "existe": "NSEAttachmentPolicy accepte image/* sans distinguer",
+   "fichiers": [
+    "apps/ios/MeeshyNotificationExtension/NSEAttachmentPolicy.swift"
+   ],
+   "depend": [
+    "S7"
+   ]
+  },
+  {
+   "cle": "S27",
+   "chaine": "serveur",
+   "ms": "MC",
+   "taille": "developper",
+   "labels": [
+    "gateway",
+    "shared",
+    "translator"
+   ],
+   "titre": "Un média porte une description textuelle, et la transcription d'une vidéo ou d'un vocal se sert en sous-titres traduits",
+   "critere": "`altText` (optionnel, 7 langues par le Prisme) sur MessageAttachment et PostMedia, saisi à l'envoi et généré par défaut depuis la transcription Whisper quand elle existe ; la transcription traduite (déjà produite par le pipeline audio) est servie en WebVTT par langue (`GET /attachments/:id/subtitles/:lang`) ; témoins ; rétrocompat : champs optionnels",
+   "existe": "aucun altText dans schema.prisma (grep nul) ; transcription produite mais jamais servie en sous-titres",
+   "fichiers": [
+    "packages/shared/prisma/schema.prisma",
+    "services/gateway/src/routes/attachments/",
+    "packages/shared/types/attachment.ts"
+   ],
+   "depend": [
+    "S9"
+   ]
+  },
+  {
+   "cle": "IL21",
+   "chaine": "ios-lecture",
+   "ms": "M164",
+   "taille": "developper",
+   "labels": [
+    "ios",
+    "sdk",
+    "prisme"
+   ],
+   "titre": "Une vidéo ou un vocal se lit avec ses sous-titres dans la langue du lecteur, et VoiceOver décrit chaque média",
+   "critere": "SharedAVPlayerManager monte la piste WebVTT de la langue élue par ReaderPrism (AVMediaCharacteristicLegible, ou couche de sous-titres maison si le WebVTT distant n'est pas accepté par AVPlayer en MP4 progressif) ; `altText` servi devient l'accessibilityLabel des images et vidéos ; témoins ; argumenté, non mesuré",
+   "existe": "AVMediaCharacteristicLegible absent hors SharedAVPlayerManager ; aucun accessibilityLabel de média servi",
+   "fichiers": [
+    "packages/MeeshySDK/Sources/MeeshyUI/Media/SharedAVPlayerManager+Subtitles.swift",
+    "packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyVideoPlayer+Controls.swift"
+   ],
+   "depend": [
+    "S27",
+    "IL4"
+   ]
+  },
+  {
+   "cle": "W21",
+   "chaine": "web",
+   "ms": "MG",
+   "taille": "petit",
+   "labels": [
+    "web",
+    "prisme"
+   ],
+   "titre": "Le web affiche les sous-titres d'une vidéo ou d'un vocal dans la langue du lecteur, et chaque média porte sa description",
+   "critere": "<track kind=subtitles srclang> depuis la route S27 pour la langue élue par le Prisme ; alt des images depuis altText ; témoins",
+   "existe": "aucun <track>, alt générique",
+   "fichiers": [
+    "apps/web/src/components/video-tile.tsx",
+    "apps/web/src/components/attachment-blocks.tsx"
+   ],
+   "depend": [
+    "S27"
+   ]
+  }
+ ],
+ "decisions_detail": [
+  {
+   "cle": "DEC-COMPRESSION",
+   "titre": "Décision : ce que « sans perte » veut dire pour une photo, une vidéo et une voix envoyées depuis Meeshy",
+   "points": [
+    "Photo : visuellement sans perte (HEIC/AVIF/WebP q ≥ 0,85, UNE génération) ; le sans perte strict (PNG/WebP lossless) est réservé aux captures d'écran, stickers et images générées. Un vrai sans perte d'une photo 12 Mpx pèse 20–40 Mo. Défaut retenu : oui.",
+    "GPS/EXIF : #9746 (ouverte) exige EXIF/GPS retirés des images ET des vidéos, sans repli sur l'original. Défaut retenu : retrait au client par défaut (iOS garde aujourd'hui le GPS dans la conversation : PhotoCaptureProcessor.swift:140-144, ComposerPhotoEncoding.swift), réglage explicite « conserver le lieu », filet serveur conservé (S3, vidéos comprises).",
+    "HDR : conserver HLG 10 bits iOS↔iOS et fabriquer le SDR côté serveur pour le web, ou aplatir partout ? Défaut retenu : conserver.",
+    "Vidéo : HEVC conservé pour iOS + rendu H.264 1080p CRF 23 serveur pour le web/coque (original jamais touché) ; HLS/CMAF pas avant 10 000 utilisateurs ou des vidéos > 2 min mesurées ; AV1 non (remplace #9888). Défaut retenu : oui.",
+    "Voix iOS : rester AAC 64 kb/s, ou activer Opus 24 kb/s dès que le remux serveur (S4) existe (−70 %) ? Défaut retenu : AAC jusqu'à S4, puis Opus derrière un flag.",
+    "La préférence `compressImagesOnUpload` ment (lue nulle part) : la câbler ou la retirer ? Défaut retenu : la câbler (IC2).",
+    "Découpe seule d'une vidéo (#9889) : passthrough sur image clé (imprécis ≤ 1 s, gratuit) ou précise (ré-encodage) ? Défaut retenu : passthrough, l'interface dit la précision."
+   ]
+  },
+  {
+   "cle": "DEC-LECTURE",
+   "titre": "Décision : qualité par tier d'appareil, hors-ligne, télémétrie de lecture, et clôture des lots corrigés sans mesure",
+   "points": [
+    "Tiers d'appareil (IL2) : accepter une qualité visible plus basse sur un iPhone bas de gamme (720p, fenêtre N±2) ? Défaut : oui.",
+    "Hors-ligne (IL20, W20) : combien de jours, quel budget, Wi-Fi seul ? Défaut : 3 jours, Wi-Fi seul, 1 Go iOS / 500 Mo web.",
+    "QoE de lecture (IL12, S25) : anonyme toujours remontée, ou sous `telemetryEnabled` ? Défaut : sous `telemetryEnabled`.",
+    "Huit lots de #164 sont corrigés sur dev sans mesure (#9863, #9866, #9867, #9868, #9871, #9875, #10348 ; #9872/#9882 partiels) : les fermer maintenant, ou les garder ouverts jusqu'à la session Instruments sur ton Mac ? Défaut : garder ouverts, étiquette « à mesurer ».",
+    "« Argumenté, non mesuré » vaut pour TOUS les lots iOS de ce chantier (pas seulement les 8 déjà corrigés) : la session Instruments sur ton Mac reste la seule preuve de fluidité ; chaque issue garde son scénario."
+   ]
+  },
+  {
+   "cle": "DEC-SERVEUR",
+   "titre": "Décision : exposition publique des médias, MinIO, transcodage serveur, CDN, file de traitement",
+   "points": [
+    "SÉCURITÉ (S1) : `gateway_uploads` est monté dans nginx `static-files` et servi publiquement sur static.<domaine>/uploads (compose prod:490-491) — tout média de message dont on connaît la clé est joignable sans auth, vue unique comprise. Retrait proposé : staging tout de suite, production dès que l'accesslog Traefik confirme 0 lecture sur 7 jours. Ton feu vert pour la production.",
+    "MinIO (S12) : en staging maintenant ; la migration de production (données) attend ton feu vert avec sauvegarde vérifiée (#9232).",
+    "Transcodage serveur (S6) : `VIDEO_TRANSCODE` ON en staging pour fabriquer des rendus H.264 de compatibilité ; prod après mesure CPU (S2). Défaut : oui.",
+    "CDN payant : non avant 10 000 utilisateurs (médias privés par participant). Défaut : non.",
+    "File de traitement (S9) : BullMQ + un conteneur worker de plus sur le serveur partagé. Défaut : oui.",
+    "Plafonds d'envoi par rôle (S11) : proposition image 50 Mo, audio 200 Mo, vidéo 1 Go, document 100 Mo, anonymes ÷10 — aujourd'hui 4 Go pour tout. ATTEND ton verdict (visible, non réversible pour un fichier refusé).",
+    "Purge des octets d'un média à vue unique après lecture par tous (S14) : ATTEND ton feu vert (#9223 : toute purge de production).",
+    "E2EE : le chemin « chiffré » actuel (uploadEncryptedFile) reçoit le clair et chiffre côté serveur ; ce n'est pas du E2EE au sens de #9224. Les lots serveur le disent ; une revue cryptographique externe reste requise avant de présenter Meeshy comme une messagerie chiffrée."
+   ]
+  },
+  {
+   "cle": "DEC-APPELS",
+   "titre": "Décision : SFU, chiffrement de bout en bout des appels, AV1",
+   "points": [
+    "SFU : non maintenant ; LiveKit auto-hébergé dès que l'usage de groupe est mesuré ou que > 4 participants devient nominal. Le maillage à 6 reste tenable avec IC13. Défaut : non.",
+    "E2EE des appels : aucune trame n'est chiffrée de bout en bout, et une conversation E2EE (#9224) peut lancer un appel non chiffré sans le dire. ATTEND ton verdict (affirmation de sécurité visible et juridique) : bannière « appel non chiffré de bout en bout », fail-closed, ou rien tant que SFrame (web RTCRtpScriptTransform ; iOS : libwebrtc avec FrameEncryptor) n'est pas livré par un lot crypto-e2ee. Aucun lot automatique ne touche ce point.",
+    "AV1 : non (encodage logiciel sur iPhone, Safari partiel). Défaut : non."
+   ]
+  },
+  {
+   "cle": "DEC-LENS",
+   "titre": "Décision : filtres de partenaires — ARKit, shaders, revue, rémunération, identité, crédit, géo, filigrane",
+   "points": [
+    "ARKit/TrueDepth requis ? Défaut : non — Vision 76 points suffit, ARKit prend la caméra et exclurait l'appel et le composer.",
+    "Shaders ou scripts fournis par un partenaire ? Défaut : non en v1 (sécurité, App Store 2.5.2, GPU) ; LUT .cube + graphe fermé.",
+    "Revue manuelle avant publication ? Défaut : oui, sur le circuit de modération existant, plus validation automatique (taille, coût mesuré, contenu) ; créneau expiré ⇒ retrait automatique.",
+    "Rémunération : lens gratuite pour l'utilisateur ; le partenaire ne paie ni ne gagne en v1 (lié à #9227). ATTEND ton verdict (relation commerciale).",
+    "Identité partenaire : `PartnerProfile` vérifié (qui vérifie ?) — défaut : BIGBOSS/ADMIN.",
+    "Crédit « Lens par X » sur le média reçu ; en conversation E2EE, `lensId` reste-t-il en clair (métadonnée) ? ATTEND ton verdict (étiquetage DSA du crédit).",
+    "Géo-créneau : résolu sur l'appareil, précision grossière, opt-in — à valider avec l'agent conformité. ATTEND ton verdict (conformité).",
+    "Filigrane (#9756) : une lens partenaire porte-t-elle le filigrane Meeshy, le logo du partenaire, les deux ? ATTEND ton verdict (marque, contrat).",
+    "Le moteur de lens (S15, IC20–IC27, W14, W15) et la soumission/modération (S16) ne dépendent pas de ces points et partent ; seul S26 (identité, crédit, usage) attend."
+   ]
+  },
+  {
+   "cle": "DEC-UPSELL",
+   "titre": "Décision : cadres, contours, bannières et fonds — gagnés, offerts, ou un jour payants",
+   "points": [
+    "« Gagné, jamais acheté » reste-t-il la règle des cosmétiques, même après #9227 ? Défaut : oui (voie A seule ; la voie B — StoreKit 2/Play Billing/Stripe — attend #9227 et ta décision ; #3711–#3715 restent ouvertes).",
+    "Parure de rang (#11181) : porter n'importe quel rang déjà atteint, ou le rang courant seul ? après un Prestige ? ATTEND ton verdict (game design) — S18 ne fait que lever la garde.",
+    "Objets limités dans le temps ou par saison : un objet manqué revient-il ? (DSA art. 25, FOMO). Défaut : il revient.",
+    "Reversement aux vendeurs tiers : non (spec § 12). Défaut : non.",
+    "Mineurs : dépenser des Meeshes, acheter, recevoir un don ? ATTEND ton verdict (juridique).",
+    "Ciblage par communauté/pays/langue et publication admin sans déploiement : oui (S19, S20). Rétroactivité des parures : ATTEND ton verdict (visible pour tous)."
+   ]
+  },
+  {
+   "cle": "DEC-WEB",
+   "titre": "Décision : web et coque Android — réel sous la feuille, N±2 sur Android, export hors écran, envoi en arrière-plan",
+   "points": [
+    "Sous la feuille de commentaires, le réel joue flouté (coût GPU) ou se met en pause sous un poster flouté ? Défaut : pause (parité iOS).",
+    "Sur un Android à 2 décodeurs, N±2 reste-t-il monté ? Défaut : préparé en octets, monté sans décodage.",
+    "Export de scène : temps réel visible (aujourd'hui) ou hors écran par WebCodecs (Chrome/WebView seulement, Safari plus lent) ? Défaut : différé, à mesurer.",
+    "Envoi en arrière-plan : Background Fetch sur Chrome/WebView sans équivalent Safari ? Défaut : oui où il existe."
+   ]
+  },
+  {
+   "cle": "DEC-MODERATION",
+   "titre": "Décision : modération des photos, vidéos et sons envoyés",
+   "points": [
+    "Personne ne modère les médias envoyés (grep nsfw|moderateImage nul dans gateway/translator), alors que S8 et S11 élargissent l'ingestion. Proposition : un signal de modération d'image (modèle ouvert NSFW/violence) calculé dans la file S9, journalisé, sans blocage automatique en v1 ; signalement utilisateur existant relié. ATTEND ton verdict (politique de contenu, DSA)."
+   ]
+  },
+  {
+   "cle": "DEC-SONS",
+   "titre": "Décision : droits et attribution des sons de la bibliothèque",
+   "points": [
+    "`Sound` (schema.prisma:4052) n'a ni licence ni attribution ; `SoundUsage` lie post↔son. Proposition : champ `license` + `attribution` obligatoires à l'import, crédit affiché, retrait sur réclamation (DMCA/DSA). ATTEND ton verdict (juridique) ; aucun lot automatique."
+   ]
+  }
+ ]
+}
