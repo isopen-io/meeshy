@@ -49,6 +49,8 @@ export const REORDER_SCROLL_SETTLE_MS = 160;
 const REORDER_OVERSCAN_PX = 240;
 const EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 const MIN_SHIFT_PX = 0.5;
+/** Au-delà, c'est un filtre qui remplace la liste, pas des conversations qui arrivent. */
+const MAX_ENTERING = 3;
 
 export type RowBox = { readonly top: number; readonly bottom: number };
 export type FlipStep = { readonly id: string; readonly dy: number };
@@ -124,6 +126,13 @@ const fadeIn = (node: HTMLElement): void => {
   node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: REORDER_FLIP_DURATION_MS, easing: EASING });
 };
 
+export const ENTERING_CLASS = 'lens-row-entering';
+
+const markEntering = (node: HTMLElement): void => {
+  node.classList.add(ENTERING_CLASS);
+  node.addEventListener('animationend', () => node.classList.remove(ENTERING_CLASS), { once: true });
+};
+
 const boxOf = (node: HTMLElement): RowBox => {
   const { top, bottom } = node.getBoundingClientRect();
   return { top, bottom };
@@ -187,7 +196,12 @@ export function useListReorderFlip(frame: RefObject<HTMLElement | null>, order: 
     const nextOrder = signature === '' ? [] : signature.split('\n');
     committedOrder.current = nextOrder;
     const element = frame.current;
-    if (element === null || before.size === 0 || !mayGlide(lastScrollAt.current)) return;
+    if (element === null || !mayGlide(lastScrollAt.current)) return;
+    const known = new Set(previousOrder);
+    const fresh = nextOrder.filter((id) => !known.has(id));
+    const arrivals = previousOrder.length === 0 || fresh.length > MAX_ENTERING ? [] : fresh;
+    mountedRows(element, new Set(arrivals)).forEach(markEntering);
+    if (before.size === 0) return;
     const box = element.getBoundingClientRect();
     const viewport = { top: box.top, bottom: box.bottom };
     const climbers = reorderClimbers(previousOrder, nextOrder);

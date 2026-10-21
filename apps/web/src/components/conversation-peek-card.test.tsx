@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient } from '@tanstack/react-query';
@@ -8,6 +9,7 @@ import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes
 import { accentOf } from '@/lib/accent';
 import { messagesQueryKey } from '@/lib/api/messages';
 import type { Conversation, Message } from '@/lib/api/types';
+import { createHttpTransport } from '@/lib/api/http';
 import { loadRowMenuCatalog } from '@/lib/i18n-row-menu-catalog';
 import { resolveThreadMode, toStickyPreference } from '@/lib/reading-mode/decision';
 import { createReadingModeStore } from '@/lib/reading-mode/store';
@@ -99,14 +101,23 @@ function mount(options: {
   readonly conversation?: Conversation;
   readonly messages?: readonly Message[] | null;
   readonly sticky?: ConversationReadingMode;
+  readonly updatedAt?: number;
+  readonly served?: readonly Message[];
 }) {
+  const requests: string[] = [];
+  const fetchImpl = (async (input: RequestInfo | URL) => {
+    requests.push(String(input));
+    const rows = [...(options.served ?? [])].reverse();
+    return new Response(JSON.stringify({ success: true, data: rows, cursorPagination: { limit: 50, hasMore: false, nextCursor: null } }), { status: 200 });
+  }) as typeof fetch;
+  const deps = { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl }) } as const;
   const conversation = options.conversation ?? conversationOf();
   const client = new QueryClient();
   if (options.messages !== null && options.messages !== undefined) {
     client.setQueryData(messagesQueryKey(conversation.id), {
       pages: [{ messages: options.messages, hasOlder: false, nextCursor: null }],
       pageParams: [undefined],
-    });
+    }, options.updatedAt === undefined ? undefined : { updatedAt: options.updatedAt });
   }
   const store = createReadingModeStore(null);
   if (options.sticky !== undefined) store.setPreference(readingModeScopeOf({ id: VIEWER }), conversation.id, options.sticky);
@@ -125,13 +136,14 @@ function mount(options: {
         maxHeight={300}
         onOpen={() => opened.push(conversation.id)}
         client={client}
+        deps={deps}
         store={store}
         readingModesEnabled
         now={() => Date.parse('2026-09-24T10:00:00.000Z')}
       />,
     );
   });
-  return { client, opened };
+  return { client, opened, requests };
 }
 
 const card = (): HTMLElement => {
@@ -201,14 +213,39 @@ describe('ConversationPeekCard — le mode et l’accent de la conversation', ()
 });
 
 describe('ConversationPeekCard — le cache d’abord', () => {
-  test('cache vide ⇒ un squelette, et aucune requête', () => {
-    const { client } = mount({ messages: null });
+  test('cache vide ⇒ un squelette le temps de la requête', () => {
+    mount({ messages: null });
     expect(card().querySelector('[data-peek-skeleton]')).not.toBeNull();
-    expect(client.getQueryCache().getAll().length).toBe(0);
   });
 
-  test('cache non vide ⇒ aucun squelette, aucune requête émise', () => {
-    const { client } = mount({ messages: THREE });
+  test('peek: cache vide, déclenche un fetch des messages et remplace le squelette par les rangées', async () => {
+    const { requests } = mount({ messages: null, served: THREE, sticky: 'bubbles' });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(requests).toEqual(['/api/v1/conversations/c-lyon/messages?limit=50']);
+    expect(card().querySelector('[data-peek-skeleton]')).toBeNull();
+    expect([...card().querySelectorAll<HTMLElement>('[data-message]')].map((node) => node.dataset.message)).toEqual(['m-1', 'm-2', 'm-3']);
+  });
+
+  test('peek: cache périmé, rend les rangées immédiatement puis revalide sans spinner', async () => {
+    const { requests } = mount({ messages: [messageOf(1)], served: THREE, updatedAt: Date.now() - 10 * 60_000, sticky: 'bubbles' });
+    expect(card().querySelector('[data-peek-skeleton]')).toBeNull();
+    expect([...card().querySelectorAll<HTMLElement>('[data-message]')].map((node) => node.dataset.message)).toEqual(['m-1']);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(requests.length).toBe(1);
+    expect(card().querySelector('[data-peek-skeleton]')).toBeNull();
+    expect([...card().querySelectorAll<HTMLElement>('[data-message]')].map((node) => node.dataset.message)).toEqual(['m-1', 'm-2', 'm-3']);
+  });
+
+  test('cache frais ⇒ aucun squelette, aucune requête émise', async () => {
+    const { client, requests } = mount({ messages: THREE });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(requests).toEqual([]);
     expect(card().querySelector('[data-peek-skeleton]')).toBeNull();
     expect(client.getQueryCache().getAll().map((query) => query.state.fetchStatus)).toEqual(['idle']);
   });
@@ -233,5 +270,33 @@ describe('ConversationPeekCard — le cache d’abord', () => {
     const { opened } = mount({ messages: THREE });
     act(() => card().querySelector<HTMLButtonElement>('[data-peek-open]')?.click());
     expect(opened).toEqual(['c-lyon']);
+  });
+});
+
+describe('conversation-peek.css — le fondu du haut', () => {
+  const CSS = readFileSync(new URL('../styles/conversation-peek.css', import.meta.url), 'utf8');
+
+  test('le fondu ne vaut que si le contenu déborde, et reste court (≤ 12px)', () => {
+    expect(CSS).toContain('[data-peek-overflowing]');
+    const fade = /\[data-peek-overflowing\][^{]*\{[^}]*black (\d+)px/.exec(CSS);
+    expect(Number(fade?.[1])).toBeLessThanOrEqual(12);
+    expect(CSS).not.toContain('black 28px');
+  });
+
+  test('la carte marque son corps débordant quand le contenu dépasse la hauteur offerte', async () => {
+    const proto = HTMLElement.prototype;
+    const scroll = Object.getOwnPropertyDescriptor(proto, 'scrollHeight');
+    const client = Object.getOwnPropertyDescriptor(proto, 'clientHeight');
+    Object.defineProperty(proto, 'scrollHeight', { configurable: true, get: () => 400 });
+    Object.defineProperty(proto, 'clientHeight', { configurable: true, get: () => 200 });
+    try {
+      mount({ messages: THREE });
+      expect(container.querySelector('[data-peek-overflowing]')).not.toBeNull();
+    } finally {
+      if (scroll) Object.defineProperty(proto, 'scrollHeight', scroll);
+      else Reflect.deleteProperty(proto, 'scrollHeight');
+      if (client) Object.defineProperty(proto, 'clientHeight', client);
+      else Reflect.deleteProperty(proto, 'clientHeight');
+    }
   });
 });
