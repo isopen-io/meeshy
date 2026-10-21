@@ -5,7 +5,6 @@ final class ExtensionIsolationGuardTests: XCTestCase {
     private let ios = ProjectManifest.iosDirectory()
     private let nonisolatedTargets = ["MeeshyNotificationExtension", "MeeshyBroadcastExtension", "MeeshyWidgets"]
     private let mainActorConsumers = ["Meeshy", "MeeshyShareExtension", "MeeshyNotificationContentExtension"]
-    private let ownedByAnotherLot: Set<String> = ["MeeshyNotificationExtension/NSEMessagePrePersister.swift"]
     private let declarationKeywords: Set<String> = ["struct", "enum", "class", "actor", "extension", "protocol"]
     private let declarationModifiers: Set<String> = ["public", "internal", "private", "fileprivate", "final", "nonisolated", "open"]
 
@@ -60,7 +59,7 @@ final class ExtensionIsolationGuardTests: XCTestCase {
         let manifest = try manifest()
         for directory in nonisolatedTargets {
             let shared = manifest.swiftPaths(inDirectory: directory, listedBy: mainActorConsumers)
-            let exclusive = try swiftFiles(in: directory).filter { !shared.contains($0) && !ownedByAnotherLot.contains($0) }
+            let exclusive = try swiftFiles(in: directory).filter { !shared.contains($0) }
             for path in exclusive {
                 for line in redundantNonisolatedLines(in: try source(path)) {
                     XCTFail("\(path) : « \(line) » — la cible est nonisolated par défaut, l'annotation est redondante")
