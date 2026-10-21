@@ -5,7 +5,7 @@ import MeeshyUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var authManager: AuthManager
     @ObservedObject private var prefs = UserPreferencesManager.shared

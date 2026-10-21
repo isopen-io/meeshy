@@ -78,7 +78,7 @@ struct SeeNearbyContextMenu: ViewModifier {
 /// le squelette n'apparaît qu'au démarrage à froid — quand il n'y a réellement
 /// rien.
 struct NearbyDiscoveryView: View {
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @StateObject private var viewModel: NearbyDiscoveryViewModel
     @State private var selectedPostId: String?
     /// #10483 — un post listé ou épinglé ici est un affichage de la surface
