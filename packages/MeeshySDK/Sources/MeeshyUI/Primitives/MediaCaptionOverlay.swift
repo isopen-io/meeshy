@@ -441,7 +441,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
         Button(action: onToggle) {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
-                .foregroundColor(MeeshyColors.indigo300)
+                .foregroundStyle(MeeshyColors.indigo300)
                 .legibleOverCanvas()
         }
         .buttonStyle(.plain)
@@ -570,7 +570,7 @@ public struct MediaCaptionPlainText: View {
     public var body: some View {
         Text(text)
             .font(MeeshyFont.relative(size, weight: .medium))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
     }
 }
 

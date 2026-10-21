@@ -113,7 +113,7 @@ struct StoryCanvasMediaMuteOverlays: View {
         } label: {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: 30, height: 30)
                 .background(.ultraThinMaterial, in: Circle())
                 .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
@@ -173,7 +173,7 @@ struct StoryCanvasMediaMuteOverlays: View {
         } label: {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: 30, height: 30)
                 .background(.ultraThinMaterial, in: Circle())
                 .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))

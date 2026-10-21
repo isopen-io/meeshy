@@ -910,12 +910,12 @@ extension StoryComposerView {
                             // ferait déborder du cercle sans bénéfice de lecture).
                             Text("\(Int(mediaLoadProgress * 100))%")
                                 .font(.system(size: 13, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
+                                .foregroundStyle(Color.white)
                         }
                         if !mediaLoadLabel.isEmpty {
                             Text(mediaLoadLabel)
                                 .font(MeeshyFont.relative(12, weight: .medium))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundStyle(Color.white.opacity(0.8))
                         }
                     }
                 }
@@ -934,7 +934,7 @@ extension StoryComposerView {
             } label: {
                 Image(systemName: "arrow.uturn.backward")
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(.black.opacity(0.5)))
                     // Pastille de 30 pt, seule dans son coin : le débord de
