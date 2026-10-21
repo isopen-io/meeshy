@@ -65,6 +65,13 @@ class PatternRules(unittest.TestCase):
         ("anyview", "AnyView(Text(\"a\"))\nreturn AnyView(b)\n", "myAnyView(x)\nAnyViewish\n"),
         ("idiom", "UIDevice.current.userInterfaceIdiom\nuserInterfaceIdiom == .pad\n", "userInterfaceIdiomX\n"),
         ("plural-s", 'n > 1 ? "s" : ""\nn>1 ?"s":""\n', 'n > 1 ? "x" : ""\nn > 1 ? "s" : "t"\n'),
+        ("foreground-color", ".foregroundColor(.white)\nText(a).foregroundColor(MeeshyColors.x)\n", "text.foregroundColor = base\n[.foregroundColor: UIColor.white]\n.foregroundStyle(Color.white)\n"),
+        ("corner-radius-modifier", "Box()\n    .cornerRadius(8)\nRectangle().cornerRadius(1)\n", "ComposerTriggerOutline.cornerRadius(inner: 8)\nRoundedRectangle(cornerRadius: 8)\n.glassCard(cornerRadius: 12)\n"),
+        ("status-bar-hidden", ".statusBar(hidden: true)\n.statusBar(hidden: flag)\n", ".statusBarHidden(true)\n"),
+        ("autocapitalization", ".autocapitalization(.none)\n.autocapitalization(.words)\n", ".textInputAutocapitalization(.never)\n"),
+        ("disable-autocorrection", ".disableAutocorrection(true)\n.disableAutocorrection(false)\n", ".autocorrectionDisabled(true)\n"),
+        ("onchange-single", ".onChange(of: x) { v in\n.onChange(of: x) { _ in f() }\n", ".onChange(of: x) { _, v in\n.onChange(of: x, initial: true) { old, new in\n.adaptiveOnChange(of: x) { _, v in\n"),
+        ("onchange-single", ".onChange(of: order) { memory.order = $0 }\n.onChange(of: x, perform: f)\n", ".onChange(of: x) { _, v in\n"),
     )
 
     def test_each_rule_counts_its_occurrences_and_ignores_lookalikes(self):
@@ -133,6 +140,12 @@ class Exclusions(unittest.TestCase):
         reporter = "apps/ios/Meeshy/Features/Main/Services/SocialEventsV2Reporter.swift"
         self.assertEqual(count("logger-subsystem", 'Logger(subsystem: "a", category: "b")\n', logger), 0)
         self.assertEqual(count("idiom", "UIDevice.current.userInterfaceIdiom\n", reporter), 0)
+
+    def test_onchange_backport_keeps_the_deprecated_form(self):
+        backport = "packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveOnChange.swift"
+        src = ".onChange(of: value) { newValue in\n"
+        self.assertEqual(count("onchange-single", src, backport), 0)
+        self.assertEqual(count("onchange-single", src), 1)
 
     def test_same_code_elsewhere_counts(self):
         self.assertEqual(count("logger-subsystem", 'Logger(subsystem: "a", category: "b")\n'), 1)
