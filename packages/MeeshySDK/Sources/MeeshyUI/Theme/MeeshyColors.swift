@@ -394,18 +394,6 @@ public nonisolated struct MeeshyColors {
             )
     }
 
-    public static func secondaryGradient(isDark: Bool) -> LinearGradient {
-        isDark ?
-            LinearGradient(
-                colors: [indigo500.opacity(0.2), Color(hex: "13111C")],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            ) :
-            LinearGradient(
-                colors: [indigo100.opacity(0.5), Color(hex: "F8F7FF")],
-                startPoint: .topLeading, endPoint: .bottomTrailing
-            )
-    }
-
     public static func glassBorderGradient(isDark: Bool) -> LinearGradient {
         isDark ?
             LinearGradient(

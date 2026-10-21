@@ -69,13 +69,6 @@ public final class UserDisplayNameCache: Sendable {
 
     // MARK: - Batch Ingestion
 
-    public func trackFromMessage(_ message: MeeshyMessage) {
-        guard let username = message.senderUsername,
-              let displayName = message.senderName,
-              displayName != username else { return }
-        track(username: username, displayName: displayName)
-    }
-
     public func trackFromMessages(_ messages: [MeeshyMessage]) {
         store(messages.compactMap { msg -> (String, String)? in
             guard let username = msg.senderUsername,
@@ -84,14 +77,6 @@ public final class UserDisplayNameCache: Sendable {
                   displayName != username else { return nil }
             return (username.lowercased(), displayName)
         })
-    }
-
-    public func trackFromAPIMessage(_ apiMessage: APIMessage) {
-        guard let sender = apiMessage.sender else { return }
-        let username = sender.username ?? sender.user?.username
-        let displayName = sender.name
-        guard let username, !username.isEmpty, displayName != username else { return }
-        track(username: username, displayName: displayName)
     }
 
     public func trackFromUser(_ user: MeeshyUser) {
@@ -106,21 +91,6 @@ public final class UserDisplayNameCache: Sendable {
     public func trackFromMentionSuggestion(_ suggestion: MentionSuggestion) {
         guard let displayName = suggestion.displayName else { return }
         track(username: suggestion.username, displayName: displayName)
-    }
-
-    public func trackFromMentionSuggestions(_ suggestions: [MentionSuggestion]) {
-        store(suggestions.compactMap { suggestion -> (String, String)? in
-            guard let displayName = suggestion.displayName,
-                  !suggestion.username.isEmpty, !displayName.isEmpty,
-                  displayName != suggestion.username else { return nil }
-            return (suggestion.username.lowercased(), displayName)
-        })
-    }
-
-    public func trackFromParticipant(_ participant: PaginatedParticipant) {
-        guard let displayName = participant.displayName,
-              let username = participant.username else { return }
-        track(username: username, displayName: displayName)
     }
 
     public func trackFromParticipants(_ participants: [PaginatedParticipant]) {
