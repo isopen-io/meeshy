@@ -1,14 +1,20 @@
 {
   "rules": {
     "anyview": 97,
+    "autocapitalization": 3,
     "available-floor": 3,
+    "corner-radius-modifier": 7,
+    "disable-autocorrection": 4,
     "fixed-font": 945,
+    "foreground-color": 3167,
     "idiom": 0,
     "logger-subsystem": 5,
     "nonisolated-unsafe": 152,
     "nslock": 48,
     "nslog": 0,
+    "onchange-single": 13,
     "plural-s": 0,
+    "status-bar-hidden": 3,
     "try-sleep": 220,
     "uiscreen-main": 1,
     "unchecked-sendable": 132
