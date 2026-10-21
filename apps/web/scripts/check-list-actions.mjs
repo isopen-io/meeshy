@@ -87,6 +87,7 @@ import { contrastOf } from './lib/contrast.mjs';
 import { checkLensRowMetaRest } from './lib/check-lens-row-meta.mjs';
 import { checkRowMenuMore } from './lib/check-row-menu-more.mjs';
 import { reportFailures } from './lib/ci-annotation.mjs';
+import { awaitCondition } from './lib/await-fact.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -1070,7 +1071,7 @@ await checkRowMenuMore({ browser, base: BASE, check });
   const kbd = await kbdContext.newPage();
   await kbd.goto(`${BASE}/chats`, { waitUntil: 'load' });
   await kbd.waitForSelector('[data-row-primary]');
-  await kbd.waitForTimeout(300);
+  await awaitCondition(kbd, () => [...document.querySelectorAll('[data-row]')].every((row) => row.querySelector('[data-row-primary]') !== null));
   const perRow = await kbd.$$eval('[data-row]', (rows) =>
     rows.map((row) => ({
       row: row.dataset.row,
