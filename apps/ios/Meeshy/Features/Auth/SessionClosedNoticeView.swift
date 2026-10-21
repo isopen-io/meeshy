@@ -71,27 +71,27 @@ struct SessionClosedNoticeView: View {
             VStack(spacing: MeeshySpacing.xl) {
                 Image(systemName: copy.systemImage)
                     .font(MeeshyFont.relative(MeeshyFont.largeTitleSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                     .padding(.top, MeeshySpacing.xxxl)
                     .accessibilityHidden(true)
 
                 Text(copy.title)
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityAddTraits(.isHeader)
 
                 Text(copy.message)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Button(action: onContinue) {
                     Text(String(localized: "sessionClosed.continue", defaultValue: "Se reconnecter", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity, minHeight: 50)
                         .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(MeeshyColors.brandGradient))
                 }
@@ -102,7 +102,7 @@ struct SessionClosedNoticeView: View {
                     } label: {
                         Text(String(localized: "sessionClosed.contact", defaultValue: "Écrire à l'équipe Meeshy", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                            .foregroundColor(MeeshyColors.indigo500)
+                            .foregroundStyle(MeeshyColors.indigo500)
                             .frame(maxWidth: .infinity, minHeight: 44)
                     }
                     .accessibilityHint(SessionClosedNoticeCopy.supportAddress)

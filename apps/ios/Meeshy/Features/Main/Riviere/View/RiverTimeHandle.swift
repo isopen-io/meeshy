@@ -72,7 +72,7 @@ struct RiverTimeHandle: View {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(tick.label)
                         .font(MeeshyFont.relative(RiverTimeHandleMetrics.tickLabelSize, weight: .semibold))
-                        .foregroundColor(ThemeManager.shared.textMuted)
+                        .foregroundStyle(ThemeManager.shared.textMuted)
                         .lineLimit(1)
                     Rectangle()
                         .fill(ThemeManager.shared.textMuted.opacity(0.5))
@@ -91,7 +91,7 @@ struct RiverTimeHandle: View {
             if dragFraction != nil {
                 Text(scale.label(atFraction: shownFraction))
                     .font(MeeshyFont.relative(RiverTimeHandleMetrics.labelSize, weight: .bold))
-                    .foregroundColor(ThemeManager.shared.textPrimary)
+                    .foregroundStyle(ThemeManager.shared.textPrimary)
                     .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(Capsule().fill(MeeshyColors.backgroundSecondary(isDark: isDark).opacity(0.96)))
@@ -101,7 +101,7 @@ struct RiverTimeHandle: View {
                 .overlay(
                     Image(systemName: "line.3.horizontal")
                         .font(MeeshyFont.relative(RiverTimeHandleMetrics.tickLabelSize, weight: .bold))
-                        .foregroundColor(ThemeManager.shared.textMuted)
+                        .foregroundStyle(ThemeManager.shared.textMuted)
                 )
                 .frame(width: RiverTimeHandleMetrics.handleWidth, height: RiverTimeHandleMetrics.handleHeight)
                 .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
