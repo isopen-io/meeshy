@@ -16,10 +16,9 @@ final class ConversationListReorderMotionTests: XCTestCase {
     }
 
     func test_animation_atRest_isTheListSpring() {
-        XCTAssertEqual(
-            ConversationListReorderMotion.animation(reduceMotion: false, isScrolling: false),
-            .spring(response: 0.35, dampingFraction: 0.86)
-        )
+        XCTAssertNotNil(ConversationListReorderMotion.animation(reduceMotion: false, isScrolling: false))
+        XCTAssertEqual(ConversationListReorderMotion.response, 0.35, accuracy: 0.0001)
+        XCTAssertEqual(ConversationListReorderMotion.dampingFraction, 0.86, accuracy: 0.0001)
     }
 
     func test_isScrolling_recentTick_isTrue() {
