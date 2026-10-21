@@ -420,7 +420,7 @@ final class StoryDraftStoreTests: XCTestCase {
         // qu'il nommait la portent maintenant, donc la reconstruction ne
         // retombe plus sur le défaut d'init.
         //
-        // Sans elle, `StoryAudioPlayerView` sortait sur son
+        // Sans elle, la pastille audio sortait sur un
         // `guard !samples.isEmpty` et ne dessinait RIEN : une bande vide sous
         // la puce d'une note vocale, chez tout lecteur.
         XCTAssertEqual(audio.waveformSamples, [0.1, 0.6, 0.9, 0.4],

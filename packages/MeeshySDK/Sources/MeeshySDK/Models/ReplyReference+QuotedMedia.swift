@@ -28,14 +28,37 @@ public extension ReplyReference {
     /// sinon un identifiant dérivé du message cité — stable, pour que deux
     /// ouvertures de la même citation désignent la même pièce.
     var quotedAttachment: MeeshyMessageAttachment? {
+        reconstructedAttachment(presentedAs: nil)
+    }
+
+    /// La pièce citée que le lecteur COMMUN joue en plein écran : une vidéo ou
+    /// un son, jamais ce qui est protégé ni ce qui n'a pas d'adresse (#9890).
+    ///
+    /// Le moteur partagé (`SharedAVPlayerManager`) ne lit que le cache VIDÉO —
+    /// son repli réseau est supprimé — et le résolveur de disponibilité y range
+    /// ce qu'il télécharge selon le type de la pièce. Un son cité y est donc
+    /// présenté comme un média vidéo : même fichier, même lecture, rangé dans
+    /// le seul cache que le moteur sait relire. Cette pièce ne sert qu'à lire ;
+    /// la citation reste un son partout ailleurs (`quotedAttachment`).
+    var quotedPlayableAttachment: MeeshyMessageAttachment? {
+        switch quotedMediaKind {
+        case .video: return reconstructedAttachment(presentedAs: nil)
+        case .audio: return reconstructedAttachment(presentedAs: Self.sharedEngineMimeType)
+        default: return nil
+        }
+    }
+
+    private static let sharedEngineMimeType = "video/mp4"
+
+    private func reconstructedAttachment(presentedAs mime: String?) -> MeeshyMessageAttachment? {
         guard !isStoryReply, !quotedMediaIsProtected,
               let fileUrl = attachmentFileUrl, !fileUrl.isEmpty,
-              let kind = quotedMediaKind, let mime = resolvedMimeType(for: kind)
+              let kind = quotedMediaKind, let resolved = resolvedMimeType(for: kind)
         else { return nil }
         return MeeshyMessageAttachment(
             id: attachmentId ?? "quoted-\(messageId)",
             messageId: messageId.isEmpty ? nil : messageId,
-            mimeType: mime,
+            mimeType: mime ?? resolved,
             fileSize: attachmentFileSize ?? 0,
             fileUrl: fileUrl,
             width: attachmentWidth,

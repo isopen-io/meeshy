@@ -11,17 +11,15 @@ import MeeshySDK
 /// `Style` when not specified).
 ///
 /// Replaces : `InlineVideoPlayerView`, `VideoPlayerView`,
-/// `VideoFullscreenPlayerView`, `StoryVideoPlayerView`, the app-side
-/// `VideoMediaView` and `GatedVideoFullscreenPlayer` (those become wrappers
-/// around `VideoAvailabilityResolver { MeeshyVideoPlayer }`).
+/// `VideoFullscreenPlayerView`, the app-side `VideoMediaView`,
+/// `GatedVideoFullscreenPlayer` and `VideoFullscreenPlayer` (those become
+/// wrappers around `VideoAvailabilityResolver { MeeshyVideoPlayer }`).
 public struct MeeshyVideoPlayer: View {
 
     // MARK: - Style
 
     public enum Style: Sendable {
-        case flat
         case inline
-        case mini
         case fullscreen
     }
 
@@ -67,7 +65,11 @@ public struct MeeshyVideoPlayer: View {
             .playPause, .scrubber, .duration, .save, .share, .close,
             .speed, .author, .mute, .airplay, .pip, .loop
         ]
-        public nonisolated static let miniDefault: ControlSet       = [.duration]
+        /// Le plein écran d'un média qui n'est pas (encore) un message — la
+        /// citation d'une réponse en cours de composition : on le regarde ou on
+        /// l'écoute, on n'en fait rien sortir (ni `.save`, ni `.share`), et
+        /// aucun auteur ni boucle ne s'y ajoute (#9890).
+        public nonisolated static let fullscreenPreview: ControlSet = fullscreenDefault.subtracting([.save, .share, .author, .loop])
     }
 
     // MARK: - Frame
@@ -100,34 +102,23 @@ public struct MeeshyVideoPlayer: View {
         // un 9:16 portrait qui occupera ~60% d'un écran iPhone. C'est voulu.
         public static let bubble = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 0,  border: nil)
         public static let card   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: MeeshyRadius.smPlus, border: nil)
-        // Mini reste plafonné à 1:1 + 120pt (preview chip, pas de raison de
-        // déborder en hauteur pour un thumbnail).
-        public static let mini   = Frame(maxAspectRatio: 1.0, maxHeight: 120,  cornerRadius: MeeshyRadius.xs,  border: nil)
         public static let flat   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 0,  border: nil)
     }
 
     // MARK: - PerformanceOptions
 
     public struct PerformanceOptions: Sendable {
-        public var sharedPlayer: Bool
-        public var preloadOnAppear: Bool
         public var preferredForwardBufferDuration: Double
         public var waitsToMinimizeStalling: Bool
-        public var preferredPeakBitRate: Double?
 
-        public init(sharedPlayer: Bool, preloadOnAppear: Bool, preferredForwardBufferDuration: Double, waitsToMinimizeStalling: Bool, preferredPeakBitRate: Double?) {
-            self.sharedPlayer = sharedPlayer
-            self.preloadOnAppear = preloadOnAppear
+        public init(preferredForwardBufferDuration: Double, waitsToMinimizeStalling: Bool) {
             self.preferredForwardBufferDuration = preferredForwardBufferDuration
             self.waitsToMinimizeStalling = waitsToMinimizeStalling
-            self.preferredPeakBitRate = preferredPeakBitRate
         }
 
-        public static let inline     = PerformanceOptions(sharedPlayer: true,  preloadOnAppear: false, preferredForwardBufferDuration: 2.0, waitsToMinimizeStalling: false, preferredPeakBitRate: nil)
-        public static let carousel   = PerformanceOptions(sharedPlayer: false, preloadOnAppear: true,  preferredForwardBufferDuration: 2.0, waitsToMinimizeStalling: false, preferredPeakBitRate: nil)
-        public static let flat       = PerformanceOptions(sharedPlayer: false, preloadOnAppear: true,  preferredForwardBufferDuration: 1.0, waitsToMinimizeStalling: false, preferredPeakBitRate: nil)
-        public static let fullscreen = PerformanceOptions(sharedPlayer: false, preloadOnAppear: true,  preferredForwardBufferDuration: 4.0, waitsToMinimizeStalling: false, preferredPeakBitRate: nil)
-        public static let mini       = PerformanceOptions(sharedPlayer: false, preloadOnAppear: false, preferredForwardBufferDuration: 0,   waitsToMinimizeStalling: true,  preferredPeakBitRate: nil)
+        public static let inline     = PerformanceOptions(preferredForwardBufferDuration: 2.0, waitsToMinimizeStalling: false)
+        public static let carousel   = PerformanceOptions(preferredForwardBufferDuration: 2.0, waitsToMinimizeStalling: false)
+        public static let fullscreen = PerformanceOptions(preferredForwardBufferDuration: 4.0, waitsToMinimizeStalling: false)
     }
 
     // MARK: - VideoAuthor
@@ -197,14 +188,12 @@ public struct MeeshyVideoPlayer: View {
     public let fileName: String?
     public let mentionDisplayNames: [String: String]?
     /// #3897 — honoré UNIQUEMENT par `.fullscreen` (`_FullscreenRenderer`).
-    /// Pas un oubli dans les trois autres styles : `.inline`/`.mini`
-    /// (`_InlineRenderer`/`_MiniRenderer`) résolvent DÉJÀ leur propre poster
-    /// net via `MeeshyVideoThumbnail` (cascade équivalente, grade bulle
-    /// 300px) — passer CE `poster` là-bas serait un second chemin concurrent
-    /// pour le même résultat. `.flat` (`_FlatRenderer`) n'a aucun concept de
-    /// poster : usage restreint aux previews SwiftUI du canvas story. Un
-    /// futur appelant passant `poster:` avec un style autre que `.fullscreen`
-    /// ne doit pas s'attendre à un effet.
+    /// Pas un oubli dans l'autre style : `.inline` (`_InlineRenderer`)
+    /// résout DÉJÀ son propre poster net via `MeeshyVideoThumbnail` (cascade
+    /// équivalente, grade bulle 300px) — passer CE `poster` là-bas serait un
+    /// second chemin concurrent pour le même résultat. Un futur appelant
+    /// passant `poster:` avec un style autre que `.fullscreen` ne doit pas
+    /// s'attendre à un effet.
     public let poster: Poster?
     public let onDownload: (() -> Void)?
     public let onExpand: (() -> Void)?
@@ -265,9 +254,7 @@ public struct MeeshyVideoPlayer: View {
 
     private static func inferPerformance(for style: Style) -> PerformanceOptions {
         switch style {
-        case .flat:       return .flat
         case .inline:     return .inline
-        case .mini:       return .mini
         case .fullscreen: return .fullscreen
         }
     }
@@ -287,9 +274,7 @@ public struct MeeshyVideoPlayer: View {
         let player = permitted
         Group {
             switch style {
-            case .flat:       _FlatRenderer(player: player)
             case .inline:     _InlineRenderer(player: player)
-            case .mini:       _MiniRenderer(player: player)
             case .fullscreen: _FullscreenRenderer(player: player)
             }
         }

@@ -22,7 +22,7 @@ Ce code va dans `apps/ios/Meeshy/Features/Main/Views/` (ou ViewModels selon le c
 
 | Type | Placement | Exemples |
 |---|---|---|
-| Atomes purs (UIViewRepresentable, CALayer subclass) | SDK | `MeeshyVideoSurface`, `MeeshyVideoCanvasLayer`, `MeeshyVideoThumbnail` |
+| Atomes purs (UIViewRepresentable, CALayer subclass) | SDK | `MeeshyVideoSurface`, `MeeshyVideoThumbnail` |
 | Composants View polymorphes paramétrés opaques | SDK | `MeeshyVideoPlayer(style:controls:frame:performance:)` |
 | Models, types, schemas | SDK (`MeeshySDK/Models/`) | `MeeshyMessageAttachment`, `VideoAvailability` |
 | Rule engines stateless (pures functions) | SDK | `MediaDownloadPolicyEngine.shouldAutoDownload` |

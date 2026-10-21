@@ -2,25 +2,6 @@ import SwiftUI
 import AVFoundation
 import MeeshySDK
 
-// MARK: - Mini Renderer
-
-internal struct _MiniRenderer: View {
-    let player: MeeshyVideoPlayer
-
-    var body: some View {
-        MeeshyVideoThumbnail(
-            attachment: player.attachment,
-            accentColor: player.accentColor,
-            showPlayBadge: true,
-            showDurationBadge: player.controls.contains(.duration),
-            cornerRadius: player.frame.cornerRadius,
-            onTap: player.onExpand
-        )
-        .aspectRatio(player.attachment.videoAspectRatio ?? 1.0, contentMode: .fit)
-        .applyVideoFrame(player.frame)
-    }
-}
-
 // MARK: - Fullscreen Renderer
 //
 // Routes through `SharedAVPlayerManager` so PIP + global play coordination
