@@ -32,11 +32,25 @@ describe("reportedContentAuthorId — qui a écrit ce qu'on a signalé", () => {
     expect(prisma.post.findUnique.mock.calls[0]?.[0]).toEqual({ where: { id: ENTITY }, select: { authorId: true } });
   });
 
-  it("un commentaire : son auteur ; un message : son expéditeur ; un son : qui l'a déposé", async () => {
-    const prisma = prismaWith({ comment: { authorId: ME }, message: { senderId: OTHER }, sound: { uploaderId: ME } });
+  it("un commentaire : son auteur ; un son : qui l'a déposé", async () => {
+    const prisma = prismaWith({ comment: { authorId: ME }, sound: { uploaderId: ME } });
     expect(await reportedContentAuthorId(prisma, { reportedType: 'comment', reportedEntityId: ENTITY })).toBe(ME);
-    expect(await reportedContentAuthorId(prisma, { reportedType: 'message', reportedEntityId: ENTITY })).toBe(OTHER);
     expect(await reportedContentAuthorId(prisma, { reportedType: 'sound', reportedEntityId: ENTITY })).toBe(ME);
+  });
+
+  it("un message : l'UTILISATEUR derrière son participant expéditeur — `senderId` est un id de Participant, jamais de User", async () => {
+    const PARTICIPANT = '507f1f77bcf86cd799439099';
+    const prisma = prismaWith({ message: { senderId: PARTICIPANT, sender: { userId: ME } } });
+    expect(await reportedContentAuthorId(prisma, { reportedType: 'message', reportedEntityId: ENTITY })).toBe(ME);
+    expect(prisma.message.findUnique.mock.calls[0]?.[0]).toEqual({ where: { id: ENTITY }, select: { sender: { select: { userId: true } } } });
+    expect(await reportTargetsActor(prisma, { reportedType: 'message', reportedEntityId: ENTITY }, ME)).toBe(true);
+    expect(await reportTargetsActor(prisma, { reportedType: 'message', reportedEntityId: ENTITY }, PARTICIPANT)).toBe(false);
+  });
+
+  it("un message d'un invité anonyme n'a pas d'auteur inscrit : aucun acteur n'est visé", async () => {
+    const prisma = prismaWith({ message: { sender: { userId: null } } });
+    expect(await reportedContentAuthorId(prisma, { reportedType: 'message', reportedEntityId: ENTITY })).toBeNull();
+    expect(await reportTargetsActor(prisma, { reportedType: 'message', reportedEntityId: ENTITY }, ME)).toBe(false);
   });
 
   it("une conversation, une communauté ou un type inconnu n'ont pas d'auteur unique ; une ligne disparue non plus", async () => {

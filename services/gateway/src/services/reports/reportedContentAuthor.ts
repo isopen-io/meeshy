@@ -13,6 +13,9 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  *
  * La ligne se lit SANS filtre de suppression : une publication retirée reste la
  * sienne, et le signalement qui la vise reste un signalement qui le vise.
+ * Un message se résout par l'UTILISATEUR derrière son participant expéditeur :
+ * `Message.senderId` est un id de `Participant`, qu'aucun id d'acteur n'égale
+ * jamais ; un invité anonyme (`Participant.userId` nul) n'a pas d'auteur inscrit.
  * Une conversation ou une communauté n'ont pas d'auteur unique : `null`, et la
  * garde ne s'applique pas (fail-open assumé — aucun contenu propre n'y est en jeu).
  */
@@ -24,7 +27,7 @@ export type ReportedContent = {
 type AuthorLookup = (prisma: PrismaClient, id: string) => Promise<string | null>;
 
 const authorOf =
-  <Row>(read: (prisma: PrismaClient, id: string) => Promise<Row | null>, pick: (row: Row) => string): AuthorLookup =>
+  <Row>(read: (prisma: PrismaClient, id: string) => Promise<Row | null>, pick: (row: Row) => string | null): AuthorLookup =>
   async (prisma, id) => {
     const row = await read(prisma, id);
     return row === null || row === undefined ? null : pick(row);
@@ -37,7 +40,10 @@ const AUTHOR_BY_TYPE: Readonly<Record<string, AuthorLookup>> = {
   reel: authorOf((prisma, id) => prisma.post.findUnique({ where: { id }, select: { authorId: true } }), (row) => row.authorId),
   status: authorOf((prisma, id) => prisma.post.findUnique({ where: { id }, select: { authorId: true } }), (row) => row.authorId),
   comment: authorOf((prisma, id) => prisma.postComment.findUnique({ where: { id }, select: { authorId: true } }), (row) => row.authorId),
-  message: authorOf((prisma, id) => prisma.message.findUnique({ where: { id }, select: { senderId: true } }), (row) => row.senderId),
+  message: authorOf(
+    (prisma, id) => prisma.message.findUnique({ where: { id }, select: { sender: { select: { userId: true } } } }),
+    (row) => row.sender.userId,
+  ),
   sound: authorOf((prisma, id) => prisma.sound.findUnique({ where: { id }, select: { uploaderId: true } }), (row) => row.uploaderId),
 };
 
