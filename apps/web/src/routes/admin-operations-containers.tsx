@@ -99,12 +99,12 @@ function ContainerCard({
         className="grid w-full gap-2 rounded-card p-4 text-start transition-colors hover:bg-[color-mix(in_srgb,var(--color-ios-brand)_6%,transparent)] focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, outlineColor: BRAND }}
       >
-        <span className="flex flex-wrap items-start justify-between gap-2">
-          <span className="min-w-0 flex-1 break-all text-body font-semibold" style={{ color: INK }}>
-            {container.service ?? container.name}
-          </span>
-          <StateBadges container={container} language={language} />
+        {/* Le nom prend TOUTE la ligne, les badges dessous (relu à 375 et 1280 px) : côte à côte,
+            « database-staging » se coupait au milieu du mot. */}
+        <span className="block break-words text-body font-semibold" style={{ color: INK }}>
+          {container.service ?? container.name}
         </span>
+        <StateBadges container={container} language={language} />
         <span className="block break-all text-caption" style={{ color: INK2 }}>
           {container.image}
         </span>
