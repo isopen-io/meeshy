@@ -63,7 +63,7 @@ public struct PackShopTabBar: View {
                                 Image(systemName: "bag.fill").font(.system(size: 12, weight: .semibold))
                             }
                             Text(entry.title)
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                                 .lineLimit(1)
                         }
                         .foregroundStyle(selected ? Color.white : Color.primary)
@@ -161,7 +161,7 @@ public struct FramePackShelfView: View {
                 .font(.system(size: 14, weight: .semibold, design: .rounded))
                 .lineLimit(1)
             Label(tile.usageText, systemImage: "checkmark.seal")
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }

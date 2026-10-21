@@ -32,7 +32,15 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Profile/UserProfileSheet.swift",
         "Profile/UserProfileSheet+DetailsTab.swift",
         "Profile/UserProfileSheet+PostsTab.swift",
-        "Notifications/NotificationListScreen.swift"
+        "Notifications/NotificationListScreen.swift",
+        "Primitives/LanguagePickerSheet.swift",
+        "Primitives/TagInputView.swift",
+        "Primitives/StatsCard.swift",
+        "Primitives/ErrorBannerView.swift",
+        "Primitives/FeedbackToastView.swift",
+        "Packs/PackShopView.swift",
+        "Packs/FramePackShelfView.swift",
+        "Location/LocationFullscreenView.swift"
     ]
 
     private static let fixedGlyphs: [FixedGlyph] = [
