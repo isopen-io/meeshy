@@ -1,5 +1,5 @@
 {
-  "$format": "Générés en EXÉCUTANT conversationActionsFor (packages/shared/utils) sur le plan de __tests__/action-policy/action-policy-vectors-law.ts, jamais écrits à la main. { _label, input, expected, clientStricter? } — clientStricter nomme les verdicts (edit, delete, react) où le client refuse plus que la passerelle : le test de parité n'y exige que l'inclusion.",
+  "$format": "Générés en EXÉCUTANT conversationActionsFor (packages/shared/utils) sur le plan de __tests__/action-policy/action-policy-vectors-law.ts, jamais écrits à la main. { _label, input, expected, clientStricter? } — clientStricter nomme les verdicts (edit, delete, react, pin) où le client refuse plus que la passerelle : le test de parité n'y exige que l'inclusion.",
   "vectors": [
     {
       "_label": "direct-membre",

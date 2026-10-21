@@ -252,11 +252,11 @@ public enum MessageActionPolicy {
         return (captureNotice && capturedIsMine && viewer.isActiveMember, false)
     }
 
-    /// `refusesMinorPin` et `refusesContentGesture` (`messages-pin.ts`) ; plus strict sur les avis et la vue unique.
+    /// `admitMessagePin` (`messages-pin.ts`, #11219) : une épingle se voit de tous, donc épingler et désépingler
+    /// exigent le droit d'écrire (`viewerCanWrite`). Plus strict sur les avis, la vue unique et les invités.
     private static func pinVerdict(_ context: MessageActionContext) -> PinVerdict? {
-        let minorInGlobal = context.conversation.isGlobal && context.viewer.isDeclaredMinor
-        let pinnable = context.live && context.registered && context.viewer.isActiveMember
-            && !context.notice && !context.content.flags.viewOnce && !minorInGlobal
+        let pinnable = context.live && context.registered && !context.notice && !context.content.flags.viewOnce
+            && viewerCanWrite(in: context.conversation, viewer: context.viewer)
         guard pinnable else { return nil }
         return context.message.pinnedAt != nil ? PinVerdict.unpin : PinVerdict.pin
     }
@@ -277,7 +277,8 @@ public enum MessageActionPolicy {
             deleteForMe: context.registered && !flags.optimistic,
             remove: deletion.remove ? RemoveVerdict.withReason : nil,
             pin: pinVerdict(context),
-            report: context.live && context.registered && !context.notice && !context.isMine,
+            report: context.live && context.registered && context.viewer.isActiveMember
+                && !context.notice && !context.isMine,
             canReact: reacts,
             canReply: reacts && !flags.viewOnce && viewerCanWrite(in: context.conversation, viewer: context.viewer),
             translate: translatable ? (context.e2ee ? TranslateVerdict.device : TranslateVerdict.servedSwitch) : nil,

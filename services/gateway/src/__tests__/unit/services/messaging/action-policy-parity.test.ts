@@ -1,14 +1,14 @@
 /**
  * PARITÉ (#11205) — les vecteurs de la loi des actions partagée
  * (`packages/shared/fixtures/action-policy/`) rejoués contre ce qui fait foi :
- * `admitMessageEdit`, `admitMessageDelete`, `ReactionService.addReaction`, les
- * gardes de `messages-pin.ts` (`refusesMinorInConversationOfType`,
- * `refusesContentGesture`) et `actorHasMinimumRole`, avec des doubles qui rendent
- * les lignes du vecteur. INCLUSION toujours (le client n'offre jamais ce que la
- * passerelle refuse) ; ÉGALITÉ pour modifier, supprimer et réagir sauf où le
- * vecteur déclare `clientStricter`. L'épingle n'est tenue qu'en inclusion : la
- * loi la refuse en plus sur les avis, la vue unique et les invités. Aucun code
- * de production n'est touché.
+ * `admitMessageEdit`, `admitMessageDelete`, `ReactionService.addReaction`, la
+ * chaîne de `messages-pin.ts` (accès, `admitMessagePin`,
+ * `refusesMinorInConversationOfType`, `refusesContentGesture` — #11219) et
+ * `verifierCible` (signaler — #11220) et `actorHasMinimumRole`, avec des
+ * doubles qui rendent les lignes du vecteur.
+ * INCLUSION toujours (le client n'offre jamais ce que la passerelle refuse) ;
+ * ÉGALITÉ pour modifier, supprimer, réagir et épingler sauf où le vecteur
+ * déclare `clientStricter`. Aucun code de production n'est touché.
  *
  * @jest-environment node
  */
@@ -21,13 +21,15 @@ import { describe, expect, it } from '@jest/globals';
 import { ReactionService } from '../../../../services/ReactionService';
 import { refusesContentGesture } from '../../../../services/messaging/captureNoticeVisibility';
 import { refusesMinorInConversationOfType } from '../../../../services/messaging/globalMinorGate';
+import { admitMessagePin, type MessagePinReader } from '../../../../services/messaging/messagePinAdmission';
+import { verifierCible } from '../../../../routes/reports/target';
 import { admitMessageDelete, type DeleteAdmissionReader } from '../../../../services/messaging/messageDeleteAdmission';
 import { admitMessageEdit, type EditAdmissionReader } from '../../../../services/messaging/messageEditAdmission';
 import { actorHasMinimumRole } from '../../../../utils/conversation-authority';
 import type { ConversationActionInput, ConversationActions } from '@meeshy/shared/utils/conversation-action-policy';
 import type { ActionViewer, MessageActionInput, MessageActions } from '@meeshy/shared/utils/message-action-policy';
 
-type MessageVector = { readonly _label: string; readonly clientStricter?: readonly ('edit' | 'delete' | 'react')[]; readonly input: MessageActionInput; readonly expected: MessageActions };
+type MessageVector = { readonly _label: string; readonly clientStricter?: readonly ('edit' | 'delete' | 'react' | 'pin')[]; readonly input: MessageActionInput; readonly expected: MessageActions };
 
 type ConversationVector = { readonly _label: string; readonly input: ConversationActionInput; readonly expected: ConversationActions };
 
@@ -136,9 +138,10 @@ describe('parité des actions sur un message — admitMessageEdit / admitMessage
 });
 
 describe('parité des actions sur un message — ReactionService.addReaction et les gardes de l’épingle', () => {
-  it('les vecteurs couvrent une réaction sans droit d’écrire et une épingle refusée au mineur de Global', () => {
+  it('les vecteurs couvrent une réaction sans droit d’écrire, une épingle refusée au mineur de Global et à l’abonné d’un canal d’annonces', () => {
     expect(messageVectors.some((vector) => vector.expected.verdicts.canReact && !vector.expected.verdicts.canReply)).toBe(true);
     expect(messageVectors.some((vector) => vector.input.conversation.type === 'global' && vector.input.viewer.isDeclaredMinor && vector.expected.verdicts.pin === null)).toBe(true);
+    expect(messageVectors.some((vector) => vector.input.conversation.isAnnouncementChannel === true && vector.expected.verdicts.pin === null && !vector.clientStricter?.includes('pin'))).toBe(true);
   });
 
   it.each(messageVectors.map((vector) => [vector._label, vector] as const))('réagir : %s', async (_label, vector) => {
@@ -153,14 +156,81 @@ describe('parité des actions sur un message — ReactionService.addReaction et 
   });
 
   it.each(messageVectors.map((vector) => [vector._label, vector] as const))('épingler : %s', async (_label, vector) => {
-    const { message, conversation, viewer, now } = vector.input;
-    if (vector.expected.verdicts.pin === null) return;
-    const minorRefused = await refusesMinorInConversationOfType(
-      { user: { findUnique: async () => ({ birthDate: birthDateOf(viewer, now) }) } } as never,
-      { conversationType: conversation.type, userId: viewer.hasAccount ? viewer.id : null, now: new Date(now) },
-    );
+    const offered = vector.expected.verdicts.pin !== null;
+    const admitted = await gatewayPins(vector);
 
-    expect([message.deletedAt ?? null, minorRefused, refusesContentGesture({ messageType: message.messageType ?? null, metadata: message.metadata })]).toEqual([null, false, false]);
+    if (offered) expect(admitted).toBe(true);
+    if (!vector.clientStricter?.includes('pin')) expect(admitted).toBe(offered);
+  });
+});
+
+/** La ligne de participation que `admitMessagePin` relit : rang, permission d'envoi de l'invité, rôle de plateforme. */
+function pinReader(vector: MessageVector): MessagePinReader {
+  const { viewer } = vector.input;
+  const row = {
+    role: viewer.conversationRole,
+    permissions: viewer.canSendMessages ? null : ({ canSendMessages: false } as never),
+    anonymousSession: null,
+    user: viewer.hasAccount ? { role: viewer.platformRole } : null,
+  };
+  return { participant: { findFirst: async () => (viewer.isActiveMember ? row : null) } };
+}
+
+/** `PUT`/`DELETE …/pin`, dans l'ordre de la route : existence, accès, porte d'écriture, mineur de Global, avis de capture (épingler seulement). */
+async function gatewayPins(vector: MessageVector): Promise<boolean> {
+  const { message, conversation, viewer, now } = vector.input;
+  if (message.deletedAt != null || !viewer.isActiveMember) return false;
+  const guest = !viewer.hasAccount || viewer.isAnonymous;
+  const admission = await admitMessagePin(pinReader(vector), {
+    conversation: {
+      type: conversation.type,
+      isActive: conversation.isActive ?? null,
+      closedAt: conversation.closedAt == null ? null : new Date(conversation.closedAt),
+      isAnnouncementChannel: conversation.isAnnouncementChannel ?? null,
+      defaultWriteRole: conversation.defaultWriteRole ?? null,
+    },
+    conversationId: CONVERSATION_ID,
+    caller: { userId: viewer.id, participantId: guest ? viewer.participantId ?? viewer.id : undefined, isAnonymous: guest },
+    now: new Date(now),
+  });
+  if (!admission.admitted) return false;
+  const minorRefused = await refusesMinorInConversationOfType(
+    { user: { findUnique: async () => ({ birthDate: birthDateOf(viewer, now) }) } } as never,
+    { conversationType: conversation.type, userId: viewer.hasAccount ? viewer.id : null, now: new Date(now) },
+  );
+  const pinning = message.pinnedAt == null;
+  return !minorRefused && !(pinning && refusesContentGesture({ messageType: message.messageType ?? null, metadata: message.metadata }));
+}
+
+/** `POST /reports` sur un message : la cible existe, le signalant participe, et ce n'est pas le sien. */
+async function gatewayAcceptsReport(vector: MessageVector): Promise<boolean> {
+  const { message, viewer } = vector.input;
+  const registered = viewer.hasAccount && !viewer.isAnonymous;
+  const prisma = {
+    message: { findUnique: async () => ({ conversationId: CONVERSATION_ID, senderId: message.senderId ?? null, sender: { userId: message.authorUserId ?? null } }) },
+    participant: { findFirst: async () => (viewer.isActiveMember ? { id: viewer.participantId ?? viewer.id } : null) },
+  };
+  const verdict = await verifierCible({
+    prisma: prisma as never,
+    signalant: registered ? { userId: viewer.id } : { participantId: viewer.participantId ?? viewer.id },
+    type: 'message',
+    entityId: '65f0000000000000000000d1',
+  });
+  return verdict.atteignable;
+}
+
+describe('parité des actions sur un message — signaler (verifierCible)', () => {
+  it('les vecteurs couvrent un message du lecteur que la loi ne propose pas de signaler', () => {
+    expect(messageVectors.some((vector) => vector.input.message.authorUserId === vector.input.viewer.id && !vector.expected.verdicts.report)).toBe(true);
+  });
+
+  it.each(messageVectors.map((vector) => [vector._label, vector] as const))('signaler : %s', async (_label, vector) => {
+    const { message, viewer } = vector.input;
+    const accepted = await gatewayAcceptsReport(vector);
+    const authored = (viewer.hasAccount && !viewer.isAnonymous && message.authorUserId === viewer.id) || message.senderId === (viewer.participantId ?? viewer.id);
+
+    if (vector.expected.verdicts.report) expect(accepted).toBe(true);
+    if (authored) expect([accepted, vector.expected.verdicts.report]).toEqual([false, false]);
   });
 });
 
