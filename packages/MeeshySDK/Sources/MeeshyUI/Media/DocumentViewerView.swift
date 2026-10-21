@@ -274,6 +274,7 @@ public struct DocumentFullSheet: View {
                 }
             }
         }
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })
     }
 
     /// #7362 — la fiche plein écran se PRÉSENTE : c'est l'ouverture, distincte
@@ -329,7 +330,6 @@ public struct DocumentFullSheet: View {
                 }
             }
         }
-        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })
     }
 
     private var noPreviewView: some View {
