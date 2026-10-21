@@ -70,9 +70,9 @@ struct GameEngravedBirdsTests {
     func theCoinPutsNoStickerOnItsReverse() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let source = try String(
-            contentsOf: root.appendingPathComponent("Sources/MeeshyUI/Game/MeeshCoinView.swift"), encoding: .utf8
-        )
+        let source = try ["MeeshCoinView.swift", "MeeshCoinFaces.swift"].map {
+            try String(contentsOf: root.appendingPathComponent("Sources/MeeshyUI/Game/\($0)"), encoding: .utf8)
+        }.joined()
         #expect(!source.contains("GameTenantsLayer"))
         #expect(!source.contains("MeeStickerFilmView"))
         #expect(source.contains("GameEngravedBirds.draw"))

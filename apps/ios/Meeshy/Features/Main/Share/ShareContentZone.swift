@@ -109,8 +109,8 @@ struct ShareContentZone: View {
         case .card(let shareCard):
             card(icon: Self.icon(for: shareCard.kind), title: shareCard.title, subtitle: shareCard.subtitle, imageURL: shareCard.imageURL)
         case .incoming(let incoming):
-            if incoming.preparationFailed {
-                Label(ShareSheetCopy.unprepared, systemImage: "exclamationmark.icloud")
+            ForEach(incoming.shortfalls, id: \.self) { shortfall in
+                Label(ShareSheetCopy.shortfall(shortfall), systemImage: Self.symbol(for: shortfall))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundColor(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -132,6 +132,14 @@ struct ShareContentZone: View {
                     card(icon: "text.alignleft", title: text, subtitle: nil)
                 }
             }
+        }
+    }
+
+    private static func symbol(for shortfall: ShareShortfall) -> String {
+        switch shortfall {
+        case .unprepared: return "exclamationmark.icloud"
+        case .overBudget: return "externaldrive.badge.exclamationmark"
+        case .refusedSource: return "doc.badge.ellipsis"
         }
     }
 
