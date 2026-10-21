@@ -56,7 +56,7 @@ final class QuotedReferenceFactoryTests: XCTestCase {
         XCTAssertEqual(reference.previewText, "🔒 🖼️")
         XCTAssertNil(reference.attachmentThumbnailUrl)
         XCTAssertNil(reference.attachmentFileUrl)
-        XCTAssertNil(reference.attachmentFacts?.thumbHash)
+        XCTAssertNil(reference.attachmentThumbHash)
         XCTAssertEqual(reference.attachmentIsProtected, true)
     }
 
@@ -67,7 +67,7 @@ final class QuotedReferenceFactoryTests: XCTestCase {
 
         XCTAssertEqual(reference.previewText, "Hello")
         XCTAssertNil(reference.attachmentThumbnailUrl)
-        XCTAssertNil(reference.attachmentFacts?.thumbHash)
+        XCTAssertNil(reference.attachmentThumbHash)
     }
 
     func test_imageWithoutServerThumbnail_showsTheFileItself() {
