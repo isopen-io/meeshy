@@ -40,6 +40,13 @@ import MeeshySDK
 @MainActor
 final class ConversationViewReadingModeInitTests: XCTestCase {
 
+    func test_orchestrateurEtSDKPartagentLeType() {
+        XCTAssertEqual(
+            ObjectIdentifier(ReadingModeOrchestrator.ConversationType.self),
+            ObjectIdentifier(MeeshyConversation.ConversationType.self)
+        )
+    }
+
     // MARK: - readingModeConversationType(for:) — mapping pur, NOUVEAU (F-086)
 
     func test_readingModeConversationType_directMapsDirect() {
