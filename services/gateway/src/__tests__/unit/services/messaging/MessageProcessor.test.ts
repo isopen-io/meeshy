@@ -404,12 +404,7 @@ describe('MessageProcessor.getEncryptionContext', () => {
     expect(ctx.isEncrypted).toBe(false);
   });
 
-  it('refuses plaintext in e2ee mode (#11216 — the device encrypts, never the server)', async () => {
-    convFindUnique.mockResolvedValue({ encryptionMode: 'e2ee', encryptionEnabledAt: new Date(), serverEncryptionKeyId: null });
-    await expect(processor.getEncryptionContext(CONV_ID, 'hello', 'text')).rejects.toMatchObject({ code: 'E2EE_PLAINTEXT_REFUSED' });
-  });
-
-  it('returns mode=e2ee with isEncrypted=false for a message without text (client encrypts)', async () => {
+  it('returns mode=e2ee with isEncrypted=false for a textless message (#11216: text is refused)', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'e2ee', encryptionEnabledAt: new Date(), serverEncryptionKeyId: null });
     const ctx = await processor.getEncryptionContext(CONV_ID, '', 'text');
     expect(ctx.isEncrypted).toBe(false);

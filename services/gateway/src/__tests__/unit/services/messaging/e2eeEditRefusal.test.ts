@@ -22,6 +22,7 @@ import {
 import {
   E2EE_PLAINTEXT_REFUSAL_MESSAGE,
   E2EE_PLAINTEXT_REFUSED,
+  plaintextRefusedIn,
 } from '../../../../services/messaging/e2eePlaintextAdmission';
 
 const AUTHOR = 'user-author';
@@ -80,5 +81,33 @@ describe('admitMessageEdit — aucune édition en clair dans une conversation e2
     expect(describeEditRefusalForSocket('end-to-end-encrypted')).toBe(E2EE_PLAINTEXT_REFUSAL_MESSAGE);
     expect(editRefusalCode('end-to-end-encrypted')).toBe(E2EE_PLAINTEXT_REFUSED);
     expect(editRefusalCode('edit-window-expired')).toBeUndefined();
+  });
+});
+
+describe('plaintextRefusedIn — la règle elle-même (#11216)', () => {
+  it.each([
+    ['e2ee', 'Bonjour', true],
+    ['E2EE', 'Bonjour', true],
+    ['e2ee', '   ', false],
+    ['e2ee', '', false],
+    ['server', 'Bonjour', false],
+    ['hybrid', 'Bonjour', false],
+    [null, 'Bonjour', false],
+  ])('mode %s, texte %j ⇒ refusé : %s', (encryptionMode, plaintext, refused) => {
+    expect(plaintextRefusedIn({ encryptionMode, plaintext })).toBe(refused);
+  });
+});
+
+describe('plaintextRefusedIn — la règle elle-même (#11216)', () => {
+  it.each([
+    ['e2ee', 'Bonjour', true],
+    ['E2EE', 'Bonjour', true],
+    ['e2ee', '   ', false],
+    ['e2ee', '', false],
+    ['server', 'Bonjour', false],
+    ['hybrid', 'Bonjour', false],
+    [null, 'Bonjour', false],
+  ])('mode %s, texte %j ⇒ refusé : %s', (encryptionMode, plaintext, refused) => {
+    expect(plaintextRefusedIn({ encryptionMode, plaintext })).toBe(refused);
   });
 });
