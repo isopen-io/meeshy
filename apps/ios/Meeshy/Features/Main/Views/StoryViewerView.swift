@@ -662,7 +662,7 @@ struct StoryViewerView: View {
     /// scrub, or full-screen picker). Drives the heart-button bounce in the
     /// sidebar.
     @State private var heartBouncePulse: Int = 0
-    @State private var delays = DelayedActions()
+    @State var delays = DelayedActions() // internal : extensions cross-fichiers
     @State var sharedContentWrapper: SharedContentWrapper? // internal : cause de boucle (#9821)
     /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
     @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
