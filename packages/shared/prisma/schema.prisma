@@ -6113,18 +6113,28 @@ model CommunityAppearancePack {
   @@index([contractSrc])
 }
 
-/// LA POSSESSION d'un pack payant (#10632). Écrite dans la MÊME transaction que la
-/// ligne `spend` du registre `MeeshLedger` (MeeshSpend.apply) : ni achat sans
-/// possession, ni possession sans achat. Les packs gratuits n'ont pas de ligne.
+/// LA POSSESSION d'un pack payant (#10632). Quatre voies (#11272, `PACK_OWNERSHIP_SOURCES`) :
+/// l'ACHAT en Meeshes, écrit dans la MÊME transaction que la ligne `spend` du registre
+/// `MeeshLedger` (MeeshSpend.apply) — ni achat sans possession, ni possession sans achat —,
+/// le JEU (un rang, un trophée, une saison), un OCTROI de l'équipe, un ÉVÉNEMENT. Jamais
+/// acheté en argent réel (#11252). Les packs gratuits n'ont pas de ligne.
+/// `source`, `reference`, `priceMeeshes` et `requestId` sont OPTIONNELS (MongoDB : les lignes
+/// d'avant n'ont pas `source`, et lues sans elle sont des ACHATS ; seul un achat porte un
+/// prix payé non nul et un `requestId`). Une seule ligne par `(userId, packKey)` : c'est l'IDEMPOTENCE.
 model UserPackOwnership {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   userId       String   @db.ObjectId
   /// `packChoiceKey(domaine, slug)` — même clé que `UserStickerPack.packSlug`.
   packKey      String
-  /// Le prix PAYÉ, figé à l'achat (le prix servi peut changer ensuite).
-  priceMeeshes Int
-  /// Le `requestId` de la dépense — relie la possession à sa ligne de registre.
-  requestId    String
+  /// La voie : `purchase` | `game` | `grant` | `event` ; absent = `purchase` (lignes antérieures).
+  source       String?
+  /// Pourquoi cette ligne existe, court : `rank:voix`, `trophy:<clé>`, `season:2`, ou la raison d'un octroi / d'un événement.
+  reference    String?
+  /// Le prix PAYÉ, figé à l'achat (le prix servi peut changer ensuite) ; 0 hors achat (`PackGrants` l'écrit,
+  /// pour qu'un serveur d'avant #11272 — qui le déclarait requis — relise la ligne après un retour arrière).
+  priceMeeshes Int?
+  /// Le `requestId` de la dépense — relie la possession à sa ligne de registre ; absent hors achat.
+  requestId    String?
   acquiredAt   DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

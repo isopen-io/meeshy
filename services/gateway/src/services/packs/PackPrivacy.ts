@@ -9,9 +9,10 @@
  *  - les packs qu'il a PROPOSÉS, `StickerPack` + `StickerPackItem`, et leurs
  *    fichiers sous `sticker-packs/<id>/` ;
  *  - ses propositions de packs d'APPARENCE (fonds, contours, bannières : `CommunityAppearancePack`, #10709) ;
- *  - les packs qu'il a ACHETÉS en Meeshes, `UserPackOwnership` (#10632) : la
- *    ligne de dépense part avec le jeu (`GamePurge`), la possession part ici —
- *    sans quoi l'historique d'achat d'un compte purgé survivait à sa purge.
+ *  - les packs qu'il POSSÈDE, `UserPackOwnership` (#10632, #11272), par TOUTE voie —
+ *    achat en Meeshes, jeu, octroi, événement : la ligne de dépense part avec
+ *    le jeu (`GamePurge`), la possession part ici, sans filtre sur la voie —
+ *    sans quoi l'historique d'un compte purgé survivait à sa purge.
  *
  * La purge (à l'expiration de la grâce, `purgeAccountIsolatedData`) efface les
  * choix, la bibliothèque, les fichiers de son répertoire — y compris ceux
@@ -35,6 +36,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { parsePackChoiceKey } from '@meeshy/shared/types/content-pack';
+import { packOwnershipSourceOf } from '@meeshy/shared/types/pack-ownership';
 import { streamedFileUrlFromEnv } from '../attachments/publicMediaUrl';
 
 export const DELETED_ACCOUNT_PACK_AUTHOR = 'Compte supprimé';
@@ -158,7 +160,7 @@ export async function exportPackData(prisma: PackPrivacyDb, userId: string, page
     prisma.stickerPack.count({ where: { submitterId: userId } }),
     prisma.userPackOwnership.findMany({
       where: { userId },
-      select: { packKey: true, priceMeeshes: true, acquiredAt: true },
+      select: { packKey: true, source: true, reference: true, priceMeeshes: true, acquiredAt: true },
       orderBy: { acquiredAt: 'desc' },
       ...window,
     }),
@@ -178,9 +180,16 @@ export async function exportPackData(prisma: PackPrivacyDb, userId: string, page
     };
   });
 
-  const ownerships = ownershipRows.map(({ packKey, priceMeeshes, acquiredAt }) => {
+  const ownerships = ownershipRows.map(({ packKey, source, reference, priceMeeshes, acquiredAt }) => {
     const key = parsePackChoiceKey(packKey);
-    return { domain: key?.domain ?? null, slug: key?.slug ?? packKey, priceMeeshes, acquiredAt };
+    return {
+      domain: key?.domain ?? null,
+      slug: key?.slug ?? packKey,
+      source: packOwnershipSourceOf(source),
+      reference: reference ?? null,
+      priceMeeshes: priceMeeshes ?? 0,
+      acquiredAt,
+    };
   });
 
   return {
