@@ -120,7 +120,8 @@ export type RowSwipePaint = {
 /**
  * Le décalage voyage en `translate` : le conteneur d'actions occupe la largeur
  * de la ligne, attend HORS d'elle (`hide`) et glisse de `swipe` — jamais une
- * largeur qui change. Le côté se lit au signe PHYSIQUE du déplacement
+ * largeur qui change — pendant que sa piste glisse de l'inverse et reste
+ * clouée au bord de l'écran, comme les fonds fixes de `SwipeableRow.swift`. Le côté se lit au signe PHYSIQUE du déplacement
  * (`offset × sign`, `sign` valant −1 en RTL) ; à zéro il ne change pas, pour que
  * la fermeture glisse vers le bord d'où l'ouverture est venue.
  */
