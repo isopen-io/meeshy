@@ -106,9 +106,9 @@ public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite
             Image(systemName: role.icon)
                 .font(.system(size: MeeshyIconSize.xxs))
             Text(role.sectionTitle(in: .module))
-                .font(.system(size: MeeshyFont.smallSize, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
             Text("\(count)")
-                .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .foregroundColor(theme.textSecondary)
@@ -147,7 +147,7 @@ struct MemberRow: View {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
-                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
@@ -155,7 +155,7 @@ struct MemberRow: View {
                     Image(systemName: member.communityRole.icon)
                         .font(.system(size: MeeshyIconSize.xxs))
                     Text(member.communityRole.displayName)
-                        .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
                 .foregroundColor(roleColor)
             }

@@ -98,6 +98,7 @@ const SURFACES: ReadonlyArray<readonly [CleRoute, number]> = [
   ['initiateCall', RATE_LIMITS.INITIATE_CALL.max],
   ['joinCall', RATE_LIMITS.JOIN_CALL.max],
   ['callOperations', RATE_LIMITS.CALL_OPERATIONS.max],
+  ['activeCallProbe', RATE_LIMITS.ACTIVE_CALL_PROBE.max],
 ];
 
 describe("Deux comptes ne partagent jamais le compteur d'une route d'appel", () => {

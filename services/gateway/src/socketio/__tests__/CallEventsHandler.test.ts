@@ -1540,9 +1540,12 @@ describe('CallEventsHandler', () => {
 
   describe('call:request-ice-servers', () => {
     // Scoping par appel (contrat CallError.callId) — cf. 43d4d7b7e. Le refus
-    // « pas dans la call room » doit nommer l'appel : un client avec un appel
-    // actif A ne doit pas interpréter le refus d'un refresh pour l'appel B.
-    it('scopes the not-in-room rejection to the callId', async () => {
+    // d'un refresh doit nommer l'appel : un client avec un appel actif A ne
+    // doit pas interpréter le refus d'un refresh pour l'appel B. Depuis #11463
+    // le refus porte sur la PARTICIPATION (la room n'autorise plus rien) : le
+    // témoin pose donc explicitement « aucun participant actif ».
+    it('scopes the not-a-participant rejection to the callId', async () => {
+      mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({ participants: [] }));
       const { socket } = setupWithSocket();
       await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
