@@ -20,7 +20,7 @@ final class SocketServerDisconnectRetryTests: XCTestCase {
         XCTAssertNil(SocketDisconnectPolicy.reason(in: []))
     }
 
-    func test_bothSocketManagers_armTheirRetryOnAServerDisconnect() throws {
+    func test_bothSocketManagers_handOverTheServerDisconnectDecisionToTheirLifecycleMethod() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/MeeshySDK/Sockets")
@@ -29,7 +29,7 @@ final class SocketServerDisconnectRetryTests: XCTestCase {
             let handler = try XCTUnwrap(source.range(of: "socket.on(clientEvent: .disconnect)"), file)
             let body = String(source[handler.upperBound...].prefix(1_200))
             XCTAssertTrue(body.contains("SocketDisconnectPolicy.retries(afterReason:"), file)
-            XCTAssertTrue(body.contains("self.scheduleReconnectWithBackoff()"), file)
+            XCTAssertTrue(body.contains("self.handleTransportDisconnected(retries: retries)"), "l'armement se prouve par `SocketConnectionLifecycleTests` — \(file)")
             XCTAssertTrue(body.contains("socket === self.socket"), "seul le socket courant réarme — \(file)")
         }
     }

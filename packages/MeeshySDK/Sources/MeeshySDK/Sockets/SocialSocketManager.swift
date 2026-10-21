@@ -182,10 +182,11 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         guard let url = SocketConfig.baseURL else { return .notArmed }
 
-        DispatchQueue.main.async { self.connectionState = .connecting }
+        Task { @MainActor in self.connectionState = .connecting }
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
+            .handleQueue(.main),
             // CALL-FIX 2026-06-06 — WebSocket transport (voir MessageSocketManager).
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
@@ -299,7 +300,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         reconnectAttempt = 0
         backoff.reset()
         if wasReconnect {
-            DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
+            Task { @MainActor [weak self] in self?.didReconnect.send(()) }
         }
         return wasReconnect
     }
@@ -531,37 +532,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
     // MARK: - Event Handlers
 
-    private func setupEventHandlers() {
-        guard let socket else { return }
-
+    private func installLifecycleHandlers(on socket: SocketIOClient) {
         socket.on(clientEvent: .connect) { [weak self] _, _ in
-            guard let self else { return }
-            // R1/R2 — records the connection and fires `didReconnect` when this
-            // follows a previous connection (resume / network-back / re-auth).
-            self.handleConnectionEstablished()
-            DispatchQueue.main.async {
-                self.isConnected = true
-                self.connectionState = .connected
-            }
-            // BW-IOS-07 — AUCUN battement applicatif ici, delibere. Le pong
-            // ENGINE (25 s) rafraichit deja la presence de cette socket, plus
-            // souvent que les 30 s retirees ; le `heartbeat` NU qui vivait ici
-            // n'avait ni `clientTime` (donc aucun RTT calculable) ni ecouteur
-            // d'ack — doublon exact du battement web supprime au cycle 78. Le
-            // seul battement applicatif iOS est celui de
-            // `MessageSocketManager`, qui porte `clientTime`.
-            self.subscribeFeed()
-            // Re-join des post rooms après (re)connexion : le gateway a oublié nos
-            // rooms à la coupure. Sans ça, le post/reel/story ouvert cessait de
-            // recevoir likes/commentaires/réactions temps réel après un flap réseau.
-            let rooms = self.postRoomsToRejoinOnConnect()
-            for postId in rooms {
-                self.socket?.emit("post:join", ["postId": postId])
-            }
-            if !rooms.isEmpty {
-                Logger.socket.info("SocialSocket reconnected — re-joined \(rooms.count) post room(s)")
-            }
-            Logger.socket.info("SocialSocket connected")
+            self?.handleTransportConnected()
         }
 
         socket.on(clientEvent: .disconnect) { [weak self, weak socket] data, _ in
@@ -569,20 +542,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             // Seul le socket COURANT réarme : un ancien, remplacé, n'a plus rien à rouvrir.
             let retries = SocketDisconnectPolicy.retries(afterReason: SocketDisconnectPolicy.reason(in: data))
                 && socket != nil && socket === self.socket
-            DispatchQueue.main.async {
-                self.isConnected = false
-                if self.hadPreviousConnection {
-                    self.connectionState = .reconnecting(attempt: 0)
-                } else {
-                    self.connectionState = .disconnected
-                }
-                // Coupure prononcée par la passerelle, sur le socket COURANT :
-                // Socket.IO ne la rattrape pas (`SocketDisconnectPolicy`).
-                if retries {
-                    self.scheduleReconnectWithBackoff()
-                }
-            }
-            Logger.socket.info("SocialSocket disconnected")
+            self.handleTransportDisconnected(retries: retries)
         }
 
         // Une perte de transport n'émet PAS `.disconnect` quand la reconnexion automatique est active :
@@ -590,22 +550,11 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         // restait vrai pendant toute la coupure — chaque envoi attendait son accusé avant le repli REST,
         // et le retour du réseau ne relançait rien.
         socket.on(clientEvent: .reconnect) { [weak self] _, _ in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                self.isConnected = false
-                self.connectionState = .reconnecting(attempt: 0)
-            }
-            Logger.socket.info("SocialSocket transport lost — reconnecting")
+            self?.handleTransportLost()
         }
 
         socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
-            guard let self else { return }
-            self.reconnectAttempt += 1
-            let attempt = self.reconnectAttempt
-            DispatchQueue.main.async {
-                self.connectionState = .reconnecting(attempt: attempt)
-            }
-            Logger.socket.info("SocialSocket reconnect attempt \(attempt)")
+            self?.handleReconnectAttempt()
         }
 
         socket.on(clientEvent: .error) { data, _ in
@@ -616,6 +565,75 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             // silent token refresh, and even that preserves the session.
             Logger.socket.error("SocialSocket error: \(data)")
         }
+    }
+
+    func handleTransportConnected() {
+        // R1/R2 — records the connection and fires `didReconnect` when this
+        // follows a previous connection (resume / network-back / re-auth).
+        handleConnectionEstablished()
+        Task { @MainActor in
+            self.isConnected = true
+            self.connectionState = .connected
+        }
+        // BW-IOS-07 — AUCUN battement applicatif ici, delibere. Le pong
+        // ENGINE (25 s) rafraichit deja la presence de cette socket, plus
+        // souvent que les 30 s retirees ; le `heartbeat` NU qui vivait ici
+        // n'avait ni `clientTime` (donc aucun RTT calculable) ni ecouteur
+        // d'ack — doublon exact du battement web supprime au cycle 78. Le
+        // seul battement applicatif iOS est celui de
+        // `MessageSocketManager`, qui porte `clientTime`.
+        subscribeFeed()
+        // Re-join des post rooms après (re)connexion : le gateway a oublié nos
+        // rooms à la coupure. Sans ça, le post/reel/story ouvert cessait de
+        // recevoir likes/commentaires/réactions temps réel après un flap réseau.
+        let rooms = postRoomsToRejoinOnConnect()
+        for postId in rooms {
+            socket?.emit("post:join", ["postId": postId])
+        }
+        if !rooms.isEmpty {
+            Logger.socket.info("SocialSocket reconnected — re-joined \(rooms.count) post room(s)")
+        }
+        Logger.socket.info("SocialSocket connected")
+    }
+
+    func handleTransportDisconnected(retries: Bool) {
+        Task { @MainActor in
+            self.isConnected = false
+            if self.hadPreviousConnection {
+                self.connectionState = .reconnecting(attempt: 0)
+            } else {
+                self.connectionState = .disconnected
+            }
+            // Coupure prononcée par la passerelle, sur le socket COURANT :
+            // Socket.IO ne la rattrape pas (`SocketDisconnectPolicy`).
+            if retries {
+                self.scheduleReconnectWithBackoff()
+            }
+        }
+        Logger.socket.info("SocialSocket disconnected")
+    }
+
+    func handleTransportLost() {
+        Task { @MainActor in
+            self.isConnected = false
+            self.connectionState = .reconnecting(attempt: 0)
+        }
+        Logger.socket.info("SocialSocket transport lost — reconnecting")
+    }
+
+    func handleReconnectAttempt() {
+        reconnectAttempt += 1
+        let attempt = reconnectAttempt
+        Task { @MainActor in
+            self.connectionState = .reconnecting(attempt: attempt)
+        }
+        Logger.socket.info("SocialSocket reconnect attempt \(attempt)")
+    }
+
+    private func setupEventHandlers() {
+        guard let socket else { return }
+
+        installLifecycleHandlers(on: socket)
 
         // --- Post events ---
 
