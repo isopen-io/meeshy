@@ -9,6 +9,10 @@ import QuartzCore
 /// doigt depuis sa propre copie de la slide.
 public enum BindingWriteCadence {
     public static let minimumInterval: TimeInterval = 1.0 / 30.0
+    /// Un reste plus petit qu'une microseconde est l'erreur d'arrondi de
+    /// `now - lastWrite` : l'intervalle est écoulé, différer serait armer un
+    /// front de queue pour rien.
+    static let elapsedTolerance: TimeInterval = 1e-6
 
     public enum Decision: Equatable {
         case writeNow
@@ -17,9 +21,9 @@ public enum BindingWriteCadence {
 
     public static func decide(now: TimeInterval, lastWrite: TimeInterval?) -> Decision {
         guard let lastWrite else { return .writeNow }
-        let elapsed = now - lastWrite
-        guard elapsed < minimumInterval else { return .writeNow }
-        return .deferred(by: minimumInterval - elapsed)
+        let remaining = minimumInterval - (now - lastWrite)
+        guard remaining > elapsedTolerance else { return .writeNow }
+        return .deferred(by: remaining)
     }
 }
 
