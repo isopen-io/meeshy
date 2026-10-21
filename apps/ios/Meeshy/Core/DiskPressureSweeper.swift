@@ -16,12 +16,14 @@ final class DiskPressureSweeper {
     // Garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    static let shared = DiskPressureSweeper(minimumInterval: 10 * 60) {
+    static let shared = DiskPressureSweeper(minimumInterval: 10 * 60, sweep: sweepAllCaches)
+
+    nonisolated private static func sweepAllCaches() async {
         let coordinator = CacheCoordinator.shared
-        await coordinator.video.evictUnderDiskPressure()
-        await coordinator.audio.evictUnderDiskPressure()
-        await coordinator.images.evictUnderDiskPressure()
-        await coordinator.thumbnails.evictUnderDiskPressure()
+        await coordinator.video.evictUnderDiskPressure(availableBytes: nil)
+        await coordinator.audio.evictUnderDiskPressure(availableBytes: nil)
+        await coordinator.images.evictUnderDiskPressure(availableBytes: nil)
+        await coordinator.thumbnails.evictUnderDiskPressure(availableBytes: nil)
     }
 
     private let minimumInterval: TimeInterval
