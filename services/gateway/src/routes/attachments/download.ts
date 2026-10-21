@@ -127,38 +127,19 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'File not found');
         }
 
-        try {
-          await stat(filePath);
-        } catch {
+        const fileStats = await statOrNull(filePath);
+        if (!fileStats) {
           return sendNotFound(reply, 'File not found on disk');
         }
 
-        reply.header('Content-Type', attachment.mimeType);
-        // RFC 5987 filename* form encodes the original name as UTF-8 percent-
-        // escaped, eliminating the header-injection surface that exists when
-        // the unsanitized DB value is interpolated into a quoted-string.
-        // The legacy `filename=` is kept for older clients but uses an
-        // ASCII-safe fallback (the file extension) so a hostile filename
-        // cannot smuggle quotes / CRLF / parameter separators.
-        const safeFilename = sanitizeAsciiFilename(attachment.originalName);
-        const utf8Filename = encodeRFC5987(attachment.originalName);
-        reply.header(
-          'Content-Disposition',
-          `inline; filename="${safeFilename}"; filename*=UTF-8''${utf8Filename}`,
-        );
-        // SVG can contain JavaScript and would execute in the gateway origin
-        // when served inline. Force download for SVG and add nosniff to
-        // prevent MIME-sniffing attacks across all attachment types.
-        if (attachment.mimeType === 'image/svg+xml') {
-          reply.header('Content-Disposition', `attachment; filename="${safeFilename}"`);
-          reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
-        }
-        reply.header('X-Content-Type-Options', 'nosniff');
         // #9478 — le même cache que la route par chemin pour un média protégé.
-        reply.header('Cache-Control', await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()));
-
-        const stream = createReadStream(filePath);
-        return reply.send(stream);
+        // #11265 — même transport que la route par chemin : plages, ETag, 304.
+        return streamStoredFile(request, reply, {
+          filePath,
+          fileStats,
+          cacheControl: await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()),
+          representation: attachmentRepresentation(attachment),
+        });
       } catch (error: any) {
         log.error('Error serving file', { error: error?.message });
         return sendInternalError(reply, 'Error serving file');
@@ -227,20 +208,19 @@ export async function registerDownloadRoutes(
           return sendNotFound(reply, 'Thumbnail not found');
         }
 
-        try {
-          await stat(thumbnailPath);
-        } catch {
+        const thumbnailStats = await statOrNull(thumbnailPath);
+        if (!thumbnailStats) {
           return sendNotFound(reply, 'Thumbnail not found on disk');
         }
 
         // WebP thumbnails (sprint D4) advertise image/webp; legacy thumbnails
         // (always JPEG bytes whatever their extension) stay image/jpeg.
-        reply.header('Content-Type', thumbnailContentType(thumbnailPath));
-        reply.header('Content-Disposition', 'inline');
-        reply.header('Cache-Control', await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()));
-
-        const stream = createReadStream(thumbnailPath);
-        return reply.send(stream);
+        return streamStoredFile(request, reply, {
+          filePath: thumbnailPath,
+          fileStats: thumbnailStats,
+          cacheControl: await resolveAttachmentByIdCacheControl(attachmentId, prisma, new Date()),
+          representation: { contentType: thumbnailContentType(thumbnailPath), headers: { 'Content-Disposition': 'inline' } },
+        });
       } catch (error: any) {
         log.error('Error serving thumbnail', error as Error);
         return sendInternalError(reply, 'Error serving thumbnail');
@@ -384,7 +364,7 @@ export function registerFileStreamRoute(fastify: FastifyInstance, prisma: FileRo
             ? 'public, no-cache'
             : 'private, max-age=31536000';
 
-        return streamStoredFile(request, reply, { filePath: located.filePath, decodedPath, fileStats, cacheControl });
+        return streamStoredFile(request, reply, { filePath: located.filePath, fileStats, cacheControl, representation: pathRepresentation(decodedPath) });
       } catch (error: unknown) {
         log.error('Error serving file by path', { error: error instanceof Error ? error.message : String(error) });
         return sendInternalError(reply, 'Error serving file');
@@ -452,7 +432,7 @@ function registerSignedFileRoute(fastify: FastifyInstance, prisma: PrismaClient)
         const fileStats = await statOrNull(located.filePath);
         if (!fileStats) return sendNotFound(reply, 'File not found');
 
-        return streamStoredFile(request, reply, { filePath: located.filePath, decodedPath, fileStats, cacheControl: access.cacheControl });
+        return streamStoredFile(request, reply, { filePath: located.filePath, fileStats, cacheControl: access.cacheControl, representation: pathRepresentation(decodedPath) });
       } catch (error: unknown) {
         log.error('Error serving signed file', { error: error instanceof Error ? error.message : String(error) });
         return sendInternalError(reply, 'Error serving file');
@@ -551,92 +531,136 @@ const MIME_TYPES: Readonly<Record<string, string>> = {
  * Le flux d'octets d'un fichier déjà admis — partagé par la route par chemin et
  * par l'adresse signée, qui servent les mêmes octets sous les mêmes gardes.
  */
+/**
+ * La REPRÉSENTATION d'un fichier — ce que la réponse dit de ses octets (type,
+ * disposition, garde SVG). Le TRANSPORT (plages, ETag, 304, cache) est commun à
+ * toutes les routes de fichier et vit dans `streamStoredFile` (#11265).
+ */
+type StoredFileRepresentation = {
+  readonly contentType: string;
+  readonly headers: Readonly<Record<string, string>>;
+};
+
+/** Représentation de la route PAR CHEMIN : type déduit de l'extension (#4187). */
+function pathRepresentation(decodedPath: string): StoredFileRepresentation {
+  const contentType = MIME_TYPES[decodedPath.toLowerCase().slice(decodedPath.lastIndexOf('.'))] || 'application/octet-stream';
+  // #3627 — un SVG peut porter du JavaScript et l'exécuterait dans l'origine
+  // de la passerelle s'il était servi `inline` : téléchargement forcé + sandbox.
+  if (contentType === 'image/svg+xml') {
+    return {
+      contentType,
+      headers: {
+        'Content-Disposition': `attachment; filename="${sanitizeAsciiFilename(decodedPath.split('/').pop() || 'file.svg')}"`,
+        'Content-Security-Policy': "default-src 'none'; sandbox",
+        'X-Content-Type-Options': 'nosniff',
+      },
+    };
+  }
+  return { contentType, headers: { 'Content-Disposition': 'inline', 'X-Content-Type-Options': 'nosniff' } };
+}
+
+/**
+ * Représentation de la route PAR IDENTIFIANT : type et nom de la pièce jointe.
+ * Le nom RFC 5987 (`filename*`) est encodé en UTF-8 ; le `filename=` hérité est
+ * un repli ASCII qu'un nom hostile ne peut pas faire sortir de ses guillemets.
+ */
+function attachmentRepresentation(attachment: { readonly mimeType: string; readonly originalName: string }): StoredFileRepresentation {
+  const safeFilename = sanitizeAsciiFilename(attachment.originalName);
+  const utf8Filename = encodeRFC5987(attachment.originalName);
+  // SVG peut porter du JavaScript : téléchargement forcé + sandbox.
+  if (attachment.mimeType === 'image/svg+xml') {
+    return {
+      contentType: attachment.mimeType,
+      headers: {
+        'Content-Disposition': `attachment; filename="${safeFilename}"`,
+        'Content-Security-Policy': "default-src 'none'; sandbox",
+        'X-Content-Type-Options': 'nosniff',
+      },
+    };
+  }
+  return {
+    contentType: attachment.mimeType,
+    headers: {
+      'Content-Disposition': `inline; filename="${safeFilename}"; filename*=UTF-8''${utf8Filename}`,
+      'X-Content-Type-Options': 'nosniff',
+    },
+  };
+}
+
+/**
+ * Le flux d'octets d'un fichier déjà admis — partagé par toutes les routes de
+ * fichier (par identifiant, miniature, par chemin, adresse signée), qui servent
+ * les mêmes octets sous les mêmes gardes (#11265).
+ *
+ * Toute réponse porte `ETag` (faible, mtime + taille), `Vary: Accept`,
+ * `Accept-Ranges` et le `cacheControl` que le fichier autorise. Une plage
+ * valide rend 206 — un lecteur vidéo peut démarrer avant la fin du
+ * téléchargement. Le cache n'est jamais assoupli ici : `immutable` ou
+ * `no-store` viennent de `fileRouteVerdict.ts`, pas d'une décision de transport.
+ */
 function streamStoredFile(
   request: FastifyRequest,
   reply: FastifyReply,
-  input: { readonly filePath: string; readonly decodedPath: string; readonly fileStats: Stats; readonly cacheControl: string }
+  input: {
+    readonly filePath: string;
+    readonly fileStats: Stats;
+    readonly cacheControl: string;
+    readonly representation: StoredFileRepresentation;
+  }
 ) {
-  const { filePath, decodedPath, cacheControl } = input;
+  const { filePath, cacheControl, representation } = input;
   const fileSize = input.fileStats.size;
-  const mimeType = MIME_TYPES[decodedPath.toLowerCase().slice(decodedPath.lastIndexOf('.'))] || 'application/octet-stream';
 
-  // Weak ETag based on mtime+size — sufficient for HTTP cache
-  // revalidation (If-None-Match → 304). The Cache-Control directive
-  // intentionally drops `immutable` here : `immutable` tells the
-  // client never to revalidate during max-age, which makes the ETag
-  // moot. Snapshot files (UUID-named, never overwritten) ARE
-  // semantically immutable, but the route also serves user-uploaded
-  // originals which may legitimately change. Keep the long max-age
-  // for browser cache reuse, but allow ETag revalidation.
+  // Weak ETag based on mtime+size — revalidation (If-None-Match → 304).
   const etag = `W/"${fileSize}-${Math.floor(input.fileStats.mtimeMs)}"`;
+  reply.header('ETag', etag);
+  reply.header('Cache-Control', cacheControl);
+  reply.header('Accept-Ranges', 'bytes');
+  reply.header('Vary', 'Accept');
 
   const ifNoneMatch = request.headers['if-none-match'];
   if (ifNoneMatch && ifNoneMatch === etag) {
-    reply.header('ETag', etag);
-    reply.header('Cache-Control', cacheControl);
     return reply.code(304).send();
   }
 
-  const isMediaFile = mimeType.startsWith('audio/') || mimeType.startsWith('video/');
-  if (isMediaFile) {
-    reply.header('Accept-Ranges', 'bytes');
-
-    const range = request.headers.range;
-    if (range) {
-      // Parse + validate per RFC 7233. Reject malformed / out-of-bounds
-      // ranges with 416 instead of crashing on negative chunkSize or
-      // streaming junk.
-      const match = /^bytes=(\d*)-(\d*)$/.exec(range);
-      if (!match) {
-        reply.header('Content-Range', `bytes */${fileSize}`);
-        return sendError(reply, 416, 'Range Not Satisfiable');
-      }
-      const startStr = match[1];
-      const endStr = match[2];
-      const start = startStr === '' ? 0 : parseInt(startStr, 10);
-      const end = endStr === '' ? fileSize - 1 : parseInt(endStr, 10);
-      if (
-        !Number.isFinite(start)
-        || !Number.isFinite(end)
-        || start < 0
-        || end >= fileSize
-        || start > end
-      ) {
-        reply.header('Content-Range', `bytes */${fileSize}`);
-        return sendError(reply, 416, 'Range Not Satisfiable');
-      }
-      const chunkSize = (end - start) + 1;
-
-      reply.code(206);
-      reply.header('Content-Range', `bytes ${start}-${end}/${fileSize}`);
-      reply.header('Content-Length', chunkSize);
-      reply.header('Content-Type', mimeType);
-      reply.header('ETag', etag);
-      reply.header('Cache-Control', cacheControl);
-
-      return reply.send(createReadStream(filePath, { start, end }));
+  const range = request.headers.range;
+  if (range) {
+    // Parse + validate per RFC 7233. Reject malformed / out-of-bounds
+    // ranges with 416 instead of crashing on negative chunkSize or
+    // streaming junk.
+    const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (!match) {
+      reply.header('Content-Range', `bytes */${fileSize}`);
+      return sendError(reply, 416, 'Range Not Satisfiable');
     }
+    const startStr = match[1];
+    const endStr = match[2];
+    const start = startStr === '' ? 0 : parseInt(startStr, 10);
+    const end = endStr === '' ? fileSize - 1 : parseInt(endStr, 10);
+    if (
+      !Number.isFinite(start)
+      || !Number.isFinite(end)
+      || start < 0
+      || end >= fileSize
+      || start > end
+    ) {
+      reply.header('Content-Range', `bytes */${fileSize}`);
+      return sendError(reply, 416, 'Range Not Satisfiable');
+    }
+    const chunkSize = (end - start) + 1;
+
+    reply.code(206);
+    reply.header('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+    reply.header('Content-Length', chunkSize);
+    reply.header('Content-Type', representation.contentType);
+    reply.headers(representation.headers);
+
+    return reply.send(createReadStream(filePath, { start, end }));
   }
 
-  reply.header('Content-Type', mimeType);
+  reply.header('Content-Type', representation.contentType);
   reply.header('Content-Length', fileSize);
-  reply.header('ETag', etag);
-  // #3627 — même garde que `GET /attachments/:attachmentId` : un SVG
-  // peut porter du JavaScript et l'exécuterait dans l'origine de la
-  // passerelle s'il était servi `inline`. Cette route PAR CHEMIN sert
-  // les mêmes octets (c'est l'alias legacy non versionné, #4187) et
-  // n'avait jamais reçu cette garde — un fichier `.svg` uploadé
-  // légitimement (déclaré `image/svg+xml`, sans concept d'EXIF/binaire,
-  // voir `ContentSignature.verifyDeclaredMimeType`) restait servi
-  // inline par cette seule porte.
-  if (mimeType === 'image/svg+xml') {
-    reply.header('Content-Disposition', `attachment; filename="${sanitizeAsciiFilename(decodedPath.split('/').pop() || 'file.svg')}"`);
-    reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
-  } else {
-    reply.header('Content-Disposition', 'inline');
-  }
-  reply.header('X-Content-Type-Options', 'nosniff');
-  reply.header('Cache-Control', cacheControl);
+  reply.headers(representation.headers);
 
   return reply.send(createReadStream(filePath));
 }

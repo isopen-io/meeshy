@@ -42,7 +42,7 @@ Gère le téléchargement et streaming de fichiers:
 - **GET /attachments/file/\*** - Stream par chemin de fichier
 
 **Fonctionnalités:**
-- Support Range requests pour audio/vidéo (seeking)
+- Support Range requests (206) et ETag (304) pour tout fichier servi, par chemin comme par identifiant (#11265)
 - Headers CORS pour chargement cross-origin
 - Cache agressif (1 an, immutable)
 - Détection automatique du type MIME
