@@ -64,8 +64,10 @@ final class ConversationSendStateProjectionTests: XCTestCase {
     func test_twoConcurrentSends_finishIdle() async throws {
         let sut = try await makeSUT()
 
-        async let first = sut.send(makeOutgoing(content: "😂"))
-        async let second = sut.send(makeOutgoing(content: "😂"))
+        let firstMessage = makeOutgoing(content: "😂")
+        let secondMessage = makeOutgoing(content: "😂")
+        async let first = sut.send(firstMessage)
+        async let second = sut.send(secondMessage)
         _ = await (first, second)
 
         XCTAssertEqual(sut.sendActivity, .idle)
