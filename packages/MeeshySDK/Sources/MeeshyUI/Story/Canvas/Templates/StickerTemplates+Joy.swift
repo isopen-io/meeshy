@@ -10,7 +10,9 @@ import MeeshySDK
 /// palette est celle de la marque — l'ambre `warmBulb` pour ce qui rit,
 /// l'indigo `accent` pour ce qui porte un mot, `surface` en liseré pour se
 /// détacher d'une photo sombre.
-extension StickerTemplateRenderer {
+enum JoyStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .joy
+
 
     // MARK: - Le visage — le socle des trois têtes
 
@@ -565,7 +567,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille JOIE
 
-    static let joyDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.joyBigSmile,
             name: { String(localized: "sticker.template.joy.bigSmile", defaultValue: "Grand sourire", bundle: .module) },

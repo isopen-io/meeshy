@@ -451,7 +451,7 @@ extension ConversationListView {
                     // de lecture », monté plus haut dans ce fichier).
                     ConversationPreviewView(
                         conversation: conversation,
-                        cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
+                        previewLoader: conversationViewModel.previewLoader,
                         bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
                         avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
                         storyState: storyRingState(for: conversation),

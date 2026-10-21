@@ -55,7 +55,6 @@ struct CommunityLinkDetailView: View {
                 UIPasteboard.general.string = link.joinUrl
                 HapticFeedback.success()
                 withAnimation { copiedFeedback = true }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
             shareActionButton
             communityActionButton(String(localized: "communityLink.identify", defaultValue: "Identifier", bundle: .main), icon: "doc.plaintext", color: MeeshyColors.brandPrimary) {
@@ -63,6 +62,7 @@ struct CommunityLinkDetailView: View {
                 HapticFeedback.light()
             }
         }
+        .settling($copiedFeedback, to: false, after: .seconds(2), animation: .default)
     }
 
     // Native share: ShareLink handles the activity sheet, iPad popover anchoring

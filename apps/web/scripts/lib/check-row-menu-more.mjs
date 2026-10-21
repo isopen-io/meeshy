@@ -22,6 +22,8 @@
 import { awaitCondition } from './await-fact.mjs';
 
 const GROUP = 'c-deploiement';
+/** Le groupe que le lecteur a créé (`READER_CREATED_GROUP_ID`, `fixtures-pagination.ts`) : le seul où il renomme (#11211). */
+const CREATED_GROUP = 'c-page-04';
 const DIRECT = 'c-amina';
 const BUTTON = 'button[aria-label="Actions de conversation"]';
 
@@ -65,19 +67,26 @@ export async function checkRowMenuMore({ browser, base, check }) {
   const section = await page.$eval(`[data-row="${GROUP}"]`, (row) => row.closest('[data-section]')?.getAttribute('data-section') ?? null);
   check(section === 'category:cat-proches', `« Déplacer vers… › Proches » range la ligne dans la section de la catégorie (${section})`);
 
-  // c. renommer, puis rendre le nom d'origine
-  const nameOf = () => page.$eval(`[data-row="${GROUP}"] [data-name]`, (el) => el.textContent);
+  // c. un membre ne renomme pas, il quitte (#11211) ; le créateur renomme, puis rend le nom d'origine
+  await openMenuOf(page, GROUP);
+  const memberLabels = await page.$$eval('[role="menu"] button', (els) => els.map((el) => el.textContent));
+  check(
+    !memberLabels.includes('Renommer') && memberLabels.includes('Quitter'),
+    `un simple membre de « ${GROUP} » n'a pas « Renommer », il a « Quitter » (${JSON.stringify(memberLabels)})`,
+  );
+  await page.keyboard.press('Escape');
+  const nameOf = () => page.$eval(`[data-row="${CREATED_GROUP}"] [data-name]`, (el) => el.textContent);
   const original = await nameOf();
   for (const [typed, expected] of [
     ['  Projet X  ', 'Projet X'],
     ['', original],
   ]) {
-    await openMenuOf(page, GROUP);
+    await openMenuOf(page, CREATED_GROUP);
     await pick(page, 'Renommer');
     await page.waitForSelector('dialog[data-rename-dialog] input');
     await page.fill('dialog[data-rename-dialog] input', typed);
     await page.click('[data-rename="save"]');
-    await awaitCondition(page, ({ row, name }) => document.querySelector(`[data-row="${row}"] [data-name]`)?.textContent === name, { row: GROUP, name: expected });
+    await awaitCondition(page, ({ row, name }) => document.querySelector(`[data-row="${row}"] [data-name]`)?.textContent === name, { row: CREATED_GROUP, name: expected });
     const name = await nameOf();
     check(name === expected, `« Renommer » avec ${JSON.stringify(typed)} : la ligne lit « ${expected} » (${JSON.stringify(name)})`);
   }
@@ -123,6 +132,39 @@ export async function checkRowMenuMore({ browser, base, check }) {
   await page.keyboard.press('Escape');
   const closed = await page.evaluate((button) => ({ menu: document.querySelector('[role="menu"]') !== null, focus: document.activeElement?.matches(button) === true }), BUTTON);
   check(!closed.menu && closed.focus, `Échap referme et rend le focus au bouton (${JSON.stringify(closed)})`);
+
+  // f. tenir la ligne ouvre l'aperçu au-dessus des actions (#11211) — sans `contextmenu`, comme Safari iOS
+  const rowBox = await page.$eval(`[data-row="${GROUP}"] [data-name]`, (el) => {
+    const r = el.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await page.mouse.move(rowBox.x, rowBox.y);
+  await page.mouse.down();
+  await page.waitForSelector('[data-conversation-peek] [data-peek-card]', { timeout: 4000 });
+  await page.mouse.up();
+  const peek = await page.evaluate(() => {
+    const card = document.querySelector('[data-conversation-peek] [data-peek-card]');
+    const style = card === null ? null : getComputedStyle(card);
+    const box = card?.getBoundingClientRect();
+    return {
+      dialog: (card?.closest('[role="dialog"][aria-modal="true"]')?.querySelector('[role="menu"]') ?? null) !== null,
+      transform: style?.transform ?? null,
+      filter: style?.filter ?? null,
+      rows: card?.querySelectorAll('[data-peek-row]').length ?? 0,
+      left: box?.left ?? -1,
+      right: box === undefined ? -1 : window.innerWidth - box.right,
+      width: box?.width ?? 0,
+      menu: document.querySelector('[data-conversation-peek] [role="menu"]') !== null,
+      path: location.pathname,
+    };
+  });
+  check(
+    peek.dialog === true && peek.menu && peek.transform === 'none' && peek.filter === 'none' && peek.width <= 340 && peek.left >= 16 && peek.right >= 16 && peek.path === '/chats',
+    `tenir « ${GROUP} » ouvre l'aperçu net (ni transform ni filtre), dans une couche modale qui porte ses actions, 340 px au plus et 16 px des bords, au-dessus de ses actions, sans ouvrir le fil (${JSON.stringify(peek)})`,
+  );
+  await page.keyboard.press('Escape');
+  const peekClosed = await page.evaluate((button) => ({ peek: document.querySelector('[data-conversation-peek]') !== null, focus: document.activeElement?.matches(button) === true }), BUTTON);
+  check(!peekClosed.peek && peekClosed.focus, `Échap referme l'aperçu et rend le focus au bouton ⋮ (${JSON.stringify(peekClosed)})`);
 
   await context.close();
 }

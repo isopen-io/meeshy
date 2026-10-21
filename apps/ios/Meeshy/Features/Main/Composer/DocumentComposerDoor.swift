@@ -106,9 +106,13 @@ struct DocumentComposerDoor: View {
         // L'hôte des toasts est monté par le meuble lui-même
         // (`ComposerHostChromeLayer`, #4872) : le reposer ici les doublerait.
         composerHost
-            .fullScreenCover(item: $previewAssets) { assets in
-                apercu(assets)
-            }
+            .modifier(StoryPreviewReaderCover(
+                assets: $previewAssets,
+                storyViewModel: storyViewModel,
+                statusViewModel: statusViewModel,
+                router: router,
+                conversationList: conversationListViewModel
+            ))
     }
 
     private var composerHost: some View {
@@ -196,36 +200,6 @@ struct DocumentComposerDoor: View {
             },
             onDismiss: { dismiss() }
         )
-    }
-
-    /// L'aperçu est rendu par le LECTEUR (`StoryViewerView`), pas par un
-    /// composant maison — loi 6, et le MÊME montage que
-    /// `MediaComposerDoor.apercu`. Un troisième chemin d'aperçu
-    /// mentirait tôt ou tard sur ce qui sera publié.
-    private func apercu(_ assets: StoryPreviewAssets) -> some View {
-        let items = assets.slides.map { $0.toPreviewStoryItem() }
-        let group = StoryGroup(
-            id: "preview",
-            username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
-            avatarColor: MeeshyColors.brandPrimaryHex,
-            stories: items
-        )
-        return StoryViewerView(
-            viewModel: storyViewModel,
-            groups: [group],
-            currentGroupIndex: 0,
-            isPresented: Binding(
-                get: { previewAssets != nil },
-                set: { if !$0 { previewAssets = nil } }
-            ),
-            isPreviewMode: true,
-            preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
-            preloadedVideoURLs: assets.videoURLs,
-            preloadedAudioURLs: assets.audioURLs
-        )
-        .environmentObject(router)
-        .conversationListObject(conversationListViewModel)
-        .environmentObject(statusViewModel)
     }
 
     /// **L'ENVOI DURABLE**, en trois temps que rien ne doit fusionner.

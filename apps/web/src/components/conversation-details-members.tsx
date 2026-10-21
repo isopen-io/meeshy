@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { lazy, Suspense, useId, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { performMemberAction } from '@/lib/api/conversation-member-actions';
 import type { ConversationMember } from '@/lib/api/conversation-members';
@@ -87,6 +87,7 @@ export function ConversationMembersSection({
   deps,
   language,
   manageReady,
+  focus,
 }: {
   readonly conversation: Conversation;
   readonly members: readonly ConversationMember[];
@@ -103,13 +104,19 @@ export function ConversationMembersSection({
   readonly language: InterfaceLanguage;
   /** Le catalogue de gestion est chargé : les contrôles de gestion peuvent dire leurs mots. */
   readonly manageReady: boolean;
+  /** La fiche ouverte pour « Inviter » ouvre l'ajout ; pour « Gérer les membres », amène la section en vue (revue #11211). */
+  readonly focus?: 'invite' | 'members' | undefined;
 }) {
   const headingId = useId();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
   const [acting, setActing] = useState<ConversationMember | null>(null);
   const [confirming, setConfirming] = useState<Pending | null>(null);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(focus === 'invite');
+  const sectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (focus !== undefined) sectionRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [focus]);
   const [status, setStatus] = useState('');
   const manage = managementOf(conversation);
   const t = (key: ConversationManageCatalogKey, params?: Readonly<Record<string, string>>) => manageText(language, key, params);
@@ -142,7 +149,7 @@ export function ConversationMembersSection({
   };
 
   return (
-    <section aria-labelledby={headingId} className="pb-6" data-conversation-details-members-section>
+    <section ref={sectionRef} aria-labelledby={headingId} className="pb-6" data-conversation-details-members-section>
       <div className="flex items-center justify-between gap-2 px-4 pb-2">
         <h4 id={headingId} className="text-caption font-semibold uppercase" style={{ color: 'var(--color-ios-ink-2)' }}>
           {translate(language, 'conversation.details.members.section')}
@@ -245,7 +252,7 @@ export function ConversationMembersSection({
         />
       )}
 
-      {adding ? (
+      {adding && manageReady ? (
         <Suspense fallback={null}>
           <AddMembersSheet
             conversationId={conversation.id}

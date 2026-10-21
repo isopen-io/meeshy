@@ -15,11 +15,13 @@ import MeeshySDK
 /// près se ressembleraient trop pour se reconnaître du coin de l'œil dans la
 /// palette, et c'est là qu'on les choisit.
 ///
-/// **Tous les noms de ce fichier sont préfixés `travel` / `Travel`.** Les
-/// familles partagent UNE extension de `StickerTemplateRenderer` : deux types
-/// homonymes écrits dans deux fichiers y seraient le MÊME type nominal, et se
-/// heurteraient même déclarés `private`.
-extension StickerTemplateRenderer {
+/// **Les noms de ce fichier restent préfixés `travel` / `Travel`**, comme au
+/// temps où les familles partageaient une extension : un nom lu dans un
+/// message de compilation ou une trace dit tout de suite de quelle famille il
+/// vient.
+enum TravelStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .travel
+
 
     // MARK: - Le socle des silhouettes nues
 
@@ -821,7 +823,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille VOYAGE
 
-    static let travelDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.travelPlane,
             name: { String(localized: "sticker.template.travel.plane", defaultValue: "Avion", bundle: .module) },

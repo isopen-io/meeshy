@@ -32,9 +32,6 @@ struct ThemedActionButton: View {
         Button(action: {
             HapticFeedback.light()
             withAnimation(.spring(response: 0.15, dampingFraction: 0.5)) { isPressed = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) { isPressed = false }
-            }
             action()
         }) {
             ZStack {
@@ -77,6 +74,7 @@ struct ThemedActionButton: View {
         }
         .accessibilityLabel(label)
         .accessibilityHint(hint)
+        .settling($isPressed, to: false, after: .milliseconds(100), animation: .spring(response: 0.25, dampingFraction: 0.5))
         .onAppear { syncGlow() }
         // Le menu s'ouvre/se ferme SANS remonter les boutons (l'échelle reste
         // dans la hiérarchie) : c'est ce changement-ci, pas `onAppear`, qui

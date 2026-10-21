@@ -15,7 +15,9 @@ import MeeshySDK
 /// sur iOS 26 — la raison même pour laquelle `heartPath` existe. La légende vient
 /// de `String(localized:)` à clé LITTÉRALE : le LECTEUR lit « Kick-off » là où
 /// l'auteur a posé « Coup d'envoi ». Aucun emplacement, donc rien à traduire.
-extension StickerTemplateRenderer {
+enum SportStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .sport
+
 
     // MARK: - Le patron des cartouches à mot
 
@@ -670,7 +672,7 @@ extension StickerTemplateRenderer {
                   icône: { r in Self.sportWhistleIcon(in: r) }),
     ]
 
-    static let sportDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.sportSoccerBall,
             name: { String(localized: "sticker.template.sport.soccerBall", defaultValue: "Ballon de foot", bundle: .module) },

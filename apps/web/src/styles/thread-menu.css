@@ -178,7 +178,7 @@
  * critère 5) — `-webkit-touch-callout` retire le menu « Copier/Partager »
  * iOS/Android au relâchement d'un appui long ; `user-select: none` (SOUS
  * `any-hover: none` seulement — une souris garde la sélection de texte
- * ordinaire, le geste 500 ms n'existe pas pour elle) empêche l'appui long au
+ * ordinaire, le geste `LONG_PRESS_MS` n'existe pas pour elle) empêche l'appui long au
  * doigt de sélectionner le texte de la rangée AU LIEU d'ouvrir le menu.
  *
  * `[data-row]` NE SUFFIT PAS (revue #5814, défaut majeur 7, mesuré sur l'AVD
