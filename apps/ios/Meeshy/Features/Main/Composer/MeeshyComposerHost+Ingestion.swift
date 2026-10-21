@@ -19,7 +19,7 @@ extension MeeshyComposerHost {
         var medias: [ComposerDocumentMedia] = []
         for item in items {
             let declaredType = item.supportedContentTypes.first
-            guard let url = await stagedPhotoLibraryFile(item, declaredType: declaredType) else { continue }
+            guard let url = await ComposerPhotoLibraryStaging.file(for: item, declaredType: declaredType) else { continue }
             let mime = ComposerMediaProbe.mime(forURL: url, declaredType: declaredType)
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: mime)
             // **Ce qu'on vient d'ingérer se DIT** (#4879). Le mime décide de
@@ -37,19 +37,6 @@ extension MeeshyComposerHost {
         }
         routePickedMedia(medias)
         HapticFeedback.light()
-    }
-
-    /// Le fichier d'un élément de la photothèque : une vidéo par son FICHIER
-    /// (aucun octet en mémoire, #9870), une image par ses octets écrits hors
-    /// du fil principal.
-    private func stagedPhotoLibraryFile(_ item: PhotosPickerItem, declaredType: UTType?) async -> URL? {
-        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-        if isVideo { return try? await PickedMedia.loadVideoFile(item) }
-        guard let data = try? await PickedMedia.loadImageData(item) else { return nil }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(
-            "composer_photo_\(UUID().uuidString).\(declaredType?.preferredFilenameExtension ?? "dat")"
-        )
-        return await Task.detached(priority: .userInitiated) { (try? data.write(to: url)) != nil ? url : nil }.value
     }
 
     /// La caméra (T2.3) — le mime est celui que CE SITE choisit en écrivant
@@ -253,5 +240,21 @@ nonisolated enum ComposerImportedFileRoute: Equatable {
         let routed = urls.map { (url: $0, route: route(for: typeOf($0))) }
         return (sounds: routed.filter { $0.route == .sound }.map(\.url),
                 medias: routed.filter { $0.route == .media }.map(\.url))
+    }
+}
+
+/// Le fichier d'un élément de la photothèque : une vidéo par son FICHIER
+/// (aucun octet en mémoire, #9870), une image par ses octets écrits hors
+/// du fil principal. Hors de `MeeshyComposerHost` : l'hôte ne porte pas la
+/// mise en fichier, il la consomme.
+enum ComposerPhotoLibraryStaging {
+    static func file(for item: PhotosPickerItem, declaredType: UTType?) async -> URL? {
+        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+        if isVideo { return try? await PickedMedia.loadVideoFile(item) }
+        guard let data = try? await PickedMedia.loadImageData(item) else { return nil }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "composer_photo_\(UUID().uuidString).\(declaredType?.preferredFilenameExtension ?? "dat")"
+        )
+        return await Task.detached(priority: .userInitiated) { (try? data.write(to: url)) != nil ? url : nil }.value
     }
 }

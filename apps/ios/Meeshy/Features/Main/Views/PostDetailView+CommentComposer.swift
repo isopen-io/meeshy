@@ -97,8 +97,7 @@ extension PostDetailView {
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
             maxSelectionCount: MAX_POST_MEDIA,
-            matching: .any(of: [.images, .videos]),
-            preferredItemEncoding: .current
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
         )
         .fileImporter(
             isPresented: $showCommentFilePicker,

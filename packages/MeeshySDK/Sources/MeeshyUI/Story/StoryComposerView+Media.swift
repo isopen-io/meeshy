@@ -149,8 +149,7 @@ extension StoryComposerView {
         // la réponse de l'utilisateur à l'alerte d'autorisation.
         .photosPicker(isPresented: $showGalleryPicker,
                       selection: $fgMediaItem,
-                      matching: .any(of: [.images, .videos]),
-                      preferredItemEncoding: .current)
+                      matching: .any(of: [.images, .videos]), preferredItemEncoding: .current)
         .sheet(isPresented: $showTransitionSheet) {
             NavigationStack {
                 transitionPicker

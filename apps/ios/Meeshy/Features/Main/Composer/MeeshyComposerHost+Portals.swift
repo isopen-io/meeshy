@@ -266,8 +266,7 @@ extension MeeshyComposerHost {
             isPresented: $showsPhotoPicker,
             selection: $pickedPhotoLibraryItems,
             maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos]),
-            preferredItemEncoding: .current
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
         )
         .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
             guard !items.isEmpty else { return }

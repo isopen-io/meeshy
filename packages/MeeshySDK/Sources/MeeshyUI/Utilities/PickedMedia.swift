@@ -1,6 +1,7 @@
 import Foundation
 import CoreTransferable
 import PhotosUI
+import SwiftUI
 import UniformTypeIdentifiers
 
 // **L'UNIQUE site d'ingestion d'un élément du sélecteur de photothèque** (#9870).
