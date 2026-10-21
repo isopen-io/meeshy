@@ -843,7 +843,8 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
             return XCTFail("`insertOptimisticMediaMessage` introuvable — la pose optimiste d'un média a changé de nom")
         }
         let records = try source(at: "Features/Main/ViewModels/ConversationViewModel+OptimisticRecords.swift")
-        let corps = String(send[insert.lowerBound...]) + records
+        let stager = try source(at: "Features/Main/ViewModels/Conversation/OptimisticMessageStager.swift")
+        let corps = String(send[insert.lowerBound...]) + records + stager
         XCTAssertFalse(corps.contains("expiresAt: nil, effectFlags: 0"),
                        "La ligne optimiste d'un média ne doit plus naître sans protection.")
         XCTAssertTrue(corps.contains("ephemeralDuration: protection.ephemeralDurationSeconds"),
@@ -860,11 +861,13 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     func test_aucuneLigneOptimiste_neGraveDÉchéanceClient() throws {
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
         let records = try source(at: "Features/Main/ViewModels/ConversationViewModel+OptimisticRecords.swift")
-        XCTAssertFalse((send + records).contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
-        XCTAssertFalse((send + records).contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
-        XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: intent.ephemeralDurationSeconds").count - 1, 1,
+        let stager = try source(at: "Features/Main/ViewModels/Conversation/OptimisticMessageStager.swift")
+        let rows = send + records + stager
+        XCTAssertFalse(rows.contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
+        XCTAssertFalse(rows.contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
+        XCTAssertEqual(rows.components(separatedBy: "ephemeralDuration: intent.ephemeralDurationSeconds").count - 1, 1,
                        "La ligne HORS LIGNE porte la durée.")
-        XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: resolvedEphemeralDuration\n").count - 1, 1,
+        XCTAssertEqual(rows.components(separatedBy: "ephemeralDuration: resolvedEphemeralDuration\n").count - 1, 1,
                        "La ligne EN LIGNE porte la durée.")
     }
 
@@ -1087,7 +1090,14 @@ final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
         XCTAssertTrue(sortie[porte.upperBound...].prefix(120).contains("consumeOpenedViewOnceOnExit()"),
                       "La sortie par navigation consomme avant tout le reste.")
 
-        guard let fond = hôte.range(of: "if phase == .background {") else {
+        // #11074 : le `scenePhase` se lit dans le modificateur nominal du cycle de
+        // vie, qui remet l'arrière-plan à l'hôte ; l'hôte y consomme.
+        let cycle = try source(at: "Features/Main/Views/ConversationLayers/ConversationBodyLifecycle.swift")
+        XCTAssertTrue(cycle.contains("if phase == .background { actions.didEnterBackground() }"),
+                      "Le cycle de vie remet le passage en arrière-plan à l'hôte.")
+        XCTAssertTrue(hôte.contains("didEnterBackground: { conversationDidEnterBackground() }"),
+                      "L'hôte branche l'arrière-plan sur son geste de sortie.")
+        guard let fond = hôte.range(of: "func conversationDidEnterBackground() {") else {
             return XCTFail("Impossible de localiser la sortie par arrière-plan.")
         }
         let corpsFond = String(hôte[fond.upperBound...].prefix(700))

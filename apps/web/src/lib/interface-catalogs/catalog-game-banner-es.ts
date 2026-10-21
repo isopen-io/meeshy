@@ -35,7 +35,7 @@ const es = {
   'game.rank.echo': 'Eco',
   'game.rank.voix': 'Voz',
   'game.rank.conteur': 'Narrador',
-  'game.rank.passeur': 'Pasador',
+  'game.rank.passeur': 'Barquero',
   'game.rank.polyglotte': 'Políglota',
   'game.rank.ambassadeur': 'Embajador',
   'game.rank.orateur': 'Orador',

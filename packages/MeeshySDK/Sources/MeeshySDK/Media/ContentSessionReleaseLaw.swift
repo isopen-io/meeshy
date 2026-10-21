@@ -22,6 +22,12 @@ public enum ContentSessionReleaseLaw {
     /// une reprise réactive la session et annule la libération.
     public static let interruptionResumeGrace: TimeInterval = 1
 
+    /// Le temps que le dernier détenteur attend avant de désactiver la session
+    /// (#9879) : au balayage, le canvas qui arrive prend la session dans les
+    /// images qui suivent celui qui part — la désactivation s'efface, la
+    /// musique des autres apps ne baisse pas puis ne remonte pas.
+    public static let swipeHandoverGrace: TimeInterval = 0.4
+
     /// Cet événement clôt-il une interruption — après laquelle Meeshy rend la
     /// main si rien ne reprend ? L'appel Meeshy raccroché en est une
     /// (`callEndedShouldResume`) ; un casque débranché n'en est pas une.

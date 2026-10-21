@@ -102,6 +102,7 @@
     "api-endpoints:generate": "tsx scripts/generate-api-endpoints.ts",
     "ios-endpoints:generate": "tsx scripts/generate-ios-endpoints.ts",
     "generate:call-frames": "bun scripts/generate-call-frames-swift.ts",
+    "generate:lens-format": "bun scripts/generate-lens-format-swift.ts",
     "import:glory-frames": "bun scripts/import-glory-frames.ts",
     "generate:glory-frames": "bun scripts/generate-glory-frames.ts",
     "translator-languages:generate": "tsx scripts/generate-translator-languages.ts",

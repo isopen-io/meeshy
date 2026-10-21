@@ -9,19 +9,9 @@ import MeeshyUI
 /// « On répare le token, jamais le test » (règle sacrée, recopiée du patron
 /// `LentilleMetricsTests`).
 ///
-/// **RE-PREUVE (tâche 0, workshop §0)** : ce fichier N'EXISTAIT PAS. Le Core
-/// gelé S1 (M-042/043/044, commits locaux F-080/F-081 c5bfc38/0a99cb1) ne
-/// livre QUE `Focal/Core/{ReadingModeOrchestrator,FocalFocusCurve,
-/// ScrollTimePillLaw}.swift` — cf. leurs commentaires de tête, qui signalent
-/// tous les trois l'absence de `FocalMetrics`. `Focal/Core/` n'est PAS gelé
-/// dans son ensemble : seuls ces trois fichiers nommés le sont (mission de
-/// cette tâche, §« CODE GELÉ S1 »). Ce fichier est un AJOUT, jamais une
-/// édition d'un fichier gelé — même statut que `FocalRowInput.swift` (WS-4).
-///
 /// **Cotes `thread.*` ABSENTES du token — signalées, jamais inventées** (une
-/// version antérieure et PRÉ-TOKEN de `focal-implementation-contract.md`
-/// §3.11 les esquissait avant que `lentille-tokens.json` existe ; le token
-/// gelé ne les a jamais reprises) :
+/// esquisse PRÉ-TOKEN de `focal-implementation-contract.md` §3.11 les
+/// proposait ; le token ne les a jamais reprises) :
 /// - `groupTopPadding` (esquisse pré-token : `10`) — `thread.row` ne porte
 ///   QUE `padding.vertical`/`padding.horizontal`, aucun espacement dédié
 ///   « au-dessus d'un nouveau groupe d'expéditeur ». Repli : `8`
@@ -36,9 +26,9 @@ import MeeshyUI
 ///   capsule. Repli : `8` (= `MeeshySpacing.sm`, coïncidence avec l'esquisse
 ///   pré-token documentée ici, pas une preuve qu'elle est correcte).
 ///   TODO CONTRACTUEL : ajouter `thread.pill.gap` si un futur consommateur
-///   en a réellement besoin (aucun aujourd'hui — WS-2/F-081 a réutilisé
-///   `MeeshySpacing.md`/`.xs` génériques pour le padding de la capsule,
-///   faute justement de ce miroir).
+///   en a réellement besoin (aucun aujourd'hui — la capsule réutilise
+///   `MeeshySpacing.md`/`.xs` génériques pour son padding, faute de ce
+///   miroir).
 ///
 /// **Hors périmètre de ce miroir** (constantes d'ALGORITHME, pas des cotes de
 /// maquette `thread.*`) : `optimisticAlphaCeiling` (0.7, plafond du pass de
@@ -72,31 +62,26 @@ nonisolated public enum FocalMetrics {
 
     /// `thread.row.padding` — `5/16` (contrat Lentille §4.3, colonne Fil).
     nonisolated public enum Row {
-        /// 5 → 3 le 2026-08-24 (« le mode script et focal mettent moins
-        /// d'espace entre les messages d'un groupe, actuellement trop de blanc
-        /// inutile »). Cette cote joue DEUX fois entre deux rangées de suite —
-        /// le bas de l'une et le haut de l'autre : 10 pt devenaient 6.
+        /// Cote resserrée pour limiter le blanc entre les messages d'un groupe.
+        /// Elle joue DEUX fois entre deux rangées de suite — le bas de l'une et le
+        /// haut de l'autre : 3 pt + 3 pt = 6.
         public static let paddingVertical: CGFloat = 3
         public static let paddingHorizontal: CGFloat = 16
         /// Cote ABSENTE de `thread.*` — voir doc de tête (TODO CONTRACTUEL).
-        /// 8 → 4 le 2026-08-21 (« réduit l'espace entre les groupes »), puis
-        /// 4 → 8 le 2026-08-24 : resserrer l'INTÉRIEUR d'un groupe rapproche
-        /// aussi les groupes entre eux, or ce sont eux qui doivent rester
-        /// distincts. La respiration quitte l'intérieur pour la frontière.
+        /// Resserrer l'INTÉRIEUR d'un groupe rapproche aussi les groupes entre eux,
+        /// or ce sont eux qui doivent rester distincts : la respiration quitte
+        /// l'intérieur pour la frontière.
         public static let groupTopPadding: CGFloat = 8
 
-        /// **L'ORIGINE du contenu : la COLONNE DU NOM** (directive porteur
-        /// 2026-09-26, #7995 : « texte aligné au niveau des citations
-        /// toujours, permettant de distinguer avatar et auteur puis son
-        /// contenu ; la citation est déjà identifiable avec la barre puis le
-        /// fond teinté »). L'avatar occupe SEUL sa marge ; « auteur · heure »,
-        /// le contenu propre (texte, drapeaux, médias, vocal, lieu, sticker,
-        /// réactions) ET toutes les citations (message, story, humeur, pièce)
-        /// partent de cette cote — la pastille plus la gouttière de l'en-tête.
+        /// **L'ORIGINE du contenu : la COLONNE DU NOM.** Le texte s'aligne au
+        /// niveau des citations, ce qui distingue avatar et auteur puis son
+        /// contenu ; la citation reste identifiable par sa barre et son fond
+        /// teinté. L'avatar occupe SEUL sa marge ; « auteur · heure », le contenu
+        /// propre (texte, drapeaux, médias, vocal, lieu, sticker, réactions) ET
+        /// toutes les citations (message, story, humeur, pièce) partent de cette
+        /// cote — la pastille plus la gouttière de l'en-tête.
         ///
-        /// UNE cote, pas deux : aucune citation n'a de retrait propre. Elle
-        /// supplante la règle du 2026-09-25 (#7928 : contenu sous l'avatar,
-        /// citations décalées), dont la cote `Quote.indent` a disparu.
+        /// UNE cote, pas deux : aucune citation n'a de retrait propre.
         public static let contentIndent: CGFloat = Text.indent
     }
 
@@ -174,23 +159,20 @@ nonisolated public enum FocalMetrics {
         public static let surfaceLightAlpha: CGFloat = 0.055
         public static let surfaceDarkAlpha: CGFloat = 0.10
 
-        // `glassRimOpacity` (0,55, filet d'accent du verre, #8147) a disparu
-        // avec #8506 : le bloc de verre est la matière du composer, sans filet.
+        // Aucun filet d'accent du verre : le bloc de verre est la matière du composer, sans filet.
     }
 
     // MARK: - Gabarit large de la rangée
 
-    /// RETRAIT FOCAL iOS (2026-08-18) : la magnification de l'élue (§4.6) est
-    /// partie avec le pass — restent les DEUX cotes de gabarit devenues la
-    /// règle CONSTANTE de toutes les rangées : la hauteur d'en-tête et le
+    /// Les DEUX cotes de gabarit (`Focus.avatarSize`, `Focus.textIndent`) sont
+    /// la règle CONSTANTE de toutes les rangées : la hauteur d'en-tête et le
     /// retrait de texte ne varient jamais, la liste ne saute donc jamais.
-    /// Tempo de la SCÈNE Focal (2026-08-21, directive user) : la perspective
+    /// Tempo de la SCÈNE Focal : la perspective
     /// n'existe que pendant le défilement ; au repos, tout redevient Script.
     nonisolated public enum Scene {
         /// Repos sans geste avant que la scène s'aplatisse (« au bout de
-        /// quelques secondes sans scroller ») — 2,0 → 4,5 s le 2026-08-22
-        /// (directive « passe à < 5 s ») : avec `flattenDuration`, la
-        /// magnificence a disparu en 4,95 s. Liste et fil lisent ce token.
+        /// quelques secondes sans scroller ») : avec `flattenDuration`, la
+        /// magnificence disparaît en 4,95 s, sous les 5 s. Liste et fil lisent ce token.
         public static let restDelay: TimeInterval = 4.5
         /// Durée de l'aplatissement (transform + opacité + carte).
         public static let flattenDuration: TimeInterval = 0.45
@@ -201,11 +183,10 @@ nonisolated public enum FocalMetrics {
     }
 
     nonisolated public enum Focus {
-        /// Plafond de caractères du texte du message EN FOCUS (2026-08-21) :
+        /// Plafond de caractères du texte du message EN FOCUS :
         /// au-delà, « Lire plus » — une magnificence qui tient à l'écran.
         ///
-        /// **Sans consommateur depuis le 2026-08-25** (L1-01, amendement
-        /// `decisions.md`) : `truncateLimit` de la rangée vaut désormais
+        /// **Sans consommateur** : `truncateLimit` de la rangée vaut
         /// `BubbleExpandableText.truncateLimit` (512) qu'elle soit élue ou
         /// non. Conservée comme POINT DE REBRANCHEMENT si le plafond de
         /// focus revient — ne pas supprimer.
@@ -220,19 +201,17 @@ nonisolated public enum FocalMetrics {
         /// gouttière de `7` que `Text.indent` (`22 + 7 = 29`).
         public static let textIndent: CGFloat = avatarSize + 7
 
-        /// LOUPE du message élu (directive porteur 2026-09-15, #6586 : « même
-        /// chose pour le mode focal ») : l'élu seul grandit de ce gain pendant
-        /// la scène, ses voisins restent à plat (directive 2026-08-24).
+        /// LOUPE du message élu : l'élu seul grandit de ce gain pendant
+        /// la scène, ses voisins restent à plat.
         ///
-        /// 0,05 → 0,26 le 2026-09-28 (#8506 : « agrandis tout le contenu
-        /// intérieur par ×1,2 encore ») : 1,05 × 1,2 = 1,26. Même valeur que
+        /// Gain 0,26 : échelle 1,05 × 1,2 = 1,26. Même valeur que
         /// `loupeGain` de `packages/shared/utils/focal-metrics.ts`, que le web
-        /// lit. `FocalScrollPerspective.electedScale` ne l'écrête plus qu'à la
-        /// LARGEUR de l'écran — plus jamais à la hauteur du message.
+        /// lit. `FocalScrollPerspective.electedScale` ne l'écrête qu'à la
+        /// LARGEUR de l'écran, jamais à la hauteur du message.
         public static let loupeGain: CGFloat = 0.26
 
-        /// Loupe du message long DÉPLIÉ (#8147), dans tous les modes — le gain
-        /// d'avant #8506, que l'agrandissement de l'élu Focal ne vise pas.
+        /// Loupe du message long DÉPLIÉ, dans tous les modes — l'agrandissement
+        /// de l'élu Focal ne le vise pas.
         /// `FocalScrollPerspective.loupeScale` l'écrête toujours à la marge de
         /// la carte : un déplié est haut par définition.
         public static let expandedLoupeGain: CGFloat = 0.05
@@ -241,7 +220,7 @@ nonisolated public enum FocalMetrics {
         /// `expandDurationMs` de `packages/shared/utils/focal-metrics.ts`.
         public static let expandDuration: TimeInterval = 0.3
 
-        /// Courbe du dépliage / repliage (#8232) — les points de contrôle
+        /// Courbe du dépliage / repliage — les points de contrôle
         /// `[x1, y1, x2, y2]` de `expandCurve` (`focal-metrics.ts`), que le
         /// web joue en `cubic-bezier(…)` : départ vif, arrivée douce.
         public static let expandCurve: [Double] = [0.2, 0, 0, 1]
@@ -262,7 +241,7 @@ nonisolated public enum FocalMetrics {
     /// Plus petit que dans la bulle (210) : ces trois modes tiennent une
     /// COLONNE de texte, où une carte de 210 pt écraserait la lecture. Le
     /// dessin, lui, est le même atome — seule la stature change. Le rapport
-    /// de la bulle est conservé (112/160 = 147/210 = 0,7 : #10630).
+    /// de la bulle est conservé (112/160 = 147/210 = 0,7).
     nonisolated public enum Sticker {
         public static let side: CGFloat = 140
     }
@@ -275,44 +254,42 @@ nonisolated public enum FocalMetrics {
 
     /// `thread.hiddenChrome` — identique à `list.hiddenChrome` (même loi de
     /// chrome sur les deux écrans, `translateY(94)` + opacité 0,
-    /// `easeOut .25`). Propriété WS-6 (hôte de défilement), branchée depuis
-    /// le 2026-08-16 : `easeOut` cadence la disparition du header entier
+    /// `easeOut .25`). Propriété WS-6 (hôte de défilement) : `easeOut` cadence
+    /// la disparition du header entier
     /// dans `ConversationView.swift`. `translateY` et `opacityEnd` restent
     /// mirrorées pour la parité EXHAUSTIVE `thread.*` de la tâche 0, sans
     /// consommateur à ce jour.
-    /// Chips de la bordure basse du message en focus (2026-08-22 : « les
-    /// icônes doivent être SUR la bordure, comme CATÉGORIE dans la liste »).
+    /// Chips de la bordure basse du message en focus : les icônes sont SUR la
+    /// bordure, comme CATÉGORIE dans la liste.
     nonisolated public enum FocusStrip {
         /// TOUTES les chips du focus (identité, date+coche, traduction,
-        /// drapeaux, (+), réactions) = la MÊME capsule (2026-08-22 : « les
-        /// icônes en bas doivent être exactement comme ces chips »).
+        /// drapeaux, (+), réactions) = la MÊME capsule : les icônes en bas
+        /// sont exactement comme ces chips.
         public static let chipHeight: CGFloat = 24
         public static let chipMinWidth: CGFloat = 32
         /// Retrait des réactions dans la bande basse.
         public static let chipInset: CGFloat = 4
         /// L'identité du message magnifié est la SEULE chip à dépasser le
-        /// gabarit commun — « en plus agrandi simplement » (directive
-        /// 2026-08-24). Elle porte désormais tout ce que porte l'en-tête de
-        /// rangée (présence, mood, anneau de story, fantôme d'un visiteur sans
-        /// compte) : au gabarit `chipHeight` de 24, rien de tout cela n'était
-        /// lisible.
+        /// gabarit commun — elle est simplement plus agrandie. Elle porte tout ce
+        /// que porte l'en-tête de rangée (présence, mood, anneau de story,
+        /// fantôme d'un visiteur sans compte) : au gabarit `chipHeight` de 24,
+        /// rien de tout cela ne serait lisible.
         public static let identityAvatarSize: CGFloat = 26
         public static let identityChipHeight: CGFloat = 34
         public static let identityNameSize: CGFloat = 13.5
 
         /// Drapeaux de langue proposés par une rangée. Une rangée ordinaire en
-        /// montre TROIS, la magnifiée CINQ (directive 2026-08-24) : la place
+        /// montre TROIS, la magnifiée CINQ : la place
         /// disponible n'est pas la même, et un message très traduit ne doit pas
         /// noyer sa propre ligne.
         public static let flagLimitPlain = 3
         public static let flagLimitMagnified = 5
         /// **Ce dont le contenu d'une SUITE de groupe magnifiée descend sous sa
-        /// pastille d'identité** (#7953) — en RENDU seulement (`offset`), jamais
+        /// pastille d'identité** — en RENDU seulement (`offset`), jamais
         /// en hauteur : la rangée garde sa taille au basculement d'élection.
         ///
-        /// Depuis #8506 (directive porteur 2026-09-28 : « place les contrôleurs
-        /// et détails À L'INTÉRIEUR du cadre »), la pastille ne chevauche plus
-        /// la ligne haute du cadre : elle se pose ENTIÈRE en haut du bloc. Une
+        /// Contrôleurs et détails se posent À L'INTÉRIEUR du cadre : la pastille
+        /// ne chevauche pas la ligne haute du cadre, elle se pose ENTIÈRE en haut du bloc. Une
         /// tête de groupe l'y loge sur son en-tête — effacé en focus, toujours
         /// réservé, de la même hauteur (`Focus.avatarSize`) ; une suite n'a
         /// rien sous elle, son contenu descend donc de la pastille entière,
@@ -323,7 +300,7 @@ nonisolated public enum FocalMetrics {
         }
 
         /// **L'écart entre la dernière ligne du message et la bande basse**
-        /// (#8506). La bande ne chevauche plus la ligne basse du cadre : elle
+        /// La bande ne chevauche pas la ligne basse du cadre : elle
         /// se pose ENTIÈRE sous le contenu, à l'intérieur du cadre, et ne
         /// réserve aucune hauteur de rangée — elle est une superposition.
         public static let stripGap: CGFloat = FocalMetrics.Row.paddingVertical
@@ -334,8 +311,8 @@ nonisolated public enum FocalMetrics {
         public static let opacityEnd: Double = 0
         public static let easeOut: Double = 0.25
         /// Course d'un composant de chrome vers SON bord quand il s'escamote
-        /// (directive user 2026-08-21 : « disparaissent avec fondu vers les
-        /// bords, réapparaissent venant du bord vers leur position »).
+        /// (fondu vers les bords à la disparition, retour depuis le bord vers la
+        /// position à la réapparition).
         public static let edgeTravel: CGFloat = 28
     }
 
@@ -371,40 +348,29 @@ nonisolated public enum FocalMetrics {
     // MARK: - Méta discrète (opacité de texte translucide)
 
     /// Opacité du texte méta discret (heure de suite de groupe, libellé
-    /// « modifié ») — **F-083ter**. `FocalMetaRow` utilisait `0.4`/`0.45`,
-    /// une régression de contraste AA sur les DEUX thèmes (2,85:1 clair,
-    /// 4,49:1 sombre — découverte par `FocalPaletteContrastTests`, F-090).
+    /// « modifié »). `0.4`/`0.45` donnaient une régression de contraste AA sur
+    /// les DEUX thèmes (2,85:1 clair, 4,49:1 sombre, mesuré par
+    /// `FocalPaletteContrastTests`).
     ///
-    /// **Écart calculé vs la consigne littérale « aligne sur `0.5`/`0.55` »**
-    /// (RE-PREUVE avant écriture, signalé plutôt que suivi aveuglément) :
-    /// `WCAGContrast.ratioOfTranslucentForeground(.black.opacity(0.5), on:
-    /// #FFFFFF)` mesure **3,977:1** — SOUS le seuil AA `4.5:1` (calcul
-    /// vérifié : la relation opacité→contraste n'est pas linéaire, la formule
-    /// WCAG applique une courbe gamma sRGB). `0.5` est la valeur de
-    /// `FocalIdentityHeader`/`BubbleFooter` en thème clair, MAIS ces deux-là
-    /// portent déjà ce même déficit — documenté « préexistant, hors
-    /// périmètre » par F-090 (le contrat ne demandait pas de le réparer).
-    /// La consigne de CE lot exige que « les 2 tests passent » : priorité au
-    /// résultat sur la valeur littérale suggérée. `0.55` clair mesure
-    /// **4,759:1** (AA satisfait, calcul vérifié) ; `0.55` sombre mesure
-    /// **6,261:1** (déjà largement conforme). Retenu : `0.55` pour LES DEUX
-    /// thèmes — un seul palier au lieu de deux, plus simple, et
-    /// `FocalIdentityHeader` (qui lit désormais CETTE MÊME constante,
-    /// jamais un littéral concurrent) voit son propre déficit clair
-    /// préexistant corrigé EN PRIME (effet secondaire positif, jamais
-    /// demandé mais jamais une régression — 3,98:1 → 4,76:1).
+    /// **`0.5` ne suffit pas** : `WCAGContrast.ratioOfTranslucentForeground(
+    /// .black.opacity(0.5), on: #FFFFFF)` mesure **3,977:1** — SOUS le seuil AA
+    /// `4.5:1` (la relation opacité→contraste n'est pas linéaire, la formule
+    /// WCAG applique une courbe gamma sRGB). `0.55` clair mesure **4,759:1**
+    /// (AA satisfait) ; `0.55` sombre mesure **6,261:1** (déjà largement
+    /// conforme). Retenu : `0.55` pour LES DEUX thèmes — un seul palier au lieu
+    /// de deux, et `FocalIdentityHeader` lit CETTE MÊME constante, jamais un
+    /// littéral concurrent.
     nonisolated public enum MetaText {
         public static let lightOpacity: Double = 0.55
         public static let darkOpacity: Double = 0.55
     }
 
     /// **La seconde colonne de la rangée — date et accusé, au bas de la bulle**
-    /// (#5135, directive porteur 2026-09-04).
     ///
-    /// La méta vivait sur une LIGNE à elle, qui se montait toujours et ne
-    /// montrait rien au repos : `FocalRevealedDetail` masque l'heure et les
-    /// coches par OPACITÉ, jamais par démontage. C'était une hauteur pleine et
-    /// un espacement vertical réservés à de l'invisible, sous chaque message.
+    /// La méta ne vit pas sur une LIGNE à elle : `FocalRevealedDetail` masque
+    /// l'heure et les coches par OPACITÉ, jamais par démontage, donc une ligne
+    /// dédiée réserverait une hauteur pleine et un espacement vertical à de
+    /// l'invisible, sous chaque message.
     ///
     /// **`minWidth` et non `width`, et c'est la seule nuance de l'arbitrage.**
     /// Le porteur a tranché « largeur réservée pour toutes » — pour que les
@@ -440,12 +406,8 @@ nonisolated public enum FocalMetrics {
         public static let darkFill: Double = 0.06
     }
 
-    // `FocusChip` a vécu ici quelques heures le 2026-08-22 : j'y avais nommé
-    // les opacités de contour des chips de la carte de focus pour satisfaire la
-    // garde R15. Le tronc avait fait le MÊME travail au même moment, dans
-    // `FocalScrollPerspective` — c'est SA maison qui fait foi : deux domiciles
-    // pour une même cote, c'est exactement ce que la garde R15 interdit.
-    // Les contours eux-mêmes ont disparu le 2026-08-24 (« plus de cadre en
-    // mode focal ») ; ce qui reste des chips — leur teinte de fond, marque de
-    // l'état actif — vit toujours là-bas (`focusChipFillOpacity`).
+    // Les opacités des chips de la carte de focus (teinte de fond, marque de
+    // l'état actif : `focusChipFillOpacity`) vivent dans
+    // `FocalScrollPerspective` : deux domiciles pour une même cote, c'est
+    // exactement ce que la garde R15 interdit.
 }

@@ -415,6 +415,13 @@ final class ReelResumeTests: XCTestCase {
                       "la reprise du voisin se résout comme celle du moteur, par le résolveur partagé")
     }
 
+    /// Le tier média (#11281) entre dans le contexte vivant : la fenêtre des
+    /// réels ne se règle pas sur la seule mémoire.
+    func test_liveContext_carriesTheDeviceMediaTier() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ReelPrewarm.swift"))
+        XCTAssertTrue(source.contains("tier: DeviceMediaTier.current"))
+    }
+
     /// Avec ces distances, le pool garde le réel quitté face à un préchauffage
     /// plus lointain arrivé après lui.
     func test_distancesFeedThePoolEviction_keepingTheReelJustLeft() {

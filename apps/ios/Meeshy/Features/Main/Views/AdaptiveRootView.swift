@@ -462,7 +462,7 @@ struct DetachedWindowView: View {
         // Les liens vont à la fenêtre principale ; seule une conversation glissée au bord vient ici.
         .handlesExternalEvents(preferring: [DetachedWindowOpener.activityIdentifier],
                                allowing: [DetachedWindowOpener.activityIdentifier])
-        .environmentObject(router)
+        .modifier(MeeshyRouterInjection(router: router))
         .modifier(PublishesSceneNavigation(router: router, role: .detached))
         .modifier(PublishesSceneAction(keyPath: \.meeshyCloseWindow, perform: closeWindow))
         .modifier(PublishesSceneAction(keyPath: \.meeshySearch, perform: { router.pendingOpenSearch = true }))
@@ -478,7 +478,7 @@ struct DetachedWindowView: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) }
             )
-            .environmentObject(router)
+            .modifier(MeeshyRouterInjection(router: router))
             .environmentObject(statusViewModel)
             .meeshyConversationList(conversationVMOwner.viewModel)
         }

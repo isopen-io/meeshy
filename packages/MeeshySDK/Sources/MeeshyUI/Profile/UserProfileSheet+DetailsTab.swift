@@ -255,7 +255,7 @@ extension UserProfileSheet {
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(Color(hex: resolvedAccent))
             Text(text)
-                .font(.system(size: MeeshyFont.subheadSize))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -370,7 +370,7 @@ extension UserProfileSheet {
                         .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(Color(hex: resolvedAccent))
                     Text(String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module))
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
 
@@ -449,7 +449,7 @@ extension UserProfileSheet {
                 .font(.system(size: MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(Color(hex: resolvedAccent))
             Text("\(value)")
-                .font(.system(size: MeeshyFont.bodySize, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
             Text(label)
                 .font(.caption2)

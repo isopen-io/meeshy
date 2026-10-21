@@ -17,7 +17,8 @@ import MeeshyUI
 struct WelcomeView: View {
     @Binding var hasCompletedOnboarding: Bool
 
-    @StateObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     @State private var isShowingSignup = false
 

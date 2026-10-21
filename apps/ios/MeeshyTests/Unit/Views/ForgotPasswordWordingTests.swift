@@ -16,7 +16,7 @@ import MeeshyUI
 /// passe »), et un (i) « Jamais eu de mot de passe ? » répond à la seule
 /// question qui la retenait.
 ///
-/// Le vocabulaire est IMPOSÉ et identique sur web-v2 et Android, dans le style
+/// Le vocabulaire est IMPOSÉ et identique sur le web et Android, dans le style
 /// de #6632 : « par e-mail », la mécanique derrière un (i). Le témoin l'épingle
 /// en `fr` et en `en` et exige les sept langues livrées. L'état « envoyé »
 /// parle les mots de la connexion par e-mail — avec ses CLÉS, pas des jumelles.

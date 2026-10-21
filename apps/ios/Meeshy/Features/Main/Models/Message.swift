@@ -1,4 +1,4 @@
-// Message, MessageAttachment, Reaction, ReactionSummary, ChatMessage, MessageReaction
+// Message, MessageAttachment, Reaction, ReactionSummary
 // are now sourced from MeeshySDK/Models/CoreModels.swift to avoid type ambiguity.
 // ReplyReference and ForwardReference are also in the SDK.
 // Typealiases provide backward-compatible short names for the app layer.

@@ -65,9 +65,9 @@ const stagedGate = (): StrikeGate => createStrikeGate({ staged: () => true, redu
 const isOpen = async (gate: StrikeGate): Promise<boolean> =>
   Promise.race([gate.opened().then(() => true), Promise.resolve().then(() => Promise.resolve()).then(() => false)]);
 
-type Bench = { readonly edition?: MeeshEdition; readonly reduced?: boolean };
+type Bench = { readonly edition?: MeeshEdition; readonly reduced?: boolean; readonly number?: number };
 
-async function bench({ edition = 'silver', reduced = false }: Bench = {}) {
+async function bench({ edition = 'silver', reduced = false, number = 92 }: Bench = {}) {
   const gate = stagedGate();
   const time = manualClock();
   const haptics: HapticName[] = [];
@@ -75,7 +75,7 @@ async function bench({ edition = 'silver', reduced = false }: Bench = {}) {
   gate.begin();
   gate.claim();
   await mounter.mount(
-    <MintCeremony edition={edition} number={92} gate={gate} onDone={() => void (done.count += 1)} reducedMotion={reduced} modest={false} clock={time.clock} haptic={(name) => void haptics.push(name)} />,
+    <MintCeremony edition={edition} number={number} gate={gate} onDone={() => void (done.count += 1)} reducedMotion={reduced} modest={false} clock={time.clock} haptic={(name) => void haptics.push(name)} />,
   );
   const scene = (): HTMLElement | null => document.body.querySelector('[data-game-ceremony]');
   return { gate, time, haptics, done, scene };
@@ -108,6 +108,32 @@ describe('la scène part au toucher, en plein écran', () => {
     expect(face('blank')?.querySelector('[data-game-signature], text')).toBeNull();
     expect(face('obverse')?.getAttribute('data-game-face')).toBe('obverse');
     expect(face('reverse')?.getAttribute('data-game-face')).toBe('reverse');
+  });
+});
+
+describe('la pièce se frappe dans son édition DESSINÉE, au rythme de sa LOI (#11483)', () => {
+  const coinOf = (scene: HTMLElement | null, face: string): Element | null | undefined => scene?.querySelector(`[data-ceremony-face="${face}"] [data-game-coin]`);
+
+  test('le n° 247 : la nuit et les coups de l’argent, le flan, l’avers et le revers en or', async () => {
+    const { scene } = await bench({ edition: 'silver', number: 247 });
+    expect(scene()?.getAttribute('data-edition')).toBe('silver');
+    expect(scene()?.getAttribute('data-look')).toBe('gold');
+    expect(['blank', 'obverse', 'reverse'].map((face) => coinOf(scene(), face)?.getAttribute('data-game-edition'))).toEqual(['gold', 'gold', 'gold']);
+  });
+
+  test('le n° 247 : un seul coup, sans les aïeux', async () => {
+    const { gate, time, haptics } = await bench({ edition: 'silver', number: 247 });
+    gate.confirm({ number: 247, edition: 'silver' });
+    await time.advanceTo(ms('silver', 'reveal', 'fromMs'));
+    expect(haptics).toEqual(['shock']);
+  });
+
+  test('le n° 1001 se dessine en prisme ; le n° 92 reste d’argent', async () => {
+    const prism = await bench({ edition: 'silver', number: 1001 });
+    expect(coinOf(prism.scene(), 'reverse')?.getAttribute('data-game-edition')).toBe('prism');
+    mounter.unmountAll();
+    const silver = await bench({ edition: 'silver', number: 92 });
+    expect(coinOf(silver.scene(), 'reverse')?.getAttribute('data-game-edition')).toBe('silver');
   });
 });
 
@@ -184,6 +210,38 @@ describe('toucher passe la scène', () => {
     await act(async () => void scene()?.dispatchEvent(new Event('pointerdown', { bubbles: true })));
     expect(done.count).toBe(1);
     expect(await isOpen(gate)).toBe(true);
+  });
+
+  test('un toucher N’IMPORTE OÙ — sur la pièce, sur Mee, sur l’indice — la termine aussitôt, pendant l’attente de la passerelle comprise (#11482)', async () => {
+    for (const part of ['[data-ceremony-coin]', '[data-ceremony-actor="mee"]', '[data-ceremony-hint]']) {
+      const { gate, done, scene } = await bench();
+      await act(async () => void scene()?.querySelector(part)?.dispatchEvent(new Event('pointerdown', { bubbles: true })));
+      expect({ part, done: done.count, open: await isOpen(gate) }).toEqual({ part, done: 1, open: true });
+      mounter.unmountAll();
+    }
+  });
+
+  test('une seule fin : un second toucher ne termine rien de plus', async () => {
+    const { done, scene } = await bench();
+    const root = scene();
+    await act(async () => void root?.dispatchEvent(new Event('pointerdown', { bubbles: true })));
+    await act(async () => void root?.dispatchEvent(new Event('pointerdown', { bubbles: true })));
+    await act(async () => void window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })));
+    expect(done.count).toBe(1);
+  });
+
+  test('le toucher qui passe la scène ne frappe pas une seconde fois : le clic qui le suit ne touche pas ce qui était dessous', async () => {
+    const { scene } = await bench();
+    const under = document.createElement('button');
+    const clicks = { count: 0 };
+    under.addEventListener('click', () => void (clicks.count += 1));
+    document.body.append(under);
+    await act(async () => void scene()?.dispatchEvent(new Event('pointerdown', { bubbles: true })));
+    under.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(clicks.count).toBe(0);
+    under.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(clicks.count).toBe(1);
+    under.remove();
   });
 
   test('Échap aussi', async () => {

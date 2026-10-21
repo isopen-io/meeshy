@@ -25,6 +25,8 @@ struct GameMintPreviewView: View {
     /// La dernière frappe réglée par la passerelle : ce que la cérémonie attend pour frapper (#11177).
     var settlement: GameMintSettlement? = nil
     let onMint: () -> Void
+    /// La cérémonie est finie — au bout, ou passée d'un toucher : la tête de l'Héritage peut rattraper le compte (#11482).
+    var onCeremonyEnded: () -> Void = {}
     var haptics: GameHapticsProviding = GameHaptics.shared
 
     /// La cérémonie de la frappe en cours, posée au toucher (#11177).
@@ -46,11 +48,7 @@ struct GameMintPreviewView: View {
             line(frame.title, font: MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold), identifier: "game.mint.title")
                 .accessibilityAddTraits(.isHeader)
             if let celebration {
-                Text(String(
-                    localized: "game.mint.minted_line",
-                    defaultValue: "Meesh n° \(GameCopy.formatCount(celebration.number)) frappée, \(GameCopy.editionName(celebration.edition)).",
-                    bundle: .main
-                ))
+                Text(GameMintFrameModel.mintedLine(celebration))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                 .foregroundStyle(MeeshyColors.brandPrimary)
                 .accessibilityAddTraits(.updatesFrequently)
@@ -81,14 +79,19 @@ struct GameMintPreviewView: View {
             if key != nil, ceremony == nil { haptics.play(GameHapticPattern.strike) }
         }
         .modifier(MintCeremonyCover(request: $ceremony, answer: ceremony?.answer(settlement) ?? .pending))
+        .adaptiveOnChange(of: ceremony?.id) { old, new in
+            if old != nil, new == nil { onCeremonyEnded() }
+        }
     }
 
     // MARK: - La bande de la scène
 
+    /// La bande montre la PROCHAINE pièce (ou celle qu'on vient de frapper) dans son édition DESSINÉE (#11483).
     private var band: some View {
-        MintStrikeScene(
-            edition: celebration?.edition ?? mint.edition,
-            number: celebration?.number ?? mint.number,
+        let number = celebration?.number ?? mint.number
+        return MintStrikeScene(
+            edition: GameMint.displayEdition(forNumber: number),
+            number: number,
             year: Calendar.current.component(.year, from: Date()),
             play: celebration?.key ?? 0,
             coinSide: Self.bandCoinSide,
@@ -129,7 +132,7 @@ struct GameMintPreviewView: View {
 
     /// LE TOUCHER : la cérémonie part aussitôt (optimiste), et la frappe part vers la passerelle avec elle.
     private func strike() {
-        MintCeremonyLaunch.begin($ceremony, with: MintCeremonyRequest(edition: mint.edition, number: mint.number, settled: settlement))
+        MintCeremonyLaunch.begin($ceremony, with: MintCeremonyRequest(number: mint.number, edition: mint.edition, settled: settlement))
         onMint()
     }
 
@@ -213,6 +216,13 @@ struct GameMintFrameModel: Equatable {
             let text = GameMint.edition(forNumber: special) == .prism ? GameFicheCopy.meeNextPrism(number) : GameFicheCopy.meeNextGold(number)
             return ProgressionFactText(text, .mintNextSpecial)
         }
+    }
+
+    /// « Meesh n° 247 frappée, or. » : la pièce frappée se nomme par l'édition qu'on y DESSINE (#11483), comme on la voit.
+    static func mintedLine(_ celebration: MintCelebration) -> String {
+        let number = GameCopy.formatCount(celebration.number)
+        let edition = GameCopy.editionName(GameMint.displayEdition(forNumber: celebration.number))
+        return String(localized: "game.mint.minted_line", defaultValue: "Meesh n° \(number) frappée, \(edition).", bundle: .main)
     }
 
     /// Les faits du cadre, dans l'ordre de lecture.

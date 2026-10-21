@@ -4,8 +4,8 @@
  * catalogue `catalog-ar.ts`, qu'il RÉPAND.
  */
 const arEngagement = {
-  'engagement.pill.streak.one': 'لهب {count} يوم',
-  'engagement.pill.streak.other': 'لهب {count} أيام',
+  'engagement.pill.streak.one': '{count} يوم',
+  'engagement.pill.streak.other': '{count} أيام',
   'engagement.pill.points.one': '{total} شرارة، منها {today} اليوم',
   'engagement.pill.points.other': '{total} شرارات، منها {today} اليوم',
   'engagement.pill.total.one': '{total} شرارة مكتسبة في هذه المحادثة',

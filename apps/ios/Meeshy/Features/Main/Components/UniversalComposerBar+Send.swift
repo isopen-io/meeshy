@@ -202,7 +202,7 @@ extension UniversalComposerBar {
                     sendQuickEmoji(emoji)
                 } label: {
                     Text(emoji)
-                        .font(.system(size: QuickEmojiGrid.emojiSize))
+                        .font(MeeshyFont.emoji(QuickEmojiGrid.emojiSize))
                         .frame(width: QuickEmojiGrid.cell, height: QuickEmojiGrid.cell)
                         .contentShape(Rectangle())
                 }

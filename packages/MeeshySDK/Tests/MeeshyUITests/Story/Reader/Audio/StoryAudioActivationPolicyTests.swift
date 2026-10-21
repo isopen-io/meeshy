@@ -79,8 +79,19 @@ final class StoryAudioActivationPolicyTests: XCTestCase {
     func test_laDemandeDeSession_consulteLaPolitique() throws {
         let corps = try corps(de: "func requestPlaybackSessionIfNeeded()", dans: canvasAudio)
         let politique = try XCTUnwrap(corps.range(of: "StoryAudioActivationPolicy.shouldActivate("))
-        let demande = try XCTUnwrap(corps.range(of: "MediaSessionCoordinator.shared.request("))
+        let demande = try XCTUnwrap(corps.range(of: "MediaSessionCoordinator.shared.requestPlaybackInOrder("))
         XCTAssertLessThan(politique.lowerBound, demande.lowerBound)
+    }
+
+    func test_laRequeteEtLaLiberationDeSession_passentParLaFileOrdonneeDuCoordinateur() throws {
+        let code = try canvasAudio
+        let canvas = try source("Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift")
+        XCTAssertFalse(code.contains("MediaSessionCoordinator.shared.request("),
+                       "une Task par appel ne garantit aucun ordre : release puis request pouvaient se croiser")
+        XCTAssertFalse(code.contains("MediaSessionCoordinator.shared.release()"))
+        XCTAssertFalse(canvas.contains("MediaSessionCoordinator.shared.release()"))
+        let liberation = try corps(de: "func releasePlaybackSessionIfNeeded()", dans: code)
+        XCTAssertTrue(liberation.contains("MediaSessionCoordinator.shared.releasePlaybackInOrder()"))
     }
 
     func test_laPreparation_consulteLaPolitique_avantToutTelechargement() throws {

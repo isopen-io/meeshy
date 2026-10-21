@@ -34,8 +34,8 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     /// Intention de mute PAR SURFACE, orthogonale à `isMuted` (la préférence
     /// utilisateur globale posée par le bouton mute du fullscreen overlay).
-    /// Avant ce champ, le feed posait directement `isMuted = true` pour son
-    /// autoplay silencieux — ce qui fuitait vers la surface suivante (galerie
+    /// Le feed ne pose pas `isMuted = true` pour son autoplay silencieux : cela
+    /// fuirait vers la surface suivante (galerie
     /// de conversation jouant en silence alors que l'utilisateur n'avait rien
     /// demandé). Transitoire : reset par `cleanup()`, ne traverse pas un
     /// changement d'attachment ni de surface (contrairement à `isMuted`).
@@ -55,9 +55,9 @@ public final class SharedAVPlayerManager: ObservableObject {
     }
 
     private func applyMuteState() {
-        player?.isMuted = effectiveMuted
+        if let player { audioTracks.apply(to: player, wantsMuted: effectiveMuted) }
         closeStretchOnMuteChange()
-        // Lever le son d'une vidéo qui joue, c'est lancer un son (#11039).
+        // Lever le son d'une vidéo qui joue, c'est lancer un son.
         if isPlaying, !effectiveMuted { MediaSessionCoordinator.shared.activateContentPlayback(.audible) }
     }
 
@@ -66,7 +66,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// un changement de vidéo. Toggle exclusif via le fullscreen overlay
     /// (inline n'expose pas `.loop` dans son ControlSet).
     ///
-    /// Posé sur le lecteur comme `actionAtItemEnd` (#9702) : en boucle, le
+    /// Posé sur le lecteur comme `actionAtItemEnd` : en boucle, le
     /// lecteur garde son rythme à la fin de l'élément et la tête revient au
     /// début sans pause ni `play()` — sans retour au coordinateur ni
     /// réactivation de la session audio à chaque tour.
@@ -74,10 +74,10 @@ public final class SharedAVPlayerManager: ObservableObject {
         didSet { if let player { applyLoop(to: player) } }
     }
 
-    /// **La boucle est une FILE, pas un retour en arrière (#9702).** Revenir au
+    /// **La boucle est une FILE, pas un retour en arrière.** Revenir au
     /// début par `seek` à la notification de fin coûte un saut de fil, une
     /// purge du décodeur et une image-clé à redécoder : ≈ 0,1 s de trou à
-    /// chaque tour (mesuré à la recette du 2026-10-09 : claps à 8,10–8,13 s
+    /// chaque tour (mesuré : claps à 8,10–8,13 s
     /// pour un média de 8,00 s). Avec un successeur du MÊME média déjà en file,
     /// `.advance` l'enchaîne sans couture — c'est ce que fait `AVPlayerLooper`,
     /// sans vider la file ni perdre l'élément déjà préparé.
@@ -106,8 +106,8 @@ public final class SharedAVPlayerManager: ObservableObject {
         player.actionAtItemEnd = Self.actionAtItemEnd(looping: shouldLoop, successorQueued: queued)
     }
 
-    /// **La part du média jouée, lue SUR le lecteur à l'instant de l'appel
-    /// (#10555).** `currentTime` n'est publié que 2 à 5 fois par seconde
+    /// **La part du média jouée, lue SUR le lecteur à l'instant de l'appel.**
+    /// `currentTime` n'est publié que 2 à 5 fois par seconde
     /// (`MediaThermalPolicy.timeObserverInterval`) : une barre qui le lit
     /// avance par à-coups et reprend le tour de boucle jusqu'à une demi-seconde
     /// après l'image. Une barre rafraîchie par l'affichage lit ceci — le temps
@@ -139,13 +139,15 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     private var timeObserver: Any?
     private var cancellables = Set<AnyCancellable>()
+    /// Les pistes audio suivent le mute effectif.
+    let audioTracks = AudioTrackActivator()
     private var watchStartTime: Date?
 
     /// Guards `applyResumePositionIfAvailable()` against firing on every
     /// `duration` publisher tick (AVFoundation reports it more than once as
     /// the item loads) — the resume seek must happen exactly once per `load()`.
     private var hasAppliedResumeThisLoad = false
-    /// `play()` demandé avant que la reprise soit posée (#10354) : la lecture
+    /// `play()` demandé avant que la reprise soit posée : la lecture
     /// part une fois la tête au bon endroit, jamais depuis zéro avant de sauter.
     private var playsWhenResumed = false
 
@@ -177,7 +179,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// Posée APRÈS `load()` par les surfaces : `load()` appelle `cleanup()`, et
     /// tout ce qu'on pose AVANT lui est à la merci de ce nettoyage — c'est
     /// exactement le défaut que `attachmentId` a payé une fois.
-    /// #10504 — la qualité de lecture d'un contenu SOCIAL, déclarée par la
+    /// La qualité de lecture d'un contenu SOCIAL, déclarée par la
     /// surface APRÈS `load()` (comme la consommation servie). Une vidéo de
     /// conversation n'en déclare aucune : rien n'est mesuré.
     private var qoeObserver: PlaybackQoEObserver?
@@ -208,7 +210,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// can stay a plain `MainActor.assumeIsolated` call — no `Task` hop per tick.
     private var lastHeartbeat: Double = 0
 
-    /// Ce qu'une interruption a mis en pause (#11040) — survit à `cleanup()`,
+    /// Ce qu'une interruption a mis en pause — survit à `cleanup()`,
     /// qui le solde explicitement.
     var interruptionLedger = InterruptionResumeLedger()
     /// L'INTENTION de lecture, et non le débit observé : le système arrête
@@ -252,7 +254,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         let localURL = CacheCoordinator.videoLocalFileURL(for: resolved)
 
         // 1. Check prerolled player cache (instant playback — already buffered).
-        // Adopté seulement s'il lit le FICHIER (#9702) : un lecteur préparé sur
+        // Adopté seulement s'il lit le FICHIER : un lecteur préparé sur
         // l'URL distante jouerait en streaming un média déjà sur le disque, et
         // le téléchargerait une seconde fois.
         if let cached = StoryMediaLoader.shared.cachedPlayer(for: url) {
@@ -289,102 +291,19 @@ public final class SharedAVPlayerManager: ObservableObject {
         // fallback only affects conversation/feed video.
     }
 
-    // MARK: - Prerolled players (#9702)
-
-    /// Un lecteur préparé s'adopte s'il lit le fichier local — ou, à défaut de
-    /// fichier sur le disque, tel quel (comportement d'avant, rien de mieux à
-    /// servir). Préparé sur le réseau alors que le fichier est là, il se jette.
-    public nonisolated static func mayAdoptPrerolledPlayer(playsLocalFile: Bool, localFileOnDisk: Bool) -> Bool {
-        playsLocalFile || !localFileOnDisk
-    }
-
-    /// Le lecteur sortant revient au pool s'il est PRÊT et lit le fichier :
-    /// un retour en arrière le retrouve décodé. Un lecteur en échec ou en
-    /// streaming n'y prendrait que la place d'un voisin utile.
-    public nonisolated static func mayRecycleOutgoingPlayer(isReadyToPlay: Bool, playsLocalFile: Bool) -> Bool {
-        isReadyToPlay && playsLocalFile
-    }
-
-    private static func playsLocalFile(_ player: AVPlayer) -> Bool {
-        (player.currentItem?.asset as? AVURLAsset)?.url.isFileURL == true
-    }
-
-    /// Rend le lecteur que `load()` remplace au pool de `StoryMediaLoader`
-    /// (borné à trois) au lieu de le détruire — le retour en arrière d'un réel
-    /// ne repart plus à froid.
-    ///
-    /// La tête RESTE où l'utilisateur l'a laissée quand la position est
-    /// reprenable (#10354, `PlaybackResumeLaw.recycledHead`) : le retour
-    /// reprend là, à l'instant, par un simple `play()`. Ramenée à zéro, elle
-    /// jouait depuis le début pendant le geste, puis un `seek` précis la
-    /// replaçait une fois la page posée — plusieurs secondes sur l'appareil.
-    private func recycle(_ outgoing: AVPlayer, for url: URL) {
-        guard Self.mayRecycleOutgoingPlayer(
-            isReadyToPlay: outgoing.currentItem?.status == .readyToPlay,
-            playsLocalFile: Self.playsLocalFile(outgoing)
-        ) else { return }
-        PlaybackLoopQueue.dropSuccessors(of: outgoing)
-        outgoing.actionAtItemEnd = Self.actionAtItemEnd(looping: false)
-        let rewind = PlaybackResumeLaw.recycledHead(
-            position: outgoing.currentTime().seconds,
-            duration: outgoing.currentItem?.duration.seconds ?? .nan,
-            isResumable: Self.isResumable)
-        StoryMediaLoader.shared.returnPlayer(outgoing, for: url)
-        guard let rewind else {
-            // Préroulé là où il est (#9702) : ses tampons sont pleins au
-            // `play()` du retour en arrière, l'image ne fige pas.
-            Self.prerollIfIdle(outgoing)
-            return
-        }
-        outgoing.seek(to: CMTime(seconds: rewind, preferredTimescale: 600),
-                      toleranceBefore: .zero, toleranceAfter: .zero) { finished in
-            guard finished else { return }
-            Task { @MainActor in Self.prerollIfIdle(outgoing) }
-        }
-    }
-
-    /// `preroll` lève une exception sur un lecteur qui joue ou dont l'élément
-    /// n'est pas prêt : entre le `seek` et sa complétion, le lecteur a pu être
-    /// repris (il joue) ou évincé du pool (plus d'élément).
-    public nonisolated static func mayPrerollRecycledPlayer(rate: Float, isReadyToPlay: Bool) -> Bool {
-        rate == 0 && isReadyToPlay
-    }
-
-    /// **Ce que `preroll(atRate:)` exige avant d'être appelé (#10554).**
-    ///
-    /// AVFoundation lève une exception — donc arrête l'application — quand le
-    /// statut du LECTEUR n'est pas « prêt » (`AVPlayer.h` : « This method
-    /// throws an exception if the status is not AVPlayerStatusReadyToPlay »).
-    /// Les deux sites ne lisaient que le statut de l'ÉLÉMENT : un lecteur en
-    /// échec (services média redémarrés) avec un élément encore prêt passait.
-    public nonisolated static func isReadyForPreroll(
-        playerStatus: AVPlayer.Status, itemStatus: AVPlayerItem.Status?
-    ) -> Bool {
-        playerStatus == .readyToPlay && itemStatus == .readyToPlay
-    }
-
-    private static func prerollIfIdle(_ player: AVPlayer) {
-        guard mayPrerollRecycledPlayer(
-            rate: player.rate,
-            isReadyToPlay: isReadyForPreroll(playerStatus: player.status, itemStatus: player.currentItem?.status)
-        ) else { return }
-        player.preroll(atRate: 1.0) { _ in }
-    }
-
     // MARK: - Playback Controls
 
-    /// Ce que la vidéo produit au démarrage, lu par `ContentPlaybackSessionLaw`
-    /// (#11039) : audible, elle met la musique des autres apps en pause ;
-    /// muette (autoplay du fil), elle n'y touche pas. Le son activait jadis la
-    /// session sans condition dans `load()`, avant que la surface ait pu dire
-    /// son intention de silence.
+    /// Ce que la vidéo produit au démarrage, lu par `ContentPlaybackSessionLaw` :
+    /// audible, elle met la musique des autres apps en pause ;
+    /// muette (autoplay du fil), elle n'y touche pas. Activer la session sans
+    /// condition dans `load()` précéderait l'intention de silence de la surface.
     public nonisolated static func playbackAudibility(effectiveMuted: Bool) -> ContentPlaybackAudibility {
         effectiveMuted ? .muted : .audible
     }
 
     public func play() {
         guard let player else { return }
-        // La reprise se pose AVANT la lecture (#10354) — ici, pour un lecteur
+        // La reprise se pose AVANT la lecture — ici, pour un lecteur
         // adopté déjà prêt, la consommation servie étant remise entre `load()`
         // et `play()`. Élément pas encore prêt : la lecture attend que
         // `applyResumePositionIfAvailable` l'ait posée.
@@ -414,7 +333,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         emitWatchSample()
     }
 
-    /// **La pause du réel qu'on quitte, pendant le geste** (#10354).
+    /// **La pause du réel qu'on quitte, pendant le geste.**
     ///
     /// `pause()` envoie aussi le rapport de visionnage et écrit la position
     /// de reprise — du travail qui figeait la page à mi-course. Ici, seul le
@@ -514,14 +433,14 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// servir, jamais autant que le doigt en demande.
     public func seek(to seconds: Double, precise: Bool) {
         // Sans lecteur, la complétion ne viendrait jamais et tout déplacement
-        // suivant resterait en attente derrière celui-ci (#10555).
+        // suivant resterait en attente derrière celui-ci.
         guard player != nil else { return }
         // `Int(_:)` trappe sur une valeur non finie : une position de reprise illisible ne déplace rien.
         guard seconds.isFinite else { return }
         // Relevé AVANT le déplacement : c'est jusque-là que le visionnage a
         // porté. Le traqueur ignore de lui-même un déplacement à l'arrêt.
         stretchTracker.seek(from: positionMs, to: max(0, Int(seconds * 1000)))
-        // La tête publiée EST la tête demandée (#10555) : la barre s'y pose,
+        // La tête publiée EST la tête demandée : la barre s'y pose,
         // au lieu de revenir à l'ancienne position jusqu'au tick suivant.
         let head = PlaybackProgressLaw.headAfterSeek(target: seconds, durationSeconds: duration)
         if currentTime != head { currentTime = head }
@@ -581,10 +500,10 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// Arrête la vidéo parce qu'un AUTRE lecteur prend la main (voice note,
     /// story) — et qui va, dans la foulée, activer la session lui-même.
     ///
-    /// Quand le moteur vidéo ne tenait rien, désactiver la session ici était un
+    /// Quand le moteur vidéo ne tient rien, désactiver la session ici serait un
     /// aller-retour bloquant vers le serveur audio SUR LE MAIN THREAD à chaque
     /// tap de lecture et chaque ouverture de story, et `.notifyOthersOnDeactivation`
-    /// relançait la musique d'une autre app une fraction de seconde avant que
+    /// relancerait la musique d'une autre app une fraction de seconde avant que
     /// le lecteur suivant ne la coupe de nouveau.
     public func stopForHandoff() {
         let heldPlayback = player != nil || !activeURL.isEmpty
@@ -697,13 +616,13 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// by `hasAppliedResumeThisLoad` (AVFoundation republishes `duration` more
     /// than once while the item loads).
     ///
-    /// #10354 — la tête d'un lecteur ADOPTÉ est souvent déjà sur la reprise
+    /// La tête d'un lecteur ADOPTÉ est souvent déjà sur la reprise
     /// (rendu au pool à sa place, joué pendant le geste) : aucun `seek`,
     /// seulement `play()`. Sinon UN `seek` tolérant (`PlaybackResumeLaw`), au
-    /// lieu du `seek` précis qui décodait depuis l'image-clé précédente sur un
+    /// lieu du `seek` précis qui décoderait depuis l'image-clé précédente sur un
     /// lecteur qui jouait déjà. Un `play()` demandé entre-temps part ici.
     ///
-    /// #7212 — la position servie par la passerelle comble l'ABSENCE locale, par
+    /// La position servie par la passerelle comble l'ABSENCE locale, par
     /// la MÊME fonction que la vignette interroge pour teindre sa barre
     /// (`MediaResumeResolver`), et sur la paire de champs du médium VIDÉO
     /// (`lastWatchPositionMs` / `watchedComplete`).
@@ -756,10 +675,10 @@ public final class SharedAVPlayerManager: ObservableObject {
         // Sync immédiat de l'état de mute effectif sur le nouveau player. Sans
         // ça, un user qui mute en fullscreen puis ouvre une nouvelle vidéo
         // entend le son revenir alors que l'icône mute reste activée.
-        player.isMuted = effectiveMuted
+        bindAudioTracks(to: player)
         if let item = player.currentItem { engineItems.insert(ObjectIdentifier(item)) }
         applyLoop(to: player)
-        // La tête d'un lecteur adopté n'est pas à zéro (#10354) : le visionnage
+        // La tête d'un lecteur adopté n'est pas à zéro : le visionnage
         // qui commencera au `play()` part de là, pas de la valeur effacée par
         // `cleanup()` — sinon la trace compterait de zéro à la reprise.
         let head = Self.finiteSeconds(player.currentTime())
@@ -770,10 +689,10 @@ public final class SharedAVPlayerManager: ObservableObject {
         player.currentItem?.preferredPeakBitRate = MediaThermalPolicy.preferredPeakBitRate(
             isVisible: true, thermalState: ProcessInfo.processInfo.thermalState)
 
-        // Cadence backs off as the device heats up (SOTA, WWDC19 #422). The block
+        // Cadence backs off as the device heats up (WWDC19 #422). The block
         // runs via `MainActor.assumeIsolated` — NOT a `Task { @MainActor }` per tick:
-        // `queue: .main` already runs on the MainActor executor, so the old wrapper
-        // scheduled a needless continuation 5-10×/s. Mirrors the proven pattern in
+        // `queue: .main` already runs on the MainActor executor, so a wrapper
+        // would schedule a needless continuation 5-10×/s. Mirrors the proven pattern in
         // `StoryTimelineEngine`. `lastHeartbeat` is an instance property so the
         // closure captures nothing mutable.
         let interval = CMTime(
@@ -802,7 +721,7 @@ public final class SharedAVPlayerManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // La durée suit l'élément EN COURS, et lui seul (#10555) : un
+        // La durée suit l'élément EN COURS, et lui seul : un
         // successeur de boucle qui n'a pas encore relu la sienne garde celle
         // de son média au lieu de la faire retomber à zéro.
         //
@@ -825,7 +744,7 @@ public final class SharedAVPlayerManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // La file a enchaîné sur le successeur (#10555) : la tête publiée
+        // La file a enchaîné sur le successeur : la tête publiée
         // repart avec l'image, sans attendre le tick suivant, et le tour
         // d'après reçoit son successeur ICI — pas à la notification de fin,
         // qui peut arriver avant l'enchaînement et laisser la file sans suite.
@@ -842,7 +761,7 @@ public final class SharedAVPlayerManager: ObservableObject {
             .store(in: &cancellables)
 
         // Un élément prêt sans durée finie, ou en échec, libère aussi la
-        // lecture retenue par la reprise (#10354).
+        // lecture retenue par la reprise.
         player.currentItem?.publisher(for: \.status)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -861,16 +780,16 @@ public final class SharedAVPlayerManager: ObservableObject {
                 self.emitWatchSample(complete: true)
                 self.watchClockStart = self.shouldLoop ? Date() : nil
                 if self.shouldLoop {
-                    // Boucle SANS couture (#9702) : la file a déjà enchaîné sur
+                    // Boucle SANS couture : la file a déjà enchaîné sur
                     // le successeur, à son rythme — ni `seek`, ni `play()`
-                    // (qui repassait par le coordinateur et réactivait la
+                    // (qui repasserait par le coordinateur et réactiverait la
                     // session audio à chaque tour). Le tour suivant reçoit son
                     // successeur. Sans file, la tête revient au début.
                     // Reset watchStartTime pour que la prochaine fin de cycle
                     // puisse encore report progress.
                     // Fin lue AVANT l'enchaînement de la file : elle
                     // enchaînera seule, et y ramener la tête rejouerait
-                    // l'élément fini (`PlaybackLoopTurn`, #10555).
+                    // l'élément fini (`PlaybackLoopTurn`).
                     if PlaybackLoopTurn.action(
                         finishedIsCurrent: self.player?.currentItem === finished,
                         successorQueued: self.player.map { PlaybackLoopQueue.advancesToQueuedSuccessor($0) } ?? false
@@ -902,9 +821,9 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// atteint par `PlaybackCoordinator.willStartPlaying` depuis le
     /// `makeUIView` de CHAQUE canvas de scène que le fil construit — donc
     /// pendant une mise à jour de vue SwiftUI. Un moteur déjà à l'arrêt
-    /// publiait neuf fois par carte, « Publishing changes from within view
-    /// updates », et SwiftUI abandonnait ses rendus : fil VIERGE au
-    /// défilement (#6977, jumeau de `AudioPlaybackManager.resetState`).
+    /// publierait neuf fois par carte, « Publishing changes from within view
+    /// updates », et SwiftUI abandonnerait ses rendus : fil VIERGE au
+    /// défilement (jumeau de `AudioPlaybackManager.resetState`).
     private func cleanup() {
         noteSessionSignal(.contentReleased)
         wantsPlayback = false
@@ -922,6 +841,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         }
         timeObserver = nil
         cancellables.removeAll()
+        audioTracks.release()
         engineItems.removeAll()
         seekGeneration &+= 1
         seekInFlight = false
@@ -941,7 +861,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         pip.reset()
         // Le contrôleur vient de partir, et son délégué avec lui : aucun
         // `didStop` ne viendra rabaisser le drapeau. Resté levé, il refuserait
-        // le lecteur à toute surface en ligne (#9575).
+        // le lecteur à toute surface en ligne.
         if isPipActive { isPipActive = false }
         // shouldLoop reset : ne traverse pas un changement d'attachment.
         // isForceMuted reset : intention par-surface TRANSITOIRE, ne traverse

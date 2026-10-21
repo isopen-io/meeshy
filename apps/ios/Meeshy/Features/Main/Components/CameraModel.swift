@@ -14,13 +14,13 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {
         // Un modèle libéré sans `stop()` ne laisse pas son guet de la scène
-        // inscrit au centre de notifications (#9295).
+        // inscrit au centre de notifications.
         if let subjectAreaObserver { NotificationCenter.default.removeObserver(subjectAreaObserver) }
         sessionObservers.forEach { NotificationCenter.default.removeObserver($0) }
     }
-    /// Le guet de la santé de la session (#10308) — `CameraModel+Recovery`.
+    /// Le guet de la santé de la session — `CameraModel+Recovery`.
     nonisolated(unsafe) var sessionObservers: [NSObjectProtocol] = []
-    /// Le rang de la dernière entrée vidéo posée (#10308) : la couche d'aperçu
+    /// Le rang de la dernière entrée vidéo posée : la couche d'aperçu
     /// ne règle sa connexion qu'à ce changement, jamais à chaque passe.
     @Published private(set) var inputEpoch = 0
     nonisolated(unsafe) let session = AVCaptureSession()
@@ -29,16 +29,16 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// tant qu'aucune photo n'a été prise.
     var capturedPhotoData: Data?
     var capturedVideoURL: URL?
-    /// L'enregistrement du BRUT de la dernière prise, posé AVANT son identifiant (#9351) —
-    /// `nil` quand `CaptureSavePolicy` ne l'enregistre pas (défaut, #9684).
+    /// L'enregistrement du BRUT de la dernière prise, posé AVANT son identifiant —
+    /// `nil` quand `CaptureSavePolicy` ne l'enregistre pas (défaut).
     var librarySave: Task<Bool, Never>?
     /// Réglages › Médias « enregistrer l'original », lu par l'hôte (sa politique
     /// injectée) ; sans hôte, le réglage stocké.
     var savesOriginalSetting: (@MainActor () -> Bool)?
 
     /// Le brut de TOUTE prise rejoint Photos si Réglages › Médias le demande, hors
-    /// cadre compris : la directive #10284 fixe un défaut, le réglage prime
-    /// (correction porteur 2026-10-12, `CaptureSaveLaw.destination(for:savesOriginal:)`).
+    /// cadre compris : la loi fixe un défaut, le réglage prime
+    /// (`CaptureSaveLaw.destination(for:savesOriginal:)`).
     func savesOriginal() -> Bool {
         savesOriginalSetting?() ?? CaptureSavePolicy.stored().savesOriginal
     }
@@ -67,24 +67,24 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// le fil principal n'en lit que les connexions.
     nonisolated(unsafe) private let photoOutput = AVCapturePhotoOutput()
     nonisolated(unsafe) private let videoOutput = AVCaptureMovieFileOutput()
-    /// Les trames de l'objectif pour le look en direct (#9329) — guettées, mais
+    /// Les trames de l'objectif pour le look en direct — guettées, mais
     /// gardées seulement quand un look est choisi.
     nonisolated(unsafe) private let frameOutput = AVCaptureVideoDataOutput()
-    /// **La file UNIQUE de la session** (#9464) : configuration, lancement et
+    /// **La file UNIQUE de la session** : configuration, lancement et
     /// arrêt, dans l'ordre. Ce qu'elle installe est publié ensuite ici.
     nonisolated let sessionQueue = ComposerCaptureSessionQueue()
-    /// L'entrée de l'autre objectif, prête avant la bascule (#9753).
+    /// L'entrée de l'autre objectif, prête avant la bascule.
     nonisolated let preparedInputs = ComposerCameraPreparedInputs<AVCaptureDeviceInput>()
     nonisolated let liveFeed = ComposerCameraFeed()
-    /// Le vœu de la couche d'aperçu, que la bascule applique dans sa transaction (#10308).
+    /// Le vœu de la couche d'aperçu, que la bascule applique dans sa transaction.
     nonisolated let previewMirroring = ComposerPreviewMirroring()
     /// La session est configurée (ou en cours de l'être sur sa file) : on ne la
-    /// refait pas (#10307).
+    /// refait pas.
     private(set) var sessionIsPrepared = false
-    /// De l'armement à la première trame, relevé dans la console (#10307).
+    /// De l'armement à la première trame, relevé dans la console.
     nonisolated let firstFrameClock = ComposerCameraFirstFrameClock()
     #if DEBUG
-    /// La caméra de recette (#9351) — `nil` hors simulateur ou sans `-MeeshyCaptureFixture`.
+    /// La caméra de recette — `nil` hors simulateur ou sans `-MeeshyCaptureFixture`.
     let fixture: ComposerCaptureFixtureDriver?
     #endif
 
@@ -97,11 +97,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         return false
         #endif
     }
-    /// #8695 — le traitement UNIQUE de toute prise photo de l'app : chaque
+    /// Le traitement UNIQUE de toute prise photo de l'app : chaque
     /// consommateur (conversation, fil, composer, story) reçoit la photo déjà
     /// redressée, bornée et améliorée, EXIF compris.
     nonisolated let photoProcessor: any PhotoCaptureProcessorProviding
-    /// La session audio d'un enregistrement (#11042) : posée par la loi, plus
+    /// La session audio d'un enregistrement : posée par la loi, plus
     /// par la capture elle-même.
     let recordingSession: MeeshyRecordingSession = .shared
     /// La dernière remise de session demandée : un viseur qui revient avant
@@ -126,26 +126,26 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         super.init()
     }
     #endif
-    /// Publiée : le sol blanc du flash avant (#8653) suit l'objectif actif.
+    /// Publiée : le sol blanc du flash avant suit l'objectif actif.
     @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
-    /// Une bascule d'objectif est en cours (#9464) : le bouton se tait.
+    /// Une bascule d'objectif est en cours : le bouton se tait.
     @Published private(set) var isSwitchingCamera = false
     /// La dernière trame de l'ancien objectif, floutée, qui couvre la bascule.
     @Published private(set) var switchCover: CGImage?
     /// La bascule en cours : une couverture peinte après la sienne ne se pose pas.
     private var switchGeneration = 0
     private var recordingTimer: Timer?
-    /// Le guet de la scène après un toucher (#9295) — `nil` hors session.
+    /// Le guet de la scène après un toucher — `nil` hors session.
     /// `nonisolated(unsafe)` : la deinit, non isolée, le retire ; il n'est
     /// écrit que sur le fil principal.
     nonisolated(unsafe) private var subjectAreaObserver: NSObjectProtocol?
 
-    // Camera-switch-mid-recording (bug fix 2026-07-09): `AVCaptureMovieFileOutput`'s
+    // Camera-switch-mid-recording: `AVCaptureMovieFileOutput`'s
     // active recording connection breaks when its video input is removed, even
     // transiently inside a single beginConfiguration()/commitConfiguration()
-    // transaction — swapping cameras used to silently end the recording early
+    // transaction — swapping cameras in place would silently end the recording early
     // (didFinishRecordingTo fires, the view dismisses with a truncated clip).
-    // Fix: on a mid-recording switch, cleanly close the current segment, swap
+    // So on a mid-recording switch, cleanly close the current segment, swap
     // cameras once truly stopped, then open a NEW segment on the new camera —
     // the user sees one continuous recording (duration keeps counting, the
     // `isRecordingVideo` indicator never drops). All segments are stitched into
@@ -200,8 +200,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
     }
 
-    /// **La session se prépare AVANT d'être montrée** (#10307, porteur
-    /// 2026-10-12 : « armer la caméra vite »). Le composer qui s'ouvre sur un
+    /// **La session se prépare AVANT d'être montrée**, pour armer la caméra
+    /// vite : le composer qui s'ouvre sur un
     /// format qui filme la configure déjà — sorties, objectif, connexions —
     /// sans la lancer : aucun voyant caméra ne s'allume tant qu'on ne vise pas,
     /// et l'armement n'a plus qu'à la démarrer. Seulement si l'accès est DÉJÀ
@@ -212,7 +212,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
 
     /// Arme, puis lance : la configuration n'est faite qu'UNE fois par modèle —
-    /// un ré-armement ne retire ni ne repose rien (#10307), il garde l'objectif
+    /// un ré-armement ne retire ni ne repose rien, il garde l'objectif
     /// choisi et démarre. Le micro déjà autorisé entre avant le lancement.
     private func setupSession() {
         let prechauffee = sessionIsPrepared
@@ -233,8 +233,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         sessionQueue.perform { [weak self] in
             guard let self else { return }
             self.session.beginConfiguration()
-            // La capture ne reconfigure plus la session audio à sa guise : sa
-            // configuration automatique coupait les sons de Meeshy (#11042).
+            // La capture ne reconfigure pas la session audio à sa guise : sa
+            // configuration automatique couperait les sons de Meeshy.
             // `RecordingSessionLaw` la pose — non mélangeable, un son Meeshy
             // qui joue baisse au lancement de la prise et remonte à la fin.
             self.session.automaticallyConfiguresApplicationAudioSession = false
@@ -258,7 +258,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
     }
 
-    /// Le micro déjà autorisé entre dans la session ARRÊTÉE (#9328), jamais
+    /// Le micro déjà autorisé entre dans la session ARRÊTÉE, jamais
     /// pendant qu'une musique joue ; décidé à l'armement, pas à la préparation.
     private func armMicrophoneAtSetup() {
         guard !hasAudioInput, CameraAudioArming.armsAtSetup(
@@ -278,10 +278,10 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// Demande le micro et branche l'entrée audio, au premier passage en mode
     /// Vidéo (et défensivement avant un enregistrement).
     ///
-    /// Historiquement le micro était demandé dès l'ouverture de la caméra, y
-    /// compris pour quelqu'un qui ne prend qu'une photo : un prompt sans motif
-    /// visible, que l'utilisateur refuse souvent — définitivement. Il arrive
-    /// désormais au moment où le son sert réellement.
+    /// Le micro n'est pas demandé dès l'ouverture de la caméra, y compris pour
+    /// quelqu'un qui ne prend qu'une photo : un prompt sans motif visible, que
+    /// l'utilisateur refuse souvent — définitivement. Il arrive au moment où le
+    /// son sert réellement.
     ///
     /// Un refus n'empêche pas de filmer : la capture continue sans piste audio
     /// (`mergeSegments` gère l'absence de piste audio), avec un toast explicatif.
@@ -311,14 +311,14 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     }
 
     /// Le micro entre dans la capture : la session devient capable
-    /// d'enregistrer AVANT que l'entrée n'y tourne (#11042) — sauf si une
+    /// d'enregistrer AVANT que l'entrée n'y tourne — sauf si une
     /// musique joue, que seule la prise interrompra (`CameraAudioArming`).
     private func prepareRecordingSessionUnlessMusicPlays() {
         guard !AVAudioSession.sharedInstance().isOtherAudioPlaying else { return }
         recordingSession.prepare(.video)
     }
 
-    /// Le viseur revient (#9352) avec son micro déjà branché : la session
+    /// Le viseur revient avec son micro déjà branché : la session
     /// redevient celle d'un enregistrement, et une remise encore en file
     /// s'efface.
     func reclaimRecordingSessionIfArmed() {
@@ -327,7 +327,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         prepareRecordingSessionUnlessMusicPlays()
     }
 
-    /// Le viseur se ferme ou se suspend (#11042) : le son Meeshy baissé
+    /// Le viseur se ferme ou se suspend : le son Meeshy baissé
     /// remonte tout de suite ; la session, elle, ne se rend qu'une fois la
     /// capture ARRÊTÉE sur sa file — une désactivation sous une entrée audio
     /// qui tourne échoue, et la musique des autres apps ne reprendrait pas.
@@ -389,7 +389,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         switchCamera(then: { _ in })
     }
 
-    /// `then` reçoit l'objectif en place une fois la bascule finie (#9464) —
+    /// `then` reçoit l'objectif en place une fois la bascule finie —
     /// la machine de capture y rend le zoom et la lumière.
     func switchCamera(then: @escaping @MainActor @Sendable (AVCaptureDevice.Position) -> Void) {
         guard ComposerCameraSwitchRule.mayFlip(isSwitching: isSwitchingCamera), !recordingIsPending else { return }
@@ -398,7 +398,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         #if DEBUG
         if fixture != nil {
             // La caméra de recette se retourne aussi : le selfie éclairé par
-            // l'écran se recette au simulateur (#9566).
+            // l'écran se recette au simulateur.
             currentPosition = currentPosition == .back ? .front : .back
             endSwitch()
             then(currentPosition)
@@ -420,7 +420,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     /// La bascule se fait sur la file ; `then` passe sur le fil principal une
     /// fois l'objectif publié. La trame de couverture est celle déjà retenue,
-    /// et son flou se peint À CÔTÉ de la bascule, jamais devant elle (#9778).
+    /// et son flou se peint À CÔTÉ de la bascule, jamais devant elle.
     private func performCameraSwitch(to position: AVCaptureDevice.Position,
                                      then: @escaping @MainActor @Sendable () -> Void = {}) {
         let debut = CACurrentMediaTime()
@@ -515,8 +515,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     /// **La session peut-elle rendre une image ?** Les mêmes quatre faits que
     /// `takePhoto` exige — lus ici pour qu'un geste qui OUVRE la caméra et
-    /// PREND dans le même mouvement (#8653) attende qu'elle le puisse. Jamais
-    /// pendant une bascule : l'entrée en place va être retirée (#9464).
+    /// PREND dans le même mouvement attende qu'elle le puisse. Jamais
+    /// pendant une bascule : l'entrée en place va être retirée.
     var isCaptureReady: Bool {
         #if DEBUG
         if fixture != nil { return !isSwitchingCamera }
@@ -540,11 +540,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         return !Task.isCancelled
     }
 
-    /// **La torche de l'objectif actif** (#8653) — la lumière d'une VIDÉO, que
+    /// **La torche de l'objectif actif** — la lumière d'une VIDÉO, que
     /// `flashMode` n'éclaire pas. Sans lampe, ou sur un mode refusé, rien ne
     /// change : l'objectif avant n'en a pas, c'est l'écran qui l'éclaire.
     ///
-    /// `level` vient du curseur d'intensité (#8671) : une torche ALLUMÉE prend
+    /// `level` vient du curseur d'intensité : une torche ALLUMÉE prend
     /// la puissance demandée, bornée à ce que l'appareil sert (une torche
     /// chaude en sert moins).
     func setTorch(_ mode: AVCaptureDevice.TorchMode, level: Double = ComposerFlashIntensity.defaultLevel) {
@@ -568,11 +568,11 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// L'objectif en place, tel que la file l'a installé.
     private var activeVideoDevice: AVCaptureDevice?
 
-    /// **Le cadrage de l'objectif actif** (#8671) — publié pour le badge du
-    /// viseur en facteur AFFICHÉ (#9350), remis à ×1 à chaque changement d'objectif.
+    /// **Le cadrage de l'objectif actif** — publié pour le badge du
+    /// viseur en facteur AFFICHÉ, remis à ×1 à chaque changement d'objectif.
     @Published private(set) var zoomFactor: CGFloat = 1
 
-    /// L'échelle entre le facteur de l'appareil et celui qu'on lit (#9350).
+    /// L'échelle entre le facteur de l'appareil et celui qu'on lit.
     private(set) var zoomScale = ComposerCaptureZoomScale(base: 1)
 
     /// Ce que l'objectif sert, en facteur AFFICHÉ. Sans objectif (simulateur),
@@ -601,14 +601,14 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         }
     }
 
-    // MARK: - La mise au point (#9295)
+    // MARK: - La mise au point
 
     /// **Le toucher vise ce point du capteur** — mise au point et exposition,
     /// une fois ; la scène qui change rend l'objectif au continu. `devicePoint`
     /// est en coordonnées capteur (`0...1`), converties selon l'image affichée
     /// (`ComposerCaptureFocusGeometry`).
     /// `false` ⇒ l'objectif ne règle ni la netteté ni l'exposition sur un point :
-    /// rien n'a été visé, et l'écran ne doit pas le prétendre (#9464).
+    /// rien n'a été visé, et l'écran ne doit pas le prétendre.
     @discardableResult
     func focus(at devicePoint: CGPoint, smooth: Bool) -> Bool {
         guard let device = activeVideoDevice else { return false }
@@ -620,7 +620,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         CameraFocusControl.resumeContinuous(on: device, smooth: isRecordingVideo)
     }
 
-    /// **La netteté glisse pendant TOUTE la prise** (#9464) — posée à chaque
+    /// **La netteté glisse pendant TOUTE la prise** — posée à chaque
     /// segment (le nouvel objectif d'une bascule compris), retirée à la fin.
     private func setSmoothFocus(_ lisse: Bool) {
         guard let device = activeVideoDevice, device.isSmoothAutoFocusSupported else { return }
@@ -692,8 +692,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         // indicateur rouge et son compteur qui monte.
         recordingId = UUID().uuidString
         // Les sons extérieurs s'arrêtent, le son Meeshy qui joue BAISSE sans
-        // s'arrêter (#11042). Refusé pendant un appel : la prise se fait sous
-        // la session de l'appel, comme avant.
+        // s'arrêter. Refusé pendant un appel : la prise se fait sous
+        // la session de l'appel.
         recordingSession.begin(.video)
         guard startSegment() else {
             recordingSession.finish(handingBackSession: false)
@@ -802,7 +802,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
         if isSwitchingCameraDuringRecording {
             // La bascule se fait sur la file de la session : le segment suivant
-            // ne s'ouvre qu'une fois le nouvel objectif EN PLACE (#9464).
+            // ne s'ouvre qu'une fois le nouvel objectif EN PLACE.
             guard let position = pendingSwitchPosition else {
                 endSwitch()
                 resumeRecordingAfterSwitch()
@@ -819,7 +819,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
 
     /// Le nouvel objectif est en place : la prise reprend — ou se clôt, si
     /// l'auteur a demandé l'arrêt pendant la bascule. Sa connexion peut naître
-    /// inactive : la reprise l'attend un instant (#10308) plutôt que de clore la
+    /// inactive : la reprise l'attend un instant plutôt que de clore la
     /// prise sur un refus d'une image ; un arrêt demandé entre-temps reste en file.
     private func resumeRecordingAfterSwitch() {
         let suite = switchFollower
@@ -907,12 +907,12 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
         }
         // Persist the processed encoded bytes AS-IS (HEIC/JPEG, EXIF kept):
         // `saveImage(_ data:)` decodes to a UIImage and loses the EXIF,
-        // `saveImageFile` hands Photos the bytes untouched (#9347).
+        // `saveImageFile` hands Photos the bytes untouched.
         // `PhotoLibraryManager` is deliberately non-@MainActor so its
         // `performChanges` block runs on Photos' own queue without the
-        // executor-isolation SIGTRAP the previous inline save hit.
-        // L'original ne rejoint Photos que si le réglage le demande (#9684),
-        // quelle que soit la zone de la prise (#10284) : la prise reste dans la
+        // executor-isolation SIGTRAP an inline save would hit.
+        // L'original ne rejoint Photos que si le réglage le demande,
+        // quelle que soit la zone de la prise : la prise reste dans la
         // session de toute façon.
         let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
         Task { @MainActor in

@@ -249,7 +249,7 @@ const fr = {
   'game.detail.fact.level_now': 'C’est ton niveau en ce moment.',
   'game.detail.fact.level_required': 'C’est le niveau qu’il faut atteindre pour l’ouvrir.',
   'game.badge.counts_label': 'Ce qu’elle suit',
-  'game.badge.stars_label': 'Étoiles',
+  'game.badge.stars_label': 'Paliers',
   'game.badge.reason.none': 'Aucune étoile pour l’instant : le premier geste allume le cuivre.',
   'game.badge.reason.crossed': '{material}, parce que tu as franchi le seuil de {threshold} : tu en es à {count}.',
   'game.badge.reason.served': '{material}, gagné quand tu as franchi le seuil de {threshold}.',

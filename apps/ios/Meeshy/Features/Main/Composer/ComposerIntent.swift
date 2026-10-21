@@ -8,8 +8,8 @@ import MeeshySDK
 /// §3). L'utilisateur ne choisit pas « je fais une story » dans un menu : il
 /// tape sur le tray, et le composer sait.
 ///
-/// Modèle PUR — aucune vue, aucun service, aucun état. C2 (le meuble) et C3
-/// (les portes) le consomment comme une interface gelée.
+/// Modèle PUR — aucune vue, aucun service, aucun état. Le meuble et les portes
+/// le consomment comme une interface gelée.
 ///
 /// Tout y est `nonisolated` : la cible app compile avec l'isolation MainActor
 /// par défaut (Swift 6.2), qui rendrait jusqu'aux conformances `Equatable` de
@@ -19,13 +19,12 @@ nonisolated struct ComposerIntent: Equatable {
     let origin: ComposerOrigin
 
     /// **Le format sur lequel l'auteur veut ATTERRIR**, quand un geste l'a déjà
-    /// dit (#5055). `nil` — le cas de huit portes sur neuf — laisse la table
-    /// décider, comme avant.
+    /// dit. `nil` — le cas de huit portes sur neuf — laisse la table décider.
     ///
     /// ## Ce n'est PAS une porte par format
     ///
-    /// La décision porteur du 2026-08-31 (#4623) a retiré `.reelTab` avec une
-    /// raison qu'il faut relire au mot près : « une porte qui déclare son format
+    /// Le produit n'a pas de porte `.reelTab`, pour une
+    /// raison qu'il faut lire au mot près : « une porte qui déclare son format
     /// d'avance, **là où la décision doit se prendre APRÈS**, quand l'auteur voit
     /// ce qu'il compose ». Elle vise une porte qui PRÉSUME — le `+` d'un onglet
     /// « réel » suppose que l'auteur veut un réel avant qu'il ait rien composé.
@@ -72,23 +71,23 @@ nonisolated struct ComposerIntent: Equatable {
 /// Les huit portes du composer. La GRAINE qu'une porte apporte n'a pas de champ
 /// à elle : elle est matérialisée par les valeurs associées ci-dessous.
 ///
-/// ## Il n'y a PAS de porte par FORMAT (décision porteur 2026-08-31, #4623)
+/// ## Il n'y a PAS de porte par FORMAT
 ///
 /// > « On choisit de faire un réel à partir du Feed principal ou à partir du
 /// > **+** de story. On choisit **dans le composer** si on fait un post, une
 /// > story ou un réel / mood. »
 ///
-/// `.reelTab` a donc été RETIRÉE. Elle nommait une entrée que le produit ne veut
-/// pas : une porte qui déclare son format d'avance, là où la décision doit se
-/// prendre APRÈS, quand l'auteur voit ce qu'il compose.
+/// Il n'y a donc pas de porte `.reelTab` : elle nommerait une entrée que le
+/// produit ne veut pas — une porte qui déclare son format d'avance, là où la
+/// décision doit se prendre APRÈS, quand l'auteur voit ce qu'il compose.
 ///
 /// C'est la loi 9 tenue à la lettre — **le format est un CHAMP, pas une
 /// identité**. Une porte par format ferait de chaque format une identité qu'on
 /// choisit avant d'avoir composé.
 ///
-/// Le réel reste atteignable, et il l'était déjà : `plusReel` l'ajoute à
+/// Le réel reste atteignable : `plusReel` l'ajoute à
 /// l'éventail de `.storyTray` et de `.feedComposer` dès que la composition
-/// qualifie. **La capacité existait ; c'est l'entrée dédiée dont le produit ne
+/// qualifie. **La capacité existe ; c'est l'entrée dédiée dont le produit ne
 /// veut pas.**
 nonisolated enum ComposerOrigin: Equatable {
     case storyTray, feedComposer, moodChip
@@ -99,15 +98,14 @@ nonisolated enum ComposerOrigin: Equatable {
     case repost(ofPostId: String, sourceFormat: ComposerFormat)
     case edit(postId: String, documentFormat: ComposerFormat)
     case draft(id: String), share
-    /// `attachmentId` est OPTIONNEL depuis le #4025 : la même origine sert
-    /// désormais un message TEXTE, qui n'a aucune pièce jointe. Aucun lecteur
+    /// `attachmentId` est OPTIONNEL : la même origine sert un message TEXTE, qui
+    /// n'a aucune pièce jointe. Aucun lecteur
     /// n'en est affecté — les `switch` du dépôt matchent `case .conversationMedia:`
     /// sans jamais lier l'identifiant, qui voyage comme contexte et non comme
     /// donnée de décision.
     case conversationMedia(messageId: String, attachmentId: String?)
-    /// **Le média d'un POST ou la slide d'une STORY** (#6085, directive porteur
-    /// 2026-09-11 : « il faut permettre de pouvoir composer les pièces jointes
-    /// d'une conversation, d'un poste ou d'une story »).
+    /// **Le média d'un POST ou la slide d'une STORY** : on peut composer les pièces
+    /// jointes d'une conversation, d'un poste ou d'une story.
     ///
     /// Une porte DISTINCTE de `.conversationMedia`, et pas un réemploi : le
     /// contexte qui voyage n'est pas le même — un post n'a pas de `messageId`,
@@ -124,8 +122,7 @@ nonisolated enum ComposerOrigin: Equatable {
 
 nonisolated extension ComposerFormat {
 
-    /// **Le format d'une publication RENDUE**, pour rouvrir un composer dessus
-    /// (2026-09-06, unification des composers).
+    /// **Le format d'une publication RENDUE**, pour rouvrir un composer dessus.
     ///
     /// `FeedPost.type` est une CHAÎNE du fil ; `ComposerFormat` est une somme
     /// fermée. La traduction vit ici, une fois, plutôt qu'au site qui ouvre la
@@ -177,16 +174,16 @@ nonisolated extension ComposerOrigin {
     ///
     /// ## Le piège que ce lecteur désarme
     ///
-    /// `.draft(id:)` transportait un identifiant que **personne ne lisait** :
-    /// zéro `case .draft(let …)` au dépôt (mesuré le 2026-08-31). Le seul
-    /// chemin d'adoption du meuble passe par un PARAMÈTRE séparé,
+    /// `.draft(id:)` transporte un identifiant que le seul chemin d'adoption du
+    /// meuble ne lit pas : l'adoption passe par un PARAMÈTRE séparé,
     /// `MeeshyComposerHost(draftId:)` — la « seconde source » que le
-    /// doc-comment de `repostedPostId` existe pour interdire.
+    /// doc-comment de `repostedPostId` existe pour interdire. Ce lecteur est le
+    /// repli de ce paramètre.
     ///
     /// > Une porte non construite est une route morte ; une porte dont la
     /// > GRAINE n'a aucun lecteur est pire — elle compile, elle route, et elle
-    /// > perd ce qu'on lui confie. Le jour où quelqu'un l'aurait montée, le
-    /// > brouillon repris serait resté intact à côté d'un composer vierge.
+    /// > perd ce qu'on lui confie : le brouillon repris resterait intact à côté
+    /// > d'un composer vierge.
     ///
     /// Le `switch` est exhaustif : une dixième porte casse la compilation ici
     /// avant de pouvoir répondre `nil` par omission.
@@ -265,16 +262,15 @@ nonisolated enum ComposerOpening: Equatable, CaseIterable {
     case mediaSeeded
 }
 
-/// Les composers historiques que ce lot ROUTE sans les migrer (périmètre v1).
+/// Les composers historiques que la table ROUTE sans les migrer.
 ///
-/// **DEUX cas n'y sont plus routés, et les deux RESTENT dans l'énum.** Ce ne
-/// sont pas des cas morts à balayer.
+/// **Des cas qui ne sont plus routés RESTENT dans l'énum.** Ce ne sont pas des
+/// cas morts à balayer.
 ///
-/// - `feedComposer` depuis le lot 3 : `FeedComposerSheet` existe toujours et le
-///   fil la monte encore ;
-/// - `statusComposer` depuis le lot 4.6 : plus aucune porte ne le désigne et
-///   plus aucune feuille ne le monte. `StatusComposerView.swift` a été RETIRÉ
-///   au lot 4.8, la parité prouvée bloc par bloc — le cas, lui, reste.
+/// - `feedComposer` : `FeedComposerSheet` existe toujours et le fil la monte
+///   encore ;
+/// - `statusComposer` : plus aucune porte ne le désigne et plus aucune feuille
+///   ne le monte — le cas, lui, reste.
 ///
 /// Surtout : les deux gardes négatives qui interdisent à toute porte d'y
 /// retomber (`ComposerIntentTests.test_aucunePorte_neRetombeSurLaFeuilleDuFil`
@@ -283,33 +279,30 @@ nonisolated enum ComposerOpening: Equatable, CaseIterable {
 /// retour du routage passerait alors sans un mot — le mode d'extinction
 /// silencieuse propre aux gardes négatives.
 ///
-/// **`editPostSheet` est arrivé au lot 7.8, et il répare un MENSONGE — pas un
-/// manque.** La table rendait `.storyEdit` pour les QUATRE formats d'édition.
-/// Or `.storyEdit` désigne `storyEditComposerCover` (`StoryTrayView`, quatre
-/// montages), qui monte `StoryComposerView` sur une `StoryEditSession` : c'est
-/// l'atelier d'une STORY. Éditer un POST ou un RÉEL — ce que font les CINQ
-/// montages d'`EditPostSheet` (`PostDetailView`, `ProfileUserPostsList`,
-/// `ReelsPlayerView`, `RootViewComponents`, `FeedView`) — n'avait donc AUCUNE
-/// représentation ici. Une valeur manquante se voit ; une valeur voisine qui
-/// tient la place a l'air d'avoir été décidée, et c'est le pire des deux.
+/// **`editPostSheet` désigne l'édition d'un POST ou d'un RÉEL.** `.storyEdit`
+/// désigne `storyEditComposerCover` (`StoryTrayView`, quatre montages), qui
+/// monte `StoryComposerView` sur une `StoryEditSession` : c'est l'atelier d'une
+/// STORY. Éditer un POST ou un RÉEL — ce que font les CINQ montages
+/// d'`EditPostSheet` (`PostDetailView`, `ProfileUserPostsList`,
+/// `ReelsPlayerView`, `RootViewComponents`, `FeedView`) — a sa propre
+/// représentation : une valeur manquante se voit ; une valeur voisine qui tient
+/// la place a l'air d'avoir été décidée, et c'est le pire des deux.
 ///
 /// **Ce que ce cas n'est PAS.** Aucun site de production ne construit
-/// `ComposerIntent(origin: .edit(...))` — zéro occurrence, mesurée : les deux
-/// feuilles sont montées directement, hors du routeur. Le défaut était
-/// STRUCTUREL, et il se juge en fonction pure ; prétendre qu'il corrigeait un
-/// écran serait une victoire inventée.
+/// `ComposerIntent(origin: .edit(...))` : les deux feuilles sont montées
+/// directement, hors du routeur. Le cas est STRUCTUREL, et se juge en fonction
+/// pure.
 ///
-/// La doctrine du « cas qui reste déclaré » vaut désormais pour CINQ valeurs,
-/// et l'inventaire de parité qui gouverne le retrait d'`EditPostSheet.swift`
-/// vit dans `EditParityInventoryTests` — pas ici. Ce fichier ROUTE ; il ne
-/// décide pas d'un retrait.
+/// La doctrine du « cas qui reste déclaré » vaut pour CINQ valeurs, et
+/// l'inventaire de parité qui gouverne le retrait d'`EditPostSheet.swift` vit
+/// dans `EditParityInventoryTests` — pas ici. Ce fichier ROUTE ; il ne décide
+/// pas d'un retrait.
 ///
-/// **`feedInlineComposer` est arrivé à T3.3, et il NOMME l'overlay inline iPad**
-/// (`FeedView.composerOverlay`) que rien ne surveillait — `.feedComposer` ne le
-/// désigne pas, il part de son propre booléen. Le nommer le rend gardable
-/// (`FeedInlineComposerGuardTests`) SANS le migrer : T3.4, qui le ferait passer
-/// au meuble, est descopée. L'overlay reste donc NOMMÉ et GARDÉ — strictement
-/// mieux qu'un composer que rien ne mesure.
+/// **`feedInlineComposer` NOMME l'overlay inline iPad**
+/// (`FeedView.composerOverlay`) que rien ne surveillerait — `.feedComposer` ne
+/// le désigne pas, il part de son propre booléen. Le nommer le rend gardable
+/// (`FeedInlineComposerGuardTests`) SANS le migrer : l'overlay reste NOMMÉ et
+/// GARDÉ — strictement mieux qu'un composer que rien ne mesure.
 nonisolated enum LegacyComposer: Equatable {
     case statusComposer, repostComposer, storyEdit, editPostSheet, feedComposer, feedInlineComposer
 }
@@ -343,9 +336,8 @@ nonisolated extension ComposerProfile {
     /// reposts de deux posts DU MÊME FORMAT ouvrent le même composer. Elle ne
     /// les ignore pas tous : le FORMAT qu'une porte porte fait partie de son
     /// identité, et un repost de story n'ouvre pas ce qu'ouvre un repost de
-    /// post. C'est la loi du miroir, et elle a précisé celle de C1 — qui
-    /// disait « fonction de l'ORIGINE SEULE » et devenait fausse dès qu'une
-    /// porte s'est mise à porter son format.
+    /// post. C'est la loi du miroir : la table est fonction de l'ORIGINE, graine
+    /// exceptée, et le format porté en est un morceau.
     ///
     /// Quatre lois la traversent, et `ComposerIntentTests` les éprouve une par
     /// une :
@@ -362,7 +354,7 @@ nonisolated extension ComposerProfile {
     ///   qui n'existe pas ;
     /// - **une porte qui PORTE son format annonce le format porté**, et c'est
     ///   alors la CHAÎNE COMPLÈTE qui doit savoir le produire. Le maillon est
-    ///   posé depuis que les appelants du repost envoient le type de leur carte
+    ///   posé : les appelants du repost envoient le type de leur carte
     ///   (`RepostTargeting`).
     ///
     /// - Parameter compositionQualifiesAsReel: `qualifiesAsReel` de la
@@ -372,7 +364,7 @@ nonisolated extension ComposerProfile {
     ///   dont la composition n'existe pas encore quand la caméra s'ouvre.
     ///
     /// - Parameter compositionQualifiesAsMood: `qualifiesAsMood` de la
-    ///   composition COURANTE (#4030). Jumeau du précédent, et EXCLUSIF de lui
+    ///   composition COURANTE. Jumeau du précédent, et EXCLUSIF de lui
     ///   par le prédicat : le réel exige un média, le mood exige qu'il n'y en
     ///   ait aucun. Il n'ouvre le quatrième format que sur le FIL — une porte
     ///   qui gagnerait le mood sans l'avoir demandé publierait un format que sa
@@ -404,56 +396,41 @@ nonisolated extension ComposerProfile {
             )
 
         case .feedComposer:
-            // Rév. 6 (lot 3, 2026-08-24) : la porte la plus utilisée cesse de
-            // router. Le motif de la rév. 4 — « le meuble n'a pas de surface
-            // *document sans scène* » — est TOMBÉ au lot 2 :
-            // `ComposerDocumentSurface` existe, `MeeshyComposerHost` la monte,
-            // et `ComposerSurfaceRouting` fait atterrir `.keyboardOnContent` +
-            // `.post` sur elle. Une porte ne reste pas sur sa feuille
-            // historique par habitude : elle y reste tant qu'une raison la
-            // retient, et celle-là n'existe plus.
+            // La porte la plus utilisée route vers le meuble : la table ne désigne pas
+            // `FeedComposerSheet`. Le meuble a une surface document —
+            // `ComposerDocumentSurface`, que `MeeshyComposerHost` monte, et sur laquelle
+            // `ComposerSurfaceRouting` fait atterrir `.keyboardOnContent` + `.post`. Une
+            // porte ne reste pas sur sa feuille historique par habitude : elle y reste
+            // tant qu'une raison la retient.
             //
-            // Ce que cette ligne change, EXACTEMENT : la table cesse de
-            // désigner `FeedComposerSheet`. Depuis T3.1, le PLEIN composer du
-            // fil LIT cette table — `RootViewComponents` construit
-            // `ComposerIntent(origin: .feedComposer)` (via `DocumentComposerDoor`)
-            // et atterrit sur le meuble. Restent HORS table, chacun sur son
-            // propre booléen : les deux CITATIONS de la feuille
-            // (`RootViewComponents` et `FeedView`, retenues par T3.2 tant que
-            // 7.5 n'a pas d'écrivain durable du repost) et le composer INLINE
-            // de l'iPad (`FeedView.composerOverlay`, nommé
-            // `LegacyComposer.feedInlineComposer` à T3.3 ; sa migration T3.4 est
-            // descopée — l'overlay reste nommé et gardé).
+            // Le PLEIN composer du fil LIT cette table : `RootViewComponents` construit
+            // `ComposerIntent(origin: .feedComposer)` (via `DocumentComposerDoor`) et
+            // atterrit sur le meuble. Restent HORS table, chacun sur son propre booléen :
+            // les deux CITATIONS de la feuille (`RootViewComponents` et `FeedView`,
+            // retenues tant que le repost n'a pas d'écrivain durable) et le composer
+            // INLINE de l'iPad (`FeedView.composerOverlay`, nommé
+            // `LegacyComposer.feedInlineComposer` ; il reste nommé et gardé).
             //
-            // DETTE DU LOT 2 : SOLDÉE (T2.1→T2.6). La surface désignée ne
-            // tenait au 2026-08-24 qu'UNE des trois capacités du DoD — le
-            // clavier sur `content` ; les deux autres sont tombées depuis. La
-            // rangée photo·caméra·emoji·document·lieu·micro se peint désormais
-            // en entier (T2.3 pose les fichiers, T2.4 la bascule réel
-            // `forcePlainPost`, T2.5 le lieu, T2.6 le micro ; la langue est
-            // déclarée depuis T2.2), et l'ENVOI DURABLE l'était déjà depuis le
-            // lot 4.10 : `DocumentComposerDoor` monte le meuble,
-            // `ComposerDocumentSendPlan` interroge la table, et l'envoi part par
-            // la branche texte de `FeedViewModel.createPost`. C'est cette triple
-            // couverture qui a permis à T3.1 de faire lire la table par le fil.
+            // Les capacités du document sont tenues : la rangée
+            // photo·caméra·emoji·document·lieu·micro se peint en entier (fichiers, bascule
+            // réel `forcePlainPost`, lieu, micro ; la langue est déclarée), et l'ENVOI
+            // DURABLE existe : `DocumentComposerDoor` monte le meuble,
+            // `ComposerDocumentSendPlan` interroge la table, et l'envoi part par la
+            // branche texte de `FeedViewModel.createPost`. C'est cette triple couverture
+            // qui permet au fil de lire la table.
             //
-            // La garde de source correspondante a été RETOURNÉE en conséquence :
-            // `MeeshyComposerHostGuardTests`
+            // La garde de source `MeeshyComposerHostGuardTests`
             // `.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`
-            // exige désormais un appelant UNIQUE (le fil) au lieu d'aucun, et
-            // ARME les trois assertions qu'elle portait en silence. L'éventail
-            // des formats, lui, ne descend toujours PAS sous le document — le
-            // paragraphe de `MeeshyComposerHost.documentSurface` dit le blocage
-            // SDK qui l'y retient.
+            // exige un appelant UNIQUE (le fil) et ARME les trois assertions qu'elle
+            // porte.
             //
-            // **#4030 — le quatrième format rejoint l'éventail du fil.** Le
-            // mood n'était atteignable que par sa porte (`.moodChip`) : écrire
-            // deux lignes ici puis vouloir en faire un mood obligeait à fermer,
-            // revenir et retaper — la loi 9 tombait sur le seul format
-            // qu'aucune bascule n'atteignait. `plusMood` et `plusReel` ne se
-            // cumulent jamais (l'un exige un média, l'autre l'interdit) ; la
-            // composition est jugée par `ComposerMoodGate`, que le meuble
-            // nourrit comme il nourrit déjà le gate du réel.
+            // **Le quatrième format est dans l'éventail du fil.** Le mood ne serait
+            // atteignable que par sa porte (`.moodChip`) : écrire deux lignes ici puis
+            // vouloir en faire un mood obligerait à fermer, revenir et retaper — la loi 9
+            // tomberait sur le seul format qu'aucune bascule n'atteindrait. `plusMood` et
+            // `plusReel` ne se cumulent jamais (l'un exige un média, l'autre l'interdit) ;
+            // la composition est jugée par `ComposerMoodGate`, que le meuble nourrit comme
+            // il nourrit déjà le gate du réel.
             return ComposerProfile(
                 initialFormat: .post,
                 offeredFormats: plusMood(plusReel([.post, .story])),
@@ -465,34 +442,26 @@ nonisolated extension ComposerProfile {
             )
 
         case .moodChip:
-            // Rév. 7 (lot 4.6, 2026-08-24) : la porte du mood cesse de router.
-            // Les trois conditions que le lot 3 exigeait d'une porte-document
-            // avant de la recâbler — une surface, une issue pour sa saisie, un
-            // publieur atteignable — sont TOUTES tenues pour le mood, et par
-            // des choses qui existent, pas par des promesses :
+            // La porte du mood ne route pas : la table ne désigne pas
+            // `StatusComposerView`. Les trois conditions qu'on exige d'une porte-document
+            // avant de la recâbler — une surface, une issue pour sa saisie, un publieur
+            // atteignable — sont TOUTES tenues pour le mood, et par des choses qui
+            // existent, pas par des promesses :
             //
-            // - la SURFACE est `ComposerMoodSurface` (lot 4.4), et
-            //   `ComposerSurfaceRouting` fait atterrir `.moodGrid` + `.status`
-            //   dessus (lot 4.3) ;
+            // - la SURFACE est `ComposerMoodSurface`, et `ComposerSurfaceRouting` fait
+            //   atterrir `.moodGrid` + `.status` dessus ;
             // - l'ISSUE est `onClose`, que le meuble lui remet ;
             // - le PUBLIEUR est le socle : `ComposerChromeOwnership.owner(for:
             //   .mood)` rend `.host`, sa flèche est un vrai bouton gaté sur
             //   `ComposerMoodPolicy.canPublish`, et son brouillon part par
-            //   `MeeshyComposerHost.onPublishDocument` (lot 4.5).
+            //   `MeeshyComposerHost.onPublishDocument`.
             //
-            // Ce que cette ligne change, EXACTEMENT : la table cesse de
-            // désigner `StatusComposerView`. Les quatre feuilles qui le
-            // montaient montent désormais `MoodComposerDoor` — c'est le geste
-            // du même lot, et non une promesse laissée au suivant. La
-            // différence avec `.feedComposer` est là : le fil a vu sa TABLE
-            // bouger sans que ses portes suivent, faute d'une rangée d'outils ;
-            // le mood n'a pas de pièce jointe, donc pas de rangée, donc rien
-            // qui le retienne.
+            // Les feuilles qui montaient le composer de mood montent `MoodComposerDoor`.
+            // Le mood n'a pas de pièce jointe, donc pas de rangée d'outils, donc rien qui
+            // le retienne.
             //
-            // `StatusComposerView.swift` a été RETIRÉ au lot 4.8, après que la
-            // parité de la surface a été confrontée bloc par bloc. Le cas
-            // `.statusComposer` de la table, lui, reste : c'est l'interdit que
-            // les deux gardes négatives doivent pouvoir NOMMER.
+            // Le cas `.statusComposer` de la table reste : c'est l'interdit que les deux
+            // gardes négatives doivent pouvoir NOMMER.
             return ComposerProfile(
                 initialFormat: .status,
                 offeredFormats: [.status],
@@ -512,30 +481,28 @@ nonisolated extension ComposerProfile {
             // déjà son propre ancrage, et un éventail à une entrée n'affiche
             // aucun sélecteur (loi 4).
             //
-            // Rév. 7 (lot 4.7) : le routage de cette porte devient fonction du
-            // FORMAT PORTÉ, ce que la doctrine de la table autorise en toutes
-            // lettres plus haut — « le FORMAT qu'une porte porte fait partie de
-            // son identité ». Faire passer `.repost` à `nil` en bloc aurait fait
-            // dire à la table que le meuble sert AUSSI les reposts de story, de
-            // post et de réel, ce qui est faux et mesuré :
+            // Le routage de cette porte est fonction du FORMAT PORTÉ, ce que la
+            // doctrine de la table autorise en toutes lettres plus haut — « le
+            // FORMAT qu'une porte porte fait partie de son identité ». Faire passer
+            // `.repost` à `nil` en bloc dirait que le meuble sert AUSSI les reposts
+            // de post et de réel, ce qui est faux. Le mood et la story vont au
+            // meuble, chacun pour une raison qui existe :
             //
-            // - le meuble n'a aucune graine `StoryItem` (son `init` n'en prend
-            //   pas), là où `StoryComposerViewModel(reposting:authorHandle:)` en
-            //   vit ;
-            // - son canal de scène (`onPublishAllInBackground`) ne porte pas
-            //   `repostOfId` — comparer `StoryTrayActions` à
-            //   `StoryViewerView.publishStoryInBackground(repostOfId:)` ;
-            // - il ne passe ni `allowedVisibilities` ni `initialVisibilityUserIds`
-            //   à l'atelier, si bien que le plafond d'audience du repost
-            //   (`StoryRepostAudience.allowed`, loi 10) tomberait EN SILENCE.
+            // - le mood n'a besoin ni d'une graine `StoryItem`, ni d'un canal de
+            //   scène : sa graine est un emoji et une phrase, son envoi est celui du
+            //   mood (`StatusViewModel.setStatus`, qui prend déjà `repostOfId`), et
+            //   son audience est celle que sa propre surface choisit ;
+            // - la story reçoit de `ComposerHydration` sa graine `StoryItem` ET le
+            //   plafond d'audience de la loi 10 (les deux ensemble, pour qu'on ne
+            //   puisse pas passer l'une sans l'autre) ; son canal de scène,
+            //   `onPublishAllInBackground`, est une fermeture fournie par la porte,
+            //   qui CAPTURE l'identifiant de la source : une signature qui ne nomme
+            //   pas une valeur ne l'empêche pas de voyager.
             //
-            // Le mood, lui, n'a aucun de ces trois besoins : sa graine est un
-            // emoji et une phrase, son envoi est celui du mood
-            // (`StatusViewModel.setStatus`, qui prend déjà `repostOfId`), et son
-            // audience est celle que sa propre surface choisit.
-            //
-            // DETTE SOLDÉE le 2026-08-25 (lot 4.7, fin) : l'ANCRAGE en post,
-            // offert par `offeredFormats` ci-dessous, atteint désormais un
+            // Le meuble donne en plus à la story l'ANCRAGE en post, déclaré par
+            // `offeredFormats` : l'atelier nu n'a pas de plateau, donc pas
+            // d'éventail.
+            // L'ANCRAGE en post, offert par `offeredFormats` ci-dessous, atteint un
             // ÉCRAN. Le plateau — donc l'éventail — est monté par le `body` du
             // meuble sous `ComposerFormatFanPlacement`, une règle PURE : il se
             // peint là où tous les formats offerts atterrissent sur une surface
@@ -543,22 +510,14 @@ nonisolated extension ComposerProfile {
             // deux surfaces sans atelier ; `.feedComposer` offre `.story`, que
             // le routage envoie à la scène, et reste donc hors de l'éventail.
             //
-            // L'ORDRE de la levée n'était pas négociable, et c'est ce que la
-            // rédaction précédente de ce commentaire n'avait pas su ranger : le
-            // PUBLIEUR devait venir en PREMIER, alors qu'il était listé en
-            // troisième. Descendre l'éventail sans lui aurait armé une flèche
-            // qui, pressée, n'aurait rien fait — « le pire des deux mondes,
-            // puisqu'il aurait eu l'air de marcher ». L'ordre livré fut donc :
+            // Le PUBLIEUR vient en PREMIER : descendre l'éventail sans lui
+            // armerait une flèche qui, pressée, ne ferait rien — « le pire des
+            // deux mondes, puisqu'il aurait l'air de marcher ». L'ordre est donc :
             // `StatusViewModel.anchorStatusAsPost`, puis `repostOfId` sur le
             // brouillon du document, puis l'éventail, puis l'aiguillage de
             // `MoodComposerDoor.publish`.
             //
-            // La raison écrite ici jusqu'au 2026-08-24 (« le socle du document
-            // peint une audience INERTE et un œil qui ouvrirait une scène
-            // VIDE ») était PÉRIMÉE : le lot 4.9 a retiré l'œil et rendu
-            // l'audience choisissante. Elle n'était pas la bonne.
-            //
-            // CE QUI RESTE OUVERT — et qui ne retient PLUS l'éventail : le
+            // CE QUI RESTE OUVERT — et qui ne retient PAS l'éventail : le
             // plafond d'ÉLARGISSEMENT de la loi 10. Plafonner exige la
             // visibilité de l'ORIGINAL ; `ComposerIntent.repost` ne porte qu'un
             // identifiant, et le canal supposé de la graine
@@ -571,25 +530,21 @@ nonisolated extension ComposerProfile {
             // `[.private]` : un sélecteur à UN chip, la loi 4 défaite dans
             // l'autre sens.
             //
-            // POURQUOI CE TROU NE RETIENT PLUS RIEN, et c'est la correction de
-            // fond du lot 4.7. Ce qui pouvait être fermé sans connaître la
-            // source l'a été au lot 4.9 : `ComposerAudienceOffer` retire d'une
+            // POURQUOI CE TROU NE RETIENT RIEN. Ce qui peut être fermé sans
+            // connaître la source l'est : `ComposerAudienceOffer` retire d'une
             // republication les deux audiences dont la PORTÉE appartient à la
             // source (`ONLY`/`EXCEPT`, dont le serveur écrase la liste), et le
             // socle comme le ruban lisent cette offre. L'ÉLARGISSEMENT, seul
             // reliquat, pèse EXACTEMENT autant sur le ruban du mood — peint sur
-            // un écran RÉEL depuis le lot 4.6 — que sur le chip d'audience de
-            // l'ancrage. L'ancrage hérite donc d'un trou déjà nommé et déjà
-            // gardé ; il n'en ajoute aucun. Retenir l'éventail pour ce motif
-            // aurait été un plafond raisonné pour un contrôle FUTUR au prix du
-            // contrôle PRÉSENT — l'erreur que l'AVERTISSEMENT de la rédaction
-            // précédente s'était déjà faite une fois.
+            // un écran RÉEL — que sur le chip d'audience de l'ancrage. L'ancrage
+            // hérite donc d'un trou déjà nommé et déjà gardé ; il n'en ajoute
+            // aucun. Retenir l'éventail pour ce motif sacrifierait le contrôle
+            // PRÉSENT à un plafond raisonné pour un contrôle FUTUR.
             //
             // Ce que l'ancrage apporte en revanche, et que le miroir n'a pas :
             // un refus qui SE DIT. Un 403 `REPOST_AUDIENCE_WIDENING` fait rendre
             // `false` à `anchorStatusAsPost`, et le composer reste ouvert avec
-            // sa saisie ; `setStatus` avale (dette du lot 4.5, inchangée).
-            //
+            // sa saisie ; `setStatus` avale ce refus.
             // Condition de levée, en DEUX parties et dans cet ordre : (1)
             // `APIPost.toStatusEntry()` transmet `visibility`, PUIS les deux
             // sites de republication le sèment dans leur `ComposerMoodSeed` —
@@ -609,27 +564,9 @@ nonisolated extension ComposerProfile {
                 showsTimeline: true,
                 opensWith: .keyboardOnContent,
                 allowsCapture: false,
-                // **Rév. 8 (#5053) — `.story` rejoint `.status` sur le MEUBLE.**
-                //
-                // Les trois manques énumérés plus haut sont soldés :
-                // `ComposerHydration` donne au meuble sa graine `StoryItem` ET
-                // le plafond d'audience de la loi 10 (les deux ensemble, pour
-                // qu'on ne puisse pas passer l'une sans l'autre) ; le troisième
-                // — « son canal de scène ne porte pas `repostOfId` » — n'en
-                // était pas un : `onPublishAllInBackground` est une fermeture
-                // fournie par la porte, qui CAPTURE l'identifiant de la source.
-                // Une signature qui ne nomme pas une valeur ne l'empêche pas de
-                // voyager.
-                //
-                // Ce que la bascule DONNE, et qui manquait : l'ANCRAGE en post,
-                // déclaré par `offeredFormats` depuis le lot 4.7 et qui
-                // n'atteignait aucun écran — l'atelier nu n'a pas de plateau,
-                // donc pas d'éventail.
-                //
-                // `.post` et `.reel` restent déclarés sur `.repostComposer`.
-                // Aucun site du dépôt ne les construit (mesuré) ; les router
-                // vers le meuble affirmerait qu'il les sert, ce qui n'est
-                // vérifié par rien.
+                // `.post` et `.reel` restent déclarés sur `.repostComposer`. Aucun
+                // site du dépôt ne les construit ; les router vers le meuble
+                // affirmerait qu'il les sert, ce qui n'est vérifié par rien.
                 routesToLegacy: (sourceFormat == .status || sourceFormat == .story)
                     ? nil
                     : .repostComposer
@@ -647,21 +584,17 @@ nonisolated extension ComposerProfile {
             case .reel: offerts = [.reel, .post]
             case .post: offerts = plusReel([.post])
             }
-            // Rév. 9 (lot 7.8) : le routage de cette porte devient fonction du
-            // FORMAT PORTÉ — la même doctrine que `.repost` au lot 4.7, et pour
-            // une raison plus dure encore. Cette ligne rendait `.storyEdit`
-            // pour les QUATRE formats, alors que `.storyEdit` désigne
+            // Le routage de cette porte est fonction du FORMAT PORTÉ — la même
+            // doctrine que `.repost`. `.storyEdit` désigne
             // `storyEditComposerCover` : l'atelier d'une STORY, monté sur une
-            // `StoryEditSession` qu'un post n'a pas. La table faisait donc
-            // passer un post pour une story, et éditer un POST ou un RÉEL
-            // n'avait aucune représentation — alors que la feuille qui le fait
-            // existe, et compte CINQ montages de production.
+            // `StoryEditSession` qu'un post n'a pas. Faire passer un post pour une
+            // story serait un mensonge, et éditer un POST ou un RÉEL a sa feuille,
+            // qui compte CINQ montages de production.
             //
             // Les deux branches nomment des surfaces qui EXISTENT, et c'est la
             // condition à laquelle une table a le droit de router :
             //
-            // - `.story` monte `storyEditComposerCover` — quatre montages
-            //   (`StoryTrayView` deux fois, `iPadRootView`, `RootView`) ;
+            // - `.story` monte le meuble (voir plus bas) ;
             // - `.post` et `.reel` montent `EditPostSheet` — cinq montages
             //   (`PostDetailView`, `ProfileUserPostsList`, `ReelsPlayerView`,
             //   `RootViewComponents`, `FeedView`), et c'est la seule surface du
@@ -669,29 +602,23 @@ nonisolated extension ComposerProfile {
             //
             // `.status` REJOINT la seconde branche, et il faut dire pourquoi
             // plutôt que de le laisser tomber par défaut : aucun site du dépôt
-            // n'offre d'éditer un mood — mesuré, zéro état d'édition de statut,
-            // zéro montage. La branche nomme donc la seule feuille du dépôt qui
-            // édite une ligne de post qui n'est pas une story ; c'est un
-            // ROUTAGE, jamais la promesse qu'une affordance existe. Le faire
-            // retomber sur `.storyEdit` aurait reconduit le mensonge exact que
-            // cette révision retire, et le faire retomber sur `nil` aurait dit
-            // que le meuble sert l'édition d'un mood — ce qu'aucune de ses
+            // n'offre d'éditer un mood — zéro état d'édition de statut, zéro
+            // montage. La branche nomme la seule feuille du dépôt qui édite une
+            // ligne de post qui n'est pas une story ; c'est un ROUTAGE, jamais la
+            // promesse qu'une affordance existe. Le faire retomber sur
+            // `.storyEdit` reconduirait le mensonge ci-dessus, et sur `nil`
+            // dirait que le meuble sert l'édition d'un mood — ce qu'aucune de ses
             // trois surfaces ne fait.
             //
-            // CE QUE CETTE LIGNE NE CHANGE PAS, et il faut le lire au mot près :
-            // aucun site de production ne construit `ComposerIntent(origin:
-            // .edit(...))` — zéro occurrence. Les deux feuilles sont présentées
-            // directement par leurs hôtes, hors du routeur. La correction est
-            // STRUCTURELLE et se juge en fonction pure ; elle ne recâble aucun
-            // écran, et la lire comme un correctif d'écran serait exactement le
-            // vieillissement de commentaire que ce dossier traque ailleurs.
+            // CE QUE CETTE LIGNE NE CHANGE PAS : aucun site de production ne
+            // construit `ComposerIntent(origin: .edit(...))`. Les deux feuilles
+            // sont présentées directement par leurs hôtes, hors du routeur. Le
+            // routage est STRUCTUREL et se juge en fonction pure ; il ne recâble
+            // aucun écran.
             //
             // Le RETRAIT d'`EditPostSheet.swift` n'a PAS lieu ici. Ses sept
             // capacités sont inventoriées, mesurées et gardées par
-            // `EditParityInventoryTests` — deux tenues, cinq manquantes —, et
-            // les deux tenues le sont côté CRÉATION : cette porte ouvre en
-            // `.resume`, que `ComposerSurfaceRouting` fait atterrir sur la
-            // SCÈNE, où le socle ne peint rien.
+            // `EditParityInventoryTests` — deux tenues, cinq manquantes.
             return ComposerProfile(
                 initialFormat: documentFormat,
                 offeredFormats: offerts,
@@ -699,71 +626,59 @@ nonisolated extension ComposerProfile {
                 showsTimeline: true,
                 opensWith: .resume,
                 allowsCapture: false,
-                // **Rév. 10 (#5053) — `.story` passe au MEUBLE.**
-                //
-                // `storyEditComposerCover` montait `StoryComposerView` NU ;
-                // depuis le 2026-09-03 il monte `MeeshyComposerHost`
-                // (`StoryEditComposer`), hydraté par
-                // `ComposerHydration.editingStory`. La table n'a donc plus de
-                // legacy à nommer pour ce format : la porte du dépôt qui édite
-                // une story EST le meuble.
+                // `.story` va au MEUBLE : `storyEditComposerCover` monte
+                // `MeeshyComposerHost` (`StoryEditComposer`), hydraté par
+                // `ComposerHydration.editingStory`. La table n'a donc pas de legacy à
+                // nommer pour ce format : la porte du dépôt qui édite une story EST le
+                // meuble.
                 //
                 // Le nom `LegacyComposer.storyEdit` reste DÉCLARÉ, comme
-                // `.statusComposer` avant lui — un cas d'énumération qui perd
-                // son dernier routeur ne se supprime pas dans le même lot que
-                // le recâblage : `EditParityInventoryTests` compte encore par
-                // ce vocabulaire, et retirer le mot ferait rougir un inventaire
-                // pour une raison sans rapport avec ce qu'il mesure.
+                // `.statusComposer` : un cas d'énumération qui perd son dernier
+                // routeur ne se supprime pas dans le même lot que le recâblage —
+                // `EditParityInventoryTests` compte encore par ce vocabulaire, et
+                // retirer le mot ferait rougir un inventaire pour une raison sans
+                // rapport avec ce qu'il mesure.
                 //
-                // `.post` / `.reel` / `.status` restent sur `EditPostSheet` :
-                // c'est la seule surface du dépôt qui sache basculer POST vers
-                // RÉEL, et le meuble ne la remplace pas ici.
+                // `.post` / `.reel` / `.status` restent sur `EditPostSheet` : c'est la
+                // seule surface du dépôt qui sache basculer POST vers RÉEL, et le
+                // meuble ne la remplace pas ici.
                 routesToLegacy: documentFormat == .story ? nil : .editPostSheet
             )
 
         case .draft, .share:
-            // **Deux portes DÉCLARÉES SANS APPELANT** (#4611, mesuré le
-            // 2026-08-31) — dites ici pour qu'aucune session ne les monte en
-            // croyant qu'elles sont servies :
+            // **Deux portes DÉCLARÉES SANS APPELANT** — dites ici pour qu'aucune
+            // session ne les monte en croyant qu'elles sont servies :
             //
             // - `.draft` : la reprise VIVANTE marche, et elle traverse bien le
             //   meuble — `openComposer(resumingDraftId:)` pose `pendingDraftId`,
             //   `StoryTrayActions` le remet en PARAMÈTRE (`draftId:`), le meuble
-            //   adopte. Cette porte est donc une SECONDE expression de la même
-            //   intention, et c'est elle qui n'a pas d'appelant.
-            //   Elle en était même une expression MENTEUSE : son `id` n'avait
-            //   aucun lecteur (zéro `case .draft(let …)` au dépôt). Le meuble le
-            //   lit désormais en repli du paramètre
-            //   (`ComposerOrigin.resumedDraftId`), donc la monter marcherait —
-            //   elle ne perd plus ce qu'on lui confie.
-            // - `.share` : l'extension de partage ne fait aujourd'hui que
-            //   router vers des conversations. Publier une pièce reçue est la
-            //   vue `2a` de la planche, portée par #4079.
+            //   adopte. Cette porte est une SECONDE expression de la même
+            //   intention, et c'est elle qui n'a pas d'appelant. Son `id` est lu
+            //   en repli du paramètre (`ComposerOrigin.resumedDraftId`) : la
+            //   monter marcherait, elle ne perd pas ce qu'on lui confie.
+            // - `.share` : l'extension de partage ne fait que router vers des
+            //   conversations. Publier une pièce reçue est la vue `2a` de la
+            //   planche.
             //
             // Inventaire gardé : `ComposerDoorInventoryGuardTests`.
             //
-            // Rév. 3 (revue d'intégration I5) : `.post` est un état TRANSITOIRE
-            // — la table reste une fonction de l'origine, elle n'ouvre pas le
-            // document pour le deviner.
+            // `.post` est un état TRANSITOIRE — la table reste une fonction de
+            // l'origine, elle n'ouvre pas le document pour le deviner. Le host ne
+            // rebascule pas au format du document une fois celui-ci chargé : rien
+            // ne réaffecte `currentFormat` après la construction du host, et un
+            // commentaire qui énoncerait un invariant que le code ne tient pas
+            // deviendrait la loi que lirait la session suivante.
             //
-            // Rév. 5 (revue adversariale du 2026-08-23) : la rév. 3 promettait
-            // ici que « le host rebascule au format du document une fois
-            // celui-ci chargé ». **Cet écrivain n'existe pas.** Rien ne
-            // réaffecte `currentFormat` après la construction du host, et un
-            // commentaire qui énonce un invariant que le code ne tient pas
-            // devient la loi que lira la session suivante — celle qui aurait
-            // monté `.draft` en confiance.
+            // Ce qui tient VRAIMENT la conséquence est ailleurs :
+            // `ComposerSurfaceRouting` fait de `.resume` une SCÈNE quel que soit
+            // le format, parce que le seul mécanisme de reprise du meuble
+            // (`adoptDraft`) repeuple l'atelier. Le `.post` transitoire ne décide
+            // donc d'aucune surface, et reprendre un brouillon ne peut pas ouvrir
+            // un éditeur de texte vide pendant que le brouillon adopté attend
+            // derrière.
             //
-            // Ce qui tient VRAIMENT la conséquence est ailleurs, et c'est
-            // volontaire : `ComposerSurfaceRouting` fait de `.resume` une
-            // SCÈNE quel que soit le format, parce que le seul mécanisme de
-            // reprise du meuble (`adoptDraft`) repeuple l'atelier. Le `.post`
-            // transitoire ne décide donc plus d'aucune surface, et reprendre un
-            // brouillon ne peut plus ouvrir un éditeur de texte vide pendant
-            // que le brouillon adopté attend derrière.
-            //
-            // La bascule au format du document reste À ÉCRIRE (V3+) ; elle est
-            // consignée comme dette, plus promise comme acquise.
+            // La bascule au format du document reste À ÉCRIRE ; elle est consignée
+            // comme dette, jamais promise comme acquise.
             return ComposerProfile(
                 initialFormat: .post,
                 offeredFormats: plusReel([.post, .story]),
@@ -775,40 +690,22 @@ nonisolated extension ComposerProfile {
             )
 
         case .conversationMedia, .socialMedia:
-            // e9/O13 : le média reçu est DÉJÀ posé par la porte
+            // Le média reçu est DÉJÀ posé par la porte
             // (`MediaComposerDoor` → `StoryComposerViewModel(seeding:)`).
             //
-            // Le format d'ouverture est une STORY, pas un post (directive du
-            // 2026-08-23, doctrine alignée en rév. 3). Le coût de l'erreur est
-            // ASYMÉTRIQUE : ouvrir une story quand l'utilisateur voulait un post
-            // se répare d'un tap dans l'éventail, tandis qu'un post publié ne se
-            // dé-publie pas. Le défaut tombe donc du côté réversible, et le
-            // geste courant sur un média reçu est bref.
+            // Le format d'ouverture est une STORY, pas un post. Le coût de
+            // l'erreur est ASYMÉTRIQUE : ouvrir une story quand l'utilisateur
+            // voulait un post se répare d'un tap dans l'éventail, tandis qu'un
+            // post publié ne se dé-publie pas. Le défaut tombe donc du côté
+            // réversible, et le geste courant sur un média reçu est bref.
             //
-            // Rév. 8 (lot 5) : l'ouverture passe de `.keyboardOnContent` à
-            // `.mediaSeeded`, et ce n'est pas un renommage. L'ancienne valeur
-            // disait DEUX choses fausses, chacune d'un côté de la même phrase de
-            // commentaire (« il ne reste que le mot à écrire ») :
-            //
-            // - elle promettait un CLAVIER. `focusesContentOnAppear` n'a qu'un
-            //   consommateur de production — `ComposerDocumentSurface`. Sous la
-            //   scène, personne ne le lit, et l'atelier n'a aucun champ
-            //   « contenu » à mettre au foyer : on écrit dans une story en
-            //   posant un OBJET TEXTE ;
-            // - elle envoyait « Post » sur la surface DOCUMENT, qui ne porte
-            //   NI `mediaIds`, NI fichier, NI lieu. Un tap sur le chip aurait
-            //   fait disparaître la photo semée de l'écran ET de la publication
-            //   — la loi 6 rompue par le ROUTAGE, pas par une vue.
-            //
-            // Conséquence mesurable, et c'est elle qui rendait le câblage
-            // impossible : `ComposerFormatFanPlacement.paints` exige que TOUS
-            // les formats offerts atterrissent du même côté de la frontière
-            // scène / pas-de-scène. Avec `.keyboardOnContent`, `.post` partait
-            // vers `.document` ⇒ l'éventail ne se peignait PAS DU TOUT, et la
-            // porte livrait trois formats déclarés sans aucun contrôle — l'UI
-            // morte que la loi 4 nomme. L'offre, elle, n'a pas bougé d'un
-            // format : entre supprimer un mensonge et supprimer une capacité,
-            // on supprime le mensonge.
+            // L'ouverture est `.mediaSeeded` et non `.keyboardOnContent`, qui
+            // promettrait un CLAVIER : `focusesContentOnAppear` n'a qu'un
+            // consommateur de production — `ComposerDocumentSurface`. Sous la
+            // scène, personne ne le lit, et l'atelier n'a aucun champ « contenu »
+            // à mettre au foyer : on écrit dans une story en posant un OBJET
+            // TEXTE. Promettre un clavier que rien ne lève serait un mensonge de
+            // la table.
             return ComposerProfile(
                 initialFormat: .story,
                 offeredFormats: plusReel([.story, .post]),
@@ -824,9 +721,9 @@ nonisolated extension ComposerProfile {
 
 /// Ce que vise un repost : la RACINE, et le format de la CARTE.
 ///
-/// Deux choses différentes, qu'il est naturel de confondre — la confusion a
-/// été faite puis rattrapée en revue le 2026-08-23, et c'est pour qu'elle ne
-/// se refasse pas que la règle vit ici plutôt que recopiée sur six sites.
+/// Deux choses différentes, qu'il est naturel de confondre : c'est pour que la
+/// confusion ne se fasse pas que la règle vit ici plutôt que recopiée sur six
+/// sites.
 ///
 /// - La RÉFÉRENCE remonte à la racine (`originalRepostOfId`), sans quoi le
 ///   repost d'un repost embarquerait une carte de partage vide.

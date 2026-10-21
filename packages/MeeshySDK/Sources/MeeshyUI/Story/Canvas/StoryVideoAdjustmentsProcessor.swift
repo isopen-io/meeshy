@@ -17,7 +17,7 @@ import MeeshySDK
 ///   règle par `apply(_:to:)`.
 ///
 /// **Coût par trame** (dimensions 2 et 4) : UN `CIContext` pour toutes les
-/// trames de toutes les vidéos, créé une fois — jamais par trame. La chaîne ne
+/// trames de toutes les vidéos, celui du domaine — jamais un par trame. La chaîne ne
 /// porte que des noyaux par pixel (exposition, contrôles de couleur, vibrance,
 /// température, vignette), que CoreImage fusionne en une passe GPU ; le flou
 /// gaussien, seul étage multi-passes, n'est pas servi à une vidéo. Les
@@ -26,9 +26,10 @@ import MeeshySDK
 /// d'AVFoundation, un `CIFilter` n'étant pas partageable entre fils.
 public nonisolated enum StoryVideoAdjustmentsProcessor {
 
-    /// Le contexte partagé. Les intermédiaires ne sont pas gardés en cache :
-    /// une trame vidéo ne se rejoue jamais à l'identique.
-    static let context = CIContext(options: [.cacheIntermediates: false])
+    /// Le contexte du domaine (#9873) : celui du canvas, que le compositeur
+    /// d'export emploie déjà — une trame réglée en lecture et la même trame
+    /// exportée sont rendues dans les mêmes espaces de couleur.
+    static var context: CIContext { StoryRenderingContext.shared.ciContext }
 
     /// Les réglages que cette vidéo POSÉE peint, `nil` quand il n'y a rien à
     /// peindre — une image, un fond (#9496), une vidéo sans réglage actif ou

@@ -9,7 +9,7 @@ import { catchUpStandingOf, levelReachCount, photoTierStepId, type PhotoCatchUpE
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import { LEVEL_TIER_KEYS, levelTierStart, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import { levelReading } from '@/lib/game/ladder';
-import { meeshEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
+import { meeshDisplayEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { TREASURY_TIERS, type TreasuryTierKey } from '@meeshy/shared/utils/game/treasury';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
@@ -162,8 +162,12 @@ const tierMomentOf = (game: GameBlock, tier: LevelTierKey): PhotoMoment => {
 export const levelHundredMoment = (prestige: number): PhotoMoment =>
   moment(`level-100:${prestige}`, { kind: 'level-hundred', prestige });
 
-export const meeshMoment = (params: { readonly number: number; readonly edition: MeeshEdition }): PhotoMoment =>
-  moment(`meesh:${params.number}`, { kind: 'meesh', number: params.number, edition: params.edition });
+/**
+ * La pièce de la photo-souvenir se dessine comme on la voit (#11483) : dans la plus haute édition atteinte
+ * (`meeshDisplayEdition`), et le titre nomme ce dessin — « Meesh n° 247 · or ». La loi de la frappe n'y parle pas.
+ */
+export const meeshMoment = (params: { readonly number: number }): PhotoMoment =>
+  moment(`meesh:${params.number}`, { kind: 'meesh', number: params.number, edition: meeshDisplayEdition(params.number) });
 
 /**
  * Un succès qui vient de se révéler (#7742) : la même carte se propose, avec le bandeau de parrainage.
@@ -215,7 +219,7 @@ export function photoMomentFromCard(key: GuideMomentKey, game: GameBlock): Photo
     case 'first-mint': {
       /* `mint.number` est la PROCHAINE pièce : celle qui vient d'être frappée porte le numéro d'avant. */
       const number = Math.max(1, game.mint.number - 1);
-      return meeshMoment({ number, edition: meeshEdition(number) });
+      return meeshMoment({ number });
     }
     case 'treasury-tier':
       return game.treasury.tier === null ? null : treasuryMoment(game.treasury.tier);
@@ -257,7 +261,7 @@ export function photoMomentsOfTransition(previous: EngagementWithGame, next: Eng
       : null,
     after.level.prestige > before.level.prestige && !prestigeCard ? levelHundredMoment(after.level.prestige) : null,
     after.mint.number > before.mint.number && (minted === 1 || minted % 10 === 0)
-      ? meeshMoment({ number: minted, edition: meeshEdition(minted) })
+      ? meeshMoment({ number: minted })
       : null,
     treasuryIndex(after) > treasuryIndex(before) && after.treasury.tier !== null ? treasuryMoment(after.treasury.tier) : null,
     crossedFlame ? flameMoment(after.flame.days) : null,
@@ -295,7 +299,7 @@ const momentOfStep = (emblem: PhotoStepEmblem): PhotoMoment => {
     case 'prestige':
       return photoMomentOfEmblemV2({ kind: 'prestige', number: emblem.number });
     case 'meesh':
-      return meeshMoment({ number: emblem.number, edition: emblem.edition });
+      return meeshMoment({ number: emblem.number });
     case 'treasury':
       return treasuryMoment(emblem.tier);
     case 'flame':

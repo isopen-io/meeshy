@@ -48,6 +48,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { carrierMessageStillServesBytes } from './carrierMessageLifecycle';
 import { attachmentIsReaderBound } from './signedAttachmentUrls';
+import { prefixRange } from '../../utils/prefix-range';
 
 /**
  * `readerBound` (#9600) : TOUS les porteurs vivants de ce fichier sont des
@@ -165,7 +166,7 @@ async function ownerRowsOf(storageKey: string, prisma: FileRouteVerdictPrisma): 
   const variant = RESPONSIVE_VARIANT.exec(storageKey);
   if (!variant) return [];
   return prisma.messageAttachment.findMany({
-    where: { OR: [{ filePath: variant[1] }, { filePath: { startsWith: `${variant[1]}.` } }] },
+    where: { OR: [{ filePath: variant[1] }, { filePath: prefixRange(`${variant[1]}.`) }] },
     select: OWNER_SELECT,
   });
 }

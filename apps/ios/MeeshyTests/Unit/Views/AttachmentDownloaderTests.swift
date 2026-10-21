@@ -165,7 +165,7 @@ final class AttachmentDownloaderTests: XCTestCase {
         XCTAssertFalse(source.contains(".bytes(from:"), "le centre ne doit plus ouvrir URLSession.bytes")
         XCTAssertFalse(source.contains("registerInFlightDownload"), "le dédoublonnage appartient au funnel du store")
         XCTAssertTrue(
-            source.contains("store.data(for: resolvedKey, progress:"),
+            source.contains("store.data(for: resolvedKey, profile: profile, progress:"),
             "le centre télécharge par le funnel en flux du store, qui rapporte la progression"
         )
     }

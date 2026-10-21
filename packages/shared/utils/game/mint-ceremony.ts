@@ -104,7 +104,13 @@ export type MintCeremonyPlan = {
 };
 
 export type MintCeremonyInput = {
+  /** La LOI de la pièce (`meeshEdition`) : les coups, les aïeux, la nuit du prisme. */
   readonly edition: MeeshEdition;
+  /**
+   * Le DESSIN de la pièce (`meeshDisplayEdition`, #11483) : la matière des poussières. Absent : celui de la loi. Le
+   * n° 247, frappé après le n° 100, se frappe d'un seul coup dans la poussière d'or (porteur, 2026-10-21).
+   */
+  readonly look?: MeeshEdition;
   readonly mode: MintCeremonyMode;
   /** L'instant où la passerelle a répondu (confirmé ou refusé), depuis le toucher. Absent : à temps. */
   readonly answeredAtMs?: number;
@@ -166,11 +172,11 @@ const NO_PHASES: Readonly<Record<MintCeremonyPhase, null>> = Object.fromEntries(
   Record<MintCeremonyPhase, null>
 >;
 
-const particlesOf = (edition: MeeshEdition, strikes: number, modest: boolean): MintCeremonyParticles => {
+const particlesOf = (edition: MeeshEdition, look: MeeshEdition, strikes: number, modest: boolean): MintCeremonyParticles => {
   const finalBurst = isGrand(edition) ? 420 : 320;
   return {
     weave: half(WEAVE, modest),
-    dust: DUST_OF[edition].map((dust) => ({ ...dust, count: half(dust.count, modest) })),
+    dust: DUST_OF[look].map((dust) => ({ ...dust, count: half(dust.count, modest) })),
     bursts: Array.from({ length: strikes }, (_, index) => half(index === strikes - 1 ? finalBurst : 120, modest)),
     puff: half(PUFF, modest),
   };
@@ -189,7 +195,7 @@ const strikesOf = (edition: MeeshEdition, firstMs: number): readonly MintCeremon
   });
 };
 
-const normalPlan = (edition: MeeshEdition, answeredAtMs: number, modest: boolean): MintCeremonyPlan => {
+const normalPlan = (edition: MeeshEdition, look: MeeshEdition, answeredAtMs: number, modest: boolean): MintCeremonyPlan => {
   const grand = isGrand(edition);
   const firstStrike = Math.max(MINT_CEREMONY_STRIKE_READY_MS, answeredAtMs);
   const strikes = strikesOf(edition, firstStrike);
@@ -202,7 +208,7 @@ const normalPlan = (edition: MeeshEdition, answeredAtMs: number, modest: boolean
     edition,
     mode: 'normal',
     grand,
-    particles: particlesOf(edition, strikes.length, modest),
+    particles: particlesOf(edition, look, strikes.length, modest),
     phases: {
       open: OPEN,
       emit: EMIT,
@@ -234,9 +240,9 @@ const normalPlan = (edition: MeeshEdition, answeredAtMs: number, modest: boolean
 const startedBefore = (phases: MintCeremonyPlan['phases'], atMs: number): MintCeremonyPlan['phases'] =>
   Object.fromEntries(MINT_CEREMONY_PHASES.map((phase) => [phase, (phases[phase]?.fromMs ?? Infinity) < atMs ? phases[phase] : null])) as MintCeremonyPlan['phases'];
 
-const refusedPlan = (edition: MeeshEdition, answeredAtMs: number, modest: boolean): MintCeremonyPlan => {
+const refusedPlan = (edition: MeeshEdition, look: MeeshEdition, answeredAtMs: number, modest: boolean): MintCeremonyPlan => {
   const atMs = Math.max(REFUSAL_EARLIEST_MS, answeredAtMs);
-  const woven = normalPlan(edition, Math.max(atMs, MINT_CEREMONY_STRIKE_READY_MS), modest);
+  const woven = normalPlan(edition, look, Math.max(atMs, MINT_CEREMONY_STRIKE_READY_MS), modest);
   const rewind = span(atMs, atMs + Math.min(REWIND_MAX_MS, atMs - EMIT.fromMs));
   const sayMs = atMs + 1300;
   const shadowOut = span(atMs + 1650, atMs + 2250);
@@ -272,11 +278,12 @@ const reducedPlan = (edition: MeeshEdition, answeredAtMs: number): MintCeremonyP
 export function mintCeremonyPlan(input: MintCeremonyInput): MintCeremonyPlan {
   const answeredAtMs = sanitizeMs(input.answeredAtMs);
   const modest = input.modest === true;
+  const look = input.look ?? input.edition;
   switch (input.mode) {
     case 'normal':
-      return normalPlan(input.edition, answeredAtMs, modest);
+      return normalPlan(input.edition, look, answeredAtMs, modest);
     case 'refused':
-      return refusedPlan(input.edition, answeredAtMs, modest);
+      return refusedPlan(input.edition, look, answeredAtMs, modest);
     case 'reduced':
       return reducedPlan(input.edition, answeredAtMs);
   }

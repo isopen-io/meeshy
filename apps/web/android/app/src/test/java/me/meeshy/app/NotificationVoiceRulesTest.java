@@ -242,11 +242,22 @@ public class NotificationVoiceRulesTest {
 
     @Test
     public void anUnknownDurationAnEmptyTraceAndAnInvalidLanguageAreOmitted() {
-        // `language` exige deux lettres et `stretches` des segments non vides :
+        // `language` exige le format de la passerelle et `stretches` des segments non vides :
         // les envoyer vides ferait rejeter le rapport ENTIER (400).
         assertEquals(
             "{\"action\":\"listened\",\"playPositionMs\":4000,\"complete\":false}",
             NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), ""));
+    }
+
+    @Test
+    public void aLanguageTheGatewayAcceptsTravelsLikeInTheApp() {
+        // wireLanguageCode (messages-schemas.ts) : 2 a 16 caracteres, 2 ou 3 lettres et un sous-code (#11376).
+        String head = "{\"action\":\"listened\",\"playPositionMs\":4000,\"complete\":false";
+        assertEquals(head + ",\"language\":\"bas\"}", NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), "bas"));
+        assertEquals(head + ",\"language\":\"pt-br\"}", NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), " pt-BR "));
+        assertEquals(head + "}", NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), "x"));
+        assertEquals(head + "}", NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), "12"));
+        assertEquals(head + "}", NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), "fr-" + "a".repeat(20)));
     }
 
     @Test

@@ -565,6 +565,13 @@ jobs:
       - name: Nightly backup verdict witness
         run: node --test infrastructure/scripts/production-backup/meeshy-nightly-backup.test.mjs
 
+      # #10385, #11441 — le runner des opérations serveur : liste blanche, délais,
+      # demandes refusées, et la publication des conteneurs de SON environnement
+      # (étiquette revérifiée, aucun secret, sous le plafond de la passerelle),
+      # confrontée au schéma partagé par bun. `docker` et `systemctl` sont des doubles.
+      - name: Ops runner witness
+        run: node --test infrastructure/scripts/ops-runner/meeshy-ops-runner.test.mjs
+
       # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
       # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
       # ~15 min et meurt à la première erreur, alors que ce garde les liste
@@ -1208,6 +1215,16 @@ jobs:
         run: |
           cd apps/web
           node scripts/check-rich-text.mjs
+
+      # #11314 — les animations de GÉOMÉTRIE passent sur transform et opacity :
+      # width, height, top, left, grid-template-rows… animés recalculent la
+      # mise en page à chaque image. Cliquet sur les sources : aucun nouveau
+      # site, et les sites tolérés ne font que décroître.
+      - name: Gate animations de géométrie (transform et opacity seulement)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-animated-properties.mjs
 
       # #6458 — le barreau « Administration » du menu flottant, sur un dist
       # gateway (l'administration n'a pas de fixtures) : sept barreaux dans

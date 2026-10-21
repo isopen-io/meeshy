@@ -148,6 +148,9 @@ public struct ClipInspector: View {
     /// Position de lecture courante — le point se pose LÀ, et le bouton le dit
     /// plutôt que de laisser deviner où il atterrira.
     public let playheadTime: Float
+    /// Tête de lecture vivante (#9874) : le libellé « Point de volume à … » la
+    /// lit seul, l'inspecteur ne se réévalue pas à chaque tick. `nil` = `playheadTime`.
+    public let playhead: PlayheadClock?
     /// Pose un point de volume au playhead, au niveau passé.
     public let onAddVolumePoint: (Float) -> Void
     /// Retire le point d'automation d'identifiant donné.
@@ -273,6 +276,7 @@ public struct ClipInspector: View {
                 onDurationSet: @escaping (Float) -> Void = { _ in },
                 onTransformChanged: @escaping (ClipTransform.Field) -> Void = { _ in },
                 playheadTime: Float = 0,
+                playhead: PlayheadClock? = nil,
                 onAddVolumePoint: @escaping (Float) -> Void = { _ in },
                 onRemoveVolumePoint: @escaping (String) -> Void = { _ in },
                 onDuckingDisabledChanged: @escaping (Bool) -> Void = { _ in },
@@ -300,6 +304,7 @@ public struct ClipInspector: View {
         self.onDurationSet = onDurationSet
         self.onTransformChanged = onTransformChanged
         self.playheadTime = playheadTime
+        self.playhead = playhead
         self.onAddVolumePoint = onAddVolumePoint
         self.onRemoveVolumePoint = onRemoveVolumePoint
         self.onDuckingDisabledChanged = onDuckingDisabledChanged
@@ -695,6 +700,7 @@ public struct ClipInspector: View {
     private var volumeAutomation: some View {
         ClipVolumeAutomation(points: Self.sortedVolumePoints(clip.volumeKeyframes),
                              playheadTime: playheadTime,
+                             playhead: playhead,
                              volume: volume,
                              onAddVolumePoint: onAddVolumePoint,
                              onRemoveVolumePoint: onRemoveVolumePoint)

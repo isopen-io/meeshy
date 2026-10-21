@@ -4,8 +4,8 @@ import { CommentThread } from '@/components/comment-thread';
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { commentsZoneOf, commentsZoneStageOf, type CommentsComposerPresence, type CommentsZone, type CommentsZoneStage } from '@/lib/view/comments-zone';
-import { prefersReducedMotion } from '@/lib/view/reduced-motion';
+import { useFlip } from '@/lib/use-flip';
+import { COMMENTS_ZONE_MOTION, commentsZoneOf, commentsZoneStageOf, type CommentsComposerPresence, type CommentsZone, type CommentsZoneStage } from '@/lib/view/comments-zone';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
 import type { WritingBar } from '@/lib/view/use-comments-sheet-host';
@@ -79,7 +79,7 @@ function useRisingZone(rises: boolean): { readonly stage: CommentsZoneStage; rea
   const keyboard = useVirtualKeyboard(rises);
   if (!rises) return null;
   const stage = commentsZoneStageOf({ composer, keyboardOpen: keyboard.open });
-  return { stage, zone: commentsZoneOf({ stage, keyboardInset: keyboard.inset, reducedMotion: prefersReducedMotion() }), onComposerChange: setComposer };
+  return { stage, zone: commentsZoneOf({ stage, keyboardInset: keyboard.inset }), onComposerChange: setComposer };
 }
 
 export function PublicationCommentsSheet({ postId, onClose, onWritingBar, risesWithComposer = false }: PublicationCommentsSheetProps) {
@@ -93,6 +93,7 @@ export function PublicationCommentsSheet({ postId, onClose, onWritingBar, risesW
   const [focused, setWriting] = useState(false);
   const rising = useRisingZone(risesWithComposer);
   const writing = focused && rising === null;
+  useFlip(panneau, { key: rising === null ? null : `${rising.stage}|${rising.zone.height}|${rising.zone.translate}`, ...COMMENTS_ZONE_MOTION });
   const keyboardInset = useKeyboardInset(writing);
   useWritingBarReport({ sheet: panneau, writing, keyboardInset, report: onWritingBar });
   /* LA SALLE DE LA STORY, tant que son fil est ouvert (#7395) — un contact DM
@@ -179,7 +180,7 @@ export function PublicationCommentsSheet({ postId, onClose, onWritingBar, risesW
       onPointerUp={(e) => e.stopPropagation()}
       className="absolute inset-x-0 bottom-0 flex flex-col overflow-hidden"
       style={{
-        ...(rising === null ? { maxHeight: '68%' } : { height: rising.zone.height, transition: rising.zone.transition }),
+        ...(rising === null ? { maxHeight: '68%' } : { height: rising.zone.height, translate: rising.zone.translate }),
         /* `--color-ios-surface`, et JAMAIS `--color-ios-bg` : ce second nom
            n'existe dans AUCUNE feuille (mesuré — `src/styles/ios.css` déclare
            `--color-ios-surface`, dérivé de `--ios-surface`). Une variable
@@ -199,7 +200,7 @@ export function PublicationCommentsSheet({ postId, onClose, onWritingBar, risesW
            feuille laissait son composeur SOUS l'indicateur d'accueil d'un
            iPhone. Le fond de la feuille s'étend dessous ; le contenu, non. */
         paddingBottom: rising?.zone.paddingBottom ?? 'env(safe-area-inset-bottom, 0px)',
-        bottom: rising?.zone.bottom ?? (writing ? keyboardInset : 0),
+        ...(rising === null ? { bottom: writing ? keyboardInset : 0 } : { bottom: 0 }),
         borderTopLeftRadius: 18,
         borderTopRightRadius: 18,
         zIndex: 3,

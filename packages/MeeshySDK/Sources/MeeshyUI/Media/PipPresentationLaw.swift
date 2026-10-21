@@ -9,7 +9,7 @@ public nonisolated enum VideoPresentation: Sendable, Equatable {
     public nonisolated static func of(_ style: MeeshyVideoPlayer.Style) -> VideoPresentation {
         switch style {
         case .fullscreen: return .fullscreen
-        case .flat, .inline, .mini: return .inline
+        case .inline: return .inline
         }
     }
 }

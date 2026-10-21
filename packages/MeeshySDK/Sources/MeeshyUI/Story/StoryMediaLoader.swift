@@ -21,7 +21,7 @@ public final class StoryMediaLoader {
     private init() {
         // React to system memory pressure — drop the thumbnail cache and tear
         // down all prerolled players. Without this, a sustained tour through
-        // many stories accumulated up to `maxCachedPlayers` prerolled
+        // many stories accumulated up to `playerPoolCapacity` prerolled
         // `AVQueuePlayer` instances plus 100 thumbnails (~30 MB) until the next
         // manual `clear*` call.
         NotificationCenter.default.addObserver(
@@ -48,7 +48,7 @@ public final class StoryMediaLoader {
     /// Load and downsample an image from PhotosPickerItem.
     /// Uses ImageIO for hardware-accelerated decode + downsample in a single pass.
     public func loadImage(from item: PhotosPickerItem, maxDimension: CGFloat = 1080) async -> UIImage? {
-        guard let data = try? await item.loadTransferable(type: Data.self) else { return nil }
+        guard let data = try? await PickedMedia.loadImageData(item) else { return nil }
         return await loadImage(data: data, maxDimension: maxDimension)
     }
 
@@ -282,12 +282,27 @@ public final class StoryMediaLoader {
     private var playerCache: [String: AVPlayer] = [:]
     /// Insertion order for FIFO eviction (Dictionary has no guaranteed order).
     private var playerCacheOrder: [String] = []
-    /// SOTA short-video pool size: previous / current / next. Was 6 — six prerolled
-    /// `AVQueuePlayer`s each holding decoded frames was a major CPU/GPU/thermal load.
-    /// Les décodeurs matériels sont une ressource BORNÉE (#9702) : la fenêtre
-    /// des réels s'étend jusqu'à N±10, mais seul le palier « décode » (N±1)
-    /// tient un lecteur — le reste se prépare en octets, jamais en lecteurs.
-    private let maxCachedPlayers = 3
+    /// La taille du pool. Les décodeurs matériels sont une ressource BORNÉE
+    /// (#9702) : la fenêtre des réels s'étend jusqu'à N±10, mais seul le palier
+    /// « décode » (N±1) tient un lecteur — le reste se prépare en octets.
+    ///
+    /// Elle suit le tier média de l'appareil (#11281, `PlayerPoolCapacity`),
+    /// relu à chaque insertion : un iPhone qui chauffe rend ses lecteurs en
+    /// trop au prochain préchauffage. Le fournisseur est OPAQUE — un hôte ou un
+    /// témoin y pose sa propre loi par `setPlayerPoolCapacity(_:)` —, et son
+    /// défaut lit la source UNIQUE du tier, jamais une constante.
+    private var poolCapacity: @MainActor () -> Int = { PlayerPoolCapacity.players(for: DeviceMediaTier.current) }
+
+    /// Le nombre de lecteurs que le pool garde, maintenant.
+    public var playerPoolCapacity: Int { max(1, poolCapacity()) }
+
+    /// Remplace la loi de taille du pool, et rend aussitôt les lecteurs en trop.
+    public func setPlayerPoolCapacity(_ capacity: @escaping @MainActor () -> Int) {
+        poolCapacity = capacity
+        let held = playerCache.count
+        trimToCapacity()
+        if playerCache.count != held { announcePoolChange() }
+    }
 
     /// Preroll and cache a player for later retrieval via `cachedPlayer(for:)`.
     ///
@@ -378,14 +393,19 @@ public final class StoryMediaLoader {
     private func insert(_ player: AVPlayer, for key: String) {
         playerCache[key] = player
         playerCacheOrder.append(key)
-        while playerCache.count > maxCachedPlayers,
+        trimToCapacity()
+        announcePoolChange()
+    }
+
+    private func trimToCapacity() {
+        let capacity = playerPoolCapacity
+        while playerCache.count > capacity,
               let victim = PlayerPoolEviction.victim(order: playerCacheOrder, distances: retentionDistances) {
             playerCacheOrder.removeAll { $0 == victim }
             if let evicted = playerCache.removeValue(forKey: victim) {
                 Self.release(evicted)
             }
         }
-        announcePoolChange()
     }
 
     private func announcePoolChange() {

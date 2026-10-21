@@ -5,7 +5,8 @@ import MeeshySDK
 // MARK: - NotificationListScreen
 
 public struct NotificationListScreen<ViewModel: NotificationListModeling>: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @ObservedObject private var viewModel: ViewModel
 
     public var onNotificationTap: ((APINotification) -> Void)?
@@ -82,7 +83,7 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
                                 Task { await viewModel.markAllRead() }
                             } label: {
                                 Text(String(localized: "notifications.markAllRead", defaultValue: "Tout lire", bundle: .module))
-                                    .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                                     .foregroundColor(brandColor)
                             }
                         } else {
@@ -94,7 +95,7 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
 
             if viewModel.unreadCount > 0 {
                 Text(NotificationListCopy.unreadLabel(count: viewModel.unreadCount))
-                    .font(.system(size: MeeshyFont.footnoteSize))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundColor(brandColor)
                     .padding(.bottom, MeeshySpacing.xs)
             }
@@ -130,7 +131,7 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
                 Image(systemName: category.icon)
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(category.label)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundColor(isSelected ? .white : Color(hex: chipColor))
             .padding(.horizontal, MeeshySpacing.md)
@@ -281,11 +282,11 @@ public struct NotificationListScreen<ViewModel: NotificationListModeling>: View 
                 .foregroundColor(Color(hex: category.color).opacity(0.4))
 
             Text(emptyMessage)
-                .font(.system(size: MeeshyFont.calloutSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "notifications.empty.subtitle", defaultValue: "Vos notifications apparaîtront ici", bundle: .module))
-                .font(.system(size: MeeshyFont.subheadSize))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(theme.textMuted)
             Spacer()
         }

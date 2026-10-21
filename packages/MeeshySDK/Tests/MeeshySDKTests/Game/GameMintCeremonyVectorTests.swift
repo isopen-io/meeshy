@@ -98,7 +98,9 @@ enum MintCeremonyVectorEvaluator {
               let mode = input["mode"].stringValue.flatMap(MintCeremonyMode.init(rawValue:)) else {
             throw GameLawVectorError.malformed("`edition` ou `mode` illisible")
         }
-        return GameMintCeremony.plan(edition: edition, mode: mode, answeredAtMs: input["answeredAtMs"].intValue.map(Double.init),
+        let look = input["look"].stringValue.flatMap(MeeshEdition.init(rawValue:))
+        return GameMintCeremony.plan(edition: edition, look: look, mode: mode,
+                                     answeredAtMs: input["answeredAtMs"].intValue.map(Double.init),
                                      modest: input["modest"].boolValue ?? false)
     }
 

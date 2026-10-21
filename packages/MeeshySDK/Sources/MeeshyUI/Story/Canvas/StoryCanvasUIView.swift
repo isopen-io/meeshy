@@ -60,7 +60,7 @@ public final class StoryCanvasUIView: UIView {
     /// Transport timeline en lecture pendant la preview : bascule la
     /// stratégie vidéo entre seek-en-pause (scrub) et lecture muette calée.
     var timelinePreviewPlaying: Bool = false
-    /// La répétition des transitions en composition (#8792) — `nil` au repos.
+    /// La répétition des transitions en composition — `nil` au repos.
     var transitionRehearsal: StoryCanvasTransitionRehearsalRun?
 
     /// Corner radius (in this view's own coordinate space) applied to the
@@ -94,8 +94,8 @@ public final class StoryCanvasUIView: UIView {
 
     /// Jumeau de `playsVideoInEditMode` pour l'AUDIO : opt-in du composer pour
     /// jouer les clips audio/voix (via `ReaderAudioMixer`) sur le canvas
-    /// d'édition — sans lui, seul le son des vidéos jouait en édition et les
-    /// clips audio de fond restaient muets (directive user 2026-07-14). Posé à
+    /// d'édition — sans lui, seul le son des vidéos jouerait en édition et les
+    /// clips audio de fond resteraient muets. Posé à
     /// `true` uniquement par `StoryComposerCanvasView` ; le prefetcher hors-écran
     /// reste silencieux. Sans effet en `.play`.
     public var playsAudioInEditMode: Bool = false {
@@ -113,9 +113,8 @@ public final class StoryCanvasUIView: UIView {
     }
 
     /// Troisième jumeau de `playsVideoInEditMode` et `playsAudioInEditMode`,
-    /// pour les DÉCORATIONS (#4999, directive porteur 2026-09-03 : « sur la
-    /// scène les stickers doivent être vivants tout comme les vidéos et
-    /// audios »). Posé à `true` par le seul canvas composer ; le prefetcher
+    /// pour les DÉCORATIONS : sur la scène les stickers doivent être vivants
+    /// tout comme les vidéos et audios. Posé à `true` par le seul canvas composer ; le prefetcher
     /// hors-écran, lui aussi en `.edit`, ne le lève jamais. Sans effet en
     /// `.play`, où `StoryRenderer` applique déjà la pose à chaque tick.
     ///
@@ -154,17 +153,17 @@ public final class StoryCanvasUIView: UIView {
         case text, media, sticker, place, audio
     }
 
-    /// **Les kinds dont l'hôte sait RÉELLEMENT ouvrir un éditeur** (#4074).
+    /// **Les kinds dont l'hôte sait RÉELLEMENT ouvrir un éditeur.**
     ///
     /// `onItemDoubleTapped != nil` répond à « l'hôte a-t-il câblé un éditeur ? ».
     /// C'est une question de CANVAS, et « Modifier » est une décision par
     /// OBJET : l'atelier câble le rappel, puis fait `case .sticker, .location:
-    /// break` — le menu offrait donc « Modifier » sur un sticker, et rien ne se
-    /// produisait.
+    /// break` — le menu offrirait donc « Modifier » sur un sticker, et rien ne se
+    /// produirait.
     ///
     /// > **Un booléen de canvas ne peut pas répondre à une question par objet.**
-    /// > Le menu a la `kind` sous la main (`contextMenu(for:kind:)`) ; ce qui
-    /// > manquait était de la CONSULTER.
+    /// > Le menu a la `kind` sous la main (`contextMenu(for:kind:)`) ; il doit
+    /// > la CONSULTER.
     ///
     /// Défaut `[.text, .media]` — ce que le rappel de l'atelier traite
     /// réellement. Un hôte qui n'en sait éditer qu'un le restreint (la scène
@@ -183,23 +182,22 @@ public final class StoryCanvasUIView: UIView {
     /// composer typically uses this to open the inline text editor or the
     /// media editor sheet (legacy `onEditText` / `onEditMedia` UX parity).
     public var onItemDoubleTapped: ((String, CanvasItemKind) -> Void)?
-    /// **L'objet SORT de la scène (#4046)** — l'hôte décide ce qu'il devient
+    /// **L'objet SORT de la scène** — l'hôte décide ce qu'il devient
     /// (en Post : une slide du carrousel). Non câblée, l'action n'est pas
     /// offerte : le SDK ne fabrique pas un geste sans destinataire.
     public var onItemLeftScene: ((String, CanvasItemKind) -> Void)?
-    /// **« Rogner » dans l'appui long** (#8370, lot 6) — la vidéo ou le son
-    /// choisi s'ouvre sur ses bornes chez l'hôte. Le rail des contrôleurs qui
-    /// portait ce geste est parti (directive porteur 2026-09-27 : « faire
-    /// apparaître les actions possibles au long press ») ; non câblée,
+    /// **« Rogner » dans l'appui long** — la vidéo ou le son
+    /// choisi s'ouvre sur ses bornes chez l'hôte. Les actions possibles
+    /// apparaissent au long press ; non câblée,
     /// l'action n'est pas offerte.
     public var onItemTrimRequested: ((String, CanvasItemKind) -> Void)?
-    /// **L'hôte PEINT lui-même le menu d'appui long** (#8717). Câblée, elle
+    /// **L'hôte PEINT lui-même le menu d'appui long.** Câblée, elle
     /// reçoit l'objet, sa famille et le point du doigt — NORMALISÉ (0…1) sur
     /// la carte, car le canvas peut être projeté à une autre échelle que
     /// l'écran — et le menu système n'est pas présenté. Non câblée, le canvas
     /// garde son `UIMenu` : les autres hôtes ne changent pas.
     public var onItemMenuRequested: ((String, CanvasItemKind, CGPoint) -> Void)?
-    /// **Un média de premier plan devient le fond** (#8716) — l'hôte décide ce
+    /// **Un média de premier plan devient le fond** — l'hôte décide ce
     /// que devient l'ancien. Non câblée, l'action n'est pas offerte.
     public var onItemMadeBackground: ((String, CanvasItemKind) -> Void)?
 
@@ -260,17 +258,14 @@ public final class StoryCanvasUIView: UIView {
     let itemsContainer = CALayer()
     let editOverlayLayer = CALayer()
 
-    /// **L'objet SÉLECTIONNÉ, et ce qu'on en dit** (#4073, vue `1c`).
+    /// **L'objet SÉLECTIONNÉ, et ce qu'on en dit** (vue `1c`).
     ///
-    /// Le doc-comment de `editOverlayLayer` promettait « snap guides, selection
-    /// markers » depuis toujours ; seuls les guides existaient. Le canvas
-    /// n'avait AUCUNE notion d'objet sélectionné — la scène du composer
-    /// affichait donc son inspecteur, ses contrôleurs et son menu contextuel
-    /// sans jamais montrer SUR QUOI ils portaient.
+    /// Le canvas a une notion d'objet sélectionné : sans elle, la scène du
+    /// composer afficherait son inspecteur, ses contrôleurs et son menu
+    /// contextuel sans jamais montrer SUR QUOI ils portent.
     ///
     /// > Un commentaire qui décrit un mécanisme absent ne se fait contredire
-    /// > par rien (leçon 335). Celui-ci a survécu à toutes les passes parce
-    /// > qu'il énonçait la bonne intention au bon endroit.
+    /// > par rien (leçon 335).
     ///
     /// Le libellé du badge vient de l'HÔTE : ce que dit « TEXT · PLAN FG · z 2 »
     /// est du vocabulaire produit, pas une donnée du canvas. Le canvas tient la
@@ -303,12 +298,12 @@ public final class StoryCanvasUIView: UIView {
     /// média / audio, qui change réellement la composition sonore).
     ///
     /// Il remplace `slideContentRevision` dans `currentSlideKey` et dans la
-    /// garde de `reconfigureAudioForPlayback()`. Avec l'ancien compteur, TOUTE
-    /// mutation — une lettre tapée dans un texte, un déplacement d'élément —
-    /// produisait une nouvelle clé de slide : `ReaderAudioMixer.play` ne
-    /// reconnaissait plus la passe en cours et RE-SCHEDULAIT tout depuis
-    /// l'origine, donc la musique / la voix de fond repartait à zéro à chaque
-    /// frappe (constat user 2026-07-30). Désormais éditer ou bouger un objet
+    /// garde de `reconfigureAudioForPlayback()`. Avec un compteur de contenu,
+    /// TOUTE mutation — une lettre tapée dans un texte, un déplacement
+    /// d'élément — produirait une nouvelle clé de slide : `ReaderAudioMixer.play`
+    /// ne reconnaîtrait plus la passe en cours et RE-SCHEDULERAIT tout depuis
+    /// l'origine, donc la musique / la voix de fond repartirait à zéro à chaque
+    /// frappe. Éditer ou bouger un objet
     /// laisse la clé intacte → `play()` se contente de reprendre le transport.
     internal var slideAudioRevision: UInt64 = 0
 
@@ -321,10 +316,10 @@ public final class StoryCanvasUIView: UIView {
     /// `loadedImagesVersion`). Passed to `backgroundLayer.configure` as
     /// `contentVersion` so the background re-stamps an edited bitmap under the
     /// same media id. The story filter is BAKED into the background bitmap by
-    /// `StoryBackgroundLayer` (no overlay) since the 2026-06-03 pivot.
+    /// `StoryBackgroundLayer` (no overlay).
     var composerImageRevision: UInt64 = 0
 
-    /// **L'hôte présente-t-il le canvas ENTIER ?** (#6636) — `false` quand le
+    /// **L'hôte présente-t-il le canvas ENTIER ?** — `false` quand le
     /// lecteur rogne la carte au rectangle de l'image : la bande sort du cadre
     /// visible et ne se peint plus. Posé sur le calque de fond, qui le garde à
     /// travers chaque `rebuildLayers`.
@@ -459,7 +454,7 @@ public final class StoryCanvasUIView: UIView {
     /// live CALayer transform towards `backgroundLayer` instead of looking
     /// for the layer in `itemsContainer` (where the bg never lives).
     ///
-    /// Unification BG/FG (2026-05-29) : depuis le refactor, le bg media
+    /// Unification BG/FG : le bg media
     /// utilise les MÊMES fonctions de gesture que les items foreground
     /// (`updateScale`/`updatePosition`/`updateRotation` mutent
     /// `mediaObjects[bg]`). La seule différence est le routing de l'apply
@@ -476,7 +471,7 @@ public final class StoryCanvasUIView: UIView {
     /// rend PLUS le drawing persisté de `slide.effects.drawingData` —
     /// l'overlay live le remplace, sinon les 2 drawings se superposent
     /// (l'ancien à la mauvaise position en design space + le nouveau en
-    /// bounds space → bug "écrit en double" reporté 2026-05-27). Le composer
+    /// bounds space → « écrit en double »). Le composer
     /// toggle ce flag en miroir de `viewModel.isDrawingActive`. Force un
     /// rebuild pour ré-render (suppression / re-apparition du drawingLayer).
     public var isDrawingOverlayActive: Bool = false {
@@ -493,7 +488,7 @@ public final class StoryCanvasUIView: UIView {
     public internal(set) var currentManipulationLayer: CanvasManipulationLayer = .canvas
 
     /// Sélection utilisateur explicite via les chips « Arrière-plan » /
-    /// « Premier plan » (directive user 2026-07-14). `nil` = auto-dérivation
+    /// « Premier plan ». `nil` = auto-dérivation
     /// depuis le contenu. Consommée par `resolveManipulationLayer(for:override:)`
     /// et posée par `setManipulationLayer(_:)`.
     public internal(set) var manualManipulationLayerOverride: CanvasManipulationLayer?
@@ -504,11 +499,11 @@ public final class StoryCanvasUIView: UIView {
     /// commandes inadéquates pour la couche courante.
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
 
-    /// **Le canvas DIT quand il s'endort** (#3915).
+    /// **Le canvas DIT quand il s'endort.**
     ///
-    /// `isEditClockThrottled` vivait en UIKit et n'en sortait pas : la couche
-    /// SwiftUI posée par-dessus — la puce audio de premier plan et ses deux
-    /// `TimelineView(.animation(…))` — continuait donc de redessiner à 30 fps
+    /// `isEditClockThrottled` vit en UIKit : sans ce signal, la couche SwiftUI
+    /// posée par-dessus — la puce audio de premier plan et ses deux
+    /// `TimelineView(.animation(…))` — continuerait de redessiner à 30 fps
     /// sur un écran au repos, sur l'horloge d'ANIMATION de SwiftUI, que la mise
     /// en veille d'`editDisplayLink` n'atteint pas.
     ///
@@ -534,12 +529,12 @@ public final class StoryCanvasUIView: UIView {
     /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` notifications.
     public internal(set) var isAudioMuted: Bool = false
 
-    /// **Le muet de CE canvas est-il verrouillé ?** (#4084)
+    /// **Le muet de CE canvas est-il verrouillé ?**
     ///
     /// Posé par `setReaderContext` depuis `ScenePlayerConfig.locksMute`. Une
     /// carte de fil est muette PAR CONSTRUCTION ; sans ce champ, le verrou
-    /// n'existait qu'au niveau du prop et n'atteignait le canvas qu'à la passe
-    /// de rendu suivante. Entre les deux, une notification DIFFUSÉE gagnait.
+    /// n'existerait qu'au niveau du prop et n'atteindrait le canvas qu'à la passe
+    /// de rendu suivante. Entre les deux, une notification DIFFUSÉE gagnerait.
     public internal(set) var muteIsLocked: Bool = false
     /// `slideAudioRevision` contre laquelle `audioMixer` a été configuré la
     /// dernière fois. Permet à `reconfigureAudioForPlayback()` de sauter le
@@ -579,13 +574,12 @@ public final class StoryCanvasUIView: UIView {
 
     /// Failsafe timeout for the foreground-video readiness gate. The background
     /// already owns a 2 s failsafe (`pendingVideoReadinessTask`) so a stuck
-    /// background can never freeze the slide — but the foreground gate had
-    /// none, so a foreground clip whose `AVPlayerItem.status` hangs on
+    /// background can never freeze the slide — the foreground gate needs one
+    /// too: a foreground clip whose `AVPlayerItem.status` hangs on
     /// `.unknown` (slow / stalled network, never reaching `.readyToPlay` NOR
-    /// `.failed`) held `contentReadyFired` false forever → the looping
-    /// background video was never activated and the playhead stayed frozen
-    /// ("le fond vidéo ne démarre jamais / se fige quand il y a une vidéo
-    /// foreground", user 2026-06-23). Armed once by `observePendingForegroundVideos`,
+    /// `.failed`) would hold `contentReadyFired` false forever → the looping
+    /// background video would never be activated and the playhead would stay
+    /// frozen. Armed once by `observePendingForegroundVideos`,
     /// cancelled in `teardownReadinessObservers`.
     var foregroundVideoReadinessFailsafe: Task<Void, Never>?
 
@@ -604,7 +598,7 @@ public final class StoryCanvasUIView: UIView {
     // willMove/didMove ne couvrent pas ce chemin). Le link cible un
     // `WeakDisplayLinkTarget`, donc le deinit est atteignable.
     nonisolated(unsafe) var displayLink: CADisplayLink?
-    /// Temps réel écoulé entre deux ticks + cadence du contrôle de dérive (#9702).
+    /// Temps réel écoulé entre deux ticks + cadence du contrôle de dérive.
     var playheadTickClock = PlayheadTickClock()
 
     /// Runs while in `.edit` and the view is in a window — preferred 120 Hz on
@@ -613,7 +607,7 @@ public final class StoryCanvasUIView: UIView {
     /// backdrop, see `refreshEditGlassBackdropIfNeeded`) so the display server
     /// keeps the high-rate clock running while editing.
     ///
-    /// **Not actually always-on (issue #3906).** After
+    /// **Not actually always-on.** After
     /// `EditClockThrottle.defaultIdleDelay` seconds without a detected
     /// interaction (and no genuinely active media, e.g. a playing timeline
     /// preview), `driveEditClock(now:)` pauses this link (`isPaused = true`)
@@ -642,12 +636,12 @@ public final class StoryCanvasUIView: UIView {
     /// Y (coordonnées ÉCRAN) du bord supérieur des contrôleurs de l'outil
     /// texte — chips flottantes, panneau déplié, clavier. Le texte en cours
     /// d'édition ne descend JAMAIS sous cette ligne : sa dernière ligne reste
-    /// au-dessus des chips, et un texte long déborde vers le HAUT de l'écran
-    /// (directive user 2026-07-30). Posé par le composer, qui mesure la rangée
+    /// au-dessus des chips, et un texte long déborde vers le HAUT de l'écran.
+    /// Posé par le composer, qui mesure la rangée
     /// réellement rendue — même patron que `onBandTopYChange` pour la band.
     ///
     /// `.greatestFiniteMagnitude` (défaut) = aucun plafond connu : le texte
-    /// reste centré comme avant. La conversion écran → canvas est faite par
+    /// reste centré. La conversion écran → canvas est faite par
     /// `convert(_:from: nil)`, donc elle absorbe le `scaleEffect`/`offset` que
     /// SwiftUI applique au conteneur.
     public var inlineEditFloorGlobalY: CGFloat = .greatestFiniteMagnitude {
@@ -659,7 +653,7 @@ public final class StoryCanvasUIView: UIView {
 
     /// Y (coordonnées ÉCRAN) du bord INFÉRIEUR du bouton « Terminé », posé sous
     /// l'encoche. Symétrique de `inlineEditFloorGlobalY` : les deux bornent la
-    /// ZONE d'édition, dans laquelle le bloc édité se centre (spec 2026-08-01).
+    /// ZONE d'édition, dans laquelle le bloc édité se centre.
     ///
     /// `.greatestFiniteMagnitude` (défaut) = aucune zone connue : le texte reste
     /// centré sur le canvas et grandit librement, comportement d'origine.
@@ -673,7 +667,7 @@ public final class StoryCanvasUIView: UIView {
     /// Ombrage posé sur TOUT le canvas pendant l'édition d'un texte en place :
     /// les autres textes et éléments reculent, le texte édité — dont les
     /// glyphes sont peints par `inlineEditor`, une sous-VUE donc au-dessus de
-    /// cette calque — reste net (directive user 2026-08-01).
+    /// cette calque — reste net.
     ///
     /// Une `CALayer` nue n'intercepte aucun toucher : le tap « ailleurs » qui
     /// sort de l'édition continue d'atteindre le canvas.
@@ -686,7 +680,7 @@ public final class StoryCanvasUIView: UIView {
     ///
     /// Le SDK dit ce qui a été touché ; l'hôte décide de ce que cela
     /// déclenche. C'est la même répartition que `onBackgroundTapped`, et
-    /// c'est ce qui permet au composer d'y ouvrir la caméra (#4036) sans
+    /// c'est ce qui permet au composer d'y ouvrir la caméra sans
     /// que l'atelier plein écran, qui ne branche rien, change de
     /// comportement.
     ///
@@ -695,7 +689,7 @@ public final class StoryCanvasUIView: UIView {
     /// > construction — un booléen de configuration ne l'aurait pas fait.
     public var onBackgroundLongPressed: (() -> Void)?
 
-    /// **L'appui long sur un média DE FOND demande son menu** (#5041).
+    /// **L'appui long sur un média DE FOND demande son menu.**
     ///
     /// Distinct de `onBackgroundLongPressed`, qui appartient au viseur : la
     /// scène qui porte un fond n'est pas vide, et le geste y ouvre supprimer /
@@ -709,9 +703,9 @@ public final class StoryCanvasUIView: UIView {
     /// jumeau, et la même construction le garantit ici.
     public var onBackgroundMediaLongPressed: ((String) -> Void)?
 
-    /// **La LEVÉE d'un appui long armé sur une scène vide** (#5041).
+    /// **La LEVÉE d'un appui long armé sur une scène vide.**
     ///
-    /// L'appui long n'émettait que son `.began` : de quoi ouvrir un viseur,
+    /// L'appui long n'émet que son `.began` : de quoi ouvrir un viseur,
     /// jamais de quoi tenir une prise. Ces deux rappels donnent au geste sa
     /// durée — la translation pendant qu'on tient, puis le relâchement.
     ///
@@ -732,7 +726,7 @@ public final class StoryCanvasUIView: UIView {
 
     /// Miroir du zoom viewport SwiftUI (`canvasScale != 1`). Quand `true`,
     /// un double-tap sur le fond demande un reset du viewport — prioritaire
-    /// sur le cycle videoFitMode, qui reste le double-tap à l'échelle 1 (C4).
+    /// sur le cycle videoFitMode, qui reste le double-tap à l'échelle 1.
     public var isViewportZoomed: Bool = false
     /// Notifié quand un double-tap fond doit réinitialiser le zoom viewport.
     public var onViewportZoomResetRequested: (() -> Void)?
@@ -787,12 +781,12 @@ public final class StoryCanvasUIView: UIView {
         // bas, sinon le bg AVPlayer de self démarre AVANT que les autres
         // canvases soient coupés → leur audio bleed pendant la fenêtre de
         // teardown SwiftUI (~16-33 ms entre body re-render et
-        // removeFromSuperview du canvas évincé). User report 2026-05-28 :
+        // removeFromSuperview du canvas évincé). Cas réel :
         // « quand je reviens à une story arrière avec vidéo de fond puis
         // repars à la story suivante, j'ai les deux médias qui jouent en
         // même temps ».
         //
-        // **Un canvas né EN PAUSE ne réclame rien** (#9827) : la page voisine
+        // **Un canvas né EN PAUSE ne réclame rien** : la page voisine
         // du lecteur de réels naît en `.play` puis en pause, et coupait le
         // mixer du réel affiché sans jamais jouer. Il réclame en REPRENANT.
         let claimsPlaybackAtBirth = mode == .play && !startsPaused
@@ -819,19 +813,18 @@ public final class StoryCanvasUIView: UIView {
         // displayLink n'est créé que via `setMode(.play)` — qui n'est
         // appelé QU'AU SLIDE-CHANGE (identityChanged). Pour la première
         // story ouverte (canvas frais en .play, pas de transition), le
-        // displayLink restait inexistant → `displayLinkTick` jamais appelé
-        // → `currentTime` n'avançait pas → `onPlaybackTime` jamais émis
+        // displayLink resterait inexistant → `displayLinkTick` jamais appelé
+        // → `currentTime` n'avancerait pas → `onPlaybackTime` jamais émis
         // → progress bar du viewer gelée à 0 % même quand la vidéo BG
-        // jouait en boucle (video bg piloté par `isPlaybackActive`,
-        // indépendant du displayLink). Bug user-reporté 2026-05-27 :
-        // « la vidéo joue en boucle mais la progress bar n'avance pas ».
+        // jouerait en boucle (video bg piloté par `isPlaybackActive`,
+        // indépendant du displayLink) : « la vidéo joue en boucle mais la
+        // progress bar n'avance pas ».
         if mode == .play {
             // ALL-STOP préventif des autres mixers externes AVANT que le
             // displayLink + setReaderContext de ce canvas démarrent leur
             // audio. Empêche l'audio du slide précédent de jouer pendant
             // la fenêtre `oldCanvas.deinit` → deferred Task → unregister
-            // (qui peut prendre plusieurs runloop ticks). Bug
-            // user-reporté 2026-05-27 « des audios de slide précédent
+            // (qui peut prendre plusieurs runloop ticks) — « des audios de slide précédent
             // jouent dans les autres slide ». Le `willStartPlaying(external:)`
             // itère tous les externals enregistrés et les stop sauf
             // celui passé en argument.
@@ -852,13 +845,12 @@ public final class StoryCanvasUIView: UIView {
         // capture the mixer and defer the call to the main actor so it
         // outlives this view's deallocation.
         let mixer = audioMixer
-        let releaseSession = didRequestPlaybackSession
+        if didRequestPlaybackSession {
+            MediaSessionCoordinator.shared.releasePlaybackInOrder()
+        }
         Task { @MainActor in
             PlaybackCoordinator.shared.unregisterExternal(mixer)
             mixer.shutdown()
-            if releaseSession {
-                await MediaSessionCoordinator.shared.release()
-            }
         }
     }
 
@@ -876,8 +868,8 @@ public final class StoryCanvasUIView: UIView {
     /// requirement).
     var isPlaybackPaused: Bool = false
     /// Les deux causes dont `isPlaybackPaused` est la somme : la pause du
-    /// viewer (`setPaused`) et l'interruption de l'hôte (`PlaybackInterruption`,
-    /// #8725). Séparées pour que la fin d'un appel ne relance jamais une story
+    /// viewer (`setPaused`) et l'interruption de l'hôte (`PlaybackInterruption`).
+    /// Séparées pour que la fin d'un appel ne relance jamais une story
     /// que l'utilisateur avait mise en pause.
     var isPlaybackRequestedPaused: Bool = false
     var isPlaybackInterrupted: Bool = false
@@ -920,11 +912,11 @@ public final class StoryCanvasUIView: UIView {
     /// résolution d'effets à chaque tick.
     var slideHasSchedulableAudio: Bool = false
 
-    /// Ce que valaient les deux portes vidéo AVANT la retenue R1 (#6580),
+    /// Ce que valaient les deux portes vidéo AVANT la retenue R1,
     /// `nil` hors retenue.
     ///
-    /// `isSlideAudioPending()` gelait le playhead sans geler les `AVPlayer` :
-    /// la vidéo roulait pendant l'attente du fichier audio et prenait une
+    /// `isSlideAudioPending()` gèle le playhead sans geler les `AVPlayer` :
+    /// la vidéo roulerait pendant l'attente du fichier audio et prendrait une
     /// avance qu'aucun recalage ne rattrape — le recalage vise justement le
     /// playhead gelé. On SUSPEND donc les deux portes, et on les RESTAURE
     /// telles quelles : rejouer les gates du « GO » à la relâche ferait
@@ -946,7 +938,7 @@ public final class StoryCanvasUIView: UIView {
 
     var lastEditBackdropTimestamp: CFTimeInterval = 0
 
-    // MARK: - Edit clock idle throttle (issue #3906)
+    // MARK: - Edit clock idle throttle
 
     /// Timestamp (`CACurrentMediaTime()` domain — same as `CADisplayLink
     /// .timestamp`) of the last detected user interaction on this canvas:
@@ -974,8 +966,8 @@ public final class StoryCanvasUIView: UIView {
     nonisolated static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
     nonisolated static let snapTolerance: Double = 0.02
 
-    /// Cibles de snap du CADRAGE d'arrière-plan (directive user 2026-07-14 :
-    /// « effet snap pour cadrer le contenu en centrant ou en collant bordure »).
+    /// Cibles de snap du CADRAGE d'arrière-plan : effet snap pour cadrer le
+    /// contenu en centrant ou en collant bordure.
     /// `0.5` = centré, `0.0`/`1.0` = collé au bord. Tolérance plus large que le
     /// foreground : le pan bg est ralenti (× 0.5), le snap doit rester perceptible.
     nonisolated static let backgroundSnapTargets: [Double] = [0.0, 0.5, 1.0]
