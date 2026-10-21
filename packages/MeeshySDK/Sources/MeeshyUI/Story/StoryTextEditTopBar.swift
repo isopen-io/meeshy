@@ -109,7 +109,7 @@ struct CycleButtonAccessibility: ViewModifier {
                 defaultValue: "Touchez pour la valeur suivante, appui long pour toutes les options",
                 bundle: .module))
             .accessibilityAddTraits(.isButton)
-            .accessibilityAction(onActivate)
+            .accessibilityAction { onActivate() }
             .accessibilityAction(named: String(
                 localized: "story.textEdit.cycle.allOptions",
                 defaultValue: "Toutes les options", bundle: .module), onOpenPanel)

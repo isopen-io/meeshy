@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 
 /// Décision pure de défilement (marquee) du texte trop long dans `SyncPill`.
 ///
