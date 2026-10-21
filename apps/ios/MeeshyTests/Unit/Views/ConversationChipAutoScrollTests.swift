@@ -112,4 +112,30 @@ final class ConversationChipAutoScrollTests: XCTestCase {
             -60
         )
     }
+
+    // MARK: - displacement(speed:elapsed:) — le pas suit le temps RÉEL (#9883)
+
+    func test_displacement_isTheSpeedTimesTheElapsedTime() {
+        XCTAssertEqual(ChipAutoScroll.displacement(speed: 600, elapsed: 1.0 / 120.0), 5, accuracy: 1e-6)
+        XCTAssertEqual(ChipAutoScroll.displacement(speed: -600, elapsed: 1.0 / 60.0), -10, accuracy: 1e-6)
+    }
+
+    func test_displacement_atZeroSpeed_isZero() {
+        XCTAssertEqual(ChipAutoScroll.displacement(speed: 0, elapsed: 0.016), 0)
+    }
+
+    func test_displacement_afterAHitch_isBoundedSoTheListDoesNotJump() {
+        let bounded = ChipAutoScroll.displacement(speed: 900, elapsed: 5)
+        XCTAssertEqual(bounded, 900 * ChipAutoScroll.maxStep, accuracy: 1e-6)
+    }
+
+    func test_displacement_negativeElapsed_isZero() {
+        XCTAssertEqual(ChipAutoScroll.displacement(speed: 900, elapsed: -1), 0)
+    }
+
+    func test_shouldRun_onlyWhileTheFingerIsInAnEdgeZone() {
+        XCTAssertFalse(ChipAutoScroll.shouldRun(speed: 0))
+        XCTAssertTrue(ChipAutoScroll.shouldRun(speed: -120))
+        XCTAssertTrue(ChipAutoScroll.shouldRun(speed: 120))
+    }
 }
