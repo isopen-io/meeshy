@@ -85,12 +85,7 @@ jest.mock('../../../middleware/validation', () => ({
 }));
 
 jest.mock('../../../middleware/rate-limit', () => ({
-  ROUTE_RATE_LIMITS: {
-    initiateCall: {},
-    joinCall: {},
-    callOperations: {},
-    activeCallProbe: {},
-  },
+  ROUTE_RATE_LIMITS: { initiateCall: {}, joinCall: {}, callOperations: {}, activeCallProbe: {} },
 }));
 
 jest.mock('../../../utils/logger', () => ({
