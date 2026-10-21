@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import type { StickerDefinition } from '@meeshy/shared/types/sticker-definition';
 
+import { isServedMedia } from '@/lib/media/served-media';
+
 import { stickerFileOf, stickerRefusalKey } from './library-file';
 
 /**
@@ -25,6 +27,12 @@ const sticker = (overrides: Partial<StickerDefinition> = {}): StickerDefinition 
 });
 
 describe('stickerFileOf', () => {
+  test('le fichier relu est marqué SERVI : l’envoi ne le recompresse pas (#11310, #11247)', async () => {
+    const file = await stickerFileOf(sticker(), async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+
+    expect(file === null ? false : isServedMedia(file)).toBe(true);
+  });
+
   test('rend un fichier du type du sticker, nommé par son identifiant', async () => {
     const seen: string[] = [];
     const fetcher = async (url: string) => {
