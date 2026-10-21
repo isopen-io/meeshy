@@ -4,7 +4,7 @@ import MeeshySDK
 
 /// Pré-enregistrement GRDB de la bulle d'un message qui arrive (extrait de
 /// `NotificationService`, comportement identique).
-nonisolated enum NSEMessagePrePersister {
+enum NSEMessagePrePersister {
 
     /// Writes the incoming message directly to the App Group GRDB store so that
     /// when the user taps the notification banner the message is already available
