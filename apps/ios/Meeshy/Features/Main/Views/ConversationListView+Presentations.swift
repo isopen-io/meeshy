@@ -82,7 +82,10 @@ struct ConversationListModalPresentations: ViewModifier {
                     conversationId: conversation.id,
                     conversationName: conversation.name,
                     onSuccess: {
-                        if case .openConversation = lockSheetMode { onSelect(conversation) }
+                        guard case .openConversation = lockSheetMode else { return }
+                        if sheetTargets.searchAfterUnlock { router.pendingOpenSearch = true }
+                        sheetTargets.searchAfterUnlock = false
+                        onSelect(conversation)
                     }
                 )
                 .environmentObject(theme)
