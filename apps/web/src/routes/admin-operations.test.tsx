@@ -17,7 +17,7 @@ import { AdminOperationsPanel } from './admin-operations';
  * GPU, hôte partagé), la socket puis le repli, et la sauvegarde / purge réservées au
  * rang souverain, confirmées en tapant leur nom.
  */
-const { mount, mounter } = setupAdminKitTests({ languages: ['fr'] });
+const { mount, mounter } = setupAdminKitTests({ languages: ['fr', 'en'] });
 const GB = 1024 ** 3;
 const NOW = new Date('2026-10-12T10:00:00.000Z');
 
@@ -111,10 +111,10 @@ function depsOf(trigger: () => ApiResult<unknown> = () => ({ ok: true, data: { r
 
 async function open(
   identity = adminIdentityFixture({ role: 'BIGBOSS' }),
-  options: { readonly liveSource?: LiveSource | null; readonly trigger?: () => ApiResult<unknown>; readonly now?: () => Date } = {},
+  options: { readonly liveSource?: LiveSource | null; readonly trigger?: () => ApiResult<unknown>; readonly now?: () => Date; readonly language?: 'fr' | 'en' } = {},
 ) {
   const { deps, calls } = depsOf(options.trigger);
-  const host = await mount(<AdminOperationsPanel language="fr" deps={deps} liveSource={options.liveSource ?? null} now={options.now ?? (() => NOW)} />, identity);
+  const host = await mount(<AdminOperationsPanel language={options.language ?? 'fr'} deps={deps} liveSource={options.liveSource ?? null} now={options.now ?? (() => NOW)} />, identity);
   for (let attempt = 0; attempt < 20 && host.querySelector('[data-admin-ops-operation]') === null; attempt += 1) await mounter.settle();
   return { host, calls };
 }
@@ -123,6 +123,22 @@ const click = async (element: Element | null) => {
   await act(async () => (element as HTMLElement | null)?.click());
   await mounter.settle();
 };
+
+const crumbsOf = (host: Element) => [...host.querySelectorAll('[data-admin-page-header] nav li')].map((item) => item.textContent?.trim() ?? '');
+
+describe('l’en-tête de l’écran (#10462)', () => {
+  test('le fil d’Ariane dit « Système › Opérations », jamais « Opérations › Opérations »', async () => {
+    const { host } = await open();
+    expect(crumbsOf(host)).toEqual(['Système', 'Opérations']);
+    expect(host.querySelector('[data-admin-page-header] nav [aria-current="page"]')?.textContent).toBe('Opérations');
+    expect(host.querySelector('[data-admin-page-title]')?.textContent).toBe('Opérations');
+  });
+
+  test('en anglais, le groupe se nomme « System » devant « Operations »', async () => {
+    const { host } = await open(undefined, { language: 'en' });
+    expect(crumbsOf(host)).toEqual(['System', 'Operations']);
+  });
+});
 
 describe('l’hôte en direct', () => {
   test('les jauges de la dernière mesure, Docker récupérable, aucun GPU de calcul, hôte partagé', async () => {
