@@ -19,9 +19,8 @@ enum ActionPolicyVectorFixtures {
     }
 
     static func load<Vector: Decodable>(_ name: String, as _: Vector.Type) throws -> [Vector] {
-        struct File: Decodable { let vectors: [Vector] }
         let url = repoRoot().appendingPathComponent("packages/shared/fixtures/action-policy/\(name)")
-        return try JSONDecoder().decode(File.self, from: Data(contentsOf: url)).vectors
+        return try JSONDecoder().decode(ActionPolicyVectorFile<Vector>.self, from: Data(contentsOf: url)).vectors
     }
 
     static func date(_ raw: String?) -> Date? {
@@ -37,14 +36,19 @@ enum ActionPolicyVectorFixtures {
     }
 }
 
+/// `{ $format, vectors }` — le format de `reading-modes/*.vectors.json`.
+struct ActionPolicyVectorFile<Vector: Decodable>: Decodable {
+    let vectors: [Vector]
+}
+
 /// Une valeur JSON quelconque — `metadata` n'a pas de forme fixe.
-enum JSONValue: Decodable, Equatable {
+enum VectorJSONValue: Decodable, Equatable {
     case null
     case bool(Bool)
     case number(Double)
     case string(String)
-    case array([JSONValue])
-    case object([String: JSONValue])
+    case array([VectorJSONValue])
+    case object([String: VectorJSONValue])
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
@@ -52,11 +56,11 @@ enum JSONValue: Decodable, Equatable {
         if let value = try? container.decode(Bool.self) { self = .bool(value); return }
         if let value = try? container.decode(Double.self) { self = .number(value); return }
         if let value = try? container.decode(String.self) { self = .string(value); return }
-        if let value = try? container.decode([JSONValue].self) { self = .array(value); return }
-        self = .object(try container.decode([String: JSONValue].self))
+        if let value = try? container.decode([VectorJSONValue].self) { self = .array(value); return }
+        self = .object(try container.decode([String: VectorJSONValue].self))
     }
 
-    var fields: [String: JSONValue] {
+    var fields: [String: VectorJSONValue] {
         if case .object(let fields) = self { return fields }
         return [:]
     }
@@ -147,7 +151,7 @@ struct WireMessage: Decodable {
     let effectFlags: UInt32?
     let expiresAt: String?
     let ephemeralDuration: Double?
-    let metadata: JSONValue?
+    let metadata: VectorJSONValue?
     let attachments: [WirePiece?]?
     let failed: Bool?
     let senderId: String?
