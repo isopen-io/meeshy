@@ -2,6 +2,7 @@ import * as uploadsEndpoints from '@meeshy/shared/api/endpoints/uploads';
 
 import { anySignal, timeoutSignal } from './abort';
 import type { DataSource } from './config';
+import type { TusCheckpointStore } from './tus-checkpoint';
 import { credentialHeaders, type ApiFailure, type ApiResult, type Credential } from './http';
 
 /**
@@ -53,6 +54,8 @@ export type PostMediaUploadParams = PostMediaUploadDeps & {
   readonly onProgress?: (fraction: number) => void;
   /** Injectée par les témoins ; `WEB_TUS_CHUNK_BYTES` en production. */
   readonly chunkSize?: number;
+  readonly checkpoints?: TusCheckpointStore | null;
+  readonly now?: () => number;
 };
 
 /**
