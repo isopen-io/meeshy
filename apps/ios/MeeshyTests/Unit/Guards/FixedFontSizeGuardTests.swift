@@ -545,6 +545,95 @@ final class FixedFontSizeGuardTests: XCTestCase {
         let head: String
     }
 
+    private static let exactSizes: Set<CGFloat> = [11, 12, 13, 15, 16, 17, 20, 22, 28, 34]
+
+    private static let tokenSizes: [String: CGFloat] = [
+        "microSize": MeeshyFont.microSize,
+        "captionSize": MeeshyFont.captionSize,
+        "footnoteSize": MeeshyFont.footnoteSize,
+        "smallSize": MeeshyFont.smallSize,
+        "subheadSize": MeeshyFont.subheadSize,
+        "labelSize": MeeshyFont.labelSize,
+        "bodySize": MeeshyFont.bodySize,
+        "calloutSize": MeeshyFont.calloutSize,
+        "headlineSize": MeeshyFont.headlineSize,
+        "subtitleSize": MeeshyFont.subtitleSize,
+        "title3Size": MeeshyFont.title3Size,
+        "titleSize": MeeshyFont.titleSize,
+        "displaySize": MeeshyFont.displaySize,
+        "largeTitleSize": MeeshyFont.largeTitleSize
+    ]
+
+    private static let exactSizeTextExceptions: Set<ExactSizeTextSite> = [
+        ExactSizeTextSite(file: "Features/Main/Views/StoryTrayView.swift",
+                          head: #"Text("\u{1F4AD}")"#),
+        ExactSizeTextSite(file: "Features/Main/Views/StoryTrayView.swift",
+                          head: #"Text("\(Int(displayedProgress * 100))%")"#),
+        ExactSizeTextSite(file: "Features/Main/Views/ConversationHelperViews.swift",
+                          head: "Text(Self.displayedUnread(unreadCount))"),
+        ExactSizeTextSite(file: "Features/Main/Views/StoryCommentRowView.swift",
+                          head: "Text(String(comment.author.prefix(1)).uppercased())"),
+        ExactSizeTextSite(file: "Features/Main/Views/StoryLanguageQuickBar.swift",
+                          head: "Text(language.flag)"),
+        ExactSizeTextSite(file: "Features/Main/Views/StoryReactionFlightView.swift",
+                          head: "Text(flight.emoji)"),
+        ExactSizeTextSite(file: "Features/Main/Views/GlobalSearchView.swift",
+                          head: #"Text("\(result.unreadCount)")"#),
+        ExactSizeTextSite(file: "Features/Main/Components/ConversationDashboardView.swift",
+                          head: #"Text("\(score)")"#)
+    ]
+
+    static func fontSize(of token: String) -> CGFloat? {
+        let trimmed = token.trimmingCharacters(in: .whitespaces)
+        let prefix = "MeeshyFont."
+        guard trimmed.hasPrefix(prefix) else { return Double(trimmed).map { CGFloat($0) } }
+        return tokenSizes[String(trimmed.dropFirst(prefix.count))]
+    }
+
+    static func exactSizeTextHeads(in source: String) -> [String] {
+        let raw = source.components(separatedBy: "\n")
+        let masked = DeclarationBodyScanner.mask(source).components(separatedBy: "\n")
+        guard let marker = try? NSRegularExpression(
+            pattern: #"\.font\(\s*\.system\(\s*size:\s*([^,)]+)"#
+        ) else { return [] }
+
+        return masked.enumerated().compactMap { index, line -> String? in
+            let ns = line as NSString
+            guard let hit = marker.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)),
+                  let size = fontSize(of: ns.substring(with: hit.range(at: 1))),
+                  exactSizes.contains(size),
+                  let head = chainHead(raw: raw, masked: masked, index: index, column: hit.range.location),
+                  textHeads.contains(where: { head.contains($0) })
+            else { return nil }
+            return head
+        }
+    }
+
+    private static func chainHead(raw: [String], masked: [String], index: Int, column: Int) -> String? {
+        let prefix = (masked[index] as NSString).substring(to: column)
+        let trimmedPrefix = prefix.trimmingCharacters(in: .whitespaces)
+        if !trimmedPrefix.isEmpty && !trimmedPrefix.hasPrefix(".") {
+            return String(raw[index].prefix(prefix.count)).trimmingCharacters(in: .whitespaces)
+        }
+        guard let above = chainHeadIndex(lines: masked, index: index) else { return nil }
+        return raw[above].trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func chainHeadIndex(lines: [String], index: Int) -> Int? {
+        (0..<index).reversed().first { candidate in
+            let trimmed = lines[candidate].trimmingCharacters(in: .whitespaces)
+            return !(trimmed.isEmpty || trimmed.hasPrefix(".") || trimmed.hasPrefix(")"))
+        }
+    }
+
+    private func exactSizeTextSites() throws -> Set<ExactSizeTextSite> {
+        let found = try sources().flatMap { url in
+            Self.exactSizeTextHeads(in: text(of: url))
+                .map { ExactSizeTextSite(file: relativePath(url), head: $0) }
+        }
+        return Set(found)
+    }
+
     func test_unTexteDeTailleExacteSeLitEnTeteDeChaine() {
         let sameLine = "Text(value).font(.system(size: 15, weight: .bold))"
         XCTAssertEqual(Self.exactSizeTextHeads(in: sameLine), ["Text(value)"])
