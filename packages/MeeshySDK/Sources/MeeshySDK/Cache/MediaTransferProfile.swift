@@ -41,6 +41,14 @@ public struct MediaTransferProfile: Sendable, Equatable, Hashable {
         return networkCovers && priorityCovers
     }
 
+    /// Le plus petit profil qui couvre à la fois `self` et `other`.
+    public func merged(with other: MediaTransferProfile) -> MediaTransferProfile {
+        MediaTransferProfile(
+            priority: priority == .immediate || other.priority == .immediate ? .immediate : .deferrable,
+            allowsExpensiveNetworkAccess: allowsExpensiveNetworkAccess || other.allowsExpensiveNetworkAccess
+        )
+    }
+
     /// Une copie de `base` typée vidéo, avec le réglage de données et la
     /// discrétion du profil. `base` n'est jamais muté (la session partagée
     /// de l'app garde sa configuration).

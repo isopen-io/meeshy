@@ -170,6 +170,15 @@ final class DiskCacheStoreProfileJoinTests: XCTestCase {
         XCTAssertFalse(openDeferred.covers(.standard))
         XCTAssertTrue(openDeferred.covers(restricted))
     }
+
+    func test_merged_isTheSmallestProfileCoveringBoth() {
+        let restrictedImmediate = MediaTransferProfile(priority: .immediate, allowsExpensiveNetworkAccess: false)
+        let openDeferred = MediaTransferProfile(priority: .deferrable, allowsExpensiveNetworkAccess: true)
+
+        XCTAssertEqual(restrictedImmediate.merged(with: openDeferred), .standard)
+        XCTAssertEqual(restricted.merged(with: restricted), restricted)
+        XCTAssertEqual(restricted.merged(with: openDeferred), openDeferred)
+    }
 }
 
 private func outcome<T>(of body: () async throws -> T) async -> Result<T, Error> {
