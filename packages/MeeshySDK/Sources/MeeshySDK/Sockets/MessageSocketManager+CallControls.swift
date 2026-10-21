@@ -7,7 +7,7 @@ import SocketIO
 // `packages/shared/types/call-controls.ts`. La passerelle décide qui a le
 // droit ; ce fichier émet les verbes, rend leur accusé et relaie les trois
 // diffusions. Dans son propre fichier : `MessageSocketManager.swift` est hors
-// budget, il n'y porte que `registerCallControlHandlers(on:)`.
+// budget, la table des routes n'y porte que `callControlRoutes`.
 
 /// Les huit réactions d'un appel — liste FERMÉE, dans l'ordre de la passerelle.
 public enum CallReactionEmoji: String, CaseIterable, Sendable, Equatable, Decodable {
@@ -130,33 +130,24 @@ extension MessageSocketManager: CallControlsSocketProviding {
         CallControlSocketChannel.events.eraseToAnyPublisher()
     }
 
-    func registerCallControlHandlers(on socket: SocketIOClient) {
-        socket.on("call:participant-invited") { [weak self] data, _ in
-            self?.decode(CallParticipantInvitedEvent.self, from: data) { event in
+    var callControlRoutes: [SocketInboundRoute] {
+        [
+            route(.callParticipantInvited, CallParticipantInvitedEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.participantInvited(event))
-            }
-        }
-        socket.on("call:invite-declined") { [weak self] data, _ in
-            self?.decode(CallInviteSettledEvent.self, from: data) { event in
+            },
+            route(.callInviteDeclined, CallInviteSettledEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.inviteDeclined(event))
-            }
-        }
-        socket.on("call:invite-expired") { [weak self] data, _ in
-            self?.decode(CallInviteSettledEvent.self, from: data) { event in
+            },
+            route(.callInviteExpired, CallInviteSettledEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.inviteExpired(event))
-            }
-        }
-        socket.on("call:muted-by-moderator") { [weak self] data, _ in
-            self?.decode(CallMutedByModeratorEvent.self, from: data) { event in
+            },
+            route(.callMutedByModerator, CallMutedByModeratorEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.mutedByModerator(event))
-            }
-        }
-        socket.on("call:reaction-received") { [weak self] data, _ in
-            self?.decode(CallReactionReceivedEvent.self, from: data) { event in
+            },
+            route(.callReactionReceived, CallReactionReceivedEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.reactionReceived(event))
-            }
-        }
-        registerCallLiveFrameHandlers(on: socket)
+            },
+        ] + callLiveFrameRoutes
     }
 
     public func inviteCallParticipant(callId: String, userId: String) async throws {

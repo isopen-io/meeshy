@@ -5,6 +5,9 @@ import os
 
 // MARK: - Message Socket Manager
 
+// unchecked: tout l'état mutable n'est touché que sur la file principale (`.handleQueue(.main)` + `Task { @MainActor }`).
+// La façade reste non isolée : StoryPublishQueue, OutboxDrainTriggers, CacheCoordinator, ConversationSyncEngine et
+// LocationService la lisent hors MainActor — migration portée par #11530, préalable au @MainActor de type.
 public final class MessageSocketManager: ObservableObject, MessageSocketProviding, @unchecked Sendable {
     public static let shared = MessageSocketManager()
 
@@ -168,7 +171,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// #10904 — le jeton de compte présenté au handshake du socket courant
     /// (`nil` pour un invité). `auth:token-expired` rafraîchit en SON nom :
     /// jamais la session d'un compte ouvert depuis.
-    private var handshakeToken: String?
+    private(set) var handshakeToken: String?
     private var joinedConversations: Set<String> = []
     private var reconnectAttempt: Int = 0
     private var backoff = SocketReconnectBackoff()
@@ -341,7 +344,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private func setupEventHandlers() {
         guard let socket else { return }
         installConnectionHandlers(on: socket)
-        installTokenExpiryHandler(on: socket)
         setupMessageEventHandlers()
     }
 
@@ -448,19 +450,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             self.connectionState = .reconnecting(attempt: attempt)
         }
         Logger.socket.info("MessageSocket reconnect attempt \(attempt)")
-    }
-
-    private func installTokenExpiryHandler(on socket: SocketIOClient) {
-        // #10904 — le jeton de CE socket, capturé à l'inscription de ses
-        // écouteurs : un socket d'une session quittée (encore en sursis parmi
-        // les transports retirés) ne rafraîchit pas celle du moment.
-        let presentedToken = handshakeToken
-        socket.on("auth:token-expired") { _, _ in
-            Logger.socket.info("MessageSocket: auth token expired — triggering refresh")
-            Task { @MainActor in
-                AuthManager.shared.handleUnauthorized(presentedToken: presentedToken)
-            }
-        }
     }
 
     public func connectAnonymous(sessionToken: String) {
