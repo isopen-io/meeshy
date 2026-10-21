@@ -35,10 +35,23 @@ struct SessionTransitionContext: Equatable {
 
 enum SessionTransitionPlan {
     static func opening(_ context: SessionTransitionContext) -> [SessionOpeningStep] {
-        []
+        let friendships: [SessionOpeningStep] = context.friendshipsHydrated ? [] : [.hydrateFriendships]
+        return [
+            [.tagCrashReports(userId: context.userId)],
+            [.replayShareLinkAwaitingAccount, .startNotificationCoordinators, .startCache, .configureStoryPublishing],
+            friendships,
+            [.reconnectSockets, .activateConversationStoreBridge],
+            [.promptPushPermission, .refreshUnreadCount, .reRegisterPushTokens],
+            [.uploadE2EEBundle, .migrateKeychain],
+        ].flatMap { $0 }
     }
 
     static func closing(_ context: SessionTransitionContext) -> [SessionClosingStep] {
-        []
+        let endCall: [SessionClosingStep] = context.hasActiveCall ? [.endActiveCall] : []
+        return [
+            [.untagCrashReports, .resetNotifications, .clearFriendships, .clearE2EESessions, .unbindCache, .unregisterVoIP],
+            endCall,
+            [.disconnectSockets, .stopSocketRelays, .cancelBackgroundTasks],
+        ].flatMap { $0 }
     }
 }
