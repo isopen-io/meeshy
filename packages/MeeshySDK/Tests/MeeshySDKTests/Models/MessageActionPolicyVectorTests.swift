@@ -6,7 +6,10 @@ import Testing
 /// `packages/shared/fixtures/action-policy/message-actions.vectors.json`, que
 /// `messageActionsFor` a PRODUIT : type de contenu, drapeaux, verdicts et ORDRE
 /// des groupes, vecteur pour vecteur. Les deux lois ne peuvent pas diverger sans
-/// qu'un des deux côtés rougisse.
+/// qu'un des deux côtés rougisse : `sdk-tests.yml` se déclenche sur les
+/// vecteurs et les lois TypeScript qu'ils exécutent, et
+/// `packages/shared/__tests__/ci/sdk-tests-shared-inputs.test.ts` exige que tout
+/// fichier partagé relu ici figure dans ses filtres.
 struct MessageActionPolicyVectorTests {
 
     private struct Vector: Decodable {
@@ -179,6 +182,16 @@ struct MessageActionPolicyVectorTests {
             "envoi-en-echec-reessayer-en-tete",
             "lieu-ouvrir-dans-plans",
             "lien-de-l-auteur-plafond-de-six",
+            "groupe-ecriture-reservee-aux-membres-un-rang-illisible-ne-repond-pas",
+            "groupe-ecriture-reservee-au-createur-un-admin-ne-repond-pas",
+            "groupe-ecriture-reservee-au-createur-le-createur-repond",
+            "photo-vue-unique-par-la-piece-seule",
+            "photo-vue-unique-par-le-bit-de-la-piece",
+            "deux-pieces-toutes-floutees-se-transferent-sans-s-exporter",
+            "une-piece-floutee-sur-deux-s-exporte",
+            "carte-de-visite-alias-text-x-vcf",
+            "carte-de-visite-type-generique-extension-en-majuscules",
+            "carte-de-visite-lue-sur-le-nom-de-fichier-sans-nom-d-origine",
         ]
         for label in required {
             #expect(labels.contains(label), "\(label)")

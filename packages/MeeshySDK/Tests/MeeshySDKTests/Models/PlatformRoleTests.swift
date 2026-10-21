@@ -29,18 +29,49 @@ struct PlatformRoleTests {
 
     // MARK: - Hiérarchie
 
-    @Test func theLevelsAreThoseOfTheSharedHierarchy() throws {
+    /// Les entrées de la table `name` de `role-types.ts`, lues dans SON seul bloc
+    /// (de `export const name` au premier `};`) : une autre table aux mêmes clés
+    /// ne s'y mêle pas, et une clé répétée se compte au lieu d'arrêter le processus.
+    private func sharedTable(_ name: String, entry: String) throws -> (entries: Int, table: [String: Int]) {
         let url = ActionPolicyVectorFixtures.repoRoot().appendingPathComponent("packages/shared/types/role-types.ts")
         let source = try String(contentsOf: url, encoding: .utf8)
-        let pattern = try NSRegularExpression(pattern: "\\[GlobalUserRole\\.([A-Z]+)\\]:\\s*(\\d+)")
-        let matches = pattern.matches(in: source, range: NSRange(source.startIndex..., in: source))
-        let shared = Dictionary(uniqueKeysWithValues: matches.compactMap { match -> (String, Int)? in
-            guard let name = Range(match.range(at: 1), in: source), let level = Range(match.range(at: 2), in: source) else { return nil }
-            return (String(source[name]), Int(source[level]) ?? -1)
-        })
+        guard let start = source.range(of: "export const \(name):"),
+              let end = source.range(of: "};", range: start.upperBound..<source.endIndex) else { return (0, [:]) }
+        let block = String(source[start.upperBound..<end.lowerBound])
+        let pattern = try NSRegularExpression(pattern: entry)
+        let pairs = pattern.matches(in: block, range: NSRange(block.startIndex..., in: block)).compactMap { match -> (String, Int)? in
+            guard let key = Range(match.range(at: 1), in: block), let level = Range(match.range(at: 2), in: block) else { return nil }
+            return (String(block[key]), Int(block[level]) ?? -1)
+        }
+        return (pairs.count, Dictionary(pairs, uniquingKeysWith: { first, _ in first }))
+    }
+
+    @Test func theLevelsAreThoseOfTheSharedHierarchy() throws {
+        let shared = try sharedTable("GLOBAL_ROLE_HIERARCHY", entry: "\\[GlobalUserRole\\.([A-Z]+)\\]:\\s*(\\d+)")
         let mirrored = Dictionary(uniqueKeysWithValues: PlatformRole.allCases.map { ($0.rawValue, $0.level) })
-        #expect(!shared.isEmpty)
-        #expect(mirrored == shared)
+        #expect(!shared.table.isEmpty)
+        #expect(shared.entries == shared.table.count)
+        #expect(mirrored == shared.table)
+    }
+
+    /// `WRITE_PERMISSION_HIERARCHY` : le rang requis pour écrire se lit sur
+    /// `MemberRole`, `everyone` valant 0 — aucune table de rôles en chaînes ne
+    /// le recopie côté Swift.
+    @Test func theWriteRanksAreThoseOfTheSharedWriteHierarchy() throws {
+        let shared = try sharedTable("WRITE_PERMISSION_HIERARCHY", entry: "'([a-z]+)':\\s*(\\d+)")
+        #expect(!shared.table.isEmpty)
+        #expect(shared.entries == shared.table.count)
+        for (role, level) in shared.table {
+            #expect(MessageActionPolicy.requiredWriteRank(of: role) == level, "\(role)")
+        }
+        let mirrored = Set(["everyone"] + MemberRole.allCases.map(\.rawValue))
+        #expect(mirrored == Set(shared.table.keys))
+    }
+
+    @Test func anUnknownWriteRoleRequiresTheCreator() {
+        #expect(MessageActionPolicy.requiredWriteRank(of: "vip") == MemberRole.creator.level)
+        #expect(MessageActionPolicy.requiredWriteRank(of: "Member") == MemberRole.creator.level)
+        #expect(MessageActionPolicy.requiredWriteRank(of: "") == MemberRole.creator.level)
     }
 
     @Test func theOrderIsBigbossAdminModeratorAuditAnalystUser() {
