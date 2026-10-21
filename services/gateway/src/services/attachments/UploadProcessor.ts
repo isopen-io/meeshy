@@ -7,7 +7,6 @@ import { apiPath } from '@meeshy/shared/api/prefix';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { spawn } from 'child_process';
 import os from 'os';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -30,7 +29,7 @@ import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizedAudioPath } from './audio-normalization.js';
 import { audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from './uploadMimeType.js';
 import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
-import { guardedTimeout } from '../../utils/guarded-timer.js';
+import { runFfmpeg } from './ffmpeg-run.js';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -245,7 +244,7 @@ export class UploadProcessor {
       await fs.writeFile(tempInputPath, buffer);
       // Bitrate aligné sur la source iOS (64 kbps mono AAC) — ré-encoder à
       // 128 kbps doublait la taille sans bénéfice perceptif sur de la voix.
-      await this.runFfmpeg([
+      await runFfmpeg([
         '-i', tempInputPath,
         '-af', 'volume=9dB',
         '-c:a', 'aac',
@@ -265,24 +264,6 @@ export class UploadProcessor {
       await fs.unlink(tempInputPath).catch(() => {});
       await fs.unlink(tempOutputPath).catch(() => {});
     }
-  }
-
-  /** Run ffmpeg with the given argv; resolves on exit 0, rejects otherwise. */
-  private runFfmpeg(args: string[], timeoutMs = 5 * 60_000): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const proc = spawn('ffmpeg', args);
-      let stderr = '';
-      const timer = guardedTimeout({ name: 'ffmpeg-transcode-timeout', afterMs: timeoutMs, logger, run: () => {
-        proc.kill('SIGKILL');
-        reject(new Error('ffmpeg transcode timeout'));
-      } });
-      proc.stderr.on('data', (d) => { stderr += d.toString(); });
-      proc.on('close', (code) => {
-        clearTimeout(timer);
-        code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-400)}`));
-      });
-      proc.on('error', (e) => { clearTimeout(timer); reject(e); });
-    });
   }
 
   /**
@@ -318,7 +299,7 @@ export class UploadProcessor {
     const outputAbs = path.join(this.uploadBasePath, outputRel);
 
     try {
-      await this.runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan));
+      await runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan));
       const stat = await fs.stat(outputAbs);
       if (stat.size === 0 || stat.size >= fileSize) {
         // No benefit — discard the transcode, keep the original.
