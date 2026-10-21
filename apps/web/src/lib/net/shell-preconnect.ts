@@ -16,7 +16,7 @@
  * production, jamais `config.ts`, qui s'évalue sous `__SHELL__`.
  */
 
-import { PRODUCTION_ORIGIN } from '../api/production-origin';
+import { PRODUCTION_ORIGIN } from '../api/production-origin.js';
 
 export function shellApiOrigin(declared: string | undefined): string {
   const base = declared?.trim() ?? '';

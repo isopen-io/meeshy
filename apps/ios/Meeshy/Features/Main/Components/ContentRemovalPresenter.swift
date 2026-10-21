@@ -13,22 +13,22 @@ enum ContentRemovalPresenter {
     private static let maxAttempts = 14
     private static let retryDelay: TimeInterval = 0.15
 
-    static func present(_ kind: ContentRemovalKind, onConfirm: @escaping (String) -> Void) {
-        present(kind, onConfirm: onConfirm, attempt: 0)
+    static func present(_ kind: ContentRemovalKind, count: Int = 1, onConfirm: @escaping (String) -> Void) {
+        present(kind, count: count, onConfirm: onConfirm, attempt: 0)
     }
 
-    private static func present(_ kind: ContentRemovalKind, onConfirm: @escaping (String) -> Void, attempt: Int) {
+    private static func present(_ kind: ContentRemovalKind, count: Int, onConfirm: @escaping (String) -> Void, attempt: Int) {
         switch MessageCardExportPresenter.topMostController() {
         case .busy:
             guard attempt < maxAttempts else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + retryDelay) {
-                present(kind, onConfirm: onConfirm, attempt: attempt + 1)
+                present(kind, count: count, onConfirm: onConfirm, attempt: attempt + 1)
             }
         case .none:
             return
         case .ready(let top):
             let presented = RemovalPresentedHost()
-            let host = RemovalHostingController(rootView: ContentRemovalReasonSheet(kind: kind, onConfirm: onConfirm) {
+            let host = RemovalHostingController(rootView: ContentRemovalReasonSheet(kind: kind, count: count, onConfirm: onConfirm) {
                 presented.controller?.presentingViewController?.dismiss(animated: true)
             })
             presented.controller = host
@@ -86,12 +86,12 @@ enum ContentRemovalOffer {
     }
 
     /// L'entrée « Retirer » d'un dialogue de suppression de message : `before` referme ce qui la porte,
-    /// puis la feuille du motif remet le motif à `onReason`.
+    /// puis la feuille du motif remet le motif à `onReason`. `count` titre la feuille (#11520).
     @ViewBuilder
-    static func messageButton(before: @escaping () -> Void = {}, onReason: @escaping (String) -> Void) -> some View {
+    static func messageButton(count: Int = 1, before: @escaping () -> Void = {}, onReason: @escaping (String) -> Void) -> some View {
         Button(String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main), role: .destructive) {
             before()
-            ContentRemovalPresenter.present(.message, onConfirm: onReason)
+            ContentRemovalPresenter.present(.message, count: count, onConfirm: onReason)
         }
     }
 
@@ -103,7 +103,7 @@ enum ContentRemovalOffer {
         mayRemove: (Message) -> Bool, onConfirmed: @escaping () -> Void
     ) -> some View {
         if selectionOffersRemoval(selected, mayRemove: mayRemove, mayDeleteForEveryone: { viewModel.canDeleteForEveryone($0) }) {
-            messageButton { reason in
+            messageButton(count: ids.count) { reason in
                 onConfirmed()
                 Task { await ConversationSelectionRemoval(viewModel: viewModel).run(ids, reason: reason) }
             }

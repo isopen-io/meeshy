@@ -191,6 +191,21 @@ final class ContentRemovalOfferTests: XCTestCase {
         XCTAssertEqual(ContentRemovalKind.successText(reason: nil, deleted: "Publication supprimée"), "Publication supprimée")
         XCTAssertNotEqual(ContentRemovalKind.successText(reason: "Spam", deleted: "Publication supprimée"), "Publication supprimée")
     }
+
+    func test_titleKey_severalMessages_usesThePluralKey() {
+        XCTAssertEqual(ContentRemovalKind.message.titleKey(count: 1), "moderation.removal.title.message")
+        XCTAssertEqual(ContentRemovalKind.message.titleKey(count: 3), "moderation.removal.title.messages")
+    }
+
+    func test_titleKey_otherKinds_ignoreTheCount() {
+        XCTAssertEqual(ContentRemovalKind.post.titleKey(count: 4), "moderation.removal.title.post")
+        XCTAssertEqual(ContentRemovalKind.comment.titleKey(count: 2), "moderation.removal.title.comment")
+    }
+
+    func test_sheetTitle_severalMessages_saysHowMany() {
+        XCTAssertTrue(ContentRemovalKind.message.sheetTitle(count: 3).contains("3"))
+        XCTAssertEqual(ContentRemovalKind.message.sheetTitle(count: 1), ContentRemovalKind.message.sheetTitle)
+    }
 }
 
 /// **« Retirer » s'offre-t-il sur une SÉLECTION de messages ?** (#11159) — au

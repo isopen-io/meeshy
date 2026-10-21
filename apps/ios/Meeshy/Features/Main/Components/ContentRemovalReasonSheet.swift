@@ -24,6 +24,20 @@ enum ContentRemovalKind: String, Identifiable, Equatable {
         }
     }
 
+    static let severalMessagesTitleKey = "moderation.removal.title.messages"
+
+    /// La clé du titre selon le NOMBRE retiré (#11520) : une sélection de
+    /// plusieurs messages dit combien partent ; les autres surfaces n'en retirent qu'un.
+    func titleKey(count: Int) -> String {
+        guard self == .message, count > 1 else { return "moderation.removal.title.\(rawValue)" }
+        return Self.severalMessagesTitleKey
+    }
+
+    func sheetTitle(count: Int) -> String {
+        guard titleKey(count: count) == Self.severalMessagesTitleKey else { return sheetTitle }
+        return String(localized: "moderation.removal.title.messages", defaultValue: "Retirer \(count) messages", bundle: .main)
+    }
+
     /// Le retour d'une suppression : celle de l'auteur dit « supprimé », un
     /// retrait (avec motif) dit que l'auteur sera prévenu.
     static func successText(reason: String?, deleted: String) -> String {
@@ -45,6 +59,7 @@ enum ContentRemovalKind: String, Identifiable, Equatable {
 /// arrière si la passerelle refuse. Présentée par `ContentRemovalPresenter`.
 struct ContentRemovalReasonSheet: View {
     let kind: ContentRemovalKind
+    var count: Int = 1
     let onConfirm: (String) -> Void
     /// Referme la feuille — le contrôleur qui la présente (`ContentRemovalPresenter`).
     let onClose: () -> Void
@@ -71,7 +86,7 @@ struct ContentRemovalReasonSheet: View {
                 .padding(.horizontal, MeeshySpacing.xl)
                 .padding(.vertical, MeeshySpacing.lg)
             }
-            .navigationTitle(kind.sheetTitle)
+            .navigationTitle(kind.sheetTitle(count: count))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
         }

@@ -271,3 +271,39 @@ describe('les séries, la fidélité et l’ancien écran (#10388)', () => {
     expect(upsert).not.toHaveBeenCalled();
   });
 });
+
+// #11491 (décision 2026-10-21) — la reprise d'une publication supprimée suit la
+// loi des 30 jours ; `abuse.clawbackHours` ne gouverne plus rien. Un ancien
+// client l'envoie encore : il est accepté, ignoré, et n'est plus servi.
+describe('la fenêtre de reprise n’est plus un réglage (#11491)', () => {
+  const legacyAbuse = { ...DEFAULT_ENGAGEMENT_SCALE.abuse, clawbackHours: 48 };
+
+  it('accepte le clawbackHours d’un ancien client, ne l’écrit pas et ne le sert plus', async () => {
+    const bundle = makePrisma();
+    const put = await call('ADMIN', 'PUT', { scale: { ...DEFAULT_ENGAGEMENT_SCALE, abuse: legacyAbuse } }, bundle);
+    const get = await call('ADMIN', 'GET', undefined, bundle);
+
+    expect(put.res.statusCode).toBe(200);
+    const written = (bundle.upsert.mock.calls[0]?.[0] as { update: { config: { abuse: Record<string, unknown> } } }).update.config;
+    expect(written.abuse).not.toHaveProperty('clawbackHours');
+    for (const res of [put.res, get.res]) {
+      expect(res.json().data.scale.abuse).toEqual({
+        heavyPoints: DEFAULT_ENGAGEMENT_SCALE.abuse.heavyPoints,
+        unverifiedMaxPoints: DEFAULT_ENGAGEMENT_SCALE.abuse.unverifiedMaxPoints,
+      });
+    }
+  });
+
+  it('ne sert pas la valeur orpheline d’un barème stocké avant la décision', async () => {
+    const bundle = makePrisma();
+    (bundle.prisma.engagementScaleConfig.findUnique as unknown as jest.Mock).mockImplementation(async () => ({
+      config: { ...DEFAULT_ENGAGEMENT_SCALE, abuse: { ...legacyAbuse, clawbackHours: 9999 } },
+      updatedAt: new Date('2026-10-01T00:00:00.000Z'),
+      updatedById: null,
+    }));
+    const { res } = await call('ADMIN', 'GET', undefined, bundle);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.scale.abuse).not.toHaveProperty('clawbackHours');
+  });
+});

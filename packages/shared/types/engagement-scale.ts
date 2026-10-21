@@ -145,14 +145,15 @@ export type EngagementStreakBonus = {
  * LES GARDE-FOUS DES GROS POIDS. Une opération dont les points de base
  * atteignent `heavyPoints` (post, story, reel aux défauts) :
  * - ne crédite qu'une fois par contenu ;
- * - rend ses points si le contenu est supprimé dans les `clawbackHours` ;
+ * - rend ses points si le contenu est supprimé — la fenêtre n'est pas un réglage :
+ *   c'est la loi des 30 jours (`PUBLICATION_RECLAIM_WINDOW_DAYS`, #11467). L'ancien
+ *   `clawbackHours` (#11491) est accepté en entrée et ignoré ;
  * - vaut au plus `unverifiedMaxPoints` PAR ACTE pour un compte sans e-mail ni
  *   téléphone vérifié — une ferme de comptes jetables ne publie pas au prix
  *   fort. C'est la valeur d'un acte, jamais un total.
  */
 export type EngagementAbuseRules = {
   readonly heavyPoints: number;
-  readonly clawbackHours: number;
   readonly unverifiedMaxPoints: number;
 };
 
@@ -238,7 +239,6 @@ export const DEFAULT_STREAK_BONUSES: readonly EngagementStreakBonus[] = [
 
 export const DEFAULT_ABUSE_RULES: EngagementAbuseRules = {
   heavyPoints: 50,
-  clawbackHours: 24,
   unverifiedMaxPoints: 10,
 };
 
@@ -413,11 +413,10 @@ function parseLinkVisits(value: unknown): EngagementLinkVisitRules | null {
 function parseAbuse(value: unknown): EngagementAbuseRules | null {
   if (value === undefined) return DEFAULT_ABUSE_RULES;
   if (!isRecord(value)) return null;
-  const { heavyPoints, clawbackHours, unverifiedMaxPoints } = value;
+  const { heavyPoints, unverifiedMaxPoints } = value;
   if (!isIntIn(heavyPoints, 1, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
-  if (!isIntIn(clawbackHours, 0, 24 * 30)) return null;
   if (!isIntIn(unverifiedMaxPoints, 0, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
-  return { heavyPoints, clawbackHours, unverifiedMaxPoints };
+  return { heavyPoints, unverifiedMaxPoints };
 }
 
 function parsePathCaps(value: unknown): EngagementPathCaps | null {
