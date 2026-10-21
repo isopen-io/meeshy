@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import { pinchPose, pointerFraction } from '@/lib/stories/studio-grip';
 import type { StudioPose } from '@/lib/stories/studio-pose';
 import { snapPose, type SnapEngaged } from '@/lib/stories/studio-snap';
+import { LONG_PRESS_MS } from '@/lib/view/long-press';
 import { StudioManipulationLimits } from '@/routes/story-compose-limits';
 
 /**
@@ -34,10 +35,10 @@ import { StudioManipulationLimits } from '@/routes/story-compose-limits';
  */
 
 const DRAG_THRESHOLD = 6;
-const LONG_PRESS_MS = 500;
 const DOUBLE_TAP_MS = 300;
-/** L'appui long qui FILME sur une scène vide — plus court que celui du menu :
- * le doigt qui veut filmer n'attend pas (miroir du déclencheur de la caméra). */
+/** L'appui long qui FILME sur une scène vide — jamais plus long que celui du
+ * menu (`LONG_PRESS_MS`, 350 ms depuis #11207) : le doigt qui veut filmer
+ * n'attend pas (miroir du déclencheur de la caméra). */
 const CAPTURE_HOLD_MS = 350;
 
 export type StudioStageObject = { readonly id: string; readonly pose: StudioPose };

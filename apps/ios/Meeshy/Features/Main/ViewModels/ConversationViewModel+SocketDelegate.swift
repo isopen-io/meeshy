@@ -31,7 +31,7 @@ import os
 extension ConversationViewModel: ConversationSocketDelegate {
     func handleParticipantRoleUpdated(participantId: String, newRole: String) {
         Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
-        _topActiveMembers = nil
+        derived.topActiveMembers = nil
         let convId = conversationId
         Task {
             await CacheCoordinator.shared.participants.invalidate(for: convId)
@@ -76,50 +76,13 @@ extension ConversationViewModel: ConversationSocketDelegate {
         }
     }
 
-    /// Injects an enriched attachment's transcription + audio translations
-    /// directly into the metadata dictionaries (same shape as
-    /// `hydrateMetadataFromGRDB` but sourced from a socket payload).
     private func injectAttachmentMetadata(
         from attachment: APIMessageAttachment,
         intoMessageId msgId: String
     ) {
-        if let t = attachment.transcription {
-            let segments = (t.segments ?? []).map(MessageTranscriptionSegment.init)
-            let transcription = MessageTranscription(
-                attachmentId: attachment.id,
-                text: t.transcribedText ?? t.text ?? "",
-                language: t.language ?? "?",
-                confidence: t.confidence,
-                durationMs: t.durationMs,
-                segments: segments,
-                speakerCount: t.speakerCount
-            )
-            messageTranscriptions[msgId] = transcription
-            messageTranscriptionsByAttachment[attachment.id] = transcription
-        }
-        if let translations = attachment.translations, !translations.isEmpty {
-            var audios: [MessageTranslatedAudio] = []
-            for (lang, trans) in translations {
-                guard let url = trans.url, !url.isEmpty else { continue }
-                let segments = (trans.segments ?? []).map(MessageTranscriptionSegment.init)
-                audios.append(MessageTranslatedAudio(
-                    attachmentId: attachment.id,
-                    language: lang,
-                    url: url,
-                    transcription: trans.transcription,
-                    durationMs: trans.durationMs,
-                    format: trans.format,
-                    cloned: trans.cloned,
-                    quality: trans.quality,
-                    voiceModelId: trans.voiceModelId,
-                    ttsModel: trans.ttsModel,
-                    segments: segments
-                ))
-            }
-            if !audios.isEmpty {
-                messageTranslatedAudios[msgId] = audios
-                messageTranslatedAudiosByAttachment[attachment.id] = audios
-            }
-        }
+        applyAudioMetadata(
+            [AttachmentAudioMetadata.entry(fromSocket: attachment, messageId: msgId)],
+            forceOverwrite: true
+        )
     }
 }

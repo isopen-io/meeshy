@@ -14,7 +14,9 @@ import MeeshySDK
 /// Deux clés par gabarit : `sticker.template.answer.<id>` NOMME le gabarit
 /// (palette, VoiceOver) et `…<id>.caption` est le mot DESSINÉ — les deux
 /// coïncident souvent, mais l'urne s'appelle « Urne à vote » et dit « Vote ».
-extension StickerTemplateRenderer {
+enum AnswerStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .answer
+
 
     // MARK: Le patron d'un cartouche de réponse
 
@@ -557,6 +559,6 @@ extension StickerTemplateRenderer {
             draw: { _, m, échelle in Self.tellMeImage(metrics: m, screenScale: échelle) }),
     ]
 
-    static let answerDrawers: [StickerTemplateDrawer] =
+    static let drawers: [StickerTemplateDrawer] =
         answerCards.map { answerDrawer($0) } + answerShapeDrawers
 }

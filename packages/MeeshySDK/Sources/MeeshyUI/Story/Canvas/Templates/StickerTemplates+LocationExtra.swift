@@ -12,7 +12,7 @@ import MeeshySDK
 /// Fichier séparé de `StickerTemplates+Location` : celui-ci tenait déjà 220
 /// lignes, et trois dessins de plus l'auraient poussé vers la limite du budget
 /// pour un gain de cohésion nul — ce sont trois formes indépendantes.
-extension StickerTemplateRenderer {
+extension LocationStickerTemplates {
 
     // MARK: - location.stamp — le timbre à bord dentelé
 

@@ -76,6 +76,16 @@ struct ConversationBodySheets<Anchor: View, Picker: View>: ViewModifier {
     }
 }
 
+/// **Le voile de l'appui long** (#11208). Le fond se floutait à 12, plein
+/// écran : la conversation devenait illisible, et le flou s'ajoutait à
+/// l'assombrissement que l'overlay pose déjà (`MessageOverlayMenu.dismissBackground`).
+/// Le voile est désormais cet assombrissement, sur un flou léger qui ne passe
+/// jamais 8. La loi commune iOS / web (le web floute à 16 px) est tranchée par
+/// la décision-produit #11222 ; cette valeur s'y alignera.
+nonisolated enum ConversationOverlayBackdrop {
+    static let blurRadius: CGFloat = 6
+}
+
 /// **Le menu d'appui long, en `ViewModifier` NOMINAL** (LOT-10) : flou du fond
 /// AVANT l'overlay — pour ne flouter que la conversation, jamais le menu —,
 /// puis l'animation, l'overlay, la restitution du clavier à la fermeture, les
@@ -100,7 +110,7 @@ struct ConversationBodyOverlayMenu<Piece: View, PlaceCover: View>: ViewModifier 
 
     func body(content: Content) -> some View {
         content
-            .blur(radius: overlayState.showOverlayMenu ? 12 : 0)
+            .blur(radius: overlayState.showOverlayMenu ? ConversationOverlayBackdrop.blurRadius : 0)
             .animation(.easeOut(duration: 0.28), value: overlayState.showOverlayMenu)
             .overlay { menuLayer }
             .adaptiveOnChange(of: overlayState.showOverlayMenu) { _, isShowing in
@@ -164,7 +174,7 @@ struct ConversationOverlayMenuLayer<Piece: View>: View {
             overlayState: $overlayState,
             msg: msg,
             accentColor: accentColor,
-            bubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
+            bubbleFrame: overlayState.overlaySourceFrame ?? frameTracker.frame(for: msg.id) ?? .zero,
             threadLanguage: threadLanguage(msg),
             isDirect: isDirect,
             isAdminOrMod: isAdminOrMod,

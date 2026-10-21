@@ -90,7 +90,7 @@ const ViewerVideoPage = lazy(() => import('./viewer-video-page'));
  *
  * GESTES — ce qui est LIVRÉ : tap (bascule plateau ⇄ plein cadre), glissement
  * vertical qui SUIT le doigt (ferme ≥ 150, entre en plein cadre ≤ −150 depuis
- * `carded`), appui long 500 ms (plein cadre + pause), double-tap (zoom
+ * `carded`), appui long `LONG_PRESS_MS` (plein cadre + pause), double-tap (zoom
  * 1 ↔ 2,5 sur une page IMAGE), pincement à deux doigts (#9532, borné par
  * `MAX_SCALE`, centré où les doigts se posent — `useViewerPinch` ; un second
  * doigt n'est jamais un glissé ni un appui long), déplacement d'une image
@@ -623,10 +623,16 @@ export default function MediaViewer({
 
   const audioPage = current !== undefined && kindOf(current) === 'audio';
   const [audioPlaying, setAudioPlaying] = useState(false);
+  /* PAS DE PRESSION (#11207) : la scène est plein écran et chaque toucher y
+     bascule le chrome — l'enfoncer à chaque tap serait un tressaut. Sur une
+     page AUDIO, l'appui long n'ouvre rien : il ne vibre pas. */
   const longPress = useLongPress({
+    pressFeedback: false,
     onOpen: () => {
       heldOpenAtRef.current = performance.now();
-      if (!audioPage) setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
+      if (audioPage) return false;
+      setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
+      return true;
     },
   });
 
