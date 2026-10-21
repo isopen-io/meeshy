@@ -346,14 +346,31 @@ final class ConversationListPreviewLoader: ObservableObject {
         states[conversationId] = messages.isEmpty ? .empty : .loaded(snapshot)
     }
 
-    /// Le clair que l'appareil a DÉJÀ pour des messages chiffrés : le REST ne
+    /// Les messages chiffrés dont l'appareil a DÉJÀ le clair : le REST ne
     /// rend que leur cryptogramme, et le revalider ne doit pas effacer ce que
-    /// le lecteur lisait.
-    private func plaintextOnDevice(_ conversationId: String, sources: [Message]) -> [String: String] {
+    /// le lecteur lisait. Le clair est celui d'une VERSION — d'où le message
+    /// entier, pas son seul texte.
+    private func plaintextOnDevice(_ conversationId: String, sources: [Message]) -> [String: Message] {
         let served = states[conversationId]?.snapshot?.messages ?? []
         return (sources + served)
             .filter { $0.isEncrypted && !$0.content.isEmpty && deviceReadable($0) }
-            .reduce(into: [String: String]()) { known, message in known[message.id] = message.content }
+            .reduce(into: [String: Message]()) { known, message in known[message.id] = message }
+    }
+
+    /// Le clair connu ne recouvre le cryptogramme REST que pour la MÊME
+    /// version du message : modifié (nouveau cryptogramme) ou supprimé depuis
+    /// le déchiffrement, il reste scellé. Fail-closed.
+    static func isSameVersion(_ known: Message, as rest: Message) -> Bool {
+        guard known.deletedAt == nil, rest.deletedAt == nil else { return false }
+        return isSameInstant(known.updatedAt, rest.updatedAt) && isSameInstant(known.editedAt, rest.editedAt)
+    }
+
+    private static func isSameInstant(_ lhs: Date?, _ rhs: Date?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil): return true
+        case let (lhs?, rhs?): return abs(lhs.timeIntervalSince(rhs)) < 0.001
+        default: return false
+        }
     }
 
     private func refresh(
@@ -371,17 +388,29 @@ final class ConversationListPreviewLoader: ObservableObject {
             let username = AuthManager.shared.currentUser?.username
             let prism = readerPrism()
             let ordered = Array(response.data.reversed())
-            let messages = ordered.map { api -> Message in
+            let decoded = ordered.map { api -> Message in
                 var message = api.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: prism)
-                if message.isEncrypted, let clear = onDevice[message.id] { message.content = clear }
+                message.editedAt = api.editedAt
                 return message
+            }
+            let restored = Set(decoded.compactMap { message -> String? in
+                guard message.isEncrypted, let known = onDevice[message.id], Self.isSameVersion(known, as: message) else {
+                    return nil
+                }
+                return message.id
+            })
+            let messages = decoded.map { message -> Message in
+                guard restored.contains(message.id), let known = onDevice[message.id] else { return message }
+                var clear = message
+                clear.content = known.content
+                return clear
             }
             let translations = ordered.reduce(into: [String: [MessageTranslation]]()) { map, api in
                 let readable = (api.translations ?? []).filter { $0.isEncrypted != true }
                 guard !readable.isEmpty else { return }
                 map[api.id] = MessageTranslationMerge.translations(from: readable, originalLanguage: api.originalLanguage)
             }
-            publish(messages, translations: translations, for: conversationId, isReadableOnDevice: { onDevice[$0.id] != nil })
+            publish(messages, translations: translations, for: conversationId, isReadableOnDevice: { restored.contains($0.id) })
             provenance[conversationId] = .network
         } catch {
             Logger.messages.warning("[ConversationList] previewMessages fetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
