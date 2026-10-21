@@ -90,9 +90,9 @@ final class MockReactionOutbox: ReactionOutboxEnqueuing, @unchecked Sendable {
     }
 
     func enqueue(messageId: String, emoji: String, action: ReactionAction, conversationId: String) async {
-        lock.lock()
-        storage.append(Enqueued(messageId: messageId, emoji: emoji, action: action, conversationId: conversationId))
-        lock.unlock()
+        lock.withLock {
+            storage.append(Enqueued(messageId: messageId, emoji: emoji, action: action, conversationId: conversationId))
+        }
     }
 }
 
