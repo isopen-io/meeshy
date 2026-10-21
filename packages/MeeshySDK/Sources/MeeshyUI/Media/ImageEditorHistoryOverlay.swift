@@ -37,10 +37,11 @@ struct ImageEditorHistoryOverlay: View {
                             .foregroundColor(theme.textSecondary)
                             .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                             .background(Circle().fill(theme.inputBackground))
+                            .meeshyTapTarget()
                     }
                     .buttonStyle(.plain)
                 }
-                .padding(MeeshySpacing.lg)
+                .padding(EdgeInsets(top: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.small), leading: MeeshySpacing.lg, bottom: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.small), trailing: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.small)))
 
                 ScrollView {
                     VStack(spacing: MeeshySpacing.xsPlus) {
