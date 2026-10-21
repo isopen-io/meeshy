@@ -181,7 +181,7 @@ class PostDetailViewModel: ObservableObject {
             let apiPost = try await postService.getPost(postId: postId)
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             post = feedPost
-            try? await CacheCoordinator.shared.feed.save([feedPost], for: postId)
+            await bestEffort("postDetailViewModel.feed.savePost", category: .cache) { try await CacheCoordinator.shared.feed.save([feedPost], for: postId) }
 
             // Persist to GRDB
             if let persistence = feedPersistence, let record = PostRecord(from: apiPost) {
@@ -272,7 +272,7 @@ class PostDetailViewModel: ObservableObject {
             seedCommentLikes(from: unique)
             commentCursor = response.pagination?.nextCursor
             hasMoreComments = response.pagination?.hasMore ?? false
-            try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+            await bestEffort("postDetailViewModel.comments.saveThread", category: .cache) { try await CacheCoordinator.shared.comments.save(comments, for: cacheKey) }
 
             // Persist fetched comments to GRDB
             if let persistence = feedPersistence {
@@ -323,7 +323,7 @@ class PostDetailViewModel: ObservableObject {
             // Persiste les réponses sous "replies-{commentId}" pour hydrater
             // l'aperçu (2 premières) instantanément à la ré-ouverture du post
             // (cache-first, miroir de `FeedCommentsSheet`).
-            try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")
+            await bestEffort("postDetailViewModel.comments.saveRepliesPreview", category: .cache) { try await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)") }
         } catch {
             expandedThreads.remove(commentId)
         }
@@ -356,9 +356,9 @@ class PostDetailViewModel: ObservableObject {
             repliesMap[commentId] = existing + unique
             recordRepliesPagination(response.pagination, for: commentId)
             seedCommentLikes(from: unique)
-            try? await CacheCoordinator.shared.comments.save(
+            await bestEffort("postDetailViewModel.comments.saveRepliesPage", category: .cache) { try await CacheCoordinator.shared.comments.save(
                 repliesMap[commentId] ?? [], for: "replies-\(commentId)"
-            )
+            ) }
         } catch {
             // Échec réseau : stopper proprement la pagination (et toute chasse
             // en cours) — le fil reste utilisable avec les pages déjà chargées.
@@ -607,7 +607,7 @@ class PostDetailViewModel: ObservableObject {
                 repliesMap[parentId] = existing
                 // Met à jour l'aperçu en cache pour ne pas réafficher la réponse
                 // supprimée à la ré-ouverture du post.
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(existing, for: "replies-\(parentId)")
+                await bestEffort("postDetailViewModel.comments.pruneDeletedReply", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(existing, for: "replies-\(parentId)") }
             }
             if let idx = comments.firstIndex(where: { $0.id == parentId }), comments[idx].replies > 0 {
                 comments[idx].replies -= 1
@@ -623,7 +623,7 @@ class PostDetailViewModel: ObservableObject {
 
         do {
             try await postService.deleteComment(postId: post.id, commentId: comment.id, reason: reason)
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            await bestEffort("postDetailViewModel.comments.pruneDeletedComment", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)") }
             FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main)))
         } catch {
             comments = snapshotComments
@@ -752,9 +752,9 @@ class PostDetailViewModel: ObservableObject {
                 let reconciledComments = self.comments
                 let reconciledReplies = parentId.flatMap { self.repliesMap[$0] }
                 Task {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledComments, for: "post-\(postId)")
+                    await bestEffort("postDetailViewModel.comments.reconcileCreatedThread", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledComments, for: "post-\(postId)") }
                     if let parentId, let reconciledReplies {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledReplies, for: "replies-\(parentId)")
+                        await bestEffort("postDetailViewModel.comments.reconcileCreatedReplies", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledReplies, for: "replies-\(parentId)") }
                     }
                 }
             }
@@ -773,7 +773,7 @@ class PostDetailViewModel: ObservableObject {
                 // les autres vues resservent la version éditée depuis le cache.
                 let snapshot = self.comments
                 Task {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)")
+                    await bestEffort("postDetailViewModel.comments.applyRemoteEdit", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)") }
                 }
             }
             .store(in: &socketCancellables)
@@ -814,13 +814,13 @@ class PostDetailViewModel: ObservableObject {
                     self.repliesMap[parentId] = existing
                     let snapshot = existing
                     Task {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "replies-\(parentId)")
+                        await bestEffort("postDetailViewModel.comments.applyMediaUpdateReplies", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "replies-\(parentId)") }
                     }
                 } else if let idx = self.comments.firstIndex(where: { $0.id == commentId }) {
                     self.comments[idx].media = media
                     let snapshot = self.comments
                     Task {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)")
+                        await bestEffort("postDetailViewModel.comments.applyMediaUpdateThread", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)") }
                     }
                 }
             }
@@ -871,9 +871,9 @@ class PostDetailViewModel: ObservableObject {
                 let touchedThreads = touchedThreadIds
                 Task {
                     for key in touchedThreads {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(threadSnapshots[key] ?? [], for: "replies-\(key)")
+                        await bestEffort("postDetailViewModel.comments.applyRemoteDeleteReplies", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(threadSnapshots[key] ?? [], for: "replies-\(key)") }
                     }
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)")
+                    await bestEffort("postDetailViewModel.comments.applyRemoteDeleteThread", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)") }
                 }
             }
             .store(in: &socketCancellables)

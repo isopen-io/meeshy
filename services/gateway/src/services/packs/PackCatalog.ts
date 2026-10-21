@@ -31,6 +31,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
+  isFreePack,
   isPackInstalled,
   isPackOwned,
   packChoiceKey,
@@ -38,7 +39,7 @@ import {
   type PackDomain,
   type PackRegistries,
 } from '@meeshy/shared/types/content-pack';
-import { ownedPackKeys } from '@meeshy/shared/types/pack-ownership';
+import { ownedPackKeys, packEligibilityReference, type PackEligibilityRule } from '@meeshy/shared/types/pack-ownership';
 import type { PackInstallationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { GameRefusal } from '../game/GameRefusal';
 import { MeeshSpend, type SpendTx } from '../game/MeeshSpend';
@@ -53,8 +54,10 @@ export type RegistryPack<D> = {
   readonly removable: boolean;
   /** Masqué : absent de la boutique, ni installable s'il ne l'est pas déjà ; servi en LECTURE (une photo gardée se reprend). */
   readonly hidden: boolean;
-  /** Le prix en Meeshes (#10632) ; absent = gratuit, possédé par tout compte inscrit. */
+  /** Le prix en Meeshes (#10632) ; absent (et sans récompense) = gratuit, possédé par tout compte inscrit. */
   readonly price?: number;
+  /** La récompense du jeu qui donne le pack (#11273) : présente, le pack se possède par une ligne, et se gagne par CETTE règle seule. */
+  readonly reward?: PackEligibilityRule;
   /** La version du pack au registre, consignée sur la ligne de dépense. */
   readonly version?: number;
   /** `owned` : la loi de possession (`isPackOwned`) pour ce lecteur ; les domaines sans prix l'ignorent. */
@@ -125,6 +128,10 @@ export type AwardOutcome = { readonly kind: PackAwardOutcome | 'not-found' | 'fr
 /** La ligne de registre rejouée est-elle l'achat de CE pack ? `null` : une autre écriture a gagné la course. */
 const purchasedPack = (meta: unknown): { readonly domain?: unknown; readonly slug?: unknown } | null =>
   typeof meta === 'object' && meta !== null ? (meta as { domain?: unknown; slug?: unknown }) : null;
+
+/** Un pack récompensé se gagne par SA règle (celle du registre), jamais par une autre que l'appelant choisirait (#11273). */
+const awardFitsReward = (award: PackAward, reward: PackEligibilityRule | undefined): boolean =>
+  award.source !== 'game' || reward === undefined || packEligibilityReference(award.rule) === packEligibilityReference(reward);
 
 class PurchaseRefusal extends Error {
   constructor(readonly reason: 'already-owned' | 'not-found') {
@@ -298,7 +305,8 @@ export class PackCatalog<S, D extends S> {
     const registry = this.registryPack(slug);
     const target = registry === undefined && this.spec.community?.priced === true ? await this.spec.community.installable(slug) : null;
     if (registry === undefined && target === null) return { kind: 'not-found' };
-    if ((registry?.price ?? target?.price) === undefined) return { kind: 'free' };
+    if (registry !== undefined ? isFreePack(registry) : target?.price === undefined) return { kind: 'free' };
+    if (!awardFitsReward(award, registry?.reward)) return { kind: 'not-eligible' };
     const outcome = await this.grants.award({ userId, pack: { domain: this.domain, slug }, award });
     if (outcome !== 'granted') return { kind: outcome };
     const installed = this.installedOf(await this.choices(userId))(slug);
@@ -319,9 +327,9 @@ export class PackCatalog<S, D extends S> {
 
   /** La loi de possession pour ce lecteur ; sans pack payant dans le domaine, aucune lecture. */
   private async ownedOf(userId: string): Promise<(pack: RegistryPack<D>) => boolean> {
-    if (!this.spec.registry.some((pack) => pack.price !== undefined)) return () => true;
+    if (this.spec.registry.every(isFreePack)) return () => true;
     const keys = ownedPackKeys(await this.prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } }));
-    return (pack) => isPackOwned({ domain: this.domain, slug: pack.slug, price: pack.price }, keys);
+    return (pack) => isPackOwned({ domain: this.domain, slug: pack.slug, price: pack.price, reward: pack.reward }, keys);
   }
 
   /**

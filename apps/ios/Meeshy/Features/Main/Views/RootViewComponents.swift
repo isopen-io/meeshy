@@ -138,7 +138,7 @@ struct ThemedFeedOverlay: View {
                     let resp = try await PostService.shared.getBookmarks(cursor: nil, limit: 50)
                     let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
                     let posts = resp.data.map { $0.toFeedPost(preferredLanguages: langs) }
-                    try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+                    await bestEffort("rootViewComponents.feed.saveBookmarks", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
                     await MainActor.run {
                         for p in posts where !postBookmarkInFlightIds.contains(p.id) {
                             postBookmarkedIds.insert(p.id)
@@ -187,7 +187,7 @@ struct ThemedFeedOverlay: View {
                 if !current.contains(where: { $0.id == postId }) {
                     var updated = current
                     updated.insert(p, at: 0)
-                    try? await CacheCoordinator.shared.feed.save(updated, for: key)
+                    await bestEffort("rootViewComponents.feed.insertBookmark", category: .cache) { try await CacheCoordinator.shared.feed.save(updated, for: key) }
                 }
                 return current
             }()
@@ -209,7 +209,7 @@ struct ThemedFeedOverlay: View {
                     postBookmarkedIds.remove(postId)
                     postBookmarkDelta[postId, default: 0] -= 1
                     if let snap = snapshotCache {
-                        try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
+                        await bestEffort("rootViewComponents.feed.restoreBookmarks", category: .cache) { try await CacheCoordinator.shared.feed.save(snap, for: "bookmarks") }
                     }
                 }
                 FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
@@ -233,7 +233,7 @@ struct ThemedFeedOverlay: View {
         case .expired, .empty: return
         }
         let updated = current.filter { $0.id != postId }
-        try? await CacheCoordinator.shared.feed.save(updated, for: key)
+        await bestEffort("rootViewComponents.feed.pruneBookmark", category: .cache) { try await CacheCoordinator.shared.feed.save(updated, for: key) }
     }
 
     @MainActor

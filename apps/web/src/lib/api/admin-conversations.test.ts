@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   ADMIN_SOUVERAIN_PREFIXE,
-  adminConversationMessagesQueryKey,
+  adminConversationThreadQueryKey,
+  mergeAdminThreadPages,
+  nextAdminThreadOffset,
   ADMIN_CONVERSATIONS_ROOT_KEY,
   adminConversationsQueryKey,
   decodeAdminInstanceConversation,
@@ -289,12 +291,12 @@ describe('decodeAdminSovereignThread — le fil, dans le type PARTAGÉ', () => {
 describe('la clé de requête porte le préfixe souverain — le point d\'accroche de la NON-persistance', () => {
   test('les deux fabriques de clés en descendent', () => {
     expect(adminConversationsQueryKey('')[0]).toBe(ADMIN_SOUVERAIN_PREFIXE);
-    expect(adminConversationMessagesQueryKey('c1', 0)[0]).toBe(ADMIN_SOUVERAIN_PREFIXE);
+    expect(adminConversationThreadQueryKey('c1')[0]).toBe(ADMIN_SOUVERAIN_PREFIXE);
   });
 
   test('`estClefSouveraine` reconnaît ces clés et REJETTE les autres', () => {
     expect(estClefSouveraine(adminConversationsQueryKey(''))).toBe(true);
-    expect(estClefSouveraine(adminConversationMessagesQueryKey('c1', 0))).toBe(true);
+    expect(estClefSouveraine(adminConversationThreadQueryKey('c1'))).toBe(true);
 
     // Le contraste est ce qui donne sa valeur au prédicat : s'il rendait
     // `true` partout, la v2 cesserait de persister TOUT son cache, et le
@@ -394,5 +396,64 @@ describe('loadAdminConversationList — la requête composée par la liste (#787
 describe('la racine des listes invalide toutes les pages', () => {
   test('la clé d’une liste en descend', () => {
     expect(adminConversationsQueryKey('offset=20').slice(0, 2)).toEqual([...ADMIN_CONVERSATIONS_ROOT_KEY]);
+  });
+});
+
+/**
+ * LE FIL SOUVERAIN EN DÉFILEMENT CONTINU (#11457) — la passerelle sert `createdAt DESC`
+ * par OFFSET : la page 0 est la plus RÉCENTE, chaque page suivante est plus ANCIENNE.
+ * Le fil, lui, se lit du plus ancien en haut au plus récent en bas.
+ */
+describe('les pages du fil souverain se recousent dans l’ordre du fil (#11457)', () => {
+  const row = (id: string, minute: number, extra: Record<string, unknown> = {}) => ({
+    id,
+    conversationId: 'c1',
+    senderId: 'u1',
+    content: id,
+    originalLanguage: 'fr',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    reactionCount: 0,
+    isEncrypted: false,
+    isProtected: false,
+    translations: [],
+    attachmentCount: 0,
+    attachments: [],
+    replyTo: null,
+    createdAt: `2026-06-02T10:${String(minute).padStart(2, '0')}:00.000Z`,
+    sender: { id: 'p1', userId: 'u1', displayName: 'Alice', avatar: null, user: { id: 'u1', username: 'alice' } },
+    ...extra,
+  });
+  const page = (rows: readonly unknown[], offset: number, hasMore: boolean) =>
+    decodeAdminSovereignThread(servie({ data: rows, pagination: { total: 99, offset, limit: 30, hasMore } }), offset);
+
+  test('la page la plus ANCIENNE passe en TÊTE, la plus récente en QUEUE', () => {
+    const recente = page([row('m4', 4), row('m3', 3)], 0, true);
+    const ancienne = page([row('m2', 2), row('m1', 1)], 30, false);
+    expect(mergeAdminThreadPages([recente, ancienne]).messages.map((m) => m.id)).toEqual(['m1', 'm2', 'm3', 'm4']);
+  });
+
+  test('un message arrivé entre deux pages (offsets décalés) ne se peint pas deux fois', () => {
+    const recente = page([row('m4', 4), row('m3', 3)], 0, true);
+    const decalee = page([row('m3', 3), row('m2', 2)], 30, false);
+    expect(mergeAdminThreadPages([recente, decalee]).messages.map((m) => m.id)).toEqual(['m2', 'm3', 'm4']);
+  });
+
+  test('les verdicts de protection et les durées éphémères de TOUTES les pages sont gardés', () => {
+    const recente = page([row('m2', 2, { isProtected: true, content: null })], 0, true);
+    const ancienne = page([row('m1', 1, { ephemeralDuration: 30 })], 30, false);
+    const fil = mergeAdminThreadPages([recente, ancienne]);
+    expect([...fil.protectedIds]).toEqual(['m2']);
+    expect(fil.ephemeralDurations.get('m1')).toBe(30);
+  });
+
+  test('l’offset suivant avance d’une page tant que la passerelle dit qu’il en reste, et s’arrête ensuite', () => {
+    expect(nextAdminThreadOffset(page([row('m2', 2)], 0, true))).toBe(30);
+    expect(nextAdminThreadOffset(page([row('m1', 1)], 30, true))).toBe(60);
+    expect(nextAdminThreadOffset(page([row('m1', 1)], 60, false))).toBeUndefined();
   });
 });

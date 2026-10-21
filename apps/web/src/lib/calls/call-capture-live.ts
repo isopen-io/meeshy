@@ -2,6 +2,7 @@ import { recordingMimeOf } from '@/lib/media/recording-codec';
 import { browserPhotoEnv, developPhoto, PHOTO_MIME, type PhotoEnv } from '@/lib/media/photo-develop';
 
 import { captureStamp, type CaptureFile } from './call-capture-save';
+import { startFrameClock } from './frame-clock';
 
 /**
  * **FILMER, OU PRENDRE, CE QUE L'APPEL MONTRE** (#8625) — le geste sur le
@@ -137,11 +138,11 @@ export function filmedTrack(video: HTMLVideoElement, fps: number): { readonly tr
   const surface = canvasFor(video);
   const track = surface?.canvas.captureStream?.(fps).getVideoTracks()[0];
   if (surface === null || track === undefined) return null;
-  const timer = setInterval(() => paintVideo(surface.context, video), 1000 / fps);
+  const clock = startFrameClock({ fps, tick: () => paintVideo(surface.context, video), driver: () => video });
   return {
     track,
     release: () => {
-      clearInterval(timer);
+      clock.stop();
       track.stop();
     },
   };

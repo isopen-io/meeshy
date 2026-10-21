@@ -896,7 +896,7 @@ struct CommentsSheetView: View {
                 repliesMap[parentId] = existing
                 // Met à jour le cache d'aperçu pour ne pas réafficher la réponse
                 // supprimée à la ré-ouverture du post.
-                try? await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)")
+                await bestEffort("feedCommentsSheet.comments.pruneDeletedReply", category: .cache) { try await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)") }
             }
             var current = liveComments ?? post.comments
             if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
@@ -921,7 +921,7 @@ struct CommentsSheetView: View {
             // ressuscitait le commentaire supprimé à la prochaine ouverture
             // (sheet, détail, overlay story lisent la même clé).
             if comment.parentId == nil, let current = liveComments {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)")
+                await bestEffort("feedCommentsSheet.comments.pruneDeletedComment", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)") }
             }
             FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main)))
         } catch {

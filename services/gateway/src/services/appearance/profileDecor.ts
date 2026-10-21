@@ -12,7 +12,7 @@
  *     Fail-closed : un côté refusé n'écrit RIEN, pas même les autres côtés de la requête.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { isPackOwned, type PackDomain } from '@meeshy/shared/types/content-pack';
+import { isFreePack, isPackOwned, type PackDomain } from '@meeshy/shared/types/content-pack';
 import { frameUsageOf, type PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
 import { ownedPackKeys } from '@meeshy/shared/types/pack-ownership';
 import { canUseFrame, type FrameUseContext } from '@meeshy/shared/types/frame-usage';
@@ -141,8 +141,8 @@ export async function validateProfileDecorWrite({ prisma, index, userId, input }
     if (!parsed.success) return { kind: 'invalid' };
     const entry = resolvePack(index, side.domain, parsed.data, 'equipped');
     if (entry === undefined) return { kind: 'not-owned' };
-    const owned = entry.price === undefined ? new Set<string>() : await ownedKeys();
-    if (!isPackOwned({ domain: side.domain, slug: entry.slug, price: entry.price }, owned)) return { kind: 'not-owned' };
+    const owned = isFreePack(entry) ? new Set<string>() : await ownedKeys();
+    if (!isPackOwned({ domain: side.domain, slug: entry.slug, price: entry.price, reward: entry.reward }, owned)) return { kind: 'not-owned' };
     if (!index.itemKeys(entry).includes(parsed.data.item)) return { kind: 'item-not-found' };
     if (side.frameContext !== null) {
       const usage = frameUsageOf(entry);
