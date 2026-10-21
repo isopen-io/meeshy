@@ -175,22 +175,31 @@ nonisolated struct ShareStagingContext: Sendable {
     }
 }
 
-/// Où une source peut vivre (#11134, défense en profondeur). Le fichier que
-/// `loadFileRepresentation` remet est une copie du système, dans le dossier
-/// temporaire de l'extension ; rien de ce que l'extension possède par ses
-/// propres droits ne doit pouvoir partir en pièce jointe.
+/// Où une source peut vivre (#11134, #11428 — défense en profondeur). Le
+/// fichier que `loadFileRepresentation` remet est une copie du système ; rien
+/// de ce que l'extension possède par ses propres droits ne doit pouvoir partir
+/// en pièce jointe.
 ///
 /// - `sealed` : jamais — le conteneur App Group (session, carnet, fiches) et
 ///   le bundle de l'app ;
-/// - `privateRoots` : jamais, sauf sous une `exemption` — le conteneur de
-///   l'extension, dont seuls `tmp` et `Library/Caches` reçoivent les copies
-///   du système.
+/// - `privateRoots` : jamais, sauf la copie du système — le conteneur de
+///   l'extension, ses caches compris ;
+/// - `systemCopyRoots` : le dossier temporaire, où seul un sous-dossier
+///   `.com.apple.Foundation.NSItemProvider.*` créé par le système est admis,
+///   directement ou sous `TemporaryItems/`. Mesuré au simulateur iOS 27 :
+///   `tmp/TemporaryItems/.com.apple.Foundation.NSItemProvider.i7znue/IMG.jpg`.
+///   Le reste de `tmp` et `Library/Caches` ne l'est plus : ils jugeaient le
+///   chemin de la COPIE, pas son origine, et laissaient passer tout ce que
+///   l'extension y aurait elle-même posé.
 ///
 /// Chaque chemin se juge symlinks résolus : un lien se juge sur sa cible.
 nonisolated struct ShareSourcePolicy: Sendable {
+    static let systemCopyPrefix = ".com.apple.Foundation.NSItemProvider."
+    static let systemCopyParent = "TemporaryItems"
+
     let sealed: [URL]
     let privateRoots: [URL]
-    let exemptions: [URL]
+    let systemCopyRoots: [URL]
 
     static var live: ShareSourcePolicy {
         let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
@@ -198,10 +207,7 @@ nonisolated struct ShareSourcePolicy: Sendable {
         return ShareSourcePolicy(
             sealed: [group, appBundleURL()].compactMap { $0 },
             privateRoots: [home],
-            exemptions: [
-                URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true),
-                home.appendingPathComponent("Library/Caches", isDirectory: true),
-            ]
+            systemCopyRoots: [URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)]
         )
     }
 
@@ -209,7 +215,19 @@ nonisolated struct ShareSourcePolicy: Sendable {
         let path = Self.resolved(url)
         if sealed.contains(where: { Self.isWithin(path, root: $0) }) { return false }
         guard privateRoots.contains(where: { Self.isWithin(path, root: $0) }) else { return true }
-        return exemptions.contains { Self.isWithin(path, root: $0) }
+        return systemCopyRoots.contains { Self.isSystemCopy(path, root: $0) }
+    }
+
+    /// `<racine>/[TemporaryItems/].com.apple.Foundation.NSItemProvider.<x>/<fichier…>`
+    private static func isSystemCopy(_ path: String, root: URL) -> Bool {
+        let rootPath = resolved(root)
+        let base = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+        guard path.hasPrefix(base) else { return false }
+        let components = path.dropFirst(base.count).split(separator: "/").map(String.init)
+        let folder = components.first == systemCopyParent ? 1 : 0
+        guard components.count > folder + 1 else { return false }
+        let name = components[folder]
+        return name.hasPrefix(systemCopyPrefix) && name.count > systemCopyPrefix.count
     }
 
     /// L'extension vit dans `Meeshy.app/PlugIns/` : c'est l'app entière qui
