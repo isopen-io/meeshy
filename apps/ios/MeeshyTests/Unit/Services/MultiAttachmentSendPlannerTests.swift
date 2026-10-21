@@ -107,8 +107,9 @@ final class MultiAttachmentSendPlannerTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy")
-        let source = try String(contentsOf: appRoot.appendingPathComponent(
-            "Features/Main/Views/ConversationView+AttachmentHandlers.swift"), encoding: .utf8)
+        let source = try ["ConversationView+AttachmentHandlers.swift", "AttachmentSendRunner.swift"]
+            .map { try String(contentsOf: appRoot.appendingPathComponent("Features/Main/Views/\($0)"), encoding: .utf8) }
+            .joined(separator: "\n")
         let outbox = try String(contentsOf: appRoot.appendingPathComponent(
             "Features/Main/Views/AttachmentGroupOutbox.swift"), encoding: .utf8)
         let count: (String) -> Int = { needle in source.components(separatedBy: needle).count - 1 }

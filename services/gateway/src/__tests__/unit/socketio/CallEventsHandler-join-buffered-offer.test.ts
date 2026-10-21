@@ -465,8 +465,8 @@ describe('CallEventsHandler — C8 same-user socket dedup on join', () => {
     // NEW socket (churn, second tab) left stale sockets of the same user in
     // the room — every targeted signal then fanned out to N sockets
     // (targetSockets:2, glare risk, double analytics). A P2P call has exactly
-    // one signaling endpoint per user: last join wins.
-    mockJoinCall.mockResolvedValue({ callSession: makeCallSession(null, null), iceServers: [] });
+    // one signaling endpoint per user once answered (#11468): last join wins.
+    mockJoinCall.mockResolvedValue({ callSession: { ...makeCallSession(null, null), answeredAt: new Date() }, iceServers: [] });
     const prisma = makePrisma();
     const { socket, handlers } = makeSocket();
     const staleOwn = makeRemoteSocket('stale-own-socket');

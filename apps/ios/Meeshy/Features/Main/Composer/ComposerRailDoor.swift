@@ -1,5 +1,5 @@
 /// **Les PORTES du rail *leading*** — ce qui fait ENTRER de la matière dans une
-/// scène (#4062, planche rév. 27 § P4, loi 12).
+/// scène (planche § P4, loi 12).
 ///
 /// ## Pourquoi ce type existe à côté de `ComposerDocumentTool`
 ///
@@ -33,8 +33,7 @@ nonisolated enum ComposerRailLevel: Equatable {
     case slide
     /// Un objet de la scène.
     case object
-    /// **La SCÈNE elle-même** — ni la publication, ni une slide, ni un objet
-    /// (#4092).
+    /// **La SCÈNE elle-même** — ni la publication, ni une slide, ni un objet.
     ///
     /// Le dessin a exigé ce niveau : ses traits vivent dans
     /// `slide.effects.drawingStrokes`, donc le ranger en `.slide` était
@@ -45,14 +44,14 @@ nonisolated enum ComposerRailLevel: Equatable {
     /// Le classer `.object` aurait été faux dans l'autre sens : un dessin n'est
     /// pas un objet sélectionnable, empilable et minutable, et le rail
     /// *trailing* lui proposerait des contrôleurs qui ne s'appliquent pas.
-    /// (#4092 veut qu'il le DEVIENNE ; ce niveau disparaîtra alors, et sa
-    /// disparition sera le témoin que la promesse est tenue.)
+    /// Si le dessin devient un objet, ce niveau disparaîtra, et sa disparition
+    /// sera le témoin que la promesse est tenue.
     case scene
 
     /// **Ce que la porte fait naître se VOIT-il sur la scène ?**
     ///
     /// C'est cette question — et elle seule — qui décide de quel côté la porte
-    /// se pose (directive porteur 2026-08-31) :
+    /// se pose :
     ///
     /// > « Sur la rangée à gauche, ce sont les features qui apparaissent sur le
     /// > canvas visuellement ; on préserve sur la ligne canonique la description
@@ -61,9 +60,9 @@ nonisolated enum ComposerRailLevel: Equatable {
     ///
     /// Le `switch` est exhaustif à dessein : un cinquième niveau ne compilera
     /// pas tant qu'il n'aura pas dit s'il se voit. C'est exactement la question
-    /// qu'on oublie de se poser en ajoutant un bouton — et l'oublier avait
-    /// produit deux répartitions, l'une raisonnée par niveau, l'autre recopiée
-    /// dans un littéral (#4561).
+    /// qu'on oublie de se poser en ajoutant un bouton — et l'oublier produirait
+    /// deux répartitions, l'une raisonnée par niveau, l'autre recopiée
+    /// dans un littéral.
     var appearsOnCanvas: Bool {
         switch self {
         case .object, .scene:      return true
@@ -74,9 +73,8 @@ nonisolated enum ComposerRailLevel: Equatable {
 
 nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
 
-    /// **Les deux portes qui ÉCRIVENT, et elles seules** (#6132, directive
-    /// porteur 2026-09-12 : « le choix d'un outil fait disparaître le
-    /// clavier »).
+    /// **Les deux portes qui ÉCRIVENT, et elles seules.** Le choix d'un outil fait
+    /// disparaître le clavier.
     ///
     /// Toutes les autres posent, règlent ou qualifient — aucune ne prend de
     /// texte, donc aucune n'a de raison de laisser le clavier debout. Celles-ci
@@ -93,35 +91,33 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
 
     /// **Ne pose AUCUN objet** : elle donne le focus à la description de la
     /// `MeeshySlide`. En S/R cette description EST le contenu de la
-    /// publication ; en P c'est la légende du média courant (#4045).
+    /// publication ; en P c'est la légende du média courant.
     case description
 
-    /// **Le CORPS du post — son `content`, et rien d'autre** (#4890, directive
-    /// porteur 2026-09-04 : « affiche dans la rangée canonique de quoi modifier
-    /// LE CONTENU du poste »).
+    /// **Le CORPS du post — son `content`, et rien d'autre.**
     ///
     /// ## Pourquoi une porte de plus à côté de `.description`
     ///
     /// Parce qu'en Post ces deux mots désignent DEUX textes, et que le composer
-    /// n'en offrait qu'un. `ComposerSlideTextRole` porte la table : en Post, le
+    /// n'en offrirait qu'un sans cette porte. `ComposerSlideTextRole` porte la table : en Post, le
     /// texte d'une slide est la LÉGENDE de son média (`PostMedia.caption`), et
     /// le `content` de la publication a son propre logement. `.description`
-    /// ouvre le premier ; personne n'ouvrait le second.
+    /// ouvre le premier ; rien d'autre n'ouvre le second.
     ///
-    /// Mesuré au simulateur `Meeshy-iOS26` le 2026-09-04 : un post composé avec
-    /// une scène monte `ComposerSceneSurface`, qui n'a **aucun** champ de
-    /// contenu — ni la rangée du document, ni son `TextEditor`. L'auteur ne
-    /// pouvait pas écrire le corps de son propre post, et rien ne le disait.
+    /// Une scène de post monte `ComposerSceneSurface`, qui n'a **aucun** champ de
+    /// contenu — ni la rangée du document, ni son `TextEditor`. Sans cette porte,
+    /// l'auteur ne pourrait pas écrire le corps de son propre post, et rien ne le
+    /// dirait.
     ///
-    /// > Deux rôles séparés au bon endroit (le binding, #4890) et aucun des deux
-    /// > avals mis à jour : le rôle `.caption` n'avait pas de lecteur, le rôle
-    /// > `.content` n'avait plus d'écrivain. Le défaut est invisible depuis le
+    /// > Deux rôles séparés au bon endroit (le binding) et aucun des deux avals
+    /// > mis à jour : le rôle `.caption` n'aurait pas de lecteur, le rôle
+    /// > `.content` n'aurait plus d'écrivain. Le défaut est invisible depuis le
     /// > site du partage — c'est chez les VOISINS qu'il se voit.
     ///
     /// ## Niveau `.publication`, sans bascule de format
     ///
     /// Un corps de post ne se pose nulle part : il n'a ni position, ni taille,
-    /// ni rotation. Il ne suit donc pas les quatre outils que #4893 fait
+    /// ni rotation. Il ne suit donc pas les quatre outils que le format fait
     /// basculer en Story — il n'y existe simplement pas (voir
     /// `removedFromFormat`), puisqu'en Story le texte de la slide EST le
     /// contenu.
@@ -177,7 +173,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// déplacer.
     case drawing
 
-    /// **Le TEXTE** — un `StoryTextObject` du plan `fg` (#4401).
+    /// **Le TEXTE** — un `StoryTextObject` du plan `fg`.
     ///
     /// La vue `3b` ne le dessine pas dans sa rangée d'outils, et la vue `1c` le
     /// montre pourtant SÉLECTIONNÉ, avec son inspecteur. La contradiction se
@@ -190,9 +186,8 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// texte annulé ne laisse rien derrière lui.
     case text
 
-    /// **Le HASHTAG de la publication** (#4636, directive porteur 2026-08-31 :
-    /// « mettre l'outil hashtag dans la liste des outils d'un slide ou d'une
-    /// publication »).
+    /// **Le HASHTAG de la publication** — l'outil hashtag, dans la liste des outils
+    /// d'un slide ou d'une publication.
     ///
     /// Elle est la JUMELLE de `.mention`, et pas seulement par le glyphe : les
     /// deux désignent une entité que le serveur DÉRIVE du texte. C'est pourquoi
@@ -203,44 +198,38 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// pas sur la scène, il classe ce qui part.
     case hashtag
 
-    /// **Le FOND de la scène** — ce qu'il y a DERRIÈRE tous les objets (#4919).
+    /// **Le FOND de la scène** — ce qu'il y a DERRIÈRE tous les objets.
     ///
-    /// > Directive porteur 2026-09-02 : « Il faut un outil de fond dans la liste
-    /// > de gauche dès qu'on a une scène, pour faciliter la configuration de la
-    /// > scène. »
+    /// > « Il faut un outil de fond dans la liste de gauche dès qu'on a une scène,
+    /// > pour faciliter la configuration de la scène. »
     ///
-    /// ## Elle RENVERSE une ligne du § 2 d'`apps/ios/CLAUDE.md`, et pour une
-    /// ## meilleure raison que sa date
+    /// ## Pourquoi le fond est à GAUCHE
     ///
-    /// Ce tableau rangeait « image/vidéo de fond » sur la LIGNE CANONIQUE, avec
-    /// la description, la mention et le lieu. La directive, postérieure, gagne —
-    /// mais elle ne gagne pas seulement par l'ordre chronologique : **la raison
-    /// écrite au § 2 pour ranger le fond en bas était « rien de tout cela n'a de
-    /// place sur la scène ».** C'est vrai d'une mention, d'un lieu, d'un son de
-    /// fond. C'est faux d'un fond visuel — il n'est rien d'autre QUE la scène,
-    /// et c'est le seul de la liste qui occupe 100 % des pixels du canvas.
-    ///
-    /// La ligne était mal classée ; la directive la corrige au lieu de la
-    /// contredire. Le § 2 bascule dans le même commit que cette porte.
+    /// Le § 2 d'`apps/ios/CLAUDE.md` rangeait « image/vidéo de fond » sur la LIGNE
+    /// CANONIQUE, avec la description, la mention et le lieu — **la raison écrite
+    /// étant « rien de tout cela n'a de place sur la scène ».** C'est vrai d'une
+    /// mention, d'un lieu, d'un son de fond. C'est faux d'un fond visuel — il n'est
+    /// rien d'autre QUE la scène, et c'est le seul de la liste qui occupe 100 % des
+    /// pixels du canvas. La ligne du bas était mal classée.
     ///
     /// ## Niveau `.scene`, comme le DESSIN, et pour la même raison
     ///
     /// `.slide` la ferait paraître sur un `status`, qui n'a pas de toile.
     /// `.object` promettrait à un fond les contrôleurs d'empilement du rail
     /// *trailing* : or un fond n'est ni sélectionnable, ni déplaçable, ni
-    /// au-dessus de quoi que ce soit. `drawing` avait ouvert ce niveau ; le fond
+    /// au-dessus de quoi que ce soit. `drawing` ouvre ce niveau ; le fond
     /// est le second à en avoir besoin, ce qui est le meilleur signe qu'il
     /// n'était pas un cas particulier.
     ///
     /// ## Ce qu'elle ouvre, et ce qu'elle NE prend PAS
     ///
     /// Elle déplie la bande `.palette` — couleurs et effet d'ouverture — qui
-    /// était jusqu'ici INATTEIGNABLE depuis la surface de scène autrement que
+    /// serait sinon INATTEIGNABLE depuis la surface de scène autrement que
     /// par le menu `⋯`, en dépannage assumé (`backgroundPaletteIsReachable`).
     ///
     /// Elle ne prend PAS le son de fond, et c'est une décision, pas un oubli :
     /// il reste servi par `.sound` → feuille → placement `.background`, et sa
-    /// trace vit dans le couloir bas depuis #4918. Les réunir demanderait de
+    /// trace vit dans le couloir bas. Les réunir demanderait de
     /// retirer le placement de la feuille de son — un changement de geste sur un
     /// chemin livré, qui mérite sa propre décision.
     case background
@@ -250,15 +239,14 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// `switch` exhaustif : une septième porte ne compile pas tant qu'elle n'a
     /// pas dit sur quoi elle agit — ce qui est exactement la question qu'on
     /// oublie de se poser en ajoutant un bouton.
-    /// **Le niveau dépend de DEUX termes : la porte ET le format** (#4893,
-    /// directive porteur 2026-09-02).
+    /// **Le niveau dépend de DEUX termes : la porte ET le format.**
     ///
     /// > « Il faut placer l'outil géolocalisation, hashtag, corpus de texte et
     /// > mention à GAUCHE lorsqu'on est en mode Story afin de fixer chaque
     /// > position à chaque story, et on laisse en bas pour chaque Réel et
     /// > Post. »
     ///
-    /// La raison est dans la directive : **en Story ces quatre outils POSENT
+    /// La raison est dans cette citation : **en Story ces quatre outils POSENT
     /// quelque chose de positionnable** — « fixer chaque position à chaque
     /// story ». Un lieu, un hashtag, une mention et un corpus de texte y sont
     /// des objets qu'on place, qu'on agrandit et qu'on tourne, donc du niveau
@@ -270,7 +258,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// > qui change est ce que le format permet d'en faire.
     ///
     /// Le `switch` reste EXHAUSTIF sur la porte : une dixième porte ne compile
-    /// pas tant qu'elle n'a pas dit sur quoi elle agit — et, désormais, si
+    /// pas tant qu'elle n'a pas dit sur quoi elle agit — et si
     /// cela dépend du format.
     func level(for format: ComposerFormat) -> ComposerRailLevel {
         switch self {
@@ -281,22 +269,20 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         // à poser, donc rien qui puisse devenir un objet.
         case .content:
             return .publication
-        // **Le corpus de texte POSE, dans TOUS les formats** (directive porteur
-        // 2026-09-05 : « mettre sur la rangée colonne gauche toutes les
-        // modifications spécifiques à la scène et non à la publication de type
-        // Post »).
+        // **Le corpus de texte POSE, dans TOUS les formats.** Il s'agit de « mettre
+        // sur la rangée colonne gauche toutes les modifications spécifiques à la scène
+        // et non à la publication de type Post ».
         //
-        // Il basculait par format depuis #4893, et la mesure a tranché contre
-        // cette bascule : `handleRailDoor(.text)` appelle `viewModel.addText()`
-        // puis ouvre l'éditeur d'objet — **quel que soit le format**. Un objet
-        // texte se pose, se déplace, se pince et se tourne sur la scène d'un
-        // POST exactement comme sur celle d'une Story.
+        // `handleRailDoor(.text)` appelle `viewModel.addText()` puis ouvre l'éditeur
+        // d'objet — **quel que soit le format**. Un objet texte se pose, se déplace,
+        // se pince et se tourne sur la scène d'un POST exactement comme sur celle
+        // d'une Story.
         //
-        // > La porte était donc rangée en bas d'après ce que le format LAISSAIT
-        // > croire, jamais d'après ce qu'elle FAIT. Le corps du post a sa propre
-        // > porte (`.content`) depuis #4890 ; c'est elle qui qualifie la
-        // > publication, et son existence est ce qui rend le classement de
-        // > `.text` en `.publication` non seulement faux mais inutile.
+        // > Ranger la porte en bas d'après ce que le format LAISSE croire, plutôt que
+        // > d'après ce qu'elle FAIT, serait faux. Le corps du post a sa propre porte
+        // > (`.content`) ; c'est elle qui qualifie la publication, et son existence
+        // > rend le classement de `.text` en `.publication` non seulement faux mais
+        // > inutile.
         case .text:
             return .object
         // La mention, le lieu et le hashtag, eux, gardent leur bascule : hors
@@ -312,7 +298,7 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         // Le DESSIN et le FOND visent la scène elle-même — ni la publication,
         // ni une slide, ni un objet. Le fond ne bascule PAS par format : il EST
         // la scène, quel que soit le profil, et c'est ce qui le distingue des
-        // quatre outils que #4893 déplace.
+        // quatre outils que le format déplace.
         case .drawing, .background:
             return .scene
         }
@@ -321,20 +307,17 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// L'ordre du rail, de haut en bas. Écrit en toutes lettres plutôt que
     /// déduit d'`allCases` : l'ordre de déclaration peut bouger sans que
     /// personne le décide, la position que les doigts apprennent, non.
-    /// **`.description` n'y figure plus** (directive porteur 2026-09-05 : « il
-    /// existe déjà un moyen de mettre à jour la description de la scène, il
-    /// faut enlever cela de la rangée canonique »).
-    ///
-    /// Le volet sous la scène (`sceneDescriptionPanel`, son chevron toujours
-    /// disponible depuis #4993) EST ce moyen, et il est meilleur que la porte :
-    /// il se peint PAR-DESSUS le média que la description décrit, donc l'auteur
-    /// voit ce qu'il légende. Une porte qui ouvre le même volet est un second
-    /// bouton pour un seul chemin — le motif que le § 3 d'`apps/ios/CLAUDE.md`
-    /// nomme « une porte n'a pas de JUMELLE ».
+    /// **`.description` n'y figure pas.** Il existe déjà un moyen de mettre à jour
+    /// la description de la scène : le volet sous la scène
+    /// (`sceneDescriptionPanel`, son chevron toujours disponible) EST ce moyen, et
+    /// il est meilleur que la porte : il se peint PAR-DESSUS le média que la
+    /// description décrit, donc l'auteur voit ce qu'il légende. Une porte qui
+    /// ouvre le même volet est un second bouton pour un seul chemin — le motif que
+    /// le § 3 d'`apps/ios/CLAUDE.md` nomme « une porte n'a pas de JUMELLE ».
     ///
     /// La porte reste un CAS de l'énuméré : `level`, le badge et le glyphe la
-    /// décrivent toujours, et la retirer de l'énuméré ferait tomber des sites
-    /// qui la classent sans l'offrir. Ce qui disparaît est son entrée de rail.
+    /// décrivent toujours, et la retirer de l'énuméré ferait tomber des sites qui
+    /// la classent sans l'offrir. Ce qui manque est son entrée de rail.
     static let canonicalRail: [ComposerRailDoor] = [
         .content, .media, .sound, .text, .background, .drawing,
         .sticker, .mention, .hashtag, .place
@@ -356,9 +339,9 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
         case .content:     return "doc.plaintext"
         case .media:       return "photo"
         case .sound:       return "music.note"
-        // **Pas un smiley** (directive porteur 2026-09-01) : cette porte
+        // **Pas un smiley** : cette porte
         // n'ouvre pas un clavier d'emoji, elle ouvre une palette de
-        // CONSTRUCTIONS (#4579) — lieu, heure, décorations, « Mes stickers ».
+        // CONSTRUCTIONS — lieu, heure, décorations, « Mes stickers ».
         // Un visage y dirait le contenu d'un seul de ses cinq onglets.
         //
         // Aucun glyphe Apple ne s'appelle « sticker » ni « peel » — vérifié
@@ -431,19 +414,19 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     ///
     /// En STORY, le paragraphe n'a pas de place — non parce qu'une story se
     /// passerait de texte, mais parce qu'elle n'a pas de LÉGENDE distincte à
-    /// écrire : `ComposerRailDoor.description` le dit depuis #4045, « en S/R
+    /// écrire : `ComposerRailDoor.description` le dit, « en S/R
     /// cette description EST le contenu de la publication ». Une porte qui
     /// promettrait d'ajouter une légende à côté du contenu ouvrirait un second
     /// champ pour un seul texte.
     ///
     /// > « À la place de paragraphe c'est donc le corpus de texte qu'on doit
-    /// > afficher en mode story » — directive porteur 2026-09-02.
+    /// > afficher en mode story »
     ///
     /// Le corpus (`.text`) prend donc la place, et il y est POSABLE : c'est la
     /// même bascule que `level(for:)`, vue depuis la présence plutôt que
     /// depuis le niveau.
     ///
-    /// **Le CORPS (`.content`) n'existe QU'EN POST** (#4890). Ailleurs, le texte
+    /// **Le CORPS (`.content`) n'existe QU'EN POST**. Ailleurs, le texte
     /// de la slide EST le contenu de la publication — lui offrir une porte
     /// distincte ouvrirait, là aussi, un second champ pour un seul texte : la
     /// faute symétrique de celle que `.description` évite en Story.
@@ -465,27 +448,26 @@ nonisolated enum ComposerRailDoor: String, CaseIterable, Equatable {
     /// humeur d'une heure ne dit pas d'où elle est écrite ». C'est un choix
     /// produit, et il se déclare.
     ///
-    /// > **Ce retrait a longtemps tenu par ACCIDENT.** Le lieu était classé
-    /// > `.object`, donc écarté par la règle de la toile — un effet de bord
-    /// > d'une classification fausse. Corriger la classification (#4561) a
-    /// > rendu la porte au Mood, et seul le témoin l'a vu.
+    /// > **Ce retrait ne doit pas tenir par ACCIDENT.** Le lieu classé `.object`
+    /// > serait écarté par la règle de la toile — un effet de bord d'une
+    /// > classification fausse. Corriger la classification rend la porte au Mood,
+    /// > et seul le témoin le voit.
     ///
     /// La leçon vaut au-delà de ce cas : **une règle générale qui remplace un
     /// effet de bord doit vérifier ce que cet effet de bord PROTÉGEAIT.** Une
     /// protection non déclarée ne se signale pas quand on la retire — elle
     /// n'était écrite nulle part.
     ///
-    /// **`.text` y entre au #4893, et c'est la leçon ci-dessus rejouée sur une
-    /// autre porte.** Le corpus de texte était tenu hors du Mood par ACCIDENT :
-    /// il était `.object`, donc écarté par la règle de la toile. La bascule par
-    /// format le rend `.publication` hors Story — la protection tombe, et le
-    /// Mood se retrouverait avec DEUX champs de texte, le sien
-    /// (`ComposerMoodSurface.text`) et une porte qui en ouvre un second.
+    /// **`.text` est aussi retirée du Mood — la leçon ci-dessus sur une autre
+    /// porte.** Le corpus de texte était tenu hors du Mood par ACCIDENT : il était
+    /// `.object`, donc écarté par la règle de la toile. La bascule par format le
+    /// rend `.publication` hors Story — la protection tombe, et le Mood se
+    /// retrouverait avec DEUX champs de texte, le sien (`ComposerMoodSurface.text`)
+    /// et une porte qui en ouvre un second.
     ///
-    /// > La règle est écrite deux paragraphes plus haut, elle a coûté une
-    /// > régression à `.place`, et elle vient d'être payée une seconde fois par
-    /// > le lot qui la cite. **Une protection non déclarée ne se signale pas
-    /// > quand on la retire** — seul `test_laPorteTexte_disparaitDunStatus` l'a
-    /// > vue.
+    /// > La règle est écrite deux paragraphes plus haut ; elle a coûté une
+    /// > régression à `.place`, puis à `.text`. **Une protection non déclarée ne se
+    /// > signale pas quand on la retire** — seul `test_laPorteTexte_disparaitDunStatus`
+    /// > la voit.
     private static let removedFromStatus: Set<ComposerRailDoor> = [.place, .text]
 }

@@ -131,7 +131,7 @@ function makeRoom(ids: ReadonlyArray<string>) {
 
 async function join(opts: { firstFetchFails?: boolean } = {}) {
   mockJoinCall.mockResolvedValue({
-    callSession: { id: CALL_ID, conversationId: CONV_ID, mode: 'audio', participants: [makeParticipant(PEER_ID), makeParticipant(JOINER_ID)] },
+    callSession: { id: CALL_ID, conversationId: CONV_ID, mode: 'audio', answeredAt: new Date(), participants: [makeParticipant(PEER_ID), makeParticipant(JOINER_ID)] },
     iceServers: [],
   });
   const room = makeRoom([JOINER_SOCKET, STALE_SOCKET, PEER_SOCKET, ORPHAN_SOCKET]);

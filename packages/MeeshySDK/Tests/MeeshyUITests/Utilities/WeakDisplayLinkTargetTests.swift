@@ -24,12 +24,13 @@ final class WeakDisplayLinkTargetTests: XCTestCase {
         XCTAssertEqual(link.preferredFrameRateRange.preferred, 60)
     }
 
-    func test_makeLink_withMeterRange_isCappedAt30HzAndPrefers20Hz() {
+    func test_makeLink_withMeterRange_isCappedAt30HzAndPrefers20Hz() throws {
         let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .meter) { _ in }
         defer { link.invalidate() }
         XCTAssertEqual(link.preferredFrameRateRange.maximum, 30, "le vumètre ne tire jamais au-delà de 30 Hz")
         XCTAssertEqual(link.preferredFrameRateRange.preferred, 20, "les 15 barres couvrent 0,75 s, comme au temps du minuteur")
-        XCTAssertLessThanOrEqual(link.preferredFrameRateRange.minimum, link.preferredFrameRateRange.preferred)
+        let preferred = try XCTUnwrap(link.preferredFrameRateRange.preferred)
+        XCTAssertLessThanOrEqual(link.preferredFrameRateRange.minimum, preferred)
     }
 
     func test_pinnedRange_withFps_pinsMinimumMaximumAndPreferredToFps() {

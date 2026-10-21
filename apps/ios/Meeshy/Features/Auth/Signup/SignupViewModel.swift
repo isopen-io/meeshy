@@ -15,13 +15,13 @@ import MeeshyUI
 @MainActor
 protocol SignupRegistering: AnyObject {
     /// Crée le compte et APPLIQUE la session — ou rend l'adresse à vérifier
-    /// quand la passerelle ne sert aucune session (revendication #8214).
+    /// quand la passerelle ne sert aucune session (revendication d'adresse).
     /// Lève :
     /// - `MeeshyError.rejected(APIRejection)` — refus typé par champ ;
     /// - `PhoneOwnershipConflict` — numéro déjà rattaché à un compte vérifié ;
     /// - `MeeshyError.network(…)` — réseau indisponible.
     func register(_ request: RegisterRequest) async throws -> RegistrationOutcome
-    /// Crée le compte SANS poser la session (#8288) : la carte de l'inscription
+    /// Crée le compte SANS poser la session : la carte de l'inscription
     /// la tient le temps de recevoir son code. Mêmes refus que `register`.
     func registerHoldingSession(_ request: RegisterRequest) async throws -> RegistrationHold
 }
@@ -54,7 +54,7 @@ final class AuthManagerSignupRegistrar: SignupRegistering {
     }
 }
 
-// MARK: - Le lien de connexion d'une adresse déjà utilisée (#8216)
+// MARK: - Le lien de connexion d'une adresse déjà utilisée
 
 /// Demander le code et le lien de connexion d'une adresse — la porte « e-mail
 /// seul » que `MagicLinkView` emprunte (`AuthService.requestEmailCode`), jamais
@@ -78,8 +78,8 @@ final class AuthServiceSignInLinkRequester: SignInLinkRequesting {
     }
 }
 
-/// L'adresse que l'inscription remet à la connexion quand elle y bascule
-/// (#8216) : l'accueil referme l'inscription AVANT que `LoginView` n'existe,
+/// L'adresse que l'inscription remet à la connexion quand elle y bascule :
+/// l'accueil referme l'inscription AVANT que `LoginView` n'existe,
 /// l'adresse l'y attend donc ici, en mémoire vive, et ne sert qu'une fois.
 @MainActor
 final class LoginEmailHandoff {
@@ -104,7 +104,7 @@ final class LoginEmailHandoff {
 /// Les quatre saisies de l'écran, et rien d'autre : un refus qui ne vise aucune
 /// d'elles va au bandeau, jamais sous un champ arbitraire.
 enum SignupField: String, CaseIterable, Hashable {
-    /// Le pseudo a sa PROPRE saisie depuis #6479 — l'écran le montre et
+    /// Le pseudo a sa PROPRE saisie — l'écran le montre et
     /// l'envoie, donc un refus qui le vise doit se poser sous lui.
     case username
     case displayName
@@ -128,10 +128,10 @@ enum SignupSubmitOutcome: Equatable {
 /// parle à personne d'autre qu'à `SignupRegistering`.
 ///
 /// **Aucun appel réseau ne précède l'envoi.** Pas de vérification de
-/// disponibilité, pas de `debounce`, pas d'`asyncAfter` : le wizard remplacé en
-/// tenait trois (pseudo, e-mail, téléphone), chacun avec sa seconde d'attente,
-/// et ils ne pouvaient de toute façon plus répondre « déjà pris » depuis #4158.
-/// Ce qu'ils coûtaient — trois écrans et trois attentes — n'achetait plus rien.
+/// disponibilité, pas de `debounce`, pas d'`asyncAfter` : une vérification
+/// de disponibilité ne pourrait de toute façon plus répondre « déjà pris »,
+/// et les attentes qu'elle coûterait (trois écrans, trois attentes)
+/// n'achèteraient rien.
 @MainActor
 final class SignupViewModel: ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double-free au démontage
@@ -152,16 +152,16 @@ final class SignupViewModel: ObservableObject {
     /// Vrai quand le serveur a répondu `EMAIL_TAKEN` : l'écran offre alors
     /// « Se connecter » sous le champ, au lieu de laisser l'utilisateur deviner.
     @Published private(set) var emailAlreadyRegistered = false
-    /// Les pseudos LIBRES à proposer quand celui qu'on envoyait est pris
-    /// (#6479). Vide partout ailleurs.
+    /// Les pseudos LIBRES à proposer quand celui qu'on envoyait est pris.
+    /// Vide partout ailleurs.
     @Published private(set) var usernameSuggestions: [String] = []
     /// L'adresse à vérifier quand le compte n'est pas encore actif — une
-    /// revendication d'adresse (#8214) : l'écran présente alors la saisie du
+    /// revendication d'adresse : l'écran présente alors la saisie du
     /// code au lieu d'entrer dans l'app. Le mot de passe est déjà sur le
     /// compte — il ne repart pas.
     @Published var pendingVerification: PendingEmailVerification?
-    /// Le code et le lien de connexion PARTIS vers l'adresse déjà utilisée
-    /// (#8216) : l'écran présente alors l'attente de `MagicLinkView`.
+    /// Le code et le lien de connexion PARTIS vers l'adresse déjà utilisée :
+    /// l'écran présente alors l'attente de `MagicLinkView`.
     @Published var signInLink: SentEmailCode?
     @Published private(set) var isRequestingSignInLink = false
     /// Pourquoi le lien n'est pas parti — dit SOUS le geste qui l'a demandé,
@@ -170,15 +170,15 @@ final class SignupViewModel: ObservableObject {
     /// L'adresse, telle que tapée, que la passerelle a refusée comme DÉJÀ
     /// UTILISÉE : le refus et ses gestes ne valent que pour elle.
     private var rejectedEmail: String?
-    /// Le détenteur MASQUÉ de l'adresse refusée (#8214) : l'écran demande
+    /// Le détenteur MASQUÉ de l'adresse refusée : l'écran demande
     /// « Est-ce vous ? ». `nil` sur une passerelle qui ne le sert pas encore —
     /// l'écran retombe alors sur la récupération seule.
     @Published private(set) var emailOwner: APIRejection.EmailOwner?
 
-    // MARK: - Les phases (#8288)
+    // MARK: - Les phases
 
     /// Le champ du numéro a été QUITTÉ avec une saisie, ou un envoi tenté : son
-    /// refus se dit désormais sous lui (#9343, `SignupPhases.phoneRefusalShown`).
+    /// refus se dit sous lui (`SignupPhases.phoneRefusalShown`).
     @Published private(set) var isPhoneChecked = false
     /// Ce qui est PARU — monotone (`SignupProgress`).
     @Published private(set) var progress: SignupProgress = .initial
@@ -191,12 +191,12 @@ final class SignupViewModel: ObservableObject {
     @Published private(set) var codeEntry: EmailVerificationViewModel?
 
     private let registrar: any SignupRegistering
-    /// Le code du lien d'invitation ouvert avant l'inscription (#8075).
+    /// Le code du lien d'invitation ouvert avant l'inscription.
     private let referrals: PendingReferralStoreProviding
     private let linkRequester: any SignInLinkRequesting
-    /// Pose la session TENUE par la carte (#8288).
+    /// Pose la session TENUE par la carte.
     private let confirmer: EmailVerificationConfirming
-    /// Le préchargement de l'arrivée, sans seconde fête (#8089, #8288).
+    /// Le préchargement de l'arrivée, sans seconde fête.
     private let celebration: ArrivalCelebrating
     private let makeCodeEntry: (SignupCodeStep) -> EmailVerificationViewModel
 
@@ -228,13 +228,13 @@ final class SignupViewModel: ObservableObject {
 
     // MARK: - Dérivés
 
-    /// Le bouton est actif dès que l'adresse ET le numéro sont valides (#9343),
+    /// Le bouton est actif dès que l'adresse ET le numéro sont valides,
     /// et que ce qui a été tapé ailleurs tient ses bornes. Rien de réseau
     /// n'entre dans cette décision.
     var canSubmit: Bool { form.canSubmit && !isSubmitting }
 
     /// Le refus du serveur d'abord ; à défaut, ce que la saisie viole DÉJÀ —
-    /// la borne du pseudo se dit PENDANT la frappe (#8082), pas après un aller-retour.
+    /// la borne du pseudo se dit PENDANT la frappe, pas après un aller-retour.
     func error(for field: SignupField) -> String? {
         if field == .email, emailAlreadyRegistered {
             return showsEmailTakenActions ? Self.emailTakenMessage : nil
@@ -242,8 +242,8 @@ final class SignupViewModel: ObservableObject {
         return fieldErrors[field] ?? liveError(for: field)
     }
 
-    /// L'adresse refusée comme DÉJÀ UTILISÉE est toujours celle du champ
-    /// (#8216) : l'écran offre alors le lien de connexion et le mot de passe
+    /// L'adresse refusée comme DÉJÀ UTILISÉE est toujours celle du champ :
+    /// l'écran offre alors le lien de connexion et le mot de passe
     /// oublié. Corrigée, elle n'est plus celle d'un compte connu.
     var showsEmailTakenActions: Bool {
         emailAlreadyRegistered && rejectedEmail == form.email
@@ -256,7 +256,7 @@ final class SignupViewModel: ObservableObject {
         form.isEmailValid ? form.email.trimmingCharacters(in: .whitespacesAndNewlines) : nil
     }
 
-    // MARK: - « Ce n'est pas moi » (#8214 × #8216)
+    // MARK: - « Ce n'est pas moi »
 
     /// Renvoie la MÊME inscription en REVENDIQUANT l'adresse : la passerelle
     /// crée le compte sans session et envoie un code à l'adresse — sa preuve
@@ -268,7 +268,7 @@ final class SignupViewModel: ObservableObject {
         return await submit(claimingEmail: true)
     }
 
-    // MARK: - Lien de connexion (#8216)
+    // MARK: - Lien de connexion
 
     /// « Recevoir un lien de connexion » : UN geste envoie le code et le lien
     /// à l'adresse refusée, normalisée comme l'inscription l'aurait envoyée.
@@ -304,9 +304,9 @@ final class SignupViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Le numéro, requis par l'écran (#9343)
+    // MARK: - Le numéro, requis par l'écran
 
-    /// Le champ du numéro est QUITTÉ : une saisie implausible dit désormais son
+    /// Le champ du numéro est QUITTÉ : une saisie implausible dit son
     /// refus. Un champ quitté VIDE ne dit rien — on peut aller choisir son pays
     /// sans se faire gronder.
     func notePhoneFieldLeft() {
@@ -314,7 +314,7 @@ final class SignupViewModel: ObservableObject {
         isPhoneChecked = true
     }
 
-    /// « S'inscrire » est touché INACTIF (#9362) : un bouton mort qui ne dit
+    /// « S'inscrire » est touché INACTIF : un bouton mort qui ne dit
     /// rien laisse l'utilisateur sans raison. Si le numéro est refusé, son
     /// motif paraît sous le champ et l'écran y rend la main (le champ rendu).
     /// Miroir web : la tentative d'envoi refusée (D-169).
@@ -365,7 +365,7 @@ final class SignupViewModel: ObservableObject {
         defer { isSubmitting = false }
 
         do {
-            // Le code d'invitation VOYAGE avec l'inscription (#8058) : la
+            // Le code d'invitation VOYAGE avec l'inscription : la
             // passerelle rattache le compte au parrain, et un code invalide ne
             // bloque jamais la création. Le compte existe dès qu'elle répond —
             // session ouverte ou code à saisir — donc le code a servi.
@@ -374,7 +374,7 @@ final class SignupViewModel: ObservableObject {
             let outcome = try await registrar.register(request)
             referrals.forget()
             if case .verificationRequired(let pending) = outcome {
-                // #8288 — le code s'attend DANS la carte, jamais sur un autre écran.
+                // Le code s'attend DANS la carte, jamais sur un autre écran.
                 pendingVerification = pending
                 beginCode(SignupCodeStep(email: pending.email, pendingSessionToken: pending.pendingSessionToken, held: nil))
             }
@@ -385,7 +385,7 @@ final class SignupViewModel: ObservableObject {
         }
     }
 
-    /// Un nouvel envoi efface les refus d'avant : un refus qui survit à la
+    /// Un nouvel envoi efface les refus précédents : un refus qui survit à la
     /// correction qu'il a provoquée est un mensonge. Les suggestions décrivent
     /// un refus RÉVOLU : les laisser survivre proposerait des pseudos pour un
     /// conflit qui n'est peut-être plus.
@@ -400,7 +400,7 @@ final class SignupViewModel: ObservableObject {
         pendingVerification = nil
     }
 
-    // MARK: - Phases et carte (#8288)
+    // MARK: - Phases et carte
 
     var cardStage: SignupCardStage {
         switch card {
@@ -466,7 +466,7 @@ final class SignupViewModel: ObservableObject {
     }
 
     /// Le code juste valide toujours ; le lien ouvert AILLEURS ne valide que le
-    /// compte dont la session est tenue ici — « si et seulement si » (#8083) :
+    /// compte dont la session est tenue ici — « si et seulement si » :
     /// un compte sans session n'entre que par le code saisi sur cet appareil.
     private func verify(by proof: SignupProof) {
         guard case .awaitingCode(let step) = card else { return }
@@ -476,7 +476,7 @@ final class SignupViewModel: ObservableObject {
 
     /// Ce qui ouvre la session pour « S'inscrire » sans code ou « Parler aux
     /// autres » — `nil` quand le compte n'a encore rien à ouvrir. L'hôte
-    /// l'appelle une fois l'inscription refermée (#8059).
+    /// l'appelle une fois l'inscription refermée.
     func sessionOpener() -> ProvenSessionOpener? {
         switch card {
         case .editing:
@@ -497,7 +497,7 @@ final class SignupViewModel: ObservableObject {
         let confirmer = self.confirmer
         let celebration = self.celebration
         return {
-            // #10450 — une session refusée par l'appareil ne prépare aucune arrivée.
+            // Une session refusée par l'appareil ne prépare aucune arrivée.
             guard confirmer.openSession(held) else { return }
             celebration.prepare(userId: held.user.id)
         }
@@ -539,7 +539,7 @@ final class SignupViewModel: ObservableObject {
                   let served = rejection.message(forField: name) else { continue }
             // Un refus de SCHÉMA porte le texte d'Ajv (« must NOT have more
             // than 16 characters ») — anglais, technique. Sous le pseudo, la
-            // règle dans la langue du lecteur le remplace (#8082).
+            // règle dans la langue du lecteur le remplace.
             let message = field == .username && rejection.code == Self.validationErrorCode
                 ? Self.usernameRuleMessage
                 : served
@@ -557,17 +557,16 @@ final class SignupViewModel: ObservableObject {
         }
 
         fieldErrors = placed
-        // Les pseudos LIBRES servis avec `USERNAME_TAKEN` (#6479). Le SDK les
-        // décode déjà (`APIRejection.suggestions`) ; personne ne les lisait.
-        // Depuis que l'écran ENVOIE son pseudo, une collision est un REFUS et
-        // non plus un renommage silencieux — sans ces trois valeurs, ce refus
-        // serait un mur.
+        // Les pseudos LIBRES servis avec `USERNAME_TAKEN`. Le SDK les
+        // décode (`APIRejection.suggestions`). Comme l'écran ENVOIE son pseudo,
+        // une collision est un REFUS et non un renommage silencieux — sans ces
+        // trois valeurs, ce refus serait un mur.
         usernameSuggestions = rejection.suggestions
         // Un refus qu'aucun champ ne porte doit rester VISIBLE : sans ce
         // repli, un code inconnu effacerait le formulaire de toute trace de
         // l'échec et le bouton redeviendrait actif sans explication.
         //
-        // Le bandeau NE REND JAMAIS `rejection.message` tel quel (#5325) : un
+        // Le bandeau NE REND JAMAIS `rejection.message` tel quel : un
         // contrat de passerelle plus ancien que l'app (validation Fastify par
         // défaut, hors de `sendError`) porte dans ce champ une phrase
         // TECHNIQUE en anglais (« body must have required property
@@ -595,11 +594,9 @@ final class SignupViewModel: ObservableObject {
 
     /// Le champ SERVEUR → la saisie qui le porte à l'écran.
     ///
-    /// LA TABLE A CHANGÉ (#6479). `username` se repliait sur le nom affiché
-    /// parce qu'aucune saisie ne le portait — « ce pseudo est déjà pris »
-    /// aurait flotté au-dessus d'un formulaire sans champ pseudo. L'écran en a
-    /// un désormais, et il ENVOIE sa valeur : le refus se pose sous lui, sinon
-    /// le message accuse un champ que l'utilisateur n'a pas touché.
+    /// `username` a sa saisie : l'écran montre le pseudo et ENVOIE sa valeur,
+    /// donc le refus (« ce pseudo est déjà pris ») se pose sous lui, sinon le
+    /// message accuserait un champ que l'utilisateur n'a pas touché.
     ///
     /// `firstName`/`lastName` restent sous le nom affiché : la passerelle les
     /// dérive de lui, et c'est la seule saisie qui permet de les changer.
@@ -630,7 +627,7 @@ final class SignupViewModel: ObservableObject {
 
     // MARK: - Copies de refus
 
-    /// La borne du pseudo, dite sous le champ PENDANT la saisie (#8082). Les
+    /// La borne du pseudo, dite sous le champ PENDANT la saisie. Les
     /// nombres viennent de `SignupForm` — miroir du schéma partagé — jamais
     /// d'un littéral de la copie.
     static func usernameRefusalMessage(_ refusal: SignupForm.UsernameRefusal) -> String {
@@ -668,7 +665,7 @@ final class SignupViewModel: ObservableObject {
         )
     }
 
-    /// CE QUE LE REFUS DU NUMÉRO DIT (#9343) — les mêmes mots que le web
+    /// CE QUE LE REFUS DU NUMÉRO DIT — les mêmes mots que le web
     /// (`signup.phone.required` / `.tooShort` / `.implausible`). Les deux motifs
     /// de remplissage se corrigent de la même façon : vérifier son numéro.
     static func phoneRefusalMessage(_ refusal: SignupForm.PhoneRefusal) -> String {
@@ -704,7 +701,7 @@ final class SignupViewModel: ObservableObject {
         bundle: .main
     )
 
-    /// Ce que dit le champ d'une adresse DÉJÀ UTILISÉE (#8216) — jamais le
+    /// Ce que dit le champ d'une adresse DÉJÀ UTILISÉE — jamais le
     /// texte du serveur, et le mot « compte » plutôt que « adresse prise » :
     /// l'utilisateur apprend qu'il A un compte, pas qu'il s'est trompé.
     static let emailTakenMessage = String(
@@ -726,8 +723,8 @@ final class SignupViewModel: ObservableObject {
     )
 
     /// Le refus RENVOYÉ PAR LA PASSERELLE mais qu'AUCUN champ ne porte : un
-    /// code inconnu, une clé de validation que le client ne mappe pas, ou —
-    /// le cas qui a motivé #5325 — une réponse hors du contrat `sendError`
+    /// code inconnu, une clé de validation que le client ne mappe pas, ou
+    /// une réponse hors du contrat `sendError`
     /// (validation Fastify par défaut) dont `message` est un texte technique
     /// anglais. Jamais affiché seul : `rejectionBannerMessage(for:)` lui
     /// adjoint le code machine ou le statut HTTP.
@@ -738,12 +735,12 @@ final class SignupViewModel: ObservableObject {
     )
 }
 
-// MARK: - La carte de l'inscription (#8288)
+// MARK: - La carte de l'inscription
 
 /// Le compte que la carte a créé et qui attend son code.
 struct SignupCodeStep {
     let email: String
-    /// Le jeton d'attente (#8083) — la carte apprend que le lien a été ouvert ailleurs.
+    /// Le jeton d'attente — la carte apprend que le lien a été ouvert ailleurs.
     let pendingSessionToken: String?
     /// La session TENUE ; `nil` pour un compte qui n'entre que par son code.
     let held: EmailProvenSession?

@@ -44,7 +44,7 @@ struct ConversationOverlayMenu: View {
                 guard MessageExitTransport.copyDisplayed(msg, in: viewModel) else { return }
                 HapticFeedback.success()
             },
-            onEdit: { actions.edit(msg) },
+            onEdit: { actions.beginEdit(msg) },
             onReply: { actions.reply(msg) },
             onRetry: { Task { await viewModel.retryMessage(messageId: msg.id) } },
             textTranslations: viewModel.messageTranslations[msg.id] ?? [],

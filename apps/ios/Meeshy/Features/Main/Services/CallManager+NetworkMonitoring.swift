@@ -50,7 +50,7 @@ extension CallManager {
                 default: isInActiveCall = false
                 }
                 if interfaceChanged && isInActiveCall {
-                    self.analyticsNetworkTransitions += 1
+                    self.analytics.networkTransitions += 1
                 }
                 guard isInActiveCall else { return }
 

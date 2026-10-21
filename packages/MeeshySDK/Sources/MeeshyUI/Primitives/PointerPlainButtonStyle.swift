@@ -3,7 +3,7 @@ import SwiftUI
 public struct MeeshyPointerPlainButtonStyle: ButtonStyle {
     private let shape: MeeshyPointerShape
 
-    public init(shape: MeeshyPointerShape = .roundedRect(cornerRadius: 12)) {
+    public init(shape: MeeshyPointerShape = .roundedRect(cornerRadius: MeeshyRadius.smPlus)) {
         self.shape = shape
     }
 
