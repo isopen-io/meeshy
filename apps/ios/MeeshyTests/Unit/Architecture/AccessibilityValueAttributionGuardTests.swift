@@ -225,9 +225,201 @@ final class AccessibilityValueAttributionGuardTests: XCTestCase {
 
 enum IconOnlyButtonScan {
 
-    static func mutedButtons(in source: String) -> [Int] { [] }
+    private struct ButtonSite {
+        let line: Int
+        let isLabelled: Bool
+    }
 
-    static func iconButtonCount(in source: String) -> Int { 0 }
+    static func mutedButtons(in source: String) -> [Int] {
+        iconButtons(in: source).filter { !$0.isLabelled }.map { $0.line }
+    }
+
+    static func iconButtonCount(in source: String) -> Int {
+        iconButtons(in: source).count
+    }
+
+    private static func iconButtons(in source: String) -> [ButtonSite] {
+        let chars = Array(AppSourceGuard.stripComments(source))
+        return buttonStarts(in: chars).compactMap { site(at: $0, in: chars) }
+    }
+
+    private static func buttonStarts(in chars: [Character]) -> [Int] {
+        chars.indices.filter { index in
+            matches("Button", at: index, in: chars)
+                && (index == 0 || !isIdentifier(chars[index - 1]))
+        }
+    }
+
+    private static func site(at start: Int, in chars: [Character]) -> ButtonSite? {
+        let afterName = start + "Button".count
+        guard afterName < chars.count,
+              chars[afterName] == "(" || chars[afterName] == "{" || chars[afterName].isWhitespace,
+              let label = labelClosure(at: afterName, in: chars) else { return nil }
+        let body = String(chars[(label.lowerBound + 1)..<label.upperBound])
+        guard isIconOnly(body) else { return nil }
+        let chain = modifierChain(after: label.upperBound + 1, in: chars)
+        return ButtonSite(
+            line: lineNumber(of: start, in: chars),
+            isLabelled: carriesName(body + chain)
+        )
+    }
+
+    private static func labelClosure(at index: Int, in chars: [Character]) -> Range<Int>? {
+        let head = skipWhitespace(from: index, in: chars)
+        guard head < chars.count else { return nil }
+        if chars[head] == "{" { return labelAfterAction(at: head, in: chars) }
+        guard chars[head] == "(", let close = closingIndex(from: head, in: chars) else { return nil }
+        if let labelStart = topLevelLabel(from: head + 1, to: close, in: chars) {
+            return closure(at: skipWhitespace(from: labelStart, in: chars), in: chars)
+        }
+        let args = String(chars[(head + 1)..<close]).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard args.hasPrefix("action:") || args.hasPrefix("role:") else { return nil }
+        return closure(at: skipWhitespace(from: close + 1, in: chars), in: chars)
+    }
+
+    private static func labelAfterAction(at open: Int, in chars: [Character]) -> Range<Int>? {
+        guard let close = closingIndex(from: open, in: chars) else { return nil }
+        let next = skipWhitespace(from: close + 1, in: chars)
+        guard matches("label:", at: next, in: chars) else { return nil }
+        return closure(at: skipWhitespace(from: next + "label:".count, in: chars), in: chars)
+    }
+
+    private static func topLevelLabel(from start: Int, to end: Int, in chars: [Character]) -> Int? {
+        var cursor = start
+        while cursor < end {
+            let character = chars[cursor]
+            if character == "\"" {
+                cursor = endOfString(from: cursor, in: chars)
+            } else if "({[".contains(character) {
+                guard let close = closingIndex(from: cursor, in: chars) else { return nil }
+                cursor = close + 1
+            } else if matches("label:", at: cursor, in: chars), cursor == 0 || !isIdentifier(chars[cursor - 1]) {
+                return cursor + "label:".count
+            } else {
+                cursor += 1
+            }
+        }
+        return nil
+    }
+
+    private static func closure(at open: Int, in chars: [Character]) -> Range<Int>? {
+        guard open < chars.count, chars[open] == "{",
+              let close = closingIndex(from: open, in: chars) else { return nil }
+        return open..<close
+    }
+
+    private static func isIconOnly(_ body: String) -> Bool {
+        let trimmed = body
+            .replacingOccurrences(of: "accessibilityLabel(", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.contains("Image(systemName:") else { return false }
+        guard !trimmed.contains("Text("), !trimmed.contains("Label(") else { return false }
+        return trimmed.hasPrefix("Image(")
+            || ["ZStack", "HStack", "VStack"].contains { trimmed.hasPrefix($0) }
+    }
+
+    private static func modifierChain(after index: Int, in chars: [Character]) -> String {
+        var cursor = skipWhitespace(from: index, in: chars)
+        var end = index
+        while cursor + 1 < chars.count, chars[cursor] == ".", chars[cursor + 1].isLetter {
+            cursor += 1
+            while cursor < chars.count, isIdentifier(chars[cursor]) { cursor += 1 }
+            cursor = skipGroup(at: cursor, in: chars)
+            let inline = skipInlineSpaces(from: cursor, in: chars)
+            cursor = skipGroup(at: inline, in: chars, opening: "{", fallback: cursor)
+            end = cursor
+            cursor = skipWhitespace(from: cursor, in: chars)
+        }
+        return String(chars[index..<max(end, index)])
+    }
+
+    private static func skipGroup(
+        at index: Int, in chars: [Character], opening: Character = "(", fallback: Int? = nil
+    ) -> Int {
+        guard index < chars.count, chars[index] == opening,
+              let close = closingIndex(from: index, in: chars) else { return fallback ?? index }
+        return close + 1
+    }
+
+    private static func carriesName(_ text: String) -> Bool {
+        text.contains(".accessibilityLabel")
+            || text.contains(".accessibilityHidden(true)")
+            || text.contains(".accessibilityRepresentation")
+    }
+
+    private static func closingIndex(from open: Int, in chars: [Character]) -> Int? {
+        var depth = 0
+        var cursor = open
+        while cursor < chars.count {
+            let character = chars[cursor]
+            if character == "\"" {
+                cursor = endOfString(from: cursor, in: chars)
+                continue
+            }
+            if "({[".contains(character) {
+                depth += 1
+            } else if ")}]".contains(character) {
+                depth -= 1
+                if depth == 0 { return cursor }
+            }
+            cursor += 1
+        }
+        return nil
+    }
+
+    private static func endOfString(from open: Int, in chars: [Character]) -> Int {
+        if matches("\"\"\"", at: open, in: chars) {
+            var cursor = open + 3
+            while cursor < chars.count {
+                if chars[cursor] == "\\" { cursor += 2; continue }
+                if matches("\"\"\"", at: cursor, in: chars) { return cursor + 3 }
+                cursor += 1
+            }
+            return chars.count
+        }
+        var cursor = open + 1
+        while cursor < chars.count {
+            let character = chars[cursor]
+            if character == "\\" {
+                let next = cursor + 1
+                if next < chars.count, chars[next] == "(", let close = closingIndex(from: next, in: chars) {
+                    cursor = close + 1
+                } else {
+                    cursor += 2
+                }
+                continue
+            }
+            if character == "\"" { return cursor + 1 }
+            cursor += 1
+        }
+        return chars.count
+    }
+
+    private static func matches(_ text: String, at index: Int, in chars: [Character]) -> Bool {
+        let needle = Array(text)
+        guard index >= 0, index + needle.count <= chars.count else { return false }
+        return Array(chars[index..<(index + needle.count)]) == needle
+    }
+
+    private static func isIdentifier(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber || character == "_"
+    }
+
+    private static func skipWhitespace(from index: Int, in chars: [Character]) -> Int {
+        var cursor = index
+        while cursor < chars.count, chars[cursor].isWhitespace { cursor += 1 }
+        return cursor
+    }
+
+    private static func skipInlineSpaces(from index: Int, in chars: [Character]) -> Int {
+        var cursor = index
+        while cursor < chars.count, chars[cursor] == " " || chars[cursor] == "\t" { cursor += 1 }
+        return cursor
+    }
+
+    private static func lineNumber(of index: Int, in chars: [Character]) -> Int {
+        chars[0..<index].filter { $0 == "\n" }.count + 1
+    }
 }
 
 /// Garde d'analyse de source : **un bouton dont le libellé n'est qu'une icône
