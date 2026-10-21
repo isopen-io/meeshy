@@ -42,7 +42,7 @@ const collectionSchema = z.object({
 /** Les domaines dont les packs portent des cadres, donc un usage. */
 const FRAME_DOMAINS: readonly PackDomain[] = ['glory-frame', 'capture-frame', 'avatar-ring', 'banner-frame'];
 
-/** Les domaines dont les cadres sont LIBRES par défaut (usage `free`). */
+/** Les domaines dont les cadres ne servent jamais le JEU : leur usage est `free` (une surface), qu'ils soient gratuits, payants ou récompensés. */
 const FREE_FRAME_DOMAINS: readonly PackDomain[] = ['capture-frame', 'avatar-ring', 'banner-frame'];
 
 /** Les domaines qu'un jeu peut récompenser (#11273) : un contour d'avatar ou un cadre de bannière, jamais un cadre de capture. */
@@ -87,14 +87,25 @@ const usageFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain }
  * fail-closed (`glory-frame-pack.ts`), et la boutique l'affiche cadre par
  * cadre (#10154). Jamais un usage de pack qui mentirait sur ses cadres.
  */
-const packUsageDeclared = (entry: { readonly domain: PackDomain; readonly usage?: FrameUsage; readonly reward?: PackEligibilityRule }): boolean => {
+const packUsageDeclared = (entry: { readonly domain: PackDomain; readonly usage?: FrameUsage }): boolean => {
   if (!FRAME_DOMAINS.includes(entry.domain)) return entry.usage === undefined;
-  return entry.domain === 'glory-frame' || entry.usage !== undefined || entry.reward !== undefined;
+  return entry.domain === 'glory-frame' || entry.usage !== undefined;
 };
 
-/** Un pack récompensé est gagné, jamais libre : il ne déclare aucun usage (pack ni collection) ; seul un contour d'avatar ou une bannière peut l'être (#11273). */
-const rewardFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain; readonly reward?: PackEligibilityRule }): boolean =>
-  entry.reward === undefined || (REWARDABLE_FRAME_DOMAINS.includes(entry.domain) && declaredUsages(entry).length === 0);
+/**
+ * La règle PAR PACK (#11273) : l'usage dit OÙ un cadre se porte, la récompense
+ * dit COMMENT on le possède. Un pack récompensé garde donc son usage (confiné à
+ * sa surface) et se possède par une ligne `game` (`PackGrants`), jamais par
+ * tout compte (`isPackOwned`). Seuls un contour d'avatar ou un cadre de bannière
+ * OFFICIEL peuvent l'être, et jamais à prix : on le gagne, on ne l'achète pas.
+ */
+const rewardFitsPack = (entry: {
+  readonly domain: PackDomain;
+  readonly origin: 'builtin' | 'official';
+  readonly price?: number;
+  readonly reward?: PackEligibilityRule;
+}): boolean =>
+  entry.reward === undefined || (REWARDABLE_FRAME_DOMAINS.includes(entry.domain) && entry.origin === 'official' && entry.price === undefined);
 
 const sameSurfaces = (surfaces: readonly string[], expected: readonly string[]): boolean =>
   surfaces.length === expected.length && expected.every((surface) => surfaces.includes(surface));
@@ -133,7 +144,7 @@ export const PackIndexEntrySchema = z
     downloadBytes: z.object({ story: z.int().check(z.minimum(0)), square: z.nullable(z.int().check(z.minimum(0))) }),
     names: z.partialRecord(z.enum(PACK_LANGUAGES), nameSchema),
     usage: z.optional(FrameUsageSchema),
-    /** La récompense du jeu qui donne le pack (#11273) ; absente = le pack se possède par l'achat, l'octroi ou un événement (#11272). */
+    /** La récompense du jeu qui donne le pack (#11273) : présente, le pack se possède par une ligne (`isPackOwned`), jamais par tout compte. */
     reward: z.optional(PackEligibilityRuleSchema),
     /** Le prix en Meeshes (#10632) : absent = gratuit, jamais 0 ; jamais sur un pack intégré. */
     price: z.optional(z.int().check(z.minimum(1), z.maximum(PACK_PRICE_MAX))),
@@ -143,7 +154,7 @@ export const PackIndexEntrySchema = z
   .check(
     z.refine(packUsageDeclared),
     z.refine(usageFitsDomain),
-    z.refine(rewardFitsDomain),
+    z.refine(rewardFitsPack),
     z.refine((entry) => entry.atmosphere === undefined || entry.domain === 'glory-frame'),
     z.refine((entry) => entry.removable || entry.installedByDefault),
     z.refine((entry) => entry.price === undefined || entry.origin !== 'builtin'),
