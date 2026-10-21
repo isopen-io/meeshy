@@ -43,8 +43,9 @@ struct MessageActionsMenu: View {
     }
 
     private func row(_ action: PrimaryAction) -> some View {
-        // Le destructif en rouge, isolé du reste de la liste (#9908).
-        let tint = action == .deletePiece ? MeeshyColors.error : accent
+        // Le destructif en rouge, isolé du reste de la liste (#9908) : la pièce
+        // comme le message (`PrimaryAction.isDestructive`).
+        let tint = action.isDestructive ? MeeshyColors.error : accent
         return Button {
             HapticFeedback.light()
             onSelect(action)

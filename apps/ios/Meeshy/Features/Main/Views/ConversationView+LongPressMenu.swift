@@ -134,6 +134,7 @@ extension ConversationView {
                 focusedPieceId: $overlayState.overlayPieceId,
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: menu.canDeleteOnServer, canForward: menu.canForward,
+                canReply: menu.canReply, canReact: menu.canReact,
                 onReact: { piece, emoji in
                     viewModel.toggleAttachmentReaction(attachmentId: piece.id, messageId: messageId, emoji: emoji)
                 },

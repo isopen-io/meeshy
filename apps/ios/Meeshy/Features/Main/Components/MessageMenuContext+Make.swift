@@ -30,9 +30,18 @@ struct ConversationMenuAuthority: Equatable {
             conversationRoleRaw: conversation?.currentUserRole,
             isActiveMember: conversation != nil,
             canSendMessages: guest?.permissions.canSendMessages ?? true,
-            isDeclaredMinor: false
+            isDeclaredMinor: declaresMinor(conversation)
         )
         return ConversationMenuAuthority(viewer: viewer, conversation: policyConversation(of: conversation))
+    }
+
+    /// **Le lecteur est-il mineur DANS cette conversation ?** La passerelle le
+    /// dit par `viewerWriteRestriction` (calculée de `User.birthDate`, `null` à
+    /// 18 ans) ; seule `minor-global` ferme l'écriture. Une restriction inconnue
+    /// laisse écrire : c'est la passerelle qui refuse, et le refus dit pourquoi.
+    /// Site unique, partagé par le menu d'un message et celui d'une rangée de liste.
+    nonisolated static func declaresMinor(_ conversation: Conversation?) -> Bool {
+        conversation?.viewerWriteRestriction?.closesComposer ?? false
     }
 
     /// Sans conversation, rien de ce qui dépend du type ne s'ouvre.
@@ -73,7 +82,7 @@ extension MessageMenuContext {
             isMine: false, canEdit: false, canDelete: false, hasText: false, hasMedia: false,
             hasTimebasedMedia: false, isPinned: false, isStarred: false, isEdited: false,
             hasEditRevisions: false, canReply: false, canPin: false, canStar: false,
-            canReport: false, canTranslate: false, canDeleteForMe: false, isGone: true
+            canReport: false, canTranslate: false, canReact: false, canDeleteForMe: false, isGone: true
         )
     }
 
@@ -155,10 +164,12 @@ extension MessageMenuContext {
             canPin: verdicts.pin != nil,
             canStar: authority.viewer.isRegistered && !gone,
             canReport: verdicts.report,
-            // En E2EE la loi rend `.device` ; la vue Langue ne sait demander
-            // qu'au serveur, qui refuse. Tant que la traduction à la demande ne
-            // passe pas par l'appareil, « Traduire » n'est pas offert.
+            // En E2EE la loi rend `.device` : la vue Langue ne sait demander
+            // qu'au serveur, qui refuse. « Traduire » reste offert, mais par
+            // l'APPAREIL (`DeviceTranslationCoordinator`), jamais par la vue Langue.
             canTranslate: verdicts.translate == .servedSwitch,
+            translatesOnDevice: verdicts.translate == .device,
+            canReact: verdicts.canReact,
             canRemove: verdicts.remove != nil,
             canDeleteForEveryone: verdicts.deleteForEveryone,
             canDeleteForMe: verdicts.deleteForMe,

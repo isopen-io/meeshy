@@ -21,10 +21,37 @@ nonisolated enum OverlayPreviewProtection: Equatable {
     case viewOnce(opened: Bool)
     /// Flou : les pièces en tuiles masquées, le texte flouté, rien de lisible.
     case blurred
+    /// Chiffré et illisible ici : un cadenas, jamais un clair que l'appareil
+    /// n'a pas. Un message chiffré que l'appareil a DÉCHIFFRÉ (il a du texte)
+    /// se montre comme le fil le montre.
+    case encrypted
+    /// Éphémère (flamme, échéance en cours) : l'appui long ne montre ni ne
+    /// consomme ce qui brûle — la puce dit seulement qu'il disparaîtra.
+    case ephemeral
+    /// Disparu : supprimé ou échu. Le fil ne montre plus que sa pierre tombale.
+    case gone
 
-    static func form(for message: Message) -> OverlayPreviewProtection {
+    /// Trois formes distinctes pour trois états distincts : le lecteur doit
+    /// pouvoir lire POURQUOI l'aperçu ne montre rien. La précédence va du plus
+    /// définitif au plus léger : disparu, vue unique, flou, éphémère, chiffré.
+    static func form(for message: Message, now: Date = Date()) -> OverlayPreviewProtection {
+        if message.deletedAt != nil || (message.expiresAt.map { $0 <= now } ?? false) { return .gone }
         if message.holdsViewOnce { return .viewOnce(opened: message.viewOnceOpenedAt != nil) }
-        return message.holdsBlur ? .blurred : .clear
+        if message.holdsBlur { return .blurred }
+        if message.expiresAt != nil || message.effects.flags.contains(.ephemeral) { return .ephemeral }
+        let unreadable = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if message.isEncrypted && unreadable { return .encrypted }
+        return .clear
+    }
+
+    /// Le pictogramme de la forme, pour les formes à puce unique.
+    var chipSymbol: String? {
+        switch self {
+        case .clear, .viewOnce, .blurred: return nil
+        case .encrypted: return "lock.fill"
+        case .ephemeral: return "flame.fill"
+        case .gone: return "trash.slash"
+        }
     }
 }
 
@@ -182,6 +209,8 @@ struct OverlayProtectedPreview: View {
                 .allowsHitTesting(false)
         case .blurred:
             blurred
+        case .encrypted, .ephemeral, .gone:
+            ProtectedFormChip(form: form, isMe: message.isMe, isDark: isDark, accentHex: accentHex)
         }
     }
 
@@ -274,5 +303,51 @@ extension MessageOverlayMenu {
             originalLangCode: translation.originalLangCode, availableFlags: translation.availableFlags,
             activeLangCode: translation.activeLangCode, limit: FocalMetrics.FocusStrip.flagLimitPlain)
         return OverlayPreviewServedText(text: text, flags: flags, activeFlag: translation.activeLangCode)
+    }
+}
+
+// MARK: - La puce des formes qui ne montrent rien d'autre qu'elles-mêmes
+
+/// **Chiffré, éphémère, disparu : une puce, un mot.** Le fil ne montre pas le
+/// contenu de ces messages ; l'aperçu ne le dévoile pas non plus, mais il dit
+/// pourquoi — sans quoi un aperçu vide se lirait comme une panne.
+struct ProtectedFormChip: View {
+    let form: OverlayPreviewProtection
+    let isMe: Bool
+    let isDark: Bool
+    let accentHex: String
+    @Environment(\.bubbleSkin) private var skin
+
+    static func label(for form: OverlayPreviewProtection) -> String {
+        switch form {
+        case .encrypted:
+            return String(localized: "message.overlay.preview.encrypted", defaultValue: "Message chiffré", bundle: .main)
+        case .ephemeral:
+            return String(localized: "message.overlay.preview.ephemeral", defaultValue: "Message éphémère", bundle: .main)
+        case .gone:
+            return String(localized: "message.overlay.preview.gone", defaultValue: "Message supprimé", bundle: .main)
+        case .clear, .viewOnce, .blurred:
+            return ""
+        }
+    }
+
+    var body: some View {
+        let ink: Color = isMe ? skin.ink : (isDark ? .white : .black)
+        let label = Self.label(for: form)
+        HStack(spacing: MeeshySpacing.sm) {
+            if let symbol = form.chipSymbol {
+                Image(systemName: symbol)
+                    .font(MeeshyFont.relative(15, weight: .semibold))
+            }
+            Text(label)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
+        }
+        .foregroundColor(ink)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .background(BubbleBackground(isMe: isMe, accentHex: accentHex, isDark: isDark))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
     }
 }

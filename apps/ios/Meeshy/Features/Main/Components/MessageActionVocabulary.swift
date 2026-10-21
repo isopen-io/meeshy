@@ -139,6 +139,7 @@ extension PrimaryAction {
         case .exportQuick: return .exportQuick
         case .wholeMessage: return .wholeMessage
         case .deletePiece: return .deleteMedia
+        case .deleteMessage: return .delete
         case .forwardPiece: return .forward
         case .addSticker: return .addSticker
         case .favoriteSticker: return .favoriteSticker

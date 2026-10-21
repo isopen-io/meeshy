@@ -95,7 +95,7 @@ final class ViewOnceOpenedStateTests: XCTestCase {
     }
 
     func test_primaryActions_viewOnce_offerNoContentAction() {
-        XCTAssertEqual(MessageActionResolver.primaryActions(menuContext(isViewOnce: true)), [.more],
+        XCTAssertEqual(MessageActionResolver.primaryActions(menuContext(isViewOnce: true)), [.deleteMessage, .more],
                        "ni copie, ni traduction, ni enregistrement, ni composition")
     }
 

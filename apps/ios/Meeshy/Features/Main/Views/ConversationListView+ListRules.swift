@@ -135,7 +135,7 @@ nonisolated struct ConversationRowMenuCapabilities: Equatable, Sendable {
             conversationRoleRaw: conversation.currentUserRole,
             isActiveMember: currentUser != nil,
             canSendMessages: hasAccount,
-            isDeclaredMinor: false
+            isDeclaredMinor: ConversationMenuAuthority.declaresMinor(conversation)
         )
     }
 

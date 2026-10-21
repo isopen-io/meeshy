@@ -49,7 +49,8 @@ final class MessageActionResolverTests: XCTestCase {
 
     func test_primaryActions_ownEditableText_isEditTranslateCopyMore() {
         let a = MessageActionResolver.primaryActions(ctx(isMine: true, canEdit: true, canDelete: true))
-        XCTAssertEqual(a, [.reply, .edit, .select, .translate, .copy, .exportImage, .more])
+        XCTAssertEqual(a, [.reply, .edit, .select, .translate, .copy, .exportImage, .deleteMessage, .more],
+                       "Supprimer est à un geste, rouge, juste avant « Plus… »")
     }
 
     // MARK: - Exporter en image
@@ -644,7 +645,8 @@ final class MessageActionResolverTests: XCTestCase {
     func test_aDeletedMessage_offersOnlyDeleteForMe() {
         var gone = ctx(isMine: true, canDelete: true)
         gone.isGone = true
-        XCTAssertEqual(MessageActionResolver.primaryActions(gone), [.more])
+        XCTAssertEqual(MessageActionResolver.primaryActions(gone), [.deleteMessage, .more],
+                       "un message disparu ne laisse que Supprimer et Plus…")
         XCTAssertEqual(MessageActionResolver.moreSections(gone), [.actions([.delete])])
     }
 
