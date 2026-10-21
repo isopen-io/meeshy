@@ -227,6 +227,9 @@ const CONVERSATION_EXTRAS: readonly (readonly [string, Partial<ActionConversatio
   ['groupe-regime-inconnu-porte-le-badge', { encryptionMode: 'signal_v3' }, {}],
   ['groupe-chiffrement-serveur-sans-badge', { encryptionMode: 'server' }, {}],
   ['groupe-inscrit-et-anonyme-se-lit-comme-un-invite', {}, { isAnonymous: true }],
+  ['groupe-rang-de-ligne-en-majuscules-modere', {}, { conversationRole: 'MODERATOR' }],
+  ['groupe-createur-en-majuscules-supprime-pour-tous', {}, { conversationRole: 'CREATOR' }],
+  ['public-rang-de-ligne-en-majuscules-invite', { type: 'public' }, { conversationRole: 'ADMIN' }],
 ];
 
 export function buildConversationActionVectors(): readonly ConversationActionVector[] {

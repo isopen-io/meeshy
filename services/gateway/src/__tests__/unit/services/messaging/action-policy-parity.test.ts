@@ -25,6 +25,7 @@ import { admitMessagePin, type MessagePinReader } from '../../../../services/mes
 import { verifierCible } from '../../../../routes/reports/target';
 import { admitMessageDelete, type DeleteAdmissionReader } from '../../../../services/messaging/messageDeleteAdmission';
 import { admitMessageEdit, type EditAdmissionReader } from '../../../../services/messaging/messageEditAdmission';
+import { mayMintShareLink } from '../../../../routes/links/utils/share-link-mint';
 import { actorHasMinimumRole } from '../../../../utils/conversation-authority';
 import type { ConversationActionInput, ConversationActions } from '@meeshy/shared/utils/conversation-action-policy';
 import type { ActionViewer, MessageActionInput, MessageActions } from '@meeshy/shared/utils/message-action-policy';
@@ -234,7 +235,7 @@ describe('parité des actions sur un message — signaler (verifierCible)', () =
   });
 });
 
-describe('parité des actions sur une conversation — actorHasMinimumRole', () => {
+describe('parité des actions sur une conversation — actorHasMinimumRole, mayMintShareLink, POST /leave', () => {
   it.each(conversationVectors.map((vector) => [vector._label, vector] as const))('%s', (_label, vector) => {
     const { conversation, viewer } = vector.input;
     const actor = { conversationRole: viewer.conversationRole, platformRole: viewer.platformRole };
@@ -242,10 +243,14 @@ describe('parité des actions sur une conversation — actorHasMinimumRole', () 
     const administers = actorHasMinimumRole(actor, 'admin');
     const governed = viewer.isActiveMember && conversation.isActive !== false && !conversation.closedAt;
     const authority = ['group', 'public', 'broadcast'].includes(conversation.type);
+    const registered = viewer.hasAccount && !viewer.isAnonymous;
+    const mints = registered && conversation.type !== 'direct' && mayMintShareLink(actor, conversation);
 
     if (vector.expected.rename || vector.expected.manageMembers) expect(moderates).toBe(true);
     if (vector.expected.deleteForAll) expect(administers).toBe(true);
-    if (vector.expected.invite && conversation.type !== 'global') expect(moderates).toBe(true);
+    if (vector.expected.invite) expect(viewer.isActiveMember && mints).toBe(true);
+    if (governed && (authority || conversation.type === 'global')) expect(vector.expected.invite).toBe(mints);
+    if (vector.expected.leave) expect(registered).toBe(true);
     if (governed && authority) expect([vector.expected.rename, vector.expected.deleteForAll]).toEqual([moderates, administers]);
   });
 });
