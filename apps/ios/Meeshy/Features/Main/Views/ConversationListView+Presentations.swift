@@ -114,6 +114,34 @@ struct ConversationListModalPresentations: ViewModifier {
                     sheetTargets.rename = nil
                 }
             }
+            // Quitter — confirmé, comme depuis la fiche de la conversation ; le
+            // départ suit le flux existant (`ConversationStore`, `.leave`).
+            .alert(
+                String(localized: "conversation.info.leave.title", defaultValue: "Quitter la conversation", bundle: .main),
+                isPresented: Binding(
+                    get: { sheetTargets.leaveTarget != nil },
+                    set: { if !$0 { sheetTargets.leaveTarget = nil } }
+                ),
+                presenting: sheetTargets.leaveTarget
+            ) { conversation in
+                Button(String(localized: "conversation.info.leave.confirm", defaultValue: "Quitter", bundle: .main), role: .destructive) {
+                    HapticFeedback.heavy()
+                    leave(conversation)
+                }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            } message: { _ in
+                Text(String(localized: "conversation.info.leave.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .main))
+            }
+            .sheet(item: $sheetTargets.reportTarget) { conversation in
+                ReportMessageSheet(
+                    accentColor: conversation.accentColor,
+                    title: String(localized: "report.conversation.title", defaultValue: "Pourquoi signalez-vous cette conversation ?", bundle: .main)
+                ) { type, reason in
+                    report(conversation, type: type, reason: reason)
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
             .sheet(isPresented: $showWidgetPreview) {
                 WidgetPreviewView(onNewConversation: onNewConversation)
                     .environmentObject(conversationViewModel)
@@ -122,5 +150,31 @@ struct ConversationListModalPresentations: ViewModifier {
                     .presentationDragIndicator(.visible)
             }
             .modifier(GlobalSearchCoverHost(isPresented: $showGlobalSearch, conversationViewModel: conversationViewModel, router: router))
+    }
+
+    private func leave(_ conversation: Conversation) {
+        let viewModel = conversationViewModel
+        Task {
+            do {
+                try await viewModel.store.apply(.leave, for: conversation.id)
+                viewModel.conversationLeavesDetail.send(conversation.id)
+            } catch {
+                FeedbackToastManager.shared.showError(String(localized: "conversation.info.leave.error", defaultValue: "Erreur lors du départ de la conversation", bundle: .main))
+            }
+        }
+    }
+
+    private func report(_ conversation: Conversation, type: String, reason: String?) {
+        Task { @MainActor in
+            do {
+                try await ReportService.shared.reportConversation(conversationId: conversation.id, reportType: type, reason: reason)
+                HapticFeedback.success()
+                FeedbackToastManager.shared.showSuccess(String(localized: "conversation.report.success", defaultValue: "Conversation signalée", bundle: .main))
+            } catch {
+                HapticFeedback.error()
+                FeedbackToastManager.shared.showError(String(localized: "conversation.report.error", defaultValue: "Erreur lors du signalement", bundle: .main))
+            }
+            sheetTargets.reportTarget = nil
+        }
     }
 }

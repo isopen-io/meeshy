@@ -31,29 +31,18 @@ struct ConversationContextMenuView: View {
     let currentReaction: String?
     let categories: [ConversationMenuCategory]
     let currentSectionId: String?
-    let canInvite: Bool
     let isLocked: Bool
     let isArchived: Bool
     /// Faux pour Global d'un mineur, rangée d'office aux archives (#9929).
     var canToggleArchive = true
     let isBlockableDM: Bool
     let isBlocked: Bool
-    /// Renommable = conversation de groupe/communauté (pas un DM).
-    let canRename: Bool
-    // Callbacks — chacun = action ; la fermeture est faite par l'appelant via onDismiss
-    let onPin: () -> Void
-    let onMute: () -> Void
-    let onMarkReadToggle: () -> Void
-    let onDetails: () -> Void
-    let onRename: () -> Void
-    let onSetFavorite: (String) -> Void
-    let onRemoveFavorite: () -> Void
-    let onMove: (String) -> Void
-    let onInvite: () -> Void
-    let onLock: () -> Void
-    let onArchive: () -> Void
-    let onBlock: () -> Void
-    let onDelete: () -> Void
+    /// Les verdicts de la loi partagée (`ConversationActionPolicy`, #11215) —
+    /// les MÊMES que lit le menu natif : jamais déduits ici du type.
+    let capabilities: ConversationRowMenuCapabilities
+    /// Les gestes de chaque entrée, partagés avec le menu natif ; la fermeture
+    /// est faite par l'appelant via `onDismiss`.
+    let actions: ConversationRowMenuActions
     /// I-075 — force le mode Focal pour CETTE ouverture SEULE (override
     /// éphémère, jamais persistant : n'écrit ni la préférence de mode ni
     /// aucune préférence bêta). Voir `onOpenFocalBetaPreview` au site
@@ -92,6 +81,16 @@ struct ConversationContextMenuView: View {
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous))
         .animation(.easeInOut(duration: 0.2), value: panel)
         .accessibilityElement(children: .contain)
+        // Toutes les entrées, sous-panneaux compris, en actions NOMMÉES
+        // (#11215) : elles complètent l'action « Ouvrir le menu » de la rangée,
+        // et VoiceOver atteint Quitter, Signaler ou l'administration sans
+        // naviguer d'un panneau à l'autre.
+        .accessibilityActions {
+            ForEach(accessibilityEntries.map { entry in
+                        AsyncRenderRow(id: entry.id, content: Button(entry.label) { entry.perform() })
+                    },
+                    content: asyncRenderRowContent)
+        }
     }
 
     // MARK: - Root Panel
@@ -103,7 +102,7 @@ struct ConversationContextMenuView: View {
                 label: isPinned
                     ? String(localized: "context.unpin", defaultValue: "Désépingler", bundle: .main)
                     : String(localized: "context.pin", defaultValue: "Épingler", bundle: .main)
-            ) { onPin(); onDismiss() }
+            ) { actions.onPin(); onDismiss() }
 
             separator
 
@@ -112,7 +111,7 @@ struct ConversationContextMenuView: View {
                 label: isMuted
                     ? String(localized: "context.unmute", defaultValue: "Réactiver les notifications", bundle: .main)
                     : String(localized: "context.mute", defaultValue: "Mettre en silence", bundle: .main)
-            ) { onMute(); onDismiss() }
+            ) { actions.onMute(); onDismiss() }
 
             divider
 
@@ -121,21 +120,21 @@ struct ConversationContextMenuView: View {
                 label: hasUnread
                     ? String(localized: "context.mark_read", defaultValue: "Marquer comme lu", bundle: .main)
                     : String(localized: "context.mark_unread", defaultValue: "Marquer comme non lu", bundle: .main)
-            ) { onMarkReadToggle(); onDismiss() }
+            ) { actions.onMarkReadToggle(); onDismiss() }
 
             separator
 
             actionRow(
                 icon: "info.circle.fill",
                 label: String(localized: "context.details", defaultValue: "Détails", bundle: .main)
-            ) { onDetails(); onDismiss() }
+            ) { actions.onDetails(); onDismiss() }
 
-            if canRename {
+            if capabilities.rename {
                 separator
                 actionRow(
                     icon: "pencil",
                     label: String(localized: "context.rename", defaultValue: "Renommer", bundle: .main)
-                ) { onRename(); onDismiss() }
+                ) { actions.onRename(); onDismiss() }
             }
 
             separator
@@ -162,13 +161,32 @@ struct ConversationContextMenuView: View {
                 showsChevron: true
             ) { navigate(to: .more) }
 
-            divider
+            departureRows
+        }
+    }
 
+    /// Quitter, puis Supprimer ou Masquer — les entrées qui RETIRENT, en dernier.
+    @ViewBuilder
+    private var departureRows: some View {
+        if capabilities.leave || capabilities.removal != nil {
+            divider
+        }
+
+        if capabilities.leave {
             actionRow(
-                icon: "trash",
-                label: String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main),
+                icon: Self.leaveIcon,
+                label: Self.leaveLabel,
                 isDestructive: true
-            ) { onDelete(); onDismiss() }
+            ) { actions.onLeave(); onDismiss() }
+        }
+
+        if let removal = capabilities.removal {
+            if capabilities.leave { separator }
+            actionRow(
+                icon: Self.removalIcon(removal),
+                label: Self.removalLabel(removal),
+                isDestructive: true
+            ) { actions.onDelete(); onDismiss() }
         }
     }
 
@@ -184,7 +202,7 @@ struct ConversationContextMenuView: View {
                 ForEach(Self.favoriteEmojis, id: \.self) { emoji in
                     Button {
                         HapticFeedback.light()
-                        onSetFavorite(emoji)
+                        actions.onSetFavorite(emoji)
                         onDismiss()
                     } label: {
                         Text(emoji)
@@ -205,7 +223,7 @@ struct ConversationContextMenuView: View {
                     icon: "star.slash",
                     label: String(localized: "context.remove_favorite", defaultValue: "Retirer le favori", bundle: .main),
                     isDestructive: true
-                ) { onRemoveFavorite(); onDismiss() }
+                ) { actions.onRemoveFavorite(); onDismiss() }
             }
         }
     }
@@ -223,7 +241,7 @@ struct ConversationContextMenuView: View {
                     icon: category.icon,
                     label: category.name,
                     showsCheckmark: category.id == currentSectionId
-                ) { onMove(category.id); onDismiss() }
+                ) { actions.onMove(category.id); onDismiss() }
                 if index < categories.count - 1 {
                     separator
                 }
@@ -235,7 +253,7 @@ struct ConversationContextMenuView: View {
                 icon: "tray.fill",
                 label: String(localized: "context.my_conversations", defaultValue: "Mes conversations", bundle: .main),
                 showsCheckmark: currentSectionId == nil || currentSectionId == ""
-            ) { onMove(""); onDismiss() }
+            ) { actions.onMove(""); onDismiss() }
         }
     }
 
@@ -247,11 +265,11 @@ struct ConversationContextMenuView: View {
 
             divider
 
-            if canInvite {
+            if capabilities.invite {
                 actionRow(
                     icon: "person.badge.plus",
                     label: String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main)
-                ) { onInvite(); onDismiss() }
+                ) { actions.onInvite(); onDismiss() }
                 separator
             }
 
@@ -260,7 +278,7 @@ struct ConversationContextMenuView: View {
                 label: isLocked
                     ? String(localized: "context.unlock", defaultValue: "Déverrouiller", bundle: .main)
                     : String(localized: "context.lock", defaultValue: "Verrouiller", bundle: .main)
-            ) { onLock(); onDismiss() }
+            ) { actions.onLock(); onDismiss() }
 
             separator
 
@@ -270,7 +288,7 @@ struct ConversationContextMenuView: View {
                     label: isArchived
                         ? String(localized: "context.unarchive", defaultValue: "Désarchiver", bundle: .main)
                         : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main)
-                ) { onArchive(); onDismiss() }
+                ) { actions.onArchive(); onDismiss() }
             }
 
             if isBlockableDM {
@@ -281,13 +299,111 @@ struct ConversationContextMenuView: View {
                         ? String(localized: "context.unblock", defaultValue: "Débloquer", bundle: .main)
                         : String(localized: "context.block", defaultValue: "Bloquer", bundle: .main),
                     isDestructive: !isBlocked
-                ) { onBlock(); onDismiss() }
+                ) { actions.onBlock(); onDismiss() }
+            }
+
+            if capabilities.report || capabilities.adminOpen {
+                divider
+            }
+
+            if capabilities.report {
+                actionRow(icon: Self.reportIcon, label: Self.reportLabel) { actions.onReport(); onDismiss() }
+            }
+
+            if capabilities.adminOpen {
+                if capabilities.report { separator }
+                actionRow(icon: Self.adminOpenIcon, label: Self.adminOpenLabel) { actions.onOpenAdmin(); onDismiss() }
             }
 
             // RETRAIT FOCAL iOS (2026-08-18) : l'item « Focal (bêta) »
             // (I-075) est retiré avec le mode — Script est le mode nominal.
             // Le paramètre `onOpenFocalBetaPreview` reste dans l'API (site
             // d'appel inchangé) mais n'est plus jamais monté.
+        }
+    }
+
+    // MARK: - VoiceOver — les entrées en actions nommées (#11215)
+
+    /// Les entrées du menu, à plat, dans l'ordre où elles se lisent : chacune
+    /// fait ce que fait sa rangée visible, puis ferme le menu.
+    var accessibilityEntries: [ConversationMenuAccessibilityEntry] {
+        let pin = isPinned
+            ? String(localized: "context.unpin", defaultValue: "Désépingler", bundle: .main)
+            : String(localized: "context.pin", defaultValue: "Épingler", bundle: .main)
+        let mute = isMuted
+            ? String(localized: "context.unmute", defaultValue: "Réactiver les notifications", bundle: .main)
+            : String(localized: "context.mute", defaultValue: "Mettre en silence", bundle: .main)
+        let read = hasUnread
+            ? String(localized: "context.mark_read", defaultValue: "Marquer comme lu", bundle: .main)
+            : String(localized: "context.mark_unread", defaultValue: "Marquer comme non lu", bundle: .main)
+        let lock = isLocked
+            ? String(localized: "context.unlock", defaultValue: "Déverrouiller", bundle: .main)
+            : String(localized: "context.lock", defaultValue: "Verrouiller", bundle: .main)
+        let archive = isArchived
+            ? String(localized: "context.unarchive", defaultValue: "Désarchiver", bundle: .main)
+            : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main)
+        let block = isBlocked
+            ? String(localized: "context.unblock", defaultValue: "Débloquer", bundle: .main)
+            : String(localized: "context.block", defaultValue: "Bloquer", bundle: .main)
+        let entries: [ConversationMenuAccessibilityEntry?] = [
+            entry("pin", pin, actions.onPin),
+            entry("mute", mute, actions.onMute),
+            entry("read", read, actions.onMarkReadToggle),
+            entry("details", String(localized: "context.details", defaultValue: "Détails", bundle: .main), actions.onDetails),
+            entry("rename", String(localized: "context.rename", defaultValue: "Renommer", bundle: .main), actions.onRename, when: capabilities.rename),
+            entry("invite", String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main), actions.onInvite, when: capabilities.invite),
+            entry("lock", lock, actions.onLock),
+            entry("archive", archive, actions.onArchive, when: canToggleArchive),
+            entry("block", block, actions.onBlock, when: isBlockableDM),
+            entry("report", Self.reportLabel, actions.onReport, when: capabilities.report),
+            entry("adminOpen", Self.adminOpenLabel, actions.onOpenAdmin, when: capabilities.adminOpen),
+            entry("leave", Self.leaveLabel, actions.onLeave, when: capabilities.leave),
+            entry("removal", Self.removalLabel(capabilities.removal ?? .delete), actions.onDelete, when: capabilities.removal != nil)
+        ]
+        return entries.compactMap { $0 }
+    }
+
+    /// Une entrée qui fait ce que fait sa rangée visible, puis ferme le menu.
+    private func entry(
+        _ id: String,
+        _ label: String,
+        _ action: @escaping () -> Void,
+        when shown: Bool = true
+    ) -> ConversationMenuAccessibilityEntry? {
+        guard shown else { return nil }
+        let close = onDismiss
+        return ConversationMenuAccessibilityEntry(id: id, label: label, perform: { action(); close() })
+    }
+
+    // MARK: - Libellés partagés avec le menu natif
+
+    static let leaveIcon = "rectangle.portrait.and.arrow.right"
+    static let reportIcon = "exclamationmark.bubble"
+    static let adminOpenIcon = "checkmark.shield"
+
+    static var leaveLabel: String {
+        String(localized: "context.leave_group", defaultValue: "Quitter le groupe", bundle: .main)
+    }
+
+    static var reportLabel: String {
+        String(localized: "context.report", defaultValue: "Signaler", bundle: .main)
+    }
+
+    static var adminOpenLabel: String {
+        String(localized: "context.admin_open", defaultValue: "Ouvrir dans l'administration", bundle: .main)
+    }
+
+    static func removalIcon(_ removal: ConversationRowMenuCapabilities.Removal) -> String {
+        switch removal {
+        case .delete: return "trash"
+        case .hide: return "eye.slash"
+        }
+    }
+
+    static func removalLabel(_ removal: ConversationRowMenuCapabilities.Removal) -> String {
+        switch removal {
+        case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
+        case .hide: return String(localized: "context.hide_chat", defaultValue: "Masquer la discussion", bundle: .main)
         }
     }
 
@@ -370,6 +486,41 @@ struct ConversationContextMenuView: View {
     private var divider: some View {
         Divider().overlay(accent.opacity(MeeshyOpacity.light))
     }
+}
+
+// MARK: - Les gestes du menu d'une rangée (#11215)
+
+/// UNE closure par entrée du menu d'une rangée, construite une fois par la
+/// liste (`ConversationRowMenuActions.make`) et appelée par les DEUX chemins
+/// d'OS : le menu natif iOS 26 et ce menu custom de repli ne réécrivent plus
+/// chacun la même logique. Les entrées destructives arment une confirmation,
+/// jamais l'effet.
+struct ConversationRowMenuActions {
+    let onPin: () -> Void
+    let onMute: () -> Void
+    let onMarkReadToggle: () -> Void
+    let onDetails: () -> Void
+    let onRename: () -> Void
+    let onSetFavorite: (String) -> Void
+    let onRemoveFavorite: () -> Void
+    let onMove: (String) -> Void
+    let onInvite: () -> Void
+    let onLock: () -> Void
+    let onArchive: () -> Void
+    let onBlock: () -> Void
+    let onDelete: () -> Void
+    let onLeave: () -> Void
+    let onReport: () -> Void
+    let onOpenAdmin: () -> Void
+}
+
+// MARK: - Entrée VoiceOver
+
+/// Une entrée du menu exposée à VoiceOver comme action nommée (#11215).
+struct ConversationMenuAccessibilityEntry: Identifiable {
+    let id: String
+    let label: String
+    let perform: () -> Void
 }
 
 // MARK: - Row Highlight (parité menus système)

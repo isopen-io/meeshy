@@ -177,3 +177,88 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertEqual(url?.absoluteString, "https://meeshy.me/admin/conversations/c1")
     }
 }
+
+/// VoiceOver (#11215) : les entrées du menu custom sont exposées en actions
+/// NOMMÉES, et ce sont les MÊMES verdicts que les rangées visibles.
+@MainActor
+final class ConversationContextMenuAccessibilityTests: XCTestCase {
+
+    private final class Recorder {
+        var calls: [String] = []
+    }
+
+    private func makeActions(_ recorder: Recorder) -> ConversationRowMenuActions {
+        ConversationRowMenuActions(
+            onPin: { recorder.calls.append("pin") },
+            onMute: { recorder.calls.append("mute") },
+            onMarkReadToggle: { recorder.calls.append("read") },
+            onDetails: { recorder.calls.append("details") },
+            onRename: { recorder.calls.append("rename") },
+            onSetFavorite: { _ in recorder.calls.append("favorite") },
+            onRemoveFavorite: { recorder.calls.append("removeFavorite") },
+            onMove: { _ in recorder.calls.append("move") },
+            onInvite: { recorder.calls.append("invite") },
+            onLock: { recorder.calls.append("lock") },
+            onArchive: { recorder.calls.append("archive") },
+            onBlock: { recorder.calls.append("block") },
+            onDelete: { recorder.calls.append("delete") },
+            onLeave: { recorder.calls.append("leave") },
+            onReport: { recorder.calls.append("report") },
+            onOpenAdmin: { recorder.calls.append("adminOpen") }
+        )
+    }
+
+    private func makeMenu(memberRole: String, platformRole: String, recorder: Recorder) -> ConversationContextMenuView {
+        let conversation = MeeshyConversation(id: "c1", identifier: "c1", type: .group, title: "Équipe", currentUserRole: memberRole)
+        let user = MeeshyUser(id: "me", username: "me", role: platformRole, isAnonymous: false)
+        return ConversationContextMenuView(
+            accentHex: "6366F1",
+            isPinned: false,
+            isMuted: false,
+            hasUnread: false,
+            currentReaction: nil,
+            categories: [],
+            currentSectionId: nil,
+            isLocked: false,
+            isArchived: false,
+            isBlockableDM: false,
+            isBlocked: false,
+            capabilities: ConversationRowMenuCapabilities.make(conversation: conversation, currentUser: user),
+            actions: makeActions(recorder),
+            onOpenFocalBetaPreview: {},
+            onDismiss: { recorder.calls.append("dismiss") }
+        )
+    }
+
+    func test_accessibilityEntries_groupMember_offersLeaveReportAndHide_withoutRenameOrAdmin() {
+        let ids = makeMenu(memberRole: "member", platformRole: "USER", recorder: Recorder()).accessibilityEntries.map(\.id)
+        XCTAssertTrue(ids.contains("leave"))
+        XCTAssertTrue(ids.contains("report"))
+        XCTAssertTrue(ids.contains("removal"))
+        XCTAssertFalse(ids.contains("rename"))
+        XCTAssertFalse(ids.contains("adminOpen"))
+    }
+
+    func test_accessibilityEntries_platformAdmin_offersRenameAndAdminOpen() {
+        let ids = makeMenu(memberRole: "member", platformRole: "ADMIN", recorder: Recorder()).accessibilityEntries.map(\.id)
+        XCTAssertTrue(ids.contains("rename"))
+        XCTAssertTrue(ids.contains("adminOpen"))
+    }
+
+    func test_accessibilityEntry_perform_runsItsActionThenDismisses() {
+        let recorder = Recorder()
+        let leave = makeMenu(memberRole: "member", platformRole: "USER", recorder: recorder)
+            .accessibilityEntries.first { $0.id == "leave" }
+        leave?.perform()
+        XCTAssertEqual(recorder.calls, ["leave", "dismiss"])
+    }
+
+    func test_hideLabel_namesWhatTheGestureDoes() {
+        XCTAssertEqual(ConversationContextMenuView.removalIcon(.hide), "eye.slash")
+        XCTAssertNotEqual(
+            ConversationContextMenuView.removalLabel(.hide),
+            ConversationContextMenuView.removalLabel(.delete),
+            "Un membre qui masque ne lit pas « Supprimer »."
+        )
+    }
+}
