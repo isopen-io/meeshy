@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshyUI
+import MeeshySDK
 
 // #8441 — pincer SA propre image zoome la caméra envoyée ; double-tap = retour
 // à 1×. Les gestes restent montés en permanence et se désactivent par leur
@@ -72,8 +73,7 @@ private struct CallCameraZoomModifier: ViewModifier {
     private func scheduleHide() {
         hideTask?.cancel()
         hideTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: Self.indicatorLinger)
-            guard !Task.isCancelled, !zoom.isPinching else { return }
+            guard await cancellableSleep(for: .nanoseconds(Self.indicatorLinger)), !Task.isCancelled, !zoom.isPinching else { return }
             isIndicatorVisible = false
         }
     }

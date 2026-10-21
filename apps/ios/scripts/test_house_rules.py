@@ -2,6 +2,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -150,6 +151,40 @@ class Exclusions(unittest.TestCase):
     def test_same_code_elsewhere_counts(self):
         self.assertEqual(count("logger-subsystem", 'Logger(subsystem: "a", category: "b")\n'), 1)
         self.assertEqual(count("idiom", "UIDevice.current.userInterfaceIdiom\n"), 1)
+
+
+class AsyncAfterRule(unittest.TestCase):
+    def test_counts_main_and_injected_queue_forms_and_ignores_comments_strings_lookalikes(self):
+        self.assertEqual(count("async-after", "DispatchQueue.main.asyncAfter(deadline: .now() + 1) { }\n"), 1)
+        self.assertEqual(count("async-after", "queue.asyncAfter(deadline: .now() + 1) { }\n"), 1)
+        self.assertEqual(count("async-after", "// x.asyncAfter(deadline: t)\n"), 0)
+        self.assertEqual(count("async-after", 'let s = ".asyncAfter("\n'), 0)
+        self.assertEqual(count("async-after", "asyncAfterDelay(1)\n"), 0)
+
+
+class SleepNanosecondsRule(unittest.TestCase):
+    def test_counts_nanoseconds_and_ignores_duration_form(self):
+        self.assertEqual(count("sleep-nanoseconds", "try await Task.sleep(nanoseconds: 1)\n"), 1)
+        self.assertEqual(count("sleep-nanoseconds", "try? await Task.sleep(nanoseconds: 1)\n"), 1)
+        self.assertEqual(count("sleep-nanoseconds", "try await Task.sleep(for: .seconds(1))\n"), 0)
+
+
+class LoggerSubsystemExemption(unittest.TestCase):
+    SAMPLE = "apps/ios/MeeshyBroadcastExtension/SampleHandler.swift"
+    SRC = 'Logger(subsystem: "x", category: "y")\n'
+
+    def test_broadcast_extension_is_exempt(self):
+        self.assertEqual(count("logger-subsystem", self.SRC, self.SAMPLE), 0)
+        self.assertEqual(count("logger-subsystem", self.SRC, "apps/ios/MeeshyBroadcastExtension/Other.swift"), 1)
+
+    def test_exemption_holds_only_while_broadcast_extension_links_no_sdk(self):
+        text = (HERE.parent / "project.yml").read_text(encoding="utf-8")
+        block = text.split("\n  MeeshyBroadcastExtension:\n")[1]
+        block = re.split(r"\n  \w", block)[0]
+        block = "\n".join(line for line in block.split("\n") if not line.lstrip().startswith("#"))
+        self.assertNotIn("MeeshySDK", block)
+        self.assertNotIn("package:", block)
+        self.assertNotIn("dependencies:", block)
 
 
 class ScopedRules(unittest.TestCase):

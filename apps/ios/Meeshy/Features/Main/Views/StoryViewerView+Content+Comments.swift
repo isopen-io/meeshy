@@ -562,7 +562,7 @@ extension StoryViewerView {
             // stale-id guard mean only stories the viewer actually pauses on
             // trigger a single lightweight reconciliation.
             guard storyCommentCount == 0 else { return }
-            try? await Task.sleep(nanoseconds: 400_000_000)
+            _ = await cancellableSleep(for: .milliseconds(400))
             if let now = currentStory?.id, now != story.id { return }
             guard let response = try? await PostService.shared.getComments(
                 postId: story.id, cursor: nil, limit: 50

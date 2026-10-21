@@ -6,21 +6,21 @@ import MeeshySDK
 @MainActor
 final class VoiceConsentFetchTests: XCTestCase {
     func test_voiceConsentMissing_falseWhenFetchThrows() async {
-        // resolveVoiceConsentMissing is a pure async helper: maps a throwing
+        // VoiceConsentGate.missing is a pure async helper: maps a throwing
         // fetch to a Bool, defaulting to false (no false nudge) on error.
-        let missing = await ConversationViewModel.resolveVoiceConsentMissing {
+        let missing = await VoiceConsentGate.missing {
             throw NSError(domain: "x", code: 1)
         }
         XCTAssertFalse(missing)
     }
 
     func test_voiceConsentMissing_trueWhenNoConsent() async {
-        let missing = await ConversationViewModel.resolveVoiceConsentMissing { false /* hasConsent */ }
+        let missing = await VoiceConsentGate.missing { false /* hasConsent */ }
         XCTAssertTrue(missing)
     }
 
     func test_voiceConsentMissing_falseWhenConsentGranted() async {
-        let missing = await ConversationViewModel.resolveVoiceConsentMissing { true }
+        let missing = await VoiceConsentGate.missing { true }
         XCTAssertFalse(missing)
     }
 

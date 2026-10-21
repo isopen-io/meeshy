@@ -172,7 +172,7 @@ extension ComposerCaptureSession {
                                      argument: ComposerSceneCameraCopy.previousTakeStillSaving)
                 return false
             }
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            _ = await cancellableSleep(for: .milliseconds(20))
         }
         return !Task.isCancelled
     }

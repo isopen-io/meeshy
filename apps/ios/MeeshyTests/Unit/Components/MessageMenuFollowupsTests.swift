@@ -228,10 +228,10 @@ final class MessageMenuFollowupsTests: XCTestCase {
     func test_concealment_filtersARow_byItsLocalOrItsServerId() {
         var concealment = PersonalConcealment()
         concealment.conceal(["srv-b", "c"])
-        let kept = concealment.filtering([record("a"), record("cid-b", serverId: "srv-b"), record("c")])
+        let kept = [record("a"), record("cid-b", serverId: "srv-b"), record("c")].filter { !concealment.conceals($0) }
         XCTAssertEqual(kept.map(\.localId), ["a"], "un message envoyé par soi garde son id optimiste : l'id serveur le désigne aussi")
         concealment.reveal(["srv-b"])
-        XCTAssertEqual(concealment.filtering([record("cid-b", serverId: "srv-b")]).map(\.localId), ["cid-b"])
+        XCTAssertFalse(concealment.conceals(record("cid-b", serverId: "srv-b")))
     }
 
     private func seededStore(_ ids: [String]) async throws -> (store: MessageStore, db: DatabaseQueue) {

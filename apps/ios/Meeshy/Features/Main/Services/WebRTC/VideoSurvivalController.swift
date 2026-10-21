@@ -34,6 +34,7 @@
 
 import Combine
 import Foundation
+import MeeshySDK
 
 // MARK: - Policy (pure)
 
@@ -305,7 +306,7 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
                 // cancellation-aware, unlike the actuator call this whole
                 // mechanism exists to bound).
                 let timeoutTask = Task {
-                    try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+                    _ = await cancellableSleep(for: .seconds(timeoutSeconds))
                     if await resolution.claim() { continuation.resume(returning: false) } // timeout won
                 }
                 Task {

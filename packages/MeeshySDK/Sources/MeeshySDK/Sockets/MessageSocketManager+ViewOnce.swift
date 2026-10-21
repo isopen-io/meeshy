@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import SocketIO
 
 // Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #7579
 // ajoute `message:view-once-purged`, on extrait d'abord la vue unique, on
@@ -35,19 +34,10 @@ public struct ViewOncePurgedEvent: Decodable, Sendable {
 
 extension MessageSocketManager {
 
-    func registerViewOnceHandlers(on socket: SocketIOClient) {
-        socket.on("message:consumed") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(MessageConsumedEvent.self, from: data) { [weak self] event in
-                self?.messageConsumed.send(event)
-            }
-        }
-
-        socket.on("message:view-once-purged") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(ViewOncePurgedEvent.self, from: data) { [weak self] event in
-                self?.viewOncePurged.send(event)
-            }
-        }
+    var viewOnceRoutes: [SocketInboundRoute] {
+        [
+            route(.messageConsumed, MessageConsumedEvent.self) { $0.messageConsumed.send($1) },
+            route(.messageViewOncePurged, ViewOncePurgedEvent.self) { $0.viewOncePurged.send($1) },
+        ]
     }
 }

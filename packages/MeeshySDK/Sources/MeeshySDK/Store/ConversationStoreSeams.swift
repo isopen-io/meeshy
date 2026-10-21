@@ -49,34 +49,34 @@ public protocol ConversationCategoryCreating: Sendable {
 /// This `@unchecked Sendable` registry wraps a lock so the actor can
 /// hand out subjects synchronously to UI code calling `publisher(for:)`
 /// from the main thread.
+// unchecked: registre sous `perConv` (Locked) ; `CurrentValueSubject` n'est pas Sendable.
 final class ConversationStoreSubjects: @unchecked Sendable {
-    private let lock = NSLock()
-    private var perConv: [String: CurrentValueSubject<MeeshyConversation, Never>] = [:]
+    private let perConv = Locked(uncheckedState: [String: CurrentValueSubject<MeeshyConversation, Never>]())
     let list = CurrentValueSubject<[MeeshyConversation], Never>([])
 
     func subject(for id: String, initial: () -> MeeshyConversation?) -> CurrentValueSubject<MeeshyConversation, Never>? {
-        lock.lock(); defer { lock.unlock() }
-        if let s = perConv[id] { return s }
-        guard let value = initial() else { return nil }
-        let s = CurrentValueSubject<MeeshyConversation, Never>(value)
-        perConv[id] = s
-        return s
+        perConv.mutateUnchecked { subjects in
+            if let existing = subjects[id] { return existing }
+            guard let value = initial() else { return nil }
+            let created = CurrentValueSubject<MeeshyConversation, Never>(value)
+            subjects[id] = created
+            return created
+        }
     }
 
     func send(_ conv: MeeshyConversation) {
-        lock.lock(); defer { lock.unlock() }
-        perConv[conv.id]?.send(conv)
+        perConv.mutateUnchecked { $0[conv.id]?.send(conv) }
     }
 
     func remove(_ id: String) {
-        lock.lock(); defer { lock.unlock() }
-        perConv.removeValue(forKey: id)
+        perConv.mutateUnchecked { _ = $0.removeValue(forKey: id) }
     }
 
     func removeAll() {
-        lock.lock(); defer { lock.unlock() }
-        perConv.removeAll()
-        list.send([])
+        perConv.mutateUnchecked { subjects in
+            subjects.removeAll()
+            list.send([])
+        }
     }
 }
 

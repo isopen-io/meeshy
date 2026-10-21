@@ -123,7 +123,7 @@ struct ComposerMoodPublishGate<Label: View>: View {
     private func returnToWord() {
         let focus = wordFocus
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: ComposerMoodBarePublish.refocusDelay)
+            _ = await cancellableSleep(for: .nanoseconds(ComposerMoodBarePublish.refocusDelay))
             focus?.focus()
         }
     }

@@ -33,6 +33,7 @@ public struct TransferProgressCadence: Sendable, Equatable {
 /// est propriétaire dès le retour. En échec ou en annulation, rien ne reste.
 ///
 /// Building block opaque : il ne connaît ni cache, ni directive, ni clé.
+// unchecked: état mutable sous `ledger` (Locked) ; `URLSessionConfiguration` et `Transfer` ne sont pas Sendable.
 public final class MediaFileDownloader: NSObject, @unchecked Sendable {
     public typealias ProgressHandler = @Sendable (_ writtenBytes: Int64, _ expectedBytes: Int64) -> Void
 
@@ -45,10 +46,13 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
 
     private let configuration: URLSessionConfiguration
     private let cadenceInterval: TimeInterval
-    private let lock = NSLock()
-    private var sessions: [MediaTransferProfile: URLSession] = [:]
-    private var transfers: [ObjectIdentifier: Transfer] = [:]
+    private let ledger = Locked(uncheckedState: TransferLedger())
     private let logger = MeeshyLog.logger(.mediaFileDownload, subsystem: .legacySDK)
+
+    private struct TransferLedger {
+        var sessions: [MediaTransferProfile: URLSession] = [:]
+        var transfers: [ObjectIdentifier: Transfer] = [:]
+    }
 
     private final class Transfer {
         let continuation: CheckedContinuation<Download, Error>
@@ -65,23 +69,27 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
 
     /// La tâche réseau d'un appel, retenue pour que l'annulation de la `Task`
     /// appelante l'atteigne — même quand elle arrive avant sa création.
-    private final class CancellationRelay: @unchecked Sendable {
-        private let lock = NSLock()
-        private var task: URLSessionTask?
-        private var cancelled = false
+    // unchecked: la tâche et le drapeau vivent sous `state` (Locked) ; `URLSessionTask` n'est pas Sendable.
+    final class CancellationRelay: @unchecked Sendable {
+        private struct RelayState {
+            var task: URLSessionTask?
+            var cancelled = false
+        }
+
+        private let state = Locked(uncheckedState: RelayState())
 
         func attach(_ task: URLSessionTask) {
-            let alreadyCancelled = lock.withLock { () -> Bool in
-                self.task = task
-                return cancelled
+            let alreadyCancelled = state.mutateUnchecked { state -> Bool in
+                state.task = task
+                return state.cancelled
             }
             if alreadyCancelled { task.cancel() }
         }
 
         func cancel() {
-            let task = lock.withLock { () -> URLSessionTask? in
-                cancelled = true
-                return self.task
+            let task = state.mutateUnchecked { state -> URLSessionTask? in
+                state.cancelled = true
+                return state.task
             }
             task?.cancel()
         }
@@ -101,9 +109,9 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
 
     /// Lâche la session (elle retient son délégué jusqu'à son invalidation).
     public func invalidate() {
-        let current = lock.withLock { () -> [URLSession] in
-            defer { sessions = [:] }
-            return Array(sessions.values)
+        let current = ledger.mutateUnchecked { ledger -> [URLSession] in
+            defer { ledger.sessions = [:] }
+            return Array(ledger.sessions.values)
         }
         current.forEach { $0.finishTasksAndInvalidate() }
     }
@@ -129,7 +137,7 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
                     progress: progress,
                     cadence: TransferProgressCadence(minimumInterval: cadenceInterval)
                 )
-                lock.withLock { transfers[ObjectIdentifier(task)] = transfer }
+                ledger.mutateUnchecked { $0.transfers[ObjectIdentifier(task)] = transfer }
                 relay.attach(task)
                 task.resume()
             }
@@ -141,20 +149,20 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
     /// Une session par profil : une `URLSession` ne change pas de configuration
     /// après sa création. Au plus quatre (deux priorités × deux réglages).
     func session(for profile: MediaTransferProfile) -> URLSession {
-        lock.withLock {
-            if let existing = sessions[profile] { return existing }
+        ledger.mutateUnchecked { ledger in
+            if let existing = ledger.sessions[profile] { return existing }
             let created = URLSession(
                 configuration: profile.configured(from: configuration),
                 delegate: self,
                 delegateQueue: nil
             )
-            sessions[profile] = created
+            ledger.sessions[profile] = created
             return created
         }
     }
 
     private func transfer(for task: URLSessionTask) -> Transfer? {
-        lock.withLock { transfers[ObjectIdentifier(task)] }
+        ledger.mutateUnchecked { $0.transfers[ObjectIdentifier(task)] }
     }
 
     private func stage(_ location: URL) throws -> URL {
@@ -179,8 +187,8 @@ extension MediaFileDownloader: URLSessionDownloadDelegate {
         totalBytesExpectedToWrite: Int64
     ) {
         let now = ProcessInfo.processInfo.systemUptime
-        let handler = lock.withLock { () -> ProgressHandler? in
-            guard let transfer = transfers[ObjectIdentifier(downloadTask)], transfer.progress != nil else { return nil }
+        let handler = ledger.mutateUnchecked { ledger -> ProgressHandler? in
+            guard let transfer = ledger.transfers[ObjectIdentifier(downloadTask)], transfer.progress != nil else { return nil }
             guard transfer.cadence.admits(
                 writtenBytes: totalBytesWritten,
                 expectedBytes: totalBytesExpectedToWrite,
@@ -212,12 +220,12 @@ extension MediaFileDownloader: URLSessionDownloadDelegate {
             logger.error("staging failed for a media download: \(error.localizedDescription, privacy: .public)")
             outcome = .failure(error)
         }
-        lock.withLock { transfer.staged = outcome }
+        ledger.mutateUnchecked { _ in transfer.staged = outcome }
     }
 
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let transfer = lock.withLock({ transfers.removeValue(forKey: ObjectIdentifier(task)) }) else { return }
-        let staged = lock.withLock { transfer.staged }
+        guard let transfer = ledger.mutateUnchecked({ $0.transfers.removeValue(forKey: ObjectIdentifier(task)) }) else { return }
+        let staged = ledger.mutateUnchecked { _ in transfer.staged }
         if let error {
             if case .success(let download) = staged {
                 try? FileManager.default.removeItem(at: download.fileURL)

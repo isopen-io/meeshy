@@ -211,8 +211,7 @@ extension CallManager {
         let armedForCallId = currentCallId
         audioActivationFallbackTask?.cancel()
         audioActivationFallbackTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.stuckMutedFallbackDelaySeconds))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .seconds(QualityThresholds.stuckMutedFallbackDelaySeconds)), !Task.isCancelled, let self else { return }
             // Défensif : si l'appel qui a armé ce fallback s'est terminé et qu'un
             // autre a démarré entre-temps, ce timer ne parle plus pour personne —
             // sans ce guard il forcerait l'activation audio du NOUVEL appel avant

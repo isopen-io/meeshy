@@ -129,7 +129,7 @@ extension AuthManager {
         // AUCUNE transition — les sockets ne se rouvraient pas et l'écran du
         // compte quitté restait monté. Une image à l'état « sorti » (écran
         // neutre, `isSwitchingAccount`) laisse chaque observateur la voir.
-        try? await Task.sleep(for: .milliseconds(150))
+        _ = await cancellableSleep(for: .milliseconds(150))
         guard !isAuthenticated else { return false }
         // #8674 — le cache du compte qui revient est rendu AVANT que la session
         // ne s'ouvre : le premier écran le lit, jamais un cache vide.

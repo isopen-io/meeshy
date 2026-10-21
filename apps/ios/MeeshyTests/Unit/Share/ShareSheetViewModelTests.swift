@@ -317,6 +317,15 @@ final class ShareSheetViewModelTests: XCTestCase {
         XCTAssertEqual(sut.visibleCommunities.map(\.id), ["k"])
     }
 
+    func test_search_cancelledDuringDebounce_neverQueriesDirectory() async {
+        let (sut, directory, _) = makeSUT()
+        let task = Task { await sut.search("ab", debounce: .seconds(5)) }
+        await Task.yield()
+        task.cancel()
+        await task.value
+        XCTAssertTrue(directory.searchedQueries.isEmpty)
+    }
+
     // MARK: - Une story : le lien suivi remplace l'adresse directe
 
     func test_aStory_usesItsTrackedLinkOnceResolved() async {

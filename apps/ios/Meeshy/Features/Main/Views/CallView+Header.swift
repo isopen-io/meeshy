@@ -154,7 +154,7 @@ extension CallView {
             pipMorphProgress = 1
         }
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            _ = await cancellableSleep(for: .milliseconds(300))
             var swap = Transaction()
             swap.disablesAnimations = true
             withTransaction(swap) {
@@ -173,7 +173,7 @@ extension CallView {
         HapticFeedback.medium()
         callManager.startSystemPiP()
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 600_000_000)
+            _ = await cancellableSleep(for: .milliseconds(600))
             guard CallPiPPolicy.shouldFallBackToPill(
                 isPiPActive: callManager.isSystemPiPActive,
                 displayMode: callManager.displayMode

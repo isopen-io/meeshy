@@ -529,7 +529,7 @@ struct ComposerCaptureChrome: View {
             id: UUID(), location: CGPoint(x: location.x - origin.x, y: location.y - origin.y))
         focusMark = marque
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(ComposerCaptureFocus.markLifetime * 1_000_000_000))
+            _ = await cancellableSleep(for: .seconds(ComposerCaptureFocus.markLifetime))
             if focusMark == marque { focusMark = nil }
         }
     }

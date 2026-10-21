@@ -88,7 +88,7 @@ final class CallDialReadiness: CallDialReadinessProviding {
                 connect()
             }
             guard clock.now < deadline, !Task.isCancelled else { return .timedOut }
-            try? await Task.sleep(for: pollInterval)
+            _ = await cancellableSleep(for: pollInterval)
         }
     }
 }

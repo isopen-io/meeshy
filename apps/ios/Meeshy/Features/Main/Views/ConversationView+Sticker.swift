@@ -87,52 +87,15 @@ extension ConversationView {
         let attachmentId = UUID().uuidString
         let directory = FileManager.default.temporaryDirectory
         let mimeType = original?.mimeType ?? StickerSendPipeline.pngMimeType
-        let fileName = StickerSendPipeline.fileName(for: attachmentId, mimeType: mimeType)
         let fileURL = StickerSendPipeline.fileURL(id: attachmentId, in: directory, mimeType: mimeType)
 
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         let senderColor = DynamicColorGenerator.colorForName(AuthManager.shared.currentUser?.displayName ?? "?")
         let localKey = fileURL.absoluteString
-        var local = MeeshyMessageAttachment(
-            id: attachmentId,
-            fileName: fileName, originalName: fileName,
-            // Le poids n'est pas encore connu — il naîtra de l'encodage, et
-            // toutes les surfaces le taisent quand il vaut zéro. L'ESTIMER
-            // afficherait un chiffre faux sous une image que le serveur
-            // remplacera par sa propre pièce jointe deux secondes plus tard.
-            mimeType: mimeType, fileSize: 0,
-            fileUrl: localKey,
-            width: Int(image.size.width * image.scale),
-            height: Int(image.size.height * image.scale),
-            thumbnailUrl: localKey,
-            uploadedBy: currentUserId,
-            thumbnailColor: senderColor
+        let local = StickerOptimisticAttachment.make(
+            image: image, attachmentId: attachmentId, mimeType: mimeType, fileURL: fileURL,
+            sticker: sticker, uploadedBy: currentUserId, color: senderColor
         )
-        /*
-         LE TEXTE DU STICKER VOYAGE AVEC SON IMAGE (#6377, porteur 2026-09-14).
-
-         Un sticker part comme un PNG : sans ces deux champs, le fil ne reçoit
-         qu'une image muette. `alt` et `caption` existaient déjà sur
-         `MeeshyMessageAttachment` et le texte était déjà là, dans le
-         `MessageSticker` que cet appel transporte — les deux n'étaient pas
-         reliés.
-
-         Ce que leur absence coûtait : un lecteur d'écran annonçait « image »,
-         une bannière de notification ne montrait rien, et une recherche dans le
-         fil ne pouvait pas retrouver un sticker par ce qu'il DIT.
-
-         Les deux champs portent le MÊME texte, et c'est voulu : ce qu'un
-         sticker montre EST sa légende, il n'a pas de description alternative
-         distincte de son contenu. Les séparer inviterait à en remplir un seul.
-
-         `sticker == nil` — un PNG de « Mes stickers », collé tel quel — n'a
-         aucun texte à décrire : les champs restent nils plutôt que de porter
-         un nom de fichier, qui ne décrit rien et se lirait à voix haute.
-        */
-        if let texte = sticker.flatMap(StickerAltText.describe) {
-            local.alt = texte
-            local.caption = texte
-        }
         // La bulle optimiste lit `file://…` : amorcer le cache MÉMOIRE sous
         // cette clé AVANT de la poser pour qu'elle peigne l'image déjà rendue,
         // sans relire le disque ni le réseau. Le cache DISQUE, lui, attend les
@@ -163,7 +126,7 @@ extension ConversationView {
             await encodeWriteAndSendSticker(
                 image: image, original: original, attachmentId: attachmentId, directory: directory,
                 localKey: localKey, tempId: tempId, sticker: sticker,
-                replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
+                relation: ComposerSendRelation.of(route, citing: nil),
                 originalLanguage: lang, currentUserId: currentUserId, protection: protection
             )
         }
@@ -179,7 +142,7 @@ extension ConversationView {
         image: UIImage, original: StickerSendPipeline.OriginalFile?,
         attachmentId: String, directory: URL, localKey: String,
         tempId: String, sticker: MessageSticker?,
-        replyId: String?, storyReplyId: String?, storyRef: ReplyReference?,
+        relation: MessageRelation,
         originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
         let écrit: StickerSendPipeline.WrittenSticker
@@ -202,7 +165,7 @@ extension ConversationView {
         await uploadAndSendSticker(
             fileURL: écrit.url, data: écrit.data, mimeType: original?.mimeType ?? StickerSendPipeline.pngMimeType,
             image: image, tempId: tempId, sticker: sticker,
-            replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
+            relation: relation,
             originalLanguage: originalLanguage, currentUserId: currentUserId, protection: protection
         )
     }
@@ -214,12 +177,12 @@ extension ConversationView {
     /// muette.
     private func uploadAndSendSticker(
         fileURL: URL, data: Data, mimeType: String, image: UIImage, tempId: String, sticker: MessageSticker?,
-        replyId: String?, storyReplyId: String?, storyRef: ReplyReference?,
+        relation: MessageRelation,
         originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
         if NetworkMonitor.shared.isOffline {
             await enqueueStickerOffline(fileURL: fileURL, mimeType: mimeType, tempId: tempId, sticker: sticker,
-                                        replyId: replyId, originalLanguage: originalLanguage)
+                                        replyId: relation.replyToId, originalLanguage: originalLanguage)
             return
         }
         // Une pièce jointe de MESSAGE ne demande pas de compte : un invité de
@@ -242,7 +205,7 @@ extension ConversationView {
             _ = await viewModel.send(OutgoingMessage(
                 conversationId: ConversationID(viewModel.conversationId),
                 content: "",
-                relation: MessageRelation.legacy(replyToId: replyId, storyReplyToId: storyReplyId, storyReference: storyRef, forwardedFromId: nil, forwardedFromConversationId: nil, attachmentReplyTo: nil),
+                relation: relation,
                 attachments: OutgoingAttachments(ids: [result.id], previews: [result.toMessageAttachment(uploadedBy: currentUserId)]),
                 protection: protection,
                 originalLanguage: originalLanguage,
@@ -259,7 +222,7 @@ extension ConversationView {
             // `.queued` (horloge conservée) et l'outbox rejoue l'upload.
             await viewModel.recordSendFailure(tempId: tempId, error: error)
             await enqueueStickerOffline(fileURL: fileURL, mimeType: mimeType, tempId: tempId, sticker: sticker,
-                                        replyId: replyId, originalLanguage: originalLanguage)
+                                        replyId: relation.replyToId, originalLanguage: originalLanguage)
         }
     }
 

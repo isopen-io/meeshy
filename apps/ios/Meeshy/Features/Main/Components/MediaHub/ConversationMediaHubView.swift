@@ -206,7 +206,7 @@ struct ConversationMediaHubView: View {
         return Button { open(item) } label: {
             MediaHubVisualTile(item: item, accessibilityText: label).equatable()
         }
-        .buttonStyle(MeeshyPointerButtonStyle(shape: .roundedRect(cornerRadius: 0)))
+        .buttonStyle(MeeshyPointerButtonStyle(shape: .rectangle))
         .modifier(GoToMessageAffordance(messageId: item.messageId, goToMessage: actions.goToMessage))
     }
 

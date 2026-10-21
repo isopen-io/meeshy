@@ -439,7 +439,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         Button { onSelectConversation?(conversation) } label: {
                             conversationRow(conversation)
                         }
-                        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .roundedRect(cornerRadius: 0)))
+                        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .rectangle))
 
                         if conversation.id != viewModel.conversations.last?.id {
                             Divider().padding(.leading, 60)

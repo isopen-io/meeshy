@@ -465,8 +465,7 @@ final class CallManager: ObservableObject {
         pendingAnswerAction = action
         pendingAnswerSafetyTask?.cancel()
         pendingAnswerSafetyTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.pendingAnswerActionSafetyNetSeconds))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(QualityThresholds.pendingAnswerActionSafetyNetSeconds)), !Task.isCancelled else { return }
             self?.settlePendingAnswerAction(fulfilled: true, reason: "safety-net \(Int(QualityThresholds.pendingAnswerActionSafetyNetSeconds))s — still not connected")
         }
     }
@@ -559,36 +558,10 @@ final class CallManager: ObservableObject {
     var connectionEpoch = 0
 
     // MARK: - Analytics accumulators (reset in endCallInternal)
-    var analyticsCallInitiatedDate: Date?
-    /// answer/join → début de la négociation WebRTC : answerCall côté appelé,
-    /// participant-joined côté appelant. Sépare le temps de sonnerie humain
-    /// (dans setupTimeMs) du temps technique (negotiationTimeMs).
-    var analyticsNegotiationStartDate: Date?
-    var analyticsConnectedDate: Date?
-    var analyticsNetworkTransitions: Int = 0
-    var analyticsQualitySeconds: [VideoQualityLevel: Double] = [:]
-    var analyticsLastQualityDate: Date?
-    var analyticsCurrentLevel: VideoQualityLevel?
+    var analytics = CallAnalyticsRecorder()
     /// Snapshots analytics périodiques (60 s, endReason "in_progress") — un
     /// kill de l'app en background ne perd plus la télémétrie de l'appel.
     var analyticsSnapshotTask: Task<Void, Never>?
-    var analyticsRttSum: Double = 0
-    var analyticsSampleCount: Int = 0
-    var analyticsMaxPacketLoss: Double = 0
-    var analyticsPacketLossSum: Double = 0
-    var analyticsEffectsUsed: Set<String> = []
-    var analyticsVideoFiltersUsed: Bool = false
-    /// Cumulative reconnection attempts across the WHOLE call, for the
-    /// "reconnectionCount" analytics field. Deliberately separate from
-    /// `reconnectAttempt` (the live FSM retry budget, capped at
-    /// `maxReconnectAttempts` and zeroed by every `transitionToConnected` —
-    /// including a mid-call ICE-restart recovery, not just call start). Without
-    /// this, a call that survived several network blips and then ended
-    /// normally reported `reconnectionCount: 0`, identical to a call that never
-    /// had any trouble — defeating the one metric meant to flag connectivity
-    /// issues. Incremented alongside `reconnectAttempt` in `attemptReconnection`
-    /// and reset only in `endCallInternal`.
-    var analyticsTotalReconnects: Int = 0
 
     /// Periodic refresh of TURN credentials before TTL expiry. Cancelled on call end.
     var turnRefreshTask: Task<Void, Never>?

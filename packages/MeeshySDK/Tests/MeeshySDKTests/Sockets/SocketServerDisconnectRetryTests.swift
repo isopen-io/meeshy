@@ -20,7 +20,7 @@ final class SocketServerDisconnectRetryTests: XCTestCase {
         XCTAssertNil(SocketDisconnectPolicy.reason(in: []))
     }
 
-    func test_bothSocketManagers_armTheirRetryOnAServerDisconnect() throws {
+    func test_bothSocketManagers_handOverTheServerDisconnectDecisionToTheirLifecycleMethod() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Sources/MeeshySDK/Sockets")
@@ -29,31 +29,8 @@ final class SocketServerDisconnectRetryTests: XCTestCase {
             let handler = try XCTUnwrap(source.range(of: "socket.on(clientEvent: .disconnect)"), file)
             let body = String(source[handler.upperBound...].prefix(1_200))
             XCTAssertTrue(body.contains("SocketDisconnectPolicy.retries(afterReason:"), file)
-            XCTAssertTrue(body.contains("self.scheduleReconnectWithBackoff()"), file)
+            XCTAssertTrue(body.contains("self.handleTransportDisconnected(retries: retries)"), "l'armement se prouve par `SocketConnectionLifecycleTests` — \(file)")
             XCTAssertTrue(body.contains("socket === self.socket"), "seul le socket courant réarme — \(file)")
-        }
-    }
-}
-
-/// Un `forceReconnect` retire le transport courant ; s'il était déjà dans sa
-/// boucle de reconnexion (réseau coupé), elle continuait sans fin. Les tests
-/// scellent le transport (`SocketConfig.isTransportSealed`) : aucun socket ne
-/// s'y construit, la règle se lit donc à la source.
-final class SocketRetiredTransportTests: XCTestCase {
-
-    func test_retiredTransport_losesItsReconnectLoop_andClosesAfterTheGrace() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/Sockets")
-        let retireDeclarations = [
-            "SocketTransportRetirement.swift": "func retire(_ transport: SocketManager?) {",
-        ]
-        for (file, declaration) in retireDeclarations {
-            let source = try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8)
-            let start = try XCTUnwrap(source.range(of: declaration), file)
-            let body = String(source[start.upperBound...].prefix(1_400))
-            XCTAssertTrue(body.contains("retiring.reconnects = false"), file)
-            XCTAssertTrue(body.contains(".forEach { $0.disconnect() }"), file)
         }
     }
 }

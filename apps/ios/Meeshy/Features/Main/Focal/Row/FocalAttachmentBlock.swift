@@ -335,8 +335,7 @@ struct FocalGridCell: View {
     /// toucher, le flou revient après la durée de visibilité.
     private func reblurAfterVisibility() async {
         guard isRevealed, attachment.isBlurred, !attachment.isViewOnce else { return }
-        try? await Task.sleep(for: .seconds(BubbleBlurRevealLifecycle.defaultRevealDuration))
-        guard !Task.isCancelled else { return }
+        guard await cancellableSleep(for: .seconds(BubbleBlurRevealLifecycle.defaultRevealDuration)), !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: BubbleBlurRevealLifecycle.Phase.blurApply.duration)) { isRevealed = false }
     }
 

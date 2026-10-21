@@ -437,7 +437,7 @@ struct FloatingCallPillView: View {
         }
         Task { @MainActor in
             if !reduceMotion {
-                try? await Task.sleep(for: .milliseconds(250))
+                _ = await cancellableSleep(for: .milliseconds(250))
             }
             // The call can end during this 250ms exit animation (user hangs
             // up immediately after swiping, remote hangs up, etc.) — guard

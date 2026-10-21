@@ -1,6 +1,7 @@
 {
   "rules": {
     "anyview": 96,
+    "async-after": 76,
     "autocapitalization": 0,
     "available-floor": 0,
     "corner-radius-modifier": 0,
@@ -8,17 +9,18 @@
     "fixed-font": 760,
     "foreground-color": 3101,
     "idiom": 0,
-    "logger-subsystem": 5,
-    "nonisolated-unsafe": 150,
-    "nslock": 48,
+    "logger-subsystem": 0,
+    "nonisolated-unsafe": 111,
+    "nslock": 39,
     "nslog": 0,
     "observed-theme-singleton": 16,
     "onchange-single": 0,
     "plural-s": 0,
+    "sleep-nanoseconds": 25,
     "status-bar-hidden": 0,
-    "try-sleep": 220,
+    "try-sleep": 51,
     "uiscreen-main": 1,
-    "unchecked-sendable": 132,
+    "unchecked-sendable": 128,
     "viewmodel-shared": 588
   },
   "version": 1

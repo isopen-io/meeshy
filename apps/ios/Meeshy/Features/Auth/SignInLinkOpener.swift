@@ -302,7 +302,7 @@ final class AccountReplacementAlert: AccountReplacementConfirming {
             alert.preferredAction = cancel
             alert.onDisappear = { [weak alert] in
                 Task { @MainActor [weak alert] in
-                    try? await Task.sleep(for: Self.unansweredDismissalGrace)
+                    _ = await cancellableSleep(for: Self.unansweredDismissalGrace)
                     guard alert?.presentingViewController == nil else { return }
                     answer.give(.declined)
                 }

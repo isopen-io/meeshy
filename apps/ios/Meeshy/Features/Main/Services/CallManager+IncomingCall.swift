@@ -412,7 +412,7 @@ extension CallManager {
             return
         }
 
-        analyticsCallInitiatedDate = Date()
+        analytics.callInitiatedDate = Date()
         currentCallId = callId
         remoteUserId = fromUserId
         remoteUsername = fromUsername

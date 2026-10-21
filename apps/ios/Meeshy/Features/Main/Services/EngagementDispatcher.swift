@@ -86,8 +86,7 @@ final class EngagementRetryScheduler {
     func scheduleSoon() {
         timer?.cancel()
         timer = Task {
-            try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(30)), !Task.isCancelled else { return }
             await EngagementFlushTrigger.flushNow()
         }
     }

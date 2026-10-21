@@ -16,7 +16,7 @@ final class DiskPressureSweeper {
     // Garde : MainActorDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    static let shared = DiskPressureSweeper(minimumInterval: 10 * 60, sweep: sweepAllCaches)
+    static let shared = DiskPressureSweeper(minimumInterval: 10 * 60, sweep: { await sweepAllCaches() })
 
     nonisolated private static func sweepAllCaches() async {
         let coordinator = CacheCoordinator.shared
@@ -27,11 +27,11 @@ final class DiskPressureSweeper {
     }
 
     private let minimumInterval: TimeInterval
-    private let sweep: @Sendable () async -> Void
+    private let sweep: @Sendable @concurrent () async -> Void
     private var lastSweepAt: Date?
     private var inFlight: Task<Void, Never>?
 
-    init(minimumInterval: TimeInterval, sweep: @escaping @Sendable () async -> Void) {
+    init(minimumInterval: TimeInterval, sweep: @escaping @Sendable @concurrent () async -> Void) {
         self.minimumInterval = minimumInterval
         self.sweep = sweep
     }
