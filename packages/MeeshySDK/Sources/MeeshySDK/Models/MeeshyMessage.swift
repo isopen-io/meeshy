@@ -152,6 +152,13 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// `(1) · Déjà ouvert`, et le contenu est purgé.
     public var viewOnceOpenedAt: Date?
 
+    /// **D'où vient `content` SUR CET APPAREIL** (#11382) : `.wire` pour tout
+    /// texte reçu, `.decryptedOnDevice` posée par le SEUL déchiffrement
+    /// (`adoptDecryptedContent`) et liée par empreinte au clair. Hors de
+    /// l'init : aucun producteur ne la déclare. Persistée dans le cache,
+    /// absente (`.wire`) sur une ligne écrite avant elle.
+    public internal(set) var contentOrigin: MessageContentOrigin = .wire
+
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending    // optimistic, not yet sent
         case invisible  // < 200ms, status hidden in UI (debounce — spec §6.2)
@@ -269,6 +276,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case location
         case sticker
         case trackedLinkMap
+        case contentOrigin
         // Legacy keys for migration from old cached data
         case isViewOnce, isBlurred
     }
@@ -342,6 +350,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         sticker = cachedSticker?.ifWireWorthy
         // Backward-compatible: rows cached before this field decode to `[:]`.
         trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
+        contentOrigin = (try? c.decodeIfPresent(MessageContentOrigin.self, forKey: .contentOrigin)) ?? .wire
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
         if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
             effects.flags.insert(.viewOnce)
@@ -406,6 +415,9 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(sticker, forKey: .sticker)
         if !trackedLinkMap.isEmpty {
             try c.encode(trackedLinkMap, forKey: .trackedLinkMap)
+        }
+        if contentOrigin != .wire {
+            try c.encode(contentOrigin, forKey: .contentOrigin)
         }
     }
 

@@ -151,12 +151,53 @@ enum ConversationPreviewRenderer {
         conversation.encryptionMode == "e2ee"
     }
 
-    /// La peau que le fil peint : l'apparence relevée par le fil ouvert, sinon
-    /// celle que la conversation porte.
+    /// L'apparence que le fil peint : celle relevée par le fil ouvert, sinon
+    /// celle que la conversation porte. La peau ET le fond la lisent.
+    static func appearance(for conversation: Conversation) -> ConversationAppearance? {
+        BubbleSkinLedger.appearance(for: conversation.id) ?? conversation.userState.appearance
+    }
+
     static func skin(for conversation: Conversation, isDark: Bool) -> BubbleSkin {
-        BubbleSkin.resolve(
-            BubbleSkinLedger.appearance(for: conversation.id) ?? conversation.userState.appearance,
-            isDark: isDark
+        BubbleSkin.resolve(Self.appearance(for: conversation), isDark: isDark)
+    }
+
+    /// Le fond que le fil peint sous ses bulles, et l'accent de son motif.
+    struct Backdrop: Equatable {
+        let resolution: ConversationBackgroundResolution
+        let accentHex: String
+
+        /// Signature : la carte garde son propre fond (dégradé et halos à
+        /// l'accent), la version réduite du fond animé du fil.
+        static let card = Backdrop(resolution: .signature, accentHex: MeeshyColors.brandPrimaryHex)
+
+        var paintsOverTheCard: Bool { resolution != .signature }
+    }
+
+    /// Le fond RÉSOLU de la conversation (#11231) — couleur, motif ou photo —,
+    /// par la même résolution que le fil (`ConversationBackgroundResolution`) :
+    /// un choix illisible retombe sur la carte, jamais sur un vide.
+    static func backdrop(for conversation: Conversation, computedAccentHex: String, isDark: Bool) -> Backdrop {
+        let chosen = Self.appearance(for: conversation)
+        return Backdrop(
+            resolution: ConversationBackgroundResolution.resolve(chosen, isDark: isDark),
+            accentHex: ConversationBackgroundResolution.effectiveAccentHex(chosen, computedHex: computedAccentHex, isDark: isDark)
+        )
+    }
+
+    /// La photo d'un fond, dans l'aperçu : la pièce connue parmi les messages
+    /// servis, sinon la mémoire de l'appareil, sinon la route qui vérifie
+    /// l'appartenance. Une pièce CHIFFRÉE n'est jamais demandée au réseau
+    /// (`ConversationBackgroundPhotoVerdict`) : `nil`, le voile reste seul.
+    static func backdropPhoto(
+        attachmentId: String,
+        among messages: [Message],
+        remembered: ConversationBackgroundPhoto?,
+        serverOrigin: String
+    ) -> ConversationBackgroundPhoto? {
+        let known = messages.lazy.flatMap(\.attachments).first { $0.id == attachmentId }
+        guard ConversationBackgroundPhotoVerdict.source(for: known) == .clear else { return nil }
+        return ConversationBackgroundPhoto.resolve(
+            attachmentId: attachmentId, known: known, remembered: remembered, serverOrigin: serverOrigin
         )
     }
 
@@ -184,6 +225,9 @@ struct ConversationRecentMessagesPreview: View {
     let isDark: Bool
     let currentUserId: String
     let cardWidth: CGFloat
+    /// Le fond de la conversation sous ses bulles (#11231) ; la carte garde le
+    /// sien quand la conversation n'en a pas choisi.
+    var backdrop: ConversationPreviewRenderer.Backdrop = .card
 
     @Environment(\.layoutDirection) private var layoutDirection
     /// Les heures d'une rangée au repos ne se montrent qu'au défilement : la
@@ -199,6 +243,21 @@ struct ConversationRecentMessagesPreview: View {
             Spacer(minLength: 0)
             content
         }
+        .background {
+            if backdrop.paintsOverTheCard {
+                ConversationPreviewBackdrop(backdrop: backdrop, photo: backdropPhoto, isDark: isDark)
+            }
+        }
+    }
+
+    private var backdropPhoto: ConversationBackgroundPhoto? {
+        guard case .photo(let attachmentId, _, _) = backdrop.resolution else { return nil }
+        return ConversationPreviewRenderer.backdropPhoto(
+            attachmentId: attachmentId,
+            among: messages,
+            remembered: ConversationBackgroundPhotoMemory().photo(for: attachmentId),
+            serverOrigin: MeeshyConfig.shared.serverOrigin
+        )
     }
 
     @ViewBuilder
@@ -371,6 +430,71 @@ struct ConversationRecentMessagesPreview: View {
                 SkeletonShape(width: Self.skeletonWidths[index], height: 34, cornerRadius: MeeshyRadius.lg)
                 if index % 2 == 0 { Spacer(minLength: MeeshySpacing.xl) }
             }
+        }
+    }
+}
+
+// MARK: - Le fond de la conversation, dans la carte (#11231)
+
+/// Le fond que le fil peint, rendu à la taille de la carte : la couleur unie,
+/// le motif du catalogue embarqué (premier rendu sans réseau, sans sa couche
+/// animée — un aperçu ne joue rien), ou la photo sous son voile et son flou.
+/// Décor pur : ni cible, ni élément d'accessibilité.
+private struct ConversationPreviewBackdrop: View {
+    let backdrop: ConversationPreviewRenderer.Backdrop
+    let photo: ConversationBackgroundPhoto?
+    let isDark: Bool
+
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    /// La carte fait 340 pt de large au plus : la photo ne se décode jamais
+    /// au plein format.
+    private static let photoTargetSize = CGSize(width: 340, height: 300)
+
+    var body: some View {
+        layer
+            .clipped()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var layer: some View {
+        switch backdrop.resolution {
+        case .signature:
+            Color.clear
+        case .design(let design):
+            AppearanceDesignView(design: design, isDark: isDark, accentHex: backdrop.accentHex)
+                .equatable()
+        case .solid(let hex):
+            Color(hex: hex)
+        case .photo(_, let veil, let blur):
+            photoLayer(veil: veil, blur: blur)
+        }
+    }
+
+    private func photoLayer(veil: Double, blur: Int) -> some View {
+        ZStack {
+            MeeshyColors.backgroundPrimary(isDark: isDark)
+            if let photo {
+                Color.clear
+                    .overlay {
+                        ProgressiveCachedImage(
+                            thumbHash: photo.thumbHash,
+                            thumbnailUrl: photo.thumbnailUrl,
+                            fullUrl: photo.fullUrl,
+                            autoLoad: true,
+                            targetSize: Self.photoTargetSize
+                        ) {
+                            Color.clear
+                        }
+                        .scaledToFill()
+                        .blur(radius: CGFloat(blur))
+                    }
+                    .clipped()
+            }
+            MeeshyColors.backgroundPrimary(isDark: isDark)
+                .opacity(ConversationBackgroundResolution.effectiveVeil(veil, reduceTransparency: reduceTransparency))
         }
     }
 }
