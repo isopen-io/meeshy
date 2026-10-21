@@ -135,6 +135,85 @@ final class LongPressPreviewGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - 2 bis. L'aperçu se dessine dans le mode de lecture du fil (#11213)
+
+    private static let renderPath = "Meeshy/Features/Main/Views/ConversationRecentMessagesPreview.swift"
+    private static let helpersPath = "Meeshy/Features/Main/Views/ConversationListHelpers.swift"
+
+    /// Les DEUX chemins OS remettent à l'aperçu le mode que le fil ouvrirait —
+    /// la même décision, lue au même site.
+    func test_bothPaths_passTheThreadsOpeningMode() throws {
+        for path in [Self.nativePath, Self.overlayPath] {
+            let normalized = normalizedCode(try source(path))
+            XCTAssertTrue(
+                normalized.contains("readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation)"),
+                "\(path) : l'aperçu reçoit le mode d'ouverture du fil, jamais un mode recalculé sur place."
+            )
+        }
+    }
+
+    /// La bulle de l'aperçu porte la peau de la conversation et se mesure à la
+    /// carte, pas à la fenêtre.
+    func test_recentMessages_bubble_setsTheSkinAndTheCardWidth() throws {
+        let normalized = normalizedCode(try source(Self.renderPath))
+        XCTAssertTrue(normalized.contains(".environment(\\.bubbleSkin, skin)"), "la bulle porte la peau de la conversation")
+        XCTAssertTrue(
+            normalized.contains(".environment(\\.bubbleContainerWidth, Self.bubbleContainerWidth(cardWidth: cardWidth))"),
+            "la bulle se mesure à la largeur intérieure de la carte"
+        )
+    }
+
+    /// Les rangées plates sont la `FocalRow` du fil, construite par la fabrique
+    /// de l'aperçu de message — jamais une rangée refaite à la main.
+    func test_recentMessages_flatRow_isTheThreadRow() throws {
+        let normalized = normalizedCode(try source(Self.renderPath))
+        XCTAssertTrue(normalized.contains("FocalRowInput.preview("))
+        XCTAssertTrue(normalized.contains("FocalRow(input:"))
+    }
+
+    /// iOS 26 : l'aperçu natif n'est pas interactif. Ses boutons y seraient
+    /// INERTES (la loupe et l'info ne recevaient aucune action) : ils n'y sont
+    /// donc pas, seuls les indicateurs restent.
+    func test_nativePreview_isNotInteractive() throws {
+        let normalized = normalizedCode(try source(Self.nativePath))
+        XCTAssertTrue(normalized.contains("isInteractive: false"))
+        let helpers = normalizedCode(try source(Self.helpersPath))
+        XCTAssertTrue(
+            helpers.contains("if ConversationPreviewRenderer.showsHeaderActions(isInteractive: isInteractive) { headerActions"),
+            "`headerActions` n'est monté que si l'aperçu est interactif"
+        )
+    }
+
+    /// Le repli < iOS 26 lit Réduire les animations : l'entrée devient un
+    /// fondu, sans émergence, sans rebond ni flou.
+    func test_fallback_readsReduceMotion() throws {
+        let normalized = normalizedCode(try source(Self.overlayPath))
+        XCTAssertTrue(normalized.contains("@Environment(\\.accessibilityReduceMotion)"))
+        XCTAssertTrue(normalized.contains("@Environment(\\.meeshyForceReduceMotion)"))
+        XCTAssertTrue(normalized.contains("runContextMenuEmergence(reduceMotion: reduceMotion)"))
+    }
+
+    /// Le repli < iOS 26 : toucher la carte ouvre la conversation, comme
+    /// l'aperçu natif.
+    func test_fallback_tapOnTheCard_opensTheConversation() throws {
+        let normalized = normalizedCode(try source(Self.overlayPath))
+        XCTAssertTrue(normalized.contains("openFromPreview(conversation)"))
+        XCTAssertTrue(normalized.contains("dismissContextMenu() onSelect(conversation)"))
+    }
+
+    /// Prisme (patron `ConversationPreviewPrismSourceGuardTests`) : l'aperçu
+    /// rend la traduction que le chargeur a ÉLUE par `ReaderPrism` — jamais une
+    /// seconde descente, jamais `translations.first`, jamais le prisme à repli
+    /// « fr » de `preferredContentLanguages`.
+    func test_recentMessages_servesTheElectedTranslationOnly() throws {
+        let normalized = normalizedCode(try source(Self.renderPath))
+        XCTAssertTrue(normalized.contains("preferredTranslation: served[message.id]"))
+        XCTAssertTrue(normalized.contains("servedTranslation: served[message.id]"))
+        for forbidden in ["translations.first", ".first?.translatedContent", "preferredContentLanguages", "ReaderPrism.resolve"] {
+            XCTAssertFalse(normalized.contains(forbidden), "l'aperçu ne redescend pas le Prisme : « \(forbidden) »")
+        }
+    }
+
     // MARK: - 3. Gardes de source — timings et cotes gelés NON redéfinis dans Lentille/Mode/
 
     private static var modeDirectory: URL {
