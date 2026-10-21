@@ -35,7 +35,7 @@ final class KeypadViewModel: ObservableObject {
         self.userService = userService
     }
 
-    deinit {
+    nonisolated deinit {
         searchTask?.cancel()
     }
 
