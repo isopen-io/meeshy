@@ -45,8 +45,7 @@ public class NotificationActionActivity extends Activity {
         super.onCreate(savedInstanceState);
         Intent intent = getIntent();
         if (intent != null) relay(intent);
-        finish();
-        overridePendingTransition(0, 0);
+        TrampolineExit.finishWithoutAnimation(this);
     }
 
     private void relay(Intent intent) {
