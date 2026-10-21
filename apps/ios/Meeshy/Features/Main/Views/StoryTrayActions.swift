@@ -342,7 +342,7 @@ extension View {
                     isPresented.wrappedValue = false
                 }
             )
-            .environmentObject(router)
+            .modifier(MeeshyRouterInjection(router: router))
             .conversationListObject(conversationListViewModel)
         }
     }

@@ -11,14 +11,8 @@ import MeeshyUI
 /// vue distingue les deux au tap plutôt que de tout envoyer sur le détail.
 struct BookmarksView: View {
     @StateObject private var viewModel = BookmarksViewModel()
-    /// `@StateObject` sur le singleton, PAS `@EnvironmentObject` : ni `RootView`
-    /// ni `iPadRootView` n'injectent `ThemeManager`, et l'exiger de
-    /// l'environnement faisait planter l'app à l'ouverture de cet écran
-    /// (« No ObservableObject of type ThemeManager found »). Le défaut est
-    /// resté invisible tant que l'écran n'avait aucun point d'entrée.
-    /// Observé — un basculement Clair/Sombre doit repeindre la liste, ce que le
-    /// `{ ThemeManager.shared }` calculé des écrans voisins ne fait pas.
-    @StateObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.isPresented) private var isPresented
     @Environment(\.meeshyPanelDismiss) private var panelDismiss

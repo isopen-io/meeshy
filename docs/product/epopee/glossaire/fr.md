@@ -61,7 +61,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. Da
 | Lumière | ta lumière, le fil entier (la Lumière du héros) | un palier de niveau (→ Clarté) |
 | Coffre | la quatrième réserve de l'Héritage | le coffre du jour (→ l'Offrande) |
 | Trésor | la cinquième réserve de l'Héritage | le concept entier (→ l'Héritage) |
-| Étoile | le ciel : le palier Étoile, le ciel des aïeux, les fragments d'étoile | le Prestige (→ âges), la saison (→ pas) |
+| Étoile | le ciel : le palier Étoile, le ciel des aïeux, les fragments d'étoile | le Prestige (→ âges), la saison (→ pas), les paliers d'une médaille (→ paliers) |
 | Étape | l'intégration (l'accueil) seulement | le seuil des dix niveaux (→ épreuve), la saison (→ halte) |
 | Rang | le nom que le monde donne au héros | la place en ligue (→ place) |
 | Record | plus rien | voir « depuis toujours », « ta plus haute lumière », « ta plus longue Flamme », « frappées depuis toujours » |
@@ -125,6 +125,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. Da
 - **A** : « ▲ 23 j », « Flamme 23 jours ».
 - **B** : « Ta Flamme brûle depuis 23 jours », puis en petit « +46 % sur tes rêves ».
 - **Bannis** : « gel » → « Veilleuse » ; « série » → « Flamme » ; « record de Flamme » → « ta plus longue Flamme ».
+- **La série d'une conversation** n'est pas la Flamme : sous 🔥, elle ne dit que sa durée, « 4 jours » (#11444, choix 7).
 
 ### La Joute et l'Alliance (`game.league.*`, `game.duo.*`)
 
@@ -133,7 +134,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. Da
 - Les sept premiers **gravissent le cercle suivant**, les cinq derniers redescendent, les trois premiers reçoivent une **coupe**. La **Joute des amis** reste toujours ouverte.
 - **L'Alliance** : une fois par semaine, avec un ami ; si chacun réalise sa part, la récompense double.
 - **A** : « Jade · 4ᵉ ».
-- **B** : « Joute de Jade · 4ᵉ place », puis en petit « les 7 premiers montent au Saphir ».
+- **B** : « Joute Jade · 4ᵉ place », puis en petit « les 7 premiers montent au Saphir ». Le cercle se dit en apposition, sans « de » : « la joute Jade », « la joute Ambre » (#11444, choix 1).
 - **Bannis** : « ligue » → « joute » ; « rang » en ligue → « place » ; « pseudonyme » → « nom de joute » ; « duo », « mission en duo » → « alliance ».
 
 ### Le Voyage (`game.season.*`)
@@ -144,6 +145,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. Da
 - **A** : « Voyage 1 · halte 9/40 ».
 - **B** : « En terre française · 9ᵉ halte », puis en petit « 2 pas jusqu'à la halte suivante ».
 - **Bannis** : « saison » → « voyage » ; « étoiles de saison » → « pas » ; « étape de saison » → « halte ».
+- **Le fait** qui compte les pas s'intitule « Pas » (clé `game.fact.strides`, la même sur le web et sur iOS).
 
 ### La Renaissance (`game.prestige.*`)
 
@@ -152,6 +154,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. Da
 - **A** : « Âge II ».
 - **B** : « Ta légende vit son Deuxième Âge ».
 - **Bannis** : « prestige » → « renaissance » ; « étoiles » de prestige → « âges ».
+- **Le fait** qui compte les passages s'intitule « Renaissances » (clé `game.fact.rebirths`) : il dit « 2 sur 5 », et l'Âge vécu est ce nombre plus un (Troisième Âge après deux renaissances). « Âges » y serait faux d'un rang.
 
 ### Les traces de la légende
 
@@ -161,7 +164,7 @@ Le ton : on tutoie, on écrit pour un enfant de 13 ans, une idée par phrase. Da
 | carnet de progression | **la Chronique** | le livre de la légende, où chaque signe s'immortalise |
 | succès | **les Hauts faits** | raretés inchangées |
 | vitrine, trophées | **les Trophées** | coupes de joute et de voyage, trophées de renaissance et de Flamme |
-| badges | **les Médailles** | matières : Cuivre, Bronze, Argent, Or, Platine, Obsidienne, Prisme |
+| badges | **les Médailles** | matières : Cuivre, Bronze, Argent, Or, Platine, Obsidienne, Prisme ; chaque médaille gravit sept **paliers** |
 | Atlas | **l'Atlas** | un tampon par langue vraiment échangée |
 | Constellation, fragments d'étoile | **le ciel des aïeux** | dix fragments d'étoile allument une étoile ; chaque étoile offre une parure |
 

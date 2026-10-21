@@ -4,6 +4,7 @@ import {
   ROW_SWIPE_CELL,
   rowSwipeEngages,
   rowSwipeOffset,
+  rowSwipePaint,
   rowSwipeSettle,
   rowSwipeWidths,
   type RowSwipeEdge,
@@ -105,8 +106,10 @@ export function useConversationRowSwipe(sidesOf: () => RowSwipeSides) {
     offset.current = next;
     const element = rowRef.current;
     if (element === null) return;
-    element.style.setProperty('--row-swipe', `${next * sign.current}px`);
-    element.style.setProperty('--row-reveal', `${Math.abs(next)}px`);
+    const { swipe, reveal, hide } = rowSwipePaint({ offset: next, sign: sign.current });
+    element.style.setProperty('--row-swipe', swipe);
+    element.style.setProperty('--row-reveal', reveal);
+    if (hide !== null) element.style.setProperty('--row-hide', hide);
   }, []);
 
   const cancelSettle = useCallback(() => {
@@ -120,6 +123,7 @@ export function useConversationRowSwipe(sidesOf: () => RowSwipeSides) {
     offset.current = 0;
     rowRef.current?.style.removeProperty('--row-swipe');
     rowRef.current?.style.removeProperty('--row-reveal');
+    rowRef.current?.style.removeProperty('--row-hide');
     setShown(null);
   }, [cancelSettle]);
 

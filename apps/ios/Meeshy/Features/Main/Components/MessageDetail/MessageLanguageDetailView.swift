@@ -366,8 +366,16 @@ struct MessageLanguageDetailView: View {
 
     // MARK: - Local fallback (no ConversationViewModel available)
 
+    /// Le refus se DIT : un toucher sans effet ni message serait un contrôle inerte.
+    private func refuseServerTranslation() {
+        translationError = ServerTranslationAdmission.refusalMessage
+        HapticFeedback.error()
+    }
+
     private func translateToLocal(_ targetLang: String, from sourceLang: String) async {
         guard !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // #11214 — un message chiffré de bout en bout ne part jamais vers la traduction serveur.
+        guard ServerTranslationAdmission.admitsOutsideConversation(message) else { return refuseServerTranslation() }
         localTranslatingLanguages.insert(targetLang)
         translationError = nil
         defer { localTranslatingLanguages.remove(targetLang) }
@@ -404,6 +412,7 @@ struct MessageLanguageDetailView: View {
     }
 
     private func translateAudioToLocal(_ targetLang: String, attachmentId: String) async {
+        guard ServerTranslationAdmission.admitsOutsideConversation(message) else { return refuseServerTranslation() }
         localTranslatingAudioLanguages.insert(targetLang)
         translationError = nil
         defer { localTranslatingAudioLanguages.remove(targetLang) }

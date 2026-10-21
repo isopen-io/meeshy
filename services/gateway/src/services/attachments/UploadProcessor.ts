@@ -7,7 +7,6 @@ import { apiPath } from '@meeshy/shared/api/prefix';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import { spawn } from 'child_process';
 import os from 'os';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -24,13 +23,13 @@ import {
   getAttachmentEncryptionService,
 } from '../AttachmentEncryptionService';
 import { MetadataManager } from './MetadataManager';
-import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
+import { produceMediaRenditions, produceEncryptedThumbnail, imageVariantsJson } from './media-renditions.js';
 import { isExifStrippable, stripExifFromImageBuffer } from './ExifStrip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
 import { NORMALIZED_AUDIO, normalizedAudioPath } from './audio-normalization.js';
 import { audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from './uploadMimeType.js';
 import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
-import { guardedTimeout } from '../../utils/guarded-timer.js';
+import { runFfmpeg } from './ffmpeg-run.js';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -245,7 +244,7 @@ export class UploadProcessor {
       await fs.writeFile(tempInputPath, buffer);
       // Bitrate aligné sur la source iOS (64 kbps mono AAC) — ré-encoder à
       // 128 kbps doublait la taille sans bénéfice perceptif sur de la voix.
-      await this.runFfmpeg([
+      await runFfmpeg([
         '-i', tempInputPath,
         '-af', 'volume=9dB',
         '-c:a', 'aac',
@@ -264,73 +263,6 @@ export class UploadProcessor {
     } finally {
       await fs.unlink(tempInputPath).catch(() => {});
       await fs.unlink(tempOutputPath).catch(() => {});
-    }
-  }
-
-  /** Run ffmpeg with the given argv; resolves on exit 0, rejects otherwise. */
-  private runFfmpeg(args: string[], timeoutMs = 5 * 60_000): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const proc = spawn('ffmpeg', args);
-      let stderr = '';
-      const timer = guardedTimeout({ name: 'ffmpeg-transcode-timeout', afterMs: timeoutMs, logger, run: () => {
-        proc.kill('SIGKILL');
-        reject(new Error('ffmpeg transcode timeout'));
-      } });
-      proc.stderr.on('data', (d) => { stderr += d.toString(); });
-      proc.on('close', (code) => {
-        clearTimeout(timer);
-        code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-400)}`));
-      });
-      proc.on('error', (e) => { clearTimeout(timer); reject(e); });
-    });
-  }
-
-  /**
-   * D-video bandwidth — downscale/transcode an oversized clip to a lighter,
-   * progressively streamable H.264 mp4. Returns the new stored file (relative
-   * path + size + mime) on success, or `null` to keep the original.
-   *
-   * Defensive by construction: flag-gated (OFF by default), bounded by a max
-   * inline size, transcodes to a temp output and only swaps when the result is
-   * valid AND smaller — any failure/non-benefit leaves the upload untouched.
-   */
-  private async maybeTranscodeVideo(
-    filePath: string,
-    metadata: { width?: number; height?: number; bitrate?: number; videoCodec?: string },
-    fileSize: number
-  ): Promise<{ filePath: string; fileSize: number; mimeType: string } | null> {
-    if (process.env.VIDEO_TRANSCODE !== 'true') return null;
-
-    const plan = planVideoTranscode({
-      width: metadata.width,
-      height: metadata.height,
-      bitrateBps: metadata.bitrate,
-      videoCodec: metadata.videoCodec,
-      sizeBytes: fileSize,
-    });
-    if (!plan) return null;
-
-    const maxSync = Number(process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES || 200 * 1024 * 1024);
-    if (fileSize > maxSync) return null; // too large to transcode inline; leave as-is
-
-    const inputAbs = path.join(this.uploadBasePath, filePath);
-    const outputRel = filePath.replace(/\.[^.]+$/, '') + '_t.mp4';
-    const outputAbs = path.join(this.uploadBasePath, outputRel);
-
-    try {
-      await this.runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan));
-      const stat = await fs.stat(outputAbs);
-      if (stat.size === 0 || stat.size >= fileSize) {
-        // No benefit — discard the transcode, keep the original.
-        await fs.unlink(outputAbs).catch(() => {});
-        return null;
-      }
-      await fs.unlink(inputAbs).catch(() => {});
-      return { filePath: outputRel, fileSize: stat.size, mimeType: 'video/mp4' };
-    } catch (error) {
-      logger.error('Video transcode failed, keeping original', error as Error);
-      await fs.unlink(outputAbs).catch(() => {});
-      return null;
     }
   }
 
@@ -480,63 +412,30 @@ export class UploadProcessor {
       saved.size  // Passer la taille du fichier RÉELLEMENT écrit (EXIF/audio peuvent la changer)
     );
 
-    // The stored representation may diverge from the upload after transcoding
-    // (e.g. video → capped-resolution H.264 mp4). Everything persisted below
-    // (URL, size, mime, dimensions) reads these, not the raw upload.
-    let storedFilePath = filePath;
-    let storedFileSize = saved.size;
-    let storedMimeType = savedMimeType;
-
-    let thumbnailPath: string | null = null;
-    let imageVariants: Array<{ width: number; height: number; url: string; size: number; format: 'webp' }> | undefined;
-    if (attachmentType === 'image') {
-      thumbnailPath = await this.metadataManager.generateThumbnail(filePath);
-      // D4: responsive WebP variants for srcset — plaintext images only.
-      const variants = await this.metadataManager.generateImageVariants(filePath);
-      if (variants.length > 0) {
-        imageVariants = variants.map((v) => ({
-          width: v.width,
-          height: v.height,
-          url: this.getAttachmentPath(v.path),
-          size: v.size,
-          format: 'webp' as const,
-        }));
+    // Les rendus (vignette, variantes WebP, transcodage vidéo, thumbhash) sont
+    // décidés par la fabrique que le chemin résumable appelle aussi (#11260) :
+    // un même fichier laisse la même trace par les deux portes. La
+    // représentation stockée peut diverger de l'upload après transcodage ;
+    // tout ce qui est persisté plus bas (URL, taille, type, dimensions) lit
+    // `renditions`, pas l'upload brut.
+    const renditions = await produceMediaRenditions(
+      { uploadBasePath: this.uploadBasePath, metadataManager: this.metadataManager, runFfmpeg },
+      {
+        relPath: filePath,
+        mimeType: savedMimeType,
+        attachmentType,
+        fileSize: saved.size,
+        metadata,
+        clientThumbHash: providedMetadata?.thumbHash ?? null,
       }
-    } else if (attachmentType === 'video') {
-      thumbnailPath = await this.metadataManager.generateVideoThumbnail(filePath);
-      // D-video: downscale/transcode oversized clips to a lighter, progressively
-      // streamable H.264 mp4 (flag-gated, OFF by default; original kept on any
-      // failure or non-benefit). Re-probe so persisted dimensions/size match.
-      const transcoded = await this.maybeTranscodeVideo(filePath, metadata, file.size);
-      if (transcoded) {
-        storedFilePath = transcoded.filePath;
-        storedFileSize = transcoded.fileSize;
-        storedMimeType = transcoded.mimeType;
-        try {
-          metadata = await this.metadataManager.extractMetadata(
-            storedFilePath, attachmentType, storedMimeType, undefined, storedFileSize
-          );
-        } catch {
-          // Keep prior metadata (dimensions ~unchanged after a downscale-fit);
-          // never fail the upload over a re-probe.
-        }
-      }
-    }
-    metadata.thumbnailGenerated = !!thumbnailPath;
-
-    // ThumbHash: backend fallback — skip if client already computed it.
-    // Defense-in-depth length cap (cf. tus-handler.ts) — protège contre un
-    // payload malformé / malveillant qui ferait gonfler la doc DB.
-    const MAX_THUMBHASH_LENGTH = 100;
-    const rawClientThumbHash = providedMetadata?.thumbHash ?? null;
-    let thumbHash: string | null =
-      (rawClientThumbHash && rawClientThumbHash.length <= MAX_THUMBHASH_LENGTH)
-        ? rawClientThumbHash
-        : null;
-    if (!thumbHash) {
-      const { ThumbHashGenerator } = await import('./ThumbHashGenerator.js');
-      thumbHash = await ThumbHashGenerator.generate(path.join(this.uploadBasePath, storedFilePath), storedMimeType);
-    }
+    );
+    const storedFilePath = renditions.storedPath;
+    const storedFileSize = renditions.storedSize;
+    const storedMimeType = renditions.storedMimeType;
+    const thumbnailPath = renditions.thumbnailPath;
+    const imageVariants = renditions.imageVariants;
+    const thumbHash = renditions.thumbHash;
+    metadata = renditions.metadata;
 
     const fileUrl = this.getAttachmentPath(storedFilePath);
     const thumbnailUrl = thumbnailPath ? this.getAttachmentPath(thumbnailPath) : undefined;
@@ -558,7 +457,7 @@ export class UploadProcessor {
         thumbnailPath: thumbnailPath || undefined,
         thumbnailUrl: thumbnailUrl,
         thumbHash: thumbHash || undefined,
-        imageVariants: imageVariants as any,
+        imageVariants: imageVariants ? imageVariantsJson(imageVariants) : undefined,
         width: metadata.width,
         height: metadata.height,
         duration: metadata.duration,
@@ -638,12 +537,15 @@ export class UploadProcessor {
       }
     }
 
-    let thumbnailBuffer: Buffer | undefined;
-    if (attachmentType === 'image') {
-      thumbnailBuffer = await this.metadataManager.generateThumbnailFromBuffer(fileBuffer);
-    } else if (attachmentType === 'video') {
-      thumbnailBuffer = await this.metadataManager.generateVideoThumbnailFromBuffer(fileBuffer, file.mimeType);
-    }
+    // Le serveur reçoit le CLAIR ici : ce chemin n'est pas du E2EE (#9224). Il
+    // ne fabrique donc que la vignette en tampon, chiffrée avec le fichier —
+    // aucune variante ni thumbhash en clair (voir `media-renditions.ts`).
+    const thumbnailBuffer = await produceEncryptedThumbnail({
+      metadataManager: this.metadataManager,
+      attachmentType,
+      buffer: fileBuffer,
+      mimeType: file.mimeType,
+    });
 
     const encryptionResult = await this.encryptionService.encryptAttachment({
       fileBuffer: fileBuffer,

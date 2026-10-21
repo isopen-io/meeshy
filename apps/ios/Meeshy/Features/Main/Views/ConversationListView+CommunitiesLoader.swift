@@ -30,7 +30,7 @@ enum ConversationListCommunitiesLoader {
                 do {
                     let response = try await CommunityService.shared.list(offset: 0, limit: 10)
                     apply(response.data)
-                    try? await CacheCoordinator.shared.communities.save(response.data, for: cacheKey)
+                    await bestEffort("conversationListViewCommunitiesLoader.communities.save", category: .cache) { try await CacheCoordinator.shared.communities.save(response.data, for: cacheKey) }
                 } catch {
                     Logger.cache.warning("[ConversationListView] Communities silent revalidate failed: \(error.localizedDescription)")
                 }
@@ -39,7 +39,7 @@ enum ConversationListCommunitiesLoader {
             do {
                 let response = try await CommunityService.shared.list(offset: 0, limit: 10)
                 apply(response.data)
-                try? await CacheCoordinator.shared.communities.save(response.data, for: cacheKey)
+                await bestEffort("conversationListViewCommunitiesLoader.communities.save.2", category: .cache) { try await CacheCoordinator.shared.communities.save(response.data, for: cacheKey) }
             } catch {
                 Logger.messages.error("[ConversationListView] Error loading communities: \(error.localizedDescription)")
             }

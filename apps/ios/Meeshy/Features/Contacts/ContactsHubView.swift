@@ -14,7 +14,7 @@ import MeeshyUI
 /// reachable from the floating menu ladder.
 struct ContactsHubView: View {
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @State private var scrollRelay = ScrollOffsetRelay()
     @State private var selectedTab: PeopleTab
 

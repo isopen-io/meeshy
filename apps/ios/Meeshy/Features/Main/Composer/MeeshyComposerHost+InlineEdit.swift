@@ -32,8 +32,7 @@ extension MeeshyComposerHost {
     /// Les sous-outils que CET objet sert.
     func inlineSections(for id: String, family: ComposerInlineFamily) -> [ComposerObjectEditorSection] {
         ComposerInlineEditing.sections(for: family,
-                                       hasTrimmableSource: viewModel.sourceTrim(id: id) != nil,
-                                       retouching: returnsToConversation)
+                                       hasTrimmableSource: viewModel.sourceTrim(id: id) != nil)
     }
 
     /// L'édition RÉELLEMENT en cours — elle se referme dès que sa sélection,
@@ -64,8 +63,7 @@ extension MeeshyComposerHost {
             family: famille,
             onSceneSurface: mountedComposerView == .scene,
             requested: section ?? gardee,
-            hasTrimmableSource: viewModel.sourceTrim(id: id) != nil,
-            retouching: returnsToConversation) else { return false }
+            hasTrimmableSource: viewModel.sourceTrim(id: id) != nil) else { return false }
         let nouvelle = activeInlineEdit?.objectId != id
         presentedPortal = nil
         openSceneEffect = nil

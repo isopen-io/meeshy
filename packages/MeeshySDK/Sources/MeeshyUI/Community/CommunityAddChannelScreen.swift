@@ -3,7 +3,8 @@ import MeeshySDK
 
 public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>: View {
     @ObservedObject private var viewModel: ViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
 
     public init(viewModel: ViewModel) {
@@ -62,11 +63,11 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
                 .font(.system(size: 40))
                 .foregroundColor(theme.textMuted)
             Text(viewModel.searchText.isEmpty ? String(localized: "community.addChannel.empty.noConversations", defaultValue: "Aucune conversation disponible", bundle: .module) : String(localized: "community.addChannel.empty.noResults", defaultValue: "Aucun résultat", bundle: .module))
-                .font(.system(size: MeeshyFont.bodySize, weight: .medium, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textSecondary)
             if viewModel.searchText.isEmpty {
                 Text(String(localized: "community.addChannel.empty.hint", defaultValue: "Créez d'abord une conversation pour l'ajouter ici.", bundle: .module))
-                    .font(.system(size: MeeshyFont.subheadSize))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xxxl)
@@ -114,14 +115,14 @@ public struct CommunityAddChannelScreen<ViewModel: CommunityAddChannelModeling>:
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(title(for: conversation))
-                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: MeeshySpacing.sm) {
                     if let count = conversation.memberCount {
                         Label("\(count)", systemImage: "person.2.fill")
-                            .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
 

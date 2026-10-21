@@ -769,11 +769,12 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
       // `type` / `visibility` / `visibilityUserIds` ne servent pas au retrait
       // lui-même mais à l'annoncer : ils choisissent l'événement et refiltrent
-      // l'audience (`broadcastPostRemoval`). Prisma `select` : ce qui n'est pas
-      // demandé ici n'existe pas plus bas.
+      // l'audience (`broadcastPostRemoval`). `createdAt` décide si les points de
+      // la publication sont repris (trente jours, #11467). Prisma `select` : ce
+      // qui n'est pas demandé ici n'existe pas plus bas.
       const post = await fastify.prisma.post.findUnique({
         where: { id: postId },
-        select: { id: true, deletedAt: true, expiresAt: true, authorId: true, type: true, visibility: true, visibilityUserIds: true }
+        select: { id: true, deletedAt: true, expiresAt: true, authorId: true, type: true, visibility: true, visibilityUserIds: true, createdAt: true }
       });
 
       if (!post) {

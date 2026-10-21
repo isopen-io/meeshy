@@ -3,7 +3,9 @@
  *
  * Covers the TURN credential refresh flow:
  *  - happy path: authenticated participant in call room receives fresh ICE servers
- *  - not-in-room guard: socket not in call room receives NOT_A_PARTICIPANT error
+ *  - not-in-room, not a participant: receives NOT_A_PARTICIPANT error
+ *  - not-in-room but ACTIVE participant (#11463): receives fresh ICE servers —
+ *    the room is a routing detail, the DB participation is the authorization
  *  - unauthenticated guard: unknown socket returns early (no emit)
  *  - validation failure: invalid payload returns early (no emit)
  *  - error handling: generateIceServers throws → logs error, no crash
@@ -131,6 +133,7 @@ function makeSocket({ inCallRoom = true }: { inCallRoom?: boolean } = {}) {
       handlers[event] = fn;
     }),
     emit: directEmit,
+    join: jest.fn<any>(),
     to: jest.fn().mockReturnValue({ emit: jest.fn() }),
     rooms,
     data: {},
@@ -253,7 +256,46 @@ describe('CallEventsHandler — call:request-ice-servers handler', () => {
   // Not-in-room guard
   // -------------------------------------------------------------------------
 
-  describe('not-in-room guard: socket not joined to the call room', () => {
+  describe('#11463 — socket not (yet) in the call room, but the user IS an active participant', () => {
+    // Production 2026-10-21, call …dbe19a: the callee joined at 12:13:28.369,
+    // its iOS asked for fresh TURN credentials on a socket that was not in the
+    // room, got NOT_A_PARTICIPANT « Not in call room », and iOS — which treats
+    // that code as fatal — ended the call 0.3 s later.
+    let directEmit: jest.MockedFunction<any>;
+    let socketJoin: jest.MockedFunction<any>;
+
+    beforeEach(async () => {
+      configureActiveParticipant(true);
+      const prisma = makePrisma();
+      const { socket, handlers, directEmit: emit } = makeSocket({ inCallRoom: false });
+      directEmit = emit;
+      socketJoin = socket.join;
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+      await handlers[CALL_EVENTS.REQUEST_ICE_SERVERS](REQUEST_DATA);
+    });
+
+    it('serves ICE_SERVERS_REFRESHED to the requesting socket', () => {
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ICE_SERVERS_REFRESHED,
+        expect.objectContaining({ callId: CALL_ID, ttl: 480 })
+      );
+      expect(mockGenerateIceServers).toHaveBeenCalledWith(USER_ID);
+    });
+
+    it('emits no CALL_ERROR — nothing a client could read as fatal', () => {
+      const errorEmits = directEmit.mock.calls.filter(([event]) => event === CALL_EVENTS.ERROR);
+      expect(errorEmits).toEqual([]);
+    });
+
+    it('does not put the socket back into the call room (a C8-evicted socket stays out)', () => {
+      expect(socketJoin).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('not-in-room guard: socket not joined to the call room AND not an active participant', () => {
     let directEmit: jest.MockedFunction<any>;
 
     beforeEach(async () => {

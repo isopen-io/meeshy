@@ -158,13 +158,15 @@ public struct NotificationRowView: View, Equatable {
         ZStack(alignment: .topTrailing) {
             switch presentation.leading {
             case .avatar:
-                MeeshyAvatar(
-                    name: notification.senderName ?? notifType.rawValue,
-                    context: .notification,
-                    accentColor: notifType.accentHex,
-                    avatarURL: notification.senderAvatar,
-                    presenceState: notification.senderId.flatMap { presenceResolver?($0) }
-                )
+                MeeshyLivePresence {
+                    MeeshyAvatar(
+                        name: notification.senderName ?? notifType.rawValue,
+                        context: .notification,
+                        accentColor: notifType.accentHex,
+                        avatarURL: notification.senderAvatar,
+                        presenceState: notification.senderId.flatMap { presenceResolver?($0) }
+                    )
+                }
             case .milestone(let symbol):
                 milestoneMedallion(symbol)
             case .signature:

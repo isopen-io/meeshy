@@ -52,6 +52,19 @@ export const meeshEdition = (n: number): MeeshEdition => {
   return 'silver';
 };
 
+/**
+ * L'édition DESSINÉE de la n-ième Meesh (#11483) : la plus haute édition atteinte — l'argent avant le n° 100, l'or à
+ * partir du n° 100, le prisme à partir du n° 1000. Porteur, 2026-10-21 : « Le n° 247 dessiné en or ». La matière de la
+ * pièce, l'oiseau du revers et les poussières de la cérémonie suivent ce dessin ; la chorégraphie de la frappe suit la
+ * loi (`meeshEdition`). Une valeur illisible se dessine comme sa loi. Vecteurs : `meesh-display-edition.vectors.json`.
+ */
+export const meeshDisplayEdition = (n: number): MeeshEdition => {
+  const rank = sanitizeCount(n);
+  if (rank >= 1000) return 'prism';
+  if (rank >= 100) return 'gold';
+  return 'silver';
+};
+
 export type MintPreview = {
   /** Le numéro que porterait la pièce. */
   readonly number: number;

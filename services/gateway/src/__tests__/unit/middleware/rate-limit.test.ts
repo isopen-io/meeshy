@@ -92,7 +92,8 @@ describe('createRateLimitConfig', () => {
     const cfg = createRateLimitConfig(5, '1 minute', 'initiate');
     const body = cfg.config.rateLimit.errorResponseBuilder();
     expect(body.success).toBe(false);
-    expect(body.error.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(body.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(typeof body.error).toBe('string');
   });
 });
 

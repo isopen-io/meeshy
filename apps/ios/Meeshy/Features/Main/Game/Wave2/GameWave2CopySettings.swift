@@ -25,7 +25,7 @@ extension GameText {
 
     static var settingsNotificationsTitle: String { String(localized: "game2.settings.notifications.title", defaultValue: "Notifications du jeu", bundle: .main) }
 
-    static var settingsNotificationsBody: String { String(localized: "game2.settings.notifications.body", defaultValue: "Une proposition d’alliance, le résultat de ta joute, une halte de voyage : au plus une notification de jeu par jour.", bundle: .main) }
+    static var settingsNotificationsBody: String { String(localized: "game2.settings.notifications.body", defaultValue: "Une proposition d’alliance, un résultat de joute, une halte de voyage : au plus une notification du jeu par jour. Ce réglage vaut pour ton compte, sur tous tes appareils.", bundle: .main) }
 
     static var settingsNotificationsSwitch: String { String(localized: "game2.settings.notifications.switch", defaultValue: "Recevoir les notifications du jeu", bundle: .main) }
 

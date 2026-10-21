@@ -1080,7 +1080,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
     // `message:pending-delivered` announces that the offline queue for the
     // current user was just replayed. iOS had no listener at all (verified:
     // no occurrence anywhere under apps/ios or packages/MeeshySDK before this
-    // lot) — web-v2 already reacts to it by resyncing the named conversations
+    // lot) — the web already reacts to it by resyncing the named conversations
     // (`apps/web/src/lib/api/socket.ts`). The handler mirrors the existing
     // reconnect/foreground resync path (`triggerSyncIfNeeded` →
     // `delegate.syncMissedMessages()`), scoped to the currently open

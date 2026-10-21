@@ -225,6 +225,7 @@ final class Router: ObservableObject {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
+    private(set) lazy var commands = RouterCommands(router: self)
     @Published var path: [Route] = [] {
         didSet {
             AnalyticsManager.shared.trackRoute(path.last)

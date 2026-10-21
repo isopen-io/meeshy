@@ -137,13 +137,20 @@ final class PiPVideoRendererTests: XCTestCase {
             Self.layerSource.contains("if #available(iOS 17.0, *)"),
             "PiPVideoRenderer must branch on iOS 17 availability for the sampleBufferRenderer API"
         )
+        // #11043 (b795c0e03b) : the receiver is resolved ONCE on the MainActor
+        // (`PiPSampleSink.init`) — `sampleBufferRenderer` on iOS 17+, the layer
+        // itself before — and every frame is enqueued on that receiver.
         XCTAssertTrue(
-            Self.layerSource.contains("sampleBufferRenderer.enqueue"),
+            Self.layerSource.contains("target = layer.sampleBufferRenderer"),
             "iOS 17+ path must enqueue via sampleBufferRenderer"
         )
         XCTAssertTrue(
-            Self.layerSource.contains("enqueue(sample)"),
+            Self.layerSource.contains("} else {\n            target = layer\n"),
             "iOS <17 fallback must enqueue directly on the display layer"
+        )
+        XCTAssertTrue(
+            Self.layerSource.contains("func enqueue(_ sample: sending CMSampleBuffer) { target.enqueue(sample) }"),
+            "every frame is enqueued on the resolved receiver"
         )
     }
 

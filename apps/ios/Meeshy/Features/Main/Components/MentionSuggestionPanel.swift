@@ -53,14 +53,14 @@ struct MentionSuggestionPanel: View {
                             pick(candidate)
                         } label: {
                             HStack(spacing: MeeshySpacing.smPlus) {
-                                MeeshyAvatar(
+                                LivePresence { MeeshyAvatar(
                                     name: candidate.displayName,
                                     context: .userListItem,
                                     accentColor: accentColor,
                                     avatarURL: candidate.avatarURL,
                                     presenceState: PresenceManager.shared.presenceState(for: candidate.id),
                                     ring: candidate.ring
-                                )
+                                ) }
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(candidate.displayName)
                                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))

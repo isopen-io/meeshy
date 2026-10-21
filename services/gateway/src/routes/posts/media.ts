@@ -3,7 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendError, sendInternalError } from '../../utils/response';
 import { claimableMediaWhere } from '../../services/posts/mediaOwnership';
-import { reclaimMediaRowBytes, type PostMediaByteRemover } from '../../services/posts/reclaimPostMediaBytes';
+import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes, type PostMediaByteRemover } from '../../services/posts/reclaimPostMediaBytes';
 import { MediaService } from '../../services/MediaService';
 import { mayConsumePost } from './postConsumptionGate';
 import { createSocialTranslateRateLimitConfig } from './socialRateLimit';
@@ -62,7 +62,7 @@ export function registerPostMediaRoutes(
 
         const media = await prisma.postMedia.findFirst({
           where: { id: mediaId, ...claimableMediaWhere(userId) },
-          select: { id: true, fileUrl: true, thumbnailUrl: true },
+          select: { id: true, ...POST_MEDIA_FILE_COLUMNS },
         });
 
         if (!media) {

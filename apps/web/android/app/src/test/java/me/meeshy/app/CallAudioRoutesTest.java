@@ -74,4 +74,22 @@ public class CallAudioRoutesTest {
         assertTrue(CallAudioRoutes.legacyBluetoothSco("bluetooth"));
         assertFalse(CallAudioRoutes.legacyBluetoothSco("speaker"));
     }
+
+    @Test
+    public void aHearingAidIsABluetoothRouteAndUsbAudioIsWiredLikeTheWeb() {
+        // Le navigateur laisse Android garder l'appareil auditif ; la coque, qui force une sortie,
+        // doit au moins le connaitre (#11186).
+        int[] aided = {CallAudioRoutes.TYPE_BUILTIN_EARPIECE, CallAudioRoutes.TYPE_BUILTIN_SPEAKER, CallAudioRoutes.TYPE_HEARING_AID};
+        assertEquals(Arrays.asList("earpiece", "speaker", "bluetooth"), CallAudioRoutes.available(aided));
+        assertEquals("bluetooth", CallAudioRoutes.defaultRoute(false, CallAudioRoutes.available(aided)));
+        assertEquals(CallAudioRoutes.TYPE_HEARING_AID, CallAudioRoutes.deviceTypeFor("bluetooth", aided));
+        assertEquals("wired", CallAudioRoutes.routeOf(CallAudioRoutes.TYPE_USB_DEVICE));
+    }
+
+    @Test
+    public void belowApi31AHearingAidStaysWithAndroidRoutingInsteadOfAForcedSco() {
+        int[] aided = {CallAudioRoutes.TYPE_BUILTIN_EARPIECE, CallAudioRoutes.TYPE_HEARING_AID};
+        assertEquals(1, CallAudioRoutes.routableTypes(aided, 30).length);
+        assertEquals(2, CallAudioRoutes.routableTypes(aided, CallAudioRoutes.API_COMMUNICATION_DEVICE).length);
+    }
 }

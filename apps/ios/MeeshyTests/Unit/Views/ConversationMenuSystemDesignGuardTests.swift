@@ -304,8 +304,8 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     /// iOS 26+ : le builder natif doit exposer « Rechercher » et « Appeler »
     /// (décision 2026-07-14) — l'aperçu natif étant statique, ces actions
     /// vivent dans le menu, câblées sur les MÊMES chemins que les boutons de
-    /// l'aperçu du fallback custom : Rechercher arme `pendingOpenSearch` puis
-    /// ouvre la conversation, Appeler passe par `CallManager.shared.startCall`.
+    /// l'aperçu du fallback custom : Rechercher passe la porte du verrou, qui
+    /// arme `pendingOpenSearch` puis ouvre la conversation, Appeler passe par `CallManager.shared.startCall`.
     func test_nativeContextMenuBuilder_offersSearchAndCall() throws {
         let overlaysSource = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
 
@@ -324,9 +324,10 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "Le builder natif doit offrir « Rechercher » (icône magnifyingglass)."
         )
         XCTAssertTrue(
-            builderBlock.contains("router.pendingOpenSearch = true"),
-            "« Rechercher » doit armer router.pendingOpenSearch — même chemin que " +
-            "le bouton onSearch de l'aperçu custom (SSOT)."
+            builderBlock.contains("openConversation(conversation, searching: true)"),
+            "« Rechercher » doit passer la porte du verrou `openConversation(_:searching:)`, " +
+            "qui arme router.pendingOpenSearch (après le PIN si la conversation est " +
+            "verrouillée) — même chemin que le bouton onSearch de l'aperçu custom (SSOT)."
         )
         XCTAssertTrue(
             builderBlock.contains("context.call") && builderBlock.contains("phone.fill"),
@@ -339,6 +340,90 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "2026-07-23 ce point d'entrée tranche micro/caméra AVANT de composer ; " +
             "`startCall` brut ne demande rien et connecterait un appel muet."
         )
+    }
+
+    // MARK: - Menu de conversation gouverné par la loi partagée (#11215)
+
+    /// Le corps du builder natif : de `func conversationContextMenu(for` au MARK
+    /// de l'overlay custom (ses sous-fonctions y vivent aussi).
+    private func nativeBuilderBlock() throws -> String {
+        let overlaysSource = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        guard let builderRange = overlaysSource.range(of: "func conversationContextMenu(for") else {
+            XCTFail("Le builder natif conversationContextMenu(for:) doit exister.")
+            return ""
+        }
+        let blockEnd = overlaysSource.range(
+            of: "// MARK: - Custom Context Menu Overlay",
+            range: builderRange.lowerBound ..< overlaysSource.endIndex
+        )?.lowerBound ?? overlaysSource.endIndex
+        return String(overlaysSource[builderRange.lowerBound ..< blockEnd])
+    }
+
+    /// Les DEUX chemins d'OS lisent les verdicts de `ConversationActionPolicy`
+    /// par `rowMenuCapabilities(for:)`, et partagent les mêmes gestes.
+    func test_bothOSPaths_readConversationActionPolicy() throws {
+        let builder = try nativeBuilderBlock()
+        XCTAssertTrue(builder.contains("rowMenuCapabilities(for: conversation)"), "Le menu natif lit la loi partagée.")
+        XCTAssertTrue(builder.contains("ConversationRowMenuActions.make(for: conversation, in: self)"), "Le menu natif appelle les gestes partagés.")
+        XCTAssertTrue(builder.contains("if capabilities.rename {"), "Renommer suit le verdict de la loi.")
+        XCTAssertFalse(builder.contains("if conversation.type != .direct {"), "Renommer ne se déduit plus du seul type.")
+
+        let overlays = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        XCTAssertTrue(overlays.contains("capabilities: rowMenuCapabilities(for: conversation),"), "Le menu custom lit la MÊME loi.")
+        XCTAssertTrue(overlays.contains("actions: ConversationRowMenuActions.make(for: conversation, in: self),"), "Le menu custom appelle les MÊMES gestes.")
+
+        let rules = try source("Meeshy/Features/Main/Views/ConversationListView+ListRules.swift")
+        XCTAssertTrue(rules.contains("ConversationActionPolicy.actions(for:"), "Les verdicts de la rangée projettent ConversationActionPolicy.")
+    }
+
+    /// Aucune règle de rôle écrite en chaînes ne reste dans les règles de la liste.
+    func test_listRules_holdNoStringRoleRule() throws {
+        let rules = try source("Meeshy/Features/Main/Views/ConversationListView+ListRules.swift")
+        for literal in ["\"admin\"", "\"moderator\"", "\"owner\"", "\"co-owner\"", "\"bigboss\"", "\"creator\"", "\"member\"", "currentUserRole?.lowercased()"] {
+            XCTAssertFalse(rules.contains(literal), "ListRules ne doit plus comparer de rôle en chaîne : \(literal)")
+        }
+    }
+
+    /// Quitter, Signaler et l'administration existent sur les deux chemins, et
+    /// Quitter passe par une confirmation, jamais par un départ direct.
+    func test_leaveReportAndAdmin_existOnBothPaths_leaveIsConfirmed() throws {
+        let builder = try nativeBuilderBlock()
+        XCTAssertTrue(builder.contains("actions.onLeave()"))
+        XCTAssertTrue(builder.contains("actions.onReport()"))
+        XCTAssertTrue(builder.contains("actions.onOpenAdmin()"))
+
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains("actions.onLeave()"))
+        XCTAssertTrue(menu.contains("actions.onReport()"))
+        XCTAssertTrue(menu.contains("actions.onOpenAdmin()"))
+
+        let overlays = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+        XCTAssertTrue(overlays.contains("onLeave: { list.sheetTargets.leaveTarget = conversation }"), "Quitter arme la confirmation de départ.")
+        XCTAssertFalse(overlays.contains(".apply(.leave"), "Le menu ne quitte jamais sans confirmation.")
+
+        let presentations = try source("Meeshy/Features/Main/Views/ConversationListView+Presentations.swift")
+        XCTAssertTrue(presentations.contains("presenting: sheetTargets.leaveTarget"), "La confirmation de départ est présentée.")
+        XCTAssertTrue(presentations.contains("ReportService.shared.reportConversation("), "Signaler passe par le service de signalement.")
+    }
+
+    /// VoiceOver : les entrées du menu custom sont des actions NOMMÉES, en
+    /// complément de « Ouvrir le menu » sur la rangée.
+    func test_customMenu_exposesEntriesAsNamedAccessibilityActions() throws {
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains(".accessibilityActions {"), "Le menu custom expose ses entrées à VoiceOver.")
+        XCTAssertTrue(menu.contains("ForEach(accessibilityEntries.map"), "Les actions nommées viennent de la même liste d'entrées.")
+
+        let rows = try source("Meeshy/Features/Main/Views/ConversationListView+Rows.swift")
+        XCTAssertTrue(rows.contains("localized: \"conversation.row.menu_action\""), "L'action « Ouvrir le menu » de la rangée reste en place.")
+    }
+
+    /// Quitter dit le MÊME mot dans le menu et dans sa confirmation, quel que
+    /// soit le type : « groupe » mentait pour une conversation publique ou une
+    /// chaîne (#11215).
+    func test_leaveLabel_isTheConfirmationTitle_forEveryType() throws {
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains("localized: \"conversation.info.leave.title\""), "Le menu reprend le titre de la confirmation de départ.")
+        XCTAssertFalse(menu.contains("context.leave_group"), "« Quitter le groupe » ne s'offre plus à une chaîne.")
     }
 
     // MARK: - Menu d'appui long des MESSAGES (design système par version)
@@ -465,32 +550,24 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         )
     }
 
-    /// Le builder du menu natif (ConversationView) : rangée d'emojis en
-    /// `.controlGroupStyle(.compactMenu)` (4 plus utilisés — plafond 1 ligne),
-    /// actions via `MessageActionResolver` (SSOT avec l'overlay).
-    func test_buildNativeMessageMenu_compactRow_resolver_confirmedDelete() throws {
-        let vSource = try source("Meeshy/Features/Main/Views/ConversationView+NativeMessageMenu.swift")
-
-        guard let range = vSource.range(of: "func buildNativeMessageMenu(for msg: Message)") else {
-            XCTFail("ConversationView doit exposer buildNativeMessageMenu(for:).")
-            return
+    /// #11214 — le builder du menu natif (`buildNativeMessageMenu`) était mort :
+    /// `private`, sans appelant, tenu vert par cette seule garde. Il a quitté le
+    /// dépôt ; la garde lit désormais le chemin VIVANT — l'overlay compose sa
+    /// liste par `MessageActionResolver`, sur le contexte que la fabrique UNIQUE
+    /// lui remet, et la feuille « Plus… » lit la même fabrique.
+    func test_liveMenus_composeFromTheResolver_onTheFactoryContext() throws {
+        let overlay = try source("Meeshy/Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertTrue(
+            overlay.contains("MessageActionResolver.primaryActions(menuContext)"),
+            "L'overlay doit composer sa liste par MessageActionResolver (SSOT)."
+        )
+        for host in ["Meeshy/Features/Main/Views/ConversationView+OverlayMenu.swift",
+                     "Meeshy/Features/Main/Views/ConversationView+MessageSheets.swift"] {
+            XCTAssertTrue(
+                try source(host).contains("MessageMenuContext.make(message: msg, viewModel: viewModel, authority: authority)"),
+                "\(host) doit lire le contexte de la fabrique unique, jamais le composer lui-même."
+            )
         }
-        let end = vSource.index(range.lowerBound, offsetBy: 4000, limitedBy: vSource.endIndex) ?? vSource.endIndex
-        let block = String(vSource[range.lowerBound ..< end])
-        XCTAssertTrue(
-            block.contains(".controlGroupStyle(.compactMenu)"),
-            "La rangée d'emojis rapides doit utiliser .controlGroupStyle(.compactMenu) " +
-            "(rangée horizontale système — sans ce style le ControlGroup empile)."
-        )
-        XCTAssertTrue(
-            block.contains("EmojiUsageTracker.topEmojis(count: 4"),
-            "La rangée rapide doit afficher 4 emojis (plafond : au-delà, " +
-            ".compactMenu passe à la ligne)."
-        )
-        XCTAssertTrue(
-            block.contains("MessageActionResolver.primaryActions(ctx)"),
-            "Les actions du menu natif doivent venir de MessageActionResolver (SSOT overlay)."
-        )
     }
 
     // MARK: - Aperçu du menu natif = la bulle « prise de sa position »

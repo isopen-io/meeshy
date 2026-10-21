@@ -213,6 +213,18 @@ public enum GameMint {
         return .silver
     }
 
+    /// L'édition DESSINÉE de la n-ième Meesh (#11483) : la plus haute édition atteinte — l'argent avant le n° 100, l'or
+    /// à partir du n° 100, le prisme à partir du n° 1000 (porteur, 2026-10-21 : « Le n° 247 dessiné en or »). La matière,
+    /// l'oiseau du revers et les poussières de la cérémonie suivent ce dessin ; la chorégraphie de la frappe suit la loi
+    /// (`edition(forNumber:)`). MIROIR de `meeshDisplayEdition` (`packages/shared/utils/game/mint.ts`), rejoué sur
+    /// `meesh-display-edition.vectors.json`.
+    public static func displayEdition(forNumber n: Int) -> MeeshEdition {
+        let rank = max(0, n)
+        if rank >= 1000 { return .prism }
+        if rank >= 100 { return .gold }
+        return .silver
+    }
+
     /// Les faits des étapes APRÈS la frappe (#9706) : une Meesh de plus, et sa Gloire — qui peut faire
     /// passer un rang. Le Mythe, servi par le serveur, reste le Mythe.
     private static func stepsAfterMint(_ steps: GameLevelStepFacts) -> GameLevelStepFacts {

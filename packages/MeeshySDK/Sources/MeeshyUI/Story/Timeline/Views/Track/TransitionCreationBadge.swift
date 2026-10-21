@@ -47,6 +47,8 @@ public struct TransitionCreationBadge: View, Equatable {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "story.timeline.transition.add",
                                    defaultValue: "Ajouter une transition", bundle: .module))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onCreate() }
     }
 }
 

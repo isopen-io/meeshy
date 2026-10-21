@@ -82,7 +82,7 @@ The tone: plain, warm English written for a 13-year-old, one idea per sentence. 
 | Light | your light, the whole thread (the hero’s Light) | a level phase (→ Gleam) |
 | Chest | the Legacy’s fourth container | the chest of the day (→ the Offering) |
 | Treasure | the Legacy’s fifth container (capitalized) | the whole concept (→ the Legacy) |
-| Star | the sky: the Star phase, the ancestors’ sky, star fragments, a medal’s stars | Prestige (→ Ages), the season (→ strides) |
+| Star | the sky: the Star phase, the ancestors’ sky, star fragments, a medal’s stars | Prestige (→ Ages), the season (→ strides), the label of a medal’s thresholds (→ Marks) |
 | Step | onboarding only (“Step 2 of 7”, “The seven steps”, “First steps”) | the ten-level threshold (→ trial), the season (→ stop); the journey counts **strides**, never steps |
 | Rank | the name the world gives the hero | the place in the joust (→ place) |
 | Record | nothing anymore | see “since the beginning”, “your highest light”, “your longest Flame”, “minted since the beginning” |

@@ -194,17 +194,15 @@ final class PresentedSurfaceRegistryTests: XCTestCase {
 
     func test_atelierWritesItsDraft_mountedAndArmed_isTrue() {
         XCTAssertTrue(ComposerConversationYield.atelierWritesItsDraft(
-            mounted: .atelier, exitIsArmed: true, returnsToConversation: false))
+            mounted: .atelier, exitIsArmed: true))
     }
 
-    func test_atelierWritesItsDraft_unarmedOrOtherSurfaceOrRetouch_isFalse() {
+    func test_atelierWritesItsDraft_unarmedOrOtherSurface_isFalse() {
         XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
-            mounted: .atelier, exitIsArmed: false, returnsToConversation: false))
-        XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
-            mounted: .atelier, exitIsArmed: true, returnsToConversation: true))
+            mounted: .atelier, exitIsArmed: false))
         for mounted in ComposerMountedView.allCases where mounted != .atelier {
             XCTAssertFalse(ComposerConversationYield.atelierWritesItsDraft(
-                mounted: mounted, exitIsArmed: true, returnsToConversation: false), "\(mounted)")
+                mounted: mounted, exitIsArmed: true), "\(mounted)")
         }
     }
 
