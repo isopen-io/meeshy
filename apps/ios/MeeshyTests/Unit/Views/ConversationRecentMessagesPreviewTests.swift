@@ -322,16 +322,17 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
     }
 
     /// Une pièce CHIFFRÉE n'est jamais demandée au réseau : le serveur n'en sert
-    /// que le chiffré. L'aperçu garde alors le voile sur le fond neutre.
-    func test_backdropPhoto_encryptedPiece_isNeverRequested() {
+    /// que le chiffré. L'aperçu retombe alors sur la carte, comme le fil
+    /// retombe sur Signature — jamais un aplat neutre que le fil ne montre pas.
+    func test_backdropPhoto_encryptedPiece_isNeverRequested_andFallsBackToTheCard() {
         var piece = MeeshyMessageAttachment.image()
         piece.isEncrypted = true
         var carrier = message("m1")
         carrier.attachments = [piece]
 
-        XCTAssertNil(ConversationPreviewRenderer.backdropPhoto(
+        XCTAssertEqual(ConversationPreviewRenderer.backdropPhoto(
             attachmentId: piece.id, among: [carrier], remembered: nil, serverOrigin: "https://gate.test"
-        ))
+        ), .signature)
     }
 
     func test_backdropPhoto_knownClearPiece_usesItsOwnUrls() {
@@ -343,15 +344,74 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
             attachmentId: piece.id, among: [carrier], remembered: nil, serverOrigin: "https://gate.test"
         )
 
-        XCTAssertEqual(photo?.fullUrl, piece.fileUrl)
+        XCTAssertEqual(photo, .paint(ConversationBackgroundPhoto(thumbnailUrl: piece.thumbnailUrl, fullUrl: piece.fileUrl, thumbHash: piece.thumbHash)))
     }
 
+    /// Une pièce hors des cinq derniers messages n'est connue de personne : elle
+    /// se demande à la route qui vérifie l'appartenance, et c'est l'échec de
+    /// son chargement, sondé comme dans le fil, qui la juge.
     func test_backdropPhoto_unknownPiece_usesTheDownloadRouteThatChecksMembership() {
         let photo = ConversationPreviewRenderer.backdropPhoto(
             attachmentId: "64b7f0c2a1b2c3d4e5f60718", among: [], remembered: nil, serverOrigin: "https://gate.test"
         )
 
-        XCTAssertEqual(photo?.fullUrl, "https://gate.test/api/v1/attachments/64b7f0c2a1b2c3d4e5f60718")
+        guard case .paint(let resolved) = photo else { return XCTFail("une pièce inconnue se demande à la route vérifiée") }
+        XCTAssertEqual(resolved.fullUrl, "https://gate.test/api/v1/attachments/64b7f0c2a1b2c3d4e5f60718")
+    }
+
+    /// La sonde a déjà jugé la pièce (chiffrée, disparue, refusée) : l'aperçu
+    /// ne la retélécharge pas à chaque appui long, il retombe sur la carte.
+    func test_backdropPhoto_pieceAlreadyJudgedUnreadable_isNeverRequestedAgain() {
+        XCTAssertEqual(ConversationPreviewRenderer.backdropPhoto(
+            attachmentId: "64b7f0c2a1b2c3d4e5f60718", among: [], remembered: nil, serverOrigin: "https://gate.test",
+            judgedUnreadable: true
+        ), .signature)
+    }
+
+    func test_displayedBackdrop_photoFellBack_isTheCard() {
+        let photo = backdrop(ConversationAppearance(background: .photo(attachmentId: "64b7f0c2a1b2c3d4e5f60718", veil: 0.4, blur: 6)))
+
+        let shown = ConversationPreviewRenderer.displayed(photo, photoFellBack: true)
+
+        XCTAssertFalse(shown.paintsOverTheCard, "le fil retombe sur Signature, l'aperçu sur la carte")
+        XCTAssertEqual(ConversationPreviewRenderer.displayed(photo, photoFellBack: false), photo)
+    }
+
+    func test_displayedBackdrop_notAPhoto_ignoresThePhotoVerdict() {
+        let solid = backdrop(ConversationAppearance(background: .solid(color: "indigo")))
+
+        XCTAssertEqual(ConversationPreviewRenderer.displayed(solid, photoFellBack: true), solid)
+    }
+
+    /// La photo se résout UNE fois par pièce (`.task(id:)`), jamais à chaque
+    /// réévaluation du corps : la clé ne change que si la pièce ou ce qu'on
+    /// en sait change.
+    func test_photoKey_changesOnlyWithThePieceOrWhatTheCardKnowsOfIt() {
+        var piece = MeeshyMessageAttachment.image()
+        piece.isEncrypted = true
+        let photo = backdrop(ConversationAppearance(background: .photo(attachmentId: piece.id, veil: 0.4, blur: 6)))
+        var carrier = message("m1")
+        carrier.attachments = [piece]
+
+        let unknown = ConversationPreviewRenderer.photoKey(of: photo, among: [message("m0")])
+        let known = ConversationPreviewRenderer.photoKey(of: photo, among: [message("m0"), carrier])
+
+        XCTAssertEqual(unknown, ConversationPreviewRenderer.photoKey(of: photo, among: []))
+        XCTAssertNotEqual(unknown, known)
+        XCTAssertNil(ConversationPreviewRenderer.photoKey(of: backdrop(nil), among: []))
+    }
+
+    func test_photoFallbacks_rememberTheVerdict_withinABound() {
+        let fallbacks = ConversationPreviewPhotoFallbacks(capacity: 2)
+
+        fallbacks.remember("a")
+        fallbacks.remember("b")
+        fallbacks.remember("a")
+        fallbacks.remember("c")
+
+        XCTAssertFalse(fallbacks.contains("b"), "la plus ancienne sort")
+        XCTAssertTrue(fallbacks.contains("a"))
+        XCTAssertTrue(fallbacks.contains("c"))
     }
 
     // MARK: - Le repli < iOS 26 : l'entrée sous Réduire les animations

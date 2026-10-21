@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 @testable import MeeshySDK
 
@@ -40,6 +41,11 @@ final class MessageContentOriginTests: XCTestCase {
         try JSONDecoder().decode(MeeshyMessage.self, from: JSONSerialization.data(withJSONObject: object))
     }
 
+    private func digest(of origin: MessageContentOrigin) -> String? {
+        guard case .decryptedOnDevice(let digest) = origin else { return nil }
+        return digest
+    }
+
     // MARK: - Ce que seul le déchiffrement pose
 
     func test_newMessage_comesFromTheWire() {
@@ -79,26 +85,36 @@ final class MessageContentOriginTests: XCTestCase {
     }
 
     func test_wire_neverVouchesForAnyContent() {
-        XCTAssertFalse(MessageContentOrigin.wire.vouches(for: ""))
-        XCTAssertFalse(MessageContentOrigin.wire.vouches(for: "Salut"))
+        XCTAssertFalse(MessageContentOrigin.wire.vouches(for: "", messageId: "m1"))
+        XCTAssertFalse(MessageContentOrigin.wire.vouches(for: "Salut", messageId: "m1"))
     }
 
     func test_decryptedOrigin_vouchesOnlyForTheTextItProduced() {
-        let origin = MessageContentOrigin.decrypted("Salut")
+        let origin = MessageContentOrigin.decrypted("Salut", messageId: "m1")
 
-        XCTAssertTrue(origin.vouches(for: "Salut"))
-        XCTAssertFalse(origin.vouches(for: "Salut "))
-        XCTAssertFalse(origin.vouches(for: "salut"))
+        XCTAssertTrue(origin.vouches(for: "Salut", messageId: "m1"))
+        XCTAssertFalse(origin.vouches(for: "Salut ", messageId: "m1"))
+        XCTAssertFalse(origin.vouches(for: "salut", messageId: "m1"))
     }
 
     /// L'empreinte n'est jamais le clair lui-même : le cache la porte à côté
     /// du texte, elle n'en est pas une seconde copie.
     func test_decryptedOrigin_neverStoresTheClear() throws {
-        guard case .decryptedOnDevice(let digest) = MessageContentOrigin.decrypted("Rendez-vous à midi") else {
-            return XCTFail("le déchiffrement pose une provenance d'appareil")
-        }
-        XCTAssertFalse(digest.contains("Rendez-vous"))
-        XCTAssertEqual(digest.count, 64, "SHA-256 en hexadécimal")
+        let hex = try XCTUnwrap(digest(of: MessageContentOrigin.decrypted("Rendez-vous à midi", messageId: "m1")))
+        XCTAssertFalse(hex.contains("Rendez-vous"))
+        XCTAssertEqual(hex.count, 64, "HMAC-SHA256 en hexadécimal")
+    }
+
+    /// Une empreinte nue (SHA-256 du clair) se renverse par dictionnaire et
+    /// relie deux messages au même clair : elle est liée au MESSAGE.
+    func test_decryptedOrigin_isBoundToTheMessage_neverABareHashOfTheClear() throws {
+        let first = try XCTUnwrap(digest(of: MessageContentOrigin.decrypted("oui", messageId: "m1")))
+        let second = try XCTUnwrap(digest(of: MessageContentOrigin.decrypted("oui", messageId: "m2")))
+        let bare = SHA256.hash(data: Data("oui".utf8)).map { String(format: "%02x", $0) }.joined()
+
+        XCTAssertNotEqual(first, second, "deux messages au même clair ne se relient pas par leur empreinte")
+        XCTAssertNotEqual(first, bare, "l'empreinte n'est pas attaquable par une table de SHA-256")
+        XCTAssertFalse(MessageContentOrigin.decrypted("oui", messageId: "m1").vouches(for: "oui", messageId: "m2"))
     }
 
     // MARK: - Recouvrir le cryptogramme REST par le clair connu
@@ -115,13 +131,66 @@ final class MessageContentOriginTests: XCTestCase {
 
     func test_carryDecryptedContent_fromAnUnvouchedCopy_changesNothing() {
         var forged = message(content: "Texte forgé")
-        forged.contentOrigin = .decrypted("Autre chose")
+        forged.contentOrigin = .decrypted("Autre chose", messageId: "m1")
         var rest = message()
 
         rest.carryDecryptedContent(from: forged)
 
         XCTAssertEqual(rest.content, "Q2lwaGVydGV4dGU=")
         XCTAssertEqual(rest.contentOrigin, .wire)
+    }
+
+    /// La réconciliation temp → serveur réécrit l'id du message : le clair
+    /// qu'il portait reste prouvé, lié à son NOUVEL id.
+    func test_carryDecryptedContent_acrossARekey_keepsTheClearVouchedUnderTheNewId() {
+        let known = decrypted("Rendez-vous à midi")
+        var rekeyed = MeeshyMessage(
+            id: "srv_1", conversationId: "c1", senderId: "u1", content: known.content, isEncrypted: true,
+            createdAt: Date(timeIntervalSince1970: 1_000), updatedAt: Date(timeIntervalSince1970: 1_000)
+        )
+
+        rekeyed.carryDecryptedContent(from: known)
+
+        XCTAssertEqual(rekeyed.content, "Rendez-vous à midi")
+        XCTAssertTrue(rekeyed.isContentDecryptedOnDevice)
+    }
+
+    // MARK: - Un clair effacé n'emporte jamais son empreinte
+
+    /// Expiration, suppression, flamme-œil : le moteur vide `content` sans
+    /// toucher au reste. L'empreinte du clair effacé ne survit ni en mémoire,
+    /// ni dans la ligne du cache.
+    func test_erasedContent_dropsTheProvenance_inMemoryAndInTheCache() throws {
+        var erased = decrypted("oui")
+        erased.content = ""
+        erased.deletedAt = Date()
+
+        XCTAssertEqual(erased.contentOrigin, .wire)
+        XCTAssertNil(try blob(erased)["contentOrigin"], "aucune empreinte du clair effacé dans le cache")
+    }
+
+    func test_deletedMessage_isNeverVouched_evenWhenItsContentSurvives() throws {
+        var deleted = decrypted("oui")
+        deleted.deletedAt = Date()
+
+        XCTAssertFalse(deleted.isContentDecryptedOnDevice)
+        XCTAssertNil(try blob(deleted)["contentOrigin"])
+    }
+
+    func test_contentRewrittenFromTheWire_isNeverPersistedWithAStaleDigest() throws {
+        var rewritten = decrypted("Rendez-vous à midi")
+        rewritten.content = "Q2lwaGVydGV4dGU="
+
+        XCTAssertNil(try blob(rewritten)["contentOrigin"])
+    }
+
+    /// Une ligne dont l'empreinte ne couvre plus le texte (écrite par une
+    /// version antérieure, ou abîmée) se relit `.wire`.
+    func test_cachedOriginThatNoLongerCoversTheContent_decodesAsWire() throws {
+        var object = try blob(decrypted("oui"))
+        object["content"] = ""
+
+        XCTAssertEqual(try decode(object).contentOrigin, .wire)
     }
 
     // MARK: - Le cache (rétrocompatible)
@@ -162,17 +231,17 @@ final class MessageContentOriginTests: XCTestCase {
     // MARK: - Le serveur ne peut pas la déclarer
 
     func test_apiMessage_toMessage_isAlwaysWire_evenWhenThePayloadClaimsOtherwise() throws {
-        let digest = String(repeating: "a", count: 64)
+        let validDigest = try XCTUnwrap(digest(of: MessageContentOrigin.decrypted("Texte forgé", messageId: "m1")))
         let json = """
         {"id":"m1","conversationId":"c1","senderId":"u1","content":"Texte forgé","isEncrypted":true,
          "createdAt":"2026-10-18T08:00:00.000Z","updatedAt":"2026-10-18T08:00:00.000Z",
-         "contentOrigin":{"kind":"decryptedOnDevice","digest":"\(digest)"}}
+         "contentOrigin":{"kind":"decryptedOnDevice","digest":"\(validDigest)"}}
         """
         let api = try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: Data(json.utf8))
 
         let message = api.toMessage(currentUserId: "me")
 
         XCTAssertEqual(message.contentOrigin, .wire)
-        XCTAssertFalse(message.isContentDecryptedOnDevice)
+        XCTAssertFalse(message.isContentDecryptedOnDevice, "même une empreinte VALIDE du texte forgé ne passe pas le fil")
     }
 }
