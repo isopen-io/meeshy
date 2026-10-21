@@ -174,6 +174,19 @@ public actor MediaSessionCoordinator {
 
     private nonisolated let scheduleAfter: DelayedScheduler
 
+    /// **La file ordonnée des prises de lecture** (#9879) : une `Task` par appel
+    /// ne garantit aucun ordre entre une libération et la requête qui la suit.
+    /// `enqueue` est synchrone, `AsyncStream` est FIFO et un seul consommateur
+    /// l'exécute dans l'acteur — l'ordre des appels EST l'ordre des effets.
+    private nonisolated let _opsLock = OSAllocatedUnfairLock<AsyncStream<PlaybackSessionOp>.Continuation?>(initialState: nil)
+
+    enum PlaybackSessionOp: Sendable {
+        case request
+        case release
+        case deactivateIfIdle(generation: Int)
+        case barrier(CheckedContinuation<Void, Never>)
+    }
+
     private init(scheduleAfter: @escaping DelayedScheduler = DelayedScheduling.real) {
         self.scheduleAfter = scheduleAfter
     }
@@ -563,6 +576,9 @@ public actor MediaSessionCoordinator {
                 try session.setCategory(.playAndRecord, mode: .default,
                                         options: [.defaultToSpeaker, .allowBluetoothHFP])
             }
+            #if DEBUG
+            testProbe?.calls.append(.activate)
+            #endif
             try session.setActive(true)
             audibleContentHoldsSession = role == .playback
         }
@@ -572,14 +588,82 @@ public actor MediaSessionCoordinator {
     public func release() async {
         guard activationCount > 0 else { return }
         activationCount -= 1
-        if activationCount == 0, Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession {
-            playbackLeaseHeld = false
-            audibleContentHoldsSession = false
-            do {
-                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            } catch {
-                logger.error("release: setActive(false) failed — \(error.localizedDescription, privacy: .public)")
+        if activationCount == 0 { deactivateSession() }
+    }
+
+    private func deactivateSession() {
+        guard Self.shouldManageSession(callActive: callActive), contentMayReconfigureSession else { return }
+        playbackLeaseHeld = false
+        audibleContentHoldsSession = false
+        #if DEBUG
+        testProbe?.calls.append(.deactivate)
+        #endif
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            logger.error("release: setActive(false) failed — \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // MARK: - File ordonnée (#9879)
+
+    /// Prend la session `.playback` à son rang dans la file.
+    public nonisolated func requestPlaybackInOrder() { enqueue(.request) }
+
+    /// Rend la prise à son rang dans la file. Le dernier détenteur ne désactive
+    /// qu'au bout de `ContentSessionReleaseLaw.swipeHandoverGrace` : la requête
+    /// du canvas suivant, au balayage, annule la désactivation (la musique des
+    /// autres apps ne baisse plus puis ne remonte plus).
+    public nonisolated func releasePlaybackInOrder() { enqueue(.release) }
+
+    nonisolated func enqueue(_ op: PlaybackSessionOp) {
+        let continuation = _opsLock.withLock { state -> AsyncStream<PlaybackSessionOp>.Continuation in
+            if let existing = state { return existing }
+            var created: AsyncStream<PlaybackSessionOp>.Continuation?
+            let stream = AsyncStream<PlaybackSessionOp> { created = $0 }
+            let continuation = created!
+            state = continuation
+            Task { [weak self] in
+                for await next in stream {
+                    guard let self else { return }
+                    await self.perform(next)
+                }
             }
+            return continuation
+        }
+        continuation.yield(op)
+    }
+
+    /// Rend quand tout ce qui a été mis en file avant l'appel est exécuté.
+    func settled() async {
+        await withCheckedContinuation { enqueue(.barrier($0)) }
+    }
+
+    private func perform(_ op: PlaybackSessionOp) async {
+        switch op {
+        case .request:
+            do {
+                try await request(role: .playback)
+            } catch {
+                logger.error("ordered request failed — \(error.localizedDescription, privacy: .public)")
+            }
+        case .release:
+            releaseHandingOver()
+        case .deactivateIfIdle(let generation):
+            guard activationCount == 0, _activationGeneration.withLock({ $0 }) == generation else { return }
+            deactivateSession()
+        case .barrier(let continuation):
+            continuation.resume()
+        }
+    }
+
+    private func releaseHandingOver() {
+        guard activationCount > 0 else { return }
+        activationCount -= 1
+        guard activationCount == 0 else { return }
+        let generation = _activationGeneration.withLock { $0 }
+        scheduleAfter(ContentSessionReleaseLaw.swipeHandoverGrace, .main) { [weak self] in
+            self?.enqueue(.deactivateIfIdle(generation: generation))
         }
     }
 
@@ -695,6 +779,9 @@ public final class MediaSessionCoordinatorTestProbe: @unchecked Sendable {
     /// Fait jeter le prochain `request(role:)` comme un `setCategory` /
     /// `setActive` refusé par le système.
     public var failNextRequest = false
+    /// Les `setActive` de `request` et de la libération, dans l'ordre (#9879).
+    public enum Call: Sendable { case activate, deactivate }
+    public var calls: [Call] = []
     public struct SimulatedFailure: Error {}
     public init() {}
 }
