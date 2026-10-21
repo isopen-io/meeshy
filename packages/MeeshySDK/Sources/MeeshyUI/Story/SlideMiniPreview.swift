@@ -303,7 +303,7 @@ public struct SlideMiniPreview: View {
                        geometry: CanvasGeometry(renderSize: size),
                        baseSize: sticker.baseSize,
                        scale: sticker.scale),
-                   screenScale: UIScreen.main.scale)?.0 {
+                   screenScale: displayScale)?.0 {
                 // **La vignette passe par le moteur QUI DESSINE la scène.**
                 // Peindre `Text(sticker.emoji)` y montrait le repli — 💕 pour
                 // deux cœurs, 🕐 pour un ruban d'heure — c'est-à-dire ce que
@@ -360,7 +360,7 @@ public struct SlideMiniPreview: View {
                 metrics: StickerTemplateMetrics.location(
                     geometry: CanvasGeometry(renderSize: size),
                     scale: CGFloat(lieu.scale)),
-                screenScale: UIScreen.main.scale)?.0 {
+                screenScale: displayScale)?.0 {
                 Image(uiImage: dessin)
                     .resizable()
                     .scaledToFit()
