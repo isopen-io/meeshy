@@ -228,6 +228,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         let periodic = autoEvictionWriteCounter % Self.autoEvictionEveryNWrites == 0
         guard bigWrite || periodic else { return }
         await evictOverBudget()
+        await evictUnderDiskPressure()
     }
 
     // MARK: - Adoption (PR B — optimistic local file → canonical cache key)
