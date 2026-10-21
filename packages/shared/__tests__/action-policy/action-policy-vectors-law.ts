@@ -20,6 +20,7 @@ import {
   type MessageActionSubject,
 } from '../../utils/message-action-policy.js';
 import { messageContentKind } from '../../utils/message-content-kind.js';
+import { MESSAGE_EFFECT_FLAGS } from '../../types/message-effect-flags.js';
 
 export type StricterVerdict = 'edit' | 'delete' | 'react';
 
@@ -97,6 +98,10 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['broadcast-admin-repond', {}, announcements, { conversationRole: 'admin' }],
   ['groupe-ecriture-reservee-aux-moderateurs', {}, { defaultWriteRole: 'moderator' }, {}],
   ['groupe-rang-d-ecriture-inconnu-ferme', {}, { defaultWriteRole: 'vip' }, {}],
+  ['groupe-ecriture-reservee-aux-membres-le-membre-repond', {}, { defaultWriteRole: 'member' }, {}],
+  ['groupe-ecriture-reservee-aux-membres-un-rang-illisible-ne-repond-pas', {}, { defaultWriteRole: 'member' }, { conversationRole: 'owner' }],
+  ['groupe-ecriture-reservee-au-createur-un-admin-ne-repond-pas', {}, { defaultWriteRole: 'creator' }, { conversationRole: 'admin' }],
+  ['groupe-ecriture-reservee-au-createur-le-createur-repond', {}, { defaultWriteRole: 'creator' }, { conversationRole: 'creator' }],
   ['groupe-clos-auteur', mine, { closedAt: '2026-10-19T00:00:00.000Z' }, {}],
   ['groupe-inactif-auteur', mine, { isActive: false }, {}],
   ['message-epingle-desepingler', { pinnedAt: iso(NOW - HOUR) }, {}, {}],
@@ -109,6 +114,10 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['photo-enregistrable', { content: '', messageType: 'image', attachments: [{ mimeType: 'image/jpeg' }] }, {}, {}],
   ['video-vue-unique', { content: '', messageType: 'video', isViewOnce: true, attachments: [{ mimeType: 'video/mp4' }] }, {}, {}],
   ['photo-floutee', { content: '', messageType: 'image', isBlurred: true, attachments: [{ mimeType: 'image/jpeg' }] }, {}, {}],
+  ['photo-vue-unique-par-la-piece-seule', { content: '', messageType: 'image', attachments: [{ mimeType: 'image/jpeg', isViewOnce: true }] }, {}, {}],
+  ['photo-vue-unique-par-le-bit-de-la-piece', { content: '', messageType: 'image', attachments: [{ mimeType: 'image/jpeg', effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE }] }, {}, {}],
+  ['deux-pieces-toutes-floutees-se-transferent-sans-s-exporter', { content: '', attachments: [{ mimeType: 'image/jpeg', isBlurred: true }, { mimeType: 'video/mp4', effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }] }, {}, {}],
+  ['une-piece-floutee-sur-deux-s-exporte', { content: '', attachments: [{ mimeType: 'image/jpeg', isBlurred: true }, { mimeType: 'application/pdf' }] }, {}, {}],
   ['flamme-a-duree-se-transfere-sans-se-copier', { ephemeralDuration: 30, effectFlags: 1, expiresAt: iso(NOW + 30_000) }, {}, {}],
   ['flamme-apres-lecture-ne-se-transfere-pas', { effectFlags: 1 | 8 }, {}, {}],
   ['ephemere-expire-seul-supprimer-pour-moi', { ephemeralDuration: 30, effectFlags: 1, expiresAt: iso(NOW - 1000) }, {}, {}],
@@ -120,6 +129,10 @@ const MESSAGE_CASES: readonly MessageCase[] = [
   ['lieu-de-l-auteur-ne-se-modifie-pas', { ...mine, messageType: 'location', content: '12 rue des Lilas' }, {}, {}],
   ['lieu-ecrit-en-texte', { metadata: { location: { name: 'Gare' } }, content: 'Gare de Lyon' }, {}, {}],
   ['carte-de-visite', { content: '', attachments: [{ mimeType: 'text/vcard', originalName: 'zoe.vcf' }] }, {}, {}],
+  ['carte-de-visite-alias-text-x-vcf', { content: '', attachments: [{ mimeType: 'text/x-vcf' }] }, {}, {}],
+  ['carte-de-visite-type-generique-extension-en-majuscules', { content: '', attachments: [{ mimeType: 'application/octet-stream', originalName: 'ZOE.VCF' }] }, {}, {}],
+  ['carte-de-visite-lue-sur-le-nom-de-fichier-sans-nom-d-origine', { content: '', attachments: [{ mimeType: 'application/octet-stream', fileName: 'zoe.vcard' }] }, {}, {}],
+  ['fichier-generique-sans-extension-de-carte', { content: '', attachments: [{ mimeType: 'application/octet-stream', originalName: 'zoe.vcf.zip' }] }, {}, {}],
   ['sondage', { content: 'Où dîner ?', metadata: { poll: { options: ['A', 'B'] } } }, {}, {}],
   ['sondage-de-l-auteur-ne-se-modifie-pas', { ...mine, content: 'Où dîner ?', metadata: { poll: { options: ['A', 'B'] } } }, {}, {}],
   ['sticker', { content: '', metadata: { sticker: { templateId: 'coeur' } } }, {}, {}],

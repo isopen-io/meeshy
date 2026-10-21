@@ -142,7 +142,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
         "Features/Main/Components/MessageDetailSentimentTab.swift",
         "Features/Main/Components/MessageEffectModifiers.swift",
-        "Features/Main/Components/MessageOverlayMenu.swift",
         "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
         // long (son glyphe « play » dans un disque fixe de 52 pt) a quitté
@@ -462,7 +461,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // transport et de traduction par leur CADRE (`resizable` + `frame`), plus
     // par une police figée — quatre glyphes, aucun texte. `AudioFullscreenView`
     // sort de `bearingFiles` (règle 4) ; sa page n'y entre pas.
-    private static let totalCeiling = 186
+    // 186 → 185 (#11208) : l'aperçu d'appui long rend la cellule du fil, et sa
+    // rangée de fichier reconstruite part avec son glyphe figé.
+    // `MessageOverlayMenu.swift` sort de `bearingFiles` (règle 4) ; le texte
+    // figé ne bouge pas.
+    private static let totalCeiling = 185
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

@@ -147,8 +147,12 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     func test_iPadCovers_matchTheiPhoneForReelsStoriesAndProfileReels() throws {
         let layer = try source(of: "RootLayers/iPadRootViewLayers.swift")
         XCTAssertTrue(layer.contains("ReelOpenFailureView("), "un réel introuvable montre son échec, pas d'autres réels")
-        XCTAssertTrue(layer.contains("targetCommentId: request.targetCommentId"))
-        XCTAssertTrue(layer.contains("targetParentCommentId: request.targetParentCommentId"))
+        // Le lecteur de story se monte par le couvercle UNIQUE (#11197) : l'iPad le pose, et c'est
+        // lui qui descend une notification de réponse jusqu'à SON commentaire, pour toutes les racines.
+        XCTAssertTrue(layer.contains(".modifier(StoryReaderCover("), "l'iPad monte le lecteur par le couvercle unique")
+        let cover = try source(of: "StoryViewerContainer.swift")
+        XCTAssertTrue(cover.contains("targetCommentId: presented.targetCommentId"))
+        XCTAssertTrue(cover.contains("targetParentCommentId: presented.targetParentCommentId"))
         XCTAssertTrue(layer.contains("onOpenReel: { reel, reels in"), "un réel de profil s'ouvre dans le lecteur")
     }
 

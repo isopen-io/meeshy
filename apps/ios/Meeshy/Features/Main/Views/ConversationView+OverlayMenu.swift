@@ -5,7 +5,7 @@ import MeeshyUI
 // MARK: - Le menu d'appui long d'un message
 //
 // Extrait de `ConversationView.swift` (cohésion). L'hôte garde ce qui dépend
-// de SON état — le message visé, sa frame suivie par `frameTracker`, la
+// de SON état — le message visé, le cadre de sa cellule, la
 // langue du fil, l'aiguillage vers l'aperçu d'une pièce — et remet le reste ;
 // ce type compose le menu et branche ses rappels sur le ViewModel, l'état des
 // surcouches et les gestes de `ConversationMessageActions`.
@@ -26,13 +26,15 @@ struct ConversationOverlayMenu: View {
         MessageOverlayMenu(
             message: msg,
             contactColor: accentColor,
-            // Le frame-tracker ne suit que les BULLES : en Focal/Script il
-            // rend `nil`, donc `.zero`, et l'overlay présente son aperçu
-            // centré, à sa taille naturelle. C'est exactement ce que
-            // demande la directive du 2026-08-23 — « le mode focal, en
-            // long-press, doit afficher le message normal » — là où la
-            // capture de la cellule Focal en tranchait l'identité et la
-            // barre de méta, toutes deux à cheval sur son cadre.
+            // Le cadre de la cellule pressée (`overlaySourceFrame`, résolu
+            // par `cellFrameInWindow`) : l'aperçu s'ouvre À SA PLACE, dans le
+            // mode de lecture du fil — la rangée plate en Script et en Focal,
+            // la bulle ailleurs (`MessageOverlayPreviewKind`). La décision
+            // #11204 supplante la directive du 2026-08-23 (« en Focal, afficher
+            // le message normal ») : son grief était la CAPTURE de la cellule,
+            // qui tranchait l'identité et la méta posées à cheval sur son
+            // cadre. L'aperçu ne capture plus rien, il rend la rangée elle-même,
+            // entière, à 16 pt des bords.
             messageBubbleFrame: bubbleFrame,
             isPresented: $overlayState.showOverlayMenu,
             canDelete: msg.isMe || isAdminOrMod || actions.canRemove(msg),
