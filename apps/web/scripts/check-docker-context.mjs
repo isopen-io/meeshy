@@ -88,6 +88,7 @@ const REQUIRED = [
   'apps/web/public/sw-institutional.js',
   'apps/web/public/sw-legacy-purge.js',
   'apps/web/public/sw-share-target.js',
+  'apps/web/public/sw-background-upload.js',
   'apps/web/scripts/prerender-institutional.tsx',
   'apps/web/scripts/check-nginx-public.sh',
   'apps/web/scripts/lib/institutional-routes.mjs',
