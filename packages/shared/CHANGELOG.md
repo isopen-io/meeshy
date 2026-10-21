@@ -1,5 +1,391 @@
 # @meeshy/shared
 
+## 1.42.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - cibles de 44 pt pour fermer l'ajout de membre, fermer le carrousel et synchroniser le répertoire
+  - les dernières écritures de persistance silencieuses journalisent leur échec
+  - le miroir Swift dessine la n-ième Meesh dans la plus haute édition atteinte — le n° 247 en or, frappé d'un coup dans la poussière d'or
+  - l'échelle d'une médaille dit le mot de ses paliers dans les sept langues — « The seven marks », « I sette gradini », « Os sete patamares »
+  - un texte qui nomme l'édition d'une pièce montrée parle comme le dessin — « Meesh n° 247 frappée, or »
+  - la pièce de la photo-souvenir se dessine comme on la voit — le n° 247 en or, et son titre le dit
+  - l'action d'accessibilite du chip audio utilise la signature SwiftUI valide
+  - l'Héritage garde son compte et sa pièce jusqu'à la fin de la frappe, puis montre la dernière pièce, dessinée en or dès la centième
+  - les gestes gardes du SDK se declarent boutons a VoiceOver
+  - les zones touchables actionnables du SDK sont des boutons au survol pointeur
+  - la remontée de chaîne de modificateurs est partagée par les règles 2 et 5 (S7b)
+  - un texte de taille exacte est une exception nommée, huit glyphes en cadre fixe (S7b)
+  - un style de bouton qui ajoute le survol pointeur sans changer le rendu
+  - les noms tranchés le 2026-10-21 parlent les sept langues — Barquero, « N jours » sous la flamme d'une conversation, les paliers des médailles
+  - la fenêtre détachée, le profil d'un lien profond et l'aperçu des widgets reçoivent aussi les commandes de navigation — sans elles, une vue migrée y naviguait dans le vide
+  - Imager une réponse montre « Post en tête » sans défiler — la bascule s'épingle à la suite des modes, hors de leur défilement ; avec les trois modes d'une réponse elle finissait coupée au bord (« ✓ Pos… »), le choix d'afficher le post existait sans se voir. Recette simulateur staging : commentaire (Post + commentaire / Commentaire seul) et réponse (Post en tête activé / désactivé). Avec le support story par son post (« Mes stories »), Imager un commentaire offre partout le choix d'afficher le post, comme le web (Closes #11477)
+  - l'injection du routeur passe par un modificateur dédié
+  - le fil et le détail de publication lisent RouterCommands
+  - les hubs et la recherche lisent RouterCommands
+  - les vues du jeu lisent RouterCommands
+  - les vues Contacts qui naviguent lisent RouterCommands
+  - hashtags, favoris, lien d'appel et fiche participant lisent le thème dans l'environnement
+  - l'accueil et la connexion lisent le thème dans l'environnement
+  - RouterCommands expose les commandes du routeur sans son état
+  - Auth, JoinFlow, Notifications et réglages de conversation du SDK lisent le thème dans l'environnement
+  - les écrans Communauté du SDK lisent le thème dans l'environnement
+  - ThemePalette, projection pure du mode de thème
+  - Imager un commentaire de story ouvert par son post (« Mes stories ») compose comme dans le lecteur — le post qui disparaît est support par son visuel, sous les gardes de la story (audience publique, échéance, canvas sans vignette), jumelle de composingPostOf (Refs #11477)
+  - la pendule des compositeurs d'appel plafonne la cadence et ne gèle plus sur une tuile figée
+  - supprime dix-sept fonctions publiques du SDK que ni l'app ni les tests n'appellent
+  - supprime onze types et cinq alias que rien ne référence
+  - le vumètre d'un vocal garde son rythme, sa durée et son îlot hors de l'écran
+  - les deux boutons du sélecteur d'audience lisent le catalogue du SDK
+  - LicensesView ne crédite plus Kingfisher, qui n'est plus une dépendance
+  - retire les trois #available(iOS 16.0) que le plancher rend inutiles
+  - le témoin de la bande d onde importe MeeshySDK — WaveformClip.Source.published vit dans MeeshySDK (Refs #9886)
+  - les écritures du cache contacts, affiliation et liens journalisent leur échec
+  - les écritures du cache profils, statistiques et progression journalisent leur échec
+  - les écritures du cache fil, signets, commentaires et statuts journalisent leur échec
+  - les écritures du cache conversations, médias et communautés journalisent leur échec
+  - les écritures de messages en base journalisent leur échec
+  - les compositeurs d'appel peignent au rythme des images
+  - le niveau du micro pendant un vocal suit l'écran, plafonné à 30 Hz
+  - la cérémonie de frappe compile sous Xcode 26.1 — les grains et les étincelles passent en Double explicite
+  - la garde iOS des littéraux de design reconnaît la palette de la cérémonie de la frappe, et l'enclume de la bande lit la même encre et un rayon du thème
+  - les pastilles de réaction et la ligne d'un visiteur sans compte se déclarent boutons à VoiceOver
+  - les rangées de recherche, la vignette du composer de post et la tuile du hub média sont des boutons au survol pointeur
+  - cibles tactiles de 44 pt sur les en-têtes flottants, la fermeture de l'historique et les sauts vidéo
+  - rafraîchir les identifiants TURN s'autorise sur la participation active, plus sur la room de la socket
+  - la sonde de reprise GET /calls/active a son propre seau, et un refus de débit se lit 429 RATE_LIMIT_EXCEEDED
+  - MeeshyTapTarget.inset et overlaps pour compenser la croissance du cadre tactile
+  - l'administration lit une conversation en défilement continu — le plus récent en bas, remonter charge les plus anciens au-dessus sans saut — et voit les médias transmis (#11457)
+  - la passe de pression disque compile sous l'isolation MainActor — run test (Refs #11286)
+  - le témoin RMS compare des Double et le cliquet nonisolated(unsafe) verrouille sa baisse à 151 — run test (Refs #9886)
+  - les polices de la cérémonie de frappe passent par l'échelle de la scène, le libellé « passer » suit Dynamic Type (cliquet fixed-font remonté sur dev depuis e63e8c0f72)
+  - la cérémonie de frappe rend ses couleurs en foregroundStyle et sa minuterie sans try? sur Task.sleep (cliquets maison remontés sur dev depuis e63e8c0f72)
+  - les lecteurs et éditeurs média du SDK suivent la taille de police de l'utilisateur
+  - les primitives, packs et la localisation du SDK suivent la taille de police de l'utilisateur
+  - le profil et les notifications du SDK suivent la taille de police de l'utilisateur
+  - le profil vocal du SDK suit la taille de police de l'utilisateur
+  - les réglages de conversation du SDK suivent la taille de police de l'utilisateur
+  - le bouton lecture/arrêt d'une humeur dit son action, d'une seule source avec le rotor
+  - le bouton d'annulation d'une pièce jointe en préparation porte son libellé
+  - les écrans de communauté du SDK suivent la taille de police de l'utilisateur
+  - la cible MeeshyTests compile les deux politiques de la NSE que son plan d'enrichissement appelle — build-for-testing de nouveau vert
+  - trace obligatoire et ordre épinglé, journal indisponible dit en mots (#11441)
+  - trace avant dépôt, refus journalisés une fois, runner revérifie son environnement (#11441)
+  - le cliquet des couleurs en dur enregistre la pièce Meesh (145→158, 478→479)
+  - l'onde se dessine à l'échelle de ce qu'elle porte, partout — bulle audio, éditeur, timeline, rognage
+  - la file ordonnée de session naît de makeStream, sans déballage forcé — run test
+  - le cliquet des couleurs en dur iOS enregistre la palette de la pièce Meesh (145 → 158 littéraux, 478 → 479 variables) — Quality rouge sur dev depuis d50c95c584
+  - relu au navigateur réel (375 et 1280 px), le nom d'un conteneur prend toute la ligne et ses badges passent dessous — côte à côte, « database-staging » se coupait au milieu du mot (Refs #11441)
+  - l'écran Opérations montre chaque conteneur de l'environnement — état et santé en mots, image et sa date, depuis combien de temps il tourne — et sa modale dit la consommation (processeur, mémoire et sa limite, réseau, disque, processus), les réseaux où il se trouve avec son adresse, ses ports et son cycle de vie ; l'ADMIN lance sauvegarde et nettoyage de Docker (motif proposé, gros boutons), le journal dit les tentatives refusées (Refs #11441)
+  - une seule forme d'onde — RMS vectorisé par Accelerate, cache à clé de contenu, deux échelles qui ne se mélangent plus
+  - foregroundStyle sur les sites ajoutés par dev depuis la branche S6
+  - le Voyage compte des pas et la Renaissance des renaissances, et le web et iOS disent la même chose là où ils se contredisaient
+  - la requête et la libération de session d'un canvas sont ordonnées, la musique des autres apps ne baisse plus puis ne remonte plus au balayage
+  - sa propre pastille ne se peint jamais — ni sur son post, son commentaire, son message en groupe, sa fiche ou ses Réglages (décision porteur 2026-10-21, Refs #11412)
+  - le runner des opérations publie l'état des conteneurs de son environnement (state/containers.json) — projet compose /opt/meeshy/<env> seul, image et sa date, état, santé, démarrage, redémarrages, consommation (docker stats), réseaux et ports, aucun secret ; publication indépendante de l'usage Docker, et une collecte ratée garde la dernière (Refs #11441)
+  - sur iOS, la frappe devient une cérémonie plein écran — des milliers d'étincelles tissent le cercle, la poussière forme le flan, Mee pose le coin et Meo frappe en dernier
+  - le composer ne porte plus le chemin de retour d'un média au message, resté sans appelant
+  - aucune action publiée à la barre de menus ne naît neuve à chaque rendu — ouvrir une conversation ne fige plus l'iPhone (#11238)
+  - nonisolated deinit + import Combine sur les ajouts de #11405
+  - partager un lien avec sa vignette envoie le lien, et un chemin de fichier seul dit pourquoi il ne part pas
+  - l'extension de partage n'admet que la copie temporaire créée par le système, jamais un fichier de son conteneur ni de ses caches
+  - les copies de l'extension de partage ne dépassent jamais 500 Mo ensemble, et une copie interrompue ne laisse rien sur le disque
+  - le trim audio borne le PCM décodé au lieu de décoder sans limite (#11406)
+  - le viseur ouvert clavier levé revient avec son aperçu et ses commandes au lieu d'un écran noir sans issue
+  - sur iOS, la cérémonie de la frappe suit la même loi que le web — les instants de chaque phase, la frappe en dernier, le marteau gardé levé, rejoués sur les vecteurs partagés
+  - le rayon du pointeur est un jeton, « Signaler » une entrée nommée, l'image d'une communauté passe par le chemin des images d'identité
+  - les 22 clés des écrans Community, JoinFlow, notifications et bandeau d'erreur sont traduites au catalogue de l'app
+  - les cinq types fonction async stockés écrivent leur isolement — iOS 16 et 17 n'ont pas \_swift_getExtendedFunctionTypeMetadata
+  - aucun candidat de ViewThatFits n'atteint plus une fermeture isolée — le rail de retouche et les boutons de l'aperçu ont leur membre, le rail construit ses entrées dans le body
+  - chaque pastille se repeint sur user:status et aux seuils 1/3/5, la coupure éteint sans figer le vert, l'activité ne rafraîchit que lastActiveAt (Refs #11412)
+  - un snapshot plus ancien qu'une frappe locale peut encore dire « connecté » — il garde l'activité la plus récente et ne rallume plus que ce que la passerelle voit en direct (Refs #11412)
+  - les pastilles restent justes à la reconnexion et après une frappe — la coupure éteint sans effacer, la frappe ne rafraîchit que l'activité, le snapshot n'écrase pas plus récent, la rampe de visages et les membres actifs lisent la carte vivante (Refs #11412)
+  - ma vignette lâchée près de son coin y revient en glissant, plus d'un saut
+  - les actions de balayage restent clouées au bord, comme iOS
+  - les points de reprise TUS partent à la fin du compte ; Background Fetch, mort en production, est retiré (Refs #11311)
+  - un média déjà servi par la passerelle repart tel quel, jamais ré-encodé ; le client ne prétend plus retirer l'EXIF qu'il laisse partir (Refs #11310)
+  - la garde des animations de géométrie voit une transition rangée dans une constante
+  - le FLIP part de la position du changement, jamais d'un rendu périmé
+  - l'administration relue au navigateur réel (375 px, clair et sombre) — les gestes de l'édition rapide passent sous ses champs, du plus courant au plus lourd (supprimer en dernier), en colonne de même largeur sur téléphone ; le titre des modales d'administration passe en title3, au-dessus de sa phrase ; le bannissement range « Annuler » à côté de « Bannir » et titre son historique (Refs #11410)
+  - la tête de lecture de la timeline tire sur la plage .clock de la fabrique, TimelineDriveClock disparaît — run test (Refs #9874)
+  - les horloges visuelles consomment la plage .clock de la fabrique, .visualClock disparaît — run test (Refs #9883)
+  - staging installe SA config nginx statique, jamais celle de production
+  - l'éviction sous pression disque part aussi au lancement et au retour au premier plan — run test (Refs #11286)
+  - DiskCacheStore+DiskPressure importe os pour les interpolations de Logger
+  - sur iOS, la Meesh est la même pièce que sur le web — « MEESHY · 1 MEESH », « Nº » souligné, Mee, Meo ou les deux, l'or pur et le prisme royal
+  - la liste des comptes offre ses gestes sur la ligne — déverrouiller, activer, valider l'e-mail, seulement quand ils ont un effet, immédiats et optimistes, avec le motif proposé à l'ADMIN (Refs #11410)
+  - la cadence d'écriture du geste rend writeNow quand l'intervalle est écoulé, l'arrondi flottant ne diffère plus de 1e-16 s — run test (Refs #9874)
+  - la pose de repos d'un sticker attend sans try? sur Task.sleep (Refs #9883)
+  - la lecture d'une conversation s'ouvre, pour l'ADMIN, sur le motif proposé déjà écrit — « Lire » d'un seul geste (Refs #11410)
+  - six animations de géométrie passent sur transform et opacity
+  - une garde refuse toute nouvelle animation de géométrie
+  - la provenance d'un clair déchiffré disparaît avec lui, liée au message ; la photo de fond de l'aperçu retombe sur la carte comme le fil
+  - chaque écran du jeu met en tête ce qu'on possède et ne dit chaque chiffre qu'une fois sur iOS — Progression en synthèse, ta lumière et l'Héritage en tête de leur fiche, la frappe dans son cadre
+  - DiskCacheStore+Pinning importe os pour les interpolations de Logger
+  - l'aperçu d'une conversation reconnaît le clair déchiffré par sa provenance et se dessine sur le fond de la conversation
+  - la confirmation de suppression lit la fabrique sans alourdir ConversationView
+  - le menu d'un message ne propose que ce que la loi admet — constats de la revue adversariale
+  - le menu d'une conversation suit la passerelle — Inviter en public, Quitter inscrit, rang casse pliée, Masquer hors direct
+  - dix-neuf vues peignent leur premier plan par foregroundStyle
+  - les réactions à un changement passent par adaptiveOnChange
+  - les rayons passent par clipShape, forme rect dans les widgets
+  - les visionneuses masquent la barre d'état par statusBarHidden
+  - la saisie emploie textInputAutocapitalization et autocorrectionDisabled
+  - six cliquets maison sur les modificateurs SwiftUI dépréciés
+  - MeeshyUI déclare un deinit nonisolated sur ses classes MainActor
+  - les classes MainActor du cœur déclarent un deinit nonisolated
+  - services d'appel, présence et conversation déclarent un deinit nonisolated
+  - les view models de Contacts déclarent un deinit nonisolated
+  - le menu d'un message ne propose que ce que le rôle, le type et le chiffrement permettent
+  - le drop de la chip redevient légitime dès que le doigt quitte la zone de bord, run test
+  - le menu d'une conversation ne propose que ce que le rôle permet, sur les deux chemins d'OS
+  - les horloges visuelles suivent l'écran et se mettent en pause, run test
+  - la coupe audio borne le PCM décodé par la durée, pas la seule taille compressée
+  - la pression disque n'évince plus un fichier remis à un player
+  - le cache média s'évince sous pression disque réelle
+  - extrait le registre de pins du cache disque
+  - la garde de cadence lit une signature écrite sur plusieurs lignes
+  - chaque lien d'affichage déclare sa plage de cadence
+  - la coupe audio refuse une source au-delà de 24 Mo avant décodage
+  - l'import de vidéo par fichier compile dans le SDK et ne régresse plus la cohésion — run test
+  - l'aperçu d'une conversation nomme sa couleur accentColor — la pastille d'un message scellé lit l'accent de la conversation sous le nom que le cliquet des couleurs admet
+  - le planificateur de BindingWriteThrottle est isolé au main acteur, le SDK compile en Swift 6 - run test
+  - une conversation verrouillée ne s'ouvre plus dans une fenêtre détachée sans le PIN — l'entrée « Ouvrir dans une nouvelle fenêtre » et le glissé de rangée lisent ConversationOpenRoute.mayDetach
+  - l'aperçu d'une conversation reste net, tient dans le volet étroit et dit ses non-lus au pluriel
+  - l'aperçu d'appui long n'ouvre plus une conversation verrouillée sans son PIN
+  - l'aperçu d'une conversation tenue longuement se dessine dans son mode de lecture, avec ses marges, sa peau et son accent
+  - « Réessayer », la citation restaurée et l'offre de traduction lisent la même loi que le menu
+  - l'origine qu'atteint l'envoi de fond se lit sur la portée du worker, pas sur location.origin
+  - une session TUS d'une autre origine n'est plus interrompue quand la page se cache — Background Fetch refuse tout pré-vol CORS
+  - l'aperçu d'une conversation ne se rouvre plus après avoir touché le voile, et Inviter / Gérer les membres ouvrent la fiche là où ils le disent — revue #11211
+  - le menu d'un message ne sert que ce que le web sait faire honnêtement
+  - le plafond du chunk d'envoi suit sa mesure (3,8 Ko) ; l'envoi sans port de fond garde exactement son signal d'avant
+  - une réaction ou une épingle ne scelle plus l'aperçu d'un message chiffré déjà déchiffré — la version du texte se lit à editedAt, pas à updatedAt
+  - la déconnexion oublie la preuve « déchiffré sur cet appareil »
+  - l'aperçu ne ressuscite jamais l'ancien clair d'un message E2EE modifié ou supprimé
+  - la page cachée en plein envoi confie le reste du fichier au navigateur (Background Fetch), le service worker range l'accusé et la page qui revient le rend sans réseau
+  - un envoi de média coupé reprend après un rechargement — checkpoint IndexedDB {adresse, offset, empreinte}, session relue par HEAD, bail par fichier
+  - une photo se développe et se recompresse hors du fil principal, et part recompressée partout où le profil le fait déjà
+  - l'aperçu d'appui long ne recule jamais, ne ment pas sur le vide et lit les DM déchiffrées (#11212)
+  - écouter un vocal en basaa, en duala ou en pt-BR depuis la notification enregistre sa langue, comme dans l'app (#11376)
+  - tenir une conversation montre ses derniers messages dans son mode et son accent, avec les actions que son rôle permet
+  - l'aperçu d'appui long d'une conversation est servi par son état publié
+  - l'aperçu d'appui long d'une conversation se charge, se revalide et parle la langue du lecteur
+  - toutes les portes du menu d'un message lisent la loi partagée
+  - les quatre SaveState des visionneuses sont nonisolated, Equatable et Sendable
+  - le retour au repos de l'enregistrement du document est posé sur la vue, pas sur la Task
+  - le drapeau de défilement voulu ne retombe plus pendant un saut animé
+  - l'analyseur de texte publie sans détour par la file principale
+  - les états transitoires reviennent au repos par une tâche liée à la vue
+  - les gestes différés à l'apparition s'annulent au départ de la vue
+  - DelayedUI.Outcome est nonisolated et le compteur de test libère sa deinit
+  - StickerTemplatePreviewScaleTests importe MeeshySDK pour le catalogue de stickers
+  - une primitive DelayedUI temporise le fil principal par des tâches annulables
+  - les vignettes de timeline reçoivent l'échelle d'écran au lieu de la lire sur l'écran principal
+  - la vignette de gabarit de sticker se redessine quand l'échelle de sa fenêtre change
+  - la mini-vignette de slide dessine ses stickers à l'échelle de l'environnement
+  - le cadre de bannière se rasterise à l'échelle de sa fenêtre, plus à celle de l'écran principal
+  - une conversation pas encore lue est jugée chiffrée par le menu
+  - le menu d'un message projette messageActionsFor, groupé, Répondre en tête
+  - la timeline de production mémoïse ses résolveurs et le canvas ne recule plus au lâcher d'un geste - run test
+  - une prise de vue ne se perd plus quand le worker d'image tombe, un worker muet ne bloque plus l'envoi, et un PNG ou un WebP porteur d'EXIF part ré-encodé
+  - la timeline ne réévalue plus toute la vue à chaque tick de tête de lecture - run test
+  - le miroir Swift de la loi des actions rejoue sur chaque changement de la loi partagée, sans table de rôles recopiée
+  - une photo se décode, se réduit, se retouche et s'encode dans un worker, et part recompressée en WebP 0,85 (repli JPEG, PNG si transparente) avec ses métadonnées EXIF retirées — pièces du fil et de la feuille d'envoi, TUS des posts, commentaires et stories
+  - le SDK Swift dit les mêmes actions permises que la loi partagée, vecteur pour vecteur
+  - la mémoire de la rangée plate de l'aperçu déclare un deinit non isolé — l'isolated deinit fabriqué par MainActor tue xctest au démontage (Swift #85663)
+  - une vidéo choisie s'affiche dans la retouche unique avec sa croix, « Terminé » et ses outils, au lieu d'un écran noir sans issue
+  - la première réception rend l'instant tel qu'il est gravé, comme les suivantes
+  - un appel vocal où l'autre filme ou partage son écran flotte en image dans l'image, comme sur le web (#11346)
+  - l'avalement du contextmenu Android ne survit ni à un nouvel appui ni au démontage de son hôte (revue #11207)
+  - chaque écran du jeu met en tête ce qu'on possède et ne dit chaque chiffre qu'une fois sur le web — Progression en synthèse, l'Héritage et ta lumière en tête de leur fiche, la frappe dans son cadre
+  - les pistes audio se réconcilient même quand la sortie est déjà juste, et l'activateur ne double-libère plus au démontage
+  - la pression revient sans saut, un appui qui n'ouvre rien ne vibre pas, la ligne de conversation vibre comme un message (revue #11207)
+  - l'app iOS raconte l'épopée dans les six autres langues — your light, tu luz, dein Licht, la tua luce, sua luz, نورك — et un témoin tient chaque clé commune au texte du web
+  - le chargeur d'historique est Sendable — la persistance de la page antérieure tourne en tâche enfant
+  - un réel ou une bulle muets ne décodent plus leur piste audio
+  - l'aperçu de l'appui long laisse la liste à l'écran, ne perd plus sa rangée, peint la frame vidéo sans l'encoder et garde son élévation tronqué
+  - les lecteurs préparés et leur recyclage quittent SharedAVPlayerManager
+  - la copie d'une vidéo importée reste hors du fil principal — le site d'ingestion n'hérite plus du MainActor de MeeshyUI — run test
+  - l'aperçu d'appui long s'ouvre à sa place sur iPad, sans saut, et garde ce que la cellule montre (#11208)
+  - la cérémonie de la frappe tient ses images — couleurs groupées, couches posées, densité qui s'adapte, et aucun rendu React pendant le geste
+  - une seule loi de codecs pour vocal, vidéo et appel
+  - une vidéo de la photothèque entre par un fichier, sans transcodage caché ni octet en mémoire — run test
+  - un appui long se sent à 350 ms et la liste suit le mouvement sans rien recalculer d'invisible
+  - la frappe devient une cérémonie plein écran sur le web — des milliers d'étincelles tissent le cercle, Mee et Meo y sèment la poussière, le flan se fige et la frappe arrive en dernier
+  - la cérémonie de la frappe se calcule image par image sur le web, et la porte de la frappe porte la réponse de la passerelle jusqu'à la scène
+  - les uploads de la passerelle ne sont plus servis par le domaine statique public
+  - les notifications et les textes partagés du jeu racontent l'épopée — la Joute et son cercle, le Voyage et ses haltes, l'Alliance, l'acte rien que pour toi, les signes des aïeux et la Chronique, la Flamme qui brûle, les hauts faits et les médailles
+  - la cérémonie de la frappe a sa loi partagée — les instants de chaque phase, la frappe en dernier, le marteau gardé levé tant que la passerelle n'a pas répondu, le refus qui ramène la lumière et le fondu des animations réduites
+  - les faces voisines du cube n'existent que le temps du glissé
+  - une garde iOS interdit les mots de comptable dans les textes du jeu, et chaque defaultValue du jeu dit le français du catalogue
+  - l'épopée parle allemand — dein Licht und seine Funken, der Schatten, das Erbe, der Traum und seine Akte, die Gabe, die Hüterin, das Turnier, das Bündnis, die Reise und ihre Rasten, die Wiedergeburt, die Chronik
+  - l'aperçu d'un message tenu longuement est la cellule du fil, à sa place et dans son mode de lecture
+  - les catalogues portugais (Brésil) du jeu racontent l'épopée — sua luz e suas faíscas, a Sombra, o Título, a Herança, o Sonho em três atos e a Oferenda, a Lamparina, o Torneio e a Aliança, a Viagem e suas paradas, o Renascimento e suas Eras, a Crônica
+  - le jeu raconte l'épopée en anglais — your light and its sparks, the Shadow, glory, the Legacy, the Dream and its acts, the Offering, the Vigil, the Joust, the Alliance, the Journey and its stops, Rebirth, the Chronicle
+  - l'épopée parle italien — la tua luce e le sue scintille, l'Ombra, l'Eredità, il Sogno e i suoi atti, l'Offerta, la Lucerna, il Torneo, l'Alleanza, il Viaggio e le sue soste, la Rinascita, la Cronaca
+  - l'épopée parle arabe — نورك وشراراته، الظلّ، الإرث، الحلم وفصوله، العطيّة، القنديل، المبارزة، التحالف، الرحلة ومحطاتها، الانبعاث وعصوره، السيرة
+  - l'épopée parle espagnol — tu luz y sus chispas, la Sombra, la gloria, el Legado, el Sueño y sus actos, la Ofrenda, la Vela, la Justa, la Alianza, el Viaje y sus paradas, el Renacimiento y sus Edades, la Crónica
+  - le menu d'appui long lit l'ordre de la sélection — la propriété n'est plus privée à l'extension de sélection
+  - l'aperçu d'un message tenu longuement garde ses marges, reste net, se soulève depuis sa rangée et montre le média tel qu'il est à l'écran
+  - l'app iOS parle la voix de l'épopée en français — ta lumière et ses étincelles, l'Ombre, la gloire, l'Héritage, le Rêve et ses actes, l'Offrande, la Veilleuse, la Joute, l'Alliance, le Voyage et ses haltes, la Renaissance, la Chronique
+  - le retrait d'une sélection sort du ConversationViewModel et de ConversationView — ConversationSelectionRemoval et ContentRemovalOffer portent la règle et les boutons
+  - le retrait d'une sélection devient une commande du ConversationCommandHandler, ses boutons sortent de ConversationView
+  - une garde interdit les mots de comptable dans les textes du jeu, et chaque nom de l'épopée se lit au caractère près
+  - reculer d'un auteur pose sur sa dernière story, comme le lecteur iOS
+  - la loi d'échéance des éphémères lit l'horloge et le registre injectés
+  - ouvrir une conversation ne fige plus l'app — l'action d'envoi publiée à la barre de menus reste la même d'un rendu à l'autre
+  - le lecteur de stories passe d'un auteur à l'autre par un cube, au doigt et annulable
+  - « Retirer » sur les commentaires de story et sur la sélection multiple de messages — un seul motif pour les messages des autres, les siens partent sans motif, chaque refus ne ramène que son message
+  - la fixture de ligne optimiste vit sur le MainActor, comme le constructeur qu'elle appelle
+  - le lecteur de stories se monte par UN seul couvercle, quel que soit le point d'appel (run test)
+  - le passage d'un groupe de stories à l'autre tourne comme un vrai cube, et le glissé reste annulable jusqu'au bout (run test)
+  - gardes de placement des collaborateurs et cliquet de cohésion verrouillé à la baisse (LOT-11T3)
+  - l'instantané d'un favori se compose dans sa fabrique (LOT-11T3)
+  - le catalogue principal du jeu parle la voix de l'épopée en français — ta lumière et ses étincelles, l'Ombre, la gloire, l'Héritage, le Rêve et ses actes, l'Offrande, la Veilleuse, la Joute, l'Alliance, le Voyage et ses haltes, la Renaissance, la Chronique
+  - l'élection de l'audio cité sort du ViewModel (LOT-11T3)
+  - la consommation média servie se sème hors du ViewModel (LOT-11T3)
+  - les types de valeur du modèle de conversation deviennent des types de premier niveau (LOT-11T3)
+  - fusion des messages et re-clé des ids serveur sortent du ViewModel (LOT-11T3)
+  - la loi d'échéance des éphémères devient une fonction pure (LOT-11T3)
+  - la citation optimiste se compose dans sa fabrique (LOT-11T3)
+  - les mémos des projections dérivées vivent dans leur propre cache (LOT-11T3)
+  - les fiches, les règles, le bandeau et l'accueil racontent l'épopée en français — ta lumière, l'Héritage, le Rêve, la Joute, le Voyage, la Renaissance
+  - l'ouverture, la pagination et le rattrapage passent par le chargeur d'historique (LOT-11T3)
+  - les actions sur un message vivent dans le gestionnaire de commandes (LOT-11T3)
+  - la fusion des traductions et des métadonnées audio sort du ViewModel (LOT-11T3)
+  - les statiques mutables du SDK (épinglage, libellé du lecteur, surcharges de vitrine) passent par Locked<State> (#11187)
+  - PushDeliveryReceiptService et RecognitionBox passent par Locked<State>, deps enfin synchronisé (#11187)
+  - StoryService et ContactResolveService passent par Locked<State> (#11187)
+  - UserDisplayNameCache passe par Locked<State> (#11187)
+  - les registres d'accusés, de stories vues, de réception et les puits sociaux passent par Locked<State> (#11187)
+  - FileDigestMemo et VisitorReaderKey passent par Locked<State> (#11187)
+  - l'envoi ne publie plus d'état que la vue ne lit pas (#11117)
+  - OutboxInflightDispatches, TimeStringCache et les boîtes de formateurs passent par Locked<State> (#11187)
+  - DailyGestureLimitLedger et ListingContextLedger passent par Locked<State> (#11187)
+  - CryptoSignposts passe par Locked<State> (#11187)
+  - la tranche de l'or est à son encre, les lauriers s'écartent du numéro, et la planche de revue montre les six faces de la Meesh
+  - la Meesh porte « MEESHY · 1 MEESH », son Nº souligné et ses trois éditions — argent sobre veiné d'or, or pur raffiné, prisme royal d'or et de diamant (web)
+  - la feuille du décor compile sous Xcode 27 — le liseré d'une tuile choisie est une vue de valeur, et la peinture de la bannière sort de l'étiquette du bouton
+  - un appel reste dans l'appareil auditif ou le casque USB, comme sur le web (#11186)
+  - purge des copies temporaires BubbleDrag-\* (à chaque chargement, au logout) et prédicat de glisser testé
+  - le dépôt sur la conversation est refusé dans l'aperçu de notification
+  - la feuille de création d'un post du fil retouche ses images et ses vidéos dans la même retouche qu'après la prise
+  - la visionneuse plein écran reste sur l'image touchée quand le catalogue ajoute des médias avant elle, et ouvrir une pièce lointaine ne construit plus toutes celles qui la précèdent
+  - la tuile « Image » de la bannière montre la bannière actuelle et ouvre la sélection d'image, et chaque cadre se prévisualise posé sur la bannière réelle
+  - une conversation directe nomme l'interlocuteur, jamais le lecteur, et une ligne déjà gravée sous le lecteur se répare seule
+  - l'écran plein des Réels porte le menu « … » de la carte — Retirer pour la modération, Supprimer pour l'auteur, Signaler ; le réel quitte la pile sur-le-champ et revient à sa place si la passerelle refuse
+  - FeedRedrawSourceGuardTests est référencé dans le groupe Unit/Views du projet, là où vit le fichier — le build de tests ne casse plus sans xcodegen
+  - deux cadres de bannière installés d'office, fixe et animé, et des bannières qui se voient — « Aurore vive » devient une aurore boréale animée, distincte d'« Aurore »
+  - la vue qui révèle le curseur clavier déclare un deinit non isolé, comme toute classe MainActor de l'app
+  - les 20 familles de stickers deviennent 20 types pilotés par StickerTemplateFamilyTable
+  - foodRamenImage sous 80 lignes, vapeur et baguettes extraites, ordre de dessin inchangé
+  - « Éditer » sur un média de la bande des récents ouvre aussi la retouche de la caméra, dans la conversation comme dans les commentaires
+  - l'alerte « Abandonner ? » ne publie plus pendant une mise à jour de la vue, et un test d'interface au simulateur prouve qu'« Abandonner » ramène la visée
+  - les pièces d'un commentaire passent aussi par la retouche de la caméra, et la série de scènes disparaît
+  - « Retirer » le contenu d'un autre avec un motif — message de groupe (créateur compris, jamais en direct), publication, réel, story et commentaire pour la modération ; la cloche dit le retrait et son motif
+  - la série de scènes du composer n'est plus une porte de la conversation, une pièce en attente ouvre la retouche
+  - la cible d'une notification de retrait se lit aussi dans le push (contentType recopié en postType), typée par RemovedContentType
+  - « Retirer » un commentaire ou une story d'un autre, et la cloche dit le retrait avec son motif
+  - évaluer l'autoclosure de CommentSendTrace avant l'interpolation OSLog
+  - les attentes de MeeshyUI respectent l'annulation, et le cliquet try-sleep baisse de 47
+  - « Retirer » le message ou la publication d'un autre, motif demandé — modérateur de groupe ou de plateforme, optimiste et défait si la passerelle refuse
+  - les attentes du cœur du SDK respectent l'annulation
+  - une attente annulée entre deux essais ne relance plus la requête
+  - la loi du retrait par la modération — qui retire le contenu d'un autre, et le motif de 3 à 500 caractères
+  - les appelants de l'envoi construisent un OutgoingMessage, et un échec de rejeu d'envoi est persisté par l'OutboxDispatcher
+  - l'envoi du ConversationViewModel passe par le coordinateur injectable, et ses écritures best-effort sont journalisées
+  - ConversationSendCoordinator porte le transport, le journal des tentatives et les écritures best-effort de l'envoi (GREEN)
+  - les gestionnaires de touches de la liste déclarent iOS 17, comme KeyPress qu'ils rendent
+  - le Result d'envoi dit s'il est accepté, et OutgoingAttachments.none (GREEN)
+  - les NSLog restants deviennent des Logger MeeshyLog
+  - les Logger construits à la main passent par MeeshyLog sans changer de sous-système ni de catégorie
+  - MeeshyLog porte le sous-système et toutes les catégories historiques
+  - toucher une image ou une vidéo en attente d'envoi ouvre la même retouche qu'après la prise
+  - MeeshyPointerShape quitte le MainActor comme les autres Shape du SDK (#11064)
+  - la question « Abandonner ? » de la retouche vit dans la session, et « Abandonner » abandonne même si l'alerte se ferme avant son action
+  - l'extension de partage n'ouvre plus un chemin choisi par l'app hôte — URL de fichier décodée refusée, sources du conteneur App Group et du bundle scellées, extension et destination de la copie bornées
+  - le pointeur de redimensionnement de colonne ne compile pointerStyle que là où il existe (macOS, visionOS)
+  - un même partage garde les mêmes fichiers que sur la PWA — un fichier vide n'occupe pas de place, le premier qui dépasse arrête le partage (#11142)
+  - « Partager → Meeshy » depuis Google Photos remet les photos et les vidéos, plus leurs chemins
+  - le bandeau du jeu choisit sa jauge par branche ViewBuilder, sans AnyView (cliquet maison rouge sur dev depuis #11125)
+  - l'anneau du curseur clavier nomme sa couleur accentColor (cliquet d'accent)
+  - la cloche de notifications devient un écran SDK, son ViewModel passe côté app
+  - la fiche de profil lit son cache par un chargeur injecté par l'environnement
+  - le glisser d'une pièce jointe résout son magasin sans await dans le ternaire
+  - les écrans Community du SDK ne portent plus ni ViewModel ni service
+  - le parcours d'adhésion par lien devient un écran SDK sans orchestration
+  - la scène Focal sépare la remise à plat et le passage de l'élu Refs #11129
+  - le défilement isole la transition de bas de fil et la pagination Refs #11129
+  - l'observation du modèle de conversation se range par famille d'abonnements Refs #11129
+  - en retouche, les bandes d'outils ne sont plus coupées : les formats vont d'un bord de l'écran à l'autre sous la scène, et le rail défile plutôt que de rogner un libellé
+  - la pose du snapshot se découpe en étapes nommées, effets dans le même ordre Refs #11129
+  - le texte pur de Community, JoinFlow et Notifications quitte les vues du SDK
+  - la cellule de message se compose de fonctions courtes à entrées et rappels figés
+  - la liste de conversations se parcourt aux flèches, s'ouvre à Entrée, se quitte à Échap
+  - une bulle se glisse vers une autre app depuis le cache, jamais si elle est protégée
+  - un fichier se dépose n'importe où sur la conversation, pas seulement sur le composer
+  - frappe, séparateur de jour et début de conversation ont chacun leur registration
+  - la liste de messages libère son lien d'affichage sans isolation MainActor
+  - Cmd+Retour envoie par la barre de menus, plus par un bouton invisible
+  - la poignée de colonne iPad porte le curseur de redimensionnement
+  - la forme du pointeur épouse la forme visible, meeshyPointerInteractive et son ButtonStyle
+  - réessayer un envoi garde la story citée et le transfert, et un transfert ne part plus par le socket qui les perdrait
+  - en retouche, la rangée de (x) et « Terminé » reste montée et se cache par opacité ; le toucher qui ferme l'alerte n'atteint plus la prise
+  - refermer l'aperçu de conversation rend la page dans le commit qui le retire
+  - en retouche, lecture et volume vivent en haut à droite sous « Terminé », toujours visibles, et (x)/« Terminé » cèdent la place aux éléments d'édition
+  - un recalage de dérive en lecture vise à ±0,1 s — plus de rafale de seeks précis qui s'annulent
+  - inscrire les fichiers neufs au pbxproj, révoquer le bail audio à l'arrière-plan, importer MeeshySDK dans la dérive
+  - la jauge de progression du jeu glisse sur le compositeur au lieu de relayouter sa largeur
+  - la forme de la waveform suit la déclaration de forme du reste de l'app
+  - le pager de réels prépare la fenêtre N±2…N±10 que l'usage réclame, palier par palier
+  - une ombre par bloc au-dessus de la vidéo d'un réel, plus une par feuille
+  - le lecteur des réels précharge selon l'usage — N±2 montés, N±1 décodés, têtes amorcées jusqu'à N±10 ; progression écrite à chaque image ; coque Android épinglée sur le GPU
+  - la waveform d'un réel audio bouge enfin — sa phase est animable
+  - le fond du fil rasterise ses orbes floutés au lieu de les recomposer à chaque frame
+  - la vague du dévoilement des réels coule vraiment, et s'arrête avec son masque
+  - activatePlaybackSync ne repaie plus setActive(true) à chaque balayage de réel
+  - le vocal se décode hors du fil principal et sa progression ne crée plus une Task par tick
+  - le moteur vidéo partagé lit le fichier, rend le lecteur sortant au pool et boucle sans réactiver la session
+  - les fondus du lecteur suivent le temps réel, plus le nombre de réveils
+  - le pool de lecteurs préparés lit le fichier local, s'annule au balayage et reprend le lecteur sortant
+  - le lecteur de scène avance en temps réel et recale ses vidéos en continu
+  - ReelPreloadWindow, jumelle Swift de la fenêtre de préchargement des réels
+  - l'aperçu du composer démarre vidéo et audio à la même ancre hôte
+  - loi pure de la fenêtre de préchargement des réels — N±2 toujours, jusqu'à N±10 selon la cadence, la direction et la contrainte
+  - aucun filtre startsWith ne reçoit plus une valeur calculée — un préfixe se lit en intervalle de chaînes
+  - retirer un contenu ne reprend plus que ses propres reçus, et une publication de plus d'un mois garde ses étincelles
+  - une possession sans achat reste lisible par le serveur d'avant après un retour arrière
+  - un pack se possède par le jeu, un octroi ou un événement, plus seulement par l'achat
+  - GET /admin/ops/containers sert les conteneurs de l'environnement publiés par le runner (lecture bornée à 256 Ko, validée, liste vide hors contrat) ; sauvegarde et nettoyage s'ouvrent au rang d'administration (ADMIN et BIGBOSS), et chaque tentative refusée — rang, confirmation, délai, opération en cours, relais absent — est journalisée (SERVER_OPERATION_REFUSED, #10459 point 3) ; manifeste et catalogues d'adresses régénérés (Refs #11441)
+  - la grâce de départ passe par la minuterie gardée — une levée dans son rappel ne fait plus tomber la passerelle (cliquet timer-callback-guard-sweep) (Refs #10575)
+  - la présence dit qui est LÀ — le battement d'un connecté passif est enfin rediffusé (toutes les 4 min), un onglet caché ou une app en arrière-plan part hors ligne après 15 s de grâce, et une requête REST ne déclare plus personne en ligne (Refs #10575)
+  - le compte static.<domaine>/uploads fouille les colonnes JSON (#11256)
+  - If-Range ne s'honore qu'avec un ETag fort (#11265)
+  - les routes de fichier rendent immuable une clé UUID et ne promettent plus de cache sur un 416
+  - les routes de fichier servent plages, ETag et Vary par un transport commun
+  - les colonnes d'octets d'un PostMedia se lisent par une seule sélection
+  - TUS et multipart produisent les mêmes rendus par une fabrique commune
+  - le lanceur ffmpeg vit dans son propre module
+  - le compte static.<domaine>/uploads reconnaît aussi les références static:uploads/…
+  - le compte static.<domaine>/uploads balaie aussi avatars, bannières et pistes, et seule la passerelle monte ses uploads
+  - retirer ou rendre privé un post n'efface plus la notification qui explique le retrait à son auteur — retractPostNotifications supprimait toute ligne dont context.postId visait le post, content_removed compris : sur staging, le commentaire retiré d'un post puis la mise en privé de ce post laissaient l'auteur sans aucune explication, et la purge des stories expirées aurait effacé celle d'une story retirée. Le filtre exclut désormais le type content_removed. Témoin rouge avant le correctif (retractPostNotifications.test.ts), filtres attendus alignés dans postRemovalEffects et ExpiredStoriesCleanupService. Refs #11160
+  - passer en privé la publication d'un autre depuis la console prévient aussi l'auteur, avec un libellé qui le dit
+  - un retrait fait depuis la console d'administration prévient l'auteur par content_removed, avec son motif
+  - un modérateur retire une publication ou un commentaire d'autrui avec un motif, l'auteur est prévenu
+  - un tiers retire un message de groupe avec un motif, l'auteur est prévenu
+  - un pack récompensé se gagne par sa règle, se porte sur sa surface, et n'est jamais gratuit pour tous
+  - un contour d'avatar ou une bannière peut être la récompense d'un rang, d'un trophée ou d'une saison
+  - la n-ième Meesh se dessine dans la plus haute édition atteinte — le n° 247 en or, sa frappe d'un seul coup dans la poussière d'or
+  - une URL après un emoji est refusée par TypeScript comme par le Swift, et sdk-tests rejoue les vecteurs MeeshyLens
+  - MeeshyLens v1 est un contrat Zod tolérant, lu à l'identique par un miroir Swift généré
+  - le contrat des conteneurs Docker de l'environnement — nom, service, image et sa date, état, santé, démarrage, redémarrages, consommation, réseaux et ports, et rien d'autre (aucune variable d'environnement, aucun label) (Refs #11441)
+  - PostMedia porte imageVariants et videoCodec, tous deux optionnels
+  - la loi des actions suit la passerelle — réagir sans écrire, épingle refusée au mineur de Global, E2EE fermé par défaut, vecteurs régénérables
+  - une seule loi dit quelles actions un lecteur peut faire sur un message ou une conversation
+
 ## 1.41.0
 
 ### Minor Changes
