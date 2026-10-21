@@ -13,7 +13,9 @@ final class RouterInjectionGuardTests: XCTestCase {
         "Meeshy/Features/Main/Views/GuestConversationContainer.swift",
         "Meeshy/Features/Main/Views/StoryTrayActions.swift",
         "Meeshy/Features/Main/Views/StoryViewerContainer.swift",
-        "Meeshy/Features/Main/Navigation/SceneCommandHosts.swift"
+        "Meeshy/Features/Main/Navigation/SceneCommandHosts.swift",
+        "Meeshy/Features/Main/Views/AdaptiveRootView.swift",
+        "Meeshy/Features/Main/Views/ConversationListView+Presentations.swift"
     ]
 
     private static let commandOnlyViews = [
