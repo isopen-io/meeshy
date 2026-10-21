@@ -35,7 +35,7 @@ describe('summaryExits — les trois sorties du Résumé Vivant (#7429, extrait 
     const selectMode = (mode: string) => calls.push(`mode:${mode}`);
     const requestJump = (id: string | null) => calls.push(`jump:${id}`);
     const setReplyTarget = (id: string | null) => calls.push(`reply:${id}`);
-    const exits = summaryExits({ selectMode, requestJump, setReplyTarget, resumeTarget: () => null });
+    const exits = summaryExits({ selectMode, requestJump, setReplyTarget, replyable: () => true, resumeTarget: () => null });
 
     exits.onReplyToPerson(entryOf(['m-a', 'm-b']));
 
@@ -48,6 +48,7 @@ describe('summaryExits — les trois sorties du Résumé Vivant (#7429, extrait 
       selectMode: (mode) => calls.push(`mode:${mode}`),
       requestJump: (id) => calls.push(`jump:${id}`),
       setReplyTarget: (id) => calls.push(`reply:${id}`),
+      replyable: () => true,
       resumeTarget: () => null,
     });
 
@@ -62,6 +63,7 @@ describe('summaryExits — les trois sorties du Résumé Vivant (#7429, extrait 
       selectMode: (mode) => calls.push(`mode:${mode}`),
       requestJump: (id) => calls.push(`jump:${id}`),
       setReplyTarget: () => {},
+      replyable: () => true,
       resumeTarget: () => null,
     });
 
@@ -76,6 +78,7 @@ describe('summaryExits — les trois sorties du Résumé Vivant (#7429, extrait 
       selectMode: (mode) => calls.push(`mode:${mode}`),
       requestJump: (id) => calls.push(`jump:${id}`),
       setReplyTarget: () => {},
+      replyable: () => true,
       resumeTarget: () => null,
     });
 
@@ -91,6 +94,7 @@ describe('summaryExits — les trois sorties du Résumé Vivant (#7429, extrait 
       selectMode: (mode) => calls.push(`mode:${mode}`),
       requestJump: (id) => calls.push(`jump:${id}`),
       setReplyTarget: () => {},
+      replyable: () => true,
       resumeTarget: () => currentTarget,
     });
 
@@ -106,11 +110,27 @@ describe('summaryExits — les trois sorties du Résumé Vivant (#7429, extrait 
       selectMode: (mode) => modes.push(mode),
       requestJump: () => {},
       setReplyTarget: () => {},
+      replyable: () => true,
       resumeTarget: () => null,
     });
     exits.onReplyToPerson(entryOf(['m-a']));
     exits.onOpenEpisode(episodeOf(['m-b']));
     exits.onResumeThread();
     expect(modes).toEqual(['script', 'script', 'script']);
+  });
+
+  test('visage sur un message auquel on ne peut pas répondre d’ici (bout en bout, droit d’écrire retiré) ⇒ script + saut, sans pré-adressage (#11372)', () => {
+    const calls: string[] = [];
+    const exits = summaryExits({
+      selectMode: (mode) => calls.push(`mode:${mode}`),
+      requestJump: (id) => calls.push(`jump:${id}`),
+      setReplyTarget: (id) => calls.push(`reply:${id}`),
+      replyable: (id) => id !== 'm-a',
+      resumeTarget: () => null,
+    });
+
+    exits.onReplyToPerson(entryOf(['m-a', 'm-b']));
+
+    expect(calls).toEqual(['mode:script', 'jump:m-a']);
   });
 });
