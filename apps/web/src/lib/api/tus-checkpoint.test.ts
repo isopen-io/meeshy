@@ -69,7 +69,6 @@ describe('idbTusCheckpointStore — le checkpoint survit à la page', () => {
     const idb = fakeIndexedDb();
     const store = idbTusCheckpointStore(idb.factory);
     await store.save(checkpointOf());
-    idb.rowsOf(TUS_CHECKPOINT_DB_NAME, TUS_CHECKPOINT_STORE_NAME) as Map<string, unknown>;
     (idb.rowsOf(TUS_CHECKPOINT_DB_NAME, TUS_CHECKPOINT_STORE_NAME) as Map<string, unknown>).set('fp-1', { location: 12 });
 
     expect(await store.find('fp-1')).toBeNull();
