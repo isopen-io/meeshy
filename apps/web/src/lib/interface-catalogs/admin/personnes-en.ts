@@ -16,6 +16,7 @@ const f = {
   'admin.people.sort.firstName': 'First name',
   'admin.people.sort.lastName': 'Last name',
   'admin.people.col.security': 'Security',
+  'admin.people.ban.history': 'Ban history',
   'admin.people.col.actions': 'Actions',
   'admin.people.row.unlock': 'Unlock',
   'admin.people.row.activate': 'Activate',

@@ -16,6 +16,7 @@ const f = {
   'admin.people.sort.firstName': 'Nombre',
   'admin.people.sort.lastName': 'Apellidos',
   'admin.people.col.security': 'Seguridad',
+  'admin.people.ban.history': 'Historial de bloqueos',
   'admin.people.col.actions': 'Acciones',
   'admin.people.row.unlock': 'Desbloquear',
   'admin.people.row.activate': 'Activar',
