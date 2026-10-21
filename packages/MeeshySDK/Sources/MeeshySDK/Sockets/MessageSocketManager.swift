@@ -826,7 +826,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Decode Helper
 
-    nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
+    nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @MainActor @Sendable (T) -> Void) {
         SocketPayloadDecoder.decode(type, from: data, handler: handler)
     }
 }

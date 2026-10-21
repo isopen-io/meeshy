@@ -925,7 +925,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     private static let offMainDecoder: JSONDecoder = makeSocketPayloadDecoder()
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.social-socket.decode", qos: .userInitiated)
 
-    private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
+    nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @MainActor @Sendable (T) -> Void) {
         guard let first = data.first else { return }
 
         let jsonData: Data
@@ -947,7 +947,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         Self.decodeQueue.async {
             do {
                 let decoded = try Self.offMainDecoder.decode(type, from: jsonData)
-                DispatchQueue.main.async { handler(decoded) }
+                Task { @MainActor in handler(decoded) }
             } catch {
                 Logger.socket.error("SocialSocket decode error for \(String(describing: type)): \(error)")
             }

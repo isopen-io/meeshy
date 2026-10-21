@@ -21,7 +21,7 @@ enum SocketPayloadDecoder {
     /// Serial so payloads decode in arrival order, off the main thread.
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.socket.decode", qos: .userInitiated)
 
-    static func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
+    static func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @MainActor @Sendable (T) -> Void) {
         guard let first = data.first else {
             Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=empty-payload")
             return
@@ -31,7 +31,7 @@ enum SocketPayloadDecoder {
         // inline parsed every realtime event (message / reaction / receipt …) on
         // the main thread — visible CPU on busy conversations. Serialise the dict
         // here (cheap), then decode off-main on a serial queue that preserves
-        // arrival order; the handler still lands on main.
+        // arrival order; the handler still lands on main (`@MainActor`).
         let jsonData: Data
         if let dict = first as? [String: Any] {
             do {
@@ -54,7 +54,7 @@ enum SocketPayloadDecoder {
         Self.decodeQueue.async {
             do {
                 let decoded = try Self.socketDecoder.decode(type, from: jsonData)
-                DispatchQueue.main.async { handler(decoded) }
+                Task { @MainActor in handler(decoded) }
             } catch {
                 if payloadKeys.isEmpty {
                     Logger.socket.error("decode FAILED type=\(String(describing: type)): \(error)")
