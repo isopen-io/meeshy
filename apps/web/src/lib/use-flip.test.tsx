@@ -43,7 +43,8 @@ afterEach(() => {
   top = 0;
   if (realAnimate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
   else Object.defineProperty(HTMLElement.prototype, 'animate', realAnimate);
-  if (realRect !== undefined) Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', realRect);
+  if (realRect === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect');
+  else Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', realRect);
 });
 
 function Probe({ flipKey, fadeFrom }: { readonly flipKey: string | null; readonly fadeFrom?: number }) {
@@ -55,6 +56,7 @@ function Probe({ flipKey, fadeFrom }: { readonly flipKey: string | null; readonl
 function stub(): void {
   Object.defineProperty(HTMLElement.prototype, 'animate', {
     configurable: true,
+    writable: true,
     value(frames: readonly Keyframe[], options: KeyframeAnimationOptions) {
       played = [...played, { frames, options }];
       return { cancel: () => undefined };
@@ -62,6 +64,7 @@ function stub(): void {
   });
   Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
     configurable: true,
+    writable: true,
     value: () => ({ left: 10, top, right: 10, bottom: top, width: 0, height: 0, x: 10, y: top, toJSON: () => ({}) }),
   });
 }

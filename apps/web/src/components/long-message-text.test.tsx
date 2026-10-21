@@ -46,12 +46,14 @@ afterEach(() => {
   collapseUnfolded();
   if (realAnimate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
   else Object.defineProperty(HTMLElement.prototype, 'animate', realAnimate);
-  if (realRect !== undefined) Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', realRect);
+  if (realRect === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect');
+  else Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', realRect);
 });
 
 function stub(): void {
   Object.defineProperty(HTMLElement.prototype, 'animate', {
     configurable: true,
+    writable: true,
     value(frames: readonly Keyframe[]) {
       played.push(frames);
       return { cancel: () => undefined };
@@ -59,6 +61,7 @@ function stub(): void {
   });
   Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
     configurable: true,
+    writable: true,
     value(this: HTMLElement) {
       const unfolded = this.closest('[data-long-message]')?.getAttribute('data-long-message') === 'unfolded';
       const top = this.hasAttribute('data-long-message-toggle') ? (unfolded ? 400 : 100) : 50;
