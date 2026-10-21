@@ -46,7 +46,7 @@ struct PostDetailView: View {
         _mentionController = StateObject(wrappedValue: MentionComposerController(context: .post(id: postId)))
     }
     @EnvironmentObject var statusViewModel: StatusViewModel
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
     @State var showTranslationSheet = false
     @State var selectedProfileUser: ProfileSheetUser?
     @State private var likeScale: CGFloat = 1.0

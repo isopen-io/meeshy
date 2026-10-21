@@ -13,7 +13,7 @@ import MeeshyUI
 /// sont déclarées (évite le crash `EnvironmentObject error` qui frappait au
 /// tap du bouton de partage d'une story).
 struct StoryViewerSheets: ViewModifier {
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
     let currentStory: StoryItem?

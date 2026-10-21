@@ -9,7 +9,7 @@ struct GlobalSearchView: View {
     @StateObject private var viewModel = GlobalSearchViewModel()
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.meeshyConversationList) var conversationListViewModel
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
     // Présentée en fullScreenCover : hérite des EnvironmentValues, PAS des
     // EnvironmentObject. Cf. SocialChromeEnvironment.swift.
     @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver

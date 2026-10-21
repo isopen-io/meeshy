@@ -17,7 +17,7 @@ import MeeshyUI
 /// survives sub-tab switches.
 struct PeopleDiscoveryView: View {
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     @StateObject private var requestsVM = RequestsViewModel()
     @StateObject private var discoverVM = DiscoverViewModel()
