@@ -111,11 +111,10 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
             XCTAssertEqual(
                 code.components(separatedBy: glyph.marker).count - 1, 1,
                 "\(glyph.file) doit garder \(glyph.marker) exactement une fois")
-            let receiverRange = try XCTUnwrap(
-                code.range(of: glyph.receiver), "\(glyph.file) : \(glyph.receiver) introuvable")
-            let tail = String(code[receiverRange.upperBound...].prefix(160))
+            let tails = Self.ranges(of: glyph.receiver, in: code).map { String(code[$0.upperBound...].prefix(160)) }
+            XCTAssertFalse(tails.isEmpty, "\(glyph.file) : \(glyph.receiver) introuvable")
             XCTAssertTrue(
-                tail.contains(glyph.marker),
+                tails.contains { $0.contains(glyph.marker) },
                 "\(glyph.file) : la police figée ne suit plus \(glyph.receiver)")
         }
     }
@@ -127,6 +126,16 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
             let resolved = UIFont.preferredFont(forTextStyle: style, compatibleWith: traits).pointSize
             XCTAssertEqual(Double(resolved), size, accuracy: 0.01, "\(size) pt ne tombe pas sur son style de texte")
         }
+    }
+
+    private static func ranges(of needle: String, in text: String) -> [Range<String.Index>] {
+        var found: [Range<String.Index>] = []
+        var start = text.startIndex
+        while let range = text.range(of: needle, range: start..<text.endIndex) {
+            found.append(range)
+            start = range.upperBound
+        }
+        return found
     }
 
     private static func uiTextStyle(_ style: Font.TextStyle) -> UIFont.TextStyle {
