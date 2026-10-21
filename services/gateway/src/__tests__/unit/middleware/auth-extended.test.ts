@@ -663,7 +663,11 @@ describe('AuthMiddleware — StatusService integration', () => {
     jest.clearAllMocks();
   });
 
-  it('calls updateUserLastSeen and ensureUserOnline when user is offline', async () => {
+  // #10575 — une requête REST ne prouve pas qu'une personne est LÀ : l'extension
+  // de notification iOS (`NSEDataSync`) et celle de partage appellent l'API en
+  // arrière-plan, et la marquer en ligne allumait sa pastille chez ses amis. La
+  // présence appartient à la socket au premier plan ; REST ne date que l'activité.
+  it('calls updateUserLastSeen but NEVER declares an offline user online from REST', async () => {
     const user = createTestUser({ isOnline: false });
     const prisma = createMockPrisma({
       userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
@@ -679,7 +683,7 @@ describe('AuthMiddleware — StatusService integration', () => {
     await middleware.createAuthContext(`Bearer ${token}`);
 
     expect(statusService.updateUserLastSeen).toHaveBeenCalledWith(user.id);
-    expect(statusService.ensureUserOnline).toHaveBeenCalledWith(user.id, false);
+    expect(statusService.ensureUserOnline).not.toHaveBeenCalled();
   });
 
   it('calls updateUserLastSeen but NOT ensureUserOnline when user is already online', async () => {
