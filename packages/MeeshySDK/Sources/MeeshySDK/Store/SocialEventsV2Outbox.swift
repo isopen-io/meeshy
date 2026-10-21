@@ -194,13 +194,13 @@ public actor SocialEventsV2Outbox {
 
     /// Un refus de forme (400) : toute la file v2 est jetée, sans rejeu.
     public func dropAll(owner: String) async {
-        _ = try? await db.write { db in
+        await bestEffort("socialEventsV2Outbox.dropAll") { try await db.write { db in
             try db.execute(sql: "DELETE FROM social_events_v2 WHERE owner = ?", arguments: [owner])
-        }
+        } }
     }
 
     /// À la déconnexion : la file d'un compte ne survit pas à son départ.
     public func purgeAll() async {
-        _ = try? await db.write { db in try db.execute(sql: "DELETE FROM social_events_v2") }
+        await bestEffort("socialEventsV2Outbox.purgeAll") { try await db.write { db in try db.execute(sql: "DELETE FROM social_events_v2") } }
     }
 }

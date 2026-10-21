@@ -42,7 +42,9 @@ final class ScrollOffsetRelayAdoptionSourceGuardTests: XCTestCase {
 
         var sources: [(String, String)] = []
         for case let url as URL in walker where url.pathExtension == "swift" {
-            guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            // Un type découpé se lit comme son UNITÉ : `PostDetailView.swift`
+            // déclare le relais, `PostDetailView+Header.swift` le donne à lire.
+            guard let raw = try? AppSourceGuard.text(at: url) else { continue }
             sources.append((url.lastPathComponent, AppSourceGuard.stripComments(raw)))
         }
         return sources.sorted { $0.0 < $1.0 }

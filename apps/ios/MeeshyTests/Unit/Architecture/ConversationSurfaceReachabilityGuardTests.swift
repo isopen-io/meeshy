@@ -66,16 +66,11 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
 
     /// Les exceptions, chacune avec la raison qui la rend légitime.
     ///
-    /// `buildNativeMessageMenu(for:)` : `private`, jamais appelée, et pourtant
-    /// tenue VERTE par `ConversationMenuSystemDesignGuardTests`, qui l'inspecte
-    /// à la source — le motif « code mort testé vert » que ce dépôt connaît.
-    /// Son doc-comment dit « le menu natif n'existe que sur iOS 26 » : c'est
-    /// peut-être un chemin monté plus tard, pas un vestige. Trancher demande
-    /// l'arbitrage produit du menu contextuel natif, pas une passe de nettoyage
-    /// — inscrite ici NOMMÉMENT pour qu'elle reste une dette VUE.
+    /// `buildNativeMessageMenu(for:)` a vécu ici, dette NOMMÉE : `private`,
+    /// jamais appelée, tenue verte par une garde de source. #11214 l'a retirée
+    /// avec son fichier — le menu d'un message n'a plus qu'un contexte, celui
+    /// de `MessageMenuContext.make`.
     private static let unreachableAllowlist: Set<String> = [
-        "buildNativeMessageMenu",
-
         // ── 2026-09-06 · la reprise d'un post bloqué DORT, et sa dette est NOMMÉE ──
         //
         // `recoverStuckPostDraftIfNeeded` pré-remplissait le composer avec le
@@ -460,7 +455,7 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     /// leur nom, pour que la recherche `git log -S` les retrouve.
     func test_lesDeuxFonctionsRetiréesEn243iNeSontPasRevenues() {
         let corpus = Self.surfaceSources.map { $0.code }.joined(separator: "\n")
-        for name in ["replyCountPill", "scrollToAndHighlight"] {
+        for name in ["replyCountPill", "scrollToAndHighlight", "buildNativeMessageMenu"] {
             XCTAssertFalse(
                 corpus.contains(name),
                 "\(name) est revenue dans la surface conversation. Elle n'a jamais eu de site d'appel : la monter, ou ne pas la réécrire."
@@ -1092,7 +1087,14 @@ final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
         XCTAssertTrue(sortie[porte.upperBound...].prefix(120).contains("consumeOpenedViewOnceOnExit()"),
                       "La sortie par navigation consomme avant tout le reste.")
 
-        guard let fond = hôte.range(of: "if phase == .background {") else {
+        // #11074 : le `scenePhase` se lit dans le modificateur nominal du cycle de
+        // vie, qui remet l'arrière-plan à l'hôte ; l'hôte y consomme.
+        let cycle = try source(at: "Features/Main/Views/ConversationLayers/ConversationBodyLifecycle.swift")
+        XCTAssertTrue(cycle.contains("if phase == .background { actions.didEnterBackground() }"),
+                      "Le cycle de vie remet le passage en arrière-plan à l'hôte.")
+        XCTAssertTrue(hôte.contains("didEnterBackground: { conversationDidEnterBackground() }"),
+                      "L'hôte branche l'arrière-plan sur son geste de sortie.")
+        guard let fond = hôte.range(of: "func conversationDidEnterBackground() {") else {
             return XCTFail("Impossible de localiser la sortie par arrière-plan.")
         }
         let corpsFond = String(hôte[fond.upperBound...].prefix(700))

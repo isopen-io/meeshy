@@ -38,26 +38,27 @@ struct StoryTextEditTopBar: View {
     /// Remplace le X rouge de l'ancienne rangée basse. « Terminé » dit ce que
     /// l'action fait : elle referme l'éditeur, elle ne supprime rien.
     private var finishButton: some View {
-        Text(String(localized: "story.textEdit.finish.short",
-                    defaultValue: "Terminé", bundle: .module))
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(Color.white)
-            .lineLimit(1)
-            .padding(.horizontal, MeeshySpacing.lg)
-            .frame(height: TextEditToolbarMetrics.bubbleSize)
-            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
-            .contentShape(Capsule())
-            .onTapGesture {
-                HapticFeedback.medium()
-                onFinish()
-            }
-            .accessibilityLabel(String(
-                localized: "story.textEdit.finish",
-                defaultValue: "Terminer l'édition du texte", bundle: .module))
-            .accessibilityHint(String(
-                localized: "story.textEdit.finish.hint",
-                defaultValue: "Ferme l'éditeur et masque le clavier", bundle: .module))
-            .accessibilityAddTraits(.isButton)
+        Button {
+            HapticFeedback.medium()
+            onFinish()
+        } label: {
+            Text(String(localized: "story.textEdit.finish.short",
+                        defaultValue: "Terminé", bundle: .module))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .frame(height: TextEditToolbarMetrics.bubbleSize)
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .capsule))
+        .accessibilityLabel(String(
+            localized: "story.textEdit.finish",
+            defaultValue: "Terminer l'édition du texte", bundle: .module))
+        .accessibilityHint(String(
+            localized: "story.textEdit.finish.hint",
+            defaultValue: "Ferme l'éditeur et masque le clavier", bundle: .module))
     }
 
     // MARK: - Accessibilité
@@ -95,6 +96,7 @@ struct StoryTextEditTopBar: View {
 struct CycleButtonAccessibility: ViewModifier {
     let label: String
     let value: String
+    let onActivate: () -> Void
     let onOpenPanel: () -> Void
 
     func body(content: Content) -> some View {
@@ -107,6 +109,7 @@ struct CycleButtonAccessibility: ViewModifier {
                 defaultValue: "Touchez pour la valeur suivante, appui long pour toutes les options",
                 bundle: .module))
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction(onActivate)
             .accessibilityAction(named: String(
                 localized: "story.textEdit.cycle.allOptions",
                 defaultValue: "Toutes les options", bundle: .module), onOpenPanel)

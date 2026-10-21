@@ -615,10 +615,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// et non le menu longpress ». Les deux sont distincts : l'appui long
     /// ouvre l'overlay (réactions + actions), celui-ci la feuille complète.
     var onOpenMoreSheet: ((String) -> Void)?
-    /// **Le prédicat d'éditabilité est REMIS, jamais recalculé.** La règle
-    /// (`msg.isMe || isCurrentUserAdminOrMod`) est déjà écrite TROIS fois dans
-    /// `ConversationView` ; en poser une quatrième ici garantirait qu'elles
-    /// divergent au premier ajustement de l'une.
+    /// **Le prédicat d'éditabilité est REMIS, jamais recalculé.** La règle vit
+    /// dans `MessageMenuContext.make` (#11214) ; en poser une seconde ici
+    /// garantirait qu'elles divergent au premier ajustement de l'une.
     var canEditMessage: ((String) -> Bool)?
     /// User-initiated reaction add. Carries the message id and the tapped
     /// bubble cell's on-screen frame (window coords, `nil` when the cell is

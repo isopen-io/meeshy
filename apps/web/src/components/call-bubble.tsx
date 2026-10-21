@@ -11,7 +11,9 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import {
   bubbleOrigin,
+  BUBBLE_SETTLE_TRANSITION,
   bubbleSize,
+  bubbleTranslate,
   fittingTier,
   isBubbleTap,
   nudgeBubble,
@@ -183,13 +185,14 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
         style={{
           width: size.width,
           height: size.height,
-          left: origin.left + (drag?.x ?? 0),
-          top: `calc(${origin.top + (drag?.y ?? 0)}px + env(safe-area-inset-top))`,
+          left: 0,
+          top: 0,
+          translate: bubbleTranslate({ origin, drag }),
           background: BG,
           color: 'var(--color-on-media)',
           transform: pinch === null ? undefined : `scale(${Math.min(1.6, Math.max(0.6, pinch))})`,
           transformOrigin: placement.edge === 'left' ? 'left center' : 'right center',
-          transition: drag === null && pinch === null ? 'left 180ms ease-out, top 180ms ease-out, width 180ms ease-out, height 180ms ease-out' : 'none',
+          transition: drag === null && pinch === null ? BUBBLE_SETTLE_TRANSITION : 'none',
           touchAction: 'none',
         }}
         onWheel={onWheel}

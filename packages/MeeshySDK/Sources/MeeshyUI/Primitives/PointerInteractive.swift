@@ -18,7 +18,7 @@ nonisolated public enum MeeshyPointerShape: Shape, Equatable, Sendable {
 }
 
 extension View {
-    public func meeshyPointerInteractive(shape: MeeshyPointerShape = .roundedRect(cornerRadius: 12)) -> some View {
+    public func meeshyPointerInteractive(shape: MeeshyPointerShape = .roundedRect(cornerRadius: MeeshyRadius.smPlus)) -> some View {
         contentShape(.hoverEffect, shape).hoverEffect(.highlight)
     }
 
@@ -35,7 +35,7 @@ extension View {
 public struct MeeshyPointerButtonStyle: ButtonStyle {
     private let shape: MeeshyPointerShape
 
-    public init(shape: MeeshyPointerShape = .roundedRect(cornerRadius: 12)) {
+    public init(shape: MeeshyPointerShape = .roundedRect(cornerRadius: MeeshyRadius.smPlus)) {
         self.shape = shape
     }
 

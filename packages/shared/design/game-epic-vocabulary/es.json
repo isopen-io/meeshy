@@ -127,12 +127,13 @@
     {
       "pattern": "(?<!de\\s)(?<![\\p{L}\\p{N}])estrellas?(?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "«pasos» (el viaje); «edades» (el renacimiento)",
+      "instead": "«pasos» (el viaje); «edades» (el renacimiento); «escalones» (una medalla)",
       "keys": [
         "game.season.",
         "game.prestige.",
         "game.fact.strides",
-        "game.fact.rebirths"
+        "game.fact.rebirths",
+        "game.badge.stars_label"
       ]
     },
     {
@@ -249,6 +250,14 @@
       "keys": [
         "game."
       ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])llamas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«N días» bajo 🔥: la Llama es la del héroe, nunca la de una conversación",
+      "keys": [
+        "engagement.pill.streak."
+      ]
     }
   ],
   "names": {
@@ -276,7 +285,7 @@
     "game.rank.echo": "Eco",
     "game.rank.voix": "Voz",
     "game.rank.conteur": "Narrador",
-    "game.rank.passeur": "Pasador",
+    "game.rank.passeur": "Barquero",
     "game.rank.polyglotte": "Políglota",
     "game.rank.ambassadeur": "Embajador",
     "game.rank.orateur": "Orador",
@@ -363,6 +372,8 @@
     "game.gauge.treasury": "Legado",
     "game.gauge.flame": "Llama",
     "game.fact.strides": "Pasos",
-    "game.fact.rebirths": "Renacimientos"
+    "game.fact.rebirths": "Renacimientos",
+    "game.badge.stars_label": "Escalones",
+    "game.badge.ladder_title": "Los siete escalones"
   }
 }

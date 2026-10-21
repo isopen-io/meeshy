@@ -8,8 +8,8 @@
  * (`engagement.post.points.*`, #9570) — le jeu tutoie.
  */
 const frEngagement = {
-  'engagement.pill.streak.one': 'Flamme de {count} jour',
-  'engagement.pill.streak.other': 'Flamme de {count} jours',
+  'engagement.pill.streak.one': '{count} jour',
+  'engagement.pill.streak.other': '{count} jours',
   'engagement.pill.points.one': '{total} étincelle dont {today} aujourd’hui',
   'engagement.pill.points.other': '{total} étincelles dont {today} aujourd’hui',
   'engagement.pill.total.one': '{total} étincelle gagnée dans cette conversation',

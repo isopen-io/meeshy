@@ -48,9 +48,12 @@ public final class TimelineViewModel: ObservableObject {
 
     // MARK: - State observable by Views
 
-    @Published public internal(set) var project: TimelineProject
-    @Published public private(set) var currentTime: Float = 0 {
-        didSet { onPlayheadChanged?(currentTime) }
+    @Published public internal(set) var project: TimelineProject { didSet { projectRevision = TimelineProjectRevision.next() } }
+    public private(set) var projectRevision: UInt = TimelineProjectRevision.next() // clé KeyedMemo, unique au processus
+    public let playhead = PlayheadClock() // #9874 : un tick ne publie que sur lui, pas sur ce view model
+    public private(set) var currentTime: Float { // NON publié ici : lire `playhead` pour être réveillé
+        get { playhead.time }
+        set { playhead.move(to: newValue); onPlayheadChanged?(newValue) }
     }
     @Published public private(set) var isPlaying: Bool = false {
         didSet {
@@ -254,9 +257,7 @@ public final class TimelineViewModel: ObservableObject {
     // MARK: - Wiring
 
     private func wireEngineCallbacks() {
-        engine.onTimeUpdate = { [weak self] time in
-            self?.currentTime = time
-        }
+        engine.onTimeUpdate = { [weak self] in self?.currentTime = $0 }
         engine.onPlaybackEnd = { [weak self] in
             guard let self else { return }
             self.isPlaying = false
@@ -267,9 +268,7 @@ public final class TimelineViewModel: ObservableObject {
             self.scrub(to: 0, precise: true)
             self.onPlaybackEnded?()
         }
-        engine.onError = { [weak self] error in
-            self?.errorMessage = error.localizedDescription
-        }
+        engine.onError = { [weak self] in self?.errorMessage = $0.localizedDescription }
         engine.onElementBecameActive = { [weak self] elementId in
             // Surface to selection so the inspector reflects the active clip
             // when playback crosses a clip boundary. Read-only signal — does

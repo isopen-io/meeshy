@@ -5,64 +5,60 @@ import CoreGraphics
 
 // MARK: - Waveform Cache
 
-/// Unified waveform sample extraction with persistent disk cache.
-/// Replaces both WaveformGenerator (URL-based) and AudioWaveformAnalyzer (Data-based).
-/// Samples are cached to disk by content hash to avoid recalculation.
+/// **La mesure d'une forme d'onde, une fois, partout.**
+///
+/// RMS absolu par compartiment (`WaveformExtractor`, Accelerate), jamais divisé
+/// par le pic ; l'échelle qui le rend lisible est `WaveformScale`. Le cache est
+/// clé par l'empreinte du CONTENU (`WaveformContentKey`) et du nombre de
+/// compartiments : un même son sous deux noms ne se calcule qu'une fois, deux
+/// `recording.m4a` ne se confondent pas. Mémoire bornée (FIFO), disque durable.
 public actor WaveformCache {
 
     public static let shared = WaveformCache()
     private init() {
         self.cacheDirectory = FileManager.default.cachesDirectory
-            .appendingPathComponent("com.meeshy.waveforms", isDirectory: true)
+            .appendingPathComponent("com.meeshy.waveforms.v2", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+        Self.retiredDirectories.forEach { name in
+            try? FileManager.default.removeItem(at: FileManager.default.cachesDirectory
+                .appendingPathComponent(name, isDirectory: true))
+        }
     }
 
+    /// Les caches des mesures d'avant (normalisées au pic ; la seconde boucle
+    /// d'`AudioWaveform`) : leurs valeurs ne sont plus lisibles, rien ne les relit.
+    private static let retiredDirectories = ["com.meeshy.waveforms", "story-waveforms"]
+
     private let cacheDirectory: URL
-    // Borné (éviction FIFO) : le dictionnaire nu accumulait une entrée par
-    // clé pour toute la vie du process — petites valeurs (~320 B) mais sans
-    // aucune éviction hors `clearMemoryCache()` manuel. Le disque reste la
-    // couche durable ; une éviction mémoire ne coûte qu'une relecture L2.
+    // Borné (éviction FIFO) : une éviction mémoire ne coûte qu'une relecture du disque.
     private var memoryCache = BoundedFIFOMap<String, [Float]>(capacity: 300)
 
     // MARK: - Public API
 
-    /// Generate waveform samples from a local audio URL.
-    /// Results are cached by filename + sampleCount.
+    /// Le relevé (RMS absolu) d'un fichier audio local.
     public func samples(from url: URL, count: Int = 80) async throws -> [Float] {
-        let key = cacheKey(for: url.lastPathComponent, count: count)
-
-        if let cached = memoryCache[key] { return cached }
-        if let disk = loadFromDisk(key: key) {
-            memoryCache[key] = disk
-            return disk
-        }
-
-        let result = try await extractSamples(from: url, count: count)
-        memoryCache[key] = result
-        saveToDisk(key: key, samples: result)
+        let key = cacheKey(for: WaveformContentKey.identity(of: url), count: count)
+        if let cached = cachedSamples(for: key) { return cached }
+        let result = try await measure(url, count: count)
+        store(result, for: key)
         return result
     }
 
-    /// Generate waveform samples from raw audio Data.
-    /// Writes to a temp file, extracts, then cleans up.
+    /// Le relevé (RMS absolu) d'un audio en mémoire.
     public func samples(from data: Data, count: Int = 80) async throws -> [Float] {
-        let hash = stableHash(data)
-        let key = cacheKey(for: hash, count: count)
+        let identity = WaveformContentKey.identity(of: data)
+        let key = cacheKey(for: identity, count: count)
+        if let cached = cachedSamples(for: key) { return cached }
 
-        if let cached = memoryCache[key] { return cached }
-        if let disk = loadFromDisk(key: key) {
-            memoryCache[key] = disk
-            return disk
-        }
-
+        // Un nom par appel : deux mesures concurrentes du même son (l'acteur est
+        // réentrant pendant `measure`) ne se retirent pas le fichier l'une à l'autre.
         let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("waveform_\(hash).caf")
+            .appendingPathComponent("waveform_\(identity)_\(UUID().uuidString).caf")
         defer { try? FileManager.default.removeItem(at: tempURL) }
         try data.write(to: tempURL)
 
-        let result = try await extractSamples(from: tempURL, count: count)
-        memoryCache[key] = result
-        saveToDisk(key: key, samples: result)
+        let result = try await measure(tempURL, count: count)
+        store(result, for: key)
         return result
     }
 
@@ -91,73 +87,26 @@ public actor WaveformCache {
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
     }
 
-    // MARK: - Sample Extraction
+    // MARK: - Measure
 
-    private func extractSamples(from url: URL, count: Int) async throws -> [Float] {
-        let asset = AVURLAsset(url: url)
-        let duration = try await asset.load(.duration)
-        guard duration.seconds > 0 else { return [] }
+    /// Hors de l'acteur : la mesure est du calcul, elle ne doit pas sérialiser les lectures du cache.
+    private func measure(_ url: URL, count: Int) async throws -> [Float] {
+        let task = Task.detached(priority: .utility) { try await WaveformExtractor.samples(from: url, count: count) }
+        return try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+    }
 
-        guard let track = try await asset.loadTracks(withMediaType: .audio).first else {
-            return []
-        }
+    private func cachedSamples(for key: String) -> [Float]? {
+        if let cached = memoryCache[key] { return cached }
+        guard let disk = loadFromDisk(key: key) else { return nil }
+        memoryCache[key] = disk
+        return disk
+    }
 
-        let reader = try AVAssetReader(asset: asset)
-        let outputSettings: [String: Any] = [
-            AVFormatIDKey: kAudioFormatLinearPCM,
-            AVLinearPCMBitDepthKey: 16,
-            AVLinearPCMIsBigEndianKey: false,
-            AVLinearPCMIsFloatKey: false,
-        ]
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
-        reader.add(output)
-        reader.startReading()
-        defer { if reader.status == .reading { reader.cancelReading() } }
-
-        // Two-pass streaming: first count total samples, then bucket in a streaming pass
-        // For short audio (< 5min), single-pass with estimated total is fine
-        let sampleRate = try await track.load(.naturalTimeScale)
-        let estimatedTotalSamples = Int(duration.seconds * Double(sampleRate))
-        let estimatedBucketSize = max(1, estimatedTotalSamples / count)
-
-        var buckets = [Float](repeating: 0, count: count)
-        var bucketCounts = [Int](repeating: 0, count: count)
-        var globalSampleIndex = 0
-
-        while let buffer = output.copyNextSampleBuffer() {
-            try Task.checkCancellation()
-            guard let blockBuffer = CMSampleBufferGetDataBuffer(buffer) else { continue }
-            let length = CMBlockBufferGetDataLength(blockBuffer)
-            guard length > 0 else { continue }
-
-            var data = Data(count: length)
-            _ = data.withUnsafeMutableBytes { ptr in
-                guard let base = ptr.baseAddress else { return OSStatus(0) }
-                return CMBlockBufferCopyDataBytes(blockBuffer, atOffset: 0,
-                                                  dataLength: length, destination: base)
-            }
-
-            data.withUnsafeBytes { ptr in
-                let int16Ptr = ptr.bindMemory(to: Int16.self)
-                for sample in int16Ptr {
-                    let bucketIndex = min(globalSampleIndex / estimatedBucketSize, count - 1)
-                    buckets[bucketIndex] += Float(abs(Int32(sample))) / Float(Int16.max)
-                    bucketCounts[bucketIndex] += 1
-                    globalSampleIndex += 1
-                }
-            }
-        }
-
-        guard globalSampleIndex > 0 else { return [] }
-
-        var result = [Float](repeating: 0, count: count)
-        for i in 0..<count {
-            result[i] = bucketCounts[i] > 0 ? buckets[i] / Float(bucketCounts[i]) : 0
-        }
-
-        let maxVal = result.max() ?? 1.0
-        guard maxVal > 0 else { return result }
-        return result.map { $0 / maxVal }
+    /// Un relevé vide (fichier illisible, pas encore écrit) ne se retient pas : le prochain appel retente.
+    private func store(_ samples: [Float], for key: String) {
+        guard !samples.isEmpty else { return }
+        memoryCache[key] = samples
+        saveToDisk(key: key, samples: samples)
     }
 
     // MARK: - Waveform Image Rendering
@@ -191,7 +140,7 @@ public actor WaveformCache {
         context.setFillColor(red: 0.388, green: 0.400, blue: 0.945, alpha: 1.0)
 
         for (i, sample) in samples.enumerated() {
-            let barHeight = max(1, Int(CGFloat(sample) * CGFloat(pixelHeight) * 0.9))
+            let barHeight = max(1, Int(CGFloat(WaveformScale.displayHeight(rms: sample)) * CGFloat(pixelHeight) * 0.9))
             let x = i * (barWidth + gap)
             let y = (pixelHeight - barHeight) / 2
             context.fill(CGRect(x: x, y: y, width: max(1, barWidth - 1), height: barHeight))
@@ -234,15 +183,6 @@ public actor WaveformCache {
             Data(buffer: ptr)
         }
         try? data.write(to: fileURL, options: .atomic)
-    }
-
-    private func stableHash(_ data: Data) -> String {
-        var hash: UInt64 = 14695981039346656037
-        for byte in data.prefix(8192) {
-            hash ^= UInt64(byte)
-            hash &*= 1099511628211
-        }
-        return String(format: "%016llx", hash)
     }
 }
 

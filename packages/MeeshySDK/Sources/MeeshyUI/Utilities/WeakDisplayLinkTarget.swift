@@ -53,7 +53,7 @@ public final class WeakDisplayLinkTarget: NSObject {
     }
 }
 
-/// Les trois plages de cadence du produit. Un site n'écrit jamais de
+/// Les plages de cadence du produit. Un site n'écrit jamais de
 /// littéral : il choisit une de ces lois, ou la cadence du palier de lecture.
 public extension CAFrameRateRange {
     /// Horloge (timeline, défilement lent, lecteur de story) : 30 à 60 Hz.
@@ -64,6 +64,13 @@ public extension CAFrameRateRange {
     /// Geste ou édition en cours : 60 à 120 Hz (ProMotion).
     static var gesture: CAFrameRateRange {
         CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+    }
+
+    /// Indicateur de niveau (vumètre d'un vocal) : 20 Hz préférés, plafonné à
+    /// 30 Hz. Les 15 barres du vumètre couvrent ainsi les 0,75 s qu'elles
+    /// couvraient au temps du minuteur à 20 Hz, sans publier plus souvent.
+    static var meter: CAFrameRateRange {
+        CAFrameRateRange(minimum: 15, maximum: 30, preferred: 20)
     }
 
     /// Cadence fixe égale à `fps` : équivalent exact de l'ancien

@@ -51,7 +51,8 @@ extension StoryComposerViewModel {
         Task { [weak self] in
             let samples: [Float]
             do {
-                samples = try await WaveformCache.shared.samples(from: url)
+                let measured = try await WaveformCache.shared.samples(from: url)
+                samples = WaveformScale.peakNormalized(measured)
             } catch {
                 samples = []
             }

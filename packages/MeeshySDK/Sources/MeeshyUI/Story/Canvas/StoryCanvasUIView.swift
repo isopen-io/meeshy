@@ -852,13 +852,12 @@ public final class StoryCanvasUIView: UIView {
         // capture the mixer and defer the call to the main actor so it
         // outlives this view's deallocation.
         let mixer = audioMixer
-        let releaseSession = didRequestPlaybackSession
+        if didRequestPlaybackSession {
+            MediaSessionCoordinator.shared.releasePlaybackInOrder()
+        }
         Task { @MainActor in
             PlaybackCoordinator.shared.unregisterExternal(mixer)
             mixer.shutdown()
-            if releaseSession {
-                await MediaSessionCoordinator.shared.release()
-            }
         }
     }
 

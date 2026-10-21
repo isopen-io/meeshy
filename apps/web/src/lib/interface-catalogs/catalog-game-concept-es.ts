@@ -251,7 +251,7 @@ const es = {
   'game.detail.fact.level_now': 'Es tu nivel en este momento.',
   'game.detail.fact.level_required': 'Es el nivel que debes alcanzar para abrirlo.',
   'game.badge.counts_label': 'Lo que sigue',
-  'game.badge.stars_label': 'Estrellas',
+  'game.badge.stars_label': 'Escalones',
   'game.badge.reason.none': 'Ninguna estrella por ahora: tu primer gesto enciende el cobre.',
   'game.badge.reason.crossed': '{material}, porque superaste el umbral de {threshold}: llevas {count}.',
   'game.badge.reason.served': '{material}, ganado al superar el umbral de {threshold}.',

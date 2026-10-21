@@ -223,11 +223,7 @@ public struct UserIdentityBar: View {
             flagsView(codes: codes, active: active, onTap: onTap)
 
         case .translateButton(let action):
-            Image(systemName: "translate")
-                .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
-                .foregroundColor(MeeshyColors.brandPrimary)
-                .onTapGesture { action() }
-                .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
+            translateButton(action)
 
         case .presence(let state):
             // Couleurs + libellé via le mapping central (PresenceStyle) :
@@ -377,6 +373,16 @@ public struct UserIdentityBar: View {
         }
     }
 
+    private func translateButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "translate")
+                .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
+                .foregroundColor(MeeshyColors.brandPrimary)
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
+        .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
+    }
+
     // MARK: - Flags View
 
     @ViewBuilder
@@ -400,6 +406,11 @@ public struct UserIdentityBar: View {
                 .onTapGesture {
                     onTap?(code)
                 }
+                .accessibilityLabel(String(
+                    format: String(localized: "userIdentity.language.show.a11y", bundle: .module),
+                    display?.name ?? code))
+                .accessibilityAddTraits(onTap == nil ? [] : .isButton)
+                .accessibilityAction { onTap?(code) }
             }
         }
     }

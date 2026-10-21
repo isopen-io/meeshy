@@ -1,5 +1,6 @@
 import type { CompositeTile, VideoCompositor } from './call-recording-runtime';
 import { compositeRects } from './call-recording-runtime';
+import { startFrameClock } from './frame-clock';
 
 /**
  * **LA COMPOSITION D'UN ENREGISTREMENT VIDÉO** (#8437) — un canevas 1280 × 720
@@ -70,7 +71,7 @@ export function createBrowserCompositor(): VideoCompositor {
     });
   };
 
-  const timer = setInterval(paint, 1000 / FPS);
+  const clock = startFrameClock({ fps: FPS, tick: paint, driver: () => sources.find((source) => source.video !== null)?.video ?? null });
   paint();
   const track = canvas.captureStream(FPS).getVideoTracks()[0];
   if (track === undefined) throw new Error('canvas-capture-missing');
@@ -92,7 +93,7 @@ export function createBrowserCompositor(): VideoCompositor {
       sources = next;
     },
     close: () => {
-      clearInterval(timer);
+      clock.stop();
       sources.forEach(release);
       sources = [];
       track.stop();

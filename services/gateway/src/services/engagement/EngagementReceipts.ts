@@ -26,6 +26,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MEESH_DEBIT_ORDER } from '@meeshy/shared/utils/meesh';
+import { prefixRange } from '../../utils/prefix-range';
 import { takeBackAcrossEngagementCounters } from './EngagementCounterWrites';
 import type { EngagementQuotas } from './EngagementQuotas';
 import type { PostPointsRecorder } from './PostPointsRecorder';
@@ -46,10 +47,8 @@ export const receiptBucket = (source: string, postId: string | undefined): strin
  * `|` (0x7C) est suivi de `}` (0x7D) : `[receipt:<source>|, receipt:<source>})`
  * contient exactement les seaux qui commencent par `receipt:<source>|`.
  */
-export const receiptBucketsOf = (source: string): { readonly gte: string; readonly lt: string } => ({
-  gte: `receipt:${source}|`,
-  lt: `receipt:${source}}`,
-});
+export const receiptBucketsOf = (source: string): { readonly gte: string; readonly lt: string } =>
+  prefixRange(`receipt:${source}|`);
 
 const postIdOfReceipt = (bucket: string): string | undefined => {
   const postId = bucket.slice(bucket.lastIndexOf('|') + 1);

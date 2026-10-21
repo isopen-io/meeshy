@@ -32,8 +32,12 @@ final class ConversationHeaderFlameTests: XCTestCase {
     func test_headerButtonsCluster_previewPutsOpenFullInTheSearchSlot() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
         XCTAssertTrue(source.contains("searchButton: { headerSearchSlot }"))
-        let slot = try XCTUnwrap(source.range(of: "struct ConversationHeaderSearchSlot: View {"))
-        let body = String(source[slot.upperBound...].prefix(600))
+        let band = AppSourceGuard.stripComments(try String(
+            contentsOf: Self.appFile("Meeshy/Features/Main/Views/ConversationExpandedHeaderBand.swift"),
+            encoding: .utf8))
+        let slot = try XCTUnwrap(band.range(of: "struct ConversationHeaderSearchSlot: View {"),
+                                 "l'emplacement de la recherche vit avec la bande de l'en-tête déplié (#11074)")
+        let body = String(band[slot.upperBound...].prefix(600))
         XCTAssertTrue(body.contains("if previewMode {") && body.contains("ConversationHeaderOpenFullButton(")
                         && body.contains("} else {") && body.contains("ConversationHeaderSearchButton("),
                       "« agrandir » remplace la loupe, il ne s'ajoute plus après elle")
