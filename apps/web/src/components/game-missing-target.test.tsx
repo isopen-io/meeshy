@@ -121,16 +121,17 @@ describe('les données d’un concept : chaque manque est une ligne qui nomme sa
   const facts = (concept: Parameters<typeof conceptView>[0], view: EngagementWithGame): readonly (readonly [string, string])[] =>
     conceptView(concept, view, NOW).facts.map((fact) => [fact.label, plain(fact.value)] as const);
 
-  test('Points : ce qu’il manque POUR LA MEESH — une seule poche, plus de second solde « à convertir »', () => {
-    expect(facts('points', jcnm)).toEqual([['Jusqu’à la Meesh n° 79', '1 839 étincelles']]);
+  test('Héritage : ce qu’il manque POUR LA MEESH — une seule poche, plus de second solde « à convertir »', () => {
+    expect(facts('meesh', jcnm)).toContainEqual(['Jusqu’à la Meesh n° 79', '1 839 étincelles']);
   });
 
-  test('Points : les pastilles disent la Meesh visée', () => {
-    expect(conceptView('points', jcnm, NOW).chips.map((chip) => plain(chip.text))).toEqual(['1 839 jusqu’à la Meesh n° 79']);
+  test('Étincelles : ni prix ni manque d’une Meesh — ils sont à l’Héritage (#11178)', () => {
+    expect(facts('points', jcnm)).toEqual([]);
+    expect(plain(conceptView('points', jcnm, NOW).line?.text ?? '')).not.toContain('Meesh');
   });
 
-  test('Niveau : la pastille dit le niveau visé', () => {
-    expect(conceptView('level', jcnm, NOW).chips.map((chip) => plain(chip.text))).toContain('1 301 étincelles jusqu’au 28');
+  test('Niveau : la ligne dit le niveau visé', () => {
+    expect(plain(conceptView('level', jcnm, NOW).line?.text ?? '')).toBe('1 301 étincelles jusqu’au 28');
   });
 
   test('Niveau, devant un ancien serveur : la ligne nomme le niveau visé', () => {
@@ -149,7 +150,7 @@ describe('les données d’un concept : chaque manque est une ligne qui nomme sa
     for (const view of [jcnm, before]) {
       for (const concept of ['level', 'points', 'meesh', 'glory', 'league'] as const) {
         const shown = conceptView(concept, view, NOW);
-        for (const line of [...shown.facts.map((fact) => fact.label), ...shown.chips.map((chip) => plain(chip.text))]) {
+        for (const line of [...shown.facts.map((fact) => fact.label), ...(shown.line === null ? [] : [plain(shown.line.text)])]) {
           expect({ concept, line, bare: /^(il manque|encore \d[\d ]*( points?)?)$/i.test(line) }).toEqual({ concept, line, bare: false });
         }
       }
@@ -188,21 +189,22 @@ describe('avant un geste : ce qu’il manque est une phrase, avec son but', () =
     expect(text(renderToStaticMarkup(<GameRequirementLine concept="league" current={8} required={10} record />))).toContain('Il manque 2 niveaux pour l’ouvrir.');
   });
 
-  test('la frappe : en poche, le prix — et le manque vise la Meesh, en étincelles, sans solde à convertir', () => {
-    const page = text(
-      renderToStaticMarkup(
-        <GameMintPreview mint={jcnmGame.mint} held={jcnmGame.level.score} online minting={false} celebration={null} onMint={() => undefined} />,
+  test('la frappe : le prix et ta lumière en une phrase, puis le manque, avec son but (#11178)', () => {
+    const page = plain(
+      text(
+        renderToStaticMarkup(
+          <GameMintPreview mint={jcnmGame.mint} held={jcnmGame.level.score} online minting={false} celebration={null} onMint={() => undefined} />,
+        ),
       ),
     );
-    expect(page).toContain('Tu as 77 099 étincelles');
+    expect(page).toContain('Elle fige 7 662 étincelles de ta lumière, qui en compte 77 099.');
+    expect(page).toContain('Il en manque encore 1 839 pour la frapper.');
     expect(page).not.toContain('À convertir');
-    expect(page).toContain('Il faut 7 662 étincelles');
-    expect(page).toContain('Il manque 1 839 étincelles à ta lumière pour frapper la Meesh n° 79.');
   });
 
   test('la frappe : une seule poche, aucun solde « à convertir » n’est plus déduit', () => {
-    const page = text(renderToStaticMarkup(<GameMintPreview mint={jcnmGame.mint} held={jcnmGame.level.score} online minting={false} celebration={null} onMint={() => undefined} />));
-    expect(page).toContain('Tu as 77 099 étincelles');
+    const page = plain(text(renderToStaticMarkup(<GameMintPreview mint={jcnmGame.mint} held={jcnmGame.level.score} online minting={false} celebration={null} onMint={() => undefined} />)));
+    expect(page).toContain('77 099');
     expect(page).not.toContain('À convertir');
     expect(page).not.toContain('5 823');
   });

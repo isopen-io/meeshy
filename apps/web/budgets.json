@@ -1221,6 +1221,15 @@
         "source": "Mesure du 2026-10-21 par build local (#11177, `bun run build` puis gzip -9 par fichier) : 3,67 Ko pour les SEPT fichiers de la cinquieme partie du catalogue du jeu (`catalog-game-frappe-<l>.ts`, 16 cles `game.frappe.*` : ta lumiere, le tchak, les aieux qui se manifestent, la phrase de Mee a la fete et au refus), de 0,50 a 0,56 Ko. Chargee par la ceremonie de la frappe elle-meme, au toucher (`components/game/mint-ceremony.tsx`), jamais avec un ecran : un lecteur n en telecharge qu UN, et seulement quand il frappe. Plafond = ceil(3,67) + 1 = 5."
       }
     },
+    "interface_catalogs_game_fiche": {
+      "pattern": "^assets/catalog-game-fiche-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 5,
+        "status": "MESUREE PAR BUILD LOCAL (#11178) -- A CONFIRMER PAR LA CI",
+        "source": "Mesure du 2026-10-21 par build local (#11178, `bun run build` puis `node scripts/measure-weight.mjs`, gzip -9 par fichier) : 3,45 Ko pour les SEPT fichiers de la sixieme partie du catalogue du jeu (`catalog-game-fiche-<l>.ts`, 24 cles `game.fiche.light.*`, `game.fiche.heritage.*`, `game.fiche.mint.*` : la tete des fiches des Etincelles et de l Heritage, le contenant avec son article et son possessif, une cle par contenant, et le cadre de la frappe). Chargee avec Progression (`GAME_SCREEN_PARTS.progression`) : un lecteur n en telecharge qu UNE. Plafond = ceil(3,45) + 1 = 5."
+      }
+    },
     "mint_ceremony": {
       "pattern": "^assets/mint-ceremony-[A-Za-z0-9_-]+\\.(js|css)$",
       "dynamic_only": true,

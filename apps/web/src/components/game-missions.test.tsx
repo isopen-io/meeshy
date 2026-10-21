@@ -84,11 +84,11 @@ describe('changer de mission', () => {
     expect(text(html)).toContain('Changer · 1 Meesh');
   });
 
-  test('avant le changement : les Meeshes en poche, son prix et ce qui restera (#9705)', () => {
+  test('avant le changement : les Meeshes en poche et son prix — jamais ce qui restera (#9705, #11178)', () => {
     const page = text(renderToStaticMarkup(<GameMissions {...props({ balance: 3 })} />));
     expect(page).toContain('Tu as 3 Meeshes');
     expect(page).toContain('Il faut 1 Meesh');
-    expect(page).toContain('Après 2 Meeshes');
+    expect(page).not.toContain('2 Meeshes');
   });
 
   test('sans Meesh : le changement n’est pas offert, et la ligne dit combien il manque', () => {
