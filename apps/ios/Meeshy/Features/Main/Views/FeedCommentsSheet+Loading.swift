@@ -77,7 +77,7 @@ extension CommentsSheetView {
             seedLikedIds(from: fetched)
             commentsNextCursor = response.pagination?.nextCursor
             commentsHasMore = response.pagination?.hasMore ?? false
-            try? await CacheCoordinator.shared.comments.save(fetched, for: cacheKey)
+            await bestEffort("feedCommentsSheet.comments.saveThread", category: .cache) { try await CacheCoordinator.shared.comments.save(fetched, for: cacheKey) }
         } catch {
             // Network failed — keep whatever we already have (embedded top-3
             // or the cached stale page loaded above). Matches this sheet's
@@ -141,7 +141,7 @@ extension CommentsSheetView {
             seedLikedIds(from: replies)
             // Persist replies under "replies-{commentId}" so re-presenting the sheet
             // hydrates the auto-preview rows instantly without a round-trip.
-            try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")
+            await bestEffort("feedCommentsSheet.comments.saveRepliesPreview", category: .cache) { try await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)") }
         } catch {
             expandedThreads.remove(commentId)
         }
@@ -172,9 +172,9 @@ extension CommentsSheetView {
             repliesNextCursor[commentId] = response.pagination?.nextCursor
             repliesHasMore[commentId] = response.pagination?.hasMore ?? false
             seedLikedIds(from: unique)
-            try? await CacheCoordinator.shared.comments.save(
+            await bestEffort("feedCommentsSheet.comments.saveRepliesPage", category: .cache) { try await CacheCoordinator.shared.comments.save(
                 repliesMap[commentId] ?? [], for: "replies-\(commentId)"
-            )
+            ) }
         } catch {
             // Échec réseau : stopper proprement la pagination (et toute chasse
             // en cours) — le fil garde les pages déjà chargées.

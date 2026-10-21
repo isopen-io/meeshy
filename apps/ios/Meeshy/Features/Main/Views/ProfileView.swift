@@ -95,7 +95,7 @@ struct ProfileView: View {
             Task { await authManager.refreshCurrentUserProfile() }
             if let fresh = try? await StatsService.shared.fetchStats() {
                 stats = fresh
-                try? await CacheCoordinator.shared.stats.save([fresh], for: userId)
+                await bestEffort("profileView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([fresh], for: userId) }
             }
         }
         .fullScreenCover(item: $fullscreenImage) { image in
