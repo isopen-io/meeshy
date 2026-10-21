@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { developedSize, developPhoto, developPhotoFile, developPixels, lookFilter, PHOTO_LOOK, PHOTO_MAX_EDGE, type PhotoEnv, type PhotoFileEnv, type PhotoSurface } from './photo-develop';
+import { developedSize, developPhoto, developPhotoFile, developPixels, lookFilter, PHOTO_LOOK, PHOTO_MAX_EDGE, photoMaxEdgeFor, type PhotoEnv, type PhotoFileEnv, type PhotoSurface } from './photo-develop';
 
 /**
  * LE DÉVELOPPEMENT D'UNE PHOTO (#8695) — une seule fonction, réutilisée par
@@ -225,5 +225,21 @@ describe('hors du fil principal (#11310)', () => {
     expect(blob?.type).toBe('image/jpeg');
     expect(offloaded).toEqual([{ width: PHOTO_MAX_EDGE, height: 1920 }]);
     expect(journal.painted).toEqual([]);
+  });
+});
+
+describe('le look se developpe a la taille que l\'appareil tient (W10)', () => {
+  test('1920 sur un appareil bas, le maximum historique sinon', () => {
+    expect(photoMaxEdgeFor('low')).toBe(1920);
+    expect(photoMaxEdgeFor('mid')).toBe(PHOTO_MAX_EDGE);
+    expect(photoMaxEdgeFor('high')).toBe(PHOTO_MAX_EDGE);
+    expect(photoMaxEdgeFor('pro')).toBe(PHOTO_MAX_EDGE);
+  });
+
+  test('un fichier developpe sur le fil courant suit le plafond de l\'environnement', async () => {
+    const { env, journal } = fakeEnv();
+    const decoded = async () => ({ image: {} as CanvasImageSource, size: { width: 4032, height: 3024 }, close: () => undefined });
+    await developPhotoFile(new File(['x'], 'a.jpg', { type: 'image/jpeg' }), { ...env, decode: decoded, maxEdge: 1920 });
+    expect(journal.painted).toEqual([{ crop: { x: 0, y: 0, width: 4032, height: 3024 }, size: { width: 1920, height: 1440 } }]);
   });
 });
