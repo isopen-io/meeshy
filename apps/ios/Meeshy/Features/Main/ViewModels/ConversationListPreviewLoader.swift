@@ -22,11 +22,14 @@ struct LiveConversationPreviewCache: ConversationPreviewCacheProviding {
     }
 }
 
-/// Les trois états que l'aperçu sait DIRE : il charge, il montre, il n'a rien.
+/// Les quatre états que l'aperçu sait DIRE : il charge, il montre, il n'a
+/// rien (CONSTATÉ par le serveur), ou il n'a rien pu lire — un échec réseau
+/// sur une ligne froide ne prouve pas qu'une conversation est vide.
 enum ConversationPreviewPhase: Equatable {
     case loading
     case loaded
     case empty
+    case unavailable
 }
 
 /// Les derniers messages servis, leurs traductions, et celle que le Prisme du
@@ -95,12 +98,14 @@ final class ConversationListPreviewLoader: ObservableObject {
         case loading
         case loaded(ConversationPreviewSnapshot)
         case empty
+        case unavailable
 
         var phase: ConversationPreviewPhase {
             switch self {
             case .loading: return .loading
             case .loaded: return .loaded
             case .empty: return .empty
+            case .unavailable: return .unavailable
             }
         }
 
@@ -138,11 +143,22 @@ final class ConversationListPreviewLoader: ObservableObject {
 
     static let previewLimit = 5
 
+    /// D'où vient ce qui est servi. Le réseau ne recule jamais devant le
+    /// cache (le chargeur n'écrit pas dans `CacheCoordinator.messages`, qui
+    /// garde donc une version plus ancienne), et seul un cache FRAIS ou le
+    /// réseau dispensent `.ensure` de revalider.
+    private enum Provenance {
+        case staleCache
+        case freshCache
+        case network
+    }
+
     @Published private(set) var states: [String: PreviewState] = [:]
     /// Le chargement en vol, par conversation. Une OUVERTURE qui le trouve
     /// l'attend puis revalide : un préchargement en cours ne la fait jamais
     /// tomber (l'aperçu ouvert garderait sinon ce que le cache avait).
     private var inFlight: [String: InFlight] = [:]
+    private var provenance: [String: Provenance] = [:]
 
     private struct InFlight {
         let token: UUID
@@ -152,15 +168,20 @@ final class ConversationListPreviewLoader: ObservableObject {
     private let messageService: MessageServiceProviding
     private let cache: ConversationPreviewCacheProviding
     private let readerPrism: () -> [String]
+    /// La preuve qu'un message chiffré a été déchiffré SUR CET APPAREIL
+    /// (`DecryptedMessageLedger`) : sans elle, son contenu reste scellé.
+    private let isDecryptedOnDevice: (String) -> Bool
 
     init(
         messageService: MessageServiceProviding,
         cache: ConversationPreviewCacheProviding = LiveConversationPreviewCache(),
-        readerPrism: @escaping () -> [String] = { ReaderPrism.resolve(for: AuthManager.shared.currentUser) }
+        readerPrism: @escaping () -> [String] = { ReaderPrism.resolve(for: AuthManager.shared.currentUser) },
+        isDecryptedOnDevice: @escaping (String) -> Bool = { DecryptedMessageLedger.shared.contains($0) }
     ) {
         self.messageService = messageService
         self.cache = cache
         self.readerPrism = readerPrism
+        self.isDecryptedOnDevice = isDecryptedOnDevice
     }
 
     /// Une conversation jamais chargée se lit `.loading` : l'aperçu n'affirme
@@ -189,13 +210,16 @@ final class ConversationListPreviewLoader: ObservableObject {
         }
         guard !isSettled(conversationId, for: intent) else { return }
         let token = UUID()
+        // Le chargement se RETIRE lui-même du registre avant de rendre la
+        // main : celui qui l'attendait relit donc un registre déjà à jour,
+        // quel que soit l'ordre dans lequel les deux continuations reprennent.
         let task = Task { [weak self] in
             guard let self else { return }
             await self.perform(conversationId, intent: intent, currentUserId: currentUserId)
+            if self.inFlight[conversationId]?.token == token { self.inFlight[conversationId] = nil }
         }
         inFlight[conversationId] = InFlight(token: token, intent: intent, task: task)
         await task.value
-        if inFlight[conversationId]?.token == token { inFlight[conversationId] = nil }
     }
 
     private func perform(
@@ -205,27 +229,40 @@ final class ConversationListPreviewLoader: ObservableObject {
     ) async {
         let cached = await cache.messages(for: conversationId)
         let fromCache = Self.cachedMessages(in: cached)
-        if let fromCache {
+        if let fromCache, provenance[conversationId] != .network {
             let translations = await cache.translations(for: fromCache.map(\.id))
-            publish(fromCache, translations: translations, for: conversationId)
+            publish(fromCache, translations: translations, for: conversationId, isReadableOnDevice: { self.deviceReadable($0) })
+            provenance[conversationId] = Self.isFresh(cached) ? .freshCache : .staleCache
         }
         guard Self.needsNetwork(intent: intent, cached: cached) else { return }
-        if states[conversationId] == nil { states[conversationId] = .loading }
-        await refresh(conversationId, currentUserId: currentUserId)
+        if states[conversationId]?.snapshot == nil, states[conversationId]?.phase != .empty {
+            states[conversationId] = .loading
+        }
+        await refresh(conversationId, plaintextSources: fromCache ?? [], currentUserId: currentUserId)
+    }
+
+    /// Un message chiffré se lit en clair dans l'aperçu s'il a été DÉCHIFFRÉ
+    /// sur cet appareil et si son contenu n'est pas resté le cryptogramme —
+    /// le moteur de synchronisation peut réécrire le cache depuis le REST
+    /// après le déchiffrement.
+    private func deviceReadable(_ message: Message) -> Bool {
+        isDecryptedOnDevice(message.id) && !Self.looksLikeCiphertext(message.content)
     }
 
     // MARK: - Lois pures
 
-    /// L'aperçu tel que le lecteur le lit : un message chiffré non déchiffré
-    /// n'emporte que son drapeau (jamais le cryptogramme comme texte, ni ses
-    /// traductions), et chaque message sert la traduction que `ReaderPrism`
+    /// L'aperçu tel que le lecteur le lit : un message chiffré que
+    /// `isReadableOnDevice` ne prouve pas déchiffré sur l'appareil n'emporte
+    /// que son drapeau (jamais le cryptogramme comme texte), aucun message
+    /// chiffré n'emporte de traduction, et chaque message sert la traduction que `ReaderPrism`
     /// élit — `nil` ⇒ l'original, jamais `translations.first`.
     static func snapshot(
         messages: [Message],
         translations: [String: [MessageTranslation]],
-        prism: [String]
+        prism: [String],
+        isReadableOnDevice: (Message) -> Bool = { _ in false }
     ) -> ConversationPreviewSnapshot {
-        let sealed = messages.map { Self.sealedForPreview($0) }
+        let sealed = messages.map { $0.isEncrypted && isReadableOnDevice($0) ? $0 : Self.sealedForPreview($0) }
         let encryptedIds = Set(sealed.filter { $0.isEncrypted }.map(\.id))
         let readable = translations.filter { !encryptedIds.contains($0.key) }
         let served = sealed.reduce(into: [String: MessageTranslation]()) { served, message in
@@ -254,6 +291,18 @@ final class ConversationListPreviewLoader: ObservableObject {
         )?.value
     }
 
+    /// Le cryptogramme d'un message E2EE est du base64 d'au moins une
+    /// enveloppe AES-GCM (nonce 12 + étiquette 16 octets) : un clair n'en a
+    /// pas la forme. Fail-closed — dans le doute, on scelle.
+    static func looksLikeCiphertext(_ content: String) -> Bool {
+        (Data(base64Encoded: content)?.count ?? 0) >= 28
+    }
+
+    private static func isFresh(_ result: CacheResult<[Message]>) -> Bool {
+        guard case .fresh = result else { return false }
+        return true
+    }
+
     private static func cachedMessages(in result: CacheResult<[Message]>) -> [Message]? {
         switch result {
         case .fresh(let data, _), .stale(let data, _):
@@ -274,17 +323,45 @@ final class ConversationListPreviewLoader: ObservableObject {
 
     // MARK: - État
 
+    /// `.prefetch` s'arrête dès que quelque chose est servi ; `.ensure`, dès
+    /// que ce qui est servi est À JOUR (cache frais ou réseau) — un cache
+    /// périmé servi par un préchargement se revalide encore.
     private func isSettled(_ conversationId: String, for intent: LoadIntent) -> Bool {
-        guard intent != .open, let state = states[conversationId] else { return false }
-        return state.phase != .loading
+        switch intent {
+        case .open: return false
+        case .prefetch: return provenance[conversationId] != nil
+        case .ensure: return provenance[conversationId].map { $0 != .staleCache } ?? false
+        }
     }
 
-    private func publish(_ messages: [Message], translations: [String: [MessageTranslation]], for conversationId: String) {
-        let snapshot = Self.snapshot(messages: messages, translations: translations, prism: readerPrism())
+    private func publish(
+        _ messages: [Message],
+        translations: [String: [MessageTranslation]],
+        for conversationId: String,
+        isReadableOnDevice: (Message) -> Bool
+    ) {
+        let snapshot = Self.snapshot(
+            messages: messages, translations: translations, prism: readerPrism(), isReadableOnDevice: isReadableOnDevice
+        )
         states[conversationId] = messages.isEmpty ? .empty : .loaded(snapshot)
     }
 
-    private func refresh(_ conversationId: String, currentUserId: @MainActor @Sendable () -> String) async {
+    /// Le clair que l'appareil a DÉJÀ pour des messages chiffrés : le REST ne
+    /// rend que leur cryptogramme, et le revalider ne doit pas effacer ce que
+    /// le lecteur lisait.
+    private func plaintextOnDevice(_ conversationId: String, sources: [Message]) -> [String: String] {
+        let served = states[conversationId]?.snapshot?.messages ?? []
+        return (sources + served)
+            .filter { $0.isEncrypted && !$0.content.isEmpty && deviceReadable($0) }
+            .reduce(into: [String: String]()) { known, message in known[message.id] = message.content }
+    }
+
+    private func refresh(
+        _ conversationId: String,
+        plaintextSources: [Message],
+        currentUserId: @MainActor @Sendable () -> String
+    ) async {
+        let onDevice = plaintextOnDevice(conversationId, sources: plaintextSources)
         do {
             let response = try await messageService.list(
                 conversationId: conversationId, offset: 0, limit: Self.previewLimit,
@@ -294,19 +371,22 @@ final class ConversationListPreviewLoader: ObservableObject {
             let username = AuthManager.shared.currentUser?.username
             let prism = readerPrism()
             let ordered = Array(response.data.reversed())
-            let messages = ordered.map {
-                $0.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: prism)
+            let messages = ordered.map { api -> Message in
+                var message = api.toMessage(currentUserId: userId, currentUsername: username, preferredLanguages: prism)
+                if message.isEncrypted, let clear = onDevice[message.id] { message.content = clear }
+                return message
             }
             let translations = ordered.reduce(into: [String: [MessageTranslation]]()) { map, api in
                 let readable = (api.translations ?? []).filter { $0.isEncrypted != true }
                 guard !readable.isEmpty else { return }
                 map[api.id] = MessageTranslationMerge.translations(from: readable, originalLanguage: api.originalLanguage)
             }
-            publish(messages, translations: translations, for: conversationId)
+            publish(messages, translations: translations, for: conversationId, isReadableOnDevice: { onDevice[$0.id] != nil })
+            provenance[conversationId] = .network
         } catch {
             Logger.messages.warning("[ConversationList] previewMessages fetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
             guard states[conversationId]?.phase == .loading else { return }
-            states[conversationId] = .empty
+            states[conversationId] = .unavailable
         }
     }
 }

@@ -253,19 +253,28 @@ struct ConversationPreviewView: View {
     private var recentMessagesSection: some View {
         if let previewLoader {
             ConversationPreviewStateReader(loader: previewLoader, conversationId: conversation.id) { state in
-                recentMessages(state.messages, served: state.snapshot?.served ?? [:], isLoading: state.phase == .loading)
+                recentMessages(state.messages, served: state.snapshot?.served ?? [:], phase: state.phase)
             }
         } else {
-            recentMessages(cachedMessages, served: [:], isLoading: false)
+            recentMessages(cachedMessages, served: [:], phase: cachedMessages.isEmpty ? .empty : .loaded)
         }
     }
 
-    private func recentMessages(_ messages: [Message], served: [String: MessageTranslation], isLoading: Bool) -> some View {
+    private func recentMessages(_ messages: [Message], served: [String: MessageTranslation], phase: ConversationPreviewPhase) -> some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
 
-            if messages.isEmpty && isLoading {
+            if messages.isEmpty && phase == .loading {
                 recentMessagesSkeleton
+            } else if messages.isEmpty && phase == .unavailable {
+                // Échec réseau sans cache : RIEN n'a été constaté, l'aperçu ne
+                // prétend donc pas que la conversation est vide.
+                EmptyStateView(
+                    icon: "wifi.exclamationmark",
+                    title: String(localized: "preview.messages_unavailable", defaultValue: "Impossible de charger les messages"),
+                    subtitle: ""
+                )
+                .padding(.bottom, MeeshySpacing.smPlus)
             } else if messages.isEmpty {
                 EmptyStateView(
                     icon: "bubble.left.and.bubble.right",
@@ -279,7 +288,7 @@ struct ConversationPreviewView: View {
                         VStack(spacing: 0) {
                             ForEach(messages) { msg in
                                 ThemedMessageBubble(
-                                    message: msg,
+                                    message: Self.displayable(msg),
                                     contactColor: accentColor,
                                     preferredTranslation: served[msg.id],
                                     showAvatar: !msg.isMe
@@ -297,6 +306,15 @@ struct ConversationPreviewView: View {
                 }
             }
         }
+    }
+
+    /// Un message chiffré que l'appareil n'a pas déchiffré arrive SCELLÉ (seul
+    /// son drapeau voyage) : il se dit « Message chiffré », jamais une bulle vide.
+    private static func displayable(_ message: Message) -> Message {
+        guard message.isEncrypted, message.content.isEmpty else { return message }
+        var sealed = message
+        sealed.content = "🔒 " + String(localized: "protection.encrypted", bundle: .main)
+        return sealed
     }
 
     private static let skeletonWidths: [CGFloat] = [150, 190, 120]
