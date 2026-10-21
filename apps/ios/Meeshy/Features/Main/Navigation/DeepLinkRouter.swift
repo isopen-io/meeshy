@@ -30,10 +30,10 @@ enum DeepLinkDestination: Equatable {
     case post(id: String)
     case magicLink(token: String)
     /// `/auth/verify-email?token=…&email=…` — le lien de l'e-mail « code +
-    /// lien » (#8035) : il vérifie l'adresse et ouvre la session.
+    /// lien » : il vérifie l'adresse et ouvre la session.
     case emailVerificationLink(token: String, email: String)
     /// `/reset-password?via=email#token=…` — le lien de « Mot de passe
-    /// oublié » (#10868). Pas un lieu de l'app : il présente « Nouveau mot de
+    /// oublié ». Pas un lieu de l'app : il présente « Nouveau mot de
     /// passe », connecté ou non, et rien n'attend la connexion.
     case passwordResetLink(token: String)
     case share(text: String?, url: String?)
@@ -41,24 +41,24 @@ enum DeepLinkDestination: Equatable {
     case postDetail(postId: String)
     case storyDetail(postId: String)
     /// Un réel NOMMÉ (`/reel/<id>`, `/reels?seed=<id>`, `meeshy://reel/<id>`) :
-    /// il s'ouvre dans le lecteur de réels, comme depuis le fil (#7805).
+    /// il s'ouvre dans le lecteur de réels, comme depuis le fil.
     case reel(postId: String)
-    /// Une communauté (`/communities/<id>`, `meeshy://community/<id>`) (#7811).
+    /// Une communauté (`/communities/<id>`, `meeshy://community/<id>`).
     case community(id: String)
-    /// `meeshy://conversations/recent` — widget et App Shortcut (#7811).
+    /// `meeshy://conversations/recent` — widget et App Shortcut.
     case recentConversation
-    /// `meeshy://conversations/unread` — widgets « Non lus » (#7811).
+    /// `meeshy://conversations/unread` — widgets « Non lus ».
     case unreadConversations
     case hashtag(tag: String)
-    /// Lien d'invitation (#8075) — `/signup/affiliate/<code>` (le lien que la
+    /// Lien d'invitation — `/signup/affiliate/<code>` (le lien que la
     /// passerelle grave) ou `/signup?ref=<code>` : un CODE à mémoriser jusqu'à
     /// l'inscription, pas un lieu de l'app.
     case referral(code: String)
     case call(conversationId: String, isVideo: Bool)
-    /// Une saison ou une semaine de ligue (#9947) — `/me/progression/saison/{n}`, `/me/progression/ligue/{lundi}`.
+    /// Une saison ou une semaine de ligue — `/me/progression/saison/{n}`, `/me/progression/ligue/{lundi}`.
     case game(GameLink)
-    /// `meeshy://settings/packs?domaine=<domaine>` : la vitrine unique, filtrée (#10632).
-    /// `pack=<slug>` met CE pack en avant dans la vitrine (#10703) — même paramètre que le web.
+    /// `meeshy://settings/packs?domaine=<domaine>` : la vitrine unique, filtrée.
+    /// `pack=<slug>` met CE pack en avant dans la vitrine — même paramètre que le web.
     case packShop(domain: PackDomain?, pack: String? = nil)
     case external(URL)
 }
@@ -71,7 +71,7 @@ enum DeepLinkParser {
 
     /// Un hôte Meeshy : ceux de la production, plus l'hôte web de
     /// l'environnement SÉLECTIONNÉ (`staging.meeshy.me` sur staging) — la
-    /// recette voit ce que la production verra (#8140). Égalité EXACTE : un
+    /// recette voit ce que la production verra. Égalité EXACTE : un
     /// hôte qui ne fait que commencer ou finir comme celui-ci reste étranger.
     static func isMeeshyHost(_ host: String, environmentWebOrigin: String) -> Bool {
         let host = host.lowercased()
@@ -133,7 +133,7 @@ enum DeepLinkParser {
         return (trimmed?.isEmpty == false) ? trimmed : nil
     }
 
-    /// #10859 — un lien d'e-mail porte son secret dans le FRAGMENT
+    /// Un lien d'e-mail porte son secret dans le FRAGMENT
     /// (`…?via=email#token=…&email=…`) : le navigateur ne l'envoie jamais au
     /// serveur, aucun journal d'accès ne le garde. Le fragment prime ; la
     /// requête reste lue pour les e-mails partis avant, jusqu'à leur expiration.
@@ -158,7 +158,7 @@ enum DeepLinkParser {
     /// - `/post/{id}` or `/p/{id}`               -> post detail (short)
     /// - `/story/{id}`, `/stories/{id}`, `/s/{id}` -> story detail
     /// - `/share?text=...&url=...`               -> share content
-    /// - `/auth/magic-link?token=...`            -> passwordless auth (https ONLY, #10870)
+    /// - `/auth/magic-link?token=...`            -> passwordless auth (https ONLY)
     ///
     /// Custom scheme (meeshy://...):
     /// - `meeshy://me`, `meeshy://links`
@@ -172,7 +172,7 @@ enum DeepLinkParser {
     /// - `meeshy://story/{id}`, `meeshy://stories/{id}`, `meeshy://s/{id}`
     /// - `meeshy://share?text=...&url=...`
     ///
-    /// Never under `meeshy://` (#10868, #10870): a link that CONNECTS
+    /// Never under `meeshy://`: a link that CONNECTS
     /// (magic-link, verify-email) or resets a password. Any page or app opens
     /// that scheme, and would hand the app a third party's token.
     ///
@@ -225,7 +225,7 @@ enum DeepLinkParser {
     }
 
     // Un chemin meeshy.me inconnu (ex. /settings) part dans Safari. Un chemin
-    // de lien à jeton d'e-mail ne se lit QUE sur sa forme exacte (#10875) :
+    // de lien à jeton d'e-mail ne se lit QUE sur sa forme exacte :
     // toute variante part, elle aussi, dans Safari.
     private static func parseMeeshyWeb(_ url: URL) -> DeepLinkDestination {
         if EmailLinkSecret.carriesSecret(url) {
@@ -250,13 +250,13 @@ enum DeepLinkParser {
     }
 
     /// `/auth/magic-link?token=…` ou `/auth/magic-link/<token>` ;
-    /// `/auth/verify-email?token=…&email=…` (#8035) ; `/reset-password` et
-    /// `/auth/reset-password` ; les alias `/auth/email-link/…` (#10859, #10868)
-    /// — et, depuis #10859, le secret dans le fragment (`?via=email#token=…`).
-    /// La forme se juge par `EmailLinkSecret.exactForm` (#10875) ; un jeton ou
+    /// `/auth/verify-email?token=…&email=…` ; `/reset-password` et
+    /// `/auth/reset-password` ; les alias `/auth/email-link/…`
+    /// — et le secret dans le fragment (`?via=email#token=…`).
+    /// La forme se juge par `EmailLinkSecret.exactForm` ; un jeton ou
     /// une adresse vide n'ouvre rien.
     ///
-    /// Jamais par `meeshy://` (#10870) : n'importe quelle page ou app ouvre ce
+    /// Jamais par `meeshy://` : n'importe quelle page ou app ouvre ce
     /// schéma, et y présenterait le jeton d'un TIERS. Seul le lien universel
     /// https, que l'AASA réserve à notre domaine, porte un lien d'e-mail.
     private static func emailLink(_ url: URL) -> DeepLinkDestination? {
@@ -274,7 +274,7 @@ enum DeepLinkParser {
         }
     }
 
-    /// **La seule table des formes de lien Meeshy** (#7815), pour le web et le
+    /// **La seule table des formes de lien Meeshy**, pour le web et le
     /// schéma `meeshy://`. Les surfaces propres aux widgets et aux App
     /// Shortcuts (`contact`, `quickreply`, `send`, `conversations`) ne sont
     /// lues que sous `meeshy://` — l'AASA ne les revendique pas sur le web.
@@ -283,11 +283,11 @@ enum DeepLinkParser {
         guard let head = components.first else { return nil }
         let id = identifier(components, 1)
         switch head {
-        // `/me/progression/saison|ligue[/…]` (#9947) est le Jeu ; le reste de `/me` reste le profil.
+        // `/me/progression/saison|ligue[/…]` est le Jeu ; le reste de `/me` reste le profil.
         case "me": return GameLinkParser.link(from: components).map { .game($0) } ?? .ownProfile
         case "links": return .userLinks
         case "share": return parseShareQuery(url)
-        // Les liens d'e-mail ne passent pas par cette table (`emailLink`, #10875).
+        // Les liens d'e-mail ne passent pas par cette table (`emailLink`).
         case "signup": return referralCode(components: components, url: url).map { .referral(code: $0) }
         case "hashtag": return id.map { .hashtag(tag: $0) }
         // Invitation de conversation — `/join/<id>` (canonique).
@@ -299,11 +299,11 @@ enum DeepLinkParser {
         case "chat": return id.map { .chatLink(identifier: $0) }
         case "c", "conversation": return id.map { .conversation(id: $0, draftText: nil) }
         // Réel — `/reel/<id>`, l'adresse que la passerelle grave dans chaque
-        // partage de réel ; `/reels?seed=<id>`, la porte du Flux web (#7805).
+        // partage de réel ; `/reels?seed=<id>`, la porte du Flux web.
         case "reel": return id.map { .reel(postId: $0) }
         case "reels": return reelsSeed(components: components, url: url).map { .reel(postId: $0) }
         // Communauté — `/communities/<id>` ; `/communities/new` est l'écran de
-        // création du web, pas une communauté (#7811).
+        // création du web, pas une communauté.
         case "community", "communities": return id.flatMap(communityIdentifier).map { .community(id: $0) }
         // `/feeds/post/<id>` — l'URL de partage canonique d'un post ;
         // `/feeds/p/<id>` en est l'alias court.
@@ -321,9 +321,9 @@ enum DeepLinkParser {
         // conversation (même clé App Group que le widget), `message` la dictée.
         case "send" where customScheme:
             return queryValue("contactId", in: url).map { .conversation(id: $0, draftText: queryValue("message", in: url)) }
-        // Widgets « Non lus » / « Récentes » et App Shortcut (#7811).
+        // Widgets « Non lus » / « Récentes » et App Shortcut.
         case "conversations" where customScheme: return id.flatMap(conversationListEntry)
-        // La vitrine unique, filtrée par domaine (#10632, spec 2026-10-14 § 4.4).
+        // La vitrine unique, filtrée par domaine.
         case "settings" where customScheme && components.count == 2 && components[1] == "packs":
             return .packShop(domain: PackDomain(queryValue: queryValue("domaine", in: url)),
                              pack: PackFocusSlug.normalized(queryValue("pack", in: url)))
@@ -402,7 +402,7 @@ enum DeepLink: Equatable {
     case conversation(id: String)
     case postDetail(postId: String)
     case storyDetail(postId: String)
-    /// Un réel nommé — ouvert par `ReelDoor` dans le lecteur de réels (#7805).
+    /// Un réel nommé — ouvert par `ReelDoor` dans le lecteur de réels.
     case reel(postId: String)
     case community(id: String)
     case recentConversation
@@ -411,9 +411,9 @@ enum DeepLink: Equatable {
     case ownProfile
     case userLinks
     case hashtag(tag: String)
-    /// Une saison ou une semaine de ligue (#9947), ouverte par `Router.openGame(at:)`.
+    /// Une saison ou une semaine de ligue, ouverte par `Router.openGame(at:)`.
     case game(GameLink)
-    /// La vitrine unique des packs, filtrée par domaine (#10632).
+    /// La vitrine unique des packs, filtrée par domaine.
     case packShop(domain: PackDomain?, pack: String? = nil)
     /// `/l/<token>` dont la cible vit sur le web : lien EXTERNAL, ou type de
     /// cible que ce client ne connaît pas encore. Le consommateur l'OUVRE
@@ -434,7 +434,7 @@ enum DeepLink: Equatable {
     /// présente en confirmation. Le lien ne compose jamais lui-même.
     case callRequest(conversationId: String, isVideo: Bool)
 
-    /// **Reçu sans compte, ce lien attend-il la connexion ?** (#7811)
+    /// **Reçu sans compte, ce lien attend-il la connexion ?**
     ///
     /// Un lien de CONTENU survit à la connexion : `pendingDeepLink` n'est pas
     /// consommé tant que la personne n'a pas de session, et la racine le reprend
@@ -452,7 +452,7 @@ enum DeepLink: Equatable {
     }
 }
 
-/// Une destination ET le `/l/<jeton>` qui l'a produite (#9171).
+/// Une destination ET le `/l/<jeton>` qui l'a produite.
 struct TrackedLinkOrigin: Equatable {
     let token: String
     let link: DeepLink
@@ -484,14 +484,14 @@ final class DeepLinkRouter: ObservableObject {
     /// reprendre la résolution à zéro et reposerait la question.
     @Published var requestedGuestJoin: String?
 
-    /// « Entrer dans World Wide » choisi sur l'écran de connexion (#10006).
+    /// « Entrer dans World Wide » choisi sur l'écran de connexion.
     ///
     /// L'entrée SERVIE par `GET /world` voyage avec le choix : la session
     /// invitée (portée par `MeeshyApp`) s'ouvre sur la clé qu'elle nomme, sans
     /// relire le réseau ni écrire d'identifiant en dur.
     @Published var requestedWorldEntry: WorldEntry?
 
-    /// Le `/l/<jeton>` d'où vient la destination en attente (#9171). La
+    /// Le `/l/<jeton>` d'où vient la destination en attente. La
     /// résolution remplace le jeton par sa cible typée ; sans cette trace, un
     /// visiteur sans compte ne pourrait plus apprendre QUI lui a partagé le
     /// contenu. Il ne vaut que pour la destination qu'il a produite : un lien
@@ -505,8 +505,8 @@ final class DeepLinkRouter: ObservableObject {
         return origin.token
     }
 
-    /// L'écran de compte que la page d'invitation a demandé, SANS compte
-    /// (#7795) : « Se connecter » ou « Créer un compte ». `LoginView` le
+    /// L'écran de compte que la page d'invitation a demandé, SANS compte :
+    /// « Se connecter » ou « Créer un compte ». `LoginView` le
     /// consomme — l'inscription s'y ouvre par sa propre feuille.
     @Published var requestedAccountEntry: InviteLandingChoice?
 
@@ -532,14 +532,14 @@ final class DeepLinkRouter: ObservableObject {
     /// raccourci (widget « Réponse rapide », App Shortcut « Send Message »)
     /// soit observable en test sans toucher aux `UserDefaults` du simulateur.
     private let drafts: DraftStore
-    /// Le code d'invitation mémorisé jusqu'à l'inscription (#8075).
+    /// Le code d'invitation mémorisé jusqu'à l'inscription.
     private let referrals: PendingReferralStoreProviding
     private let isAuthenticated: @MainActor () -> Bool
     private let hasResolvedSession: @MainActor () -> Bool
-    /// #10483 — la porte qui amène un contenu en détail le MARQUE de son
+    /// La porte qui amène un contenu en détail le MARQUE de son
     /// entrée : lien de suivi, lien `?via=`, lien venu d'ailleurs, ou rien.
     private let entries: DetailOpenSourceProviding
-    /// #10868 — « Nouveau mot de passe », présenté à la racine de l'app.
+    /// « Nouveau mot de passe », présenté à la racine de l'app.
     private let passwordReset: PasswordResetLinkPresenter
 
     init(
@@ -575,10 +575,10 @@ final class DeepLinkRouter: ObservableObject {
             // n'attend son issue.
             Task { await resolver.recordClick(token: token) }
             let resolved = try? await resolver.resolve(token: token)
-            // Un lien court d'INVITATION (#10560) : son adresse d'origine est un
+            // Un lien court d'INVITATION : son adresse d'origine est un
             // `/signup/affiliate/<code>`, qui n'est pas une destination mais un
             // code à retenir — exactement ce que fait le lien direct. Sans cette
-            // voie, il tombait dans « Ce lien n'a pas pu être ouvert ».
+            // voie, il tomberait dans « Ce lien n'a pas pu être ouvert ».
             if let code = Self.trackedReferralCode(for: resolved) {
                 self.trackedLinkOrigin = nil
                 _ = self.captureReferral(code)
@@ -656,7 +656,7 @@ final class DeepLinkRouter: ObservableObject {
     /// Universal Links, pour qu'une URL Meeshy atterrisse in-app plutôt que dans
     /// Safari. `nil` quand l'URL n'ouvre rien (schéma non web, forme vide).
     ///
-    /// Jamais un lien qui CONNECTE ou réinitialise (#10870) : la cible d'un lien
+    /// Jamais un lien qui CONNECTE ou réinitialise : la cible d'un lien
     /// suivi est choisie par son créateur, qui y mettrait son propre jeton.
     static func destination(forOriginalURL url: URL) -> DeepLink? {
         switch DeepLinkParser.parse(url) {
@@ -703,9 +703,9 @@ final class DeepLinkRouter: ObservableObject {
 
     // MARK: - Lancement système (lien universel, schéma meeshy://)
 
-    /// **Traduit, n'analyse pas** (#7815). L'analyse est celle de
+    /// **Traduit, n'analyse pas.** L'analyse est celle de
     /// `DeepLinkParser.parse`, la même que le tap in-app : deux `switch` recopiés
-    /// faisaient diverger les portes au premier format oublié dans l'un d'eux.
+    /// feraient diverger les portes au premier format oublié dans l'un d'eux.
     /// Ne restent ici que les trois gestes propres au lancement système :
     /// résoudre un `/l/<token>`, déposer le brouillon d'un raccourci, et ne pas
     /// revendiquer ce qui n'est pas une destination (`/share`, le web externe).
@@ -766,7 +766,7 @@ final class DeepLinkRouter: ObservableObject {
     }
 
     /// Sans compte, l'invitation MÉMORISE son code et ouvre l'inscription, qui
-    /// le fera voyager (`affiliateToken`, #8058). Un compte déjà connecté ne se
+    /// le fera voyager (`affiliateToken`). Un compte déjà connecté ne se
     /// rattache à personne : rien ne change, et le lien n'est pas revendiqué.
     private func captureReferral(_ code: String) -> Bool {
         guard !isAuthenticated() else { return false }
