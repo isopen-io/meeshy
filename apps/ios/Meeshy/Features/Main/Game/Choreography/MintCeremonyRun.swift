@@ -38,14 +38,21 @@ enum MintCeremonyAnswer: Equatable {
 
 /// UNE cérémonie demandée par un toucher : la pièce que l'écran annonçait, et la dernière frappe réglée au moment du
 /// toucher — la réponse qui compte est la PREMIÈRE réglée après lui.
+///
+/// La pièce a DEUX éditions (#11483) : la LOI (`edition`, le numéro du centième ou du millième) décide de la
+/// chorégraphie — un coup, trois coups et les aïeux, la nuit du prisme et les deux frappeurs ; le DESSIN (`look`, la plus
+/// haute édition atteinte) décide de la matière — la pièce, l'oiseau du revers, les poussières.
 struct MintCeremonyRequest: Identifiable, Equatable {
     let id = UUID()
     let edition: MeeshEdition
+    let look: MeeshEdition
     let number: Int
     let settledKey: Int
 
-    init(edition: MeeshEdition, number: Int, settled: GameMintSettlement?) {
+    /// - Parameter edition: la loi de la pièce, telle que l'aperçu la sert ; le dessin se déduit de son numéro.
+    init(number: Int, edition: MeeshEdition, settled: GameMintSettlement?) {
         self.edition = edition
+        look = GameMint.displayEdition(forNumber: number)
         self.number = number
         settledKey = settled?.key ?? 0
     }
@@ -71,7 +78,10 @@ struct MintCeremonyRequest: Identifiable, Equatable {
 @MainActor
 final class MintCeremonyRun: ObservableObject {
 
+    /// La LOI de la pièce : la chorégraphie.
     let edition: MeeshEdition
+    /// Le DESSIN de la pièce (#11483) : la matière de la pièce, de son revers et des poussières.
+    let look: MeeshEdition
     let modest: Bool
     let reduced: Bool
     let particles: MintCeremonyParticles
@@ -93,11 +103,12 @@ final class MintCeremonyRun: ObservableObject {
 
     nonisolated deinit {}
 
-    init(edition: MeeshEdition, number: Int, reduced: Bool, modest: Bool = MintCeremonyRun.isModestDevice,
+    init(edition: MeeshEdition, look: MeeshEdition? = nil, number: Int, reduced: Bool, modest: Bool = MintCeremonyRun.isModestDevice,
          haptics: GameHapticsProviding = GameHaptics.shared,
          clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
          onFinish: @escaping () -> Void) {
         self.edition = edition
+        self.look = look ?? edition
         self.number = number
         self.reduced = reduced
         self.modest = modest
@@ -108,7 +119,9 @@ final class MintCeremonyRun: ObservableObject {
         startedAt = clock()
         particles = reduced
             ? MintCeremonyParticles(weave: [], dust: [], bursts: [], puff: [])
-            : MintCeremonyParticles.build(GameMintCeremony.plan(edition: edition, mode: .normal, modest: modest), seed: number)
+            : MintCeremonyParticles.build(
+                GameMintCeremony.plan(edition: edition, look: self.look, mode: .normal, modest: modest), seed: number
+            )
         timers = [after(Self.pendingLimit) { [weak self] in self?.giveUpIfPending() }]
     }
 
@@ -129,14 +142,14 @@ final class MintCeremonyRun: ObservableObject {
     var elapsedMs: Double { (clock() - startedAt) * 1000 }
 
     /// Le déroulé de l'instant : tant que la passerelle n'a pas répondu, les coups restent devant.
-    nonisolated static func livePlan(edition: MeeshEdition, mode: MintCeremonyMode, answeredAtMs: Double?, nowMs: Double,
-                                     modest: Bool) -> MintCeremonyPlan {
+    nonisolated static func livePlan(edition: MeeshEdition, look: MeeshEdition? = nil, mode: MintCeremonyMode, answeredAtMs: Double?,
+                                     nowMs: Double, modest: Bool) -> MintCeremonyPlan {
         let pending = max(nowMs + 1000, mode == .reduced ? 0 : Double(GameMintCeremony.strikeReadyMs + 1000))
-        return GameMintCeremony.plan(edition: edition, mode: mode, answeredAtMs: answeredAtMs ?? pending, modest: modest)
+        return GameMintCeremony.plan(edition: edition, look: look, mode: mode, answeredAtMs: answeredAtMs ?? pending, modest: modest)
     }
 
     func plan(atMs nowMs: Double) -> MintCeremonyPlan {
-        Self.livePlan(edition: edition, mode: mode, answeredAtMs: answeredAtMs, nowMs: nowMs, modest: modest)
+        Self.livePlan(edition: edition, look: look, mode: mode, answeredAtMs: answeredAtMs, nowMs: nowMs, modest: modest)
     }
 
     /// Des images qui tardent (au-delà d'une image à 60 Hz et demie) plusieurs fois de suite : un fil sur deux.
