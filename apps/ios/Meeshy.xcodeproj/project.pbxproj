@@ -1738,6 +1738,7 @@
 		756228DE325C0178574DA0E9 /* ConversationMediaGalleryView+ScenePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1570F9BEEDF354475A41B670 /* ConversationMediaGalleryView+ScenePage.swift */; };
 		7588FFA52A5C851A8488C327 /* AudioFullscreenPage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD9C10F82B2DDEC2A994E502 /* AudioFullscreenPage.swift */; };
 		75B08BA7D08E4DC0E69998B8 /* GameElementDetailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E18EABE64027088B76D6781F /* GameElementDetailTests.swift */; };
+		9EECC752E077C4F79C82D894 /* GameEpicVocabularyGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E02514101C2262358840CAE8 /* GameEpicVocabularyGuardTests.swift */; };
 		75C61AEAA874ACD74449CA29 /* MessageViewsMetaRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F1D96C0AF460598E95A8FB /* MessageViewsMetaRow.swift */; };
 		75D78878E4989C6816449ACF /* ShareSourceCommentStripping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85500316BDD99F365B7F7179 /* ShareSourceCommentStripping.swift */; };
 		75D83A695E42B75C3AECF5E1 /* WidgetDeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3B73F11A4BB5A47F095F333 /* WidgetDeepLinkTests.swift */; };
@@ -7068,6 +7069,7 @@
 		E15E54B8E196CF7E43B34F7A /* StoryEditComposer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryEditComposer.swift; sourceTree = "<group>"; };
 		E1865B1B014FE100C1C2802B /* ConversationMarkedReadObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMarkedReadObserver.swift; sourceTree = "<group>"; };
 		E18EABE64027088B76D6781F /* GameElementDetailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameElementDetailTests.swift; sourceTree = "<group>"; };
+		E02514101C2262358840CAE8 /* GameEpicVocabularyGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameEpicVocabularyGuardTests.swift; sourceTree = "<group>"; };
 		E1DC57FBB1E2B9054877854F /* PackFilePruner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PackFilePruner.swift; sourceTree = "<group>"; };
 		E21947B5B7F1E6FA3D89EA6D /* RootMenuLadderGlowGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootMenuLadderGlowGuardTests.swift; sourceTree = "<group>"; };
 		E247FF9F4232CE6A8D7A1CC4 /* DeviceLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceLayout.swift; sourceTree = "<group>"; };
@@ -8928,6 +8930,7 @@
 				00F4D9D5C89F6904888AD1F7 /* GameBannerBadgeModelTests.swift */,
 				246CC37D502A7F2904DECE86 /* GameCopyTests.swift */,
 				E18EABE64027088B76D6781F /* GameElementDetailTests.swift */,
+				E02514101C2262358840CAE8 /* GameEpicVocabularyGuardTests.swift */,
 				141F4DEAB9FF27F0906C917A /* GameFixture.swift */,
 				E9CB78C57DE501831CE2793A /* GameGuideCardTests.swift */,
 				F180A84C74FC45E9B3AE3888 /* GameGuideEventsTests.swift */,
@@ -15591,6 +15594,7 @@
 				29601752F671892E39768919 /* GameCopyTests.swift in Sources */,
 				43E45212E6F9CE468340FF49 /* GameDeepLinkTests.swift in Sources */,
 				75B08BA7D08E4DC0E69998B8 /* GameElementDetailTests.swift in Sources */,
+				9EECC752E077C4F79C82D894 /* GameEpicVocabularyGuardTests.swift in Sources */,
 				83A8AE8B82B85A545B6CEA31 /* GameFixture.swift in Sources */,
 				B1442A35AFE10A42ED5C5FE9 /* GameGuideCardTests.swift in Sources */,
 				46F9208BA005BAB81FD2AD04 /* GameGuideEventsTests.swift in Sources */,

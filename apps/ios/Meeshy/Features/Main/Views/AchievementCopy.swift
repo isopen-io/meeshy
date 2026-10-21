@@ -84,10 +84,10 @@ enum AchievementCopy {
                           defaultValue: "\(n) filleuls arrivés", bundle: .main)
         case "link.click.count":
             return String(localized: "achievement.link.click.count",
-                          defaultValue: "\(n) clics sur vos liens", bundle: .main)
+                          defaultValue: "\(n) clics sur tes liens", bundle: .main)
         case "streak.hold.count":
             return String(localized: "achievement.streak.hold.count",
-                          defaultValue: "Série de \(n) jours", bundle: .main)
+                          defaultValue: "Flamme de \(n) jours", bundle: .main)
         case "meesh.mint.count":
             return String(localized: "achievement.meesh.mint.count",
                           defaultValue: "\(n) Meeshes frappées", bundle: .main)
@@ -160,10 +160,10 @@ enum AchievementCopy {
                           defaultValue: "\(n) filleul arrivé", bundle: .main)
         case "link.click.count":
             return String(localized: "achievement.link.click.count.one",
-                          defaultValue: "\(n) clic sur vos liens", bundle: .main)
+                          defaultValue: "\(n) clic sur tes liens", bundle: .main)
         case "streak.hold.count":
             return String(localized: "achievement.streak.hold.count.one",
-                          defaultValue: "Série de \(n) jour", bundle: .main)
+                          defaultValue: "Flamme de \(n) jour", bundle: .main)
         case "meesh.mint.count":
             return String(localized: "achievement.meesh.mint.count.one",
                           defaultValue: "\(n) Meesh frappée", bundle: .main)

@@ -74,11 +74,11 @@ describe('les gels', () => {
     expect(text(html)).toContain('Il manque 1 Meesh');
   });
 
-  test('avant l’achat : les Meeshes en poche, le prix du gel et ce qui restera (#9705)', () => {
+  test('avant l’achat : les Meeshes en poche et le prix du gel — jamais ce qui restera (#9705, #11178)', () => {
     const page = text(renderToStaticMarkup(<GameFlamePanel {...props({ balance: 4 })} />));
     expect(page).toContain('Tu as 4 Meeshes');
     expect(page).toContain('Il faut 1 Meesh');
-    expect(page).toContain('Après 3 Meeshes');
+    expect(page).not.toContain('3 Meeshes');
   });
 
   test('hors ligne : le bouton se tait', () => {
@@ -107,7 +107,7 @@ describe('le rallumage', () => {
     const html = renderToStaticMarkup(<GameFlamePanel {...props({ ...out, balance: 5 })} />);
     expect(html).toContain('data-game-relight=""');
     expect(text(html)).toContain('Rallumer la Flamme · 3 Meesh');
-    expect(text(html)).toContain('Après 2 Meeshes');
+    expect(text(html)).not.toContain('2 Meeshes');
   });
 
   test('le toucher rallume', async () => {

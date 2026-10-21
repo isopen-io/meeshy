@@ -240,7 +240,7 @@ describe("l'IA propose, un humain valide", () => {
     expect(proposer.calls[0]).toMatchObject({ number: 2, startDay: '2027-02-15', previousThemes: ['language:fr'], brief: 'Une saison japonaise' });
     expect(db.definitions).toHaveLength(0);
     expect((await call(app, 'GET', '/admin/game/seasons/app-events')).json().data.events.map((e: any) => e.key)).toEqual(['saison-2', 'saison-3', 'saison-4']);
-    expect((await call(app, 'GET', '/admin/game/seasons/app-events')).json().data.events[0].localizations['fr-FR'].name).toBe('Saison 2');
+    expect((await call(app, 'GET', '/admin/game/seasons/app-events')).json().data.events[0].localizations['fr-FR'].name).toBe('Voyage 2');
     await app.close();
   });
 
