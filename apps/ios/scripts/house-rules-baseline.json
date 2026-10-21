@@ -9,7 +9,7 @@
     "foreground-color": 3121,
     "idiom": 0,
     "logger-subsystem": 5,
-    "nonisolated-unsafe": 152,
+    "nonisolated-unsafe": 151,
     "nslock": 48,
     "nslog": 0,
     "onchange-single": 0,

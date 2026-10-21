@@ -70,7 +70,7 @@ final class WaveformCacheContentTests: XCTestCase {
 
         let samples = try await WaveformCache.shared.samples(from: url, count: 32)
 
-        samples.forEach { XCTAssertEqual($0, 0.5 / 2.0.squareRoot(), accuracy: 0.02) }
+        samples.forEach { XCTAssertEqual(Double($0), 0.5 / 2.0.squareRoot(), accuracy: 0.02) }
     }
 
     func test_theDiskLayer_givesBackTheSameSamplesAsTheMeasure() async throws {
