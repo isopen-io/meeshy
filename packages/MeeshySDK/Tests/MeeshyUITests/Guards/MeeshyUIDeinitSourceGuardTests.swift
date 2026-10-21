@@ -40,7 +40,12 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
         let name: String
         let isNonisolated: Bool
         let hasDeinit: Bool
+        let hasBareDeinit: Bool
     }
+
+    private static let pendingBareDeinits: Set<String> = [
+        "Story/Timeline/Engine/StoryTimelineEngine.swift: StoryTimelineEngine"
+    ]
 
     private func meeshyUIRoot() -> URL {
         ComposerSourceGuard.packageRoot.appendingPathComponent("Sources/MeeshyUI")
@@ -79,11 +84,15 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
             let pre = String(code[preStart..<range.lowerBound])
             let isNonisolated = pre.range(of: "\\bnonisolated\\b(?=[^{}]*$)", options: .regularExpression) != nil
             let afterName = afterKeyword[nameMatch.upperBound...]
-            let hasDeinit = Self.bodyContainsDeinit(
+            let members = Self.topLevelMembers(
                 chars: chars,
                 startOffset: code.distance(from: code.startIndex, to: afterName.startIndex))
+            let hasDeinit = members.range(of: "\\bdeinit\\b", options: .regularExpression) != nil
+            let hasExplicitIsolation = members.range(
+                of: "\\bnonisolated\\s+deinit\\b", options: .regularExpression) != nil
             out.append(ClassDecl(relativePath: relativePath, name: rawName,
-                                 isNonisolated: isNonisolated, hasDeinit: hasDeinit))
+                                 isNonisolated: isNonisolated, hasDeinit: hasDeinit,
+                                 hasBareDeinit: hasDeinit && !hasExplicitIsolation))
         }
         return out
     }
@@ -122,8 +131,8 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
         return out
     }
 
-    private static func bodyContainsDeinit(chars: [Character], startOffset: Int) -> Bool {
-        guard let open = (startOffset..<chars.count).first(where: { chars[$0] == "{" }) else { return false }
+    private static func topLevelMembers(chars: [Character], startOffset: Int) -> String {
+        guard let open = (startOffset..<chars.count).first(where: { chars[$0] == "{" }) else { return "" }
         var depth = 0
         var body = ""
         var idx = open
@@ -137,7 +146,7 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
             if depth == 1 { body.append(c) }
             idx += 1
         }
-        return body.range(of: "\\bdeinit\\b", options: .regularExpression) != nil
+        return body
     }
 
     // MARK: - Garde principale
@@ -157,6 +166,31 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
             "`deinit` : leur deinit synthétisée est ISOLÉE et double-libère sur iOS 26.1 (abrt). " +
             "Ajouter `nonisolated deinit {}` ou marquer le type `nonisolated`.\n" +
             offenders.joined(separator: "\n")
+        )
+    }
+
+    func test_everyNonisolatedMeeshyUIClass_writtenDeinit_isNonisolated() throws {
+        let offenders = Set(try classDecls()
+            .filter { !$0.isNonisolated && $0.hasBareDeinit }
+            .map { "\($0.relativePath): \($0.name)" })
+            .subtracting(Self.pendingBareDeinits)
+            .sorted()
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Ces classes de MeeshyUI écrivent un `deinit` sans `nonisolated`. " +
+            "Écrire `nonisolated deinit`.\n" + offenders.joined(separator: "\n")
+        )
+    }
+
+    func test_pendingBareDeinits_onlyShrinks() throws {
+        let bare = Set(try classDecls()
+            .filter { !$0.isNonisolated && $0.hasBareDeinit }
+            .map { "\($0.relativePath): \($0.name)" })
+        let stale = Self.pendingBareDeinits.subtracting(bare).sorted()
+        XCTAssertTrue(
+            stale.isEmpty,
+            "Ces exceptions gelées sont corrigées ou disparues : les retirer de " +
+            "`pendingBareDeinits`.\n" + stale.joined(separator: "\n")
         )
     }
 
@@ -195,5 +229,16 @@ final class MeeshyUIDeinitSourceGuardTests: XCTestCase {
         }
         """), relativePath: "S.swift").map(\.name)
         XCTAssertEqual(names, ["Widget"])
+    }
+
+    func test_parser_flagsBareWrittenDeinit() {
+        let bare = Self.parse(Self.mask("""
+        final class Bare { deinit { player?.pause() } }
+        """), relativePath: "S.swift").first { $0.name == "Bare" }
+        let explicit = Self.parse(Self.mask("""
+        final class Explicit { nonisolated deinit {} }
+        """), relativePath: "S.swift").first { $0.name == "Explicit" }
+        XCTAssertEqual(bare?.hasBareDeinit, true)
+        XCTAssertEqual(explicit?.hasBareDeinit, false)
     }
 }

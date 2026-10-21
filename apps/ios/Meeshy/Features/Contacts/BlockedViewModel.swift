@@ -21,7 +21,7 @@ final class BlockedViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
     }
 
-    deinit {
+    nonisolated deinit {
         revalidationTask?.cancel()
     }
 
