@@ -23,6 +23,7 @@ private func makeSleep(ledger: SleepLedger, result: Bool) -> @Sendable (Duration
 private final class Counter {
     private(set) var value = 0
     func increment() { value += 1 }
+    nonisolated deinit {}
 }
 
 @MainActor

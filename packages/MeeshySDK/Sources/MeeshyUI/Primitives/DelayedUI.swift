@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 
 public enum DelayedUI {
-    public enum Outcome: Equatable, Sendable {
+    public nonisolated enum Outcome: Equatable, Sendable {
         case performed
         case settled
         case skipped
