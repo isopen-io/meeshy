@@ -123,6 +123,10 @@ struct SectionHeaderView: View {
 struct ConversationPreviewView: View {
     let conversation: Conversation
     var cachedMessages: [Message] = []
+    /// L'aperçu VIVANT (#11212) : seule la section des messages l'observe, et
+    /// passe de « chargement » à « messages » sans jamais dire « Aucun message »
+    /// avant de l'avoir constaté. `nil` ⇒ `cachedMessages`, figés.
+    var previewLoader: ConversationListPreviewLoader? = nil
 
     var bannerURL: URL? = nil
     var avatarURL: String? = nil
@@ -221,40 +225,7 @@ struct ConversationPreviewView: View {
             .padding(MeeshySpacing.mdPlus)
             .background(headerBackground)
 
-            // Recent messages preview
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-
-                if cachedMessages.isEmpty {
-                    EmptyStateView(
-                        icon: "bubble.left.and.bubble.right",
-                        title: String(localized: "preview.no_messages", defaultValue: "Aucun message"),
-                        subtitle: ""
-                    )
-                    .padding(.bottom, MeeshySpacing.smPlus)
-                } else {
-                    ScrollViewReader { proxy in
-                        ScrollView(.vertical, showsIndicators: false) {
-                            VStack(spacing: 0) {
-                                ForEach(cachedMessages) { msg in
-                                    ThemedMessageBubble(
-                                        message: msg,
-                                        contactColor: accentColor,
-                                        showAvatar: !msg.isMe
-                                    )
-                                    .allowsHitTesting(false)
-                                }
-                            }
-                            .padding(.horizontal, MeeshySpacing.smPlus)
-                            .padding(.vertical, MeeshySpacing.sm)
-                        }
-                        .onAppear {
-                            guard let lastID = cachedMessages.last?.id else { return }
-                            proxy.scrollTo(lastID, anchor: .bottom)
-                        }
-                    }
-                }
-            }
+            recentMessagesSection
             .frame(minHeight: 120, maxHeight: 300)
             .background(previewBackground)
         }
@@ -274,6 +245,95 @@ struct ConversationPreviewView: View {
                 )
         )
         .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.medium), radius: 20, y: 10)
+    }
+
+    // MARK: - Recent messages (#11212)
+
+    @ViewBuilder
+    private var recentMessagesSection: some View {
+        if let previewLoader {
+            ConversationPreviewStateReader(loader: previewLoader, conversationId: conversation.id) { state in
+                recentMessages(state.messages, served: state.snapshot?.served ?? [:], phase: state.phase)
+            }
+        } else {
+            recentMessages(cachedMessages, served: [:], phase: cachedMessages.isEmpty ? .empty : .loaded)
+        }
+    }
+
+    private func recentMessages(_ messages: [Message], served: [String: MessageTranslation], phase: ConversationPreviewPhase) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+
+            if messages.isEmpty && phase == .loading {
+                recentMessagesSkeleton
+            } else if messages.isEmpty && phase == .unavailable {
+                // Échec réseau sans cache : RIEN n'a été constaté, l'aperçu ne
+                // prétend donc pas que la conversation est vide.
+                EmptyStateView(
+                    icon: "wifi.exclamationmark",
+                    title: String(localized: "preview.messages_unavailable", defaultValue: "Impossible de charger les messages"),
+                    subtitle: ""
+                )
+                .padding(.bottom, MeeshySpacing.smPlus)
+            } else if messages.isEmpty {
+                EmptyStateView(
+                    icon: "bubble.left.and.bubble.right",
+                    title: String(localized: "preview.no_messages", defaultValue: "Aucun message"),
+                    subtitle: ""
+                )
+                .padding(.bottom, MeeshySpacing.smPlus)
+            } else {
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            ForEach(messages) { msg in
+                                ThemedMessageBubble(
+                                    message: Self.displayable(msg),
+                                    contactColor: accentColor,
+                                    preferredTranslation: served[msg.id],
+                                    showAvatar: !msg.isMe
+                                )
+                                .allowsHitTesting(false)
+                            }
+                        }
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.sm)
+                    }
+                    .onAppear {
+                        guard let lastID = messages.last?.id else { return }
+                        proxy.scrollTo(lastID, anchor: .bottom)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Un message chiffré que l'appareil n'a pas déchiffré arrive SCELLÉ (seul
+    /// son drapeau voyage) : il se dit « Message chiffré », jamais une bulle vide.
+    private static func displayable(_ message: Message) -> Message {
+        guard message.isEncrypted, message.content.isEmpty else { return message }
+        var sealed = message
+        sealed.content = "🔒 " + String(localized: "protection.encrypted", bundle: .main)
+        return sealed
+    }
+
+    private static let skeletonWidths: [CGFloat] = [150, 190, 120]
+
+    /// Ligne froide : la forme du fil, jamais « Aucun message » ni un spinner.
+    private var recentMessagesSkeleton: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            ForEach(0..<3, id: \.self) { index in
+                HStack {
+                    if index % 2 == 1 { Spacer(minLength: MeeshySpacing.xl) }
+                    SkeletonShape(width: Self.skeletonWidths[index], height: 34, cornerRadius: MeeshyRadius.lg)
+                    if index % 2 == 0 { Spacer(minLength: MeeshySpacing.xl) }
+                }
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.sm)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(String(localized: "conversation.view.loading_messages", bundle: .main)))
     }
 
     // MARK: - Header background (banner + dark gradient)

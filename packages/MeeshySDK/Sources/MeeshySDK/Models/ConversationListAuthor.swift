@@ -45,7 +45,12 @@ public enum ConversationListAuthor {
     /// Le repli anglais n'est pas une traduction de confort : il ne sert que la
     /// fenêtre entre le lancement du processus et la configuration, pendant
     /// laquelle aucune ligne n'est encore rendue.
-    nonisolated(unsafe) public static var readerLabel: String = "You"
+    public static var readerLabel: String {
+        get { readerLabelSlot.read { $0 } }
+        set { readerLabelSlot.mutate { $0 = newValue } }
+    }
+
+    private static let readerLabelSlot = Locked("You")
 
     /// Posé au démarrage par l'app, avec sa chaîne localisée.
     public static func configureReaderLabel(_ label: String) {

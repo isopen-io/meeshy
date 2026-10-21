@@ -6,15 +6,13 @@ import { contactInitials, vcardFieldRows, type ContactAction, type VCardFieldRow
 import { translate } from '@/lib/i18n-catalog';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { LONG_PRESS_MS } from '@/lib/view/long-press';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
 import { ContactAccountRow } from './contact-card-account';
 import { Glyph, GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
-
-/** Durée d'un appui long — celle du menu du message (`use-long-press`). */
-const LONG_PRESS_MS = 500;
 
 export type ClipboardWriter = (text: string) => Promise<void>;
 

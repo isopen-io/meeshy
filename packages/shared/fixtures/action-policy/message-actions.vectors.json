@@ -2797,6 +2797,344 @@
       }
     },
     {
+      "_label": "groupe-ecriture-reservee-aux-membres-le-membre-repond",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "member"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "sentiment",
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
+      "_label": "groupe-ecriture-reservee-aux-membres-un-rang-illisible-ne-repond-pas",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "member"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "owner",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "sentiment",
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": false,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
+      "_label": "groupe-ecriture-reservee-au-createur-un-admin-ne-repond-pas",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "creator"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "admin",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "sentiment",
+            "report"
+          ],
+          "moderation": [
+            "remove"
+          ],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": {
+            "reasonRequired": true
+          },
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": false,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
+      "_label": "groupe-ecriture-reservee-au-createur-le-createur-repond",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "creator"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "creator",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "sentiment",
+            "report"
+          ],
+          "moderation": [
+            "remove"
+          ],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": {
+            "reasonRequired": true
+          },
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
       "_label": "groupe-clos-auteur",
       "input": {
         "message": {
@@ -3819,6 +4157,360 @@
       ]
     },
     {
+      "_label": "photo-vue-unique-par-la-piece-seule",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "",
+          "messageType": "image",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "attachments": [
+            {
+              "mimeType": "image/jpeg",
+              "isViewOnce": true
+            }
+          ]
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "image",
+          "flags": {
+            "viewOnce": true,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [],
+          "organize": [],
+          "more": [
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": null,
+          "report": true,
+          "canReact": true,
+          "canReply": false,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": false,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "edit"
+      ]
+    },
+    {
+      "_label": "photo-vue-unique-par-le-bit-de-la-piece",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "",
+          "messageType": "image",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "attachments": [
+            {
+              "mimeType": "image/jpeg",
+              "effectFlags": 4
+            }
+          ]
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "image",
+          "flags": {
+            "viewOnce": true,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [],
+          "organize": [],
+          "more": [
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": null,
+          "report": true,
+          "canReact": true,
+          "canReply": false,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": false,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "edit"
+      ]
+    },
+    {
+      "_label": "deux-pieces-toutes-floutees-se-transferent-sans-s-exporter",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "attachments": [
+            {
+              "mimeType": "image/jpeg",
+              "isBlurred": true
+            },
+            {
+              "mimeType": "video/mp4",
+              "effectFlags": 2
+            }
+          ]
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "multi",
+          "flags": {
+            "viewOnce": false,
+            "blurred": true,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "forward"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": true,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "edit"
+      ]
+    },
+    {
+      "_label": "une-piece-floutee-sur-deux-s-exporte",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "attachments": [
+            {
+              "mimeType": "image/jpeg",
+              "isBlurred": true
+            },
+            {
+              "mimeType": "application/pdf"
+            }
+          ]
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "multi",
+          "flags": {
+            "viewOnce": false,
+            "blurred": true,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "forward",
+            "save"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": true,
+          "copy": false,
+          "save": true,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "edit"
+      ]
+    },
+    {
       "_label": "flamme-a-duree-se-transfere-sans-se-copier",
       "input": {
         "message": {
@@ -4743,6 +5435,365 @@
           "forward": true,
           "copy": false,
           "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "edit"
+      ]
+    },
+    {
+      "_label": "carte-de-visite-alias-text-x-vcf",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "attachments": [
+            {
+              "mimeType": "text/x-vcf"
+            }
+          ]
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "contact",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "saveContact",
+            "forward"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": true,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "edit"
+      ]
+    },
+    {
+      "_label": "carte-de-visite-type-generique-extension-en-majuscules",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "attachments": [
+            {
+              "mimeType": "application/octet-stream",
+              "originalName": "ZOE.VCF"
+            }
+          ]
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "contact",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "saveContact",
+            "forward"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": true,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "edit"
+      ]
+    },
+    {
+      "_label": "carte-de-visite-lue-sur-le-nom-de-fichier-sans-nom-d-origine",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "attachments": [
+            {
+              "mimeType": "application/octet-stream",
+              "fileName": "zoe.vcard"
+            }
+          ]
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "contact",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "saveContact",
+            "forward"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": true,
+          "copy": false,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      },
+      "clientStricter": [
+        "edit"
+      ]
+    },
+    {
+      "_label": "fichier-generique-sans-extension-de-carte",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "attachments": [
+            {
+              "mimeType": "application/octet-stream",
+              "originalName": "zoe.vcf.zip"
+            }
+          ]
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "file",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "forward",
+            "save"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": null,
+          "transcribe": false,
+          "sentiment": false,
+          "forward": true,
+          "copy": false,
+          "save": true,
           "serverFeatureAbsence": null
         }
       },

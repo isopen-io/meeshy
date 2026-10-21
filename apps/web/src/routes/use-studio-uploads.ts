@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import type { ApiFailure } from '@/lib/api/http';
 import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
+import { prepareImageForUpload } from '@/lib/media/prepare-image-upload';
 import { withPage, type StudioDraft } from '@/lib/stories/studio';
 import { pageWithSoundUpload, pageWithVisualUpload, type StudioDoor, type StudioPage, type StudioUploadState } from '@/lib/stories/studio-page';
 import { uploadStateOf, type PendingUpload } from '@/lib/stories/studio-publish';
@@ -65,11 +66,11 @@ export function useStudioUploads({
     abortRef.current[key]?.abort();
     const controller = new AbortController();
     abortRef.current[key] = controller;
-    const pending: PendingUpload = import('@/lib/api/post-media-upload')
-      .then(({ uploadPostMedia }) =>
+    const pending: PendingUpload = Promise.all([import('@/lib/api/post-media-upload'), prepareImageForUpload(file)])
+      .then(([{ uploadPostMedia }, prepared]) =>
         uploadPostMedia({
           ...upload,
-          file,
+          file: prepared,
           uploadContext: 'story',
           signal: controller.signal,
           onProgress: (progress) => {
