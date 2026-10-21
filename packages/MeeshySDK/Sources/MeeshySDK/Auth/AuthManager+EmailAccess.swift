@@ -2,7 +2,7 @@ import Foundation
 import os
 
 /// Les portes qui passent par la boîte e-mail : le lien de connexion, et la
-/// vérification d'adresse qui, depuis #8035, OUVRE la session.
+/// vérification d'adresse qui OUVRE la session.
 extension AuthManager {
 
     // MARK: - Magic Link
@@ -29,7 +29,7 @@ extension AuthManager {
         defer { isLoading = false }
 
         do {
-            // #10463 — par `openSession` : une session refusée y est refermée.
+            // Par `openSession` : une session refusée y est refermée.
             openSession(try await verifyMagicLink(token: token))
         } catch let error as MeeshyError {
             errorMessage = error.errorDescription
@@ -38,11 +38,11 @@ extension AuthManager {
         }
     }
 
-    /// Valide le lien de connexion SANS poser la session (#8076) : un lien
+    /// Valide le lien de connexion SANS poser la session : un lien
     /// ouvert pendant qu'une présentation d'accès est affichée attend qu'elle
     /// se referme, sinon elle resterait orpheline sous la nouvelle racine.
     ///
-    /// #10872 — lève `LinkConfirmationRequired` quand le lien n'a pas été
+    /// Lève `LinkConfirmationRequired` quand le lien n'a pas été
     /// demandé par cet appareil : aucune session, l'identité du compte à
     /// confirmer. `confirmed` rejoue la preuve après le « oui ».
     public func verifyMagicLink(token: String, confirmed: Bool = false) async throws -> EmailProvenSession {
@@ -57,8 +57,8 @@ extension AuthManager {
 
     /// Vérifie l'adresse (code ou lien) et pose la session rendue, par le MÊME
     /// chemin qu'une connexion réussie. Rend `true` si une session est ouverte,
-    /// `false` si la passerelle a vérifié sans session (réponse antérieure à
-    /// #8035). Lève le refus de la passerelle (code faux, expiré, débit).
+    /// `false` si la passerelle a vérifié sans session (réponse d'une passerelle
+    /// plus ancienne). Lève le refus de la passerelle (code faux, expiré, débit).
     @discardableResult
     public func confirmEmail(_ request: EmailVerificationRequest) async throws -> Bool {
         guard let proven = try await verifyEmail(request) else { return false }
@@ -66,20 +66,20 @@ extension AuthManager {
         return true
     }
 
-    /// Vérifie l'adresse SANS poser la session (#8059) : l'écran qui a présenté
+    /// Vérifie l'adresse SANS poser la session : l'écran qui a présenté
     /// la saisie du code doit d'abord se REFERMER. Ouvrir la session bascule la
     /// racine de l'app et démonte l'écran de connexion — une feuille encore
     /// présentée par lui resterait orpheline, figée, sans « Fermer » qui
-    /// réponde. `nil` ⇒ vérifiée sans session (passerelle antérieure à #8035).
+    /// réponde. `nil` ⇒ vérifiée sans session (passerelle plus ancienne).
     ///
-    /// Lève `SecondFactorRequired` quand le compte porte un second facteur
-    /// (#10445) : l'adresse est prouvée, mais aucune session n'est rendue —
+    /// Lève `SecondFactorRequired` quand le compte porte un second facteur :
+    /// l'adresse est prouvée, mais aucune session n'est rendue —
     /// ce n'est ni un refus ni un « Email vérifié ! ».
     public func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession? {
         try EmailProvenSession.served(by: try await authService.confirmEmail(request))
     }
 
-    // MARK: - Inscription, session tenue (#8288)
+    // MARK: - Inscription, session tenue
 
     /// Crée le compte SANS poser la session : l'écran d'inscription la tient
     /// le temps que sa carte reçoive le code, puis la pose par `openSession`.
@@ -113,12 +113,12 @@ extension AuthManager {
     }
 
     /// Pose la session prouvée par `verifyEmail`, comme une connexion réussie,
-    /// et rend son VERDICT (#10450) : `true` si la session est posée. La session
+    /// et rend son VERDICT : `true` si la session est posée. La session
     /// d'un AUTRE utilisateur que celui de la session ouverte est REFUSÉE
-    /// (#10446) — rien n'est posé, `errorMessage` le dit, et l'appelant
+    /// — rien n'est posé, `errorMessage` le dit, et l'appelant
     /// n'annonce aucun succès ; y passer se fait par `switchToProvenAccount`.
     ///
-    /// #10463 — refusée aussi pendant un changement de compte, et toute session
+    /// Refusée aussi pendant un changement de compte, et toute session
     /// refusée est REFERMÉE côté passerelle, ici, pour tous les appelants : la
     /// preuve a ouvert une session serveur que rien d'autre ne fermerait.
     @discardableResult
@@ -133,7 +133,7 @@ extension AuthManager {
         }
     }
 
-    /// #10463 — hors d'un changement de compte. Pendant sa pause, la session
+    /// Hors d'un changement de compte. Pendant sa pause, la session
     /// sortante est démontée : une session posée là passerait la garde de
     /// `applySession` comme une première connexion, sans question, et le
     /// changement poserait ensuite la sienne par-dessus.
@@ -144,7 +144,7 @@ extension AuthManager {
         try installSession(proven)
     }
 
-    /// #10463 — la porte des sessions que le serveur vient d'OUVRIR (connexion,
+    /// La porte des sessions que le serveur vient d'OUVRIR (connexion,
     /// second facteur, inscription, vérification) : refusée, elle est refermée
     /// côté passerelle, puis le refus est rendu à l'appelant.
     func installClosingRefused(_ proven: EmailProvenSession) throws {
@@ -164,7 +164,7 @@ extension AuthManager {
                          origin: proven.origin)
     }
 
-    // MARK: - Un lien qui ouvre un AUTRE compte (#10445)
+    // MARK: - Un lien qui ouvre un AUTRE compte
 
     /// Passe à la session PROUVÉE d'un autre compte en GARDANT celle qu'on
     /// quitte : même sortie que « Changer de compte » (`suspendActiveSession`),
@@ -172,22 +172,22 @@ extension AuthManager {
     /// Rien n'est écrit au trousseau pour le compte entrant avant cet appel :
     /// la session rendue par la preuve n'existe qu'en mémoire jusque-là.
     ///
-    /// #10450 — aucune dérogation à la garde de `applySession` : la session
+    /// Aucune dérogation à la garde de `applySession` : la session
     /// prouvée ne se pose que sur une session DÉMONTÉE. Si la sortie n'a pas
     /// eu lieu (compte actif inconnu), si un autre changement de compte est en
     /// cours, ou si une session s'est rouverte pendant la pause, rien n'est
     /// posé et la session prouvée est refermée côté passerelle.
     ///
-    /// #10463 — la session refusée se referme dans une tâche à part : sous
+    /// La session refusée se referme dans une tâche à part : sous
     /// `isSwitchingAccount`, ses réessais (jusqu'à quelques secondes hors
     /// ligne) tenaient toute autre bascule refusée.
     ///
-    /// #10513 — une preuve plus vieille que sa fenêtre d'adoption
-    /// (`EmailProvenSession.adoptableFor`, #10518) ne range rien et ne pose
+    /// Une preuve plus vieille que sa fenêtre d'adoption
+    /// (`EmailProvenSession.adoptableFor`) ne range rien et ne pose
     /// rien : la passerelle ne l'adopterait plus, et le premier appel
     /// déconnecterait. Elle est refermée côté passerelle.
     ///
-    /// #10518 — rend la RAISON d'un refus : `.expired` (fenêtre passée, il
+    /// Rend la RAISON d'un refus : `.expired` (fenêtre passée, il
     /// faut un nouveau lien) ou `.failed` (l'appareil n'a pas pu poser la
     /// session). Dans les deux cas rien du compte du lien n'est posé et la
     /// session prouvée est refermée côté passerelle. `.expired`, et un
@@ -243,12 +243,12 @@ extension AuthManager {
     /// Ferme côté passerelle une session prouvée que l'utilisateur a REFUSÉE,
     /// ou que l'appareil n'a pas pu poser : la preuve a consommé le jeton et
     /// ouvert une session serveur, qui ne doit pas leur survivre. Rien ne
-    /// change sur l'appareil. Réessaie comme la déconnexion (#10450).
+    /// change sur l'appareil. Réessaie comme la déconnexion.
     public func discardProvenSession(_ proven: EmailProvenSession) async {
         await performServerLogoutWithRetries(token: proven.token)
     }
 
-    /// `discardProvenSession` sans faire attendre l'appelant (#10463).
+    /// `discardProvenSession` sans faire attendre l'appelant.
     func closeRefusedProvenSession(_ proven: EmailProvenSession) {
         let closure: Task<Void, Never> = Task { [weak self] in
             guard let self else { return }
@@ -271,7 +271,7 @@ extension AuthManager {
     #endif
 }
 
-/// #10446 — `applySession` refuse d'installer un autre utilisateur par-dessus
+/// `applySession` refuse d'installer un autre utilisateur par-dessus
 /// une session ouverte, hors du changement de compte explicite.
 public struct SessionReplacementRefused: LocalizedError, Equatable, Sendable {
     public let activeUserId: String?
@@ -287,7 +287,7 @@ public struct SessionReplacementRefused: LocalizedError, Equatable, Sendable {
     }
 }
 
-/// #10463 — une connexion, un second facteur ou une inscription demandés
+/// Une connexion, un second facteur ou une inscription demandés
 /// pendant un changement de compte : refusés, rien n'est envoyé au serveur.
 public struct AccountSwitchUnderway: LocalizedError, Equatable, Sendable {
     public init() {}
@@ -297,13 +297,13 @@ public struct AccountSwitchUnderway: LocalizedError, Equatable, Sendable {
     }
 }
 
-/// Ce que rend `switchToProvenAccount` (#10518).
+/// Ce que rend `switchToProvenAccount`.
 public enum ProvenAccountSwitchOutcome: Equatable, Sendable {
     case switched
     case refused(ProvenAccountSwitchRefusal)
 }
 
-/// Pourquoi la session prouvée n'a pas été posée (#10518).
+/// Pourquoi la session prouvée n'a pas été posée.
 public enum ProvenAccountSwitchRefusal: Equatable, Sendable {
     /// La fenêtre d'adoption est passée : il faut un nouveau lien. Jugé avant
     /// toute sortie — le compte ouvert l'est resté.
@@ -316,9 +316,9 @@ public enum ProvenAccountSwitchRefusal: Equatable, Sendable {
 }
 
 /// La passerelle a prouvé l'adresse, mais le compte attend son second facteur
-/// (`requires2FA`) : aucune session n'est rendue (#10445).
+/// (`requires2FA`) : aucune session n'est rendue.
 ///
-/// #10518 — le défi a lui aussi sa fenêtre : `adoptableFor` secondes à
+/// Le défi a lui aussi sa fenêtre : `adoptableFor` secondes à
 /// compter de `receivedAt`. C'est un plafond — un défi plus récent du même
 /// compte le remplace. Deux refus sont égaux par leur défi et sa fenêtre,
 /// jamais par l'instant où ils ont été reçus.
@@ -347,23 +347,23 @@ public struct SecondFactorRequired: Error, Equatable, Sendable {
     }
 }
 
-/// Une session que la preuve de l'adresse a rendue, pas encore posée (#8059).
+/// Une session que la preuve de l'adresse a rendue, pas encore posée.
 public struct EmailProvenSession: Sendable {
     public let token: String
     public let sessionToken: String?
     public let user: MeeshyUser
     /// D'où vient la session qu'on posera — une preuve d'adresse ouvre une
-    /// CONNEXION ; la carte de l'inscription (#8288) tient celle d'un compte
+    /// CONNEXION ; la carte de l'inscription tient celle d'un compte
     /// qu'elle vient de CRÉER, et le report de la demande de notifications en dépend.
     public let origin: SessionOrigin
-    /// L'instant où la preuve a été reçue (#10513) : l'âge de la session.
+    /// L'instant où la preuve a été reçue : l'âge de la session.
     public let receivedAt: Date
     /// Les secondes, à compter de `receivedAt`, pendant lesquelles adopter
-    /// cette session vaut encore (#10518) : le délai SERVI par la passerelle
+    /// cette session vaut encore : le délai SERVI par la passerelle
     /// moins la marge, ou le repli. Toujours entre zéro et la borne dure.
     public let adoptableFor: TimeInterval
 
-    /// Le REPLI (#10518) : la fenêtre d'une session dont la passerelle n'a
+    /// Le REPLI : la fenêtre d'une session dont la passerelle n'a
     /// servi aucun délai lisible. La fenêtre d'une preuve se lit sur
     /// `adoptableFor`, jamais ici.
     public static let adoptionWindow: TimeInterval = ProvenAdoptionWindow.fallback(for: .session)
@@ -390,11 +390,11 @@ public struct EmailProvenSession: Sendable {
     }
 
     /// La session que sert une réponse de preuve d'adresse. `nil` ⇒ adresse
-    /// prouvée sans session (passerelle antérieure à #8035) ; lève
+    /// prouvée sans session (passerelle plus ancienne) ; lève
     /// `SecondFactorRequired` quand le compte attend son second facteur.
-    /// `receivedAt` est l'instant où la réponse est lue (#10518) : le délai
+    /// `receivedAt` est l'instant où la réponse est lue : le délai
     /// servi s'y applique, sur les deux branches.
-    /// #10872 — lève `LinkConfirmationRequired` avant tout : la passerelle n'a
+    /// Lève `LinkConfirmationRequired` avant tout : la passerelle n'a
     /// rien ouvert, elle attend que l'utilisateur confirme le compte.
     static func served(by data: LoginResponseData, receivedAt: Date = Date()) throws -> EmailProvenSession? {
         if data.requiresConfirmation == true, let account = data.account {
@@ -421,13 +421,13 @@ public struct EmailProvenSession: Sendable {
 }
 
 /// Ce dont un écran de saisie du code a besoin : prouver l'adresse, puis — une
-/// fois l'écran refermé — ouvrir la session (#8059).
+/// fois l'écran refermé — ouvrir la session.
 @MainActor
 public protocol EmailVerificationConfirming: AnyObject {
     func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession?
-    /// `true` si la session est posée (#10450) : un refus n'annonce rien, et
+    /// `true` si la session est posée : un refus n'annonce rien, et
     /// la session refusée est refermée côté passerelle par l'implémentation
-    /// (#10463) — l'appelant n'a rien à fermer.
+    /// — l'appelant n'a rien à fermer.
     @discardableResult
     func openSession(_ proven: EmailProvenSession) -> Bool
 }
