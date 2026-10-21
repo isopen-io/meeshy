@@ -1,43 +1,42 @@
 import XCTest
 @testable import MeeshySDK
 
-/// IL5 (#11283) — la session réseau des médias est typée vidéo, respecte le
-/// réglage de données mobiles, et rend discrétionnaires les transferts différés
-/// (paliers prime / idle de la fenêtre de préchargement des réels).
+/// IL5 (#11283) — la session réseau des médias est typée vidéo, applique le
+/// droit au réseau facturé qu'on lui passe, et rend discrétionnaires les
+/// transferts différés. Quel palier, quel réglage : politique côté app
+/// (`ReelTransferPolicy`, témoins `ReelTransferPolicyTests`).
 final class MediaTransferProfileTests: XCTestCase {
 
     private func configuration(for profile: MediaTransferProfile) -> URLSessionConfiguration {
         profile.configured(from: URLSessionConfiguration.ephemeral)
     }
 
-    private func profile(for tier: ReelPreloadWindow.Tier, allowsExpensive: Bool = true) -> MediaTransferProfile {
-        MediaTransferProfile(priority: MediaTransferPriority(reelTier: tier), allowsExpensiveNetworkAccess: allowsExpensive)
+    private func profile(_ priority: MediaTransferPriority, allowsExpensive: Bool = true) -> MediaTransferProfile {
+        MediaTransferProfile(priority: priority, allowsExpensiveNetworkAccess: allowsExpensive)
     }
 
     func test_everyMediaProfile_isTypedAsVideoTraffic() {
         let profiles = [
-            profile(for: .play),
-            profile(for: .prime, allowsExpensive: false),
+            profile(.immediate),
+            profile(.deferrable, allowsExpensive: false),
         ]
         XCTAssertEqual(profiles.map { configuration(for: $0).networkServiceType }, [.video, .video])
     }
 
-    func test_playDecodeAndMount_areNotDiscretionary() {
-        let tiers: [ReelPreloadWindow.Tier] = [.play, .decode, .mount]
-        XCTAssertEqual(tiers.map { configuration(for: profile(for: $0)).isDiscretionary }, [false, false, false])
+    func test_immediatePriority_isNotDiscretionary() {
+        XCTAssertFalse(configuration(for: profile(.immediate)).isDiscretionary)
     }
 
-    func test_primeAndIdle_areDiscretionary() {
-        let tiers: [ReelPreloadWindow.Tier] = [.prime, .idle]
-        XCTAssertEqual(tiers.map { configuration(for: profile(for: $0)).isDiscretionary }, [true, true])
+    func test_deferrablePriority_isDiscretionary() {
+        XCTAssertTrue(configuration(for: profile(.deferrable)).isDiscretionary)
     }
 
     func test_dataSavingOn_forbidsExpensiveNetworkAccess() {
-        XCTAssertFalse(configuration(for: profile(for: .play, allowsExpensive: false)).allowsExpensiveNetworkAccess)
+        XCTAssertFalse(configuration(for: profile(.immediate, allowsExpensive: false)).allowsExpensiveNetworkAccess)
     }
 
     func test_dataSavingOff_allowsExpensiveNetworkAccess() {
-        XCTAssertTrue(configuration(for: profile(for: .prime, allowsExpensive: true)).allowsExpensiveNetworkAccess)
+        XCTAssertTrue(configuration(for: profile(.deferrable, allowsExpensive: true)).allowsExpensiveNetworkAccess)
     }
 
     func test_standardProfile_keepsTheFormerTransferBehaviour() {
@@ -51,7 +50,7 @@ final class MediaTransferProfileTests: XCTestCase {
         base.networkServiceType = .default
         base.isDiscretionary = false
         base.allowsExpensiveNetworkAccess = true
-        _ = profile(for: .idle, allowsExpensive: false).configured(from: base)
+        _ = profile(.deferrable, allowsExpensive: false).configured(from: base)
         XCTAssertEqual(base.networkServiceType, .default)
         XCTAssertFalse(base.isDiscretionary)
         XCTAssertTrue(base.allowsExpensiveNetworkAccess)
@@ -78,31 +77,5 @@ final class MediaTransferProfileTests: XCTestCase {
 
         XCTAssertTrue(downloader.session(for: .standard) === downloader.session(for: .standard))
         XCTAssertFalse(downloader.session(for: .standard) === downloader.session(for: deferred))
-    }
-
-    // MARK: - Le réglage vidéo de l'utilisateur, par palier
-
-    func test_farTiers_onWifiOnlyVideoSetting_stayOffExpensiveNetworks() {
-        let tiers: [ReelPreloadWindow.Tier] = [.prime, .idle]
-        let allowed = tiers.map { MediaTransferProfile(reelTier: $0, videoPolicy: .wifiOnly).allowsExpensiveNetworkAccess }
-        XCTAssertEqual(allowed, [false, false])
-        XCTAssertFalse(MediaTransferProfile(reelTier: .prime, videoPolicy: .never).allowsExpensiveNetworkAccess)
-    }
-
-    func test_farTiers_onCellularVideoSetting_mayUseExpensiveNetworks() {
-        let policies: [AutoDownloadPolicy] = [.always, .wifiAndGoodCellular]
-        let allowed = policies.map { MediaTransferProfile(reelTier: .prime, videoPolicy: $0).allowsExpensiveNetworkAccess }
-        XCTAssertEqual(allowed, [true, true])
-    }
-
-    func test_nearTiers_neverBlockedByTheVideoSetting_soPlaybackNeverStalls() {
-        let tiers: [ReelPreloadWindow.Tier] = [.play, .decode, .mount]
-        let profiles = tiers.map { MediaTransferProfile(reelTier: $0, videoPolicy: .wifiOnly) }
-        XCTAssertEqual(profiles.map(\.allowsExpensiveNetworkAccess), [true, true, true])
-        XCTAssertEqual(profiles.map(\.isDiscretionary), [false, false, false])
-    }
-
-    func test_farTier_profile_isDiscretionary() {
-        XCTAssertTrue(MediaTransferProfile(reelTier: .prime, videoPolicy: .always).isDiscretionary)
     }
 }

@@ -124,8 +124,8 @@ enum ReelPrewarm {
         center.prefetch(urlString: attachment.fileUrl,
                         expectedSize: Int64(attachment.fileSize),
                         cacheStore: .video,
-                        profile: MediaTransferProfile(
-                            reelTier: tier,
+                        profile: ReelTransferPolicy.profile(
+                            for: tier,
                             videoPolicy: MediaDownloadPreferencesStore.shared.preferences.video))
         return AttachmentDownloadCenter.key(for: attachment.fileUrl)
     }
