@@ -157,7 +157,8 @@ describe.each(MOUNTS)('#9315 — %s : un fichier de message suit son porteur', (
     const res = await app.inject({ method: 'GET', url: base + encodeKey(KEY) });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toBe('image/jpeg');
-    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+    // #11265 — clé UUID écrite une fois : cache long ET immuable.
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
     await app.close();
   });
 
@@ -356,7 +357,8 @@ describe('#9315 — ce qui n’est pas une pièce jointe garde son régime', () 
       url: '/api/v1/attachments/file/' + encodeKey('2026/10/68f2a81417a557e8ce4ddfc1/post_0b4c1d2e-aaaa-4bbb-8ccc-123456789abc.jpg'),
     });
     expect(res.statusCode).toBe(200);
-    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+    // #11265 — clé UUID écrite une fois : cache long ET immuable.
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
     await app.close();
   });
 
