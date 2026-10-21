@@ -18,11 +18,11 @@ import Foundation
 
 // MARK: - Conversations & messages metadata
 
-/// R6 — payload du kind `.markStoryViewed` : le « vu » d'une story survit à
+/// Payload du kind `.markStoryViewed` : le « vu » d'une story survit à
 /// un kill/offline et se rejoue au reconnect. `storyId` sert aussi d'anchor
 /// de coalescing (latest-wins par story).
 ///
-/// #10483 — la vue porte l'ENTRÉE du lecteur (provenance, origine d'un
+/// La vue porte l'ENTRÉE du lecteur (provenance, origine d'un
 /// listing). Gardées en chaînes BRUTES : une ligne écrite par une version plus
 /// récente, avec une valeur que celle-ci ne connaît pas, se décode quand même
 /// (la valeur inconnue se lit comme absente) ; une ligne antérieure n'a pas les
@@ -46,7 +46,7 @@ public struct MarkStoryViewedPayload: Codable, Sendable, Equatable {
     }
 }
 
-/// #8303 — les messages flamme-œil qu'un lecteur a vus puis quittés. Les
+/// Les messages flamme-œil qu'un lecteur a vus puis quittés. Les
 /// identifiants sont SERVEUR : la passerelle ne consomme que les lignes flamme-œil
 /// reçues par l'appelant, un identifiant étranger est ignoré.
 public struct ConsumeAfterReadPayload: Codable, Sendable, Equatable {
@@ -352,12 +352,12 @@ public struct RepostPostPayload: Codable, Sendable, Equatable {
 // MARK: - Posts & comments
 
 /// **Un média DÉJÀ monté par une tentative précédente**, rangé sous son index
-/// d'origine dans `CreatePostPayload.localMediaPaths` (#5830).
+/// d'origine dans `CreatePostPayload.localMediaPaths`.
 ///
 /// Les deux valeurs voyagent ENSEMBLE parce que les deux servent : l'`id`
 /// devient un `PostMedia` dans le corps de `POST /posts`, et l'`url` est ce que
 /// le canvas d'un réel affiche — adopter l'id sans l'url laisse le lecteur
-/// devant un `file://` que l'assainisseur annule (#5280).
+/// devant un `file://` que l'assainisseur annule.
 public struct UploadedPostMedia: Codable, Sendable, Equatable {
     /// Position du fichier dans `localMediaPaths` au moment de la composition.
     public let sourceIndex: Int
@@ -409,11 +409,11 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// Explicit recipient ids for `EXCEPT` / `ONLY` visibility (and audience
     /// scoping for statuses). `nil` for the public/friends default.
     public let visibilityUserIds: [String]?
-    /// Task 17 — lieu partagé en attente d'envoi. `nil` pour l'immense
+    /// Lieu partagé en attente d'envoi. `nil` pour l'immense
     /// majorité des posts — porté ici pour que le chemin durable (outbox)
     /// transporte la position exactement comme le chemin direct
     /// (`PostService.create`), au lieu de la perdre au flush après un envoi
-    /// hors-ligne. Optionnel : un enregistrement persisté avant Task 17
+    /// hors-ligne. Optionnel : un enregistrement persisté avant ce champ
     /// décode toujours sans cette clé.
     public let location: SharedPlace?
     /// Les personnes que l'auteur a nommées SANS les écrire (note sous le
@@ -452,8 +452,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// une écriture. Ne pas rouvrir ce champ-là en croyant compléter celui-ci.
     ///
     /// Porté ici parce que le chemin HORS LIGNE de `StatusViewModel.setStatus`
-    /// est le seul des deux à ne pas l'avoir : republier un mood sans réseau
-    /// publiait un mood ORIGINAL, sans sa source — un contenu attribué à
+    /// en a besoin : sans lui, republier un mood sans réseau publierait un mood
+    /// ORIGINAL, sans sa source — un contenu attribué à
     /// quelqu'un d'autre par omission. `nil` — le cas immensément majoritaire —
     /// vaut « publication d'origine ». Optionnel aussi pour que toute ligne
     /// persistée avant ce champ continue de décoder.
@@ -462,9 +462,9 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// avant d'envoyer. Le gateway la persiste sur le premier `PostMedia` audio
     /// et **évite alors la re-transcription Whisper** (`PostService.createPost`).
     ///
-    /// Sans elle ici, un vocal routé par la file durable arrivait sans son
-    /// texte : le serveur re-transcrivait, le travail de l'appareil était jeté
-    /// en silence, et le résultat pouvait différer de celui qui avait été
+    /// Sans elle ici, un vocal routé par la file durable arriverait sans son
+    /// texte : le serveur re-transcrirait, le travail de l'appareil serait jeté
+    /// en silence, et le résultat pourrait différer de celui qui avait été
     /// affiché. C'est ce qui QUALIFIE un enregistrement, pas ce qui le compose
     /// — et c'est précisément ce genre de champ qu'un lot de convergence laisse
     /// derrière lui.
@@ -482,11 +482,11 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// fichiers « extension préservée pour que le dispatcher en dérive le
     /// MIME » — un contrat qui tient tant que la table des extensions connaît
     /// le conteneur. Un vocal importé depuis Fichiers en `.caf` / `.aiff` /
-    /// `.opus` retombait sur `application/octet-stream`, et le gateway ne
+    /// `.opus` retomberait sur `application/octet-stream`, et le gateway ne
     /// reconnaît un média audio qu'à `mimeType.startsWith('audio/')` : le
-    /// message partait sans sa transcription embarquée ET sans
-    /// re-transcription. Le site d'envoi, LUI, connaissait le MIME depuis le
-    /// début — il ne l'emportait simplement pas.
+    /// message partirait sans sa transcription embarquée ET sans
+    /// re-transcription. Le site d'envoi, LUI, connaît le MIME — il doit
+    /// l'emporter.
     ///
     /// C'est un champ de QUALIFICATION, pas de composition : il ne dit rien de
     /// ce que la publication CONTIENT, seulement de la façon dont ses octets
@@ -494,33 +494,32 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// laisse derrière.
     public let localMediaMimeTypes: [String]?
 
-    /// **LE CANVAS composé sur la scène** (#4756).
+    /// **LE CANVAS composé sur la scène.**
     ///
     /// Porté ici pour la même raison que `location` et `mentions`, et c'est ici
     /// que cela compte le plus : un post du meuble n'emprunte JAMAIS
     /// `PostService.create`, il part par cette file — en ligne comme hors ligne
     /// (`FeedViewModel.publish`). Sans ce champ, l'auteur compose un fond, des
     /// objets, un dessin, voit sa publication apparaître, et **la carte du fil
-    /// n'affiche que le texte**. Mesuré au simulateur le 2026-09-04.
+    /// n'affiche que le texte**.
     ///
-    /// Optionnel : un enregistrement persisté avant ce lot décode toujours sans
+    /// Optionnel : un enregistrement persisté avant ce champ décode toujours sans
     /// cette clé, et `nil` y dit la vérité — ces posts-là n'avaient pas de
     /// scène à transporter.
     public let storyEffects: StoryEffects?
 
     /// **La LÉGENDE de chaque fichier, alignée par INDEX sur
-    /// `localMediaPaths`** (#4756).
+    /// `localMediaPaths`.
     ///
     /// Clée par index et non par id serveur, parce que l'id n'existe pas encore
     /// quand cette ligne est écrite : c'est l'upload qui l'attribue, au flush.
     /// Le dispatcher fait la traduction, seul étage à connaître les deux.
     ///
     /// `nil` à une position ⇒ ce fichier n'a pas de légende. Optionnel :
-    /// un enregistrement persisté avant ce lot décode sans cette clé.
+    /// un enregistrement persisté avant ce champ décode sans cette clé.
     public let mediaCaptions: [String?]?
 
     /// **Le texte ALTERNATIF par fichier, même alignement par INDEX**
-    /// (2026-09-05).
     ///
     /// Jumeau de `mediaCaptions` par la forme, distinct par le destinataire :
     /// la légende s'adresse à qui VOIT le média, l'alternative à qui ne le voit
@@ -528,11 +527,11 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// (`CreatePostSchema.mediaCaption` / `.mediaAlt`), et aucun des deux ne
     /// sert de repli à l'autre.
     ///
-    /// Optionnel pour la même raison : une ligne persistée avant ce lot décode
+    /// Optionnel pour la même raison : une ligne persistée avant ce champ décode
     /// sans cette clé.
     public let mediaAlts: [String?]?
 
-    /// **L'identifiant d'OBJET de canvas de chaque fichier** (#5280).
+    /// **L'identifiant d'OBJET de canvas de chaque fichier.**
     ///
     /// Il ne part PAS au serveur : il sert au dispatcher, une fois les ids
     /// serveur créés, à réécrire le canvas pour qu'il désigne les médias que
@@ -541,15 +540,15 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// n'existe nulle part ailleurs à ce moment-là.
     public let mediaObjectIds: [String?]?
 
-    /// **L'autorisation d'extraction du son** (#3996), même clé top-level
+    /// **L'autorisation d'extraction du son**, même clé top-level
     /// `allowSoundExtraction` que le chemin direct (`CreatePostRequest`,
     /// `PostService.create`).
     ///
     /// Porté ici pour la même raison que `storyEffects` et `location` : un
     /// post du meuble n'emprunte JAMAIS `PostService.create`, il part par
     /// cette file — en ligne comme hors ligne. Sans ce champ, le choix de
-    /// l'auteur survivait jusqu'à la composition de `PublishIntent`, et
-    /// mourait au premier passage par la file durable : déclaré, jamais
+    /// l'auteur survivrait jusqu'à la composition de `PublishIntent`, et
+    /// mourrait au premier passage par la file durable : déclaré, jamais
     /// transmis.
     ///
     /// `nil` — le défaut — vaut « l'auteur n'a rien décidé » ; le gateway
@@ -569,22 +568,20 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         return mimes[index]
     }
 
-    /// **Ce qu'une tentative PRÉCÉDENTE a déjà monté** (#5830).
+    /// **Ce qu'une tentative PRÉCÉDENTE a déjà monté.**
     ///
-    /// Sans ce champ, `OutboxDispatcher.dispatchCreatePost` reparcourait
+    /// Sans ce champ, `OutboxDispatcher.dispatchCreatePost` reparcourrait
     /// `localMediaPaths` DEPUIS L'INDEX 0 à chaque rejeu : un fichier téléversé
-    /// avec succès à la tentative *n* était **jeté** dès que la tentative
-    /// échouait sur un fichier suivant. Seul l'offset TUS d'un fichier survivait
+    /// avec succès à la tentative *n* serait **jeté** dès que la tentative
+    /// échoue sur un fichier suivant. Seul l'offset TUS d'un fichier survivrait
     /// — jamais le fait qu'un fichier soit FINI. Une publication à trois médias
     /// et 56 Mo dont aucune tentative ne peut tout finir d'un trait ne se
-    /// publiait donc JAMAIS, quel que soit le nombre de tentatives (réel bloqué
-    /// mesuré sur l'appareil du porteur le 2026-09-08 : `attempts = 5`,
-    /// `2.mov` figé à 20 Mo sur 42,6 Mo, les trois fichiers encore sur disque).
+    /// publierait JAMAIS, quel que soit le nombre de tentatives.
     ///
     /// La clé est l'INDEX D'ORIGINE, jamais la longueur d'un tableau : c'est la
     /// seule jointure entre ce que l'auteur a composé et ce que le serveur a
     /// créé, et un fichier sauté rompt tout alignement positionnel (même
-    /// raison que `uploadedSourceIndexes` côté dispatcher, #4756).
+    /// raison que `uploadedSourceIndexes` côté dispatcher).
     ///
     /// `nil` — le cas de toute ligne écrite avant ce champ, et de toute
     /// première tentative — vaut « rien d'acquis ».
@@ -680,11 +677,11 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     /// Effets visuels du commentaire (bitmask) — porté par le chemin durable
     /// pour ne pas être perdu à l'enfilement, comme le chemin direct le porte.
     public let effectFlags: Int?
-    /// Langue d'ÉCRITURE déclarée par l'auteur à la pastille du composer (#6587).
+    /// Langue d'ÉCRITURE déclarée par l'auteur à la pastille du composer.
     ///
     /// `PostComment.originalLanguage` est la langue SOURCE depuis laquelle tout
-    /// lecteur descend son prisme : sans ce champ, le serveur la DEVINAIT par
-    /// heuristique de mots (`detectLanguage`), et la pastille était un contrôle
+    /// lecteur descend son prisme : sans ce champ, le serveur la DEVINERAIT par
+    /// heuristique de mots (`detectLanguage`), et la pastille serait un contrôle
     /// qui ment. Une devinette à la place d'une déclaration fausse la résolution
     /// pour TOUS les lecteurs, sur les trois clients.
     ///
@@ -696,7 +693,7 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     /// donc un champ requis à la relecture ferait disparaître SANS ERREUR
     /// toute la file hors-ligne gravée avant la mise à jour de l'app.
     public let originalLanguage: String?
-    /// **L'ANCRE du média du post que ce commentaire CITE** (#6578).
+    /// **L'ANCRE du média du post que ce commentaire CITE.**
     ///
     /// L'ancre SEULE : la nature est dérivée du MIME par le serveur, et tout ce
     /// qui décrit le média est relu à chaque service. Graver ici une vignette
@@ -708,11 +705,11 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     /// la relecture ferait disparaître SANS ERREUR toute la file gravée avant la
     /// mise à jour de l'app.
     public let quotedPostMediaId: String?
-    /// **Les pièces du commentaire, encore sur le disque** (#9743) — chemins
+    /// **Les pièces du commentaire, encore sur le disque** — chemins
     /// relatifs sous `Documents/pending-media/<cmid>/`, résolus par
     /// `OfflineQueue.absoluteMediaPath(forStored:)`. Le dispatcher les
     /// téléverse au rejeu puis crée le commentaire avec leurs ids : sans ce
-    /// champ, un commentaire envoyé hors ligne arrivait SANS son média. Même
+    /// champ, un commentaire envoyé hors ligne arriverait SANS son média. Même
     /// mécanisme que `CreatePostPayload.localMediaPaths`. `nil` pour un
     /// commentaire sans pièce, et pour toute ligne gravée avant le champ.
     public let localMediaPaths: [String]?
@@ -722,7 +719,7 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     public let uploadedMedia: [UploadedCommentMedia]?
     /// Transcription produite sur l'appareil pour une pièce audio.
     public let mobileTranscription: MobileTranscriptionPayload?
-    /// **Le compte qui a ÉCRIT ce commentaire** (#9743). La ligne vit dans la
+    /// **Le compte qui a ÉCRIT ce commentaire.** La ligne vit dans la
     /// base de son compte, mais l'enfilement d'un envoi qui échoue arrive
     /// APRÈS une attente réseau : entre-temps le compte a pu changer, et la
     /// file — un singleton rebranché à la bascule — aurait rejoué le
@@ -806,11 +803,11 @@ public struct ToggleLikeCommentPayload: Codable, Sendable, Equatable {
 
 // MARK: - Consommation d'un attachement
 
-/// Point 7 — rapport de consommation d'un média, rendu durable.
+/// Rapport de consommation d'un média, rendu durable.
 ///
-/// Les six sites de lecture postaient jusqu'ici en `try?` inline : une écoute
-/// hors-ligne, en avion ou dans un ascenseur était perdue sans trace. Le
-/// rapport passe désormais par l'outbox, comme toute autre écriture.
+/// Un `try?` inline perdrait sans trace une écoute
+/// hors-ligne, en avion ou dans un ascenseur : le
+/// rapport passe par l'outbox, comme toute autre écriture.
 ///
 /// ## Pourquoi ce kind ne se coalesce PAS
 ///

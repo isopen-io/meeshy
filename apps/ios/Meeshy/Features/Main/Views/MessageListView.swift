@@ -44,8 +44,8 @@ struct BubbleSwipeContainer<Content: View>: View {
     var resistance: SwipeResistance = .normal
     /// Rangée plate (Script) : géométrie UNIFORME — reply = glisser à DROITE
     /// (icône à GAUCHE), forward = glisser à GAUCHE (icône à DROITE),
-    /// indépendant de `isMine` (tous les messages sont alignés pareil,
-    /// directive user 2026-08-18). `false` (bulles) : convention historique.
+    /// indépendant de `isMine` (tous les messages sont alignés pareil).
+    /// `false` (bulles) : convention historique.
     var uniformFlatDirection: Bool = false
     let onSwipeReply: () -> Void
     let onSwipeForward: () -> Void
@@ -58,7 +58,7 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// pression. `true` (< iOS 26) garde le long-press → overlay custom.
     /// Les deux ne coexistent jamais (double déclenchement).
     var enableLongPress: Bool = true
-    /// **Mode sélection multiple (#4005).** `true` : un tap sur la cellule
+    /// **Mode sélection multiple.** `true` : un tap sur la cellule
     /// bascule la sélection au lieu de son geste habituel — un capteur
     /// transparent se pose PAR-DESSUS `content()` (fonctionne quel que soit
     /// ce que fait la bulle en dessous : traduction, carrousel média, etc.),
@@ -67,8 +67,7 @@ struct BubbleSwipeContainer<Content: View>: View {
     var isSelected: Bool = false
     var onToggleSelection: (() -> Void)? = nil
     /// **Les opérations primaires du menu SYSTÈME, ouvert au double tap**
-    /// (#6117 — « le menu natif avec effet systeme liquid glass […] se fait au
-    /// double tap ! Mais le menu meeshy se fait au longpress »).
+    /// (le menu natif liquid glass s'ouvre au double tap, le menu Meeshy au longpress).
     ///
     /// Vide ⇒ le double tap ne présente rien : `EditMenuHostView.present`
     /// refuse un menu sans action, et un geste qui ouvrirait une barre vide
@@ -102,13 +101,9 @@ struct BubbleSwipeContainer<Content: View>: View {
         }
     }
 
-    /// **Retour porteur 2026-08-27 (#4005 bis, puis ter).** En mode
-    /// sélection, une bulle se décalait à droite pour loger son cercle
-    /// SEULEMENT si elle était REÇUE (`!isMine`) — la bulle ENVOYÉE gardait
-    /// son cercle au coin haut-droit. Deuxième retour porteur, explicite :
-    /// **toujours à gauche, qu'importe `isMine` ET qu'importe le mode de
-    /// lecture** — colonne de cases à cocher unique, façon Mail/Fichiers,
-    /// jamais un coin qui dépend du sens de la bulle.
+    /// **En mode sélection, la bulle loge son cercle TOUJOURS à gauche**, qu'importe
+    /// `isMine` ET qu'importe le mode de lecture : colonne de cases à cocher
+    /// unique, façon Mail/Fichiers, jamais un coin qui dépend du sens de la bulle.
     ///
     /// Diamètre du glyphe SF Symbol (`.font(.system(size: 20))` ci-dessous,
     /// halo de fond exclu) — l'unité que le porteur nomme « taille du
@@ -123,8 +118,7 @@ struct BubbleSwipeContainer<Content: View>: View {
 
     /// Largeur de la marge ouverte à GAUCHE de la bulle en mode sélection —
     /// 0 hors sélection, pour laisser le repos existant strictement
-    /// inchangé. S'applique à TOUTE bulle, envoyée ou reçue (retour porteur
-    /// 2026-08-27 ter : « qu'importe le mode »).
+    /// inchangé. S'applique à TOUTE bulle, envoyée ou reçue, quel que soit le mode.
     private var selectionShift: CGFloat {
         guard isSelectionModeActive else { return 0 }
         return Self.selectionCircleDiameter * selectionShiftMultiplier
@@ -165,17 +159,17 @@ struct BubbleSwipeContainer<Content: View>: View {
                 .accessibilityAction(named: String(localized: "a11y.message.actions.reply", bundle: .main)) { onSwipeReply() }
                 .accessibilityAction(named: String(localized: "a11y.message.actions.forward", bundle: .main)) { onSwipeForward() }
                 .accessibilityAction(named: String(localized: "a11y.message.actions.long_press", bundle: .main)) { onLongPress() }
-                // Plus de `GeometryReader` + préférence par cellule : hébergée
+                // Pas de `GeometryReader` + préférence par cellule : hébergée
                 // dans une `UIHostingConfiguration`, la préférence ne franchit
                 // jamais la frontière UIKit jusqu'à `ConversationView` — la
                 // frame du menu flottant vient de `cellFrameInWindow` (UIKit).
-                // C'était une vue et une écriture de préférence par cellule et
-                // par layout, pour rien (audit fluidité 2026-08-21).
+                // Ce serait une vue et une écriture de préférence par cellule et
+                // par layout, pour rien.
                 .opacity(isHiddenForOverlay ? 0 : 1)
                 .animation(BubbleAnimations.overlayRevealCrossfade, value: isHiddenForOverlay)
                 .onPreferenceChange(BubbleInlinePagingPreferenceKey.self) { isInlinePagingActive = $0 }
                 .onPreferenceChange(MediaScrubbingPreferenceKey.self) { isMediaScrubbing = $0 }
-                // Mode sélection (#4005) : swipe/longpress s'effacent — une
+                // Mode sélection : swipe/longpress s'effacent — une
                 // seule intention à la fois, même patron que le carrousel
                 // média (`isInlinePagingActive`) et le scrubbing.
                 .simultaneousGesture(dragGesture, including: isSelectionModeActive ? .none : .all)
@@ -185,7 +179,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // the bubble at its source position (looked up via
                 // MessageFramePreferenceKey above), with adaptive lift
                 // and a compact action menu — that's what `onLongPress`
-                // is wired to. Duration tightened from 0.45 → 0.35 to
+                // is wired to. Duration 0.35 to
                 // match iMessage/WhatsApp reactivity.
                 //
                 // `maximumDistance: 6` (default 10) : on rétrécit la
@@ -201,15 +195,14 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // pression ; ce geste custom est retiré pour éviter le
                 // double déclenchement (overlay custom + menu natif).
                 .modifier(ConditionalBubbleLongPress(enabled: enableLongPress && !isSelectionModeActive, action: onLongPress))
-                // **Le double tap ouvre le menu SYSTÈME** (#6117), posé ICI —
+                // **Le double tap ouvre le menu SYSTÈME**, posé ICI —
                 // sur le conteneur qui enveloppe les cellules des TROIS peaux
                 // (`.bubbles`, `.script`, `.focal`) — et non à l'intérieur
-                // d'une bulle. Le geste vivait dans `ThemedMessageBubble`,
-                // donc il n'existait pas en `.script` ni en `.focal`, qui sont
-                // rendus par `FocalRow`.
+                // d'une bulle : posé dans `ThemedMessageBubble`, il n'existerait pas
+                // en `.script` ni en `.focal`, qui sont rendus par `FocalRow`.
                 //
                 // **Même garde de sélection que l'appui long** : une seule
-                // intention à la fois (#4005). Une garde posée sur un seul des
+                // intention à la fois. Une garde posée sur un seul des
                 // deux gestes est une garde qui a déjà commencé à diverger.
                 //
                 // Les vues INTERNES qui portent déjà leur propre double tap —
@@ -220,7 +213,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                 .modifier(NativeMessageEditMenu(isEnabled: !isSelectionModeActive,
                                                 actions: editMenuActions))
 
-            // **Capteur de sélection (#4005).** Par-dessus TOUT — fonctionne
+            // **Capteur de sélection.** Par-dessus TOUT — fonctionne
             // quel que soit ce que fait la bulle en dessous (traduction,
             // carrousel média…). Un tap qui aurait ouvert une action dans la
             // bulle est INTERCEPTÉ pendant la sélection — comportement voulu,
@@ -238,7 +231,7 @@ struct BubbleSwipeContainer<Content: View>: View {
         }
         // Toujours coin haut-GAUCHE, centré dans `selectionShift` par
         // `selectionLeadingCircleInset` — qu'importe `isMine`, qu'importe le
-        // mode de lecture (retour porteur 2026-08-27 ter).
+        // mode de lecture.
         .overlay(alignment: .topLeading) {
             if isSelectionModeActive {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -291,7 +284,7 @@ struct BubbleSwipeContainer<Content: View>: View {
     }
 
     private var dragGesture: some Gesture {
-        // `minimumDistance: 22` (avant 15) : on élargit la fenêtre
+        // `minimumDistance: 22` : on élargit la fenêtre
         // pendant laquelle le pan UICollectionView a priorité exclusive
         // sur le swipe horizontal de la bulle. Tant que le doigt n'a
         // pas parcouru 22pt, AUCUN événement n'arrive à ce gesture —
@@ -363,7 +356,7 @@ private struct ConditionalBubbleLongPress: ViewModifier {
             content.simultaneousGesture(
                 LongPressGesture(minimumDuration: MessagePressClaim.rowMinimumDuration, maximumDistance: 6)
                     .onEnded { _ in
-                        // La tuile d'un lot a déjà ouvert l'aperçu de SA pièce (#10800).
+                        // La tuile d'un lot a déjà ouvert l'aperçu de SA pièce.
                         guard !MessagePressClaim.isClaimed() else { return }
                         HapticFeedback.medium()
                         // Le menu de ce chemin s'ouvre en SURCOUCHE : clavier
@@ -387,7 +380,7 @@ private struct ConditionalBubbleLongPress: ViewModifier {
 /// (précédent `ConversationRowItem.nativeContextMenu` : AnyView stable, jamais
 /// un `@ViewBuilder` générique — sinon EXC_BAD_ACCESS iOS 26). `preview` rend
 /// la VRAIE bulle d'origine à l'endroit (la collection view étant inversée, le
-/// snapshot par défaut ne l'affichait pas correctement) — feedback 2026-07-14.
+/// snapshot par défaut ne l'afficherait pas correctement).
 extension View {
     @ViewBuilder
     func nativeMessageContextMenu<Preview: View>(
@@ -410,7 +403,7 @@ extension View {
 /// dépasse la hauteur disponible, pour qu'elle tienne dans l'écran SANS jamais
 /// déformer ses proportions. La `.frame` finale (dimensions mises à l'échelle)
 /// informe le layout SwiftUI de la taille visible — le platter système colle
-/// alors à la bulle, sans bordure ni card. Anti-« effet bordure » 2026-07-14.
+/// alors à la bulle, sans bordure ni card (anti-« effet bordure »).
 struct MessageMenuPreviewContainer<Content: View>: View {
     /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
     @Environment(\.sceneWindowSize) var sceneWindowSize
@@ -437,7 +430,7 @@ struct MessageMenuPreviewContainer<Content: View>: View {
 
     var body: some View {
         content()
-            // **L'aperçu de l'appui long ne s'annonce pas** (#9632) : le menu
+            // **L'aperçu de l'appui long ne s'annonce pas** : le menu
             // natif est attaché sous la valeur d'annonce du fil, dont l'aperçu
             // hériterait. Fermé par défaut, une flamme y reste noire.
             .environment(\.announcesCapture, false)
@@ -484,9 +477,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// message is never hidden behind the composer/keyboard.
     /// Pass the composer height here.
     var bottomInset: CGFloat = 0
-    /// La façon dont `bottomInset` REJOINT sa nouvelle valeur (#4949).
+    /// La façon dont `bottomInset` REJOINT sa nouvelle valeur.
     ///
-    /// `nil` = pose sèche, à l'ancienne. Non-nil quand le parent sait quelle
+    /// `nil` = pose sèche. Non-nil quand le parent sait quelle
     /// animation est en train de jouer — typiquement la courbe et la durée
     /// que le clavier vient d'annoncer (`KeyboardTransition`) : le fil et la
     /// barre de composition arrivent alors ENSEMBLE, au lieu que l'un glisse
@@ -502,10 +495,10 @@ struct MessageListView: UIViewControllerRepresentable {
     /// (`DeviceLayout.safeAreaTop`) — sous `ignoresSafeArea`, ni le
     /// `GeometryReader` ni le contrôleur hébergé ne le connaissent.
     var topInset: CGFloat = 0
-    /// Hauteur MESURÉE de la bande d'en-tête flottant (#7998) — ancre des
+    /// Hauteur MESURÉE de la bande d'en-tête flottant — ancre des
     /// pilules de jour et de la réserve de la rangée plate.
     var headerBandHeight: CGFloat = 0
-    /// Ce que le chrome flottant montre en ce moment (#6013) : en rangée
+    /// Ce que le chrome flottant montre en ce moment : en rangée
     /// plate, le fil s'efface sous l'en-tête et le composeur tant qu'ils sont
     /// posés, et retrouve le bord de l'écran quand le défilement les escamote.
     /// Incremented from the parent SwiftUI view when the "scroll to latest"
@@ -568,19 +561,17 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Swipe-to-forward on a bubble. Argument is the swiped message id.
     var onSwipeForward: ((String) -> Void)?
     /// Long-press on a bubble — opens the contextual options menu for that
-    /// message (reply, forward, react, copy, delete, …). Le second paramètre
-    /// portait l'aperçu Focal (pixels de la cellule vivante) jusqu'au
-    /// 2026-08-23 : la capture, bornée aux `bounds` de la cellule, tranchait
-    /// en deux l'identité et la barre de méta que le mode Focal fait tenir à
-    /// cheval sur son cadre. L'overlay rend désormais le message NORMAL, dans
-    /// tous les modes de lecture.
+    /// message (reply, forward, react, copy, delete, …). L'overlay rend le
+    /// message NORMAL, dans tous les modes de lecture : la capture de la
+    /// cellule vivante, bornée à ses `bounds`, trancherait en deux l'identité
+    /// et la barre de méta que le mode Focal fait tenir à cheval sur son cadre.
     ///
-    /// Le SECOND paramètre du tuple porte désormais le frame RÉEL de la
-    /// cellule (`cellFrameInWindow`, résolu côté UIKit) — #4004 (2026-08-27) :
+    /// Le SECOND paramètre du tuple porte le frame RÉEL de la
+    /// cellule (`cellFrameInWindow`, résolu côté UIKit) :
     /// `MessageFramePreferenceKey` ne traverse la frontière UIKit qu'en mode
     /// Rivière (`RiverBubbleView`), jamais pour la liste standard.
     var onLongPress: ((String, CGRect?) -> Void)?
-    /// L'appui long d'une TUILE (#9907) — message, pièce visée, frame réel.
+    /// L'appui long d'une TUILE — message, pièce visée, frame réel.
     var onLongPressPiece: ((String, String, CGRect?) -> Void)?
     /// id de la bulle présentée dans l'overlay custom d'appui long — la
     /// cellule live correspondante est masquée (opacity 0) le temps de
@@ -589,14 +580,13 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Long-press on a call-summary notice → request the shared call-detail
     /// sheet for that message, distinct from `onLongPress`'s regular-message menu.
     var onCallDetailRequest: ((String) -> Void)?
-    /// **Mode sélection multiple (#4005).** `false`/`[]` par défaut — sans
+    /// **Mode sélection multiple.** `false`/`[]` par défaut — sans
     /// effet sur les écrans qui ne câblent pas ces trois paramètres.
     var isSelectionModeActive: Bool = false
     var selectedMessageIds: Set<String> = []
     var onToggleSelection: ((String) -> Void)?
-    /// **Les trois opérations que le menu SYSTÈME sert en premier** (#6117,
-    /// directive porteur : « les options qu'il faut en premier c'est editer,
-    /// selectionner et composer »), plus la porte du GRAND menu.
+    /// **Les trois opérations que le menu SYSTÈME sert en premier** (éditer,
+    /// sélectionner et composer), plus la porte du GRAND menu.
     ///
     /// Elles remontent chacune d'un cran — de `MessageOverlayMenu`, qui les
     /// portait déjà, jusqu'ici. Aucune n'est réécrite au passage : le menu
@@ -608,7 +598,7 @@ struct MessageListView: UIViewControllerRepresentable {
     /// qui BASCULE une coche dans un mode déjà actif : le menu doit armer.
     var onSelectMessage: ((String) -> Void)?
     var onComposeFromMessage: ((String) -> Void)?
-    /// « Imager » au double tap (#8692) — remplace « Composer » en tête de barre.
+    /// « Imager » au double tap — remplace « Composer » en tête de barre.
     var onImagineFromMessage: ((String) -> Void)?
     /// « Plus… » ouvre le **GRAND** menu (`MessageMoreSheet`), pas l'overlay
     /// d'appui long — directive porteur : « le plus doit ouvrir le grand menu
@@ -616,7 +606,7 @@ struct MessageListView: UIViewControllerRepresentable {
     /// ouvre l'overlay (réactions + actions), celui-ci la feuille complète.
     var onOpenMoreSheet: ((String) -> Void)?
     /// **Le prédicat d'éditabilité est REMIS, jamais recalculé.** La règle vit
-    /// dans `MessageMenuContext.make` (#11214) ; en poser une seconde ici
+    /// dans `MessageMenuContext.make` ; en poser une seconde ici
     /// garantirait qu'elles divergent au premier ajustement de l'une.
     var canEditMessage: ((String) -> Bool)?
     /// User-initiated reaction add. Carries the message id and the tapped
@@ -654,14 +644,14 @@ struct MessageListView: UIViewControllerRepresentable {
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    /// SANS abonnement (#7006) : le fil ne LIT le modèle de liste que pour le
+    /// SANS abonnement : le fil ne LIT le modèle de liste que pour le
     /// remettre au contrôleur, dans `makeUIViewController`. Déclaré en
-    /// `@EnvironmentObject`, il rejouait `updateUIViewController` à chaque
+    /// `@EnvironmentObject`, il rejouerait `updateUIViewController` à chaque
     /// `typing:start` de n'importe quelle conversation.
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @Environment(\.colorScheme) private var colorScheme
 
-    /// Porte aussi l'écoute des gestes du fil (#9061) : un toucher n'importe
+    /// Porte aussi l'écoute des gestes du fil : un toucher n'importe
     /// où dans la liste — réagir, lancer un audio, ouvrir un menu — rend le
     /// lecteur actif aux yeux de ses pairs, sans rien retenir du geste.
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
@@ -685,8 +675,8 @@ struct MessageListView: UIViewControllerRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    /// Le défilement du doigt relaie au parent ET au rapporteur de présence
-    /// (#9061) : défiler, c'est regarder.
+    /// Le défilement du doigt relaie au parent ET au rapporteur de présence :
+    /// défiler, c'est regarder.
     private var scrollingRelay: (Bool) -> Void {
         let parent = onScrollingActiveChanged
         return { isActive in
@@ -723,12 +713,12 @@ struct MessageListView: UIViewControllerRepresentable {
         // de `readingMode`/`hasReachedOldest`, qui doivent donc déjà être à
         // jour au moment de son premier appel.
         vc.readingMode = readingMode
-        // #3947 — cf. `updateUIViewController` : la liste ne se dessine
+        // Cf. `updateUIViewController` : la liste ne se dessine
         // pas sous un pane opaque. Posé dès le montage, sinon une ouverture
         // DIRECTE en Rivière rendrait le fil une fois pour rien.
         vc.view.isHidden = !MessageListViewController.rendersThread(readingMode)
         vc.onMessagesSeen = onMessagesSeen
-        // #9617 — le fil répond « qu'est-ce qui est à l'écran ? » à une capture.
+        // Le fil répond « qu'est-ce qui est à l'écran ? » à une capture.
         ContentCaptureReporter.shared.register(vc)
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
@@ -737,7 +727,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLongPress = onLongPress
         vc.onLongPressPiece = onLongPressPiece
         vc.overlaidMessageId = overlaidMessageId
-        // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
+        // `didSet` gardés côté VC (même patron que `readingMode`).
         vc.isSelectionModeActive = isSelectionModeActive
         vc.selectedMessageIds = selectedMessageIds
         vc.onToggleSelection = onToggleSelection
@@ -777,13 +767,13 @@ struct MessageListView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ vc: MessageListViewController, context: Context) {
         vc.update(isDark: colorScheme == .dark, accentColor: accentColor)
-        // WS-6 (F-085) : posé AVANT `applyBottomInset`/`applyTopInset` plus bas
+        // Posé AVANT `applyBottomInset`/`applyTopInset` plus bas
         // — mêmes raisons que `makeUIViewController`. Le `didSet` côté
         // contrôleur ne rejoue le pass QUE si la valeur change réellement
         // (garde `oldValue != newValue`) : une réaffectation identique à
         // chaque tick SwiftUI est un no-op.
         //
-        // #3947 — ET LE MODE D'ABORD, avant tout ORDRE POSITIONNEL. Ce
+        // LE MODE D'ABORD, avant tout ORDRE POSITIONNEL. Ce
         // `didSet` est l'instant du RÉVEIL : c'est lui qui réapplique
         // `.allItems` quand un pane opaque cesse de couvrir la liste, que
         // l'entonnoir `applyToDataSource` a tenue en veille pendant. Les
@@ -826,7 +816,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onNearBottomChanged = onNearBottomChanged
         vc.onScrollingActiveChanged = scrollingRelay
         vc.isHeaderExpanded = isHeaderExpanded
-        // #3947 — **la liste ne se dessine pas sous ce qui la recouvre.**
+        // **La liste ne se dessine pas sous ce qui la recouvre.**
         //
         // La Rivière (`RiverConversationHost`) et le Résumé
         // (`LivingSummaryHost`) sont posés PAR-DESSUS le fil dans le même
@@ -840,14 +830,14 @@ struct MessageListView: UIViewControllerRepresentable {
         // `isHidden` retire le RENDU sans toucher aux DONNÉES : le contrôleur
         // reste vivant, ses abonnements aussi, son `contentOffset` intact —
         // donc le retour au fil est instantané et à la bonne place, sans
-        // rechargement. Les abonnements ne sont toujours pas SUSPENDUS (les
-        // reprendre exigerait de savoir lesquels se rejouent) : depuis #3947
-        // c'est leur PUITS qui est fermé — `applyToDataSource` n'applique
+        // rechargement. Les abonnements ne sont pas SUSPENDUS (les
+        // reprendre exigerait de savoir lesquels se rejouent) : c'est leur
+        // PUITS qui est fermé — `applyToDataSource` n'applique
         // rien sous un pane, et le réveil réapplique `.allItems`.
         //
         // La condition n'est pas réécrite : `rendersThread` est déjà la loi
-        // qui distingue ces deux modes (elle gouverne le suivi de lecture
-        // depuis le 2026-08-25). Une seconde formulation aurait divergé.
+        // qui distingue ces deux modes (elle gouverne le suivi de lecture).
+        // Une seconde formulation divergerait.
         vc.view.isHidden = !MessageListViewController.rendersThread(readingMode)
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
@@ -857,7 +847,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLongPress = onLongPress
         vc.onLongPressPiece = onLongPressPiece
         vc.overlaidMessageId = overlaidMessageId
-        // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
+        // `didSet` gardés côté VC (même patron que `readingMode`).
         vc.isSelectionModeActive = isSelectionModeActive
         vc.selectedMessageIds = selectedMessageIds
         vc.onToggleSelection = onToggleSelection
@@ -886,7 +876,7 @@ struct MessageListView: UIViewControllerRepresentable {
         }
         vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
-        // #4949 — la réserve basse rejoint sa valeur SUR la courbe de ce qui
+        // La réserve basse rejoint sa valeur SUR la courbe de ce qui
         // l'a causée (le clavier qui monte ou descend), jamais en un pas sec.
         // `transition == nil` retombe mot pour mot sur la pose sèche.
         vc.applyBottomInset(bottomInset, transition: bottomInsetTransition)

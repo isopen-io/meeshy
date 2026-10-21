@@ -3,7 +3,7 @@
  * l'appel. Un appel direct en tient une, un appel de groupe une par membre
  * (maillage, `mode: 'p2p'` : la passerelle relaie, elle ne mixe rien).
  *
- * Trois règles, reprises d'iOS (`CallManager.swift` § 3.5) pour que le web
+ * Quatre règles, reprises d'iOS (`CallManager.swift` § 3.5) pour que le web
  * parle la même langue que l'app :
  *
  * - **négociation parfaite (W3C)** : le plus petit identifiant est POLI et
@@ -14,7 +14,13 @@
  * - **aucun codec injecté dans le SDP** : Opus + RED passent par
  *   `setCodecPreferences` (ADR-4 iOS — un RED injecté dans le SDP a rendu
  *   l'audio muet après ICE). Seuls les paramètres `fmtp` d'Opus de la
- *   description ENVOYÉE sont réglés (`shapeSdp`, #8697).
+ *   description ENVOYÉE sont réglés (`shapeSdp`, #8697). La vidéo suit
+ *   H264 > VP8 > VP9 (#11319) sur chaque ligne vidéo, qu'elle vienne de
+ *   l'offre, de la réponse ou d'une caméra allumée en cours d'appel ; un
+ *   navigateur sans `setCodecPreferences` ni `getCapabilities` (Firefox avant
+ *   128, WebView ancienne) garde sa négociation par défaut, sans erreur ;
+ * - **connexion comme iOS** (`P2PWebRTCClient.swift`) : max-bundle, RTCP
+ *   multiplexé, pool ICE de 4 (`peerConfiguration`).
  *
  * La reprise ICE : `disconnected` attend 3 s avant de relancer, `failed`
  * relance tout de suite, puis 2 → 16 s entre deux tentatives, 5 au plus.
@@ -72,6 +78,37 @@ export function isStaleEpoch(incoming: number, highWaterMark: number): boolean {
   return incoming < highWaterMark;
 }
 
+const ICE_CANDIDATE_POOL_SIZE = 4;
+const VIDEO_CODEC_ORDER: readonly string[] = ['video/h264', 'video/vp8', 'video/vp9'];
+const VIDEO_RETRANSMISSION = 'video/rtx';
+
+/** La configuration de la connexion, celle d'iOS (`P2PWebRTCClient.swift`) : un seul transport par pair, RTCP multiplexé, pool ICE pré-chauffé. */
+export function peerConfiguration(iceServers: readonly RTCIceServer[]): RTCConfiguration {
+  return { iceServers: [...iceServers], bundlePolicy: 'max-bundle', rtcpMuxPolicy: 'require', iceCandidatePoolSize: ICE_CANDIDATE_POOL_SIZE };
+}
+
+/** H264 > VP8 > VP9 (`P2PWebRTCClient+CodecPreferences.swift`), AV1 exclu, RTX gardé : sans lui la retransmission vidéo se tait. */
+export function orderVideoCodecs(codecs: readonly RTCRtpCodec[]): RTCRtpCodec[] {
+  const rank = (codec: RTCRtpCodec): number => {
+    const mime = codec.mimeType.toLowerCase();
+    if (mime === VIDEO_RETRANSMISSION) return VIDEO_CODEC_ORDER.length;
+    return VIDEO_CODEC_ORDER.indexOf(mime);
+  };
+  return codecs.filter((codec) => rank(codec) !== -1).sort((a, b) => rank(a) - rank(b));
+}
+
+function preferVideoCodecs(transceiver: RTCRtpTransceiver): void {
+  if (typeof transceiver.setCodecPreferences !== 'function') return;
+  const capabilities = typeof RTCRtpReceiver === 'undefined' ? null : RTCRtpReceiver.getCapabilities?.('video');
+  const preferred = orderVideoCodecs(capabilities?.codecs ?? []);
+  if (preferred.length === 0) return;
+  try {
+    transceiver.setCodecPreferences(preferred);
+  } catch {
+    /* Navigateur sans préférence de codec : la négociation par défaut tient. */
+  }
+}
+
 export function restartBackoffMs(attempt: number): number {
   return attempt <= 1 ? 0 : Math.min(RESTART_BACKOFF_BASE_MS * 2 ** (attempt - 2), RESTART_BACKOFF_MAX_MS);
 }
@@ -101,7 +138,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
   const createConnection = deps.createConnection ?? ((config: RTCConfiguration) => new RTCPeerConnection(config));
   const polite = isPolitePeer(deps.localUserId, deps.remoteUserId);
 
-  const pc = createConnection({ iceServers: [...deps.iceServers] });
+  const pc = createConnection(peerConfiguration(deps.iceServers));
   const remote = (deps.createStream ?? (() => new MediaStream()))();
 
   let epoch = 0;
@@ -259,6 +296,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       preferOpusRed(audioTransceiver);
       const video = videoTrack();
       videoTransceiver = pc.addTransceiver(video ?? 'video', { direction: video === null ? 'recvonly' : 'sendrecv', streams: [deps.localStream] });
+      preferVideoCodecs(videoTransceiver);
       if (deps.onChannel !== undefined && typeof pc.createDataChannel === 'function') deps.onChannel(pc.createDataChannel('transcription', { ordered: true }));
       deps.onState('connecting');
       await makeOffer();
@@ -275,6 +313,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       if (description.type !== 'offer') return;
       if (audioTransceiver === null || videoTransceiver === null) await bindAnswererTracks();
       if (audioTransceiver !== null) preferOpusRed(audioTransceiver);
+      if (videoTransceiver !== null) preferVideoCodecs(videoTransceiver);
       if (!everConnected) deps.onState('connecting');
       await pc.setLocalDescription();
       sendDescription();
@@ -298,6 +337,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       if (videoTransceiver === null) {
         if (track === null) return;
         videoTransceiver = pc.addTransceiver(track, { direction: 'sendrecv', streams: [deps.localStream] });
+        preferVideoCodecs(videoTransceiver);
         return;
       }
       await videoTransceiver.sender.replaceTrack(track);
