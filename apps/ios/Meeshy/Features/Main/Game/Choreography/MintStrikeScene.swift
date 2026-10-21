@@ -66,8 +66,8 @@ struct MintStrikeScene: View {
 
     /// L'enclume sous la pièce : la pièce s'y pose, Meo y frappe.
     private var anvil: some View {
-        RoundedRectangle(cornerRadius: 3)
-            .fill(LinearGradient(colors: [Color(hex: "a9afbd"), Color(hex: "5b6070")], startPoint: .top, endPoint: .bottom))
+        RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
+            .fill(LinearGradient(colors: MintCeremonyPalette.anvilTop, startPoint: .top, endPoint: .bottom))
             .frame(width: coinSide * 1.05, height: max(5, coinSide * 0.08))
             .offset(y: coinSide * 0.5 + 2)
             .accessibilityHidden(true)

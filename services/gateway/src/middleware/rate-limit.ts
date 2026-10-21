@@ -58,6 +58,15 @@ export const RATE_LIMITS = {
     timeWindow: '1 minute',
     description: 'Other call-related endpoints'
   },
+
+  // Sonde de reprise (#11462) — chaque appareil du compte la rejoue à chaque
+  // (re)connexion de socket et retour au premier plan. Lecture idempotente :
+  // son plafond se compte en appareils × reconnexions, pas en gestes.
+  ACTIVE_CALL_PROBE: {
+    max: 60,
+    timeWindow: '1 minute',
+    description: 'GET /api/calls/active'
+  },
 };
 
 /**
@@ -159,6 +168,12 @@ type SensDeLEchec = 'ferme' | 'ouvert';
  * encore une parité que le commentaire revendiquait sans que le code la
  * tienne.
  *
+ * Le STATUT ne suffisait pas (#11462) : l'objet lancé n'est pas une `Error`,
+ * et le gestionnaire global le journalisait en ERROR puis REMPLAÇAIT son corps
+ * par « Internal Server Error ». `rateLimitRefusalResponse`
+ * (`utils/rate-limit-refusal.ts`) le reconnaît désormais, et la forme posée ici
+ * suit l'enveloppe d'erreur : `error` est une chaîne plate, `code` à côté.
+ *
  * @param max - plafond de requêtes sur la fenêtre
  * @param timeWindow - fenêtre, en ms ou en toutes lettres ('1 minute')
  * @param label - espace de noms du seau (deux routes ne se mélangent jamais)
@@ -183,10 +198,8 @@ export function createRateLimitConfig(
         errorResponseBuilder: () => ({
           success: false,
           statusCode: 429,
-          error: {
-            code: 'RATE_LIMIT_EXCEEDED',
-            message: `Too many requests (calls/${label}). Please try again later.`
-          }
+          error: `Too many requests (calls/${label}). Please try again later.`,
+          code: 'RATE_LIMIT_EXCEEDED'
         })
       }
     }
@@ -311,6 +324,12 @@ export const ROUTE_RATE_LIMITS = {
     RATE_LIMITS.CALL_OPERATIONS.max,
     RATE_LIMITS.CALL_OPERATIONS.timeWindow,
     'operations',
+    'ouvert'
+  ),
+  activeCallProbe: createRateLimitConfig(
+    RATE_LIMITS.ACTIVE_CALL_PROBE.max,
+    RATE_LIMITS.ACTIVE_CALL_PROBE.timeWindow,
+    'active',
     'ouvert'
   )
 };
