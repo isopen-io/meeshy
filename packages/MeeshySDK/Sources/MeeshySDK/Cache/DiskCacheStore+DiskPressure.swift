@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Éviction sous pression DISQUE réelle (IL8, #11286) : le volume manque
 /// d'espace, indépendamment du budget du store. La règle de choix est dans
