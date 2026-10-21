@@ -179,7 +179,7 @@ describe('la frappe', () => {
     await settle();
     expect(gameOf(cached()).level.score).toBe(gameOf(before).level.score);
     expect(gameOf(cached()).mint.number).toBe(gameOf(before).mint.number);
-    expect(actions().errors.mint).toContain('prix');
+    expect(actions().errors.mint).toContain('à figer');
     expect(client.getQueryState(ENGAGEMENT_PROGRESS_QUERY_KEY)?.isInvalidated).toBe(true);
   });
 
@@ -295,7 +295,7 @@ describe('le coffre, le gel et le rallumage', () => {
     await act(async () => actions().claimChest());
     await settle();
     expect(gameOf(cached()).chest.status).toBe('ready');
-    expect(actions().errors.chest).toContain('missions');
+    expect(actions().errors.chest).toContain('actes du rêve');
   });
 
   test('un gel acheté : un de plus, le solde servi', async () => {
@@ -315,7 +315,7 @@ describe('le coffre, le gel et le rallumage', () => {
     await act(async () => actions().buyFreeze());
     await settle();
     expect(gameOf(cached()).flame.freezes).toBe(gameOf(before).flame.freezes);
-    expect(actions().errors.freeze).toContain('maximum');
+    expect(actions().errors.freeze).toContain('le plus possible');
   });
 
   test('le rallumage : la série servie, le solde servi', async () => {

@@ -25,9 +25,9 @@ beforeAll(async () => {
 });
 
 describe('la tuile de série dit des jours, accordés au nombre', () => {
-  test('français : « Série : 1 jour », « Série : 3 jours »', () => {
-    expect(streakText('fr', 1)).toBe('Série : 1 jour');
-    expect(streakText('fr', 3)).toBe('Série : 3 jours');
+  test('français : « Flamme : 1 jour », « Flamme : 3 jours »', () => {
+    expect(streakText('fr', 1)).toBe('Flamme : 1 jour');
+    expect(streakText('fr', 3)).toBe('Flamme : 3 jours');
   });
 
   test('anglais : singulier et pluriel', () => {

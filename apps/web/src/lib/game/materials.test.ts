@@ -35,6 +35,12 @@ describe('paintStops — des arrêts qui nomment des jetons', () => {
     }
   });
 
+  test('l’or de la pièce a son propre champ, et le prisme un champ d’or mêlé de diamant (#11176)', () => {
+    expect(GAME_PAINTS).toContain('coin-gold-in');
+    expect(GAME_PAINTS).toContain('coin-diamond-in');
+    expect(GAME_PAINTS).toContain('diamond');
+  });
+
   test('le prisme porte cinq teintes, le métal deux ou trois', () => {
     expect(paintStops('prism')).toHaveLength(5);
     expect(paintStops('copper')).toHaveLength(2);
@@ -64,6 +70,11 @@ describe('inventaire des jetons', () => {
       expect(declared(token)).toBe(true);
     }
     expect(tokenVar('edge')).toBe('var(--game-edge)');
+  });
+
+  test('la veine d’or de l’argent et les teintes des éclats de diamant sont déclarées (#11176)', () => {
+    expect(declared('--game-coin-vein')).toBe(true);
+    for (const tint of [0, 1, 2, 3, 4]) expect(declared(`--game-sparkle-${tint}`)).toBe(true);
   });
 
   test('les dix teintes de palier sont déclarées', () => {

@@ -48,7 +48,7 @@ extension ConversationView {
     /// Les messages sélectionnés, dans l'ORDRE du fil (pas l'ordre de tap) —
     /// un transfert groupé qui inverserait l'ordre de lecture serait un
     /// défaut, pas un détail.
-    private var selectedMessagesInThreadOrder: [Message] {
+    var selectedMessagesInThreadOrder: [Message] {
         viewModel.messages.filter { overlayState.selectedMessageIds.contains($0.id) }
     }
 

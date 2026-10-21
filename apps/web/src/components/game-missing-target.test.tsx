@@ -80,9 +80,9 @@ describe('le catalogue : aucun « Il manque » sans cible', () => {
 });
 
 describe('les deux soldes ont deux noms stables, dans les sept langues', () => {
-  test('« Étincelles convertibles » et « Étincelles » en français (porteur 2026-10-17)', async () => {
+  test('« Ta lumière » et « Étincelles » en français (porteur 2026-10-17)', async () => {
     const french = await catalogOf('fr');
-    expect(french['game.concept.fact.held']).toBe('Étincelles convertibles');
+    expect(french['game.concept.fact.held']).toBe('Ta lumière');
     expect(french['game.concept.fact.convertible']).toBe('Étincelles');
     expect(french['game.points.convertible.other']).toBe('{count} étincelles');
   });
@@ -122,27 +122,27 @@ describe('les données d’un concept : chaque manque est une ligne qui nomme sa
     conceptView(concept, view, NOW).facts.map((fact) => [fact.label, plain(fact.value)] as const);
 
   test('Points : ce qu’il manque POUR LA MEESH — une seule poche, plus de second solde « à convertir »', () => {
-    expect(facts('points', jcnm)).toEqual([['Il manque pour la Meesh n° 79', '1 839 étincelles']]);
+    expect(facts('points', jcnm)).toEqual([['Jusqu’à la Meesh n° 79', '1 839 étincelles']]);
   });
 
   test('Points : les pastilles disent la Meesh visée', () => {
-    expect(conceptView('points', jcnm, NOW).chips.map((chip) => plain(chip.text))).toEqual(['Meesh n° 79 : il manque 1 839']);
+    expect(conceptView('points', jcnm, NOW).chips.map((chip) => plain(chip.text))).toEqual(['1 839 jusqu’à la Meesh n° 79']);
   });
 
   test('Niveau : la pastille dit le niveau visé', () => {
-    expect(conceptView('level', jcnm, NOW).chips.map((chip) => plain(chip.text))).toContain('Niveau 28 dans 1 301 étincelles');
+    expect(conceptView('level', jcnm, NOW).chips.map((chip) => plain(chip.text))).toContain('1 301 étincelles jusqu’au 28');
   });
 
   test('Niveau, devant un ancien serveur : la ligne nomme le niveau visé', () => {
     const labels = facts('level', before).map(([label]) => label);
-    expect(labels).toContain(`Il manque pour le niveau ${before.level.level + 1}`);
+    expect(labels).toContain(`Jusqu’au niveau ${before.level.level + 1}`);
   });
 
   test('Gloire : ce qu’il manque nomme le rang suivant', () => {
     const labels = facts('glory', jcnm).map(([label]) => label);
-    const missing = labels.filter((label) => label.startsWith('Il manque'));
+    const missing = labels.filter((label) => label.startsWith('Jusqu’à'));
     expect(missing).toHaveLength(1);
-    expect(/^Il manque pour \p{Lu}/u.test(missing[0] ?? '')).toBe(true);
+    expect(/^Jusqu’à \p{Lu}/u.test(missing[0] ?? '')).toBe(true);
   });
 
   test('aucune ligne, aucune pastille ne dit « Il manque » ou « encore » sans cible', () => {
@@ -160,7 +160,7 @@ describe('les données d’un concept : chaque manque est une ligne qui nomme sa
 describe('les précisions d’un élément', () => {
   test('le blason : ce qu’il manque nomme le rang suivant', () => {
     const labels = rankDetail(jcnmGame.glory).facts.map((fact) => fact.label);
-    expect(labels.some((label) => /^Il manque pour /.test(label))).toBe(true);
+    expect(labels.some((label) => /^Jusqu’à /.test(label))).toBe(true);
     expect(labels).not.toContain('Il manque');
   });
 
@@ -168,19 +168,19 @@ describe('les précisions d’un élément', () => {
     const league = gameBlockWithExtrasFixture({}, { league: { consented: true, pseudonym: 'Colibri-4821', group: { league: 'jade', groupId: 'g', members: [{ userId: 'user-demo', weekPoints: 10 }, ...Array.from({ length: 29 }, (_, i) => ({ userId: `p-${i}`, weekPoints: 500 - i })) ] }, friendIds: [], friendsWeekPoints: {} } }).league;
     if (league === undefined) throw new Error('la fixture sert la ligue');
     const labels = gemDetail(league).facts.map((fact) => fact.label);
-    expect(labels).toContain('Il manque pour la zone de montée');
+    expect(labels).toContain('Jusqu’à la zone de montée');
   });
 
   test('la pièce : ce qu’il manque nomme la Meesh et se dit en étincelles', () => {
     const rows = coinDetail(jcnm)?.facts.map((fact) => [fact.label, plain(fact.value)]);
-    expect(rows).toContainEqual(['Il manque pour la Meesh n° 79', '1 839 étincelles']);
+    expect(rows).toContainEqual(['Jusqu’à la Meesh n° 79', '1 839 étincelles']);
   });
 });
 
 describe('avant un geste : ce qu’il manque est une phrase, avec son but', () => {
   test('un gel', () => {
-    const page = text(renderToStaticMarkup(<GameSpendLine concept="flame" held={0} cost={1} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => `Il manque ${missing} pour acheter un gel.` }} />));
-    expect(page).toContain('Il manque 1 Meesh pour acheter un gel.');
+    const page = text(renderToStaticMarkup(<GameSpendLine concept="flame" held={0} cost={1} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => `Il manque ${missing} pour prendre une Veilleuse.` }} />));
+    expect(page).toContain('Il manque 1 Meesh pour prendre une Veilleuse.');
     expect(page).not.toContain('Restera');
   });
 
@@ -194,15 +194,15 @@ describe('avant un geste : ce qu’il manque est une phrase, avec son but', () =
         <GameMintPreview mint={jcnmGame.mint} held={jcnmGame.level.score} online minting={false} celebration={null} onMint={() => undefined} />,
       ),
     );
-    expect(page).toContain('En poche 77 099 étincelles');
+    expect(page).toContain('Tu as 77 099 étincelles');
     expect(page).not.toContain('À convertir');
-    expect(page).toContain('Coûte 7 662 étincelles');
-    expect(page).toContain('Il manque 1 839 étincelles pour la Meesh n° 79.');
+    expect(page).toContain('Il faut 7 662 étincelles');
+    expect(page).toContain('Il manque 1 839 étincelles à ta lumière pour frapper la Meesh n° 79.');
   });
 
   test('la frappe : une seule poche, aucun solde « à convertir » n’est plus déduit', () => {
     const page = text(renderToStaticMarkup(<GameMintPreview mint={jcnmGame.mint} held={jcnmGame.level.score} online minting={false} celebration={null} onMint={() => undefined} />));
-    expect(page).toContain('En poche 77 099 étincelles');
+    expect(page).toContain('Tu as 77 099 étincelles');
     expect(page).not.toContain('À convertir');
     expect(page).not.toContain('5 823');
   });

@@ -481,7 +481,7 @@ describe('le résultat : partager, enregistrer, garder', () => {
     expect(log.kept[0]?.photo.mode).toBe('card');
     expect((log.kept[0]?.photo.story as File).name).toBe('meeshy-story.png');
     expect(log.kept[0]?.photo.source ?? null).toBeNull();
-    expect(host.textContent).toContain('Gardée au carnet');
+    expect(host.textContent).toContain('Gardée dans ta Chronique');
   });
 
   test('un selfie gardé emporte sa SOURCE réduite et sa recette (miroir) (#10161)', async () => {
@@ -520,7 +520,7 @@ describe('le résultat : partager, enregistrer, garder', () => {
     await settle();
     const alert = host.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain('Plus de place sur cet appareil');
-    expect(host.textContent).not.toContain('Gardée au carnet');
+    expect(host.textContent).not.toContain('Gardée dans ta Chronique');
     expect((by(host, 'data-photo-keep') as HTMLButtonElement | null)?.disabled).toBe(false);
     await click(alert?.querySelector<HTMLElement>('[data-photo-no-space-save]') ?? null);
     await settle();
@@ -531,7 +531,7 @@ describe('le résultat : partager, enregistrer, garder', () => {
     const { host } = await toResult({ keepOk: false });
     await click(by(host, 'data-photo-keep'));
     await settle();
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain('carnet');
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Chronique');
     expect(by(host, 'data-photo-share')).not.toBeNull();
   });
 

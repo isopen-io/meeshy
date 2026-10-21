@@ -221,11 +221,8 @@ extension ConversationView {
                     }
                 }
                 if let idx = viewModel.messageIndex(for: msgId), canRemoveMessage(viewModel.messages[idx]) {
-                    Button(String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main), role: .destructive) {
-                        overlayState.deleteConfirmMessageId = nil
-                        ContentRemovalPresenter.present(.message) { reason in
-                            Task { await viewModel.removeMessage(messageId: msgId, reason: reason) }
-                        }
+                    ContentRemovalOffer.messageButton(before: { overlayState.deleteConfirmMessageId = nil }) { reason in
+                        Task { await viewModel.removeMessage(messageId: msgId, reason: reason) }
                     }
                 }
                 Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
@@ -250,6 +247,8 @@ extension ConversationView {
                         deleteSelectedMessages(mode: .everyone)
                     }
                 }
+                ContentRemovalOffer.selectionButton(selectedMessagesInThreadOrder, ids: overlayState.selectedMessageIds,
+                    viewModel: viewModel, mayRemove: canRemoveMessage, onConfirmed: endSelectionMode)
                 Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
                     deleteSelectedMessages(mode: .local)
                 }

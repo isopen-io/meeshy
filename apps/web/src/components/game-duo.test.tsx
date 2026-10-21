@@ -60,7 +60,7 @@ describe('un duo actif', () => {
   });
 
   test('la récompense dit comment elle double', () => {
-    expect(text(html)).toContain('Doublée si vous finissez chacun votre part.');
+    expect(text(html)).toContain('Doublée si chacun réalise sa part.');
   });
 
   test('on peut le quitter à tout moment', () => {
@@ -77,7 +77,7 @@ describe('les autres états', () => {
   test('verrouillé : le niveau 20 des DEUX et le niveau record de la personne', () => {
     const t = text(renderToStaticMarkup(<GameDuo {...props({ duo: duo({ unlocked: false, ...NONE }), levelRecord: 12 })} />));
     expect(t).toContain('s’ouvre au niveau 20, pour vous deux');
-    expect(t).toContain('Record 12');
+    expect(t).toContain('Au plus haut 12');
     expect(t).toContain('Requis 20');
     expect(t).toContain('Il manque 8 niveaux');
     expect(t).toContain('Tu es au niveau 12');
@@ -139,7 +139,7 @@ describe('les autres états', () => {
     const accepted: string[] = [];
     const received = duo({ status: 'invited', role: 'invitee', mission: null, progress: null, reward: null });
     const host = await mount(<GameDuo {...props({ duo: received, onAccept: (id) => accepted.push(id) })} />);
-    expect(host.textContent).toContain('Amina t’invite');
+    expect(host.textContent).toContain('Amina te propose une alliance');
     await click(buttonNamed(host, 'Accepter'));
     expect(accepted).toEqual(['duo-1']);
     expect(buttonNamed(host, 'Décliner')).not.toBeNull();
@@ -149,12 +149,12 @@ describe('les autres états', () => {
     const done = duo({ status: 'completed', progress: { mine: 40, partner: 40, common: 80, mineDone: true, partnerDone: true, bothDone: true }, reward: { points: 600, doubled: true } });
     const t = text(renderToStaticMarkup(<GameDuo {...props({ duo: done })} />));
     expect(t).toContain('Récompense doublée : 600 étincelles');
-    expect(t).toContain('Duo réussi cette semaine.');
+    expect(t).toContain('Alliance réussie cette semaine.');
   });
 
   test('abandonné : pas de nouvelle invitation avant la semaine prochaine', () => {
     const html = renderToStaticMarkup(<GameDuo {...props({ duo: duo({ ...NONE, status: 'abandoned' }) })} />);
-    expect(text(html)).toContain('Un nouveau duo s’ouvre la semaine prochaine');
+    expect(text(html)).toContain('Une nouvelle alliance s’ouvre la semaine prochaine');
     expect(html).not.toContain('data-game-duo-invite');
   });
 
@@ -165,6 +165,6 @@ describe('les autres états', () => {
   });
 
   test('un refus de la passerelle se lit', () => {
-    expect(text(renderToStaticMarkup(<GameDuo {...props({ error: 'Le duo se joue entre amis acceptés.' })} />))).toContain('entre amis acceptés');
+    expect(text(renderToStaticMarkup(<GameDuo {...props({ error: 'L’alliance se fait entre amis acceptés.' })} />))).toContain('entre amis acceptés');
   });
 });
