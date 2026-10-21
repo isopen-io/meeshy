@@ -124,7 +124,7 @@ final class ContactsListViewModel: ObservableObject {
 
     private func persistFriends() {
         let snapshot = friends
-        Task { try? await CacheCoordinator.shared.friends.save(snapshot, for: cacheKey) }
+        Task { await bestEffort("contactsListViewModel.friends.save", category: .cache) { try await CacheCoordinator.shared.friends.save(snapshot, for: cacheKey) } }
     }
 
     // MARK: - Load Friends
@@ -209,7 +209,7 @@ final class ContactsListViewModel: ObservableObject {
 
             loadState = .loaded
             lastObservedFriendIds = Set(friends.map(\.id))
-            try? await CacheCoordinator.shared.friends.save(friends, for: cacheKey)
+            await bestEffort("contactsListViewModel.friends.save.2", category: .cache) { try await CacheCoordinator.shared.friends.save(friends, for: cacheKey) }
         } catch {
             if friends.isEmpty {
                 loadState = .error("Erreur lors du chargement")

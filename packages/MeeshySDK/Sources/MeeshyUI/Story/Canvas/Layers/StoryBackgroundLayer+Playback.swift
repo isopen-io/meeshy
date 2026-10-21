@@ -73,19 +73,9 @@ extension StoryBackgroundLayer {
         attachedVideoAsset = asset
         Task { @MainActor [weak self, weak pl] in
             guard self != nil else { return }
-            let tracks: [AVAssetTrack]
-            if #available(iOS 16.0, *) {
-                tracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
-            } else {
-                tracks = asset.tracks(withMediaType: .video)
-            }
+            let tracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
             guard let videoTrack = tracks.first else { return }
-            let naturalSize: CGSize
-            if #available(iOS 16.0, *) {
-                naturalSize = (try? await videoTrack.load(.naturalSize)) ?? .zero
-            } else {
-                naturalSize = videoTrack.naturalSize
-            }
+            let naturalSize = (try? await videoTrack.load(.naturalSize)) ?? .zero
             guard naturalSize.width > 0, naturalSize.height > 0 else { return }
             guard let pl else { return }
             let resolved = StoryBackgroundLayer.resolveVideoGravity(

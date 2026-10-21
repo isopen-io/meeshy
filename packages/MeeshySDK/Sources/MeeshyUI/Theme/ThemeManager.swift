@@ -33,14 +33,6 @@ public enum ThemePreference: String, CaseIterable {
         }
     }
 
-    public func next() -> ThemePreference {
-        switch self {
-        case .system: return .light
-        case .light: return .dark
-        case .dark: return .system
-        }
-    }
-
     public func resolvedMode(systemScheme: ColorScheme) -> ThemeMode {
         switch self {
         case .system: return systemScheme == .dark ? .dark : .light
@@ -155,10 +147,6 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
             guard let self, self.preference == .system, self.mode != resolved else { return }
             self.mode = resolved
         }
-    }
-
-    public func cyclePreference(systemScheme: ColorScheme) {
-        preference = preference.next()
     }
 
     public var preferredColorScheme: ColorScheme? {
@@ -307,13 +295,6 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
         mode.isDark ? Color(hex: "312E81").opacity(0.6) : Color(hex: "C7D2FE")
     }
 
-    public func inputBorderFocused(tint: String) -> LinearGradient {
-        LinearGradient(
-            colors: [Color(hex: tint), Color(hex: tint).opacity(0.6)],
-            startPoint: .leading, endPoint: .trailing
-        )
-    }
-
     // MARK: - Material
 
     public var glassMaterial: some ShapeStyle {
@@ -339,14 +320,5 @@ extension EnvironmentValues {
     public var theme: ThemeManager {
         get { self[ThemeKey.self] }
         set { self[ThemeKey.self] = newValue }
-    }
-}
-
-// MARK: - View Extension
-
-extension View {
-    public func withTheme(_ mode: ThemeMode) -> some View {
-        self.environment(\.theme, ThemeManager.shared)
-            .onAppear { ThemeManager.shared.mode = mode }
     }
 }
