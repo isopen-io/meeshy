@@ -122,12 +122,13 @@
     {
       "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*stern(?:e|en)?(?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "„Schritte“ (die Reise); „Zeitalter“ (die Wiedergeburt)",
+      "instead": "„Schritte“ (die Reise); „Zeitalter“ (die Wiedergeburt); „Stufen“ (eine Medaille)",
       "keys": [
         "game.season.",
         "game.prestige.",
         "game.fact.strides",
-        "game.fact.rebirths"
+        "game.fact.rebirths",
+        "game.badge.stars_label"
       ]
     },
     {
@@ -204,6 +205,14 @@
       "pattern": "(?<![\\p{L}\\p{N}])(?:Ihnen|Ihre|Ihren|Ihrem|Ihrer|Ihres)(?![\\p{L}\\p{N}])",
       "flags": "u",
       "instead": "„dein“, „deine“: das Spiel duzt"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])flammen?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„N Tage“ unter 🔥: die Flamme gehört dem Helden, nie einem Gespräch",
+      "keys": [
+        "engagement.pill.streak."
+      ]
     }
   ],
   "names": {
@@ -318,6 +327,7 @@
     "game.gauge.treasury": "Erbe",
     "game.gauge.flame": "Flamme",
     "game.fact.strides": "Schritte",
-    "game.fact.rebirths": "Wiedergeburten"
+    "game.fact.rebirths": "Wiedergeburten",
+    "game.badge.stars_label": "Stufen"
   }
 }

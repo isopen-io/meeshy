@@ -251,7 +251,7 @@ const pt = {
   'game.detail.fact.level_now': 'É o seu nível neste momento.',
   'game.detail.fact.level_required': 'É o nível que você precisa alcançar para abrir.',
   'game.badge.counts_label': 'O que ela acompanha',
-  'game.badge.stars_label': 'Estrelas',
+  'game.badge.stars_label': 'Patamares',
   'game.badge.reason.none': 'Nenhuma estrela por enquanto: seu primeiro gesto acende o cobre.',
   'game.badge.reason.crossed': '{material}, porque você passou do limite de {threshold}: você está em {count}.',
   'game.badge.reason.served': '{material}, conquistado ao passar do limite de {threshold}.',

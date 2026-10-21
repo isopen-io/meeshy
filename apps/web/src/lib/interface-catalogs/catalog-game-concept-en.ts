@@ -251,7 +251,7 @@ const en = {
   'game.detail.fact.level_now': 'This is your level right now.',
   'game.detail.fact.level_required': 'This is the level you need to reach to open it.',
   'game.badge.counts_label': 'What it follows',
-  'game.badge.stars_label': 'Stars',
+  'game.badge.stars_label': 'Marks',
   'game.badge.reason.none': 'No star yet: your first move lights up copper.',
   'game.badge.reason.crossed': '{material}, because you passed the {threshold} mark: you are at {count}.',
   'game.badge.reason.served': '{material}, earned when you passed the {threshold} mark.',

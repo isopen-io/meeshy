@@ -251,7 +251,7 @@ const ar = {
   'game.detail.fact.level_now': 'هذا مستواك الآن.',
   'game.detail.fact.level_required': 'هذا هو المستوى الذي يجب بلوغه لفتحه.',
   'game.badge.counts_label': 'ما الذي يتبعه',
-  'game.badge.stars_label': 'النجوم',
+  'game.badge.stars_label': 'العتبات',
   'game.badge.reason.none': 'لا نجمة بعد: أول إجراء منك يُضيء النحاس.',
   'game.badge.reason.crossed': '{material}، لأنك تجاوزت عتبة {threshold}: وصلت إلى {count}.',
   'game.badge.reason.served': '{material}، نلته حين تجاوزت عتبة {threshold}.',

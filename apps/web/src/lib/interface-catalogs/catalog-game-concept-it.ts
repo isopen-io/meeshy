@@ -251,7 +251,7 @@ const it = {
   'game.detail.fact.level_now': 'È il tuo livello in questo momento.',
   'game.detail.fact.level_required': 'È il livello da raggiungere per aprirlo.',
   'game.badge.counts_label': 'Che cosa segue',
-  'game.badge.stars_label': 'Stelle',
+  'game.badge.stars_label': 'Gradini',
   'game.badge.reason.none': 'Ancora nessuna stella: il tuo primo gesto accende il rame.',
   'game.badge.reason.crossed': '{material}, perché hai superato la soglia di {threshold}: sei a {count}.',
   'game.badge.reason.served': '{material}, ottenuto superando la soglia di {threshold}.',

@@ -122,12 +122,13 @@
     {
       "pattern": "(?<!d[’'])(?<![\\p{L}\\p{N}])étoiles?(?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "« pas » (le voyage) ; « âges » (la renaissance)",
+      "instead": "« pas » (le voyage) ; « âges » (la renaissance) ; « paliers » (une médaille)",
       "keys": [
         "game.season.",
         "game.prestige.",
         "game.fact.strides",
-        "game.fact.rebirths"
+        "game.fact.rebirths",
+        "game.badge.stars_label"
       ]
     },
     {
@@ -209,6 +210,14 @@
       "pattern": "(?<![\\p{L}\\p{N}])(?:vos|votre)(?![\\p{L}\\p{N}])",
       "flags": "iu",
       "instead": "« ton », « ta », « tes » : le jeu tutoie"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])flammes?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« N jours » sous 🔥 : la Flamme est celle du héros, jamais d’une conversation",
+      "keys": [
+        "engagement.pill.streak."
+      ]
     }
   ],
   "names": {
@@ -323,6 +332,7 @@
     "game.gauge.treasury": "Héritage",
     "game.gauge.flame": "Flamme",
     "game.fact.strides": "Pas",
-    "game.fact.rebirths": "Renaissances"
+    "game.fact.rebirths": "Renaissances",
+    "game.badge.stars_label": "Paliers"
   }
 }
