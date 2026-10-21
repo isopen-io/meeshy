@@ -897,6 +897,13 @@ final class MessageListViewController: UIViewController {
     /// `internal` depuis `+UnreadSeparator.swift` (#7222) : même raison que
     /// `isDark` juste au-dessus.
     var isIntentionalProgrammaticScroll = false
+    var programmaticScrollRelease: Task<Void, Never>?
+
+    func beginIntentionalProgrammaticScroll() {
+        programmaticScrollRelease?.cancel()
+        programmaticScrollRelease = nil
+        isIntentionalProgrammaticScroll = true
+    }
 
     /// La frontière gelée du séparateur de premier non-lu (#7222) — voir
     /// `MessageListViewController+UnreadSeparator.swift`. `internal`, pas
@@ -927,7 +934,7 @@ final class MessageListViewController: UIViewController {
         // fois la fenêtre posée — même contrat que la cible absente.
         guard collectionView.numberOfSections > 0,
               indexPath.item < collectionView.numberOfItems(inSection: 0) else { return }
-        isIntentionalProgrammaticScroll = true
+        beginIntentionalProgrammaticScroll()
         scrollSettleTarget = ScrollToMessageSettleLaw.PendingTarget(localId: localId, strong: strong)
         collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
         scheduleScrollSettleFallback()
