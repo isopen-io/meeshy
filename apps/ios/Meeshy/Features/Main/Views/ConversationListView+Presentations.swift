@@ -117,7 +117,7 @@ struct ConversationListModalPresentations: ViewModifier {
             .sheet(isPresented: $showWidgetPreview) {
                 WidgetPreviewView(onNewConversation: onNewConversation)
                     .environmentObject(conversationViewModel)
-                    .environmentObject(router)
+                    .modifier(MeeshyRouterInjection(router: router))
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
