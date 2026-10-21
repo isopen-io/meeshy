@@ -111,6 +111,17 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
         ("Conversation/MediaConsumptionSeeder.swift", ["static func seed("]),
         ("Conversation/QuotedAudioResolver.swift", ["static func inWindow(", "static func outOfWindow("]),
         ("Conversation/StarredSnapshotFactory.swift", ["static func snapshot("]),
+        ("Conversation/OptimisticMessageStager.swift", ["func stageOffline(", "func stageOnline(", "func stageMedia("]),
+        ("Conversation/SendFailureRecovery.swift", ["func recover(", "func classifyRefusal("]),
+        ("Conversation/ConversationMessageProjector.swift", ["static func visualAttachments(", "static func audioItems(", "static func mentionCandidates("]),
+        ("Conversation/EphemeralExpiryTriage.swift", ["static func triage("]),
+        ("Conversation/ConversationReadReceiptSender.swift", ["func send(conversationId:"]),
+        ("Conversation/VoiceConsentGate.swift", ["func fetchMissing(", "func grant("]),
+        ("Conversation/FailedMessageReplay.swift", ["static func outgoing("]),
+        ("Conversation/DeliveryCounterReconciliation.swift", ["static func updates("]),
+        ("Conversation/ConversationWindowFetcher.swift", ["func around(", "func fetchAfter("]),
+        ("Conversation/ConversationCacheReader.swift", ["func currentConversation(", "func cachedThread("]),
+        ("Conversation/ConversationCollaborators.swift", ["struct ConversationCollaborators"]),
     ]
 
     // MARK: - Lecture
