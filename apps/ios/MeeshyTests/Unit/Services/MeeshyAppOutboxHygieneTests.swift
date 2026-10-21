@@ -11,29 +11,29 @@ import XCTest
 final class MeeshyAppOutboxHygieneTests: XCTestCase {
 
     private func meeshyAppSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // MeeshyAppOutboxHygieneTests.swift -> Services
-            .deletingLastPathComponent() // Services -> Unit
-            .deletingLastPathComponent() // Unit -> MeeshyTests
-            .deletingLastPathComponent() // MeeshyTests -> apps/ios
-            .appendingPathComponent("Meeshy/MeeshyApp.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit("Meeshy/MeeshyApp.swift")
+    }
+
+    /// Le corps d'une fermeture de démarrage : de l'appel jusqu'à la première
+    /// ligne `}` qui a l'indentation de la ligne portant l'appel.
+    private func closureBody(after needle: String, in source: String) -> String? {
+        guard let start = source.range(of: needle) else { return nil }
+        let lineStart = source[..<start.lowerBound].lastIndex(of: "\n").map { source.index(after: $0) } ?? source.startIndex
+        let indent = String(source[lineStart...].prefix { $0 == " " })
+        guard let end = source.range(of: "\n\(indent)}\n", range: start.upperBound..<source.endIndex) else { return nil }
+        return String(source[start.upperBound..<end.lowerBound])
     }
 
     // MARK: - SettingsActionQueue flush handler (P1 — MeeshyApp:281 4xx replay loop)
 
     private func settingsFlushHandlerBody(from source: String) -> String? {
-        guard let start = source.range(of: "await SettingsActionQueue.shared.setFlushHandler"),
-              let end = source.range(of: "\n                    }\n", range: start.upperBound..<source.endIndex) else {
-            return nil
-        }
-        return String(source[start.upperBound..<end.lowerBound])
+        closureBody(after: "await SettingsActionQueue.shared.setFlushHandler", in: source)
     }
 
     func test_settingsFlushHandler_doesNotCatchDeadAPIErrorType() throws {
         let source = try meeshyAppSource()
         guard let body = settingsFlushHandlerBody(from: source) else {
-            XCTFail("Could not locate SettingsActionQueue.setFlushHandler body in MeeshyApp.swift")
+            XCTFail("Could not locate SettingsActionQueue.setFlushHandler body in the MeeshyApp unit")
             return
         }
         XCTAssertFalse(
@@ -46,7 +46,7 @@ final class MeeshyAppOutboxHygieneTests: XCTestCase {
     func test_settingsFlushHandler_catchesMeeshyErrorServer_forPermanentClientErrorCodes() throws {
         let source = try meeshyAppSource()
         guard let body = settingsFlushHandlerBody(from: source) else {
-            XCTFail("Could not locate SettingsActionQueue.setFlushHandler body in MeeshyApp.swift")
+            XCTFail("Could not locate SettingsActionQueue.setFlushHandler body in the MeeshyApp unit")
             return
         }
         XCTAssertTrue(
@@ -64,7 +64,7 @@ final class MeeshyAppOutboxHygieneTests: XCTestCase {
     func test_settingsFlushHandler_doesNotTreat429AsTerminal() throws {
         let source = try meeshyAppSource()
         guard let body = settingsFlushHandlerBody(from: source) else {
-            XCTFail("Could not locate SettingsActionQueue.setFlushHandler body in MeeshyApp.swift")
+            XCTFail("Could not locate SettingsActionQueue.setFlushHandler body in the MeeshyApp unit")
             return
         }
         XCTAssertFalse(
@@ -89,7 +89,7 @@ final class MeeshyAppOutboxHygieneTests: XCTestCase {
         // required to preserve the original "any 4xx is terminal" intent.
         let source = try meeshyAppSource()
         guard let body = settingsFlushHandlerBody(from: source) else {
-            XCTFail("Could not locate SettingsActionQueue.setFlushHandler body in MeeshyApp.swift")
+            XCTFail("Could not locate SettingsActionQueue.setFlushHandler body in the MeeshyApp unit")
             return
         }
         XCTAssertTrue(
@@ -101,17 +101,13 @@ final class MeeshyAppOutboxHygieneTests: XCTestCase {
     // MARK: - OfflineQueue retry-send handler (P0 outbox-01 — location dropped)
 
     private func retrySendHandlerBody(from source: String) -> String? {
-        guard let start = source.range(of: "await OfflineQueue.shared.setRetrySend"),
-              let end = source.range(of: "\n                    }\n", range: start.upperBound..<source.endIndex) else {
-            return nil
-        }
-        return String(source[start.upperBound..<end.lowerBound])
+        closureBody(after: "await OfflineQueue.shared.setRetrySend", in: source)
     }
 
     func test_setRetrySendBody_includesLocationField() throws {
         let source = try meeshyAppSource()
         guard let body = retrySendHandlerBody(from: source) else {
-            XCTFail("Could not locate OfflineQueue.setRetrySend body in MeeshyApp.swift")
+            XCTFail("Could not locate OfflineQueue.setRetrySend body in the MeeshyApp unit")
             return
         }
         XCTAssertTrue(
@@ -126,7 +122,7 @@ final class MeeshyAppOutboxHygieneTests: XCTestCase {
     func test_outboxFlusherBootRecovery_doesNotUseSilentTryOptional() throws {
         let source = try meeshyAppSource()
         guard let anchorRange = source.range(of: "let flusher = OutboxFlusher(") else {
-            XCTFail("Could not locate the outbox-flusher construction site in MeeshyApp.swift")
+            XCTFail("Could not locate the outbox-flusher construction site in the MeeshyApp unit")
             return
         }
         // Look at the ~400 characters immediately preceding the flusher
