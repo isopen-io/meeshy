@@ -13,11 +13,12 @@ const ME = '507f1f77bcf86cd799439032';
 const OTHER = '507f1f77bcf86cd799439031';
 const ENTITY = '507f1f77bcf86cd799439011';
 
-const prismaWith = (rows: { post?: unknown; comment?: unknown; message?: unknown; sound?: unknown }) =>
+const prismaWith = (rows: { post?: unknown; comment?: unknown; message?: unknown; participant?: unknown; sound?: unknown }) =>
   ({
     post: { findUnique: jest.fn<any>().mockResolvedValue(rows.post ?? null) },
     postComment: { findUnique: jest.fn<any>().mockResolvedValue(rows.comment ?? null) },
     message: { findUnique: jest.fn<any>().mockResolvedValue(rows.message ?? null) },
+    participant: { findUnique: jest.fn<any>().mockResolvedValue(rows.participant ?? null) },
     sound: { findUnique: jest.fn<any>().mockResolvedValue(rows.sound ?? null) },
   }) as any;
 
@@ -40,15 +41,28 @@ describe("reportedContentAuthorId — qui a écrit ce qu'on a signalé", () => {
 
   it("un message : l'UTILISATEUR derrière son participant expéditeur — `senderId` est un id de Participant, jamais de User", async () => {
     const PARTICIPANT = '507f1f77bcf86cd799439099';
-    const prisma = prismaWith({ message: { senderId: PARTICIPANT, sender: { userId: ME } } });
+    const prisma = prismaWith({ message: { senderId: PARTICIPANT }, participant: { userId: ME } });
     expect(await reportedContentAuthorId(prisma, { reportedType: 'message', reportedEntityId: ENTITY })).toBe(ME);
-    expect(prisma.message.findUnique.mock.calls[0]?.[0]).toEqual({ where: { id: ENTITY }, select: { sender: { select: { userId: true } } } });
+    expect(prisma.message.findUnique.mock.calls[0]?.[0]).toEqual({ where: { id: ENTITY }, select: { senderId: true } });
+    expect(prisma.participant.findUnique.mock.calls[0]?.[0]).toEqual({ where: { id: PARTICIPANT }, select: { userId: true } });
     expect(await reportTargetsActor(prisma, { reportedType: 'message', reportedEntityId: ENTITY }, ME)).toBe(true);
     expect(await reportTargetsActor(prisma, { reportedType: 'message', reportedEntityId: ENTITY }, PARTICIPANT)).toBe(false);
   });
 
+  it("un message ne traverse jamais la relation requise `sender` : un expéditeur DISPARU rend « sans auteur », pas une erreur (#6501)", async () => {
+    const prisma = prismaWith({ message: { senderId: '507f1f77bcf86cd799439099' } });
+    expect(await reportedContentAuthorId(prisma, { reportedType: 'message', reportedEntityId: ENTITY })).toBeNull();
+    expect(await reportTargetsActor(prisma, { reportedType: 'message', reportedEntityId: ENTITY }, ME)).toBe(false);
+  });
+
+  it("un message sans expéditeur projeté (ligne partielle) n'interroge aucun participant", async () => {
+    const prisma = prismaWith({ message: { conversationId: ENTITY } });
+    expect(await reportedContentAuthorId(prisma, { reportedType: 'message', reportedEntityId: ENTITY })).toBeNull();
+    expect(prisma.participant.findUnique).not.toHaveBeenCalled();
+  });
+
   it("un message d'un invité anonyme n'a pas d'auteur inscrit : aucun acteur n'est visé", async () => {
-    const prisma = prismaWith({ message: { sender: { userId: null } } });
+    const prisma = prismaWith({ message: { senderId: '507f1f77bcf86cd799439099' }, participant: { userId: null } });
     expect(await reportedContentAuthorId(prisma, { reportedType: 'message', reportedEntityId: ENTITY })).toBeNull();
     expect(await reportTargetsActor(prisma, { reportedType: 'message', reportedEntityId: ENTITY }, ME)).toBe(false);
   });

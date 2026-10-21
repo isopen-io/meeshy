@@ -16,6 +16,9 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
  * Un message se résout par l'UTILISATEUR derrière son participant expéditeur :
  * `Message.senderId` est un id de `Participant`, qu'aucun id d'acteur n'égale
  * jamais ; un invité anonyme (`Participant.userId` nul) n'a pas d'auteur inscrit.
+ * La relation REQUISE `Message.sender` n'est jamais traversée : on lit le scalaire
+ * `senderId`, puis le `Participant` par son id — un expéditeur disparu (#6501)
+ * rend « sans auteur » au lieu de faire rejeter la lecture, sans réparation à brancher.
  * Une conversation ou une communauté n'ont pas d'auteur unique : `null`, et la
  * garde ne s'applique pas (fail-open assumé — aucun contenu propre n'y est en jeu).
  */
@@ -33,6 +36,14 @@ const authorOf =
     return row === null || row === undefined ? null : pick(row);
   };
 
+const messageAuthor: AuthorLookup = async (prisma, id) => {
+  const message = await prisma.message.findUnique({ where: { id }, select: { senderId: true } });
+  const senderId = message?.senderId;
+  if (typeof senderId !== 'string' || senderId.length === 0) return null;
+  const participant = await prisma.participant.findUnique({ where: { id: senderId }, select: { userId: true } });
+  return participant?.userId ?? null;
+};
+
 const AUTHOR_BY_TYPE: Readonly<Record<string, AuthorLookup>> = {
   user: async (_prisma, id) => id,
   post: authorOf((prisma, id) => prisma.post.findUnique({ where: { id }, select: { authorId: true } }), (row) => row.authorId),
@@ -40,10 +51,7 @@ const AUTHOR_BY_TYPE: Readonly<Record<string, AuthorLookup>> = {
   reel: authorOf((prisma, id) => prisma.post.findUnique({ where: { id }, select: { authorId: true } }), (row) => row.authorId),
   status: authorOf((prisma, id) => prisma.post.findUnique({ where: { id }, select: { authorId: true } }), (row) => row.authorId),
   comment: authorOf((prisma, id) => prisma.postComment.findUnique({ where: { id }, select: { authorId: true } }), (row) => row.authorId),
-  message: authorOf(
-    (prisma, id) => prisma.message.findUnique({ where: { id }, select: { sender: { select: { userId: true } } } }),
-    (row) => row.sender.userId,
-  ),
+  message: messageAuthor,
   sound: authorOf((prisma, id) => prisma.sound.findUnique({ where: { id }, select: { uploaderId: true } }), (row) => row.uploaderId),
 };
 
