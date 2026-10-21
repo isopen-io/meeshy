@@ -348,9 +348,9 @@ public final class StoryTimelineEngine {
     private func startDriveClock(from playhead: Float, anchorHostTime: UInt64) {
         stopDriveClock()
         driveOrigin = (playhead, TimelinePlaybackSync.hostSeconds(anchorHostTime))
-        // Plage bornée à 60 Hz (`TimelineDriveClock`) : la tête n'a pas besoin
-        // des 120 Hz d'un écran ProMotion (#9874).
-        let link = TimelineDriveClock.makeLink { [weak self] link in
+        // Plage `.clock` (30…60 Hz) : la tête n'a pas besoin des 120 Hz d'un
+        // écran ProMotion (#9874).
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .clock) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
