@@ -19,11 +19,13 @@ let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 let played: Played[] = [];
 let top = 0;
-const realAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
-const realRect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+let realAnimate: PropertyDescriptor | undefined;
+let realRect: PropertyDescriptor | undefined;
 
 beforeAll(() => {
   ensureHappyDomRegistered();
+  realAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+  realRect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 

@@ -21,11 +21,13 @@ const LONG = `${'Bonjour tout le monde, voici un très long message. '.repeat(30
 let container: HTMLDivElement | null = null;
 let root: Root | null = null;
 const played: (readonly Keyframe[])[] = [];
-const realAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
-const realRect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+let realAnimate: PropertyDescriptor | undefined;
+let realRect: PropertyDescriptor | undefined;
 
 beforeAll(async () => {
   ensureHappyDomRegistered();
+  realAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+  realRect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadInterfaceCatalog('fr');
 });

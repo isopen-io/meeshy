@@ -88,6 +88,36 @@ function Harness({ active, onSwap }: { readonly active: ActiveCall; readonly onS
   return <CallStage call={active} layout="video-duo" language="fr" choice={null} onChoose={() => undefined} immersive={false} onToggleImmersive={() => undefined} moderation={null} self={self} />;
 }
 
+/** Espionne `animate` et pose un rectangle qui suit le coin : le FLIP se lit sans moteur de mise en page. */
+function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly reducedMotion?: boolean } = {}): (readonly Keyframe[])[] {
+  const played: (readonly Keyframe[])[] = [];
+  const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+  const savedAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+  const savedRect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+  const savedMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+  proto.animate = function animate(frames: readonly Keyframe[]) {
+    played.push(frames);
+    return { cancel: () => undefined };
+  };
+  proto.getBoundingClientRect = function rect(this: HTMLElement) {
+    const left = this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300;
+    return { left, top: 80, right: left, bottom: 80, width: 0, height: 0, x: left, y: 80, toJSON: () => ({}) };
+  };
+  Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: reducedMotion }) });
+  try {
+    run();
+  } finally {
+    const restore = (name: string, saved: PropertyDescriptor | undefined, target: object) => {
+      if (saved === undefined) Reflect.deleteProperty(target, name);
+      else Object.defineProperty(target, name, saved);
+    };
+    restore('animate', savedAnimate, HTMLElement.prototype);
+    restore('getBoundingClientRect', savedRect, HTMLElement.prototype);
+    restore('matchMedia', savedMedia, window);
+  }
+  return played;
+}
+
 const mount = (active: ActiveCall = call()) => {
   const host = document.createElement('div');
   document.body.appendChild(host);
@@ -163,34 +193,6 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
     view.done();
   });
 
-  test('changer de coin se joue en FLIP : un `transform` qui revient à zéro, jamais left/top/width/height (#11314)', () => {
-    fresh();
-    const played: (readonly Keyframe[])[] = [];
-    const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
-    const savedAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
-    const savedRect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
-    proto.animate = function animate(frames: readonly Keyframe[]) {
-      played.push(frames);
-      return { cancel: () => undefined };
-    };
-    proto.getBoundingClientRect = function rect(this: HTMLElement) {
-      const left = this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300;
-      return { left, top: 80, right: left, bottom: 80, width: 0, height: 0, x: left, y: 80, toJSON: () => ({}) };
-    };
-    try {
-      const view = mount();
-      view.key('ArrowLeft');
-      expect(played).toEqual([[{ transform: 'translate(280px, 0px)' }, { transform: 'none' }]]);
-      expect(view.frame().className).not.toMatch(/transition-\[/);
-      view.done();
-    } finally {
-      if (savedAnimate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
-      else Object.defineProperty(HTMLElement.prototype, 'animate', savedAnimate);
-      if (savedRect === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect');
-      else Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', savedRect);
-    }
-  });
-
   test('la vignette dit comment la déplacer', () => {
     fresh();
     const view = mount();
@@ -209,13 +211,25 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
     again.done();
   });
 
-  test('le retour au coin s’anime, sauf mouvement réduit', () => {
+  test('changer de coin se joue en FLIP : un `transform` qui revient à zéro, jamais left/top/width/height (#11314)', () => {
     fresh();
-    const view = mount();
-    const classes = view.frame().className.split(' ');
-    expect(classes).toContain('transition-[left,top,transform,width,height]');
-    expect(classes).toContain('motion-reduce:transition-none');
-    view.done();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.key('ArrowLeft');
+      expect(view.frame().className).not.toMatch(/transition/);
+      view.done();
+    });
+    expect(played).toEqual([[{ transform: 'translate(280px, 0px)' }, { transform: 'none' }]]);
+  });
+
+  test('mouvement réduit : le retour au coin est sec', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.key('ArrowLeft');
+      view.done();
+    }, { reducedMotion: true });
+    expect(played).toEqual([]);
   });
 });
 

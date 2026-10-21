@@ -106,3 +106,29 @@ export function rowSwipeSettle(params: {
   if (opens(-dx, -velocity, widths.trailing)) return -widths.trailing;
   return 0;
 }
+
+/** Les trois propriétés personnalisées d'une image du balayage (#11314). */
+export type RowSwipePaint = {
+  /** Le déplacement physique du contenu, signé. */
+  readonly swipe: string;
+  /** La largeur découverte, toujours positive. */
+  readonly reveal: string;
+  /** Où le conteneur d'actions attend hors de la ligne : `-100%` à gauche, `100%` à droite. `null` à l'arrêt : il garde le côté qu'il avait. */
+  readonly hide: string | null;
+};
+
+/**
+ * Le décalage voyage en `translate` : le conteneur d'actions occupe la largeur
+ * de la ligne, attend HORS d'elle (`hide`) et glisse de `swipe` — jamais une
+ * largeur qui change. Le côté se lit au signe PHYSIQUE du déplacement
+ * (`offset × sign`, `sign` valant −1 en RTL) ; à zéro il ne change pas, pour que
+ * la fermeture glisse vers le bord d'où l'ouverture est venue.
+ */
+export function rowSwipePaint({ offset, sign }: { readonly offset: number; readonly sign: 1 | -1 }): RowSwipePaint {
+  const physical = offset * sign;
+  return {
+    swipe: `${physical}px`,
+    reveal: `${Math.abs(offset)}px`,
+    hide: physical === 0 ? null : physical > 0 ? '-100%' : '100%',
+  };
+}

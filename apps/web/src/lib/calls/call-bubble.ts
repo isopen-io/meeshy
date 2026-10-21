@@ -81,6 +81,18 @@ export function bubbleOrigin(placement: Pick<BubblePlacement, 'edge' | 'fraction
   return { left, top: insets.top + MARGIN + clamp01(placement.fraction) * travel(viewport, insets, size) };
 }
 
+/**
+ * La bulle est ancrée en haut à gauche de l'écran et POSÉE par `translate` : se
+ * déplacer ne change plus aucune géométrie (#11314). La zone sûre haute
+ * s'ajoute en CSS, le doigt s'ajoute à l'origine pendant le glissé.
+ */
+export function bubbleTranslate({ origin, drag }: { readonly origin: { readonly left: number; readonly top: number }; readonly drag: Point | null }): string {
+  return `${origin.left + (drag?.x ?? 0)}px calc(${origin.top + (drag?.y ?? 0)}px + env(safe-area-inset-top))`;
+}
+
+/** L'aimantation au bord ne joue que `translate`, au tempo d'avant (#11314) ; le glissé et le pincement n'en ont pas. */
+export const BUBBLE_SETTLE_TRANSITION = 'translate 180ms ease-out';
+
 /** Le centre au lâcher → le bord le plus proche et la hauteur gardée. */
 export function snapBubble(center: Point, viewport: Size, insets: Insets, size: Size): Pick<BubblePlacement, 'edge' | 'fraction'> {
   const range = travel(viewport, insets, size);
