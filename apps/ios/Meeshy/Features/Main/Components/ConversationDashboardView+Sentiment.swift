@@ -52,7 +52,7 @@ struct ConversationDashboardSentimentSection: View {
                 .foregroundColor(color)
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
     }

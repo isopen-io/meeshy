@@ -197,7 +197,7 @@ struct ChangePasswordView: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.caption.weight(.medium))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .transition(.opacity)
             }
@@ -217,7 +217,7 @@ struct ChangePasswordView: View {
                          : String(localized: "auth.password.set.submit", defaultValue: "Définir le mot de passe", bundle: .main))
                         .font(.subheadline.weight(.bold))
                 }
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
@@ -242,14 +242,14 @@ struct ChangePasswordView: View {
             // Le sens est porté par le texte ci-dessous → masqué de VoiceOver.
             Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: MeeshyIconSize.hero))
-                .foregroundColor(MeeshyColors.success)
+                .foregroundStyle(MeeshyColors.success)
                 .accessibilityHidden(true)
 
             Text(form.asksCurrentPassword
                  ? String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifié", bundle: .main)
                  : String(localized: "auth.password.set.success", defaultValue: "Mot de passe défini", bundle: .main))
                 .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         // Confirmation transitoire (auto-dismiss 1,5 s) → un seul élément VoiceOver lisible.
         .accessibilityElement(children: .combine)
@@ -307,7 +307,7 @@ struct ChangePasswordView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(title)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     // Libellé visuel doublon : masqué de VoiceOver, son rôle
                     // est réassigné au SecureField via accessibilityLabel
                     // (doctrine 186i « stop placeholder-as-name »).
@@ -329,7 +329,7 @@ struct ChangePasswordView: View {
                     eyeColor: theme.textMuted
                 )
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             }
 
             Spacer()

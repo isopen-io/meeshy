@@ -63,7 +63,7 @@ struct MessageTranscriptionDetailView: View {
 
                 Text(MessageLanguageDetailView.languageName(for: transcription.language))
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
 
                 Spacer()
 
@@ -79,7 +79,7 @@ struct MessageTranscriptionDetailView: View {
                 if let durationMs = transcription.durationMs {
                     Text(formatDuration(durationMs / 1000))
                         .font(.system(.caption2, design: .monospaced).weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             .padding(MeeshySpacing.smPlus)
@@ -97,7 +97,7 @@ struct MessageTranscriptionDetailView: View {
             // Full text
             Text(transcription.text)
                 .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, MeeshySpacing.xs)
 
@@ -111,7 +111,7 @@ struct MessageTranscriptionDetailView: View {
                     ForEach(segments) { segment in
                         Text(segment.text + " ")
                             .font(.footnote.weight(.regular))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .padding(.horizontal, MeeshySpacing.xxs)
                             .padding(.vertical, 1)
                             .background(
@@ -140,7 +140,7 @@ struct MessageTranscriptionDetailView: View {
                             .accessibilityHidden(true)
                         Text(String(format: String(localized: "message-detail.transcription.speakers", defaultValue: "%d locuteurs détectés", bundle: .main), speakerCount))
                             .font(.caption.weight(.medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     .padding(.horizontal, MeeshySpacing.xs)
                     .accessibilityElement(children: .combine)
@@ -163,13 +163,13 @@ struct MessageTranscriptionDetailView: View {
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
                             .font(.footnote.weight(.medium))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .lineLimit(1)
 
                         if let duration = attachment.duration {
                             Text(formatDuration(duration / 1000))
                                 .font(.caption2)
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                         }
                     }
 
@@ -189,12 +189,12 @@ struct MessageTranscriptionDetailView: View {
                 // masqué à VoiceOver (le libellé « Aucune transcription » porte le sens).
                 Image(systemName: "text.word.spacing")
                     .font(.system(size: MeeshyIconSize.xxxl, weight: .light))
-                    .foregroundColor(theme.textMuted.opacity(0.4))
+                    .foregroundStyle(theme.textMuted.opacity(0.4))
                     .accessibilityHidden(true)
 
                 Text(String(localized: "message-detail.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
                     .font(.subheadline.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
 
                 if let firstMedia = mediaAttachments.first {
                     Button {
@@ -243,7 +243,7 @@ struct MessageTranscriptionDetailView: View {
                     .accessibilityHidden(true)
                 Text(String(localized: "message-detail.audio-translations", defaultValue: "Traductions audio", bundle: .main))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .padding(.horizontal, MeeshySpacing.xs)
             .accessibilityAddTraits(.isHeader)
@@ -258,7 +258,7 @@ struct MessageTranscriptionDetailView: View {
                             .font(.subheadline)
                         Text(display?.name ?? audio.targetLanguage)
                             .font(.footnote.weight(.semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
 
                         Spacer()
 
@@ -279,13 +279,13 @@ struct MessageTranscriptionDetailView: View {
 
                         Text(formatDuration(audio.durationMs / 1000))
                             .font(.system(.caption2, design: .monospaced).weight(.medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
 
                     if !audio.transcription.isEmpty {
                         Text(audio.transcription)
                             .font(.footnote)
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .lineLimit(4)
                     }
                 }

@@ -185,7 +185,7 @@ public struct SettingsRow<Trailing: View>: View {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let info, let onInfo {
                         SettingsInfoButton(info: info, color: color, action: onInfo)
@@ -194,7 +194,7 @@ public struct SettingsRow<Trailing: View>: View {
                 if let subtitle {
                     Text(subtitle)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -318,12 +318,12 @@ private struct SettingsInfoOverlay: ViewModifier {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             Text(presented.title)
                 .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Text(presented.message)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
@@ -331,7 +331,7 @@ private struct SettingsInfoOverlay: ViewModifier {
             } label: {
                 Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, MeeshySpacing.md)
             }

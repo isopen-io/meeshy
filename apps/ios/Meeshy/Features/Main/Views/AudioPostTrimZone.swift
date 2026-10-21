@@ -34,7 +34,7 @@ struct AudioPostTrimZone: View {
                     Text(String(localized: "composer.audio.trim.loading",
                                 defaultValue: "Chargement du son…", bundle: .main))
                         .font(.caption)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                 }
             }
         case .failed:
@@ -43,14 +43,14 @@ struct AudioPostTrimZone: View {
                     Text(String(localized: "composer.audio.trim.load-failed",
                                 defaultValue: "Le son n'a pas pu être chargé.", bundle: .main))
                         .font(.caption)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     Button(String(localized: "common.retry",
                                   defaultValue: "Réessayer", bundle: .main)) {
                         onRetry()
                     }
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                 }
             }
         case .trimmer:
@@ -80,10 +80,10 @@ struct AudioPostTrimZone: View {
             if acquisition == .direct {
                 Text(Self.rangeLabel(trimRange))
                     .font(.caption.monospacedDigit())
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
-        .foregroundColor(theme.textSecondary)
+        .foregroundStyle(theme.textSecondary)
     }
 
     /// **L'attente et l'échec occupent la MÊME place que les poignées.** Une

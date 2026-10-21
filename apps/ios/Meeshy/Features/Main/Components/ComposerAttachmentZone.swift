@@ -95,7 +95,7 @@ struct ComposerAttachmentTile: View {
 
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: Self.labelWidth)
         }
@@ -143,7 +143,7 @@ struct ComposerAttachmentTile: View {
                     // Doctrine 86i : glyphe de type décoratif borné par la tuile fixe 56×56 → figé + masqué
                     // (le libellé sous la tuile porte le nom du fichier).
                     .font(.system(size: 22))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .accessibilityHidden(true)
             }
         }
@@ -164,7 +164,7 @@ struct ComposerAttachmentRemoveBadge: View {
             Image(systemName: "xmark")
                 // Doctrine 82i : glyphe de suppression dans un cadre tap fixe 18×18 → figé.
                 .font(.system(size: 8, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: 18, height: 18)
                 .background(
                     Circle()
@@ -201,7 +201,7 @@ struct ComposerPlaceTile: View {
 
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: ComposerAttachmentTile.labelWidth)
         }

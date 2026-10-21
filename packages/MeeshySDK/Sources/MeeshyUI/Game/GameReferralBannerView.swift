@@ -74,7 +74,7 @@ public struct GameReferralBannerView: View {
                 .placed(metrics.signature)
             Text(title)
                 .font(.system(size: metrics.titleSize, weight: .heavy, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .frame(width: metrics.title.width, height: metrics.title.height, alignment: rightToLeft ? .trailing : .leading)
@@ -85,7 +85,7 @@ public struct GameReferralBannerView: View {
                 if let flameLabel {
                     Text(flameLabel)
                         .font(.system(size: metrics.flameLabelSize, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                         .placed(metrics.flameLabel)

@@ -111,12 +111,11 @@ enum ConversationViewRules {
             && !hasMentionSuggestions
     }
 
-    /// SDK `MeeshyConversation.ConversationType` (8 cas) → miroir GELÉ de la
-    /// loi de lecture (`ReadingModeOrchestrator.ConversationType`, 5 cas —
-    /// RE-PREUVE : `community`/`channel`/`bot` n'y existent pas). Les trois
-    /// cas absents sont des conversations multi-parties comme `.group` —
-    /// jamais `.direct`, la seule distinction qui compte pour
-    /// `resolveCapabilities` (éligibilité Rivière : « jamais en direct »).
+    /// Type SDK → type que la loi de lecture distingue (`direct`, `group`,
+    /// `public`, `global`, `broadcast`). `community`, `channel` et `bot` sont
+    /// des conversations multi-parties comme `.group` — jamais `.direct`, la
+    /// seule distinction qui compte pour `resolveCapabilities` (éligibilité
+    /// Rivière : « jamais en direct »).
     /// `nil` (aucune conversation) ⇒ `.group`, cohérent avec `isDirect`
     /// (calculée plus haut), qui traite déjà un `conversation` nil comme
     /// « pas direct ».

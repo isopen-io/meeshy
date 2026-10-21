@@ -17,14 +17,14 @@ struct CommentEditingBanner: View {
                 .foregroundColor(Color(hex: accentColor))
             Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
             Spacer()
             Button {
                 onCancel()
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
         }
@@ -77,7 +77,7 @@ struct CommentReplyBanner: View {
                 // Figé : chrome xmark dans un cadre tap fixe 24×24 (doctrine 82i).
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }

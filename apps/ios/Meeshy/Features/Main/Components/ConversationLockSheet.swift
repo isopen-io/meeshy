@@ -53,7 +53,7 @@ struct ConversationLockSheet: View {
             if let error = errorMessage {
                 Text(error)
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
             numpad
@@ -84,12 +84,12 @@ struct ConversationLockSheet: View {
 
             Text(titleText)
                 .font(.headline)
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
             Text(subtitleText)
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxxl)
         }
@@ -153,7 +153,7 @@ struct ConversationLockSheet: View {
                     Image(systemName: "delete.left.fill")
                         // doctrine 82i — glyphe borné par la touche fixe 76×76 du pavé
                         .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .frame(width: 76, height: 76)
                 }
                 .opacity(currentPin.isEmpty ? 0.3 : 1.0)
@@ -172,7 +172,7 @@ struct ConversationLockSheet: View {
             Text("\(digit)")
                 // doctrine 82i — chiffre borné par la touche fixe 76×76 du pavé
                 .font(.system(size: 26, weight: .medium, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(width: 76, height: 76)
                 .background(
                     Circle()

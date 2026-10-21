@@ -185,7 +185,7 @@ public enum MessageContentKind: String, CaseIterable, Sendable {
     }
 
     /// `(?<![@\w])https?://\S`, `\w` au sens ASCII de JavaScript.
-    private static let webAddress = try! NSRegularExpression(
+    private static let webAddress = LiteralRegex.compile(
         pattern: "(?<![@A-Za-z0-9_])https?://\\S",
         options: [.caseInsensitive]
     )

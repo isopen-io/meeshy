@@ -7,6 +7,12 @@ final class RouterInjectionGuardTests: XCTestCase {
         AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
     }
 
+    private func principalCode(_ path: String) throws -> String {
+        let name = URL(fileURLWithPath: path).lastPathComponent
+        let url = try XCTUnwrap(AppSourceGuard.unitURLs(path).first { $0.lastPathComponent == name }, "\(path) introuvable")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
     private static let injectionSites = [
         "Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift",
         "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift",
@@ -85,7 +91,7 @@ final class RouterInjectionGuardTests: XCTestCase {
 
     func test_commandOnlyViews_readRouterCommands() throws {
         for path in Self.commandOnlyViews {
-            let source = try code(path)
+            let source = try principalCode(path)
             XCTAssertFalse(declaresRouterObject(source), "\(path) observe encore le Router")
             XCTAssertTrue(source.contains("@Environment(\\.routerCommands)"), "\(path) ne lit pas les commandes")
         }

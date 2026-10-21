@@ -104,7 +104,7 @@ struct FeedCaptionOverlay: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(deplie ? Self.full(caption) : abrege)
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -123,7 +123,7 @@ struct FeedCaptionOverlay: View {
                 } label: {
                     Text(deplie ? Self.moinsLibelle : Self.plusLibelle)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         // La cible dépasse le glyphe : « plus… » fait six
                         // caractères, et une cible de six caractères n'est pas
                         // une cible (44 pt, HIG).

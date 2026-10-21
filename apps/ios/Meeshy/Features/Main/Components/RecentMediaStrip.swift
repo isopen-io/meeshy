@@ -549,12 +549,12 @@ struct RecentMediaStrip: View {
                          ? String(localized: "composer.recent.accessDenied", defaultValue: "Accès aux photos refusé", bundle: .main)
                          : String(localized: "composer.recent.grantAccess", defaultValue: "Autoriser l'accès aux photos", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(Color.primary)
                     Text(model.isAuthorizationRefused
                          ? String(localized: "composer.recent.accessDenied.hint", defaultValue: "Toucher pour ouvrir les Réglages", bundle: .main)
                          : String(localized: "composer.recent.grantAccess.hint", defaultValue: "Pour retrouver vos médias récents ici", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                 }
                 Spacer(minLength: 0)
             }
@@ -580,7 +580,7 @@ struct RecentMediaStrip: View {
                 } label: {
                     Text(String(localized: "composer.recent.cancelSelection", defaultValue: "Annuler", bundle: .main))
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                         .padding(.horizontal, MeeshySpacing.md)
                         .padding(.vertical, MeeshySpacing.xsPlus)
                 }
@@ -605,7 +605,7 @@ struct RecentMediaStrip: View {
                         Text(String(localized: "composer.recent.addSelected", defaultValue: "Ajouter (\(selection.count))", bundle: .main))
                             .font(.caption.weight(.bold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, MeeshySpacing.xsPlus)
                 }

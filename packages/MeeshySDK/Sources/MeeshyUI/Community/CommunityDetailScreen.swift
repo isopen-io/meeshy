@@ -173,7 +173,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             } label: {
                 Image(systemName: "chevron.backward")
                     .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .background(Color.black.opacity(0.35))
                     .clipShape(Circle())
@@ -202,7 +202,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 } label: {
                     Image(systemName: "ellipsis")
                         .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                         .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
@@ -215,7 +215,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 } label: {
                     Image(systemName: "heart.fill")
                         .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                         .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
@@ -259,12 +259,12 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                 VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                     Text(community.name)
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     if let desc = community.description, !desc.isEmpty {
                         Text(desc)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, design: .rounded))
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .lineLimit(2)
                     }
                 }
@@ -278,7 +278,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     Text(community.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privée", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 }
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.xs)
                 .background(theme.backgroundSecondary)
@@ -337,14 +337,14 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon)
                     .font(.system(size: MeeshyIconSize.xs))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
                 Text(value)
                     .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
             }
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -390,7 +390,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         Text(String(localized: "community.detail.leave.label", defaultValue: "Quitter la communauté", bundle: .module))
                     }
                     .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, MeeshySpacing.smPlus)
                     .background(MeeshyColors.error.opacity(0.1))
@@ -407,10 +407,10 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: icon)
                     .font(.system(size: MeeshyIconSize.lg))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .rounded))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, MeeshySpacing.md)
@@ -478,7 +478,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "number")
                 .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .foregroundStyle(MeeshyColors.brandPrimary)
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .background(MeeshyColors.brandPrimary.opacity(0.1))
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
@@ -486,13 +486,13 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(viewModel.conversationTitles[conversation.id] ?? String(localized: "community.detail.channel.fallbackName", defaultValue: "Channel", bundle: .module))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 if let desc = conversation.description, !desc.isEmpty {
                     Text(desc)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(1)
                 }
             }
@@ -502,7 +502,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             if let count = conversation.memberCount {
                 Text("\(count)")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
