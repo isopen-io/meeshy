@@ -79,6 +79,7 @@ final class RootPresentationRulesTests: XCTestCase {
 extension AppRootSession {
     @MainActor
     fileprivate static func make(isAuthenticated: Bool, isSwitchingAccount: Bool) -> AppRootSession {
+        @MainActor
         final class Source: AppRootSessionSource {
             let isAuthenticated: Bool
             let isSwitchingAccount: Bool

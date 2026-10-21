@@ -8,7 +8,6 @@ import os
 struct MeeshyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     let dependencies = DependencyContainer.shared
-    @StateObject private var authManager = AuthManager.shared
     @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var pushManager = PushNotificationManager.shared
     @StateObject var deepLinkRouter = DeepLinkRouter.shared
@@ -28,10 +27,6 @@ struct MeeshyApp: App {
     @State private var showCrashSheet = false
     @State private var hasSurfacedCrashReports = false
     @Environment(\.colorScheme) private var colorScheme
-
-    private var shouldShowOnboarding: Bool {
-        !hasCompletedOnboarding && !authManager.isAuthenticated
-    }
 
     // Kept alive for the process lifetime so the Combine pipeline is never
     // deallocated. A static var on the App struct survives SwiftUI re-evaluations.
@@ -131,233 +126,74 @@ struct MeeshyApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // UNE fenêtre principale : une seconde copie ouverte par le système renvoie vers la première
-            // (`MainWindowGate`, AdaptiveRootView.swift).
+            let inputs = rootInputs
             MainWindowGate {
             SystemThemeDetector {
-                ZStack {
-                    Group {
-                        if authManager.isAuthenticated {
-                            AdaptiveRootView()
-                                // Les listes `@` du SDK servent les
-                                // mêmes contacts que celles de l'app, réchauffés
-                                // de la même façon.
-                                .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
-                                .modifier(ProfileSheetEnvironment())
-                        } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin && !authManager.isSwitchingAccount {
-                            LoginView()
-                                .safeAreaInset(edge: .top, spacing: 0) {
-                                    PendingLinkNotice(isVisible: deepLinkRouter.pendingDeepLink?.opensAfterSignIn == true)
-                                }
-                                .animation(.easeOut(duration: 0.25), value: deepLinkRouter.pendingDeepLink)
-                                // Un lien d'appel reçu avant que la session soit relue
-                                // n'attend pas la connexion : se connecter ne relance rien.
-                                .onAppear { deepLinkRouter.discardPendingCallRequest() }
-                                // La fermeture prononcée par le serveur s'explique AVANT la reconnexion.
-                                .sheet(item: Binding(
-                                    get: { authManager.sessionRevocationNotice },
-                                    set: { if $0 == nil { authManager.acknowledgeSessionRevocationNotice() } }
-                                )) { notice in
-                                    SessionClosedNoticeView(notice: notice) { authManager.acknowledgeSessionRevocationNotice() }
-                                }
-                        }
-                    }
-                    .opacity(launchSplash.phase == .covering ? 0 : 1)
-                    .accessibilityHidden(arrivalCelebration.isShowing).modifier(ComposerRetoucheRecetteCover())
-
-                    // L'adresse prouvée vient d'ouvrir la session : la
-                    // fête passe AVANT l'onboarding, qui l'attend
-                    // (`OnboardingHost`), pendant que la racine, montée
-                    // dessous, et `ArrivalPrefetcher` remplissent les caches.
-                    if authManager.isAuthenticated && arrivalCelebration.isShowing {
-                        ArrivalCelebrationView(onSkip: { arrivalCelebration.dismiss() })
-                            .transition(.opacity)
-                            .zIndex(3)
-                    }
-
-                    // Il s'efface d'abord (`fullScreenGate`
-                    // coupe touches et VoiceOver), puis quitte l'arbre SANS
-                    // transition. Son plafond vit dans SA tâche : aucune attente
-                    // du démarrage ne peut le retenir. Voir `LaunchSplashController`.
-                    if launchSplash.phase != .gone {
-                        SplashScreen()
-                            .fullScreenGate(isPresented: launchSplash.phase == .covering)
-                            .task { await launchSplash.holdUntilCeiling() }
-                            .zIndex(1)
-                    }
-
-                    #if DEBUG
-                    // Aperçu de l'onboarding pour la vérification au
-                    // simulateur — voir `OnboardingPreviewLaunch`.
-                    if OnboardingPreviewLaunch.isActive {
-                        OnboardingPreviewScreen().zIndex(2)
-                    }
-                    if ConversationLinkCardPreviewLaunch.isActive {
-                        ConversationLinkCardPreviewScreen().zIndex(2)
-                    }
-                    if ResetPasswordPreviewLaunch.isActive {
-                        ResetPasswordPreviewScreen().zIndex(2)
-                    }
-                    if ForgotPasswordPreviewLaunch.isActive {
-                        ForgotPasswordPreviewScreen().zIndex(2)
-                    }
-                    if LinkSignInConfirmationPreviewLaunch.isActive {
-                        LinkSignInConfirmationPreviewScreen().zIndex(2)
-                    }
-                    #endif
-                }
-                .meeshyAnimation(.easeInOut(duration: 0.35), value: arrivalCelebration.isShowing)
-                // `!isAuthenticated` protège d'un ACCIDENT — un lien traité
-                // avant la fin de `checkExistingSession`, qui échouerait un
-                // utilisateur connecté dans un flux invité. `isDeliberate`
-                // nomme l'INTENTION inverse : quelqu'un qui a un compte et
-                // choisit malgré tout d'entrer sans lui. Les deux doivent
-                // coexister ; les confondre reviendrait soit à rouvrir
-                // l'accident, soit à interdire le choix.
-                .fullScreenCover(isPresented: .init(
-                    get: { activeGuestSession != nil && (!authManager.isAuthenticated || activeGuestSession?.isDeliberate == true) },
-                    set: { if !$0 { dismissGuestSession() } }
-                )) {
-                    if let guestSession = activeGuestSession {
-                        GuestConversationContainer(
-                            session: guestSession,
-                            onSessionCreated: { ctx in
-                                if !AnonymousSessionStore.save(ctx) {
-                                    toastManager.showError(String(localized: "guest.session.save.error", defaultValue: "Impossible d'enregistrer la session", bundle: .main))
-                                }
-                                activeGuestSession = GuestSession(
-                                    identifier: guestSession.identifier,
-                                    context: ctx,
-                                    isDeliberate: guestSession.isDeliberate,
-                                    origin: guestSession.origin
-                                )
-                            },
-                            onAccountRequest: { entry in
-                                deepLinkRouter.requestAccount(entry, forShareLink: guestSession.identifier)
-                                dismissGuestSession()
-                            },
-                            onNewLink: { identifier in
-                                activeGuestSession = GuestSession(identifier: identifier, context: AnonymousSessionStore.load(linkId: identifier), isDeliberate: guestSession.isDeliberate)
-                            }
+                AppRootGate { session, commands in
+                    RootScene(
+                        session: session,
+                        commands: commands,
+                        state: inputs.scene,
+                        actions: RootSceneActions(
+                            onLoginAppear: { deepLinkRouter.discardPendingCallRequest() },
+                            onSkipCelebration: { arrivalCelebration.dismiss() },
+                            holdSplashUntilCeiling: { await launchSplash.holdUntilCeiling() }
                         )
-                    }
-                }
-                // Posté par le transport, hors du fil principal : la session se termine sur lui.
-                .onReceive(NotificationCenter.default.publisher(for: .meeshyGuestSessionEnded).receive(on: DispatchQueue.main)) { endGuestSession($0) }
-                .visitorContentCover(
-                    presenter: visitorPresenter,
-                    isEligible: !authManager.isAuthenticated && activeGuestSession == nil && launchSplash.phase != .covering
-                )
-                .fullScreenCover(isPresented: .init(
-                    get: { shouldShowOnboarding && launchSplash.phase != .covering && activeGuestSession == nil && visitorPresenter.request == nil },
-                    set: { _ in }
-                )) {
-                    WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
-                }
-                // **L'hôte des toasts est un modificateur.** Un `fullScreenCover` — le
-                // composer — couvrirait un hôte posé à la seule racine : tout toast levé
-                // de là-haut serait invisible. Sa PLACE peut donc se répéter sans se
-                // recopier.
-                .feedbackToastOverlay()
-                .ageGateOverlay()
-                .sheet(isPresented: $showCrashSheet) {
-                    CrashReportSheet(reports: crashReportsToShow)
-                }
-                .environmentObject(authManager)
-                .environmentObject(deepLinkRouter)
-                .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
-                .preferredColorScheme(theme.preferredColorScheme)
-                .onOpenURL { url in
-                    // **`meeshy://compose-share` n'est pas une
-                    // DESTINATION.** Il ne navigue nulle part : il demande de
-                    // reprendre une fiche que l'extension vient de déposer, et
-                    // c'est le cover racine qui la présente. Le faire passer par
-                    // `DeepLinkParser` aurait demandé un cas d'énumération pour
-                    // quelque chose qui n'est pas un lieu de l'app.
-                    //
-                    // L'identifiant est PASSÉ, pas deviné : deux partages
-                    // rapides se suivent, et reprendre « la plus ancienne »
-                    // ouvrirait la première pièce sur le geste de la seconde.
-                    // Même principe pour un partage RELAYÉ par
-                    // l'extension : la fiche est déjà sur le disque, l'écran de
-                    // partage de la racine la présente.
-                    if let relayId = ShareRelayHandoff.shareId(from: url) {
-                        ShareRelayConsumer.shared.consumeNext(id: relayId)
-                        return
-                    }
-                    if ShareComposeLink.shareId(from: url) != nil {
-                        let identifiant = ShareComposeLink.shareId(from: url)
-                        Task { await ShareComposeHandoffConsumer.shared.consumeNext(id: identifiant) }
-                        return
-                    }
-                    if let link = SignInLink(DeepLinkParser.parse(url)) {
-                        Task { await SignInLinkOpener.open(link) }
-                        return
-                    }
-                    let _ = deepLinkRouter.handle(url: url)
-                }
-                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
-                    guard let url = userActivity.webpageURL else { return }
-                    if let link = SignInLink(DeepLinkParser.parse(url)) {
-                        Task { await SignInLinkOpener.open(link) }
-                        return
-                    }
-                    let _ = deepLinkRouter.handle(url: url)
-                }
-                .onContinueUserActivity(CallBackRequest.startCallActivityType) { userActivity in
-                    guard CallDialReadinessSnapshot.mayQueueDial(sessionResolved: authManager.hasResolvedStoredSession, authenticated: authManager.isAuthenticated),
-                          let request = CallBackRequest(userActivity: userActivity) else { return }
-                    CallBackDialer.shared.dial(request)
-                }
-                .task { await runLaunchSequence() }
-                // La session elle-même (sockets, clés, notifications) se règle dans
-                // `MeeshyApp+Lifecycle.swift`, hors de toute fenêtre : ici, seulement
-                // l'état de CETTE vue.
-                .adaptiveOnChange(of: authManager.isAuthenticated) { _, isAuth in
-                    if isAuth { activeGuestSession = nil }
-                }
-                .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
-                    handleGuestDeepLink(link)
-                }
-                // Entrée SANS COMPTE choisie depuis un appareil qui en a un.
-                // `RootView` a posé la question et reçu la réponse ; la session
-                // invitée, elle, vit ici. Le canal est distinct de
-                // `pendingDeepLink` parce qu'il ne porte pas une destination à
-                // résoudre mais une identité déjà choisie — le confondre
-                // reposerait la question.
-                .adaptiveOnChange(of: deepLinkRouter.requestedGuestJoin) { _, identifier in
-                    guard let identifier else { return }
-                    deepLinkRouter.requestedGuestJoin = nil
-                    activeGuestSession = GuestSession(
-                        identifier: identifier,
-                        context: AnonymousSessionStore.load(linkId: identifier),
-                        isDeliberate: true
                     )
-                }
-                // « Entrer dans World Wide » depuis l'écran de
-                // connexion : la session invitée s'ouvre sur la clé SERVIE
-                // par `GET /world`, et reprend celle que cet appareil y a déjà.
-                .adaptiveOnChange(of: deepLinkRouter.requestedWorldEntry) { _, entry in
-                    guard let entry else { return }
-                    deepLinkRouter.requestedWorldEntry = nil
-                    activeGuestSession = GuestSession(
-                        identifier: entry.shareLinkIdentifier,
-                        context: AnonymousSessionStore.load(linkId: entry.shareLinkIdentifier),
-                        origin: .world(entry)
+                    .guestSessionCover(
+                        guest: inputs.activeGuestSession,
+                        isAuthenticated: session.isAuthenticated,
+                        actions: guestSessionCoverActions
                     )
-                }
-                // Prisme Linguistique — dès que la langue principale de
-                // l'utilisateur change (login, changement de préférence), on la
-                // met en cache pour l'override de langue UI appliqué au prochain
-                // lancement (cf. `UILanguageOverride`).
-                .adaptiveOnChange(of: authManager.currentUser?.systemLanguage) { _, newLanguage in
-                    UILanguageOverride.cache(from: newLanguage)
-                    UILanguageOverride.refreshNotificationLanguage()
+                    .onReceive(NotificationCenter.default.publisher(for: .meeshyGuestSessionEnded).receive(on: DispatchQueue.main)) { endGuestSession($0) }
+                    .visitorContentCover(
+                        presenter: visitorPresenter,
+                        isEligible: RootPresentationRules.visitorContentIsEligible(
+                            isAuthenticated: session.isAuthenticated,
+                            hasGuestSession: inputs.activeGuestSession != nil,
+                            splashPhase: inputs.splashPhase
+                        )
+                    )
+                    .fullScreenCover(isPresented: .init(
+                        get: {
+                            RootPresentationRules.showsOnboarding(
+                                hasCompletedOnboarding: inputs.hasCompletedOnboarding,
+                                isAuthenticated: session.isAuthenticated,
+                                splashPhase: inputs.splashPhase,
+                                hasGuestSession: inputs.activeGuestSession != nil,
+                                hasVisitorRequest: inputs.hasVisitorRequest
+                            )
+                        },
+                        set: { _ in }
+                    )) {
+                        WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
+                    }
+                    .modifier(OverlayHost(crashReports: inputs.crashReports, isCrashSheetPresented: $showCrashSheet))
+                    .environmentObject(AuthManager.shared)
+                    .environmentObject(deepLinkRouter)
+                    .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
+                    .preferredColorScheme(theme.preferredColorScheme)
+                    .modifier(ExternalEntryHandlers(dispatcher: LiveExternalEntryDispatcher(router: deepLinkRouter)))
+                    .task { await runLaunchSequence() }
+                    .adaptiveOnChange(of: session.isAuthenticated) { _, isAuth in
+                        if isAuth { activeGuestSession = nil }
+                    }
+                    .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
+                        handleGuestDeepLink(link)
+                    }
+                    .adaptiveOnChange(of: deepLinkRouter.requestedGuestJoin) { _, identifier in
+                        openRequestedGuestJoin(identifier)
+                    }
+                    .adaptiveOnChange(of: deepLinkRouter.requestedWorldEntry) { _, entry in
+                        openRequestedWorldEntry(entry)
+                    }
+                    .adaptiveOnChange(of: session.systemLanguage) { _, newLanguage in
+                        UILanguageOverride.cache(from: newLanguage)
+                        UILanguageOverride.refreshNotificationLanguage()
+                    }
                 }
             }
             }
-            // La taille de CETTE fenêtre (Stage Manager, Split View), publiée au-dessus de tout ce qu'elle porte :
-            // feuilles, couvertures, toasts et barrière d'âge la lisent aussi.
             .publishingSceneWindowSize()
         }
         .commands { MeeshyCommands() }
@@ -374,12 +210,74 @@ struct MeeshyApp: App {
                 // Mêmes barrière d'âge et préférence d'animation que la fenêtre principale.
                 .ageGateOverlay()
                 .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
-                .environmentObject(authManager)
+                .environmentObject(AuthManager.shared)
                 .environmentObject(deepLinkRouter)
                 .preferredColorScheme(theme.preferredColorScheme)
                 .publishingSceneWindowSize()
         }
         .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
+    }
+
+    private var rootInputs: RootInputs {
+        RootInputs(
+            hasCheckedSession: hasCheckedSession,
+            activeGuestSession: activeGuestSession,
+            splashPhase: launchSplash.phase,
+            isCelebrating: arrivalCelebration.isShowing,
+            pendingDeepLink: deepLinkRouter.pendingDeepLink,
+            hasCompletedOnboarding: hasCompletedOnboarding,
+            hasVisitorRequest: visitorPresenter.request != nil,
+            crashReports: crashReportsToShow,
+            previewReplacesLogin: Self.onboardingPreviewReplacesLogin
+        )
+    }
+
+    private var guestSessionCoverActions: GuestSessionCoverActions {
+        GuestSessionCoverActions(
+            dismiss: { dismissGuestSession() },
+            sessionCreated: { guest, context in
+                if !AnonymousSessionStore.save(context) {
+                    toastManager.showError(String(localized: "guest.session.save.error", defaultValue: "Impossible d'enregistrer la session", bundle: .main))
+                }
+                activeGuestSession = GuestSession(
+                    identifier: guest.identifier,
+                    context: context,
+                    isDeliberate: guest.isDeliberate,
+                    origin: guest.origin
+                )
+            },
+            accountRequested: { guest, entry in
+                deepLinkRouter.requestAccount(entry, forShareLink: guest.identifier)
+                dismissGuestSession()
+            },
+            newLink: { guest, identifier in
+                activeGuestSession = GuestSession(
+                    identifier: identifier,
+                    context: AnonymousSessionStore.load(linkId: identifier),
+                    isDeliberate: guest.isDeliberate
+                )
+            }
+        )
+    }
+
+    private func openRequestedGuestJoin(_ identifier: String?) {
+        guard let identifier else { return }
+        deepLinkRouter.requestedGuestJoin = nil
+        activeGuestSession = GuestSession(
+            identifier: identifier,
+            context: AnonymousSessionStore.load(linkId: identifier),
+            isDeliberate: true
+        )
+    }
+
+    private func openRequestedWorldEntry(_ entry: WorldEntry?) {
+        guard let entry else { return }
+        deepLinkRouter.requestedWorldEntry = nil
+        activeGuestSession = GuestSession(
+            identifier: entry.shareLinkIdentifier,
+            context: AnonymousSessionStore.load(linkId: entry.shareLinkIdentifier),
+            origin: .world(entry)
+        )
     }
 
     // MARK: - Test seam (DEBUG)
@@ -508,7 +406,7 @@ struct MeeshyApp: App {
         // after `hasCheckedSession = true`, so the link survives in
         // `deepLinkRouter.pendingDeepLink` and is processed then.
         guard hasCheckedSession else { return }
-        guard !authManager.isAuthenticated else { return }
+        guard !AuthManager.shared.isAuthenticated else { return }
         switch link {
         case .joinLink(let id), .chatLink(let id):
             activeGuestSession = GuestSession(identifier: id, context: AnonymousSessionStore.load(linkId: id))
@@ -561,7 +459,7 @@ struct SystemThemeDetector<Content: View>: View {
 
 // MARK: - Profile sheet environment
 
-private struct ProfileSheetEnvironment: ViewModifier {
+struct ProfileSheetEnvironment: ViewModifier {
     /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA visibilité autorise,
     /// rien sinon. Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
     /// injection, toutes les feuilles de profil la reçoivent.

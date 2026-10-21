@@ -5,6 +5,7 @@ import MeeshySDK
 @MainActor
 final class AppRootSessionTests: XCTestCase {
 
+    @MainActor
     private final class FakeRootSessionSource: AppRootSessionSource {
         var isAuthenticated = false
         var hasResolvedStoredSession = false
