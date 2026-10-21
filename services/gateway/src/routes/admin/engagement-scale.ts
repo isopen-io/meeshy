@@ -107,7 +107,6 @@ const engagementScaleSchema = {
       type: 'object',
       properties: {
         heavyPoints: { type: 'integer' },
-        clawbackHours: { type: 'integer' },
         unverifiedMaxPoints: { type: 'integer' },
       },
     },

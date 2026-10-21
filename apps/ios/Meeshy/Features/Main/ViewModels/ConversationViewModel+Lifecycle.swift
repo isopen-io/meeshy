@@ -89,10 +89,6 @@ extension ConversationViewModel {
 
     // MARK: - Consentement vocal
 
-    nonisolated static func resolveVoiceConsentMissing(_ fetchHasConsent: () async throws -> Bool) async -> Bool {
-        await VoiceConsentGate.missing(fetchHasConsent)
-    }
-
     private func loadVoiceConsentStatus() {
         let gate = collaborators.voiceConsent
         if gate.isKnownGranted {
