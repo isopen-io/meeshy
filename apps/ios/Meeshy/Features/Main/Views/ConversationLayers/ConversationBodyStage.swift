@@ -93,6 +93,7 @@ struct ConversationReaderModeBranch: View {
     @Binding var overlayState: ConversationOverlayState
     let showScript: () -> Void
     let reply: (Message) -> Void
+    let presentMenu: (Message) -> Void
     let openViewOnce: (String) -> Bool
     let openMedia: (MessageAttachment) -> Void
 
@@ -106,7 +107,7 @@ struct ConversationReaderModeBranch: View {
                 scrollState: $scrollState,
                 overlayState: $overlayState,
                 showScript: showScript,
-                reply: reply,
+                presentMenu: presentMenu,
                 openViewOnce: openViewOnce,
                 openMedia: openMedia
             )

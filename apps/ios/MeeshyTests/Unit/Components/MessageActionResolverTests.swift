@@ -1068,15 +1068,18 @@ final class MessageExitOfferTests: XCTestCase {
         // Les menus du message (feuilles, overlay d'appui long) ont quitté l'hôte : son unité les compte.
         let host = try source("Views/ConversationView.swift") + source("Views/ConversationView+MessageSheets.swift")
             + source("Views/ConversationView+OverlayMenu.swift")
-        XCTAssertEqual(host.components(separatedBy: "MessageExitTransport.copy(").count - 1, 2)
+        // #11233 — les deux « Copier » du message copient le texte AFFICHÉ, par le site unique.
+        XCTAssertEqual(host.components(separatedBy: "MessageExitTransport.copyDisplayed(msg,in:viewModel)").count - 1, 2)
         XCTAssertEqual(host.components(separatedBy: "MessageExitTransport.save(msg,through:mediaSaveCoordinator)").count - 1, 2)
         XCTAssertTrue(host.contains("onShare:{ifMessageExitTransport.mayShare(msg){overlayState.shareMessage=msg}}"))
     }
 
-    func test_river_copyIsGuardedInTheGestureToo() throws {
+    /// #11224 — la Rivière n'a plus de menu à elle : sa copie est celle du menu
+    /// unifié, gardée par le transport. Elle n'écrit plus dans le presse-papiers.
+    func test_river_neverCopiesByItself_theUnifiedMenuDoes() throws {
         let code = try source("Riviere/View/RiverBubbleView.swift")
-        XCTAssertTrue(code.contains("ifcontent.viewOnceChip==nil,content.offersCopy{Button{ifcontent.offersCopy{UIPasteboard.general.string=content.text}}"))
-        XCTAssertEqual(code.components(separatedBy: "UIPasteboard").count - 1, 1)
+        XCTAssertFalse(code.contains("UIPasteboard"))
+        XCTAssertTrue(code.contains("onLongPress(content.bubble.messageId)"))
     }
 
     func test_gallery_bothTransportsAskTheGate_andTheMenuHandsItToTheCoordinator() throws {
