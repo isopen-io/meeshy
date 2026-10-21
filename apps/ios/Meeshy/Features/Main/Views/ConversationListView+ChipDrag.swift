@@ -151,14 +151,13 @@ final class ChipAutoScrollDriver {
         // Proxy weak (WeakDisplayLinkTarget) : un link `target: self` retiendrait
         // le driver, donc la View par `onScrollTick`. Plage 30…60 Hz : le doigt
         // ne demande pas 120 Hz de défilement.
-        let created = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let created = WeakDisplayLinkTarget.makeLink(frameRateRange: .clock) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
             }
             self.tick(link)
         }
-        created.preferredFrameRateRange = .visualClock
         created.add(to: .main, forMode: .common)
         link = created
         return created

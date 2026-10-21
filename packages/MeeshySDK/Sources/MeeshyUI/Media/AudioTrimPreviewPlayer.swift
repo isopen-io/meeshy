@@ -94,21 +94,20 @@ public final class AudioTrimPreviewPlayer: ObservableObject {
 
     // MARK: - L'horloge
 
-    /// Un `CADisplayLink` sur la plage 30…60 Hz (`CAFrameRateRange.visualClock`),
+    /// Un `CADisplayLink` sur la plage 30…60 Hz (`CAFrameRateRange.clock`),
     /// pas un `Timer` : la bande défile sous le curseur au rythme de l'ÉCRAN, et
     /// l'horloge d'affichage est déjà sur le fil principal — plus de `Task` par
     /// tic. Le proxy `WeakDisplayLinkTarget` ne retient pas `self` : un joueur
     /// abandonné ne reste pas vivant par sa propre horloge.
     private func demarrerHorloge() {
         arreterHorloge()
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .clock) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
             }
             self.battre()
         }
-        link.preferredFrameRateRange = .visualClock
         link.add(to: .main, forMode: .common)
         horloge = link
     }

@@ -1,5 +1,4 @@
 import XCTest
-import QuartzCore
 @testable import MeeshyUI
 
 /// #9883 — **la lecture du rognage suit l'horloge d'affichage.**
@@ -28,12 +27,5 @@ final class AudioTrimPlaybackStepTests: XCTestCase {
     func test_aPlayerThatStoppedByItself_finishesAtTheLowerBound() {
         let step = AudioTrimPlaybackStep.next(currentTime: 4, playerIsPlaying: false, lowerBound: 2, upperBound: 5)
         XCTAssertEqual(step, .finished(restingAt: 2))
-    }
-
-    func test_theVisualClockRange_isThirtyToSixty() {
-        let range = CAFrameRateRange.visualClock
-        XCTAssertEqual(range.minimum, 30)
-        XCTAssertEqual(range.maximum, 60)
-        XCTAssertEqual(range.preferred, 60)
     }
 }

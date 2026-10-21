@@ -92,7 +92,7 @@ final class VisualClockSourceGuardTests: XCTestCase {
             XCTAssertEqual(
                 Self.timerDrivers(in: source), [],
                 "\(path) pilote une valeur visuelle par un Timer. Utiliser TimelineView(.animation(minimumInterval:paused:)) "
-                + "ou WeakDisplayLinkTarget avec CAFrameRateRange.visualClock."
+                + "ou WeakDisplayLinkTarget.makeLink(frameRateRange: .clock)."
             )
         }
     }
@@ -147,10 +147,8 @@ final class VisualClockSourceGuardTests: XCTestCase {
 
     func test_chipAutoScroll_followsTheDisplay_andSleepsAtZeroSpeed() throws {
         let source = try app("Meeshy/Features/Main/Views/ConversationListView+ChipDrag.swift")
-        XCTAssertTrue(source.contains("WeakDisplayLinkTarget.makeLink"),
-                      "Le pilote n'est plus un CADisplayLink à proxy faible.")
-        XCTAssertTrue(source.contains("preferredFrameRateRange = .visualClock"),
-                      "La plage 30…60 n'est plus posée sur le link.")
+        XCTAssertTrue(source.contains("WeakDisplayLinkTarget.makeLink(frameRateRange: .clock)"),
+                      "Le pilote n'est plus un CADisplayLink à proxy faible sur l'horloge 30…60 (`.clock`).")
         XCTAssertTrue(source.contains("ChipAutoScroll.displacement("),
                       "Le pas n'est plus le temps RÉEL écoulé (loi `displacement`) mais une fraction nominale.")
         XCTAssertTrue(source.contains("isPaused"),
@@ -171,8 +169,8 @@ final class VisualClockSourceGuardTests: XCTestCase {
 
     func test_audioTrimPreview_followsTheDisplay() throws {
         let source = try sdk("packages/MeeshySDK/Sources/MeeshyUI/Media/AudioTrimPreviewPlayer.swift")
-        XCTAssertTrue(source.contains("WeakDisplayLinkTarget.makeLink"))
-        XCTAssertTrue(source.contains("preferredFrameRateRange = .visualClock"))
+        XCTAssertTrue(source.contains("WeakDisplayLinkTarget.makeLink(frameRateRange: .clock)"),
+                      "La lecture du rognage ne suit plus l'horloge 30…60 (`.clock`).")
         XCTAssertFalse(source.contains("Task { @MainActor"),
                        "Une `Task` par tic est de retour : l'horloge d'affichage est déjà sur le fil principal.")
     }
