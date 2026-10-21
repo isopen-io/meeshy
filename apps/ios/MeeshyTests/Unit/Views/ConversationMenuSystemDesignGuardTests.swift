@@ -417,6 +417,15 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         XCTAssertTrue(rows.contains("localized: \"conversation.row.menu_action\""), "L'action « Ouvrir le menu » de la rangée reste en place.")
     }
 
+    /// Quitter dit le MÊME mot dans le menu et dans sa confirmation, quel que
+    /// soit le type : « groupe » mentait pour une conversation publique ou une
+    /// chaîne (#11215).
+    func test_leaveLabel_isTheConfirmationTitle_forEveryType() throws {
+        let menu = try source("Meeshy/Features/Main/Views/ConversationContextMenuView.swift")
+        XCTAssertTrue(menu.contains("localized: \"conversation.info.leave.title\""), "Le menu reprend le titre de la confirmation de départ.")
+        XCTAssertFalse(menu.contains("context.leave_group"), "« Quitter le groupe » ne s'offre plus à une chaîne.")
+    }
+
     // MARK: - Menu d'appui long des MESSAGES (design système par version)
     //
     // Décision produit 2026-07-14 (« hybride ») : le menu d'appui long des

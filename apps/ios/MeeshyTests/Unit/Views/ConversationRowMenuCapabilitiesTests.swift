@@ -73,6 +73,27 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertFalse(caps.invite)
     }
 
+    func test_make_publicMember_invites_likeTheGateway() {
+        let caps = capabilities(makeConversation(type: .public, currentUserRole: "member"), user: makeUser())
+        XCTAssertTrue(caps.invite, "mayMintShareLink : tout membre inscrit d'une conversation publique fabrique un lien.")
+    }
+
+    func test_make_broadcastMember_hasNoInvite() {
+        let caps = capabilities(makeConversation(type: .broadcast, currentUserRole: "member"), user: makeUser())
+        XCTAssertFalse(caps.invite, "Une chaîne reste réservée aux moderators : seul public ouvre le lien au membre.")
+    }
+
+    func test_make_publicGuest_hasNoInvite() {
+        let caps = capabilities(makeConversation(type: .public, currentUserRole: "member"), user: makeUser(isAnonymous: true))
+        XCTAssertFalse(caps.invite, "Le lien exige une ligne Participant d'inscrit.")
+    }
+
+    func test_make_legacyUppercaseRole_keepsTheRightsTheGatewayGrants() {
+        let caps = capabilities(makeConversation(currentUserRole: "ADMIN"), user: makeUser())
+        XCTAssertTrue(caps.rename, "effectiveConversationRole plie la casse : une ligne « ADMIN » héritée renomme.")
+        XCTAssertTrue(caps.invite)
+    }
+
     // MARK: - Rôle de plateforme
 
     func test_make_platformAdmin_memberRow_hasRenameAndAdminOpen() {
@@ -140,10 +161,11 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertFalse(caps.report, "On ne se signale pas soi-même.")
     }
 
-    func test_make_anonymousGuest_hasNoReportNorRemoval() {
+    func test_make_anonymousGuest_hasNoReportNorRemovalNorLeave() {
         let caps = capabilities(makeConversation(), user: makeUser(isAnonymous: true))
         XCTAssertFalse(caps.report)
         XCTAssertNil(caps.removal)
+        XCTAssertFalse(caps.leave, "POST /conversations/:id/leave refuse les anonymes.")
     }
 
     func test_make_unloadedUser_opensNothingRoleBound() {
@@ -160,9 +182,14 @@ final class ConversationRowMenuCapabilitiesTests: XCTestCase {
         XCTAssertEqual(caps.removal, .hide, "Un membre sans droit deleteForAll MASQUE la discussion.")
     }
 
-    func test_make_groupAdmin_keepsDelete() {
+    func test_make_groupAdmin_hides_untilDeleteForAllIsWired() {
         let caps = capabilities(makeConversation(currentUserRole: "admin"), user: makeUser())
-        XCTAssertEqual(caps.removal, .delete)
+        XCTAssertEqual(caps.removal, .hide, "Le geste ne masque que pour soi : « Supprimer » y affirmerait un droit qu'il n'exerce pas.")
+    }
+
+    func test_make_platformAdminInGroup_hides_untilDeleteForAllIsWired() {
+        let caps = capabilities(makeConversation(currentUserRole: "member"), user: makeUser(role: "BIGBOSS"))
+        XCTAssertEqual(caps.removal, .hide)
     }
 
     func test_make_direct_keepsDelete() {
@@ -251,6 +278,15 @@ final class ConversationContextMenuAccessibilityTests: XCTestCase {
             .accessibilityEntries.first { $0.id == "leave" }
         leave?.perform()
         XCTAssertEqual(recorder.calls, ["leave", "dismiss"])
+    }
+
+    func test_accessibilityEntries_reachFavoritesAndMoveTargets() {
+        let recorder = Recorder()
+        let entries = makeMenu(memberRole: "member", platformRole: "USER", recorder: recorder).accessibilityEntries
+        XCTAssertEqual(entries.filter { $0.id.hasPrefix("favorite.") }.count, 8, "Les huit favoris sont des actions nommées.")
+        XCTAssertTrue(entries.contains { $0.id == "move.inbox" }, "« Mes conversations » est atteignable sans ouvrir le sous-panneau.")
+        entries.first { $0.id.hasPrefix("favorite.") }?.perform()
+        XCTAssertEqual(recorder.calls, ["favorite", "dismiss"])
     }
 
     func test_hideLabel_namesWhatTheGestureDoes() {

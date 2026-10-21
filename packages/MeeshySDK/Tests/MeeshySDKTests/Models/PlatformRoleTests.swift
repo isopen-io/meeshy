@@ -159,4 +159,11 @@ struct PlatformRoleTests {
         #expect(authority(conversationRole: "moderator", isActiveMember: false).memberRank == 0)
         #expect(authority(conversationRole: "moderator").memberRank == MemberRole.moderator.level)
     }
+
+    @Test func aLegacyUppercaseConversationRoleGovernsTheConversationButNotItsMessages() {
+        #expect(authority(conversationRole: "MODERATOR").effectiveRole == .moderator)
+        #expect(authority(conversationRole: "CREATOR").effectiveRank == MemberRole.creator.level)
+        #expect(authority(conversationRole: "MODERATOR").memberRank == 0)
+        #expect(authority(conversationRole: "OWNER").effectiveRole == nil)
+    }
 }
