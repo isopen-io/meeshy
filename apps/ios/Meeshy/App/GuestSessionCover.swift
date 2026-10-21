@@ -29,9 +29,3 @@ struct GuestSessionCover: ViewModifier {
         }
     }
 }
-
-extension View {
-    func guestSessionCover(guest: GuestSession?, isAuthenticated: Bool, actions: GuestSessionCoverActions) -> some View {
-        modifier(GuestSessionCover(guest: guest, isAuthenticated: isAuthenticated, actions: actions))
-    }
-}

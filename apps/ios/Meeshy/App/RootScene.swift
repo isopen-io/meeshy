@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct RootSceneState {
     let hasCheckedSession: Bool
