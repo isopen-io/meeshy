@@ -5,7 +5,7 @@ import {
   TUS_BACKGROUND_MESSAGE,
   backgroundFetchIdOf,
   backgroundUploadPort,
-  documentVisibility,
+  visibilityOf,
   type BackgroundContainer,
   type BackgroundRegistration,
 } from './tus-background';
@@ -126,21 +126,26 @@ describe('backgroundUploadPort.isRunning / settled', () => {
   });
 });
 
-describe('documentVisibility', () => {
+describe('visibilityOf', () => {
   test('prévient quand la page passe à l’arrière-plan, et se désabonne', () => {
+    const target = new EventTarget();
+    const page = Object.assign(target, { visibilityState: 'visible' as DocumentVisibilityState }) as unknown as Document;
     let hidden = 0;
-    const stop = documentVisibility.onHidden(() => (hidden += 1));
-    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
-    document.dispatchEvent(new Event('visibilitychange'));
+    const stop = visibilityOf(() => page).onHidden(() => (hidden += 1));
+
+    target.dispatchEvent(new Event('visibilitychange'));
     expect(hidden).toBe(0);
 
-    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
-    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(page, 'visibilityState', { value: 'hidden', configurable: true });
+    target.dispatchEvent(new Event('visibilitychange'));
     expect(hidden).toBe(1);
 
     stop();
-    document.dispatchEvent(new Event('visibilitychange'));
+    target.dispatchEvent(new Event('visibilitychange'));
     expect(hidden).toBe(1);
-    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+  });
+
+  test('sans document (rendu serveur, worker) : rien à écouter, aucune exception', () => {
+    expect(() => visibilityOf(() => undefined).onHidden(() => undefined)()).not.toThrow();
   });
 });
