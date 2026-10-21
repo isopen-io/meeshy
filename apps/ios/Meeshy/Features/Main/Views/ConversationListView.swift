@@ -504,15 +504,18 @@ struct ConversationListView: View {
         .overlay { KeyboardCursorRing(isActive: keyboardCursor == conversation.id, accentColor: conversation.accentColor) }
     }
 
-    private func openConversation(_ conversation: Conversation) {
-        guard ConversationLockManager.shared.isLocked(conversation.id) else { return onSelect(conversation) }
+    func openConversation(_ conversation: Conversation, searching: Bool = false) {
+        let route = ConversationOpenRoute.resolve(conversation.id, searching: searching)
+        if route.armsSearchNow { router.pendingOpenSearch = true }
+        guard route.presentsLockSheet else { return onSelect(conversation) }
+        sheetTargets.searchAfterUnlock = route.searchesAfterUnlock
         lockSheetMode = .openConversation
         sheetTargets.lockSheet = conversation
     }
 
     private func openConversation(id: String) {
         conversationViewModel.groupedConversations.lazy.flatMap(\.conversations)
-            .first { $0.id == id }.map(openConversation(_:))
+            .first { $0.id == id }.map { openConversation($0) }
     }
 
     private var swipeActions: ConversationSwipeActions {
