@@ -32,7 +32,6 @@ final class WindowMetricsSourceGuardTests: XCTestCase {
         let debt: Set<String> = [
             "SlideMiniPreview.swift",
             "StickerPickerView+Templates.swift",
-            "BannerFrameRenderer.swift",
             "AudioWaveform.swift",
             "VideoFilmstrip.swift",
         ]
