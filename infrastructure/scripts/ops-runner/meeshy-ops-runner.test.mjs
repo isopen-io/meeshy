@@ -139,7 +139,7 @@ describe('une demande de sauvegarde valide', () => {
   it('un second appel avant six heures est retenu par le délai, sans rien exécuter', () => {
     drop(request());
     run();
-    drop(request({ id: ID_B }));
+    drop(request({ id: ID_B, requestedAt: '2026-10-13T03:58:00.000Z' }));
     run('process', { OPS_NOW: '2026-10-13T03:59:00.000Z' });
     assert.equal(calls().length, 1);
     assert.equal(opsState().runs.backup.status, 'throttled');
@@ -294,6 +294,48 @@ describe('les demandes refusées', () => {
     drop(request({ requestedBy: 'secret-token-XYZ', extra: 1 }));
     run();
     assert.ok(!readFileSync(path.join(base, 'state', 'ops.json'), 'utf8').includes('secret-token-XYZ'));
+  });
+
+  it('une demande REMPLACÉE par une FIFO entre lstat et open ne bloque jamais le runner : refusée, sans rien exécuter (#10459 point 2)', () => {
+    const fifo = path.join(base, 'requests', `${ID_A}.json`);
+    assert.equal(spawnSync('mkfifo', [fifo]).status, 0);
+    const small = path.join(root, 'petit.json');
+    writeFileSync(small, JSON.stringify(request()));
+    // Une passerelle compromise (uid 1001) qui échange le fichier contre une FIFO
+    // APRÈS le lstat : on rejoue la course en faisant mentir lstat, pas open.
+    const result = spawnSync('python3', ['-I', '-c', `import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location('runner', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+regular = os.lstat(sys.argv[3])
+module.os.lstat = lambda _path: regular
+state = module.empty_state()
+module.handle_request(module.Paths('staging'), 'staging', os.path.basename(sys.argv[2]), state)
+`, RUNNER, fifo, small], { env, encoding: 'utf8', timeout: 10_000 });
+    assert.equal(result.signal, null, 'le runner a bloqué sur la FIFO');
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /not-regular-file/);
+    assert.deepEqual(readdirSync(path.join(base, 'requests')), []);
+    assert.equal(readdirSync(path.join(base, 'rejected')).length, 1);
+    assert.deepEqual(calls(), []);
+  });
+
+  it('une demande plus vieille que l’horizon (2 h) ou datée du futur est refusée et nommée : un runner réveillé tard n’exécute pas un geste que personne ne tient plus (#10459)', () => {
+    drop(request({ requestedAt: '2026-10-12T19:59:59.000Z' }));
+    run();
+    refusedWithoutEffect();
+    assert.equal(opsState().runs.backup.status, 'rejected');
+    assert.equal(opsState().runs.backup.code, 'stale-request');
+    assert.equal(opsState().lastAcceptedAt.backup, null);
+
+    drop(request({ id: ID_B, requestedAt: '2026-10-12T22:06:00.000Z' }));
+    run();
+    assert.deepEqual(calls(), []);
+    assert.equal(opsState().runs.backup.code, 'future-request');
+
+    drop(request({ id: ID_B, requestedAt: '2026-10-12T20:00:01.000Z' }));
+    run();
+    assert.equal(opsState().runs.backup.status, 'succeeded');
   });
 
   it('un fichier temporaire récent est laissé, un vieux est retiré', () => {
