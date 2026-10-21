@@ -169,6 +169,66 @@ struct StoryItemRenderableSlideTests {
         #expect(slide.mediaURL == "https://cdn.example.com/legacy-bg.jpg")
     }
 
+    // MARK: - L'image d'un STICKER n'est jamais le fond (#9994)
+
+    /// La publication rattache l'image de chaque sticker au post
+    /// (`foregroundMediaIds`), donc elle figure dans `StoryItem.media`. Le choix
+    /// du fond hérité — « la pièce qu'aucun objet ne référence » — ne comptait
+    /// pas les stickers parmi les référents : l'image d'un sticker passait pour
+    /// le fond et se peignait sur toute la carte.
+    @Test func toRenderableSlide_stickerImage_isNeverTakenForTheBackdrop_besideAForegroundMedia() {
+        let foreground = StoryMediaObject(id: "fg", postMediaId: "fg-media",
+                                          kind: .image, aspectRatio: 1.5,
+                                          isBackground: false)
+        var effects = StoryEffects()
+        effects.mediaObjects = [foreground]
+        effects.stickerObjects = [StorySticker(id: "st", emoji: "⭐️", postMediaId: "sticker-media")]
+        let fg = FeedMedia(id: "fg-media", type: .image,
+                           url: "https://cdn.example.com/fg.jpg", thumbnailColor: "000000")
+        let sticker = FeedMedia(id: "sticker-media", type: .image,
+                                url: "https://cdn.example.com/sticker.png", thumbnailColor: "000000")
+        let item = StoryItem(id: "story-1", content: nil, media: [fg, sticker],
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+        #expect(slide.mediaURL == nil)
+    }
+
+    /// Le cas le plus visible : une story TEXTE + sticker image, sans aucun
+    /// média posé. La branche « aucun mediaObject » prenait `media.first` —
+    /// l'image du sticker — comme fond plein cadre.
+    @Test func toRenderableSlide_textAndStickerStory_hasNoBackdrop() {
+        var effects = StoryEffects()
+        effects.textObjects = [StoryTextObject(id: "t1", text: "hi")]
+        effects.stickerObjects = [StorySticker(id: "st", emoji: "⭐️", postMediaId: "sticker-media")]
+        let sticker = FeedMedia(id: "sticker-media", type: .image,
+                                url: "https://cdn.example.com/sticker.png", thumbnailColor: "000000")
+        let item = StoryItem(id: "story-1", content: nil, media: [sticker],
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+        #expect(slide.mediaURL == nil)
+        #expect(slide.effects.mediaObjects == nil)
+    }
+
+    /// Le fond hérité d'une story qui porte AUSSI un sticker image reste son fond.
+    @Test func toRenderableSlide_legacyBackdrop_survivesAStickerImageListedBeforeIt() {
+        var effects = StoryEffects()
+        effects.stickerObjects = [StorySticker(id: "st", emoji: "⭐️", postMediaId: "sticker-media")]
+        let sticker = FeedMedia(id: "sticker-media", type: .image,
+                                url: "https://cdn.example.com/sticker.png", thumbnailColor: "000000")
+        let bg = FeedMedia(id: "bg-media", type: .image,
+                           url: "https://cdn.example.com/bg.jpg", thumbnailColor: "000000")
+        let item = StoryItem(id: "story-1", content: nil, media: [sticker, bg],
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+        #expect(slide.mediaURL == "https://cdn.example.com/bg.jpg")
+    }
+
     // MARK: - Forme legacy « média seul » (TRANSITOIRE)
 
     /// Un client sans `X-Canvas-Caps` reçoit d'une story canvas v3 une forme

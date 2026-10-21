@@ -73,12 +73,7 @@ public nonisolated struct StoryRecomposition: Sendable {
         var assets: [Asset] = []
         var effects = renderable.effects
 
-        // Le fond hérité est la pièce qu'AUCUN objet ne référence — mais
-        // `toRenderableSlide` ne compte pas les stickers parmi les référents :
-        // l'image d'un sticker passerait pour le fond. Elle reste au sticker.
-        let stickerMediaIds = Set((effects.stickerObjects ?? []).map(\.postMediaId).filter { !$0.isEmpty })
-        if let url = renderable.mediaURL, !url.isEmpty,
-           !story.media.contains(where: { $0.url == url && stickerMediaIds.contains($0.id) }) {
+        if let url = renderable.mediaURL, !url.isEmpty {
             let backdrop = story.media.first { $0.url == url }
             guard backdrop.map({ $0.type == .image }) ?? true else { return nil }
             assets.append(Asset(objectId: slideId, kind: .backgroundImage, remoteURL: url))

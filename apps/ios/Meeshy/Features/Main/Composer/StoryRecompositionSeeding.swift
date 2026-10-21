@@ -12,7 +12,8 @@ import MeeshyUI
 ///
 /// Les images sont décodées au plafond de 1080 px du composer, hors du main
 /// actor (`StoryMediaLoader`) ; vidéos et sons restent des FICHIERS, que la
-/// fabrique copie.
+/// fabrique copie. Un sticker ANIMÉ garde aussi ses octets d'origine : sans
+/// eux, il repartirait figé sur sa première image.
 ///
 /// `nil` dès qu'un média de la scène ne se rapatrie pas : la porte se referme
 /// alors en le disant, plutôt que d'ouvrir une scène amputée.
@@ -25,6 +26,7 @@ enum StoryRecompositionSeeding {
 
         var images: [String: UIImage] = [:]
         var files: [String: URL] = [:]
+        var stickerAnimations: [String: Data] = [:]
         for asset in recomposition.assets {
             guard let file = local[asset.objectId] else { continue }
             switch asset.kind {
@@ -35,9 +37,13 @@ enum StoryRecompositionSeeding {
                       let bitmap = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080)
                 else { continue }
                 images[asset.objectId] = bitmap
+                if asset.kind == .stickerImage, AnimatedImageDecoder.animates(data) {
+                    stickerAnimations[asset.objectId] = data
+                }
             }
         }
-        return StoryComposerSeed.scene(recomposition, images: images, files: files)
+        return StoryComposerSeed.scene(recomposition, images: images, files: files,
+                                       stickerAnimations: stickerAnimations)
     }
 
     /// Les fichiers locaux, par identifiant d'objet. Un média introuvable est

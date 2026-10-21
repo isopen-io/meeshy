@@ -150,11 +150,17 @@ public struct StoryComposerSeed {
     /// `nil` dès qu'un fond, un média ou un son manque — la scène ne se reprend
     /// qu'entière. Une image de STICKER absente ne refuse rien : le sticker se
     /// peint par son emoji, comme chez tout lecteur à qui l'image manque.
+    ///
+    /// `stickerAnimations` porte les octets ANIMÉS (GIF, APNG) des stickers qui
+    /// bougent : sans eux, la publication téléverse la seule image fixe et le
+    /// sticker repart figé. Seuls ceux d'un sticker de la scène sont gardés.
     public static func scene(_ recomposition: StoryRecomposition,
                              images: [String: UIImage],
-                             files: [String: URL]) -> StoryComposerSeed? {
+                             files: [String: URL],
+                             stickerAnimations: [String: Data] = [:]) -> StoryComposerSeed? {
         var background: UIImage?
         var bitmaps: [String: UIImage] = [:]
+        var animations: [String: Data] = [:]
         var videos: [String: URL] = [:]
         var audios: [String: URL] = [:]
         let abandon: () -> StoryComposerSeed? = {
@@ -173,6 +179,7 @@ public struct StoryComposerSeed {
                 bitmaps[asset.objectId] = image
             case .stickerImage:
                 if let image = images[asset.objectId] { bitmaps[asset.objectId] = image }
+                if let data = stickerAnimations[asset.objectId] { animations[asset.objectId] = data }
             case .video, .audio:
                 guard let source = files[asset.objectId],
                       let copied = StoryComposerSeedFile.copyForComposer(
@@ -187,7 +194,8 @@ public struct StoryComposerSeed {
                                                  backgroundImage: background,
                                                  images: bitmaps,
                                                  videoURLs: videos,
-                                                 audioURLs: audios)
+                                                 audioURLs: audios,
+                                                 stickerAnimations: animations)
         return StoryComposerSeed(payload: .scene(scene), description: recomposition.description)
     }
 
@@ -241,6 +249,8 @@ public struct StoryComposerRecomposedScene {
     public let images: [String: UIImage]
     public let videoURLs: [String: URL]
     public let audioURLs: [String: URL]
+    /// Les octets animés des stickers qui bougent, sous l'id du sticker.
+    public let stickerAnimations: [String: Data]
 }
 
 /// La copie sous la convention de nom du composer, isolée pour être lisible
@@ -346,6 +356,9 @@ public extension StoryComposerViewModel {
                                audioURLs: scene.audioURLs)
             for (objectId, fileURL) in scene.videoURLs {
                 loadVideoThumbnail(objectId: objectId, fileURL: fileURL)
+            }
+            for (stickerId, data) in scene.stickerAnimations {
+                registerLoadedStickerAnimation(data, for: stickerId)
             }
             isSeededSession = true
 

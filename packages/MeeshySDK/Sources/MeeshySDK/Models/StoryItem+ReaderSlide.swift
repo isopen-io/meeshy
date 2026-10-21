@@ -147,6 +147,10 @@ extension StoryItem {
         // `media`, donc il n'est jamais choisi ici : `renderBackground` le traite
         // en amont (branche isBackground), et `mediaURL` reste `nil` — pas de
         // double routage ni de post id fourni au resolver keyé sur `FeedMedia.id`.
+        // L'image d'un STICKER est un média du post (la publication la rattache
+        // avec le premier plan) : elle n'est jamais un candidat au fond (#9994).
+        let stickerMediaIds = Set((effects.stickerObjects ?? []).map(\.postMediaId).filter { !$0.isEmpty })
+        let backdropCandidates = self.media.filter { !stickerMediaIds.contains($0.id) }
         let legacyMediaURL: String?
         if let mediaObjects = effects.mediaObjects, !mediaObjects.isEmpty {
             var referencedIds = Set(mediaObjects.map(\.postMediaId))
@@ -156,14 +160,14 @@ extension StoryItem {
                     referencedIds.insert(variant.postMediaId)
                 }
             }
-            legacyMediaURL = self.media.first(where: { !referencedIds.contains($0.id) })?.url
-        } else if let carrier = Self.legacyVideoCarrier(in: self.media) {
+            legacyMediaURL = backdropCandidates.first(where: { !referencedIds.contains($0.id) })?.url
+        } else if let carrier = Self.legacyVideoCarrier(in: backdropCandidates) {
             // TRANSITOIRE — forme legacy « média seul ». À SUPPRIMER quand le
             // parc ne sert plus que le canvas v3 (voir `legacyVideoCarrier`).
             effects.mediaObjects = [carrier]
             legacyMediaURL = nil
         } else {
-            legacyMediaURL = self.media.first?.url
+            legacyMediaURL = backdropCandidates.first?.url
         }
         return StorySlide(
             id: self.id,

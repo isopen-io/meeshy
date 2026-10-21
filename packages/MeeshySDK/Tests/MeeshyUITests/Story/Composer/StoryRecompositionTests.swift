@@ -223,6 +223,31 @@ final class StoryRecompositionTests: XCTestCase {
         XCTAssertNotNil(seed)
     }
 
+    /// Un sticker ANIMÉ garde ses octets : sans eux, la publication téléverse la
+    /// seule image fixe et le sticker repart figé.
+    func test_laGraine_gardeLesOctetsAnimesDUnSticker_etPasCeuxDUnAutreObjet() throws {
+        let recomposition = try XCTUnwrap(StoryRecomposition(story: richStory(), preferredLanguages: []))
+        let gif = Data("GIF89a-anime".utf8)
+        let seed = try XCTUnwrap(StoryComposerSeed.scene(
+            recomposition,
+            images: ["m-1": makeImage(), "st-image": makeImage()],
+            files: ["v-1": try makeFile("v.mp4"), "au-1": try makeFile("voice.m4a")],
+            stickerAnimations: ["st-image": gif, "m-1": gif]
+        ))
+        guard case .scene(let posed)? = seed.payload else { return XCTFail("graine de scène attendue") }
+        addTeardownBlock {
+            for url in Array(posed.videoURLs.values) + Array(posed.audioURLs.values) {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+
+        let sut = StoryComposerViewModel(seeding: seed)
+
+        XCTAssertEqual(sut.loadedStickerAnimations["st-image"], gif)
+        XCTAssertNil(sut.loadedStickerAnimations["m-1"],
+                     "seul un sticker de la scène porte des octets animés")
+    }
+
     func test_laGraineLegacy_poseLeFondDansSlideImages() throws {
         let legacy = story(media: [FeedMedia(id: "pm-1", type: .image, url: "https://cdn.example/bg.jpg")],
                            content: "Plage")
