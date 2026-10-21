@@ -10,6 +10,7 @@ import type { Message } from '@/lib/api/types';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { sendSheetStore, type SendSheetRequest } from '@/lib/send/send-sheet-store';
+import { menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -73,12 +74,11 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
       messages,
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      // #7377 — ce témoin garde le TRANSFERT, pas le favori. `false` le dit et
+      // #7377 — ce témoin garde le TRANSFERT, pas le favori. `hasAccount: false` le dit et
       // évite d'exiger ici un QueryClientProvider : l'état d'étoile d'un
-      // message se LIT du serveur, donc `canStar: true` monterait une requête
+      // message se LIT du serveur, donc `hasAccount: true` monterait une requête
       // qui n'a rien à voir avec ce qui est mesuré.
-      canStar: false,
+      viewer: menuViewer({ hasAccount: false }),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
     });
@@ -91,7 +91,7 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
   act(() => {
     root.render(
       // #7378 — `useMessageMenu` lit l'état de favori par `useQuery`. Même
-      // `enabled: false` (ce que pose `canStar: false` ci-dessus), le hook
+      // `enabled: false` (ce que pose `hasAccount: false` ci-dessus), le hook
       // exige un client dans l'arbre pour exister : `enabled` gouverne la
       // REQUÊTE, jamais la présence du fournisseur.
       <QueryClientProvider client={appQueryClient}>

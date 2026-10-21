@@ -6,6 +6,7 @@ import { attachmentDefaults, message, minutesAgo, translation } from '@/lib/api/
 import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { loadMessagePiecesCatalog, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
+import { menuScope } from '@/test-support/menu-viewer';
 
 import {
   MAX_PRIMARY_MENU_ACTIONS,
@@ -33,24 +34,9 @@ beforeAll(async () => {
 
 const NOW = Date.parse('2026-10-20T12:00:00.000Z');
 
-const viewerOf = (overrides: Partial<MenuViewer> = {}): MenuViewer => ({
-  id: 'u-viewer',
-  participantId: null,
-  hasAccount: true,
-  isAnonymous: false,
-  platformRole: 'USER',
-  conversationRole: 'member',
-  canSendMessages: true,
-  isActiveMember: true,
-  ...overrides,
-});
-
 const scopeOf = (
   options: { readonly viewer?: Partial<MenuViewer>; readonly conversation?: Partial<ActionConversation> } = {},
-): ActionScope => ({
-  viewer: viewerOf(options.viewer),
-  conversation: { type: 'group', encryptionMode: null, isActive: true, ...options.conversation },
-});
+): ActionScope => menuScope(options.viewer, options.conversation);
 
 const row = (overrides: Partial<Message> = {}): Message =>
   message({

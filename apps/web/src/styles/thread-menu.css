@@ -106,6 +106,21 @@
   border-top: 1px solid var(--color-edge);
 }
 
+/* LES GROUPES DU MENU (#11210) — principal, organiser, plus, modération,
+   destructif : un trait plus franc les sépare (9 px avec ses marges,
+   `SEPARATOR_HEIGHT` de `message-menu.tsx`), et la mention du bout en bout se
+   lit en retrait, sans être un geste. */
+.message-menu-separator {
+  height: 1px;
+  margin-block: 4px;
+  background-color: var(--color-edge);
+}
+.message-menu-notice {
+  margin: 0;
+  color: var(--color-ios-ink-3);
+  border-top: 1px solid var(--color-edge);
+}
+
 /* LA SURFACE DU GLISSEMENT (#9043) — tout le voile : glisser vers le haut y
    réduit l'aperçu, un toucher y ferme. `touch-action: none` : le doigt pilote
    la réduction, jamais un défilement du document. */

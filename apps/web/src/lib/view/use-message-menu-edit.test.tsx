@@ -8,6 +8,7 @@ import type { Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -70,8 +71,7 @@ function mount(options: { readonly hasAccount?: boolean; readonly withEdit?: boo
       messages,
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      canStar: options.hasAccount ?? true,
+      viewer: menuViewer({ hasAccount: options.hasAccount ?? true }),
       reply: {
         setReplyTarget: () => {},
         setReplyToMedia: () => {},
@@ -109,10 +109,10 @@ function mount(options: { readonly hasAccount?: boolean; readonly withEdit?: boo
 const ids = (api: MenuApi): readonly string[] => api.menuData?.items.map((item) => item.id) ?? [];
 
 describe('useMessageMenu — « Modifier » suit la règle du serveur', () => {
-  test('mon message récent ⇒ « Modifier » ouvre le menu', () => {
+  test('mon message récent ⇒ « Modifier » s’offre, juste après « Répondre » (#11210)', () => {
     const { api, open } = mount();
     open('m-mine');
-    expect(ids(api())[0]).toBe('edit');
+    expect(ids(api()).slice(0, 2)).toEqual(['reply', 'edit']);
   });
 
   test('le message d’un autre, ou le mien au-delà de 24 heures ⇒ pas de « Modifier »', () => {

@@ -14,6 +14,7 @@ import { sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MessageMenu } from '@/components/message-menu';
+import { menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -97,8 +98,7 @@ function mount(lot: Message = LOT): { api: () => MenuApi; requests: HttpRequest[
       messages: [lot],
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      canStar: false,
+      viewer: menuViewer({ hasAccount: false }),
       reply: { setReplyTarget: () => {}, setReplyToMedia: (messageId, attachmentId) => replies.push([messageId, attachmentId]) },
       announce: () => {},
       queryClient,

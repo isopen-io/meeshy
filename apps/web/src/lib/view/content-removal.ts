@@ -1,4 +1,6 @@
-import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
+import { platformModerates } from '@meeshy/shared/utils/message-action-policy';
+
+import { messageActionsOf, type ActionMessage, type MenuViewer } from './message-action-scope';
 
 /**
  * **RETIRER LE CONTENU D'UN AUTRE** (#11150) — la loi du client, reflet du
@@ -29,17 +31,30 @@ export function removalBody(reason: string | undefined): { readonly body?: { rea
   return reason === undefined ? {} : { body: { reason } };
 }
 
-const PLATFORM_MODERATOR_ROLES: ReadonlySet<string> = new Set(['MODERATOR', 'ADMIN', 'BIGBOSS']);
+/** Un lecteur inscrit, membre actif, de ce rôle — la seule forme que la loi partagée juge (`message-action-policy.ts`). */
+const memberViewer = (platformRole: string | null | undefined, conversationRole: string | null | undefined): MenuViewer => ({
+  id: 'viewer',
+  hasAccount: true,
+  isAnonymous: false,
+  platformRole: platformRole ?? null,
+  conversationRole: conversationRole ?? null,
+  canSendMessages: true,
+  isActiveMember: true,
+});
 
-const MODERATED_CONVERSATION_TYPES: ReadonlySet<string> = new Set(['group', 'public', 'global', 'broadcast']);
+/** Le message d'un AUTRE, vivant — ce que « Retirer » vise. */
+const OTHERS_MESSAGE: ActionMessage = { id: 'others-message', senderId: 'author', content: '…', createdAt: new Date(0), isViewOnce: false, isBlurred: false };
 
-export const moderatesPlatformContent = (platformRole: string | null | undefined): boolean => PLATFORM_MODERATOR_ROLES.has(platformRole ?? '');
+/** Rôle de plateforme MODERATOR, ADMIN ou BIGBOSS, comparé EXACTEMENT (`platformModerates`, `@meeshy/shared`). */
+export const moderatesPlatformContent = (platformRole: string | null | undefined): boolean =>
+  platformModerates({ ...memberViewer(platformRole, null), isDeclaredMinor: false });
 
+/** Le verdict `remove` de `messageActionsFor` sur le message d'un autre — jamais une seconde règle (#11210). */
 export function moderatesConversation(params: {
   readonly conversation: { readonly type: string; readonly currentUserRole?: string | null | undefined };
   readonly platformRole: string | null | undefined;
 }): boolean {
   const { conversation, platformRole } = params;
-  if (!MODERATED_CONVERSATION_TYPES.has(conversation.type)) return false;
-  return hasMinimumMemberRole(conversation.currentUserRole ?? '', MemberRole.MODERATOR) || moderatesPlatformContent(platformRole);
+  const scope = { viewer: memberViewer(platformRole, conversation.currentUserRole), conversation: { type: conversation.type } };
+  return messageActionsOf(OTHERS_MESSAGE, scope, { now: Date.now() }).verdicts.remove !== null;
 }

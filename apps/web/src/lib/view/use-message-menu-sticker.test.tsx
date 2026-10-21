@@ -16,6 +16,7 @@ import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MessageMenu } from '@/components/message-menu';
+import { menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -101,8 +102,7 @@ function mount(lot: Message, library: readonly StickerDefinition[]): { api: () =
       messages: [lot],
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      canStar: false,
+      viewer: menuViewer({ hasAccount: false }),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
       queryClient,

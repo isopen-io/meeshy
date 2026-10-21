@@ -269,7 +269,8 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
   test('le menu reçoit le sous-menu de « Transférer » (#9039)', async () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
-    const item = (id: 'forward' | 'exportDiscussion', labelKey: 'message.menu.forward' | 'message.menu.exportDiscussion') => ({ id, labelKey, glyph: 'imageSquare' as const });
+    const item = (id: 'forward' | 'exportDiscussion', labelKey: 'message.menu.forward' | 'message.menu.exportDiscussion') =>
+      ({ id, catalog: 'interface', labelKey, glyph: 'imageSquare', group: 'primary' }) as const;
     await mountSheets(
       menuOf({
         menuTarget: { messageId: SERVER_MESSAGE_ID, element, isMine: true },

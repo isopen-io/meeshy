@@ -10,6 +10,7 @@ import type { Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { menuViewer } from '@/test-support/menu-viewer';
 
 import type { MenuViewer } from './message-actions';
 import { useMessageMenu } from './use-message-menu';
@@ -49,19 +50,14 @@ const row = (overrides: Partial<Message> & { readonly id: string }): Message =>
 const THEIRS = row({ id: 'm-theirs' });
 const MINE = row({ id: 'm-mine', senderId: 'u-viewer' });
 const FAILED = row({ id: 'cid_failed', senderId: 'u-viewer' });
-const MESSAGES = [THEIRS, MINE, FAILED];
-
-const viewerOf = (overrides: Partial<MenuViewer> = {}): MenuViewer => ({
-  id: 'u-viewer',
-  participantId: null,
-  hasAccount: true,
-  isAnonymous: false,
-  platformRole: 'USER',
-  conversationRole: 'member',
-  canSendMessages: true,
-  isActiveMember: true,
-  ...overrides,
+const LINK = row({ id: 'm-link', content: 'Le programme : https://meeshy.me/programme.' });
+const PLACE = row({
+  id: 'm-place',
+  content: '',
+  messageType: 'location',
+  metadata: { location: { latitude: 48.8566, longitude: 2.3522, name: 'Hôtel de Ville', address: 'Place de l’Hôtel de Ville, Paris' } },
 });
+const MESSAGES = [THEIRS, MINE, FAILED, LINK, PLACE];
 
 type MenuApi = ReturnType<typeof useMessageMenu>;
 
@@ -75,6 +71,7 @@ afterEach(() => {
 
 function mount(options: { readonly viewer?: Partial<MenuViewer>; readonly conversation?: Partial<ActionConversation> } = {}) {
   const retried: string[] = [];
+  const announced: string[] = [];
   const queryClient = new QueryClient();
   let latest!: MenuApi;
   function Harness() {
@@ -83,11 +80,11 @@ function mount(options: { readonly viewer?: Partial<MenuViewer>; readonly conver
       messages: MESSAGES,
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewer: viewerOf(options.viewer),
+      viewer: menuViewer(options.viewer),
       conversation: { type: 'group', encryptionMode: null, isActive: true, ...options.conversation },
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {}, beginEdit: () => {} },
       send: { retry: (id) => retried.push(id), failed: (id) => id === 'cid_failed' },
-      announce: () => {},
+      announce: (text) => announced.push(text),
       queryClient,
       transport: { request: async () => ({ ok: true, data: null as never }) },
     });
@@ -113,7 +110,7 @@ function mount(options: { readonly viewer?: Partial<MenuViewer>; readonly conver
     act(() => {
       container.querySelector(`[data-row="${id}"]`)?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-  return { api: () => latest, open, retried };
+  return { api: () => latest, open, retried, announced };
 }
 
 const ids = (api: MenuApi): readonly string[] => api.menuData?.items.map((item) => item.id) ?? [];
@@ -160,5 +157,64 @@ describe('useMessageMenu — le lecteur est explicite', () => {
     expect(ids(api())[0]).toBe('retry');
     act(() => api().onMenuAction('cid_failed', 'retry'));
     expect(retried).toEqual(['cid_failed']);
+  });
+});
+
+describe('useMessageMenu — les gestes du TYPE', () => {
+  let restore = () => {};
+  afterEach(() => restore());
+
+  const stubWindow = () => {
+    const opened: string[] = [];
+    const written: string[] = [];
+    const openDescriptor = Object.getOwnPropertyDescriptor(window, 'open');
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(window, 'open', {
+      configurable: true,
+      value: (url: string) => {
+        opened.push(url);
+        return null;
+      },
+    });
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          written.push(text);
+          return Promise.resolve();
+        },
+      },
+    });
+    restore = () => {
+      if (openDescriptor === undefined) delete (window as { open?: unknown }).open;
+      else Object.defineProperty(window, 'open', openDescriptor);
+      if (clipboard === undefined) delete (navigator as { clipboard?: unknown }).clipboard;
+      else Object.defineProperty(navigator, 'clipboard', clipboard);
+    };
+    return { opened, written };
+  };
+
+  test('un lien s’ouvre hors de Meeshy, et se copie avec son annonce', async () => {
+    const { opened, written } = stubWindow();
+    const { api, open, announced } = mount();
+    open('m-link');
+    expect(ids(api()).slice(0, 3)).toEqual(['reply', 'openLink', 'copyLink']);
+    act(() => api().onMenuAction('m-link', 'openLink'));
+    expect(opened).toEqual(['https://meeshy.me/programme']);
+    await act(async () => api().onMenuAction('m-link', 'copyLink'));
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    expect(written).toEqual(['https://meeshy.me/programme']);
+    expect(announced).toEqual(['Lien copié']);
+  });
+
+  test('un lieu s’ouvre dans une carte, et son adresse se copie', async () => {
+    const { opened, written } = stubWindow();
+    const { api, announced } = mount();
+    act(() => api().onMenuAction('m-place', 'openInMaps'));
+    expect(opened[0]?.startsWith('https://maps.apple.com/?ll=48.85660,2.35220')).toBe(true);
+    await act(async () => api().onMenuAction('m-place', 'copyAddress'));
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    expect(written).toEqual(['Place de l’Hôtel de Ville, Paris']);
+    expect(announced).toEqual(['Adresse copiée']);
   });
 });

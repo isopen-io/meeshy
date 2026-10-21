@@ -50,6 +50,15 @@ const fr = {
   'message.pin.failed': 'Le message n’a pas pu être épinglé',
   'message.unpin.failed': 'Le message n’a pas pu être désépinglé',
   'message.report.title': 'Signaler ce message',
+  'message.menu.retry': 'Réessayer',
+  'message.menu.translateOnDevice': 'Traduire sur l’appareil',
+  'message.menu.e2eeAbsent': 'Chiffré de bout en bout : ni transcription ni analyse',
+  'message.link.open': 'Ouvrir le lien',
+  'message.link.copy': 'Copier le lien',
+  'message.link.copied': 'Lien copié',
+  'message.location.open': 'Ouvrir dans une carte',
+  'message.location.copy': 'Copier l’adresse',
+  'message.location.copied': 'Adresse copiée',
 } as const;
 
 export default fr;

@@ -45,7 +45,7 @@ import { useTypistAvatar } from '@/lib/view/use-typist-avatar';
 import { useSend } from '@/lib/view/use-send';
 import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
-import { moderatesConversation } from '@/lib/view/content-removal';
+import { menuConversationOf, menuViewerOf } from '@/lib/view/message-action-scope';
 import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useOnline } from '@/lib/net/online';
@@ -518,11 +518,11 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     messages,
     readerLanguages,
     readerLocale,
-    viewerId: viewer.id ?? '',
-    canStar: !viewer.isAnonymous,
+    viewer: menuViewerOf({ viewer, participants: conversation?.participants, conversation, platformRole }),
+    conversation: menuConversationOf(conversation),
+    send: { retry, failed: (id) => deliveryOf(id) === 'failed' && !permanentOf(id) },
     reply: compose,
     announce: announcer.announce,
-    moderates: conversation !== undefined && moderatesConversation({ conversation, platformRole }),
   });
 
   /**

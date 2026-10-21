@@ -4,8 +4,11 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { useState } from 'react';
 
-import { forwardMenuItems, messageMenuItems, translationChoices, type MessageMenuItem } from '@/lib/view/message-actions';
+import { message, minutesAgo } from '@/lib/api/fixtures-base';
+import { forwardMenuItems, messageMenuContextOf, messageMenuItems, translationChoices, type MessageMenuItem } from '@/lib/view/message-actions';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { menuScope } from '@/test-support/menu-viewer';
 import { useLongPress } from '@/lib/view/long-press';
 import { pinToBottom } from '@/lib/view/pin-to-bottom';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -31,8 +34,13 @@ beforeAll(async () => {
      la langue n'est pas chargée — c'est le contrat de `i18n-catalog.ts`, pas
      un état à maquiller. Trois langues ici : le français des témoins
      existants, l'anglais et l'arabe du témoin de rang. */
-  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar'), loadMessagePiecesCatalog('fr')]);
 });
+
+/** Les verdicts de la loi partagée (#11210) sur le message d'un autre, et sur le mien. */
+const subject = (senderId: string) =>
+  message({ id: 'm2', conversationId: 'c-a', senderId, content: 'texte', originalLanguage: 'fr', translations: [], createdAt: minutesAgo(5) });
+const THEIRS = messageMenuContextOf(subject('u-autre'), { now: Date.now(), scope: menuScope() }).actions;
 
 afterAll(async () => {
   delete globals.IS_REACT_ACT_ENVIRONMENT;
@@ -67,9 +75,12 @@ function Harness({
   flatRow = false,
   events = {},
   forwardItems,
+  items: givenItems,
 }: {
   /** Le sous-menu de « Transférer » (#9039) — absent : Transférer agit aussitôt. */
   readonly forwardItems?: readonly MessageMenuItem[];
+  /** Les entrées, quand le témoin les compose lui-même (groupes, #11210). */
+  readonly items?: readonly MessageMenuItem[];
   readonly text?: string;
   readonly isMine?: boolean;
   readonly protectedMessage?: boolean;
@@ -83,7 +94,9 @@ function Harness({
     onOpen: (anchor) => setTarget({ messageId: 'm2', element: anchor.element, isMine }),
   });
 
-  const items = messageMenuItems({ hasText: true, isProtected: protectedMessage, languageCount: 2, canForward: true });
+  const items =
+    givenItems ??
+    messageMenuItems({ hasText: true, isProtected: protectedMessage, languageCount: 2, canForward: true, ...(THEIRS === undefined ? {} : { actions: THEIRS }) });
   const choices = translationChoices({
     message: { originalLanguage: 'fr', translations: [{ id: 't', messageId: 'm2', targetLanguage: 'en', translatedContent: 'Hello', translationModel: 'medium', createdAt: new Date() }] },
     preferredLanguages: ['en'],
@@ -184,14 +197,14 @@ describe('MessageMenu — ouvrir (T8)', () => {
     expect(document.querySelector('[aria-label="Ajouter une réaction"]')).not.toBeNull();
   });
 
-  test('les entrées, dans l’ordre : Sélectionner · Traduire · Copier · Transférer · Répondre · Imager · Plus…', () => {
+  test('les entrées, dans l’ordre : Répondre · Copier · Transférer · Traduire · Sélectionner · Imager · Plus… (#11210)', () => {
     const el = mount();
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const list = document.querySelector('.message-menu-list')!;
     const labels = Array.from(list.querySelectorAll('[role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['Sélectionner', 'Traduire', 'Copier', 'Transférer', 'Répondre', 'Imager', 'Plus…']);
+    expect(labels).toEqual(['Répondre', 'Copier', 'Transférer', 'Traduire', 'Sélectionner', 'Imager', 'Plus…']);
   });
 
   test('l’aperçu contient le texte de la rangée et AUCUN data-message/data-row dupliqué', () => {
@@ -379,7 +392,7 @@ describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-    expect(labelsOf()).toEqual(['Select', 'Translate', 'Copy', 'Forward', 'Reply', 'Make an image', 'More…']);
+    expect(labelsOf()).toEqual(['Reply', 'Copy', 'Forward', 'Translate', 'Select', 'Make an image', 'More…']);
   });
 
   test('interface AR ⇒ le menu rendu est arabe, et son rail s’annonce en arabe', () => {
@@ -388,7 +401,7 @@ describe('MessageMenu — les libellés viennent du catalogue (#7555)', () => {
     act(() => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-    expect(labelsOf()).toEqual(['تحديد', 'ترجمة', 'نسخ', 'إعادة توجيه', 'رد', 'تحويل إلى صورة', 'المزيد…']);
+    expect(labelsOf()).toEqual(['رد', 'نسخ', 'إعادة توجيه', 'ترجمة', 'تحديد', 'تحويل إلى صورة', 'المزيد…']);
     expect(document.querySelector('[data-message-menu-rail]')?.getAttribute('aria-label')).toBe(
       translate('ar', 'message.menu.react'),
     );
@@ -505,7 +518,55 @@ describe('MessageMenu — garde de protection (T11, D-23)', () => {
       row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const labels = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).map((b) => b.textContent);
-    expect(labels).toEqual(['Sélectionner', 'Transférer', 'Répondre', 'Plus…']);
+    expect(labels).toEqual(['Répondre', 'Transférer', 'Sélectionner', 'Plus…']);
+  });
+});
+
+/**
+ * #11210 — LES GROUPES SE VOIENT. Principal, organiser, plus, modération et
+ * destructif sont séparés par un trait ; « Supprimer » se dit dans la couleur
+ * de l'erreur ; la mention du bout en bout se lit sans être un geste (elle
+ * n'entre pas dans le parcours au clavier).
+ */
+describe('MessageMenu — les groupes (#11210)', () => {
+  const open = (items: readonly MessageMenuItem[]) => {
+    const el = mount({ items });
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+  };
+  const moderated = (encryptionMode: string | null) =>
+    messageMenuItems({
+      ...messageMenuContextOf(subject('u-autre'), { now: Date.now(), scope: menuScope({ platformRole: 'MODERATOR' }, { encryptionMode }) }),
+      piecesLabels: true,
+    });
+
+  test('un trait entre chaque groupe, jamais à l’intérieur d’un groupe', () => {
+    open(moderated(null));
+    const list = document.querySelector('.message-menu-list')!;
+    const groups = Array.from(list.querySelectorAll<HTMLElement>('[role="menuitem"]')).map((b) => b.dataset.group);
+    const changes = groups.filter((group, i) => i > 0 && group !== groups[i - 1]).length;
+    expect(new Set(groups)).toEqual(new Set(['primary', 'organize', 'more', 'moderation', 'destructive']));
+    expect(list.querySelectorAll('[data-message-menu-separator]').length).toBe(changes);
+  });
+
+  test('« Retirer » est au menu rapide d’un MODERATOR ; « Supprimer » porte la variante destructive, en dernier', () => {
+    open(moderated(null));
+    const buttons = Array.from(document.querySelectorAll<HTMLElement>('.message-menu-list [role="menuitem"]'));
+    expect(buttons.map((b) => b.textContent)).toContain('Retirer');
+    const last = buttons.at(-1);
+    expect([last?.textContent, last?.dataset.variant]).toEqual(['Supprimer', 'destructive']);
+    expect(buttons.filter((b) => b.dataset.variant === 'destructive').length).toBe(1);
+  });
+
+  test('en bout en bout, la mention se lit en « Plus », sans être une entrée du menu', () => {
+    open(moderated('e2ee'));
+    const notice = document.querySelector('[data-message-menu-notice]');
+    expect(notice?.textContent).toBe('Chiffré de bout en bout : ni transcription ni analyse');
+    expect(notice?.getAttribute('role')).toBeNull();
+    expect(Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).map((b) => b.textContent)).not.toContain(
+      'Chiffré de bout en bout : ni transcription ni analyse',
+    );
   });
 });
 

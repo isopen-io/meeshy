@@ -46,6 +46,15 @@ const ar = {
   'message.pin.failed': 'تعذّر تثبيت الرسالة',
   'message.unpin.failed': 'تعذّر إلغاء تثبيت الرسالة',
   'message.report.title': 'الإبلاغ عن هذه الرسالة',
+  'message.menu.retry': 'إعادة المحاولة',
+  'message.menu.translateOnDevice': 'الترجمة على الجهاز',
+  'message.menu.e2eeAbsent': 'مشفّرة من طرف إلى طرف: لا نسخ صوتي ولا تحليل',
+  'message.link.open': 'فتح الرابط',
+  'message.link.copy': 'نسخ الرابط',
+  'message.link.copied': 'تم نسخ الرابط',
+  'message.location.open': 'فتح في خريطة',
+  'message.location.copy': 'نسخ العنوان',
+  'message.location.copied': 'تم نسخ العنوان',
 } satisfies MessagePiecesCatalog;
 
 export default ar;

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -87,8 +87,23 @@ type ListItem = MessageMenuItem | PieceMenuItem;
 /** Le libellé d'une entrée — celles d'une pièce vivent dans leur propre catalogue (`i18n-message-pieces-catalog`). */
 const PIECE_ACTION_IDS: ReadonlySet<string> = new Set<PieceActionId>(['pieceReply', 'pieceSave', 'pieceForward', 'pieceDelete', 'wholeMessage']);
 const isPieceItem = (item: ListItem): item is PieceMenuItem => PIECE_ACTION_IDS.has(item.id);
-const labelOf = (language: InterfaceLanguage, item: ListItem): string =>
-  isPieceItem(item) || item.id === 'edit' || item.id === 'addSticker' ? translateMessagePieces(language, item.labelKey) : translate(language, item.labelKey);
+const labelOf = (language: InterfaceLanguage, item: ListItem): string => {
+  if (isPieceItem(item)) return translateMessagePieces(language, item.labelKey);
+  return item.catalog === 'pieces' ? translateMessagePieces(language, item.labelKey) : translate(language, item.labelKey);
+};
+
+/**
+ * LES GROUPES SE VOIENT (#11210) — un trait sépare principal, organiser,
+ * plus, modération et destructif ; la mention du bout en bout se lit sans se
+ * toucher (ce n'est pas un geste), et « Supprimer » se dit dans la couleur de
+ * l'erreur.
+ */
+const SEPARATOR_HEIGHT = 9;
+const groupOf = (item: ListItem): string | null => (isPieceItem(item) ? null : item.group);
+const isNotice = (item: ListItem): boolean => !isPieceItem(item) && item.id === 'e2eeNotice';
+const separatorsOf = (items: readonly ListItem[]): number =>
+  items.reduce((count, item, i) => (i > 0 && groupOf(item) !== groupOf(items[i - 1] as ListItem) ? count + 1 : count), 0);
+const isDestructive = (item: ListItem): boolean => !isPieceItem(item) && item.group === 'destructive';
 
 const isRtl = (): boolean => typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
 
@@ -196,8 +211,12 @@ export function MessageMenu({
      fondu : un `mask-image` posé sur l'hôte s'appliquerait APRÈS son `filter`
      et emporterait le halo et l'ombre de l'aperçu. */
   const previewClipRef = useRef<HTMLDivElement | null>(null);
-  const listItems: readonly ListItem[] = piece !== undefined ? piece.data.items : panel === 'forward' ? forwardItems : items;
+  const shownItems: readonly ListItem[] = piece !== undefined ? piece.data.items : panel === 'forward' ? forwardItems : items;
+  const listItems = shownItems.filter((item) => !isNotice(item));
+  const notice = panel === 'actions' && piece === undefined ? items.find(isNotice) : undefined;
   const listRows = panel === 'translate' && piece === undefined ? choices.length : listItems.length;
+  /* Les traits et la mention prennent leur place : la loi de placement la reçoit en lignes de menu. */
+  const extraHeight = panel === 'translate' ? 0 : separatorsOf(shownItems) * SEPARATOR_HEIGHT + (notice === undefined ? 0 : MENU_ROW_HEIGHT);
   /* LA BOÎTE D'UNE PIÈCE (#9907) — stable pour tout le défilement, centrée. */
   const pieceBox =
     piece === undefined || typeof window === 'undefined'
@@ -218,7 +237,7 @@ export function MessageMenu({
   const computePlacement = (rows: number, height: number | null = cloneHeight) => {
     const rect = target.element.getBoundingClientRect();
     const safe = safeAreaInsets();
-    const menuHeight = menuListHeight(rows);
+    const menuHeight = menuListHeight(rows) + extraHeight;
     const anchor =
       pieceBox !== null
         ? {
@@ -481,7 +500,7 @@ export function MessageMenu({
       close();
       return;
     }
-    if (item.id === 'translate') {
+    if (item.id === 'translate' || item.id === 'translateOnDevice') {
       showPanel('translate');
       return;
     }
@@ -788,32 +807,46 @@ export function MessageMenu({
           >
             {listItems.map((item, i) => {
               const index = railCount + i;
+              const previous = listItems[i - 1];
+              const tone = isDestructive(item) ? 'var(--color-error)' : undefined;
               return (
-                <button
-                  key={item.id}
-                  ref={(el) => {
-                    roving.itemRefs.current[index] = el;
-                  }}
-                  type="button"
-                  role="menuitem"
-                  data-action={item.id}
-                  tabIndex={index === roving.activeIndex ? 0 : -1}
-                  className="flex w-full items-center gap-2.5 px-3 text-start text-title font-medium"
-                  style={{ minHeight: MENU_ROW_HEIGHT, color: 'var(--color-ios-ink)' }}
-                  onClick={() => onListItemChosen(item)}
-                >
-                  <GlyphSvg glyph={THREAD_MENU_GLYPHS[item.glyph]} size={18} style={{ color: 'var(--accent)' }} />
-                  <span className="flex-1">{labelOf(language, item)}</span>
-                  {item.id === 'more' || (item.id === 'forward' && panel === 'actions' && forwardItems.length > 1) ? (
-                    <GlyphSvg
-                      glyph={{ viewBox: '0 0 256 256', body: '<path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/>' }}
-                      size={14}
-                      style={{ color: 'var(--color-ios-ink-3)' }}
-                    />
+                <Fragment key={item.id}>
+                  {previous !== undefined && groupOf(previous) !== groupOf(item) ? (
+                    <div role="separator" aria-hidden data-message-menu-separator className="message-menu-separator" />
                   ) : null}
-                </button>
+                  <button
+                    ref={(el) => {
+                      roving.itemRefs.current[index] = el;
+                    }}
+                    type="button"
+                    role="menuitem"
+                    data-action={item.id}
+                    {...(groupOf(item) === null ? {} : { 'data-group': groupOf(item) })}
+                    {...(tone === undefined ? {} : { 'data-variant': 'destructive' })}
+                    tabIndex={index === roving.activeIndex ? 0 : -1}
+                    className="flex w-full items-center gap-2.5 px-3 text-start text-title font-medium"
+                    style={{ minHeight: MENU_ROW_HEIGHT, color: tone ?? 'var(--color-ios-ink)' }}
+                    onClick={() => onListItemChosen(item)}
+                  >
+                    <GlyphSvg glyph={THREAD_MENU_GLYPHS[item.glyph]} size={18} style={{ color: tone ?? 'var(--accent)' }} />
+                    <span className="flex-1">{labelOf(language, item)}</span>
+                    {item.id === 'more' || (item.id === 'forward' && panel === 'actions' && forwardItems.length > 1) ? (
+                      <GlyphSvg
+                        glyph={{ viewBox: '0 0 256 256', body: '<path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/>' }}
+                        size={14}
+                        style={{ color: 'var(--color-ios-ink-3)' }}
+                      />
+                    ) : null}
+                  </button>
+                </Fragment>
               );
             })}
+            {notice === undefined ? null : (
+              <p data-message-menu-notice className="message-menu-notice flex items-center gap-2.5 px-3 text-caption" style={{ minHeight: MENU_ROW_HEIGHT }}>
+                {isPieceItem(notice) ? null : <GlyphSvg glyph={THREAD_MENU_GLYPHS[notice.glyph]} size={14} />}
+                <span className="flex-1">{labelOf(language, notice)}</span>
+              </p>
+            )}
           </div>
         ) : (
           /* UN SEUL `role="menu"` DANS LE DOCUMENT (revue #5814) — un `menu`

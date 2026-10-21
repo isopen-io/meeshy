@@ -10,6 +10,7 @@ import type { Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -84,8 +85,7 @@ function mount(options: { readonly hasAccount?: boolean; readonly answer?: (requ
       messages: MESSAGES,
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      canStar: options.hasAccount ?? true,
+      viewer: menuViewer({ hasAccount: options.hasAccount ?? true }),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
       queryClient,

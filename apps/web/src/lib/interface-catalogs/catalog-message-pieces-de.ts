@@ -46,6 +46,15 @@ const de = {
   'message.pin.failed': 'Die Nachricht konnte nicht angeheftet werden',
   'message.unpin.failed': 'Die Nachricht konnte nicht gelöst werden',
   'message.report.title': 'Diese Nachricht melden',
+  'message.menu.retry': 'Erneut versuchen',
+  'message.menu.translateOnDevice': 'Auf dem Gerät übersetzen',
+  'message.menu.e2eeAbsent': 'Ende-zu-Ende-verschlüsselt: keine Transkription, keine Analyse',
+  'message.link.open': 'Link öffnen',
+  'message.link.copy': 'Link kopieren',
+  'message.link.copied': 'Link kopiert',
+  'message.location.open': 'In einer Karte öffnen',
+  'message.location.copy': 'Adresse kopieren',
+  'message.location.copied': 'Adresse kopiert',
 } satisfies MessagePiecesCatalog;
 
 export default de;

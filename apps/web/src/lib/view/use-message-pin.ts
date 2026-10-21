@@ -8,6 +8,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { isMessagePiecesCatalogLoaded, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
+import type { ActionScope } from './message-action-scope';
 import { messagePinAction, type MessagePinAction } from './message-actions';
 
 /**
@@ -35,26 +36,26 @@ const noticeOf = (action: MessagePinAction, outcome: PinGestureOutcome): string 
 
 export function useMessagePin(params: {
   readonly conversationId: string;
-  readonly viewer: { readonly id: string; readonly hasAccount: boolean };
+  readonly scope: ActionScope;
   readonly announce: (text: string) => void;
   readonly queryClient: QueryClient;
   readonly transport: Transport;
 }): (message: Message | undefined) => MessagePinEntry | null {
-  const { conversationId, viewer, announce, queryClient, transport } = params;
+  const { conversationId, scope, announce, queryClient, transport } = params;
   return useCallback(
     (message: Message | undefined): MessagePinEntry | null => {
       if (message === undefined || !isMessagePiecesCatalogLoaded(currentInterfaceLanguage())) return null;
-      const action = messagePinAction(message, viewer, { now: Date.now() });
+      const action = messagePinAction(message, scope, { now: Date.now() });
       if (action === null) return null;
       return {
         action,
         onToggle: () => {
-          void performPinGesture({ queryClient, conversationId, messageId: message.id, on: action === 'pin', viewerId: viewer.id, transport }).then(
+          void performPinGesture({ queryClient, conversationId, messageId: message.id, on: action === 'pin', viewerId: scope.viewer.id, transport }).then(
             (outcome) => announce(noticeOf(action, outcome)),
           );
         },
       };
     },
-    [conversationId, viewer, announce, queryClient, transport],
+    [conversationId, scope, announce, queryClient, transport],
   );
 }

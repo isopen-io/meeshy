@@ -46,6 +46,15 @@ const es = {
   'message.pin.failed': 'No se pudo fijar el mensaje',
   'message.unpin.failed': 'No se pudo desfijar el mensaje',
   'message.report.title': 'Denunciar este mensaje',
+  'message.menu.retry': 'Reintentar',
+  'message.menu.translateOnDevice': 'Traducir en el dispositivo',
+  'message.menu.e2eeAbsent': 'Cifrado de extremo a extremo: sin transcripción ni análisis',
+  'message.link.open': 'Abrir enlace',
+  'message.link.copy': 'Copiar enlace',
+  'message.link.copied': 'Enlace copiado',
+  'message.location.open': 'Abrir en un mapa',
+  'message.location.copy': 'Copiar dirección',
+  'message.location.copied': 'Dirección copiada',
 } satisfies MessagePiecesCatalog;
 
 export default es;

@@ -31,10 +31,14 @@ describe('qui retire le message d’un autre dans une conversation', () => {
 
   test('le créateur, l’administrateur et le modérateur d’un groupe, d’une conversation publique, globale ou de diffusion', () => {
     for (const type of ['group', 'public', 'global', 'broadcast']) {
-      for (const role of ['creator', 'admin', 'moderator', 'ADMIN']) {
+      for (const role of ['creator', 'admin', 'moderator']) {
         expect({ type, role, ok: moderatesConversation({ conversation: { type, currentUserRole: role }, platformRole: null }) }).toEqual({ type, role, ok: true });
       }
     }
+  });
+
+  test('le rang se lit EXACT, comme la passerelle le compare — plier la casse offrirait ce qu’elle refuse (#11210)', () => {
+    expect(moderatesConversation({ conversation: { type: 'group', currentUserRole: 'ADMIN' }, platformRole: null })).toBe(false);
   });
 
   test('un simple membre non, sauf rôle de plateforme MODERATOR, ADMIN ou BIGBOSS', () => {
