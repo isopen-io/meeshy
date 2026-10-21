@@ -14,6 +14,8 @@
  * pastille chez les amis. Revenir pendant la grâce n'annonce rien ; revenir
  * après annonce le retour.
  */
+import { guardedTimeout, type TimerErrorLogger } from '../utils/guarded-timer.js';
+
 export const PRESENCE_AWAY_GRACE_MS = 15_000;
 
 export type PresenceForegroundDeps = {
@@ -23,12 +25,13 @@ export type PresenceForegroundDeps = {
   readonly announceAway: (userKey: string) => void;
   /** Écrit et diffuse le retour d'un utilisateur dont le départ était annoncé. */
   readonly announceBack: (userKey: string) => void;
+  readonly logger: TimerErrorLogger;
   readonly graceMs?: number;
 };
 
 export class PresenceForeground {
   private readonly hidden = new Set<string>();
-  private readonly pendingAway = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly pendingAway = new Map<string, NodeJS.Timeout>();
   private readonly announcedAway = new Set<string>();
 
   constructor(private readonly deps: PresenceForegroundDeps) {}
@@ -108,12 +111,17 @@ export class PresenceForeground {
 
   private scheduleAway(userKey: string): void {
     this.cancelAway(userKey);
-    const timer = setTimeout(() => {
-      this.pendingAway.delete(userKey);
-      if (this.isPresent(userKey) || (this.deps.socketsOf(userKey)?.size ?? 0) === 0) return;
-      this.announcedAway.add(userKey);
-      this.deps.announceAway(userKey);
-    }, this.deps.graceMs ?? PRESENCE_AWAY_GRACE_MS);
+    const timer = guardedTimeout({
+      name: 'presence-away-grace',
+      afterMs: this.deps.graceMs ?? PRESENCE_AWAY_GRACE_MS,
+      logger: this.deps.logger,
+      run: () => {
+        this.pendingAway.delete(userKey);
+        if (this.isPresent(userKey) || (this.deps.socketsOf(userKey)?.size ?? 0) === 0) return;
+        this.announcedAway.add(userKey);
+        this.deps.announceAway(userKey);
+      },
+    });
     timer.unref?.();
     this.pendingAway.set(userKey, timer);
   }

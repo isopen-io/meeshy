@@ -138,6 +138,7 @@ export class AuthHandler {
       socketsOf: (userKey) => this.userSockets.get(userKey),
       announceAway: (userKey) => this.announcePresence(userKey, false),
       announceBack: (userKey) => this.announcePresence(userKey, true),
+      logger,
     });
   }
 
