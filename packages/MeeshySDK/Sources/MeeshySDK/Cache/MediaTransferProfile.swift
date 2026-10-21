@@ -31,6 +31,16 @@ public struct MediaTransferProfile: Sendable, Equatable, Hashable {
         priority == .deferrable
     }
 
+    /// `true` quand un transfert ouvert avec ce profil peut servir un appelant
+    /// qui demande `requested` : au moins aussi prioritaire, au moins autant de
+    /// réseau. Un préchargement différé interdit de cellulaire ne couvre pas
+    /// une lecture premier plan.
+    public func covers(_ requested: MediaTransferProfile) -> Bool {
+        let networkCovers = allowsExpensiveNetworkAccess || !requested.allowsExpensiveNetworkAccess
+        let priorityCovers = priority == .immediate || requested.priority == .deferrable
+        return networkCovers && priorityCovers
+    }
+
     /// Une copie de `base` typée vidéo, avec le réglage de données et la
     /// discrétion du profil. `base` n'est jamais muté (la session partagée
     /// de l'app garde sa configuration).
