@@ -48,6 +48,19 @@ public extension ReplyReference {
         }
     }
 
+    /// La lecture d'une citation se RAPPORTE au serveur (`watched`) seulement
+    /// pour une VIDÉO qui porte sa vraie ancre (#9890) :
+    /// - un son passe par le moteur vidéo partagé, qui le rapporterait « vu »
+    ///   sur une pièce AUDIO — un accusé faux, diffusé à la conversation ;
+    /// - sans ancre, la pièce porte l'identifiant dérivé `quoted-<message>`,
+    ///   que le serveur ne connaît pas : le rapport partirait dans la file
+    ///   hors-ligne pour un 404.
+    var quotedPlaybackReportsConsumption: Bool {
+        guard quotedMediaKind == .video, quotedPlayableAttachment != nil,
+              let anchor = attachmentId, !anchor.isEmpty else { return false }
+        return true
+    }
+
     private static let sharedEngineMimeType = "video/mp4"
 
     private func reconstructedAttachment(presentedAs mime: String?) -> MeeshyMessageAttachment? {

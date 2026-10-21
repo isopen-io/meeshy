@@ -200,7 +200,12 @@ enum ComposerQuotedMediaTarget {
     static func playback(reply: ReplyReference) -> PreviewMedia? {
         guard let attachment = reply.quotedPlayableAttachment,
               let url = MeeshyConfig.resolveMediaURL(attachment.fileUrl) else { return nil }
-        return PreviewMedia(url: url, type: reply.quotedMediaKind == .audio ? "audio" : "video", attachment: attachment)
+        return PreviewMedia(
+            url: url,
+            type: reply.quotedMediaKind == .audio ? "audio" : "video",
+            attachment: attachment,
+            reportsConsumption: reply.quotedPlaybackReportsConsumption
+        )
     }
 }
 

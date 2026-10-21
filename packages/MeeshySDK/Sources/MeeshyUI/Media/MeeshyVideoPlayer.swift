@@ -183,6 +183,12 @@ public struct MeeshyVideoPlayer: View {
     /// appelle `onExpand` au lieu de montrer/masquer les contrôles. Défaut
     /// `false` : toutes les surfaces existantes gardent leur geste.
     public let surfaceTapExpands: Bool
+    /// Paramètre opaque : `false` joue la pièce SANS la rapporter — ni
+    /// `watched` au serveur, ni consommation, ni position de reprise. Honoré
+    /// par les deux renderers. Défaut `true` : chaque surface existante garde
+    /// son suivi. L'app décide quand une lecture n'est pas un visionnage
+    /// honnête de CETTE pièce (un son joué par le moteur vidéo, #9890).
+    public let reportsConsumption: Bool
     public let author: VideoAuthor?
     public let caption: String?
     public let fileName: String?
@@ -216,6 +222,7 @@ public struct MeeshyVideoPlayer: View {
         autoplayMuted: Bool = false,
         playButtonDiameter: CGFloat = 64,
         surfaceTapExpands: Bool = false,
+        reportsConsumption: Bool = true,
         author: VideoAuthor? = nil,
         caption: String? = nil,
         fileName: String? = nil,
@@ -239,6 +246,7 @@ public struct MeeshyVideoPlayer: View {
         self.autoplayMuted = autoplayMuted
         self.playButtonDiameter = playButtonDiameter
         self.surfaceTapExpands = surfaceTapExpands
+        self.reportsConsumption = reportsConsumption
         self.author = author
         self.caption = caption
         self.fileName = fileName

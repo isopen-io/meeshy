@@ -21,6 +21,9 @@ struct PreviewMedia: Identifiable {
     /// La pièce citée que le lecteur commun JOUE (vidéo ou son), reconstruite
     /// depuis la citation. `nil` pour une image, ouverte par son adresse.
     var attachment: MessageAttachment? = nil
+    /// La lecture se rapporte-t-elle au serveur ? Seule une vidéo ancrée le
+    /// peut (`ReplyReference.quotedPlaybackReportsConsumption`).
+    var reportsConsumption: Bool = false
 }
 
 /// **L'aperçu plein écran d'une vidéo ou d'un son cité par la réponse en cours
@@ -48,6 +51,7 @@ struct ComposerQuotedPlaybackFullscreen: View {
                     frame: .flat,
                     availability: availability,
                     performance: .fullscreen,
+                    reportsConsumption: media.reportsConsumption,
                     poster: media.type == "video" ? VideoPosterResolver.poster(for: attachment) : nil,
                     onDownload: onDownload,
                     onClose: onClose

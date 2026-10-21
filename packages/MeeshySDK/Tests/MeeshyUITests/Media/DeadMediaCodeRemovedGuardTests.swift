@@ -129,6 +129,8 @@ final class DeadMediaCodeRemovedGuardTests: XCTestCase {
         XCTAssertTrue(media.contains("style: .fullscreen"))
         XCTAssertTrue(media.contains("controls: .fullscreenPreview"),
                       "l'aperçu d'une citation n'offre aucune sortie (ni enregistrer, ni partager)")
+        XCTAssertTrue(media.contains("reportsConsumption: media.reportsConsumption"),
+                      "un son joué par le moteur vidéo ne se rapporte pas « vu »")
         XCTAssertTrue(media.contains("VideoAvailabilityResolver("),
                       "le moteur partagé ne lit que le cache vidéo : la disponibilité passe par le résolveur")
     }
