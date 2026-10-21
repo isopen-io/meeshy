@@ -23,7 +23,6 @@ import { DeviceAccountList } from '@/components/device-account-list';
 import type { AccountSwitcher, AccountVault, DeviceAccount } from '@/lib/api/accounts';
 import { accountSwitcher, accountVault } from '@/lib/api/device-accounts';
 import { translate } from '@/lib/i18n-catalog';
-import { LoginWorldEntry, type LoginWorldDeps } from '@/components/login-world-entry';
 import { PublicHeader, useInterfaceLanguage } from '@/components/public-header';
 
 /**
@@ -165,7 +164,6 @@ export function LoginDoors({
   passwordLogin = auth.login,
   accounts = { vault: accountVault, switcher: accountSwitcher },
   serverLabel = null,
-  world,
 }: {
   readonly method: LoginMethod;
   /** La valeur BRUTE de `?next=` — clampée ici, là où elle sert. */
@@ -181,8 +179,6 @@ export function LoginDoors({
   readonly accounts?: { readonly vault: AccountVault; readonly switcher: AccountSwitcher };
   /** Le serveur visé, montré en développement seulement (#8287) — `null` : rien. */
   readonly serverLabel?: string | null;
-  /** La lecture de `GET /world` derrière la carte World Wide (#10007) — injectable pour les témoins. */
-  readonly world?: LoginWorldDeps;
 }) {
   const session = useStore(sessionStore, (s) => s.session);
   const online = useOnline();
@@ -347,11 +343,6 @@ export function LoginDoors({
             {translate(language, 'login.offline')}
           </p>
         ) : null}
-
-        {/* WORLD WIDE EN PREMIER (#10007, planche « Login ») — la carte et
-            « ou avec votre compte » précèdent tout ce qui demande un compte ;
-            le second facteur, lui, ne propose que son code. */}
-        {requires2FA ? null : <LoginWorldEntry language={language} {...(world === undefined ? {} : { world })} />}
 
         {!requires2FA && deviceAccounts.length > 0 ? (
           <DeviceAccountList

@@ -317,6 +317,7 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// que POLICE reste POLICE ; le suivant, que l'EFFET a SA section.
     func test_laSectionDesPolices_neSAppellePlusSTYLE() throws {
         let code = try source("ComposerObjectEditorView.swift")
+            + (try source("ComposerObjectEditorCopy.swift"))
         XCTAssertTrue(code.contains("defaultValue: \"POLICE\""),
                       "STYLE nommait un axe que la section ne porte pas (#4850).")
         XCTAssertFalse(code.contains("defaultValue: \"STYLE\""))
@@ -336,6 +337,7 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// l'auteur se posait devant la grille des polices.
     func test_lEffet_aSaSection_justeApresLaPolice() throws {
         let code = try source("ComposerObjectEditorView.swift")
+            + (try source("ComposerObjectEditorCopy.swift"))
         XCTAssertTrue(code.contains("defaultValue: \"EFFET\""),
                       "La section EFFET doit avoir son mot (#4870).")
         XCTAssertEqual(TextEditTool.all.first, .style)

@@ -59,10 +59,10 @@
  *
  * et, dans les SEPT langues, à 320, 375 et 390 px (#10124) :
  *
- *   6. sur chaque landing, les deux portes de l'en-tête (« Se connecter »,
- *      « Entrer sans compte ») tiennent chacune sur UNE ligne, sans rien
- *      rogner ; sur `/login`, le titre et le sous-titre de la carte World Wide
- *      se lisent EN ENTIER (aucun texte coupé par une ellipse).
+ *   6. sur chaque landing, la porte de l'en-tête (« Se connecter » — « Entrer
+ *      sans compte » a quitté la page, #10784) tient sur UNE ligne, sans rien
+ *      rogner. (La carte World Wide de `/login`, qu'on mesurait aussi, est
+ *      retirée — #10784.)
  *
  * La démonstration ordinaire est confortable : la mesure de 1. et 2. était verte
  * sur elle pendant que « Ligue » s'écrasait lettre à lettre à côté de
@@ -135,7 +135,7 @@ const CONNEXION = SEULEMENT_PROGRESSION ? [] : ['/login', '/login?methode=passwo
 /** `DIST=<dossier>` mesure une construction de recette, jamais `dist/` par défaut écrasé. */
 const DIST = process.env.DIST ?? new URL('../dist/', import.meta.url).pathname;
 
-/** 6. Les sept landings prérendues (`landingFiles`) et les sept langues de `/login`. */
+/** 6. Les sept landings prérendues (`landingFiles`), dans les sept langues. */
 const LANGUES = ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar'];
 const LANDING_DE = (langue) => (langue === 'fr' ? '/landing' : `/${langue}`);
 const TEXTES_ENTIERS = SEULEMENT_PROGRESSION ? [] : LANGUES;
@@ -160,8 +160,7 @@ const releveTextes = (selecteurs) =>
     return { selecteur, absent: false, lignes, rogne: el.scrollWidth > el.clientWidth + 1, texte: (el.textContent ?? '').trim() };
   });
 
-const PORTES_LANDING = ['.ld-bar > a[href="/login"]', '.ld-bar > [data-world-cta]'];
-const CARTE_LOGIN = ['[data-login-world-title]', '[data-login-world-subtitle]'];
+const PORTES_LANDING = ['.ld-bar > a[href="/login"]'];
 
 /** Le relevé, dans la page — voir le doc-comment de tête. */
 const releve = () => {
@@ -346,7 +345,6 @@ try {
       const page = await context.newPage();
       for (const [adresse, selecteurs, uneLigne] of [
         [LANDING_DE(langue), PORTES_LANDING, true],
-        ['/login', CARTE_LOGIN, false],
       ]) {
         const tag = `${adresse} @ ${viewport.width} px, ${langue}`;
         await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
@@ -394,7 +392,7 @@ if (!SEULEMENT_PROGRESSION) {
   constate(bilan.bandes > 0, 'aucune bande horizontale rencontrée — l’exemption des bandes ne se prouve sur rien');
 }
 constate(bilan.progression > 0, 'aucune page de Progression mesurée aux valeurs longues');
-if (!SEULEMENT_PROGRESSION) constate(bilan.textes > 0, 'aucun texte de la landing ni de /login mesuré — la mesure 6 ne mesure rien');
+if (!SEULEMENT_PROGRESSION) constate(bilan.textes > 0, 'aucun texte de la landing mesuré — la mesure 6 ne mesure rien');
 
 if (failures.length > 0) {
   console.error(`\ncheck-phone-frame : ${failures.length} échec(s)`);
@@ -405,5 +403,5 @@ console.log(
   `\ncheck-phone-frame : vert — ${ADRESSES.length} adresses × ${TELEPHONES.length} téléphones (${bilan.mesures} relevés, ${bilan.champs} champs, ${bilan.bandes} bandes) : ` +
     `aucun cadre ne défile de côté, aucun champ sous ${CHAMP_MIN_PX} px, la connexion tient dans ${IPHONE_SE.width}×${IPHONE_SE.height} ; ` +
     `Progression aux valeurs longues : ${bilan.progression} relevés (${PROGRESSION_PAGES.length} pages), rien ne glisse ni ne dépasse ; ` +
-    `${bilan.textes} textes de la landing et de /login lus en entier dans les ${LANGUES.length} langues.\n`,
+    `${bilan.textes} textes de la landing lus en entier dans les ${LANGUES.length} langues.\n`,
 );

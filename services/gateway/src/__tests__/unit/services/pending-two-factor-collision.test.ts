@@ -232,7 +232,7 @@ describe('collision entre le défi d\'étape 2 et la vérification de téléphon
       user: store.rows[0]
     });
 
-    const validation = await magic.validateMagicLink({ token: brut as string, requestContext });
+    const validation = await magic.validateMagicLink({ token: brut as string, requestContext, confirmed: true });
     expect(validation.requires2FA).toBe(true);
 
     const verification = await auth.verifyPhone(PHONE, sentCode as unknown as string);

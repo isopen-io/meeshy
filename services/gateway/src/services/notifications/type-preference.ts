@@ -68,6 +68,7 @@ export function isNotificationTypeEnabledByPreference(
     case 'two_factor_enabled':
     case 'two_factor_disabled':
     case 'login_new_device':      return true; // sécurité = toujours actif
+    case 'content_removed':       return true; // retrait par la modération : l'auteur sait pourquoi (#11149)
     default:                  return true;
   }
 }

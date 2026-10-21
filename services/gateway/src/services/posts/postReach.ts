@@ -1,13 +1,24 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
-import { POST_ENGAGEMENT_RETENTION_MS } from '../social/contentEvents';
+import { rawReadingRetentionMs } from '../../config/raw-reading-retention';
+import type { AnalyticsStanding } from '../social/eventPrivacy';
+import { accountReaderKeyOf, engagementSessionKeyOf } from './readerKey';
 import { NOT_DELETED } from './postIncludes';
 import { creditPostView } from './postViewCredit';
 import type { ViewContext } from './viewProvenance';
 import { incrementPostCounters } from './postCounters';
-import { engagementAggregateIncrements } from './engagementIncrements';
+import {
+  creditsOfIncrements,
+  engagementAggregateIncrements,
+  incrementsNotYetCredited,
+  incrementsOfCredits,
+  mergeEngagementSessions,
+  type MergeableEngagement,
+} from './engagementIncrements';
 import { consumeReferenceView, resolveReferenceAccess } from './referenceAccess';
 import { creditStoryViewed } from './postEngagementCredits';
+import { impressionImpliedByView } from '../social/viewImpressions';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { errorIdentity } from '../../utils/error-identity';
 
 /**
  * La PORTÉE d'un post — ce qui compte qu'un contenu a été vu (#10483).
@@ -29,6 +40,81 @@ export type PostReachDeps = {
    */
   readonly visibilityFilter: (viewerUserId?: string) => Promise<Prisma.PostWhereInput>;
 };
+
+/** Ce que la fusion relit de la ligne déjà stockée (#10764). */
+const STORED_ENGAGEMENT_SELECT = {
+  id: true, readerKey: true, surface: true, contentType: true, dwellMs: true, watchMs: true,
+  mediaDurationMs: true, completed: true, actions: true, watchSamples: true, createdAt: true, expiresAt: true,
+  creditedOpen: true, creditedPlay: true, creditedQualified: true,
+} as const;
+
+/**
+ * La fenêtre dans laquelle une AUTRE session du même lecteur sur le même post
+ * rend une session muette (revue de sécurité #10764). La clé de session vient
+ * du client : sans cette borne, en changer à chaque envoi ferait monter
+ * ouverture, lecture et vue qualifiée autant de fois qu'on le voudrait.
+ */
+export const ENGAGEMENT_SESSION_DEDUP_WINDOW_MS = 10_000;
+
+/**
+ * Une session compte-t-elle ? Jamais pour l'auteur ; et pas si une autre session
+ * du même lecteur sur le même post a été REÇUE (heure serveur) dans la fenêtre
+ * qui précède la sienne. La réponse est stable d'une réception à l'autre : elle
+ * ne dépend que de l'heure de création de la ligne et de ce qui l'a précédée.
+ */
+async function engagementSessionCounts(
+  prisma: PrismaClient,
+  params: {
+    readonly sessionKeys: readonly string[]; readonly postId: string; readonly userId: string;
+    readonly authorId: string; readonly receivedAt: Date;
+  },
+): Promise<boolean> {
+  if (params.authorId === params.userId) return false;
+  // Le même lecteur sous ses DEUX formes : nominative, et l'empreinte des lignes
+  // réduites écrites entre #10771 et #10785 (lues jusqu'à leur expiration, 8 j).
+  const sibling = await prisma.postEngagement.findFirst({
+    where: {
+      postId: params.postId,
+      OR: [{ userId: params.userId }, { readerKey: accountReaderKeyOf(params.userId) }],
+      NOT: { sessionId: { in: [...params.sessionKeys] } },
+      createdAt: {
+        gte: new Date(params.receivedAt.getTime() - ENGAGEMENT_SESSION_DEDUP_WINDOW_MS),
+        lt: params.receivedAt,
+      },
+    },
+    select: { id: true },
+  });
+  return !sibling;
+}
+
+type StoredEngagementRow = {
+  readonly readerKey?: string | null;
+  readonly creditedOpen?: boolean | null;
+  readonly creditedPlay?: boolean | null;
+  readonly creditedQualified?: boolean | null;
+  readonly surface?: string | null;
+  readonly contentType?: string | null;
+  readonly dwellMs?: number | null;
+  readonly watchMs?: number | null;
+  readonly mediaDurationMs?: number | null;
+  readonly completed?: boolean | null;
+  readonly actions?: unknown;
+  readonly watchSamples?: unknown;
+};
+
+const storedEngagementOf = (
+  row: StoredEngagementRow,
+  received: { readonly surface: string; readonly contentType: string },
+): MergeableEngagement & { readonly surface: string; readonly contentType: string } => ({
+  surface: row.surface ?? received.surface,
+  contentType: row.contentType ?? received.contentType,
+  dwellMs: row.dwellMs ?? 0,
+  watchMs: row.watchMs ?? undefined,
+  mediaDurationMs: row.mediaDurationMs ?? undefined,
+  completed: row.completed === true,
+  actions: Array.isArray(row.actions) ? row.actions : [],
+  watchSamples: Array.isArray(row.watchSamples) ? row.watchSamples : [],
+});
 
 export type EngagementSessionInput = {
   sessionId: string; userId?: string; postId: string; contentType: string; surface: string;
@@ -75,7 +161,7 @@ export async function recordView(
   postId: string,
   userId: string,
   duration?: number,
-  context: ViewContext = {},
+  context: ViewContext & { readonly impliesImpression?: boolean } = {},
 ): Promise<boolean> {
   try {
     // Enforce visibility before recording — without this, any authenticated
@@ -140,6 +226,13 @@ export async function recordView(
       ? false
       : await creditPostView(deps.prisma, { postId, userId, durationMs: safeDuration, ...context });
     creditStoryViewed(deps.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
+    if (context.impliesImpression && target.authorId !== userId) {
+      await impressionImpliedByView(deps.prisma, { postId, userId, surface: context.surface }).catch((error: unknown) =>
+        log.warn('recordView: impression implied by the view not written', {
+          postId,
+          error: errorIdentity(error),
+        }));
+    }
 
     const rootId = target.originalRepostOfId ?? target.repostOfId;
     if (rootId && rootId !== postId) {
@@ -168,12 +261,46 @@ export async function recordView(
     // masquer une vraie panne sur ce chemin (initiative 6cd1a3c47).
     log.warn('recordView failed', {
       postId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorIdentity(error),
     });
     return false;
   }
 
 }
+
+/**
+ * Le post qu'une session de ce lecteur a le droit de créditer : vivant, et dans
+ * son audience — ou ouvert par une RÉFÉRENCE encore valable (`granted`), comme
+ * pour `recordView`. Une session ne DÉPENSE jamais une référence : seule la vue
+ * déclarée le fait.
+ */
+async function readableEngagementTarget(
+  deps: PostReachDeps,
+  postId: string,
+  userId: string,
+  audienceOf: () => Promise<Prisma.PostWhereInput>,
+): Promise<{ readonly id: string; readonly authorId: string } | null> {
+  const select = { id: true, authorId: true, type: true, expiresAt: true } as const;
+  const visible = await deps.prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED, ...(await audienceOf()) }, select });
+  if (visible) return visible;
+  const referenced = await deps.prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select });
+  if (!referenced) return null;
+  const access = await resolveReferenceAccess({ prisma: deps.prisma, post: referenced, viewerId: userId, now: new Date() });
+  return access === 'granted' ? referenced : null;
+}
+
+/**
+ * Le statut d'analyse d'UNE session (#10772) : le client fait foi pour REFUSER
+ * (`consent: 'denied'` sur la session), la passerelle pour ACCORDER — une
+ * session qui se dit `granted` sous un statut serveur autre n'accorde rien.
+ */
+const sessionStandingOf = (clientConsent: string | undefined, standing: AnalyticsStanding): AnalyticsStanding =>
+  clientConsent === 'denied' ? 'denied' : standing;
+
+/** Une ligne réduite écrite entre #10771 et #10785 : empreinte du lecteur, sans compte ni mesure. */
+const isReducedRow = (row: StoredEngagementRow): boolean => typeof row.readerKey === 'string';
+
+const UNSET = { unset: true } as const;
 
 /**
  * Ingestion append-only des sessions d'engagement (LOT 4 + agrégation LOT 5).
@@ -184,27 +311,43 @@ export async function recordView(
  *   sans faire échouer le reste du batch.
  * - Caps défensifs (300 s) sur `dwellMs`/`watchMs`.
  * - `userId` provient de la route (jamais du client) — anti spoofing.
- * - Agrégation dénormalisée alimentée UNIQUEMENT à l'INSERT d'une nouvelle ligne
- *   (jamais aux updates/retries idempotents) : `postOpenCount`, `playCount`,
- *   `qualifiedViewCount`. N'altère NI `viewCount` NI `PostView`.
+ * - Agrégation dénormalisée (`postOpenCount`, `playCount`, `qualifiedViewCount`)
+ *   créditée par ce que la session AJOUTE (#10764) : le premier contact puis la
+ *   mesure arrivent sous la même clé, la ligne stockée est fusionnée sans
+ *   jamais reculer, et seuls les compteurs que la fusion gagne sont montés —
+ *   un rejeu idempotent n'ajoute rien. N'altère NI `viewCount` NI `PostView`.
+ *
+ * La ligne est NOMINATIVE quel que soit le statut d'analyse (#10785, décision
+ * du porteur) : « qui a vu » est une fonctionnalité de la plateforme. Le
+ * statut que la passerelle établit (#10772) ne gouverne que la télémétrie sans
+ * fonctionnalité visible : hors `granted`, ni micro-actions (`actions`) ni
+ * échantillons de lecture (`watchSamples`). Les trois compteurs déjà crédités
+ * sont rangés en drapeaux. Une ligne réduite antérieure (#10771 : empreinte,
+ * sans compte) que la suite de sa session retrouve redevient nominative.
  *
  * Retourne le nombre de sessions persistées (insert ou update).
  */
 export async function recordEngagementBatch(
-  prisma: PrismaClient,
+  deps: PostReachDeps,
   sessions: readonly EngagementSessionInput[],
   userId: string,
+  batchStanding: AnalyticsStanding = 'not_granted',
 ): Promise<number> {
+  const { prisma } = deps;
   const capped = sessions.slice(0, 50);
+  // Le MÊME filtre d'audience que `recordView`, résolu au plus une fois par lot,
+  // à la première session (un lot vide n'en coûte aucune) : une session sur un
+  // post que le lecteur ne peut pas voir ne crédite rien et n'écrit rien —
+  // sinon un client gonflerait les compteurs d'un post privé et apprendrait
+  // son existence.
+  let visibilityFilter: Promise<Prisma.PostWhereInput> | undefined;
+  const audienceOf = () => (visibilityFilter ??= deps.visibilityFilter(userId));
   let recorded = 0;
 
   for (const s of capped) {
     try {
-      const post = await prisma.post.findFirst({
-        where: { id: s.postId, deletedAt: NOT_DELETED },
-        select: { id: true, authorId: true },
-      });
-      if (!post) continue; // skip-and-continue: post deleted between begin and flush
+      const post = await readableEngagementTarget(deps, s.postId, userId, audienceOf);
+      if (!post) continue; // skip-and-continue: supprimé, hors audience ou inconnu — même porte
 
       const dwellMs = Math.max(0, Math.min(300_000, Math.round(s.dwellMs)));
       const watchMs = s.watchMs !== undefined
@@ -214,46 +357,91 @@ export async function recordEngagementBatch(
         ? Math.max(0, Math.round(s.mediaDurationMs))
         : undefined;
 
-      const completed = s.completed === true;
+      const received = {
+        surface: s.surface,
+        contentType: s.contentType,
+        dwellMs,
+        watchMs,
+        mediaDurationMs,
+        completed: s.completed === true,
+        actions: s.actions ?? [],
+        watchSamples: s.watchSamples ?? [],
+      };
+
+      const receivedAt = new Date();
+      const reducedKey = engagementSessionKeyOf(s.sessionId);
+      const readerKey = accountReaderKeyOf(userId);
+      // La clé de session vient du client : la ligne n'est la sienne que sous
+      // SON identité (compte, ou empreinte d'une ligne réduite antérieure à
+      // #10785). Celle d'un autre lecteur n'est ni lue, ni mise à jour —
+      // l'écriture qui suit lève sur l'unicité, et la session ne compte pas.
+      const ownRaw = { sessionId: s.sessionId, userId };
+      const ownReduced = { sessionId: reducedKey, readerKey };
+      const before = await prisma.postEngagement.findUnique({
+        where: ownRaw,
+        select: STORED_ENGAGEMENT_SELECT,
+      }) ?? await prisma.postEngagement.findUnique({
+        where: ownReduced,
+        select: STORED_ENGAGEMENT_SELECT,
+      });
+      const storedReduced = before !== null && isReducedRow(before);
+      const stored = before && !storedReduced ? storedEngagementOf(before, received) : undefined;
+      const sessionStanding = sessionStandingOf(s.consent, batchStanding);
+      const traced = sessionStanding === 'granted';
+      const session = stored ? mergeEngagementSessions(stored, received) : received;
+
+      const already = {
+        ...(before ? incrementsOfCredits(before) : {}),
+        ...(stored ? engagementAggregateIncrements(stored) : {}),
+      };
+      const credited = { ...already, ...engagementAggregateIncrements(session) };
+
       const data = {
         postId: s.postId,
         userId,
         contentType: s.contentType,
         surface: s.surface,
         startedAt: new Date(s.startedAt),
-        dwellMs,
-        watchMs,
-        mediaDurationMs,
-        completed,
+        dwellMs: session.dwellMs,
+        watchMs: session.watchMs,
+        mediaDurationMs: session.mediaDurationMs,
+        completed: session.completed,
         truncated: s.truncated === true,
-        consent: s.consent,
-        actions: (s.actions ?? []) as Prisma.InputJsonValue,
-        watchSamples: (s.watchSamples ?? []) as Prisma.InputJsonValue,
+        consent: sessionStanding,
+        actions: (traced ? session.actions : []) as Prisma.InputJsonValue,
+        watchSamples: (traced ? session.watchSamples : []) as Prisma.InputJsonValue,
+        ...creditsOfIncrements(credited),
       };
 
-      const before = await prisma.postEngagement.findUnique({
-        where: { sessionId: s.sessionId },
-        select: { id: true },
-      });
-      const isInsert = !before;
+      if (before && storedReduced) {
+        await prisma.postEngagement.update({
+          where: { id: before.id },
+          data: {
+            ...data,
+            sessionId: s.sessionId,
+            readerKey: UNSET,
+            expiresAt: new Date(before.createdAt.getTime() + rawReadingRetentionMs()),
+          },
+        });
+      } else {
+        await prisma.postEngagement.upsert({
+          where: ownRaw,
+          update: data,
+          // Conservation du brut : `RAW_READING_RETENTION_DAYS`, 25 mois par défaut (#10510) — posée à la création, jamais prolongée par un rejeu.
+          create: { sessionId: s.sessionId, ...data, createdAt: receivedAt, expiresAt: new Date(receivedAt.getTime() + rawReadingRetentionMs()) },
+        });
+      }
 
-      await prisma.postEngagement.upsert({
-        where: { sessionId: s.sessionId },
-        update: data,
-        // Conservation du brut : 90 j (#10510, O7) — posée à la création, jamais prolongée par un rejeu.
-        create: { sessionId: s.sessionId, ...data, expiresAt: new Date(Date.now() + POST_ENGAGEMENT_RETENTION_MS) },
+      const counts = await engagementSessionCounts(prisma, {
+        sessionKeys: [s.sessionId, reducedKey],
+        postId: s.postId,
+        userId,
+        authorId: post.authorId,
+        receivedAt: before?.createdAt ?? receivedAt,
       });
-
-      if (isInsert) {
-        await incrementPostCounters(prisma, [s.postId], engagementAggregateIncrements({
-          surface: s.surface,
-          contentType: s.contentType,
-          dwellMs,
-          watchMs,
-          mediaDurationMs,
-          completed,
-          watchSamples: s.watchSamples ?? [],
-        }));
+      const added = counts ? incrementsNotYetCredited(already, credited) : {};
+      if (Object.keys(added).length > 0) {
+        await incrementPostCounters(prisma, [s.postId], added);
       }
       recorded += 1;
     } catch (error) {
@@ -261,7 +449,7 @@ export async function recordEngagementBatch(
       // dans `recorded` (#10402) ; le lot continue, et l'échec se dit.
       log.warn('recordEngagementBatch: session not recorded', {
         postId: s.postId,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorIdentity(error),
       });
     }
   }

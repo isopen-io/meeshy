@@ -134,7 +134,7 @@ final class MessagePieceTargetTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+        return try AppSourceGuard.text(at: root.appendingPathComponent(relativePath))
     }
 
     func test_everyTileSurface_longPressOpensThePiecePreview() throws {
@@ -155,9 +155,18 @@ final class MessagePieceTargetTests: XCTestCase {
 
     private let blurredExits = MessageExitOffer(law: .ordinary, holdsBlur: true, isEncrypted: false)
 
-    func test_pieceMenu_clearPiece_offersReplySaveDeleteThenTheWholeMessage() {
+    func test_pieceMenu_clearPiece_offersReplyForwardSaveDeleteThenTheWholeMessage() {
         let ctx = MessagePieceMenu.Context(isProtected: false, exits: .unrestricted, canDelete: true)
-        XCTAssertEqual(MessagePieceMenu.actions(ctx), [.replyToPiece, .saveMedia, .deletePiece, .wholeMessage])
+        XCTAssertEqual(MessagePieceMenu.actions(ctx), [.replyToPiece, .forwardPiece, .saveMedia, .deletePiece, .wholeMessage])
+    }
+
+    /// #9914, #10947 (V2) : la passerelle copie la seule pièce choisie, l'entrée
+    /// « Transférer » ouvre l'écran de partage sur CETTE pièce — jamais sur une
+    /// pièce protégée, ni quand la loi refuse le transfert du message.
+    func test_pieceMenu_forwardsThePiece_onlyWhenTheLawLetsItLeave() {
+        let viewOnce = MessageExitOffer(law: .viewOnce, holdsBlur: false, isEncrypted: false)
+        XCTAssertFalse(MessagePieceMenu.actions(.init(isProtected: false, exits: viewOnce, canDelete: false)).contains(.forwardPiece))
+        XCTAssertFalse(MessagePieceMenu.actions(.init(isProtected: true, exits: .unrestricted, canDelete: false)).contains(.forwardPiece))
     }
 
     func test_pieceMenu_withoutTheRightToDelete_offersNoDeletion() {
@@ -215,8 +224,8 @@ final class MessagePieceTargetTests: XCTestCase {
         XCTAssertTrue(host.contains("MessageExitTransport.save(message, piece: piece.id, through: mediaSaveCoordinator)"))
         XCTAssertTrue(host.contains("deleteMedia(targeted: piece.id, of: message)"), "supprimer vise la pièce")
         let send = try source("Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift")
-        XCTAssertEqual(send.components(separatedBy: "replyAnchor").count - 1, 4,
-                       "l'ancre est lue une fois et transmise aux trois envois en ligne qui portent la citation")
+        XCTAssertEqual(send.components(separatedBy: "replyAnchor").count - 1, 2,
+                       "l'ancre est lue une fois et entre dans la relation unique du tap, que portent les trois envois en ligne qui citent")
     }
 
     // MARK: - #9910 — on réagit sur chaque pièce partout
@@ -400,5 +409,68 @@ final class MessagePieceTargetTests: XCTestCase {
     func test_piece_clearMessage_stillOpensThePiecePreview() {
         XCTAssertFalse(MessagePieceTarget.messageIsProtected(lotOfFive))
         XCTAssertEqual(MessagePieceTarget.piece("p2", in: lotOfFive)?.id, "p2")
+    }
+
+    // MARK: - #10800 — le simple toucher d'une tuile ouvre son plein écran
+
+    /// Un appui long posé en `highPriorityGesture` sur la tuile ne laissait
+    /// JAMAIS partir son `onTapGesture` (mesuré au simulateur iOS 17.5 : la
+    /// case d'un lot de quatre photos restait inerte, l'image seule s'ouvrait).
+    /// L'appui de la tuile est SIMULTANÉ, et il part AVANT celui de la rangée.
+    func test_pieceLongPress_neverOutranksTheTileTap() throws {
+        let modifier = try source("Meeshy/Features/Main/Views/Bubble/MessagePieceLongPress.swift")
+        XCTAssertFalse(modifier.contains(".highPriorityGesture("))
+        XCTAssertTrue(modifier.contains(".simultaneousGesture("))
+    }
+
+    func test_pressClaim_pieceFiresBeforeTheRow_andSilencesIt() {
+        XCTAssertLessThan(MessagePressClaim.pieceMinimumDuration, MessagePressClaim.rowMinimumDuration)
+        let pressedAt = Date(timeIntervalSince1970: 1_000)
+        MessagePressClaim.claim(at: pressedAt.addingTimeInterval(MessagePressClaim.pieceMinimumDuration))
+
+        XCTAssertTrue(MessagePressClaim.isClaimed(at: pressedAt.addingTimeInterval(MessagePressClaim.rowMinimumDuration)),
+                      "l'appui de la rangée, qui suit celui de la tuile, ne rouvre pas le menu du message")
+    }
+
+    func test_pressClaim_expires_soTheNextRowPressOpensTheMessageMenu() {
+        let claimedAt = Date(timeIntervalSince1970: 2_000)
+        MessagePressClaim.claim(at: claimedAt)
+
+        XCTAssertFalse(MessagePressClaim.isClaimed(at: claimedAt.addingTimeInterval(1)))
+        XCTAssertFalse(MessagePressClaim.isClaimed(at: claimedAt.addingTimeInterval(-1)))
+    }
+
+    // MARK: - L'avatar du pied réclame l'appui long (un geste, un effet)
+
+    func test_pressClaim_avatarSilencesTheRowMenu() {
+        let claimedAt = Date(timeIntervalSince1970: 3_000)
+        MessagePressClaim.claim(.avatar, at: claimedAt.addingTimeInterval(MessagePressClaim.pieceMinimumDuration))
+
+        XCTAssertEqual(MessagePressClaim.claimedBy, .avatar)
+        XCTAssertTrue(MessagePressClaim.isClaimed(at: claimedAt.addingTimeInterval(MessagePressClaim.rowMinimumDuration)),
+                      "le menu « Répondre » de la rangée ne s'ouvre pas avec « Voir le profil »")
+    }
+
+    func test_footerAvatar_claimsThePress() throws {
+        let footer = try source("Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift")
+        XCTAssertTrue(footer.contains(".modifier(MessageAvatarPressClaim(hasMenu: avatarMenu(sender: sender) != nil))"),
+                      "un avatar sans menu ne retient pas la pression de la rangée")
+    }
+
+    func test_quotedAuthor_prefersStoreThenReference_andNeverOpensWithoutAnId() {
+        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderUserId: "a", referenceAuthorUserId: "b"), "a")
+        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderUserId: "", referenceAuthorUserId: "b"), "b")
+        XCTAssertEqual(QuotedAuthorProfileTarget.userId(quotedSenderUserId: nil, referenceAuthorUserId: "b"), "b")
+        XCTAssertNil(QuotedAuthorProfileTarget.userId(quotedSenderUserId: "", referenceAuthorUserId: nil))
+    }
+
+    func test_quotedAuthor_opensThroughRouterOpenProfile() throws {
+        let host = try source("Meeshy/Features/Main/Views/MessageListViewController+QuotedMedia.swift")
+        XCTAssertTrue(host.contains("router.openProfile("))
+        XCTAssertFalse(host.contains("deepLinkProfileUser ="))
+        XCTAssertTrue(host.contains("quotedSenderUserId: quoted?.senderUserId"),
+                      "senderId est l'identifiant de participation, jamais un compte")
+        XCTAssertTrue(host.contains("participantId: quoted.senderId, isAnonymous: true"),
+                      "une visiteuse sans compte atteint sa fiche de participation")
     }
 }

@@ -40,6 +40,7 @@ import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
 import { findExistingMessage, findContentWindowDuplicate } from './messageDedupProjection';
+import { MESSAGE_AUTHOR_USER_SELECT } from './messageAuthorSelect';
 import type { SocketAttachmentRow } from '../../socketio/serializeAttachmentForSocket';
 
 // Logger dédié pour MessageProcessor
@@ -292,6 +293,8 @@ export class MessageProcessor {
     forwardedFromId?: string;
     /** #9572 — le verdict d'`admitMessageForward` ; REQUIS avec `forwardedFromId` (`exitProtectedCopy`). */
     forwardImposes?: ForwardImposition | null;
+    /** #9914, D7 — le verdict d'`admitMessageForward` : les pièces de la source à recopier ; `[]` n'en recopie aucune. */
+    forwardCopySelection?: readonly string[];
     forwardedFromConversationId?: string;
     /**
      * Diffusion à plusieurs destinataires (pas un transfert) : copie
@@ -485,16 +488,7 @@ export class MessageProcessor {
                 nickname: true,
                 userId: true,
                 ...ANONYMOUS_SENDER_NAME_SELECT,
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true
-                  }
-                }
+                user: { select: MESSAGE_AUTHOR_USER_SELECT }
               }
             },
             attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER },
@@ -681,6 +675,7 @@ export class MessageProcessor {
       senderId: string;
       attachmentIds?: readonly string[];
       forwardedFromId?: string;
+      forwardCopySelection?: readonly string[];
       copyAttachmentsFromMessageId?: string;
       conversationId: string;
     },
@@ -732,7 +727,7 @@ export class MessageProcessor {
       }
       // 2. Copier les attachments si c'est un forward et qu'aucun nouvel attachment n'est fourni
       else if (data.forwardedFromId) {
-        await this.copyForwardedAttachments(data.forwardedFromId, message.id, data.senderId);
+        await this.copyForwardedAttachments(data.forwardedFromId, message.id, data.senderId, data.forwardCopySelection);
       }
     } catch (error) {
       logger.error('[MessageProcessor] Error handling attachments', error);
@@ -740,13 +735,27 @@ export class MessageProcessor {
   }
 
   /**
-   * Copie les attachments d'un message original vers un nouveau message (Forward)
+   * Copie les attachments d'un message original vers un nouveau message (Forward).
+   *
+   * `selection` est le verdict d'`admitMessageForward` (#9914, D7) : absent, tout
+   * le lot ; présent, ces pièces-là dans cet ordre — `[]` ne lit ni ne recopie
+   * rien (source chiffrée, contenu renvoyé par le client).
    */
-  private async copyForwardedAttachments(originalMessageId: string, newMessageId: string, senderId: string): Promise<void> {
+  private async copyForwardedAttachments(
+    originalMessageId: string,
+    newMessageId: string,
+    senderId: string,
+    selection?: readonly string[]
+  ): Promise<void> {
     try {
-      const originalAttachments = await this.prisma.messageAttachment.findMany({
-        where: { messageId: originalMessageId }, orderBy: MESSAGE_ATTACHMENT_ORDER
+      if (selection !== undefined && selection.length === 0) return;
+      const found = await this.prisma.messageAttachment.findMany({
+        where: selection ? { messageId: originalMessageId, id: { in: [...selection] } } : { messageId: originalMessageId },
+        orderBy: MESSAGE_ATTACHMENT_ORDER
       });
+      const originalAttachments = selection
+        ? selection.flatMap((id) => found.filter((att) => att.id === id))
+        : found;
 
       if (originalAttachments.length === 0) return;
 

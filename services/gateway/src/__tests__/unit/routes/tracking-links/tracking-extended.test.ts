@@ -182,7 +182,7 @@ describe('GET /l/:token (success as registered user)', () => {
   it('records click and redirects (302)', async () => {
     const res = await app.inject({ method: 'GET', url: `/l/${TOKEN}` });
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe('https://example.com');
+    expect(res.headers.location).toBe('https://example.com/');
   });
 });
 
@@ -198,7 +198,7 @@ describe('GET /l/:token (success as anonymous user)', () => {
   it('records click and redirects (302) for anonymous user', async () => {
     const res = await app.inject({ method: 'GET', url: `/l/${TOKEN}` });
     expect(res.statusCode).toBe(302);
-    expect(res.headers.location).toBe('https://example.com');
+    expect(res.headers.location).toBe('https://example.com/');
   });
 });
 

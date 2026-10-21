@@ -43,7 +43,7 @@ public enum MeeshyEndpointPolicy {
     /// l'inscription et la preuve d'adresse sont les routes dont le contrat
     /// DOCUMENTE ses codes.
     public static func rejectionPolicy(forLegacyPath path: String) -> MeeshyEndpointRejectionPolicy {
-        path.hasPrefix("/auth/register") || path == "/auth/verify-email" ? .structured : .opaque
+        path.hasPrefix("/auth/register") || path == "/auth/verify-email" || path == "/auth/reset-password" ? .structured : .opaque
     }
 }
 
@@ -79,9 +79,13 @@ public extension AuthEndpoint {
     /// pose `INVALID_VERIFICATION`, `VERIFICATION_EXPIRED` et `WEAK_PASSWORD`,
     /// et sa phrase est écrite en français — l'écran de saisie du code doit
     /// lire le CODE pour parler la langue de l'interface.
+    ///
+    /// **La réinitialisation du mot de passe aussi (#10867)** : `RESET_TOKEN_INVALID`,
+    /// `RESET_PASSWORD_WEAK`, `TWO_FACTOR_REQUIRED`… (#10866) — un compte 2FA doit
+    /// voir la saisie du code, pas « lien invalide ».
     var rejectionPolicy: MeeshyEndpointRejectionPolicy {
         switch self {
-        case .register, .verifyEmail: return .structured
+        case .register, .verifyEmail, .resetPassword: return .structured
         default: return .opaque
         }
     }

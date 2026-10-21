@@ -95,6 +95,26 @@ describe('les images d’aperçu (og:image)', () => {
   });
 });
 
+describe('le QR code vers /world (#10784)', () => {
+  const svg = read('../../public/world-qr.svg');
+
+  test('un SVG versionné, fond blanc posé dans le SVG, sans script ni ressource externe', () => {
+    expect(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"')).toBe(true);
+    expect(svg.trimEnd().endsWith('</svg>')).toBe(true);
+    expect(svg).toMatch(/<path fill="#ffffff" d="M0 0h(\d+)v\1H0z"\/>/);
+    expect(svg).not.toMatch(/<script|href=|xlink/);
+  });
+
+  test('il encode https://meeshy.me/world : le générateur le reproduit à l’octet', async () => {
+    const { worldQrSvg, worldQrModules, WORLD_QR_URL } = await import('../../scripts/generate-world-qr.mjs');
+    expect(WORLD_QR_URL).toBe('https://meeshy.me/world');
+    expect(await worldQrSvg()).toBe(svg);
+    expect(await worldQrSvg('https://meeshy.me/')).not.toBe(svg);
+    const side = worldQrModules().size + 8;
+    expect(svg).toContain(`viewBox="0 0 ${side} ${side}"`);
+  });
+});
+
 describe('copie de la landing', () => {
   test('aucun nom de fixture ne part dans la page publique — le dist gateway les refuse (scripts/check-gateway-build.mjs)', async () => {
     const { LANDING_COPY } = await import('./landing-copy');

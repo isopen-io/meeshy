@@ -85,7 +85,10 @@ function makePrisma(attachments: unknown[]) {
   };
 }
 
+const ATTACHMENT_ID = '507f1f77bcf86cd799439061';
+
 const photoAttachment = (overrides: Record<string, unknown> = {}) => ({
+  id: ATTACHMENT_ID,
   mimeType: 'image/jpeg',
   fileName: 'resultats-analyses.jpg',
   fileSize: 240_000,
@@ -159,6 +162,7 @@ describe('éventail — le FICHIER ne franchit pas une protection du MESSAGE', (
 
     expect(params.firstAttachmentUrl).toBeUndefined();
     expect(params.firstAttachmentMimeType).toBeUndefined();
+    expect(params.firstAttachmentId).toBeUndefined();
     expect(params.notificationLocKey).toBeTruthy();
   });
 
@@ -183,6 +187,7 @@ describe('éventail — le FICHIER ne franchit pas une protection du MESSAGE', (
 
     expect(params.firstAttachmentUrl).toBe(SECRET_URL);
     expect(params.firstAttachmentMimeType).toBe('image/jpeg');
+    expect(params.firstAttachmentId).toBe(ATTACHMENT_ID);
     expect(params.hasAttachments).toBe(true);
     expect(params.firstAttachmentWidth).toBe(1024);
   });
@@ -206,6 +211,7 @@ describe('éventail — le FICHIER ne franchit pas une protection de la PIÈCE J
     });
 
     expect(params.firstAttachmentUrl).toBeUndefined();
+    expect(params.firstAttachmentId).toBeUndefined();
     expect(params.messagePreview).toBe('Regarde');
   });
 });
@@ -274,6 +280,7 @@ async function pushedData(extra: Record<string, unknown>): Promise<Record<string
     firstAttachmentUrl: SECRET_URL,
     firstAttachmentMimeType: 'image/jpeg',
     firstAttachmentDuration: 12,
+    firstAttachmentId: ATTACHMENT_ID,
     ...extra,
   } as any);
 
@@ -291,11 +298,17 @@ describe('charge APNs — le second verrou du média', () => {
     expect(data.attachmentUrl).toBe('');
     expect(data.attachmentMimeType).toBe('');
     expect(data.attachmentDurationMs).toBe('');
+    // #10641 — l'identité de la pièce jointe sert à RAPPORTER une écoute faite
+    // depuis la notification : un média qui ne voyage pas ne s'écoute pas, et
+    // son identité ne voyage pas non plus.
+    expect(data.attachmentId).toBe('');
+    expect(JSON.stringify(data)).not.toContain(ATTACHMENT_ID);
   });
 
   it('et sans lui, le média voyage', async () => {
     const data = await pushedData({});
 
+    expect(data.attachmentId).toBe(ATTACHMENT_ID);
     expect(data.attachmentUrl).toBe(SECRET_URL);
     expect(data.attachmentMimeType).toBe('image/jpeg');
   });

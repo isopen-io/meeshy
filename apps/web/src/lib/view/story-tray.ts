@@ -250,3 +250,13 @@ export function entryStoryIdOf(stories: readonly StoryTrayPost[]): string {
   const unseen = oldestFirst.find((s) => s.isViewedByMe !== true);
   return (unseen ?? oldestFirst[0])?.id ?? '';
 }
+
+/**
+ * À QUI APPARTIENT LA PRÉSENCE DE CETTE TUILE (#10944) — l'auteur, lu dans la
+ * carte vivante (le plateau est persisté : sa présence n'y entre pas, D-60) ;
+ * jamais la mienne, que ma propre tuile ne montre pas. Miroir de
+ * `StoryTrayView.swift` (`PresenceManager.presenceState(for: group.id)`).
+ */
+export function storyAuthorPresenceKey(group: Pick<StoryTrayGroup, 'authorId' | 'isMine'>): string | undefined {
+  return group.isMine ? undefined : group.authorId;
+}

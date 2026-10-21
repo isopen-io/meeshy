@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
 
 import { Bubble } from './bubble';
@@ -548,10 +549,8 @@ describe('Bubble — `lang` SUIT la langue servie après une traduction greffée
 /**
  * RETIRER UNE RÉACTION EN TAPANT SA CAPSULE (#5865, suivi de #5814 T12) —
  * iOS le permet déjà (`BubbleReactionsOverlay.swift`), seul le rail du menu
- * du message (appui long) le permettait ici. `onReact` n'est câblé QUE sur
- * les capsules `mine` (`bubble.tsx`) : taper la capsule d'autrui reste un
- * `<span>` inerte, jamais un bouton qui basculerait une réaction qui n'est
- * pas la sienne.
+ * du message (appui long) le permettait ici. Depuis #10583 la capsule
+ * d'autrui est un bouton elle aussi : la toucher pose la même réaction.
  */
 describe('Bubble — retirer une réaction en tapant sa capsule (#5865)', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -610,9 +609,25 @@ describe('Bubble — retirer une réaction en tapant sa capsule (#5865)', () => 
     expect(seen).toEqual(['👍']);
   });
 
-  test('la capsule ❤️ (pas la mienne) reste un <span> inerte — aucun bouton', () => {
+  test('tap sur la capsule ❤️ d’AUTRUI ⇒ onReact("❤️") : on pose la même réaction d’un geste (#10583)', () => {
+    const seen: string[] = [];
+    const el = mount((emoji) => seen.push(emoji));
+    const theirs = el.querySelector('button[aria-label="Réagir avec ❤️"]') as HTMLButtonElement;
+    expect(theirs).not.toBeNull();
+    act(() => {
+      theirs.click();
+    });
+    expect(seen).toEqual(['❤️']);
+  });
+
+  test('clic droit sur une capsule ⇒ la liste de qui a réagi, pour CE message (#10583)', () => {
     const el = mount(() => {});
-    expect(el.querySelector('button[aria-label*="❤️"]')).toBeNull();
+    const theirs = el.querySelector('button[aria-label="Réagir avec ❤️"]') as HTMLButtonElement;
+    act(() => {
+      theirs.dispatchEvent(new Event('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(reactorsSheetStore.getState().messageId).toBe('m-reactions');
+    reactorsSheetStore.getState().close();
   });
 
   test('la cible tactile de la capsule est étendue (`tap-target-chip`), sans grandir le dessin', () => {
@@ -756,9 +771,22 @@ describe('Bubble — les états du message (#5936)', () => {
     expect(html).not.toContain('rounded-bubble');
   });
 
-  test('(iv) sticker ⇒ côté 160, aucune .rounded-bubble', () => {
+  test('(iv) sticker ⇒ aucune .rounded-bubble', () => {
     const html = renderFull({ ...BASE_MESSAGE, content: '🔥', metadata: { sticker: { emoji: '🔥' } } });
     expect(html).toContain('data-sticker-emoji');
+    expect(html).not.toContain('rounded-bubble');
+  });
+
+  test('(iv bis) le PNG d’un sticker en bulle se peint à la cote d’iOS, 200 px (#10705)', () => {
+    const html = renderFull({
+      ...BASE_MESSAGE,
+      content: '',
+      metadata: { sticker: { stickerId: '507f1f77bcf86cd799439011' } },
+      attachments: [
+        { ...attachmentDefaults, id: 'st-1', messageId: BASE_MESSAGE.id, fileName: 's.png', originalName: 's.png', mimeType: 'image/png', fileSize: 4, fileUrl: 'https://cdn.example/s.png', uploadedBy: 'u-amina', createdAt: '2026-09-08T09:00:00.000Z' },
+      ],
+    });
+    expect(html).toContain('width="200"');
     expect(html).not.toContain('rounded-bubble');
   });
 

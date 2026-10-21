@@ -49,13 +49,26 @@ public final class CallPush {
         this.video = "true".equals(text(data, "isVideo"));
     }
 
+    /**
+     * Les appels de la coque sont COUPES pour la premiere version du Play Store
+     * (directive porteur du 2026-10-14) : une poussee d'appel ne sonne pas. Le
+     * jumeau web est `ANDROID_SHELL_CALLS_ENABLED`
+     * (`src/lib/calls/calls-availability.ts`) : les deux se rallument ensemble.
+     */
+    public static final boolean CALLS_ENABLED = false;
+
     public static CallPush route(Map<String, String> data, boolean appInForeground, CallRingLedger ledger, long now) {
+        return route(data, appInForeground, ledger, now, CALLS_ENABLED);
+    }
+
+    public static CallPush route(Map<String, String> data, boolean appInForeground, CallRingLedger ledger, long now, boolean callsEnabled) {
         String type = text(data, "type");
         String callId = text(data, "callId");
         if (TYPE_CANCEL.equals(type) || TYPE_ANSWERED_ELSEWHERE.equals(type)) {
             return new CallPush(callId == null ? Kind.SUPPRESS : Kind.STOP, data);
         }
         if (!TYPE_CALL.equals(type)) return new CallPush(Kind.NOT_CALL, data);
+        if (!callsEnabled) return new CallPush(Kind.SUPPRESS, data);
         if (callId == null || text(data, "conversationId") == null) return new CallPush(Kind.SUPPRESS, data);
         if (appInForeground || ledger.silenced(callId, now)) return new CallPush(Kind.SUPPRESS, data);
         return new CallPush(Kind.RING, data);

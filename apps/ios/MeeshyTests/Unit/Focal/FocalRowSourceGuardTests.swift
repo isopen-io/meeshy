@@ -20,15 +20,22 @@ final class FocalRowSourceGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// `FocalRow.swift` et `FocalFocusChrome.swift` (le décor du message en focus,
+    /// sorti de la rangée pour la cohésion) se lisent comme UNE unité : les
+    /// gardes négatives balaient tout le code qui vient de la rangée.
+    private func rowUnit() throws -> String {
+        try source("FocalRow.swift") + "\n" + source("FocalFocusChrome.swift")
+    }
+
     // MARK: - « Aucune bulle nulle part »
 
     func test_focalRow_doesNotReferenceBubbleBackground() throws {
-        let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
+        let stripped = AppSourceGuard.stripComments(try rowUnit())
         XCTAssertFalse(stripped.contains("BubbleBackground"), "FocalRow.swift ne doit référencer aucun fond de bulle")
     }
 
     func test_focalRow_doesNotReferenceBubbleStandardLayout() throws {
-        let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
+        let stripped = AppSourceGuard.stripComments(try rowUnit())
         XCTAssertFalse(stripped.contains("BubbleStandardLayout"), "FocalRow.swift ne doit pas composer BubbleStandardLayout")
     }
 
@@ -37,7 +44,7 @@ final class FocalRowSourceGuardTests: XCTestCase {
     /// `FocalRow` lui-même ne porte AUCUN `@State` — la sélection de langue
     /// vient de `input`/`actions` (régression `b9a39c2c`).
     func test_focalRow_hasNoState() throws {
-        let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
+        let stripped = AppSourceGuard.stripComments(try rowUnit())
         XCTAssertFalse(stripped.contains("@State"), "FocalRow.swift ne doit porter aucun @State — la langue vient de FocalRowInput/FocalRowActions")
     }
 
@@ -57,12 +64,12 @@ final class FocalRowSourceGuardTests: XCTestCase {
     // MARK: - « 1 rangée = 1 élément VoiceOver »
 
     func test_focalRow_combinesAccessibilityChildren() throws {
-        let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
+        let stripped = AppSourceGuard.stripComments(try rowUnit())
         XCTAssertTrue(stripped.contains(".accessibilityElement(children: .combine)"))
     }
 
     func test_focalRow_usesSharedAccessibilityLabelComposer() throws {
-        let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
+        let stripped = AppSourceGuard.stripComments(try rowUnit())
         XCTAssertTrue(
             stripped.contains("MessageAccessibilityLabelComposer.compose("),
             "FocalRow.swift doit réutiliser le composeur partagé (WS-1, F-080) — aucune seconde résolution du libellé VoiceOver"
@@ -83,7 +90,7 @@ final class FocalRowSourceGuardTests: XCTestCase {
     /// jette si le fichier de l'enveloppe disparaît, ce qui garde la seconde
     /// moitié aussi exigeante qu'avant.
     func test_focalRow_isNotItselfEquatable() throws {
-        let row = AppSourceGuard.stripComments(try source("FocalRow.swift"))
+        let row = AppSourceGuard.stripComments(try rowUnit())
         XCTAssertFalse(
             row.contains("struct FocalRow: View, Equatable") || row.contains("struct FocalRow: Equatable"),
             "FocalRow ne doit pas porter sa propre conformance Equatable — le gate vit sur EquatableFocalRow"
@@ -100,7 +107,7 @@ final class FocalRowSourceGuardTests: XCTestCase {
     // MARK: - Aucune police fixe (règle #9 du contrat, §8)
 
     func test_focalRow_neverUsesSystemFontDirectly() throws {
-        let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
+        let stripped = AppSourceGuard.stripComments(try rowUnit())
         XCTAssertFalse(stripped.contains(".font(.system(size:"))
     }
 
@@ -112,7 +119,7 @@ final class FocalRowSourceGuardTests: XCTestCase {
     /// dans `FocalRow.swift` serait un début de perspective conditionnelle
     /// réintroduite au mauvais endroit.
     func test_focalRow_neverReadsDensity_uniformRowRegardlessOfMode() throws {
-        let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
+        let stripped = AppSourceGuard.stripComments(try rowUnit())
         XCTAssertFalse(
             stripped.contains("input.density") || stripped.contains(".density"),
             "FocalRow.swift ne doit jamais brancher sur la densité — même rangée en Focal et en Script (contrat §3.1 usesFlatRow)"
@@ -120,7 +127,7 @@ final class FocalRowSourceGuardTests: XCTestCase {
     }
 
     func test_focalRow_neverAppliesVisualEffectOrScaleConditionally() throws {
-        let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
+        let stripped = AppSourceGuard.stripComments(try rowUnit())
         XCTAssertFalse(stripped.contains(".visualEffect"), "aucune perspective — le pass est retiré (2026-08-18), rien ne doit en repousser dans la rangée")
         XCTAssertFalse(stripped.contains(".scaleEffect"), "aucune échelle conditionnelle dans FocalRow — la rangée Script est plate par construction")
     }

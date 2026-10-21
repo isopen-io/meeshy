@@ -103,7 +103,7 @@ struct ProfileView: View {
                 imageURL: image.value,
                 fallbackText: user?.displayName ?? user?.username ?? "",
                 accentColor: accentColor
-            )
+            ).closesForConversationOpening(.profilePhoto)
         }
         .adaptiveOnChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }
@@ -246,17 +246,19 @@ struct ProfileView: View {
                     .frame(height: 120)
                     .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                     .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
-                    .onTapGesture { openFullscreen(user?.banner) }
+                    .onTapGesture { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
                     .accessibilityElement()
                     .accessibilityLabel(ProfileImageCopy.bannerLabel)
-                    .accessibilityHint(opensFullscreen(user?.banner) ? ProfileImageCopy.openFullscreenHint : "")
-                    .accessibilityAddTraits(opensFullscreen(user?.banner) ? .isButton : [])
-                    .accessibilityAction { openFullscreen(user?.banner) }
-                    .overlay(alignment: .top) {
+                    .accessibilityHint(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? ProfileImageCopy.openFullscreenHint : "")
+                    .accessibilityAddTraits(opensFullscreen(ProfileOwnBanner.openablePhoto(of: user)) ? .isButton : [])
+                    .accessibilityAction { openFullscreen(ProfileOwnBanner.openablePhoto(of: user)) }
+                    .overlay {
+                        // #10601 — le niveau et le rang aux angles BAS : la découpe de la bannière s'applique aussi à
+                        // eux, leurs coins bas suivent donc l'arrondi de ses angles, sans débord ni jour.
                         if !isEditing, let userId = user?.id {
                             GameBannerBadge(userId: userId)
                                 .allowsHitTesting(false)
-                                .padding(MeeshySpacing.sm)
+                                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         }
                     }
 
@@ -282,7 +284,7 @@ struct ProfileView: View {
 
             // Avatar overlapping banner
             ZStack(alignment: .bottomTrailing) {
-                ProfileOwnAvatar(user: user, accentColor: accentColor, isEditing: isEditing)
+                ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)
                 .overlay(
                     Circle()
                         .stroke(theme.backgroundGradient, lineWidth: 4)
@@ -331,34 +333,8 @@ struct ProfileView: View {
         }
     }
 
-    @ViewBuilder
     private var bannerImage: some View {
-        if let bannerURL = user?.banner, !bannerURL.isEmpty {
-            // CachedBannerImage : cache 3-tiers (NSCache -> disque -> reseau) avec
-            // warm-sync synchrone depuis le disque a l'init. Le banner reapparait
-            // instantanement a chaque retour sur le profil, sans refetch reseau ni
-            // re-decodage full-res (l'AsyncImage natif re-fetchait + re-decodait a
-            // chaque rendu). Le blur ThumbHash s'affiche en attendant le full image.
-            CachedBannerImage(
-                urlString: bannerURL,
-                thumbHash: user?.bannerThumbHash,
-                fallbackColor: accentColor,
-                height: 120
-            )
-        } else {
-            bannerPlaceholder
-        }
-    }
-
-    private var bannerPlaceholder: some View {
-        LinearGradient(
-            colors: [
-                Color(hex: accentColor).opacity(0.3),
-                MeeshyColors.indigo300.opacity(0.2)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        ProfileOwnBanner(user: user, accentColor: user?.profileAccentHex ?? accentColor, isDark: theme.mode.isDark)
     }
 
     // MARK: - Identity Section
@@ -520,6 +496,7 @@ struct ProfileView: View {
             .accessibilityHint(String(localized: "profile.stats.a11y.hint", defaultValue: "Ouvre les statistiques détaillées", bundle: .main))
 
             progressionEntry
+            ProfileDecorEntry(user: user, onOpenShop: { router.openPackShop(domain: $0) }, onPickBanner: { bannerItem = $0 })
         }
     }
 
@@ -863,8 +840,9 @@ struct ProfileView: View {
     /// directly from `MeeshyTests` via `@testable import Meeshy` without
     /// instantiating the SwiftUI view.
     static func mergingServerUser(_ server: MeeshyUser, onto local: MeeshyUser?) -> MeeshyUser {
-        guard server.voicePublic == nil, let voicePublic = local?.voicePublic else { return server }
-        return server.withProfileChanges(voicePublic: voicePublic)
+        let decor = server.profileDecor ?? local?.profileDecor
+        let merged = server.voicePublic == nil && local?.voicePublic != nil ? server.withProfileChanges(voicePublic: local?.voicePublic) : server
+        return merged.profileDecor == decor ? merged : merged.withProfileDecor(decor)
     }
 
     private func saveProfile() {
@@ -1001,71 +979,3 @@ struct ProfileView: View {
         return date.formatted(date: .abbreviated, time: .omitted)
     }
 }
-
-// MARK: - Optimistic Profile Builder
-
-extension MeeshyUser {
-    /// Returns a copy with the supplied fields overridden. Used by the
-    /// profile editor to apply optimistic local updates before the server
-    /// response lands. Only fields that the editor can touch are exposed;
-    /// everything else is carried over verbatim — which means every stored
-    /// property must appear in the `MeeshyUser(...)` call below: an omitted
-    /// argument takes the `= nil` default of `MeeshyUser.init` and ERASES the
-    /// field instead of carrying it (that is how the thumb hashes, the device
-    /// locale and the whole voice profile used to be wiped by a bio edit).
-    ///
-    /// Non-`private` (like `ProfileView.changedOrNil`) so the carry-over
-    /// contract can be exercised from `MeeshyTests` via `@testable import
-    /// Meeshy` without instantiating the SwiftUI view.
-    func applyingProfileEdits(
-        firstName: String? = nil,
-        lastName: String? = nil,
-        displayName: String? = nil,
-        bio: String? = nil,
-        systemLanguage: String? = nil,
-        regionalLanguage: String? = nil,
-        customDestinationLanguage: String? = nil
-    ) -> MeeshyUser {
-        MeeshyUser(
-            id: id,
-            username: username,
-            email: email,
-            firstName: firstName ?? self.firstName,
-            lastName: lastName ?? self.lastName,
-            displayName: displayName ?? self.displayName,
-            bio: bio ?? self.bio,
-            avatar: avatar,
-            avatarThumbHash: avatarThumbHash,
-            banner: banner,
-            bannerThumbHash: bannerThumbHash,
-            role: role,
-            systemLanguage: systemLanguage ?? self.systemLanguage,
-            regionalLanguage: regionalLanguage ?? self.regionalLanguage,
-            isOnline: isOnline,
-            lastActiveAt: lastActiveAt,
-            createdAt: createdAt,
-            updatedAt: updatedAt,
-            blockedUserIds: blockedUserIds,
-            isActive: isActive,
-            deactivatedAt: deactivatedAt,
-            isAnonymous: isAnonymous,
-            isMeeshyer: isMeeshyer,
-            phoneNumber: phoneNumber,
-            emailVerifiedAt: emailVerifiedAt,
-            phoneVerifiedAt: phoneVerifiedAt,
-            customDestinationLanguage: customDestinationLanguage ?? self.customDestinationLanguage,
-            autoTranslateEnabled: autoTranslateEnabled,
-            deviceLocale: deviceLocale,
-            timezone: timezone,
-            registrationCountry: registrationCountry,
-            profileCompletionRate: profileCompletionRate,
-            signalIdentityKeyPublic: signalIdentityKeyPublic,
-            voicePublic: voicePublic,
-            voiceSampleUrl: voiceSampleUrl,
-            voiceSampleDurationMs: voiceSampleDurationMs,
-            voiceQuality: voiceQuality,
-            activation: activation
-        )
-    }
-}
-

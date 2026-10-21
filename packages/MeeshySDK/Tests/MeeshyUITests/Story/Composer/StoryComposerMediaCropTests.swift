@@ -76,4 +76,23 @@ final class StoryComposerMediaCropTests: XCTestCase {
         let montre = try XCTUnwrap(vm.loadedImages[id])
         XCTAssertEqual(montre.size.width / montre.size.height, 4.0 / 3.0, accuracy: 0.01)
     }
+
+    /// Longue séance : le bitmap d'une photo supprimée n'est gardé que tant qu'une étape de l'historique peut
+    /// la ressusciter ; évincée par le cap, l'étape emporte le bitmap.
+    func test_retiredBitmap_isReleasedOnceNoHistoryStepReferencesIt() throws {
+        let (vm, id) = try composerWithImage(width: 40, height: 30)
+        vm.history = HistoryStore<Data>(cap: 2)
+        vm.pushHistorySnapshot()
+        vm.deleteElement(id: id)
+        vm.pushHistorySnapshot()
+        XCTAssertNotNil(vm.retiredImages[id], "l'étape d'avant la suppression peut encore la ramener")
+
+        let autre = UUID().uuidString
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(autre).png")
+        try XCTUnwrap(image(width: 10, height: 10).pngData()).write(to: url)
+        _ = vm.insertForegroundImage(image(width: 10, height: 10), fileURL: url, intoSlideId: vm.currentSlide.id, objectId: autre)
+        vm.pushHistorySnapshot()
+
+        XCTAssertNil(vm.retiredImages[id], "plus aucune étape ne la référence : le bitmap est libéré")
+    }
 }

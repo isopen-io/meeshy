@@ -36,15 +36,15 @@ struct GameFlamePanelView: View {
     }
 
     var body: some View {
-        GameCard(anchor: .flamePanel, title: String(localized: "game.flame_panel.title", defaultValue: "Protéger la Flamme", bundle: .main)) {
+        GameCard(anchor: .flamePanel, title: String(localized: "game.flame_panel.title", defaultValue: "Veiller sur ta Flamme", bundle: .main)) {
             GameNote(text: String(
                 localized: "game.flame_panel.bonus",
-                defaultValue: "+\(GameCopy.formatCount(GameFlame.bonusPercentPerDay)) % par jour de série sur les récompenses de mission, jusqu’à +\(GameCopy.formatCount(GameFlame.bonusPercentMax)) %.",
+                defaultValue: "Chaque jour de Flamme nourrit tes rêves : +\(GameCopy.formatCount(GameFlame.bonusPercentPerDay)) % d’étincelles par acte, jusqu’à +\(GameCopy.formatCount(GameFlame.bonusPercentMax)) %.",
                 bundle: .main
             ))
             Text(String(
                 localized: "game.flame_panel.freezes",
-                defaultValue: "Gels en réserve : \(GameCopy.formatCount(flame.freezes)) / \(GameCopy.formatCount(flame.maxFreezes))",
+                defaultValue: "Veilleuses : \(GameCopy.formatCount(flame.freezes)) / \(GameCopy.formatCount(flame.maxFreezes))",
                 bundle: .main
             ))
             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
@@ -55,7 +55,7 @@ struct GameFlamePanelView: View {
             if !online {
                 GameNote(text: String(
                     localized: "game.flame_panel.offline",
-                    defaultValue: "Hors ligne : les gels et le rallumage reprendront avec la connexion.",
+                    defaultValue: "Hors ligne : les Veilleuses et le rallumage reprendront avec la connexion.",
                     bundle: .main
                 ))
             }
@@ -67,7 +67,7 @@ struct GameFlamePanelView: View {
         if flame.freezes >= flame.maxFreezes {
             GameNote(text: String(
                 localized: "game.flame_panel.freeze_full",
-                defaultValue: "Réserve pleine : un gel couvre un jour manqué, tu n’en as pas besoin d’un de plus.",
+                defaultValue: "Tes Veilleuses sont au complet : une Veilleuse garde ta Flamme allumée un jour d’absence, tu n’en as pas besoin d’une de plus.",
                 bundle: .main
             ))
         } else {
@@ -75,7 +75,7 @@ struct GameFlamePanelView: View {
             GameActionButton(
                 title: String(
                     localized: "game.flame_panel.freeze_buy",
-                    defaultValue: "Acheter un gel · \(GameCopy.meeshes(flame.freezePrice))",
+                    defaultValue: "Prendre une Veilleuse · \(GameCopy.meeshes(flame.freezePrice))",
                     bundle: .main
                 ),
                 busy: buyingFreeze, disabled: !online || !freezeSpend.affordable, identifier: "game.flame.freeze.buy",

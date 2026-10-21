@@ -24,9 +24,9 @@ import { appInstitutionalHref } from '@/lib/institutional-href';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ThemePreference } from '@/lib/scheme';
 import { initialsOf } from '@/lib/view/conversation';
-import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import type { DevicePushRow } from '@/lib/push/use-device-push';
 import { Link } from '@/routes/route-table';
+import { useMyRing } from '@/lib/profile-decor/my-ring';
 
 /**
  * **LES SECTIONS DES RÉGLAGES** (#5563) — miroir de `SettingsView.swift`, dans
@@ -59,15 +59,6 @@ export const SECURITY_PANEL_PARAM = 'volet';
 export const SECURITY_PANEL = 'securite';
 /** Le volet des packs (#10149) — `/settings?volet=packs`, sans route neuve. */
 export const PACKS_PANEL = 'packs';
-
-/**
- * **LE COULOIR DES DISQUES FLOTTANTS** — la loi de `floating-corridor.ts`, portée
- * comme la cloche et le Flux (`FEED_TOP_RESERVE`) : au repos, la carte de profil,
- * premier contrôle de l'écran, commence SOUS les deux disques. iOS y pose le grand
- * titre dépliable de `CollapsibleHeader` ; l'encoche s'annule dans la soustraction,
- * elle décale à la fois le couloir et l'écran (`pt-safe`).
- */
-export const SETTINGS_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - SETTINGS_HEADER_HEIGHT;
 
 type IconSpec = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'ecran'; readonly name: SettingsGlyphName };
 
@@ -131,6 +122,8 @@ export function SettingsHeaderBar({ language }: { readonly language: InterfaceLa
 export type SettingsUser = { readonly username: string; readonly displayName: string | null; readonly avatar: string | null };
 
 export function ProfileCard({ language, user }: { readonly language: InterfaceLanguage; readonly user: SettingsUser | null }) {
+  /* MON CONTOUR ÉQUIPÉ (#10946) — le même que sur mon profil. */
+  const myRing = useMyRing();
   const title = translate(language, 'settings.my_profile');
   const name = user === null ? title : user.displayName ?? user.username;
   return (
@@ -141,7 +134,7 @@ export function ProfileCard({ language, user }: { readonly language: InterfaceLa
       className="flex items-center gap-3.5 rounded-card p-4 focus-visible:outline-2"
       style={{ ...SECTION_CARD_STYLE, minHeight: 72, outlineColor: 'var(--color-ios-brand)' }}
     >
-      <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={48} {...(user?.avatar ? { src: user.avatar } : {})} />
+      <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={48} {...(user?.avatar ? { src: user.avatar } : {})} {...(myRing === null ? {} : { ring: myRing })} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-body font-semibold" style={{ color: SECTION_INK }}>
           {name}
@@ -836,10 +829,17 @@ export function SettingsOfflineNotice({ language }: { readonly language: Interfa
   );
 }
 
-/** Le contenu défilant : la réserve du couloir, puis les sections espacées comme `SettingsView`. */
+/**
+ * Le contenu défilant, ses sections espacées comme `SettingsView`.
+ *
+ * IL COMMENCE SOUS L'EN-TÊTE (#10634) — comme `SettingsView` d'iOS
+ * (`.padding(.top, MeeshySpacing.sm)`) et le profil : les disques flottants se
+ * posent par-dessus, au lieu de laisser sous l'en-tête la hauteur vide de leur
+ * couloir (122 px).
+ */
 export function SettingsContent({ children }: { readonly children: ReactNode }) {
   return (
-    <div className="mx-auto grid max-w-xl gap-6 pb-24" style={{ paddingTop: SETTINGS_TOP_RESERVE + 8 }}>
+    <div className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
       {children}
     </div>
   );

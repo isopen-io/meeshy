@@ -71,7 +71,7 @@ extension ConversationMediaGalleryView {
     /// voile — il les détache, il ne les assombrit pas.
     var stageScrimsLayer: some View {
         StoryReaderScrims(
-            topInset: DeviceLayout.safeAreaTop,
+            topInset: galleryInsets.top,
             chromeVisible: MediaStageVeil.showsChrome(presentation: stagePresentation,
                                                       overlays: stageOverlays))
     }

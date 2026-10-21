@@ -10,7 +10,7 @@ import { useGameSettings } from '@/lib/game/use-game-settings';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
-import { shownLevelOf, shownStanding } from '@/lib/game/ladder';
+import { levelMaxReading, shownLevelOf, shownStanding, sparksReading } from '@/lib/game/ladder';
 import { shownRank } from '@/lib/view/game-copy';
 
 import { GameProfileBanner, type BannerStanding } from './game-profile-banner';
@@ -94,12 +94,16 @@ export function GameBannerOwnConnected({ enabled }: { readonly enabled: boolean 
   if (prefs.hidden || game === undefined) return null;
   const level = shownLevelOf(game.level);
   const atTop = level.nextThreshold === null;
+  // La POCHE d'étincelles (pas la base du niveau) en grand ; la Gloire totale dessous ; le niveau max à vie sous le niveau.
+  const sparks = sparksReading(game.level);
   const standing: BannerStanding = {
     level: level.level,
     tier: level.tier,
     prestige: level.prestige,
     progress: atTop ? 1 : level.progress,
-    points: level.score > 0 ? level.score : null,
+    points: sparks.pocket > 0 ? sparks.pocket : null,
+    glory: game.glory.glory > 0 ? game.glory.glory : null,
+    levelMax: levelMaxReading(game.level),
     pointsToNext: atTop ? null : level.pointsToNext,
     ...shownRank(game.glory),
   };
@@ -111,12 +115,16 @@ export function GameBannerVisitorConnected({ userId, enabled }: { readonly userI
   const game = useUserGame(userId, enabled, 'always');
   const served = game.data?.visible === true ? shownStanding(game.data.standing) : null;
   if (served === null) return null;
+  const servedPocket = served.sparks ?? served.points;
   const standing: BannerStanding = {
     level: served.level,
     tier: served.tier,
     prestige: served.prestige,
     progress: null,
-    points: served.points === undefined || served.points === 0 ? null : served.points,
+    // Servis aux amis seulement (la Gloire comme les points) ; le niveau max suit le réglage du RANG, comme le niveau.
+    points: servedPocket === undefined || servedPocket === 0 ? null : servedPocket,
+    glory: served.glory === undefined || served.glory === 0 ? null : served.glory,
+    levelMax: served.ladder?.levelMaxLifetime ?? served.levelMaxLifetime ?? null,
     pointsToNext: null,
     ...shownRank(served),
   };

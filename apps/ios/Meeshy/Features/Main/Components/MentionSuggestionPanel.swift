@@ -57,7 +57,9 @@ struct MentionSuggestionPanel: View {
                                     name: candidate.displayName,
                                     context: .userListItem,
                                     accentColor: accentColor,
-                                    avatarURL: candidate.avatarURL
+                                    avatarURL: candidate.avatarURL,
+                                    presenceState: PresenceManager.shared.presenceState(for: candidate.id),
+                                    ring: candidate.ring
                                 )
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(candidate.displayName)

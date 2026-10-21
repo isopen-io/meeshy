@@ -1,41 +1,41 @@
 import type { MascotLine } from '@meeshy/shared/utils/mascot';
 
-import { ACHIEVEMENT_COPY } from './progression';
+import { formatGameNumber, translateGame, translateGamePlural } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+
+import { achievementCopy } from './progression';
 
 /**
  * CE QUE DIT LA MASCOTTE (#8907) — une phrase par ligne de la loi partagée
  * (`@meeshy/shared/utils/mascot`), au tutoiement : la mascotte est une
  * compagne, pas l'institution.
  *
- * Même dette que `meesh-copy.ts` : l'écran Progression n'appelle pas encore
- * `translate()`, cette copie est donc en français seul ; l'accord passe par
- * `Intl.PluralRules`, pour que le jour du catalogue la bascule soit déjà au
- * bon endroit.
+ * Dans la langue d'interface (#10827), au catalogue du jeu
+ * (`game.mascot.*`, partie `concept` : seule Progression la monte), avec les
+ * mots d'iOS là où ils existent (`game.mint.tchak`, `game.mint.chip.level`,
+ * `reveal.badge.unlocked`). L'accord passe par `translateGamePlural`, jamais
+ * par un `=== 1`.
  */
-
-const REGLE_FR = new Intl.PluralRules('fr-FR');
-
-const points = (count: number): string => (REGLE_FR.select(count) === 'one' ? `${count} point` : `${count} points`);
-
-export function mascotSay(line: MascotLine): string {
+export function mascotSay(line: MascotLine, language: InterfaceLanguage = currentInterfaceLanguage()): string {
+  const number = (value: number): string => formatGameNumber(language, value);
   switch (line.kind) {
     case 'meesh-minted':
-      return `Tchak ! Une Meesh toute neuve. Tu en as ${line.balance}.`;
+      return translateGame(language, 'game.mascot.minted', { balance: number(line.balance) });
     case 'level-up':
-      return `Niveau ${line.level} ! On fête ça.`;
+      return translateGame(language, 'game.mascot.level_up', { level: number(line.level) });
     case 'achievement':
-      return `Succès débloqué : ${ACHIEVEMENT_COPY[line.key].title} !`;
+      return translateGame(language, 'game.mascot.achievement', { title: achievementCopy(line.key, language).title });
     case 'can-mint':
-      return `Tes points sont prêts : on frappe une Meesh pour ${points(line.mintCost)} ?`;
+      return translateGamePlural(language, 'game.mascot.can_mint', line.mintCost);
     case 'first-step':
-      return 'Salut, je suis Mee ! Envoie ton premier message et je compte tes points.';
+      return translateGame(language, 'game.mascot.first_step');
     case 'streak':
-      return `${line.days} jours d’affilée, continue comme ça !`;
+      return translateGamePlural(language, 'game.mascot.streak', line.days);
     case 'meesh-missing':
-      return `Encore ${points(line.missing)} à convertir et je frappe ta prochaine Meesh.`;
+      return translateGamePlural(language, 'game.mascot.meesh_missing', line.missing);
     case 'level-missing':
-      return `Encore ${points(line.missing)} avant le niveau ${line.nextLevel}.`;
+      return translateGamePlural(language, 'game.mascot.level_missing', line.missing, { level: number(line.nextLevel) });
     case 'top-level':
-      return 'Tu es au sommet. Bravo !';
+      return translateGame(language, 'game.mascot.top_level');
   }
 }

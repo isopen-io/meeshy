@@ -103,9 +103,9 @@ enum SceneStickerPose {
         guard let still = MeeStickerCatalog.stillImage(mee) else {
             return viewModel.addSticker(emoji: mee.emoji, scale: StorySticker.posedScale).id
         }
-        let film = mee.animated
-            ? MeeStickerCatalog.fileURL(for: mee).flatMap { try? Data(contentsOf: $0, options: .mappedIfSafe) }
-            : nil
+        // Les octets animés partent tels quels dans la story publiée : un PNG
+        // animé, que les trois clients lisent — jamais le `.lottie` (#10639).
+        let film = MeeStickerCatalog.animatedImageData(for: mee)
         return viewModel.addSticker(image: still, provider: meeProvider,
                                     scale: StorySticker.posedScale, animatedData: film).id
     }

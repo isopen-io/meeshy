@@ -295,7 +295,7 @@ for (const scheme of ['light', 'dark']) {
     await page.waitForTimeout(300);
 
     const tagListe = `Liste ${gabarit}`;
-    const liste = await releve(page, 'header a, header button, section:has([data-rail="grande"]) a[aria-label]:not([data-story-author]), nav[aria-label="Filtres"] button');
+    const liste = await releve(page, 'header a, header button, section:has([data-rail="grande"]) a[aria-label]:not([data-story-author]), nav[data-list-filters] button');
     exigeRepos(tagListe, liste);
     const grandeListe = await cotes(page, 'grande');
     constate(

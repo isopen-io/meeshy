@@ -30,7 +30,7 @@ private final class MockSignInLinkAuthorizer: SignInLinkAuthorizing {
         return try emailResult.get()
     }
 
-    func verifyMagicLink(token: String) async throws -> EmailProvenSession {
+    func verifyMagicLink(token: String, confirmed: Bool) async throws -> EmailProvenSession {
         events.append("verify")
         return try magicResult.get()
     }

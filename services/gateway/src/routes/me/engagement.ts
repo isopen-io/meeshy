@@ -23,8 +23,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
-import { computeMeeshMintPlan } from '@meeshy/shared/utils/meesh';
+import { ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES } from '@meeshy/shared/types/engagement';
 import { meeshPrice } from '@meeshy/shared/utils/game/mint';
 import type { GameBlock } from '@meeshy/shared/types/game';
 import { elanUnderScaleFromRows } from '@meeshy/shared/types/engagement-scale';
@@ -34,7 +33,10 @@ import { ACHIEVEMENT_FAMILIES } from '@meeshy/shared/types/achievement-families'
 import { AchievementReachService } from '../../services/achievements/AchievementReachService';
 import { GlobalAchievements } from '../../services/achievements/GlobalAchievements';
 import { meeshTotalsFromLedger } from '../../services/meesh/MeeshService';
+import { SPARKS_USER_SELECT, currentLevelOf, sparksOf } from '../../services/game/SparksFacts';
+import { effectiveMeeshPrice, levelSparksOf, mintCostFactor } from '@meeshy/shared/utils/game/sparks';
 import { GameBlockService, type AxisRow } from '../../services/game/GameBlockService';
+import { gameRevisionToServe } from '../../services/game/GameRevision';
 import { knowsGameWave2, milestonesServedTo } from '../../services/game/clientCapabilities';
 import { MissionService, READ_ONLY_CREDIT } from '../../services/game/MissionService';
 import { PersonalMissionService } from '../../services/game/PersonalMissionService';
@@ -52,13 +54,17 @@ const log = enhancedLogger.child({ module: 'me-engagement' });
 const USER_ENGAGEMENT_SELECT = {
   currentStreakDays: true,
   longestStreakDays: true,
-  engagementScore: true,
+  ...SPARKS_USER_SELECT,
 } as const;
 
 type UserEngagementColumns = {
   currentStreakDays: number | null | undefined;
   longestStreakDays: number | null | undefined;
   engagementScore: number | null | undefined;
+  sparksSincePrestige?: bigint | number | null;
+  sparksEarnedLifetime?: bigint | number | null;
+  levelRecord?: number | null;
+  levelMaxLifetime?: number | null;
 };
 
 /**
@@ -123,6 +129,12 @@ const engagementResponseSchema = {
           type: 'object',
           properties: {
             engagementScore: { type: 'number' },
+            // Les ÉTINCELLES (#10846), additives : la poche, le cycle (base du niveau), le total à vie, le niveau max à vie.
+            sparks: { type: 'number' },
+            sparksCycle: { type: 'number' },
+            sparksLifetime: { type: 'number' },
+            sparksDebt: { type: 'number' },
+            levelMaxLifetime: { type: 'number' },
           },
         },
         // La carte d'atteignabilité des succès (#5759) — `additionalProperties`
@@ -155,6 +167,11 @@ const engagementResponseSchema = {
             floorPoints: { type: 'number' },
             missingPoints: { type: 'number' },
             mintCost: { type: 'number' },
+            // Le prix de rang et le facteur du niveau actuel (#10847), à côté du prix effectif `mintCost`.
+            sparksDebt: { type: 'number' },
+            blockedBy: { type: ['string', 'null'] },
+            baseMintCost: { type: 'number' },
+            costFactor: { type: 'number' },
             firstMintedAt: { type: ['string', 'null'] },
             lastMintedAt: { type: ['string', 'null'] },
           },
@@ -163,6 +180,9 @@ const engagementResponseSchema = {
         // l'ignore. `additionalProperties` parce que la forme est tenue par le
         // schéma Zod partagé (`gameBlockSchema`), validé avant de partir.
         game: { type: 'object', additionalProperties: true },
+        // Le marqueur d'ordre de l'état servi (#10900, `types/game-sync.ts`) : la révision gravée du compte (#10912) — toute
+        // écriture du jeu gravée avant elle est dans cette charge. Un client ignore une source de révision plus petite.
+        gameRevision: { type: 'number' },
         // Les séries PAR ACTE (#10389) — additif : un ancien client l'ignore,
         // `streak` reste la série globale. `currentDays` est l'état écrit au
         // dernier jour compté (`lastDay`) : un client le fait retomber à 0
@@ -246,6 +266,10 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
         // par contrainte unique) et best-effort — un échec ici ne doit pas
         // fermer un écran de consultation.
         await new GlobalAchievements(fastify.prisma).sweep(userId).catch(() => undefined);
+        // Le marqueur d'ordre (#10900) est la révision GRAVÉE (#10912), lue SEULE et AVANT toute lecture de l'état : ce qui
+        // s'écrit après peut y être, ce qui s'est gravé avant y est forcément. Jamais l'heure de la réponse — deux
+        // passerelles aux horloges décalées serviraient un ordre faux. Compte sans révision gravée : l'instant, comme avant.
+        const gameRevision = await gameRevisionToServe(fastify.prisma, userId);
 
         const [user, counters, milestones, frappes, totauxMeesh, reach, scale, actStreaks] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: userId }, select: USER_ENGAGEMENT_SELECT }),
@@ -318,11 +342,10 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
 
         const streakUser = user as UserEngagementColumns;
 
-        // Le plan de frappe est DÉRIVÉ des compteurs déjà lus — aucune
-        // requête de plus, et le client rejoue exactement le même calcul pour
-        // décider s'il montre le bouton. Le score TOTAL et le score DÉBITABLE
-        // sont deux chiffres distincts : les conversations comptent dans le
-        // niveau et ne se dépensent jamais (plancher inaliénable, #5743).
+        // Les ÉTINCELLES (#10846) : la poche que la frappe dépense et que lit le niveau (#10892), le cycle et le total à vie. TOUT est
+        // convertible : plus de plancher inaliénable ni de débit par axe — `debitablePoints` est la poche entière,
+        // `floorPoints` vaut 0 (champs conservés pour les clients publiés).
+        const sparks = sparksOf(streakUser);
 
         // L'élan COURANT — ce que le PROCHAIN geste créditera. Dérivé des lignes
         // déjà lues, jamais relu : la route paierait deux fois la même
@@ -333,20 +356,15 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
           counters,
           milestones,
           familyOf: (axisKey) => (isEngagementAxisKey(axisKey) ? engagementAxisFamily(axisKey) : null),
-          engagementScore: streakUser.engagementScore ?? 0,
+          engagementScore: levelSparksOf(sparks),
         });
 
-        // Au PRIX de la prochaine pièce (la rareté croît, #9374) : les anciens
-        // clients lisent `mintCost` et `missingPoints`, qui doivent dire vrai.
-        const mintCost = meeshPrice(totauxMeesh.mintedLifetime + 1);
-        const plan = computeMeeshMintPlan(
-          counters.map((c: { axisKey: string; count: number; points: number }) => ({
-            axisKey: c.axisKey as EngagementAxisKey,
-            count: c.count,
-            points: c.points,
-          })),
-          { mintCost },
-        );
+        // Le prix EFFECTIF de la prochaine pièce (#9374, #10847) : le prix de rang × le facteur du niveau ACTUEL. Le bloc
+        // `game` le sert déjà tel que la frappe le recalculera (étapes et rang compris) ; sans lui, repli sur le niveau lu
+        // sur la poche seule (#10892). Les anciens clients lisent `mintCost` et `missingPoints`, qui doivent dire vrai.
+        const baseMintCost = meeshPrice(totauxMeesh.mintedLifetime + 1);
+        const fallbackLevel = currentLevelOf(streakUser);
+        const fallbackPrice = effectiveMeeshPrice(totauxMeesh.mintedLifetime + 1, fallbackLevel);
 
         const counterRows = counters.map((c: { axisKey: string; count: number; points: number }) => ({
           axisKey: c.axisKey,
@@ -361,6 +379,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
           return null;
         });
 
+        const mintCost = game?.mint.price ?? fallbackPrice;
         return sendSuccess(reply, {
           counters: counterRows,
           // Les paliers 1 000 et 5 000 ne partent qu'aux clients qui déclarent la vague 2 :
@@ -375,7 +394,12 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
             longestStreakDays: streakUser.longestStreakDays ?? 0,
           },
           level: {
-            engagementScore: streakUser.engagementScore ?? 0,
+            engagementScore: sparks.pocket,
+            sparks: sparks.pocket,
+            sparksCycle: sparks.cycle,
+            sparksLifetime: sparks.lifetime,
+            sparksDebt: sparks.debt,
+            levelMaxLifetime: game?.level.levelMaxLifetime ?? Math.max(streakUser.levelRecord ?? 1, streakUser.levelMaxLifetime ?? 1),
           },
           achievementReach: Object.fromEntries(reach),
           elan: {
@@ -388,14 +412,19 @@ export async function meEngagementRoutes(fastify: FastifyInstance, options: Enga
           meesh: {
             balance: totauxMeesh.balance,
             mintedLifetime: totauxMeesh.mintedLifetime,
-            debitablePoints: plan.debitablePoints,
-            floorPoints: plan.floorPoints,
-            missingPoints: plan.missingPoints,
+            debitablePoints: sparks.pocket,
+            floorPoints: 0,
+            missingPoints: Math.max(0, mintCost - sparks.pocket),
+            sparksDebt: sparks.debt,
+            blockedBy: sparks.debt > 0 ? 'debt' : null,
             mintCost,
+            baseMintCost: game?.mint.basePrice ?? baseMintCost,
+            costFactor: game?.mint.costFactor ?? mintCostFactor(fallbackLevel),
             firstMintedAt: frappes._min.createdAt?.toISOString() ?? null,
             lastMintedAt: frappes._max.createdAt?.toISOString() ?? null,
           },
           ...(game ? { game } : {}),
+          gameRevision,
           ...(actStreaks ? { actStreaks } : {}),
         });
       } catch (error) {

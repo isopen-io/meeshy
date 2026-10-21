@@ -78,6 +78,16 @@ describe('itemsOfKind — chaque segment ne garde que ce qui est le sien', () =>
     expect(itemsOfKind([once, onceMessage], 'visual')).toEqual([]);
   });
 
+  test('l’image jointe d’un STICKER n’entre jamais dans l’index : ce n’est pas un média de la conversation', () => {
+    const sticker = message({
+      id: 'st1',
+      metadata: { sticker: { stickerId: 's1' } },
+      attachments: [attachment({ id: 'png', mimeType: 'image/png' })],
+    } as never);
+    const rooted = message({ id: 'st2', sticker: { emoji: '🔥' }, attachments: [attachment({ id: 'png2', mimeType: 'image/png' })] } as never);
+    expect(itemsOfKind([sticker, rooted], 'visual')).toEqual([]);
+  });
+
   test('les messages gardent l’ordre SERVI (le plus récent d’abord)', () => {
     const recent = message({ id: 'r', attachments: [attachment({ id: 'a', mimeType: 'image/png' })] });
     const old = message({ id: 'o', attachments: [attachment({ id: 'b', mimeType: 'image/png' })] });

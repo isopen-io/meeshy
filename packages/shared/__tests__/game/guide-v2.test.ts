@@ -28,9 +28,9 @@ const events: readonly GuideEventV2[] = [
 ];
 
 describe('les moments de la vague 2', () => {
-  it('couvrent les neuf moments de la conception, sans toucher aux treize premiers', () => {
+  it('couvrent les neuf moments de la conception, sans toucher aux douze premiers', () => {
     expect([...GUIDE_MOMENT_KEYS_V2].sort()).toEqual(events.map((e) => e.kind).sort());
-    expect(GUIDE_MOMENT_KEYS).toHaveLength(13);
+    expect(GUIDE_MOMENT_KEYS).toHaveLength(12);
     expect(GUIDE_MOMENT_KEYS_V2.some((key) => (GUIDE_MOMENT_KEYS as readonly string[]).includes(key))).toBe(false);
   });
 

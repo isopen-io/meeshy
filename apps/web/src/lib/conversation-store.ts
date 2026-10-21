@@ -1,6 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
-import { flagsOf, type ConversationFlags } from './api/preferences';
+import { flagsOf, type ConversationFlags, type ConversationPreferencePatch } from './api/preferences';
 import type { Conversation } from './api/types';
 import { unreadOf } from './view/conversation';
 import { servedWriteRestriction } from './write-restriction';
@@ -33,13 +33,23 @@ import { servedWriteRestriction } from './write-restriction';
 export type ConversationOverride = {
   readonly flags?: Partial<ConversationFlags>;
   readonly unreadCount?: number;
+  /** Favori, catégorie, nom personnel (#10593) — `null` = retiré. */
+  readonly preferences?: ConversationPreferencePatch;
 };
 
 type Overrides = Readonly<Record<string, ConversationOverride>>;
 
 /** Les clés qu'un override PORTE — `unreadCount` à part, `flags` détaillé
  * champ par champ (#5650, F4/§5, étape 7). */
-export type OverrideKey = 'isPinned' | 'isMuted' | 'isArchived' | 'unreadCount';
+export type PreferenceKey = keyof ConversationPreferencePatch;
+
+export type OverrideKey = 'isPinned' | 'isMuted' | 'isArchived' | 'unreadCount' | PreferenceKey;
+
+const PREFERENCE_KEYS: readonly PreferenceKey[] = ['reaction', 'categoryId', 'customName'];
+
+const isPreferenceKey = (key: OverrideKey): key is PreferenceKey => (PREFERENCE_KEYS as readonly OverrideKey[]).includes(key);
+
+type FlagKey = Exclude<OverrideKey, 'unreadCount' | PreferenceKey>;
 
 export type ConversationStoreState = {
   readonly overrides: Overrides;
@@ -48,6 +58,8 @@ export type ConversationStoreState = {
   toggleArchive(id: string, current: boolean): void;
   markRead(id: string): void;
   markUnread(id: string): void;
+  /** Pose la correction optimiste d'une préférence (#10593). */
+  setPreference(id: string, patch: ConversationPreferencePatch): void;
   /**
    * `clearOverride` (#5650, F4) — RETIRE les clés nommées de l'override d'UNE
    * conversation, IMMUABLE, et supprime l'entrée quand elle devient vide
@@ -72,7 +84,15 @@ const mergeFlag = (
 ): Overrides =>
   mergeOverride(overrides, id, { flags: { ...overrides[id]?.flags, [field]: value } });
 
-export const conversationStore = createStore<ConversationStoreState>((set) => ({
+const remaining = <T extends object>(record: T | undefined, remove: ReadonlySet<string>): Partial<T> | undefined => {
+  if (record === undefined) return undefined;
+  const entries = Object.entries(record).filter(([key]) => !remove.has(key));
+  return entries.length > 0 ? (Object.fromEntries(entries) as Partial<T>) : undefined;
+};
+
+/** Une FABRIQUE (#10593) : le singleton de l'application en est une instance,
+ * et chaque témoin prend la sienne — deux tests ne se voient jamais. */
+export const createConversationStore = () => createStore<ConversationStoreState>((set) => ({
   overrides: {},
   togglePin: (id, current) => set((state) => ({ overrides: mergeFlag(state.overrides, id, 'isPinned', !current) })),
   toggleMute: (id, current) => set((state) => ({ overrides: mergeFlag(state.overrides, id, 'isMuted', !current) })),
@@ -88,22 +108,23 @@ export const conversationStore = createStore<ConversationStoreState>((set) => ({
    * au prochain `GET /conversations`.
    */
   markUnread: (id) => set((state) => ({ overrides: mergeOverride(state.overrides, id, { unreadCount: 1 }) })),
+  setPreference: (id, patch) =>
+    set((state) => ({ overrides: mergeOverride(state.overrides, id, { preferences: { ...state.overrides[id]?.preferences, ...patch } }) })),
   clearOverride: (id, keys) =>
     set((state) => {
       const current = state.overrides[id];
       if (current === undefined) return state;
 
-      const removeFlags = new Set(keys.filter((k): k is Exclude<OverrideKey, 'unreadCount'> => k !== 'unreadCount'));
+      const removeFlags = new Set<string>(keys.filter((k): k is FlagKey => k !== 'unreadCount' && !isPreferenceKey(k)));
+      const removePreferences = new Set<string>(keys.filter(isPreferenceKey));
       const removeUnread = keys.includes('unreadCount');
 
-      const remainingFlagEntries =
-        current.flags === undefined ? [] : Object.entries(current.flags).filter(([k]) => !removeFlags.has(k as Exclude<OverrideKey, 'unreadCount'>));
-
+      const flags = remaining(current.flags, removeFlags);
+      const preferences = remaining(current.preferences, removePreferences);
       const next: ConversationOverride = {
-        ...(remainingFlagEntries.length > 0
-          ? { flags: Object.fromEntries(remainingFlagEntries) as Partial<ConversationFlags> }
-          : {}),
+        ...(flags === undefined ? {} : { flags }),
         ...(!removeUnread && current.unreadCount !== undefined ? { unreadCount: current.unreadCount } : {}),
+        ...(preferences === undefined ? {} : { preferences }),
       };
 
       if (Object.keys(next).length === 0) {
@@ -113,6 +134,8 @@ export const conversationStore = createStore<ConversationStoreState>((set) => ({
       return { overrides: { ...state.overrides, [id]: next } };
     }),
 }));
+
+export const conversationStore = createConversationStore();
 
 /**
  * Sélecteurs PURS — `(conversation, overrides)`, jamais le store lui-même :
@@ -131,4 +154,26 @@ export function effectiveFlagsOf(conversation: Conversation, overrides: Override
 export function effectiveUnreadOf(conversation: Conversation, overrides: Overrides): number {
   const override = overrides[conversation.id]?.unreadCount;
   return override ?? unreadOf(conversation);
+}
+
+/**
+ * LA CONVERSATION EFFECTIVE (#10593) — le wire auquel s'ajoute la correction
+ * optimiste d'une préférence (favori, catégorie, nom personnel). La liste
+ * entière lit ces objets : le nom (`titleOf`), la section (`categoryIdOf`), le
+ * filtre « Favoris » (`reactionOf`) et la fiche voient la MÊME valeur, sans
+ * qu'aucun lecteur ne réécrive la fusion.
+ *
+ * Sans aucune correction de préférence, la liste revient TELLE QUELLE — et une
+ * conversation non corrigée garde son objet : les rangées mémoïsées
+ * (`sameRowProps`) ne se repeignent pas pour le geste d'une autre.
+ */
+export function withPreferenceOverrides(conversations: readonly Conversation[], overrides: Overrides): readonly Conversation[] {
+  if (!Object.values(overrides).some((override) => override.preferences !== undefined)) return conversations;
+  return conversations.map((conversation) => {
+    const preferences = overrides[conversation.id]?.preferences;
+    if (preferences === undefined) return conversation;
+    const raw = conversation.userPreferences;
+    const entry = Array.isArray(raw) && typeof raw[0] === 'object' && raw[0] !== null ? (raw[0] as Record<string, unknown>) : {};
+    return { ...conversation, userPreferences: [{ ...entry, ...preferences }] };
+  });
 }

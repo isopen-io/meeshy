@@ -1,21 +1,12 @@
 /**
- * LE POINT D'ACCROCHE DE L'ENTRÉE INVITÉ (#10002 → #10003 → #10100).
+ * L'ENTRÉE INVITÉ DANS WORLD WIDE (#10002 → #10003 → #10100 → #10784).
  *
- * La landing fait entrer un nom dans World Wide par CETTE adresse, où `{name}`
- * est le nom saisi et `{language}` la langue choisie (D-186). L'invité RESTE
- * sur `/world` (#10100, décision porteur du 2026-10-11) : l'écran y lit la clé
- * de jonction servie par `GET /world`, crée l'invité sans autre geste si le
- * jeton de passage concorde, puis ouvre le fil EN PLACE, en focus
- * (`routes/world-entry.tsx`) — plus de détour par la jonction `/chat/…`, qui
- * reste servie pour les liens de partage et les pages de la landing en cache.
- *
- * Chaîne et non fonction : le script de la landing est inliné par son texte
- * (`landing-boot.ts`) et ne peut rien importer. Son témoin la confronte à
- * `href('world', …)`, pour qu'elle ne puisse pas viser une adresse que la
- * table des routes ne sert pas. Le script y remplace encore `{link}` : sans
- * effet ici, la clé voyage dans le jeton de passage.
+ * Depuis #10784 (directive porteur du 2026-10-16), la landing ne fait plus
+ * entrer personne : ni formulaire, ni bouton « Entrer sans compte ». Elle porte
+ * un QR code vers `https://meeshy.me/world` (`public/world-qr.svg`), et c'est
+ * `/world` (`routes/world-entry.tsx`) qui demande le nom et la langue, puis
+ * ouvre le fil en focus.
  */
-export const WORLD_GUEST_ENTRY_TEMPLATE = '/world?name={name}&language={language}';
 
 /**
  * Le fil d'un invité qui revient sur la landing (« Revenir dans World Wide ») :
@@ -25,12 +16,14 @@ export const WORLD_GUEST_ENTRY_TEMPLATE = '/world?name={name}&language={language
 export const WORLD_GUEST_THREAD_TEMPLATE = '/world';
 
 /**
- * LE JETON DE PASSAGE DE LA LANDING (#10094) — ce qui distingue une entrée
- * TAPÉE sur meeshy.me d'une adresse forgée.
+ * LE JETON DE PASSAGE DE LA LANDING (#10094) — ce qui distinguait une entrée
+ * TAPÉE sur meeshy.me d'une adresse forgée. La landing n'en pose plus depuis
+ * #10784 ; la jonction le lit encore, pour les landings d'avant restées en cache
+ * (rétrocompatibilité), et sans lui elle attend le geste — fail-closed.
  *
  * L'adresse d'entrée se fabrique de n'importe où : seule, elle ferait entrer un
  * visiteur, sous un nom choisi par un tiers, dans n'importe quelle conversation
- * à lien. Le script de la landing pose donc, juste avant de naviguer, un jeton
+ * à lien. Le script de la landing posait donc, juste avant de naviguer, un jeton
  * dans le `sessionStorage` de l'ONGLET (`{ link, name, language, at }`), qu'aucune
  * autre origine ne peut écrire ; la jonction le lit ET l'efface, et ne crée
  * l'invité sans geste que si le jeton concorde avec l'adresse et date de moins

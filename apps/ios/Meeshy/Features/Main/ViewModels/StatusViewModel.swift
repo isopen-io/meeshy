@@ -277,7 +277,14 @@ class StatusViewModel: ObservableObject {
 
             if let entry = post.toStatusEntry() {
                 myStatus = entry
-                statuses.insert(entry, at: 0)
+                // L'écho socket de SA propre humeur (salle de l'auteur) peut
+                // arriver avant la réponse REST : l'insérer une seconde fois
+                // donnait deux lignes au même id.
+                if let existing = statuses.firstIndex(where: { $0.id == entry.id }) {
+                    statuses[existing] = entry
+                } else {
+                    statuses.insert(entry, at: 0)
+                }
                 await saveCacheSnapshot()
             }
         } catch {
@@ -436,8 +443,7 @@ class StatusViewModel: ObservableObject {
     func clearStatus() async {
         guard let status = myStatus else { return }
 
-        let snapshot = statuses
-        let previousStatus = myStatus
+        let index = statuses.firstIndex { $0.id == status.id }
         statuses.removeAll { $0.id == status.id }
         myStatus = nil
 
@@ -445,8 +451,13 @@ class StatusViewModel: ObservableObject {
             try await statusService.delete(statusId: status.id)
             await saveCacheSnapshot()
         } catch {
-            statuses = snapshot
-            myStatus = previousStatus
+            // Défaire CE retrait : les humeurs arrivées par socket pendant
+            // l'attente restent, et une humeur publiée entre-temps n'est pas
+            // remplacée par l'ancienne.
+            if let index {
+                statuses = OptimisticRollback.restoring(status, at: index, into: statuses)
+            }
+            if myStatus == nil { myStatus = status }
             FeedbackToastManager.shared.showError(String(localized: "status.deleteError", defaultValue: "Impossible de supprimer le statut", bundle: .main))
         }
     }
@@ -472,9 +483,16 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Lookup Methods
 
-    func statusForUser(userId: String) -> StatusEntry? {
+    /// L'humeur VIVANTE d'un utilisateur. Une humeur expire (`expiresAt`), mais
+    /// la liste n'est relue qu'au démarrage et au tirer pour rafraîchir — et
+    /// le cache la sert d'abord : sans ce filtre, l'avatar d'un ami gardait
+    /// une humeur éteinte au démarrage hors ligne ou après un jour au premier
+    /// plan. Même règle que l'humeur du tray (`StoryViewModel+Viewing`).
+    func statusForUser(userId: String, now: Date = Date()) -> StatusEntry? {
         guard let offset = statusIndexByUserId[userId], offset < statuses.count else { return nil }
-        return statuses[offset]
+        let entry = statuses[offset]
+        if let expiresAt = entry.expiresAt, expiresAt <= now { return nil }
+        return entry
     }
 
     // MARK: - Mood Tap Handler

@@ -139,6 +139,11 @@ function makePrisma() {
     postImpression: {
       create: journalise('postImpression', 'create', {}),
       createMany: journalise('postImpression', 'createMany', { count: 1 }),
+      /** La dernière impression du lecteur sur un post — aucune par défaut. */
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      /** Les impressions DÉDUITES d'une vue que le lecteur porte encore — aucune par défaut. */
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: journalise('postImpression', 'deleteMany', { count: 1 }),
     },
     anonymousPostOpen: {
       create: journalise('anonymousPostOpen', 'create', {}),
@@ -627,6 +632,96 @@ describe('critère 3 — `download` et `dwell` gardent leur effet propre', () =>
     expect((mockRecordEngagementBatch.mock.calls[0] as any)[0]).toHaveLength(2);
     await app.close();
   });
+
+  it('un `dwell-start` (premier contact, #10764) rejoint le MÊME lot de sessions que `dwell`, sous sa clé de session', async () => {
+    const app = await buildApp();
+    const debut = {
+      type: 'dwell-start',
+      sessionId: '3f2504e0-4f89-11d3-9a0c-0305e82c3303',
+      postId: VISIBLE_ID,
+      contentType: 'REEL',
+      surface: 'reels',
+      startedAt: new Date().toISOString(),
+      dwellMs: 1000,
+    };
+    const res = await app.inject({
+      method: 'POST',
+      url: '/social/events',
+      headers: { authorization: 'Bearer jeton' },
+      payload: { events: [debut] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.accepts).toContain('dwell-start');
+    expect(mockRecordEngagementBatch).toHaveBeenCalledTimes(1);
+    const [sessions] = mockRecordEngagementBatch.mock.calls[0] as any;
+    expect(sessions).toEqual([expect.objectContaining({ sessionId: debut.sessionId, surface: 'reels', dwellMs: 1000 })]);
+    expect(sessions[0]).not.toHaveProperty('type');
+    await app.close();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #10772 — le refus d'analyse s'applique aux sessions de lecture côté passerelle
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('#10772 — une session de lecture passe par le statut d’analyse que la passerelle établit', () => {
+  const DWELL = {
+    type: 'dwell',
+    sessionId: '3f2504e0-4f89-11d3-9a0c-0305e82c3310',
+    postId: VISIBLE_ID,
+    contentType: 'REEL',
+    surface: 'reels',
+    startedAt: new Date().toISOString(),
+    dwellMs: 9000,
+    actions: [{ type: 'like', atMs: 10 }],
+  };
+  const withUser = (row: Record<string, unknown> | null) => ({
+    ...makePrisma(),
+    user: { findUnique: jest.fn<any>().mockResolvedValue(row) },
+  });
+  const standingSent = () => (mockRecordEngagementBatch.mock.calls[0] as any)[2];
+  const post = (app: FastifyInstance, payload: Record<string, unknown>) =>
+    app.inject({ method: 'POST', url: '/social/events', headers: { authorization: 'Bearer jeton' }, payload });
+
+  it('un retrait côté serveur (analyticsConsentWithdrawnAt) refuse la session, même si le client ne dit rien', async () => {
+    const consented = new Date('2026-01-01');
+    const app = await buildApp({ prisma: withUser({ analyticsConsentAt: consented, dataProcessingConsentAt: consented, analyticsConsentWithdrawnAt: new Date() }) });
+    await post(app, { events: [DWELL] });
+    expect(standingSent()).toBe('denied');
+    await app.close();
+  });
+
+  it('un compte qui n’a rien consenti : la session est rangée sous not_granted', async () => {
+    const app = await buildApp({ prisma: withUser({ analyticsConsentAt: null, dataProcessingConsentAt: null }) });
+    await post(app, { events: [{ ...DWELL, type: 'dwell-start' }] });
+    expect(standingSent()).toBe('not_granted');
+    await app.close();
+  });
+
+  it('seule la passerelle accorde : un compte consentant sous un lot qui dit « denied » est refusé', async () => {
+    const consented = new Date('2026-01-01');
+    const app = await buildApp({ prisma: withUser({ analyticsConsentAt: consented, dataProcessingConsentAt: consented }) });
+    await post(app, { context: { consent: 'denied' }, events: [DWELL] });
+    expect(standingSent()).toBe('denied');
+    await app.close();
+  });
+
+  it('un compte consentant : la session garde le régime complet', async () => {
+    const consented = new Date('2026-01-01');
+    const app = await buildApp({ prisma: withUser({ analyticsConsentAt: consented, dataProcessingConsentAt: consented }) });
+    await post(app, { events: [DWELL] });
+    expect(standingSent()).toBe('granted');
+    await app.close();
+  });
+
+  it('une vue sans clé d’impression demande l’impression déduite, sans statut : elle est nominative quel que soit le consentement (#10785)', async () => {
+    const app = await buildApp({ prisma: withUser({ analyticsConsentAt: null, dataProcessingConsentAt: null }) });
+    await post(app, { events: [{ type: 'view', postId: VISIBLE_ID }] });
+    const [, , , context] = mockRecordView.mock.calls[0] as any;
+    expect(context).toMatchObject({ impliesImpression: true });
+    expect(context).not.toHaveProperty('standing');
+    await app.close();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -688,5 +783,91 @@ describe('critère 4 — la variante anonyme est la MÊME route', () => {
     expect(res.statusCode).toBe(403);
     expect(mockRecordMediaDownloads).not.toHaveBeenCalled();
     await app.close();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #10732 — une vue IMPLIQUE son impression, sans jamais la compter deux fois
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('#10732 — une vue compte son impression quand elle manque, jamais deux fois', () => {
+  type Prisma = ReturnType<typeof makePrisma>;
+  const commandes = (prisma: Prisma) => prisma.ecritures
+    .filter((e) => e.op === 'runCommandRaw')
+    .map((e) => e.args as Record<string, any>);
+  const impressionsCreditees = (prisma: Prisma) => commandes(prisma)
+    .filter((c) => c.update === 'Post')
+    .flatMap((c) => c.updates.map((u: any) => ({
+      ids: u.q._id.$in.map((id: any) => id.$oid),
+      increment: u.u[0].$set.impressionCount?.$add[1],
+    })))
+    .filter((w: { increment?: number }) => w.increment !== undefined);
+  const envoyer = async (prisma: Prisma, events: unknown[]) => {
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/social/events', headers: { authorization: 'Bearer jeton' }, payload: { events },
+    });
+    await app.close();
+    return res;
+  };
+  const IMPRESSION_EVENT_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3310';
+
+  it('une vue qui porte la clé de son impression écrit cette impression à clé et la compte', async () => {
+    const prisma = makePrisma();
+    await envoyer(prisma, [{
+      type: 'view', postId: VISIBLE_ID, surface: 'story',
+      impression: { eventId: IMPRESSION_EVENT_ID, source: 'story' },
+    }]);
+
+    const insertion = commandes(prisma).find((c) => c.insert === 'PostImpression');
+    expect(insertion?.documents).toEqual([expect.objectContaining({
+      // Le compte du lecteur quel que soit le statut d'analyse (#10785).
+      postId: { $oid: VISIBLE_ID }, userId: { $oid: USER_ID }, source: 'story', eventKey: expect.any(String),
+    })]);
+    expect(insertion?.documents[0]).not.toHaveProperty('readerKey');
+    expect(impressionsCreditees(prisma)).toEqual([{ ids: [VISIBLE_ID], increment: 1 }]);
+  });
+
+  const impliesImpression = () => (mockRecordView.mock.calls as any[]).map((call) => call[3]?.impliesImpression);
+
+  it('une vue sans clé demande à `recordView` de déduire son impression', async () => {
+    await envoyer(makePrisma(), [{ type: 'view', postId: VISIBLE_ID }]);
+    expect(impliesImpression()).toEqual([true]);
+  });
+
+  it('une vue qui porte sa clé ne déduit rien : son impression s’écrit sous sa clé', async () => {
+    await envoyer(makePrisma(), [{
+      type: 'view', postId: VISIBLE_ID, impression: { eventId: IMPRESSION_EVENT_ID, source: 'story' },
+    }]);
+    expect(impliesImpression()).toEqual([false]);
+  });
+
+  it('une vue et son impression dans le MÊME lot ne comptent qu’une impression', async () => {
+    const prisma = makePrisma();
+    await envoyer(prisma, [
+      { type: 'impression', postId: VISIBLE_ID, source: 'detail', surface: 'detail' },
+      { type: 'view', postId: VISIBLE_ID, surface: 'detail' },
+    ]);
+
+    expect(impliesImpression()).toEqual([false]);
+    expect(impressionsCreditees(prisma)).toEqual([{ ids: [VISIBLE_ID], increment: 1 }]);
+  });
+
+  it('la vue d’un post hors audience n’atteint pas `recordView` et ne déduit aucune impression', async () => {
+    const prisma = makePrisma();
+    await envoyer(prisma, [{ type: 'view', postId: HIDDEN_ID }, { type: 'view', postId: MISSING_ID }]);
+    expect(mockRecordView).not.toHaveBeenCalled();
+    expect(prisma.ecritures.filter((e) => e.modele === 'postImpression')).toEqual([]);
+    expect(impressionsCreditees(prisma)).toEqual([]);
+  });
+
+  it('l’impression qui arrive APRÈS une vue sans clé remplace celle que la vue avait déduite, sans recompter', async () => {
+    const prisma = makePrisma();
+    prisma.postImpression.findMany.mockResolvedValue([{ id: 'deduite-1', postId: VISIBLE_ID }]);
+    await envoyer(prisma, [{ type: 'impression', postId: VISIBLE_ID, source: 'story', surface: 'story' }]);
+
+    const retraits = prisma.ecritures.filter((e) => e.modele === 'postImpression' && e.op === 'deleteMany');
+    expect(retraits.map((e) => e.args.where)).toEqual([{ id: { in: ['deduite-1'] } }]);
+    expect(impressionsCreditees(prisma)).toEqual([]);
   });
 });

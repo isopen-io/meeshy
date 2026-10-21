@@ -101,13 +101,15 @@ class BookmarksViewModel: ObservableObject {
     }
 
     func removeBookmark(_ postId: String) async {
-        let snapshot = posts
-        posts.removeAll { $0.id == postId }
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let removed = posts.remove(at: index)
         do {
             try await postService.removeBookmark(postId: postId)
             try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
         } catch {
-            posts = snapshot
+            // Défaire CE retrait, pas l'écran : une page chargée ou un autre
+            // retrait réussi pendant l'attente restait effacé par l'instantané.
+            posts = OptimisticRollback.restoring(removed, at: index, into: posts)
             FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.removeError", defaultValue: "Impossible de retirer le favori", bundle: .main))
         }
     }

@@ -299,9 +299,16 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "L'aperçu doit être RETENU par la porte — sans état, le cover n'a rien à présenter."
         )
         XCTAssertTrue(
-            compacted.contains("StoryViewerView(") && compacted.contains("isPreviewMode:true"),
-            "L'aperçu doit être rendu par le LECTEUR en mode aperçu, jamais par un composant maison "
-                + "(loi 6 — un troisième chemin de rendu mentirait tôt ou tard)."
+            compacted.contains(".modifier(StoryPreviewReaderCover("),
+            "L'aperçu doit être présenté par LE lecteur partagé (`StoryPreviewReaderCover`, #11197), "
+                + "jamais par un composant maison (loi 6 — un troisième chemin de rendu mentirait tôt ou tard)."
+        )
+        let lecteur = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerContainer.swift")
+        ).components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(
+            lecteur.contains("StoryViewerView(") && lecteur.contains("isPreviewMode:true"),
+            "L'aperçu partagé doit rendre le LECTEUR en mode aperçu (loi 6)."
         )
     }
 
@@ -1512,10 +1519,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // du fil (`ConversationImageSceneDoor`) monte le meuble au lieu de
             // l'éditeur d'image à part. Elle passe les trois canaux — et n'en
             // publie aucun : son socle rend l'image au message.
-            ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "DocumentComposerDoor.swift",
+            //
+            // **Une porte de moins, 2026-10-20** (#11170) : la retouche d'une
+            // image ou d'une vidéo passe partout par la retouche de la caméra
+            // (`ConversationPieceRetouch`), qui ne monte pas le meuble. La porte
+            // de scène a quitté le dépôt avec son dernier appelant.
+            ["StoryTrayActions.swift", "MoodComposerDoor.swift", "DocumentComposerDoor.swift",
              "MediaComposerDoor.swift", "ShareComposeDoor.swift",
-             "StoryEditComposer.swift", "StoryRepublishComposer.swift",
-             "ConversationImageSceneDoor.swift"],
+             "StoryEditComposer.swift", "StoryRepublishComposer.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
                 + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "

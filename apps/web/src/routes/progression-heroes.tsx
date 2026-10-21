@@ -4,20 +4,17 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { defiDetail, elanDetail, succesDetail, type ElementDetail } from '@/lib/view/game-detail';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { ProgressBar } from '@/components/progress-bar';
-import {
-  ACHIEVEMENT_COPY,
-  FAMILY_LABELS,
-  generatedAchievementLabel,
-  levelTitle,
-  scoreLabel,
-} from '@/lib/view/progression';
-import { familyName, formatCount, gameText } from '@/lib/view/game-copy';
+import { generatedAchievementLabel, levelTitle, namedAchievementTitle } from '@/lib/view/progression';
+import { familyName, formatCount, gameText, meeshCount, pointsLabel } from '@/lib/view/game-copy';
+import { awardedDate } from '@/lib/view/game-copy-v2';
 import { meeshMissing } from '@/lib/view/meesh-copy';
 import { BRAND, CARD, INK, INK_2, MEESH_TINT, UNLOCKED_TINT } from '@/routes/progression-parts';
 
 import { lastAchievement } from '@meeshy/shared/utils/progression-layout';
 import type { EngagementMeeshProgress, EngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import { earnRules } from '@/lib/game/earn-rules';
+import { translateGamePlural } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LES HEROS D'AVANT LE JEU (#5838 à #5842), RANGÉS DANS LES FICHES (#9563).
@@ -29,8 +26,7 @@ import { earnRules } from '@/lib/game/earn-rules';
  * était dit l'est toujours, un geste plus loin.
  */
 
-const dateCourte = (iso: string): string =>
-  new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+const dateCourte = (iso: string): string => awardedDate(iso);
 
 /** Le libellé du dernier succès, quelle que soit sa provenance. */
 function libelleDernierSucces(progress: EngagementProgress): { titre: string; quand: string } | null {
@@ -38,8 +34,7 @@ function libelleDernierSucces(progress: EngagementProgress): { titre: string; qu
   if (dernier === null) return null;
 
   if (dernier.kind === 'named') {
-    const copie = ACHIEVEMENT_COPY[dernier.key as keyof typeof ACHIEVEMENT_COPY];
-    return { titre: copie?.title ?? dernier.key, quand: dateCourte(dernier.reachedAt) };
+    return { titre: namedAchievementTitle(dernier.key) ?? dernier.key, quand: dateCourte(dernier.reachedAt) };
   }
 
   const entree = (progress.achievementSections ?? [])
@@ -92,11 +87,11 @@ export function LastAchievementHero({ progress }: { progress: EngagementProgress
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
         <span id="progression-dernier" className="block text-check font-semibold uppercase tracking-wide" style={{ color: INK_2 }}>
-          {dernier === null ? 'Premier succès' : 'Dernier succès'}
+          {gameText(dernier === null ? 'game.progression.first' : 'game.progression.last')}
         </span>
         {dernier === null ? (
           <span className="block text-body font-bold" style={{ color: INK }}>
-            Envoyez un message — le premier tombe tout de suite.
+            {gameText('game.progression.first_hint')}
           </span>
         ) : (
           <>
@@ -104,7 +99,7 @@ export function LastAchievementHero({ progress }: { progress: EngagementProgress
               {dernier.titre}
             </span>
             <span className="block text-caption" style={{ color: INK_2 }}>
-              Décroché le {dernier.quand}
+              {gameText('game.progression.reached_on', { date: dernier.quand })}
             </span>
           </>
         )}
@@ -134,32 +129,33 @@ export function LevelHero({ progress, mintCost }: { progress: EngagementProgress
           {levelTitle(progress.level.level)}
         </h2>
         <p className="text-title font-bold" style={{ color: BRAND }}>
-          {scoreLabel(progress.level.value)}
+          {pointsLabel(progress.level.value)}
         </p>
       </div>
 
-      <ProgressBar progress={progress.level.progress} tint={BRAND} label="Progression vers le niveau suivant" />
+      <ProgressBar progress={progress.level.progress} tint={BRAND} label={gameText('game.progression.level_bar')} />
 
       {manque === null ? null : (
         <p className="text-caption" style={{ color: INK_2 }}>
-          Encore {scoreLabel(manque)} avant le niveau {progress.level.level + 1}
+          {gameText('game.level.to_next', { points: pointsLabel(manque), level: formatCount(progress.level.level + 1) })}
         </p>
       )}
 
       <div className="flex flex-col gap-1.5 border-t pt-3" style={{ borderColor: 'color-mix(in srgb, var(--color-ios-ink) 10%, transparent)' }}>
         <p className="text-check font-semibold uppercase tracking-wide" style={{ color: INK_2 }}>
-          Comment gagner des points
+          {gameText('game.hero.earn_title')}
         </p>
         <ul className="flex flex-wrap gap-x-3 gap-y-1">
           {bareme.map(({ famille, poids }) => (
             <li key={famille} className="text-caption" style={{ color: INK }}>
-              {FAMILY_LABELS[famille]} <span style={{ color: BRAND, fontWeight: 700 }}>{'jusqu’à\u00a0+'}{poids}</span>
+              {familyName(famille)}{' '}
+              <span style={{ color: BRAND, fontWeight: 700 }}>{gameText('game.progression.up_to', { points: formatCount(poids) })}</span>
             </li>
           ))}
         </ul>
         {mintCost === null ? null : (
           <p className="text-caption" style={{ color: INK_2 }}>
-            {mintCost} points se convertissent en une Meesh — la monnaie rare de Meeshy.
+            {gameText('game.progression.mint_explain', { points: pointsLabel(mintCost) })}
           </p>
         )}
       </div>
@@ -307,7 +303,7 @@ export function MeeshDetail({
           DISPOSITION ne réécrit pas la langue en passant — l'utilisateur
           reconnaît les mots, c'est à ça qu'il sait que c'est la même chose. */}
       <p className="text-title font-bold" style={{ color: INK }}>
-        {meesh.balance === 0 ? 'Aucune Meesh' : meesh.balance === 1 ? '1 Meesh' : `${meesh.balance} Meeshes`}
+        {meeshCount(meesh.balance)}
       </p>
       {/* À zéro, la ligne dirait « 0 frappées depuis toujours » juste au-dessus
           de « Aucune frappe pour l'instant » — deux fois la même absence. Le
@@ -315,25 +311,25 @@ export function MeeshDetail({
           seulement la disposition. */}
       {meesh.mintedLifetime > 0 ? (
         <p className="text-caption" style={{ color: INK_2 }}>
-          {meesh.mintedLifetime === 1 ? '1 frappée depuis toujours' : `${meesh.mintedLifetime} frappées depuis toujours`}
+          {translateGamePlural(currentInterfaceLanguage(), 'game.progression.minted', meesh.mintedLifetime)}
         </p>
       ) : null}
 
             {meesh.firstMintedAt === null ? (
               <p className="text-caption" style={{ color: INK_2 }}>
-                Aucune frappe pour l’instant.
+                {gameText('game.progression.never_minted')}
               </p>
             ) : (
               <dl className="flex flex-col gap-1 text-caption" style={{ color: INK_2 }}>
                 <div className="flex justify-between gap-2">
-                  <dt>Première frappe</dt>
+                  <dt>{gameText('game.progression.first_mint')}</dt>
                   <dd style={{ color: INK }}>{dateCourte(meesh.firstMintedAt)}</dd>
                 </div>
                 {/* Une frappe unique a la même date des deux côtés : la répéter
                     n'apprend rien et fait douter de la seconde ligne. */}
                 {meesh.lastMintedAt !== null && meesh.lastMintedAt !== meesh.firstMintedAt ? (
                   <div className="flex justify-between gap-2">
-                    <dt>Dernière frappe</dt>
+                    <dt>{gameText('game.progression.last_mint')}</dt>
                     <dd style={{ color: INK }}>{dateCourte(meesh.lastMintedAt)}</dd>
                   </div>
                 ) : null}
@@ -357,7 +353,7 @@ export function MeeshDetail({
                       `aria-hidden` parce que `aria-busy` le dit déjà — deux
                       annonces pour un état n'en font pas un plus clair. */}
                   {isMinting ? <MintSpinner /> : null}
-                  {isMinting ? 'Frappe en cours…' : `Convertir ${meesh.mintCost} points en une Meesh`}
+                  {isMinting ? gameText('game.mint.minting') : gameText('game.progression.mint_action', { points: pointsLabel(meesh.mintCost) })}
                 </button>
 
                 {/* L'ÉCHEC se lit ICI, sous l'action qu'on peut retenter — et

@@ -20,6 +20,8 @@ export type SendSheetIntent = 'forward' | 'share';
 export type SendSheetRequest = {
   readonly payload: SendPayload;
   readonly intent: SendSheetIntent;
+  /** La légende déjà écrite — le texte qu'une autre app a joint à ses fichiers (D9). */
+  readonly caption?: string;
   /** « Plus d’options… » : la feuille système, avec l’adresse à partager. */
   readonly moreOptions?: { readonly url?: string };
   /**

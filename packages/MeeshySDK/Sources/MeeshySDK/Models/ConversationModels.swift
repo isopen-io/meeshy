@@ -34,7 +34,7 @@ public struct APIConversationUserNested: Decodable, Sendable {
     public let lastActiveAt: Date?
 }
 
-public struct APIConversationUser: Decodable, Sendable {
+public struct APIConversationUser: Decodable, Sendable, ProfileDecorWearer {
     public let id: String
     public let userId: String?
     public let username: String?
@@ -47,6 +47,9 @@ public struct APIConversationUser: Decodable, Sendable {
     public let lastActiveAt: Date?
     public let type: String?
     public let user: APIConversationUserNested?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
+    public var profileDecor: ServedProfileDecor? = nil
 
     public var name: String {
         nonEmpty(displayName) ?? nonEmpty(user?.displayName) ?? nonEmpty(username) ?? nonEmpty(user?.username) ?? id
@@ -99,13 +102,15 @@ public struct APIConversationLastMessage: Decodable, Sendable {
     public let systemEvent: LastMessageSystemEvent?
     public let callSummary: LastMessageCallSummary?
     public let attachmentSummary: LastMessageAttachmentSummary?
+    /// Sticker hissé de `metadata.sticker` (#10752) — sa présence fait du message un sticker.
+    public let sticker: ConversationPreviewSticker?
 
     enum CodingKeys: String, CodingKey {
         case id, content, senderId, createdAt, messageType, sender, attachments
         case _count
         case isBlurred, isViewOnce, expiresAt, location
         case effectFlags, ephemeralDuration, isEncrypted, isForwarded
-        case systemEvent, callSummary, attachmentSummary
+        case systemEvent, callSummary, attachmentSummary, sticker
     }
 
     /// La nature telle que le serveur la sert ; `nil` sur un serveur antérieur.
@@ -118,7 +123,8 @@ public struct APIConversationLastMessage: Decodable, Sendable {
             isForwarded: isForwarded ?? false,
             systemEvent: systemEvent,
             callSummary: callSummary,
-            attachmentSummary: attachmentSummary
+            attachmentSummary: attachmentSummary,
+            sticker: sticker
         )
         return nature.isEmpty ? nil : nature
     }
@@ -137,6 +143,9 @@ public struct APIConversationPreferences: Codable, Sendable {
     public var reaction: String?
     public var customName: String?
     public var mentionsOnly: Bool?
+    /// Le fond et l'accent personnels (#10631) — additif : un ancien serveur
+    /// ne le sert pas, un nouveau le sert au seul lecteur.
+    public var appearance: ConversationAppearance?
     /// Monotonic version for optimistic-concurrency resolution
     /// (`incoming.version <= local -> drop`). Populated by the gateway
     /// in Phase 1 of the unification refactor. Optional for backward
@@ -154,7 +163,8 @@ public struct APIConversationPreferences: Codable, Sendable {
         reaction: String? = nil,
         customName: String? = nil,
         mentionsOnly: Bool? = nil,
-        version: Int? = nil
+        version: Int? = nil,
+        appearance: ConversationAppearance? = nil
     ) {
         self.isPinned = isPinned
         self.isMuted = isMuted
@@ -166,6 +176,7 @@ public struct APIConversationPreferences: Codable, Sendable {
         self.customName = customName
         self.mentionsOnly = mentionsOnly
         self.version = version
+        self.appearance = appearance
     }
 }
 
@@ -356,7 +367,7 @@ extension MeeshyConversation {
 
 extension APIConversation {
     public func toConversation(currentUserId: String) -> MeeshyConversation {
-        let otherParticipant = participants?.first { $0.userId != currentUserId }
+        let otherParticipant = interlocutor(readerId: currentUserId)
         let otherUser = otherParticipant?.user
 
         let convType: MeeshyConversation.ConversationType = {
@@ -375,21 +386,7 @@ extension APIConversation {
 
         let displayName: String = {
             if convType == .direct {
-                // Un direct n'a pas de titre propre : il porte le nom de
-                // l'autre. `title` peut porter un artefact hérité du legacy
-                // (« X et Y », composé côté client à la création) — jamais un
-                // repli légitime, quel que soit son contenu. Quand ni le
-                // participant ni l'expéditeur du dernier message ne sont
-                // servis (`GET /sync`, qui ne charge pas `participants`), le
-                // repli est un nom générique honnête, jamais le titre stocké.
-                if let participant = otherParticipant {
-                    return participant.user?.name ?? participant.name
-                }
-                if let sender = lastMessage?.sender,
-                   (sender.resolvedUserId ?? sender.id) != currentUserId {
-                    return sender.name
-                }
-                return "Conversation"
+                return directDisplayName(interlocutor: otherParticipant, readerId: currentUserId)
             }
             if let t = title, !t.isEmpty { return t }
             return "Conversation"
@@ -461,7 +458,7 @@ extension APIConversation {
             memberCount: memberCount ?? participants?.count ?? 2,
             memberCountCapped: memberCountCapped ?? false,
             lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
-            encryptionMode: encryptionMode ?? (convType == .direct ? "e2ee" : nil),
+            encryptionMode: encryptionMode,
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,
             unreadCount: unreadCount ?? 0, lastMessagePreview: lastMessage?.content?.meeshyPreviewTruncated,
             lastMessageAttachments: lastMsgAttachments,
@@ -532,6 +529,8 @@ extension APIConversation {
         // .reconcileUnread`, qui en reste l'UNIQUE loi de fusion.
         conversation.userState.lastReadMessageId = lastReadMessageId
         conversation.userState.lastReadMessageCreatedAt = lastReadMessageCreatedAt
+        conversation.userState.appearance = prefs?.appearance
+        conversation.participantRing = convType == .direct ? otherParticipant?.profileDecor?.avatarRing : nil
 
         return conversation
     }

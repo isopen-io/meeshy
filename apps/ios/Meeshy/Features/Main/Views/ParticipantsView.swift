@@ -294,7 +294,7 @@ struct ParticipantsView: View {
     private func participantRow(_ participant: PaginatedParticipant) -> some View {
         let color = DynamicColorGenerator.colorForName(participant.name)
         let isCurrentUser = participant.id == currentUserId
-        let presence = presenceManager.presenceState(for: participant.id)
+        let presence = presenceManager.resolvedState(userId: participant.userId, isOnline: participant.isOnline, lastActiveAt: participant.lastActiveAt)
 
         return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
@@ -302,11 +302,14 @@ struct ParticipantsView: View {
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: participant.avatar,
-                moodEmoji: statusViewModel.statusForUser(userId: participant.id)?.moodEmoji,
+                moodEmoji: statusViewModel.statusForUser(userId: participant.viewingKey)?.moodEmoji,
                 presenceState: presence,
-                onMoodTap: statusViewModel.moodTapHandler(for: participant.id)
+                isHere: presenceManager.here(userId: participant.viewingKey, conversationId: conversationId),
+                // LE CONTOUR DU MEMBRE (#10713) — l'avatar le pose dans son empreinte (#10946).
+                ring: participant.avatarRing,
+                onMoodTap: statusViewModel.moodTapHandler(for: participant.viewingKey)
             )
-            .countsImpression(of: statusViewModel.statusForUser(userId: participant.id)?.id) {
+            .countsImpression(of: statusViewModel.statusForUser(userId: participant.viewingKey)?.id) {
                 statusViewModel.trackImpression($0)
             }
 
@@ -729,5 +732,5 @@ extension View {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let participants = Logger(subsystem: "me.meeshy.app", category: "participants")
+    nonisolated static let participants = MeeshyLog.logger(.participants)
 }

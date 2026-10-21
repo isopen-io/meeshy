@@ -49,7 +49,7 @@ final class MessageEffectPerimeterGuardTests: XCTestCase {
     }
 
     private func source(at relativePath: String) throws -> String {
-        try String(contentsOf: appRoot().appendingPathComponent(relativePath), encoding: .utf8)
+        try AppSourceGuard.text(at: appRoot().appendingPathComponent(relativePath))
     }
 
     private static let focalRow = "Features/Main/Focal/Row/FocalRow.swift"

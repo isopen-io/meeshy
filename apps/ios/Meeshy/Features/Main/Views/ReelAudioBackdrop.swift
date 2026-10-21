@@ -69,7 +69,7 @@ struct ReelAudioBackdrop: View, Equatable {
 /// barres ne bougeaient pas, pendant que la boucle `repeatForever` tournait.
 /// Ici la phase passe par `animatableData` : chaque frame trace la courbe,
 /// en un seul chemin que le GPU remplit.
-struct ReelAudioWaveformBars: Shape {
+nonisolated struct ReelAudioWaveformBars: Shape {
     var phase: CGFloat
     let isActive: Bool
 

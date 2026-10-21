@@ -45,7 +45,8 @@ extension MeeshyUser {
             registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
             signalIdentityKeyPublic: signalIdentityKeyPublic,
-            activation: activation
+            activation: activation,
+            profileDecor: profileDecor
         )
     }
 
@@ -75,7 +76,8 @@ extension MeeshyUser {
             timezone: timezone, registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
             signalIdentityKeyPublic: signalIdentityKeyPublic,
-            activation: activation
+            activation: activation,
+            profileDecor: profileDecor
         )
     }
 }

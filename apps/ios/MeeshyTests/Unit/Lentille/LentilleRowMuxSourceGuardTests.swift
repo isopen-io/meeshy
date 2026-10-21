@@ -43,6 +43,24 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
         haystack.components(separatedBy: needle).count - 1
     }
 
+    // MARK: - #10757 — les DEUX rangs portent le contour du pair
+
+    /// Le contour équipé du pair d'une directe (#10713, #10714) n'était posé que
+    /// par `ThemedConversationRow` ; drapeau Lentille actif, la liste rend
+    /// `LentilleConversationRow`, et la directe restait sans contour (#10757).
+    /// Les deux rangs doivent lire LA même donnée, au même endroit de l'avatar.
+    func test_bothRows_drawThePeerRing_inTheAvatarFootprint() throws {
+        let rows = [
+            "Meeshy/Features/Main/Views/ThemedConversationRow.swift",
+            "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
+        ]
+        for path in rows {
+            let code = normalizedCode(try source(at: path))
+            XCTAssertTrue(code.contains("ring: isDirect ? conversation.participantRing : nil,"), "\(path) doit passer le contour du pair d'une directe à l'avatar, qui le pose dans son empreinte (#10946)")
+            XCTAssertFalse(code.contains(".avatarRingWithin("), "\(path) ne réenveloppe pas l'avatar : un second contour s'y dessinerait")
+        }
+    }
+
     // MARK: - Le mux existe, gardé par LE drapeau Lentille
 
     func test_rowCore_isGatedByLentilleFeatureFlag() throws {
@@ -187,6 +205,25 @@ final class LentilleRowMuxSourceGuardTests: XCTestCase {
         XCTAssertTrue(
             gate.contains("row(isMagnified ? magnification : nil) .equatable()"),
             "La branche ON garde son portillon, un cran plus bas, là où l'élection le ré-évalue."
+        )
+    }
+
+    // MARK: - Trois actions au plus par côté (#10579)
+
+    func test_swipeActions_eachSideDeclaresAtMostThree() throws {
+        let code = normalizedCode(try source(at: "Meeshy/Features/Main/Views/ConversationListView+SwipeActions.swift"))
+        guard let leading = code.range(of: "func leadingSwipeActions("),
+              let trailing = code.range(of: "func trailingSwipeActions("),
+              let end = code.range(of: "return actions }", range: trailing.upperBound..<code.endIndex) else {
+            XCTFail("leadingSwipeActions / trailingSwipeActions introuvables")
+            return
+        }
+        let leadingBody = String(code[leading.upperBound..<trailing.lowerBound])
+        let trailingBody = String(code[trailing.upperBound..<end.lowerBound])
+        XCTAssertLessThanOrEqual(occurrences(of: "SwipeAction(", in: leadingBody), 3)
+        XCTAssertLessThanOrEqual(
+            occurrences(of: "SwipeAction(", in: trailingBody), 3,
+            "SwipeableRow tronque à trois : une quatrième action déclarée ici ferait disparaître « Masquer » en silence."
         )
     }
 }

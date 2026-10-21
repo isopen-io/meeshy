@@ -89,7 +89,7 @@ describe('seasonShown avec le calendrier servi', () => {
   });
 
   test('l’en-tête de la page dit « en pause »', () => {
-    expect(seasonHeaderCount({ kind: 'paused', season: { number: 3, themeKey: 'language:hi' } }, null)).toBe('Saison 3 · en pause');
+    expect(seasonHeaderCount({ kind: 'paused', season: { number: 3, themeKey: 'language:hi' } }, null)).toBe('Voyage 3 · en pause');
   });
 });
 
@@ -129,18 +129,18 @@ const base = (patch: Partial<GameSeasonProps> = {}): GameSeasonProps => ({
 describe('les points d’étape de la saison', () => {
   test('une saison à 150 points : chaque étape ordinaire annonce +150', () => {
     const html = renderToStaticMarkup(<GameSeason {...base({ season: seasonBlock({ stepPoints: 150 }) })} />);
-    expect(html).toContain('aria-label="Étape 1, réclamée, +150"');
-    expect(text(html)).toContain('Réclamer l’étape 4 · +150');
+    expect(html).toContain('aria-label="Halte 1, réclamée, +150"');
+    expect(text(html)).toContain('Réclamer la halte 4 · +150');
   });
 
   test('sans `stepPoints` (ancien serveur) : la loi, 100', () => {
     const { stepPoints: _omitted, ...served } = seasonBlock({ stepPoints: 150 });
     const html = renderToStaticMarkup(<GameSeason {...base({ season: served })} />);
-    expect(html).toContain('aria-label="Étape 1, réclamée, +100"');
+    expect(html).toContain('aria-label="Halte 1, réclamée, +100"');
   });
 
   test('les récompenses spéciales ne changent pas (fragment, gel, coupe)', () => {
     const html = renderToStaticMarkup(<GameSeason {...base({ season: seasonBlock({ stepPoints: 200 }) })} />);
-    expect(html).toContain('Étape 5, à réclamer, Un fragment d’étoile');
+    expect(html).toContain('Halte 5, à réclamer, Un fragment d’étoile');
   });
 });

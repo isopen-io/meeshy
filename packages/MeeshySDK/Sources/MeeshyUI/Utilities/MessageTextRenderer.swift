@@ -116,8 +116,7 @@ public enum MessageTextRenderer {
             return renderBlocks(MessageBlockParser.parse(text), fontSize: fontSize, color: color, context: context)
         }
         let segments = parse(text, mentionDisplayNames: mentionDisplayNames, validUsernames: validUsernames)
-        let ranges = highlightTerm.flatMap { highlightRanges(in: text, term: $0) } ?? []
-        return buildAttributed(segments, fontSize: fontSize, color: color, context: context, highlightRanges: ranges)
+        return buildAttributed(segments, fontSize: fontSize, color: color, context: context, highlightTerm: highlightTerm)
     }
 
     /// Everything `render` receives besides the text, its size and its color —
@@ -199,13 +198,14 @@ public enum MessageTextRenderer {
     /// Returns NSRanges suitable for AttributedString highlighting.
     public static func highlightRanges(in text: String, term: String) -> [NSRange] {
         guard !term.isEmpty else { return [] }
-        let lowered = text.lowercased()
-        let termLower = term.lowercased()
+        // Cherché dans `text` LUI-MÊME : « İ » s'allonge en passant en minuscules, et un indice pris
+        // dans la copie abaissée sortait des bornes du texte d'origine.
         var ranges: [NSRange] = []
-        var searchStart = lowered.startIndex
-        while let range = lowered.range(of: termLower, range: searchStart..<lowered.endIndex) {
-            let nsRange = NSRange(range, in: text)
-            ranges.append(nsRange)
+        var searchStart = text.startIndex
+        while searchStart < text.endIndex,
+              let range = text.range(of: term, options: .caseInsensitive, range: searchStart..<text.endIndex),
+              !range.isEmpty {
+            ranges.append(NSRange(range, in: text))
             searchStart = range.upperBound
         }
         return ranges
@@ -602,7 +602,7 @@ public enum MessageTextRenderer {
         fontSize: CGFloat,
         color: Color,
         context: RenderContext,
-        highlightRanges: [NSRange] = []
+        highlightTerm: String? = nil
     ) -> AttributedString {
         let mentionColor = context.mentionColor
         let hashtagColor = context.hashtagColor
@@ -611,7 +611,6 @@ public enum MessageTextRenderer {
         let mentionDisplayNames = context.mentionDisplayNames
         let trackedLinks = context.trackedLinks
         var result = AttributedString()
-        var charOffset = 0
 
         for segment in segments {
             switch segment {
@@ -627,8 +626,7 @@ public enum MessageTextRenderer {
                 attr.foregroundColor = color
                 if styles.contains(.strikethrough) { attr.strikethroughStyle = .single }
                 if styles.contains(.underline) { attr.underlineStyle = .single }
-                applyHighlight(to: &attr, segmentText: str, charOffset: charOffset, ranges: highlightRanges)
-                charOffset += str.count
+                applyHighlight(to: &attr, segmentText: str, term: highlightTerm)
                 result.append(attr)
 
             case .code(let str, let styles):
@@ -638,7 +636,6 @@ public enum MessageTextRenderer {
                 attr.backgroundColor = color.opacity(0.12)
                 if styles.contains(.strikethrough) { attr.strikethroughStyle = .single }
                 if styles.contains(.underline) { attr.underlineStyle = .single }
-                charOffset += str.count
                 result.append(attr)
 
             case .mentionLink(let display, let url, let username):
@@ -652,7 +649,6 @@ public enum MessageTextRenderer {
                 if let mentionColor {
                     attr.foregroundColor = mentionColor
                 }
-                charOffset += display.count
                 result.append(attr)
 
             case .hashtagLink(let display, let url, _):
@@ -663,13 +659,10 @@ public enum MessageTextRenderer {
                 if let hashtagColor {
                     attr.foregroundColor = hashtagColor
                 }
-                charOffset += display.count
                 result.append(attr)
 
             case .link(let written):
-                charOffset += written.sourceCount
                 if context.linksAreInert {
-                    charOffset += written.inertText.count - written.sourceCount
                     var plain = AttributedString(written.inertText)
                     plain.font = Self.font(fontSize, .regular, relative: usesRelativeFont)
                     plain.foregroundColor = color
@@ -703,21 +696,22 @@ public enum MessageTextRenderer {
 
     // MARK: - Highlight Application
 
+    /// Le terme est cherché dans le texte AFFICHÉ du segment. Les plages
+    /// prises sur le texte BRUT tombaient à côté dès qu'un marqueur Markdown
+    /// (`**`, `_`, `~~`, accents graves, syntaxe de lien) précédait la
+    /// correspondance : retirés à l'affichage, ils décalaient chaque surlignage
+    /// de leur longueur (« oo » dans « **a** foo bar » surlignait « ar »).
     private static func applyHighlight(
         to attr: inout AttributedString,
         segmentText: String,
-        charOffset: Int,
-        ranges: [NSRange]
+        term: String?
     ) {
-        guard !ranges.isEmpty else { return }
-        let segmentRange = NSRange(location: charOffset, length: segmentText.count)
-        for hlRange in ranges {
-            let intersection = NSIntersectionRange(segmentRange, hlRange)
-            guard intersection.length > 0 else { continue }
-            let localStart = intersection.location - charOffset
-            let localNS = NSRange(location: localStart, length: intersection.length)
-            guard Range(localNS, in: segmentText) != nil else { continue }
-            let attrRange = attr.index(attr.startIndex, offsetByCharacters: localStart)..<attr.index(attr.startIndex, offsetByCharacters: localStart + intersection.length)
+        guard let term, !term.isEmpty else { return }
+        for localNS in highlightRanges(in: segmentText, term: term) {
+            guard let local = Range(localNS, in: segmentText) else { continue }
+            let start = segmentText.distance(from: segmentText.startIndex, to: local.lowerBound)
+            let length = segmentText.distance(from: local.lowerBound, to: local.upperBound)
+            let attrRange = attr.index(attr.startIndex, offsetByCharacters: start)..<attr.index(attr.startIndex, offsetByCharacters: start + length)
             attr[attrRange].backgroundColor = Color.yellow.opacity(0.4)
         }
     }
@@ -734,7 +728,8 @@ private extension WrittenLink {
         }
     }
 
-    var sourceCount: Int { sourceText.count }
+    /// En unités UTF-16 — celle des `NSRange` du surlignage.
+    var sourceCount: Int { sourceText.utf16.count }
 
     /// #10286 — what an author without an account typed, the notation kept:
     /// `[label](url)` keeps its address visible (a label alone would hide the

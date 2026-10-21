@@ -127,66 +127,23 @@ final class ShareConversationStoreTests: XCTestCase {
 
     // MARK: - Initiales
 
-    func test_initials_takesFirstAndLastWord() {
-        XCTAssertEqual(ShareTarget.initials(for: "Alice Martin"), "AM")
-    }
+    // MARK: - Le genre de la conversation (#10947)
 
-    func test_initials_singleWord_takesOneLetter() {
-        XCTAssertEqual(ShareTarget.initials(for: "Alice"), "A")
-    }
-
-    func test_initials_blankName_isEmpty() {
-        XCTAssertEqual(ShareTarget.initials(for: "   "), "")
-    }
-
-    func test_initials_ignoresExtraWhitespace() {
-        XCTAssertEqual(ShareTarget.initials(for: "  Alice   Martin  "), "AM")
-    }
-
-    // MARK: - État d'écran
-
-    private let anySession = ShareSession(
-        userId: "u1",
-        token: "jwt",
-        apiBaseURL: "https://gate.meeshy.me"
-    )
-
-    private let anyTarget = ShareTarget(
-        id: "c1",
-        displayName: "Alice",
-        accentColorHex: "#AABBCC",
-        unreadCount: 0
-    )
-
-    func test_screenState_withoutSession_isSignedOut() {
-        XCTAssertEqual(
-            ShareScreenState.resolve(session: nil, targets: [anyTarget]),
-            .signedOut
+    func test_targets_aGroupSnapshot_marksTheTargetAsAGroup() {
+        let group = snapshot(id: "g1", customName: nil, unread: 0).replacingOccurrences(of: "\"type\":\"direct\"", with: "\"type\":\"group\"")
+        let targets = ShareConversationStore.targets(
+            recentsData: recents([(id: "g1", name: "Équipe Lyon", accent: "#AABBCC"), (id: "d1", name: "Ana", accent: "#AABBCC")]),
+            snapshotsData: Data("{\(group),\(snapshot(id: "d1", customName: nil, unread: 0))}".utf8)
         )
+
+        XCTAssertEqual(targets.map(\.isGroup), [true, false])
     }
 
-    /// Une session sans conversation n'est PAS une session absente : les deux
-    /// causes appellent deux messages différents.
-    func test_screenState_withSessionButNoTargets_isNoConversations() {
-        XCTAssertEqual(
-            ShareScreenState.resolve(session: anySession, targets: []),
-            .noConversations
+    func test_targets_withoutSnapshot_isNotAssumedToBeAGroup() {
+        let targets = ShareConversationStore.targets(
+            recentsData: recents([(id: "c1", name: "Ana", accent: "#AABBCC")]),
+            snapshotsData: nil
         )
-    }
-
-    func test_screenState_withSessionAndTargets_isReady() {
-        XCTAssertEqual(
-            ShareScreenState.resolve(session: anySession, targets: [anyTarget]),
-            .ready(session: anySession, targets: [anyTarget])
-        )
-    }
-
-    /// Une session absente prime : sans jeton, aucune liste ne doit s'afficher
-    /// même si l'App Group en contient une.
-    func test_screenState_signedOutWinsOverAvailableTargets() {
-        XCTAssertEqual(
-            ShareScreenState.resolve(session: nil, targets: []),
-            .signedOut
-        )
+        XCTAssertEqual(targets.first?.isGroup, false)
     }
 }

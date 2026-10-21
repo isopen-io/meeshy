@@ -53,7 +53,10 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     private var appliedVideoEnabled: Bool?
     private var detector = ActiveSpeakerDetector()
     private var samplingTask: Task<Void, Never>?
-    private var enrichedCallIds: Set<String> = []
+    /// Les appels déjà enrichis (titre, participants) — BORNÉS : le coordinateur vit toute la session et
+    /// chaque appel de groupe y laissait son id. Un appel ancien n'a plus rien à dédoublonner.
+    private var enrichedCallIds = BoundedFIFOMap<String, Bool>(capacity: GroupCallMeshCoordinator.enrichedCallCapacity)
+    nonisolated static let enrichedCallCapacity = 64
     private var knownSession: ActiveCallSession?
     /// Un iPhone appelé REJOINT la salle dès la sonnerie : les membres déjà
     /// là lui offrent avant qu'il décroche, et les arrivants suivants
@@ -432,8 +435,8 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
             enrich(with: knownSession, callId: callId)
             return
         }
-        guard !enrichedCallIds.contains(callId), let conversationId = host?.groupConversationId else { return }
-        enrichedCallIds.insert(callId)
+        guard enrichedCallIds[callId] == nil, let conversationId = host?.groupConversationId else { return }
+        enrichedCallIds[callId] = true
         Task { [weak self, activeCalls] in
             guard let session = try? await activeCalls.activeCall(conversationId: conversationId) else { return }
             self?.enrich(with: session, callId: callId)

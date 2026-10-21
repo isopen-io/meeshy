@@ -1,6 +1,7 @@
 /**
  * LA SECTION `packs` DE L'EXPORT (#10151, LP3) — les choix d'installation des
- * trois domaines, la bibliothèque de stickers et les packs proposés, chaque
+ * domaines, la bibliothèque de stickers, les packs proposés et les packs
+ * achetés en Meeshes (#10632), chaque
  * fichier avec son adresse, à travers le VRAI sérialiseur de la route.
  *
  * @jest-environment node
@@ -45,6 +46,10 @@ function seeded(): FakeDb {
         filePath: 'sticker-packs/x/miaou.webp', width: 512, height: 512, sizeBytes: 3000,
         zones: [{ id: 'z', x: 0.1, y: 0.2, width: 0.5, height: 0.2 }], position: 0,
       },
+    ],
+    userPackOwnership: [
+      { id: 'o1', userId: USER, packKey: 'avatar-ring.echantillon', priceMeeshes: 30, requestId: 'achat-0001', acquiredAt: AT },
+      { id: 'o2', userId: OTHER, packKey: 'wallpaper.echantillon', priceMeeshes: 40, requestId: 'achat-0002', acquiredAt: AT },
     ],
   });
 }
@@ -93,8 +98,9 @@ describe('GET /export?types=packs', () => {
         ],
       }),
     ]);
-    expect(packs.counts).toEqual({ choices: 2, library: 1, submissions: 1 });
-    expect(packs.hasMore).toEqual({ choices: false, library: false, submissions: false });
+    expect(packs.ownerships).toEqual([{ domain: 'avatar-ring', slug: 'echantillon', priceMeeshes: 30, acquiredAt: AT.toISOString() }]);
+    expect(packs.counts).toEqual({ choices: 2, library: 1, submissions: 1, ownerships: 1, appearanceSubmissions: 0 });
+    expect(packs.hasMore).toEqual({ choices: false, library: false, submissions: false, ownerships: false, appearanceSubmissions: false });
     expect(JSON.stringify(packs)).not.toContain(OTHER);
     await app.close();
   });
@@ -104,7 +110,8 @@ describe('GET /export?types=packs', () => {
 
     const requested = (await app.inject({ method: 'GET', url: '/export?types=packs&format=csv' })).json().data;
 
-    expect(Object.keys(requested.csv)).toEqual(expect.arrayContaining(['packs.choices', 'packs.library', 'packs.submissions']));
+    expect(Object.keys(requested.csv)).toEqual(expect.arrayContaining(['packs.choices', 'packs.library', 'packs.submissions', 'packs.ownerships']));
+    expect(requested.csv['packs.ownerships']).toContain('echantillon');
     expect(requested.csv['packs.library']).toContain('Rire');
     await app.close();
   });

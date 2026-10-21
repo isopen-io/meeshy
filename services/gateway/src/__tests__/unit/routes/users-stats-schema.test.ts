@@ -41,6 +41,7 @@ function buildPrisma(): PrismaClient {
       ),
     },
     participant: {
+      findMany: jest.fn(() => Promise.resolve([{ id: "p1" }])),
       count: jest.fn(() => Promise.resolve(11)),
     },
     friendRequest: {

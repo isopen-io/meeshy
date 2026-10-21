@@ -93,18 +93,18 @@ public struct VoiceProfileWizardView: View {
                     .padding(.horizontal, MeeshySpacing.xl)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-                    consentPoint(icon: "mic.fill", text: String(localized: "voiceProfile.consent.point1", defaultValue: "Enregistrez quelques echantillons de votre voix", bundle: .module))
-                    consentPoint(icon: "brain.head.profile", text: String(localized: "voiceProfile.consent.point2", defaultValue: "Un modele vocal unique est cree a partir de vos echantillons", bundle: .module))
-                    consentPoint(icon: "globe", text: String(localized: "voiceProfile.consent.point3", defaultValue: "Vos traductions audio utiliseront votre voix clonee", bundle: .module))
-                    consentPoint(icon: "trash.fill", text: String(localized: "voiceProfile.consent.point4", defaultValue: "Vous pouvez supprimer vos donnees vocales a tout moment (RGPD)", bundle: .module))
-                    consentPoint(icon: "lock.shield.fill", text: String(localized: "voiceProfile.consent.point5", defaultValue: "Vos echantillons sont chiffres et ne sont jamais partages", bundle: .module))
+                    consentPoint(icon: "mic.fill", text: String(localized: "voiceProfile.consent.point1", defaultValue: "Enregistrez quelques échantillons de votre voix", bundle: .module))
+                    consentPoint(icon: "brain.head.profile", text: String(localized: "voiceProfile.consent.point2", defaultValue: "Un modèle vocal unique est créé à partir de vos échantillons", bundle: .module))
+                    consentPoint(icon: "globe", text: String(localized: "voiceProfile.consent.point3", defaultValue: "Vos traductions audio utiliseront votre voix clonée", bundle: .module))
+                    consentPoint(icon: "trash.fill", text: String(localized: "voiceProfile.consent.point4", defaultValue: "Vous pouvez supprimer vos données vocales à tout moment (RGPD)", bundle: .module))
+                    consentPoint(icon: "lock.shield.fill", text: String(localized: "voiceProfile.consent.point5", defaultValue: "Vos échantillons sont chiffrés et ne sont jamais partagés", bundle: .module))
                 }
                 .padding(.horizontal, MeeshySpacing.xxl)
 
                 Spacer().frame(height: 10)
 
                 Toggle(isOn: $viewModel.consentGiven) {
-                    Text(String(localized: "voiceProfile.consent.toggle", defaultValue: "J'accepte que mes echantillons vocaux soient utilises pour creer un profil vocal", bundle: .module))
+                    Text(String(localized: "voiceProfile.consent.toggle", defaultValue: "J'accepte que mes échantillons vocaux soient utilisés pour créer un profil vocal", bundle: .module))
                         .font(.system(size: 13))
                         .foregroundColor(.primary)
                 }
@@ -154,10 +154,10 @@ public struct VoiceProfileWizardView: View {
                 .font(.system(size: MeeshyIconSize.hero))
                 .foregroundColor(Color(hex: accentColor))
 
-            Text(String(localized: "voiceProfile.age.title", defaultValue: "Verification d'age", bundle: .module))
+            Text(String(localized: "voiceProfile.age.title", defaultValue: "Vérification d'âge", bundle: .module))
                 .font(.system(size: MeeshyFont.titleSize, weight: .bold))
 
-            Text(String(localized: "voiceProfile.age.description", defaultValue: "Le clonage vocal est reserve aux personnes de 18 ans et plus.", bundle: .module))
+            Text(String(localized: "voiceProfile.age.description", defaultValue: "Le clonage vocal est réservé aux personnes de 18 ans et plus.", bundle: .module))
                 .font(.system(size: MeeshyFont.labelSize))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -171,7 +171,7 @@ public struct VoiceProfileWizardView: View {
             Button {
                 viewModel.advanceFromAgeVerification()
             } label: {
-                Text(String(localized: "voiceProfile.age.verify", defaultValue: "Verifier", bundle: .module))
+                Text(String(localized: "voiceProfile.age.verify", defaultValue: "Vérifier", bundle: .module))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -231,10 +231,10 @@ public struct VoiceProfileWizardView: View {
                 .scaleEffect(1.5)
                 .tint(Color(hex: accentColor))
 
-            Text(String(localized: "voiceProfile.processing.title", defaultValue: "Creation du profil vocal...", bundle: .module))
+            Text(String(localized: "voiceProfile.processing.title", defaultValue: "Création du profil vocal...", bundle: .module))
                 .font(.system(size: MeeshyFont.subtitleSize, weight: .semibold))
 
-            Text(String(localized: "voiceProfile.processing.description", defaultValue: "Vos echantillons sont en cours de traitement. Cela peut prendre quelques minutes.", bundle: .module))
+            Text(String(localized: "voiceProfile.processing.description", defaultValue: "Vos échantillons sont en cours de traitement. Cela peut prendre quelques minutes.", bundle: .module))
                 .font(.system(size: 13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -257,10 +257,10 @@ public struct VoiceProfileWizardView: View {
                 .font(.system(size: 60))
                 .foregroundColor(MeeshyColors.success)
 
-            Text(String(localized: "voiceProfile.complete.title", defaultValue: "Profil vocal cree !", bundle: .module))
+            Text(String(localized: "voiceProfile.complete.title", defaultValue: "Profil vocal créé !", bundle: .module))
                 .font(.system(size: MeeshyFont.titleSize, weight: .bold))
 
-            Text(String(localized: "voiceProfile.complete.description", defaultValue: "Vos traductions audio utiliseront desormais votre voix clonee.", bundle: .module))
+            Text(String(localized: "voiceProfile.complete.description", defaultValue: "Vos traductions audio utiliseront désormais votre voix clonée.", bundle: .module))
                 .font(.system(size: MeeshyFont.labelSize))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

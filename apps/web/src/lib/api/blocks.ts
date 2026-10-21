@@ -4,6 +4,7 @@ import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
 
 import { unwrap } from './client';
 import { FRIENDS_STALE_TIME, decodePerson, type FriendRequestsDeps, type PersonSummary } from './friend-requests';
+import { BLOCKED_USERS_QUERY_KEY } from './friends-keys';
 import type { ApiResult } from './http';
 
 /**
@@ -18,7 +19,7 @@ import type { ApiResult } from './http';
  */
 
 export const BLOCKED_PAGE_SIZE = 100;
-export const BLOCKED_USERS_QUERY_KEY = ['friends', 'blocked'] as const;
+export { BLOCKED_USERS_QUERY_KEY };
 
 export type BlockedPage = { readonly users: readonly PersonSummary[]; readonly nextCursor: string | null };
 export type BlockedData = InfiniteData<BlockedPage, unknown>;

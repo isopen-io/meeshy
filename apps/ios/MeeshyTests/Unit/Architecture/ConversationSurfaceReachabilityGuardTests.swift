@@ -337,15 +337,40 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
     /// signifie : rien, nulle part, ne nomme cette fonction hors de sa propre
     /// signature.
     private func referenceCount(of name: String, in corpus: String) -> Int {
-        let uses = Self.occurrences(of: #"\b\#(name)\b"#, in: corpus)
-        let declarations = Self.occurrences(of: #"\bfunc\s+\#(name)\b"#, in: corpus)
-        return uses - declarations
+        referenceCount(of: name, in: Census(corpus))
     }
 
-    private static func occurrences(of pattern: String, in text: String) -> Int {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return 0 }
-        return regex.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
+    private func referenceCount(of name: String, in census: Census) -> Int {
+        census.uses[name, default: 0] - census.declarations[name, default: 0]
     }
+
+    /// Le recensement d'un corpus, en UNE passe : chaque mot (`\w+` maximal) et
+    /// chaque `func <nom>` comptés une fois. Un mot maximal égal à `name` est
+    /// exactement une occurrence de `\bname\b` — même verdict qu'un balayage
+    /// du corpus entier par fonction, qui en faisait deux par nom (≈ 1 000 noms
+    /// × 32 Mio) et dépassait les 3 minutes allouées au test en CI.
+    private struct Census {
+        let uses: [String: Int]
+        let declarations: [String: Int]
+
+        init(_ text: String) {
+            uses = Census.tally(#"(\w+)"#, in: text)
+            declarations = Census.tally(#"\bfunc\s+(\w+)"#, in: text)
+        }
+
+        private static func tally(_ pattern: String, in text: String) -> [String: Int] {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return [:] }
+            var counts: [String: Int] = [:]
+            for match in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+                guard let r = Range(match.range(at: 1), in: text) else { continue }
+                counts[String(text[r]), default: 0] += 1
+            }
+            return counts
+        }
+    }
+
+    /// Le recensement du corpus, fait une fois pour la classe.
+    private static let corpusCensus = Census(sourceCorpus)
 
     // MARK: - Le versant atteignabilité
 
@@ -358,7 +383,7 @@ final class ConversationSurfaceReachabilityGuardTests: XCTestCase {
             for name in declaredFunctionNames(in: file.code).sorted() {
                 guard !Self.unreachableAllowlist.contains(name),
                       !Self.frameworkInvoked.contains(name) else { continue }
-                if referenceCount(of: name, in: corpus) == 0 {
+                if referenceCount(of: name, in: Self.corpusCensus) == 0 {
                     unreachable.append("\(file.name) → \(name)")
                 }
             }
@@ -489,7 +514,7 @@ final class ReadingModeProtectionChromeGuardTests: XCTestCase {
 
     private func source(at relativePath: String) throws -> String {
         let url = appRoot().appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     // MARK: - Les cinq modes, et le sixième
@@ -673,7 +698,7 @@ final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
     }
 
     private func source(at relativePath: String) throws -> String {
-        try String(contentsOf: appRoot().appendingPathComponent(relativePath), encoding: .utf8)
+        try AppSourceGuard.text(at: appRoot().appendingPathComponent(relativePath))
     }
 
     // MARK: - #7472 — la vue unique se pose d'un seul geste, à côté du flou
@@ -822,7 +847,8 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
         guard let insert = send.range(of: "func insertOptimisticMediaMessage") else {
             return XCTFail("`insertOptimisticMediaMessage` introuvable — la pose optimiste d'un média a changé de nom")
         }
-        let corps = String(send[insert.lowerBound...])
+        let records = try source(at: "Features/Main/ViewModels/ConversationViewModel+OptimisticRecords.swift")
+        let corps = String(send[insert.lowerBound...]) + records
         XCTAssertFalse(corps.contains("expiresAt: nil, effectFlags: 0"),
                        "La ligne optimiste d'un média ne doit plus naître sans protection.")
         XCTAssertTrue(corps.contains("ephemeralDuration: protection.ephemeralDurationSeconds"),
@@ -838,8 +864,9 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     /// et survivait à l'accusé (l'upsert coalesce `api ?? existant`).
     func test_aucuneLigneOptimiste_neGraveDÉchéanceClient() throws {
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
-        XCTAssertFalse(send.contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
-        XCTAssertFalse(send.contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
+        let records = try source(at: "Features/Main/ViewModels/ConversationViewModel+OptimisticRecords.swift")
+        XCTAssertFalse((send + records).contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
+        XCTAssertFalse((send + records).contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
         XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: intent.ephemeralDurationSeconds").count - 1, 1,
                        "La ligne HORS LIGNE porte la durée.")
         XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: resolvedEphemeralDuration\n").count - 1, 1,
@@ -895,7 +922,7 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
             src.components(separatedBy: "viewModel.captureArmedProtection(replyingTo: replyId)").count - 1, 1,
             "Une seule saisie par tap : deux saisies rendraient la seconde vide."
         )
-        let envois = src.components(separatedBy: "viewModel.sendMessage(").count - 1
+        let envois = src.components(separatedBy: "viewModel.send(OutgoingMessage(").count - 1
         let servis = src.components(separatedBy: "protection: protection").count - 1
         XCTAssertGreaterThanOrEqual(
             servis, envois - 1,
@@ -1020,11 +1047,17 @@ final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
     /// par lui ; la Rivière consommait au toucher.
     func test_leCanalDeConsommation_armeAuLieuDeDétruire() throws {
         let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
-        let canaux = hôte.components(separatedBy: "onConsumeViewOnce: { messageId, completion in").dropFirst()
+        // Les deux canaux vivent dans les couches extraites de l'hôte : le fil
+        // (`ConversationMessageListLayer`) et la Rivière (`ConversationRiverLayer`).
+        let couches = try source(at: "Features/Main/Views/ConversationView+MessageListLayer.swift")
+            + "\n" + source(at: "Features/Main/Views/ConversationView+ReaderLayers.swift")
+        XCTAssertEqual(hôte.components(separatedBy: "openViewOnce: { openViewOnce(messageId: $0) }").count - 1, 2,
+                       "L'hôte remet son ouverture de vue unique au fil ET à la Rivière.")
+        let canaux = couches.components(separatedBy: "onConsumeViewOnce: { messageId, completion in").dropFirst()
         XCTAssertEqual(canaux.count, 2, "Le fil et la Rivière ont chacun leur canal.")
         for canal in canaux {
             let corps = String(canal.prefix(600))
-            XCTAssertTrue(corps.contains("completion(openViewOnce(messageId: messageId))"),
+            XCTAssertTrue(corps.contains("openViewOnce(messageId))"),
                           "Le canal délègue à l'ouverture de la vue unique.")
             XCTAssertFalse(corps.contains("await viewModel.consumeViewOnce"),
                            "Le serveur n'est plus appelé au moment de la révélation.")
@@ -1041,10 +1074,23 @@ final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
     /// verrouillage d'écran, c'est-à-dire au cas le plus probable.
     func test_lesDeuxSorties_consommentToutesLesDeux() throws {
         let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
+        // La sortie par NAVIGATION passe depuis #10818 par `leaveConversationByNavigation()` (qui consomme,
+        // puis rattrape la lecture quittée depuis le Résumé) ; l'arrière-plan appelle le geste directement.
+        // Les deux portes consomment toujours — c'est ce que la garde tient.
         XCTAssertEqual(
-            hôte.components(separatedBy: "consumeOpenedViewOnceOnExit()").count - 1, 2,
-            "La navigation (`onDisappear`) ET l'arrière-plan (`scenePhase`) doivent consommer."
+            hôte.components(separatedBy: "consumeOpenedViewOnceOnExit()").count - 1, 1,
+            "L'arrière-plan (`scenePhase`) consomme directement."
         )
+        XCTAssertEqual(
+            hôte.components(separatedBy: "leaveConversationByNavigation()").count - 1, 1,
+            "La navigation (`onDisappear`) sort par `leaveConversationByNavigation()`."
+        )
+        let sortie = try source(at: "Features/Main/Views/ConversationView+ViewOnceExit.swift")
+        guard let porte = sortie.range(of: "func leaveConversationByNavigation() {") else {
+            return XCTFail("Impossible de localiser la sortie par navigation.")
+        }
+        XCTAssertTrue(sortie[porte.upperBound...].prefix(120).contains("consumeOpenedViewOnceOnExit()"),
+                      "La sortie par navigation consomme avant tout le reste.")
 
         guard let fond = hôte.range(of: "if phase == .background {") else {
             return XCTFail("Impossible de localiser la sortie par arrière-plan.")

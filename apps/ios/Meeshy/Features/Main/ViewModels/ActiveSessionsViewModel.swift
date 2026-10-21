@@ -135,16 +135,17 @@ final class ActiveSessionsViewModel: ObservableObject {
 
     func revokeSession(sessionId: String) async {
         guard let target = sessions.first(where: { $0.id == sessionId }), !target.isCurrent else { return }
-        let snapshot = sessions
+        guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
         isRevoking = true
         defer { isRevoking = false }
-        sessions.removeAll { $0.id == sessionId }
+        sessions.remove(at: index)
         do {
             try await sessionService.revokeSession(sessionId: sessionId)
             HapticFeedback.success()
             await persist()
         } catch {
-            sessions = snapshot
+            // Défaire CE retrait, pas l'écran d'avant l'attente.
+            sessions = OptimisticRollback.restoring(target, at: index, into: sessions)
             HapticFeedback.error()
             fail(String(localized: "sessions_revoke_error", defaultValue: "Impossible de révoquer la session", bundle: .main))
         }
@@ -152,7 +153,7 @@ final class ActiveSessionsViewModel: ObservableObject {
 
     func revokeAllOtherSessions() async {
         isConfirmingRevokeAll = false
-        let snapshot = sessions
+        let removed = sessions.enumerated().filter { !$0.element.isCurrent }
         isRevoking = true
         defer { isRevoking = false }
         sessions.removeAll { !$0.isCurrent }
@@ -161,7 +162,11 @@ final class ActiveSessionsViewModel: ObservableObject {
             HapticFeedback.success()
             await persist()
         } catch {
-            sessions = snapshot
+            // Défaire CES retraits, pas l'écran d'avant l'attente : une
+            // relecture arrivée entre-temps (ou une session déjà revenue) reste.
+            for (index, session) in removed {
+                sessions = OptimisticRollback.restoring(session, at: index, into: sessions)
+            }
             HapticFeedback.error()
             fail(String(localized: "sessions_revoke_all_error", defaultValue: "Impossible de révoquer les sessions", bundle: .main))
         }

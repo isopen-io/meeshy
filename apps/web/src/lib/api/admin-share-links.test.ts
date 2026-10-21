@@ -50,7 +50,7 @@ describe('decodeAdminShareLinkRow — la ligne de liste', () => {
       description: 'Le lien posté dans le groupe des voisins',
       maxUses: 50,
       currentUses: 12,
-      expiresAt: '2026-10-15T18:00:00.000Z',
+      expiresAt: '2099-10-15T18:00:00.000Z',
       isActive: true,
       createdAt: '2026-09-20T09:00:00.000Z',
       creator: { id: OBJECT_ID(2), username: 'awa', displayName: 'Awa Diop', firstName: null, lastName: null, avatar: null },

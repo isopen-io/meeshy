@@ -27,7 +27,7 @@
  *     `PUSH_ROUTE_PATTERNS` doit être, au caractère, celui que
  *     `route-table.tsx` déclare pour la même clé. Une route renommée ou
  *     déplacée dans l'application rougit ici.
- *  2. **Le jumeau contre le RÉSOLVEUR.** Les neuf tables de types de
+ *  2. **Le jumeau contre le RÉSOLVEUR.** Les dix tables de types de
  *     `target.ts` (et les deux paramètres de recherche de `discover/view.ts`)
  *     doivent être identiques dans le worker. Un type ajouté d'un seul côté
  *     rougit ici.
@@ -54,10 +54,11 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = join(HERE, '..');
 
-/** Les neuf tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
+/** Les dix tables de types du résolveur, plus la liste des routes qu'un indice serveur peut nommer. */
 const TABLES = [
   'EPHEMERAL_ENTITIES',
   'EPHEMERAL_ONLY_TYPES',
+  'MOOD_TYPES',
   'REQUEST_TYPES',
   'PROFILE_TYPES',
   'PROGRESSION_TYPES',
@@ -133,6 +134,7 @@ const ADRESSES = [
   [{ notificationId: 'x', conversationId: 'abc' }, '/c/abc'],
   [{ postId: 'p1', postType: 'STORY' }, '/story/p1'],
   [{ postId: 'p1', postType: 'REEL' }, '/post/p1?from=notification'],
+  [{ type: 'friend_new_mood', postId: 'st1', postType: 'STATUS' }, '/mood/st1'],
   [{ type: 'friend_request', friendRequestId: 'fr1' }, '/discover?onglet=requests&demandes=received'],
   [{ type: 'contact_joined', senderUsername: 'awa' }, '/u/awa'],
   [{ type: 'contact_recently_active', senderUsername: 'marie' }, '/u/marie'],

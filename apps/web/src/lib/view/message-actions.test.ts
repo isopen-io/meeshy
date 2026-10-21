@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
-import { translation } from '@/lib/api/fixtures-base';
+import { attachmentDefaults, message, minutesAgo, translation } from '@/lib/api/fixtures-base';
+import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
+import { menuScope } from '@/test-support/menu-viewer';
 
 import {
   EXTENDED_REACTIONS,
@@ -18,30 +20,57 @@ import {
   type MessageMenuContext,
 } from './message-actions';
 
-/** Un `MessageMenuContext` de base — « rien de protégé, deux langues ». */
+/**
+ * LES VERDICTS DE LA LOI PARTAGÉE (#11210) pour trois messages types, lus par
+ * un membre inscrit d'un groupe : le texte d'un autre, le mien, la photo d'un
+ * autre. Le menu en est une projection ; les drapeaux de sortie du contexte
+ * (texte, protection, langues) restent ceux que chaque témoin pose.
+ */
+const NOW = Date.now();
+const row = (overrides: Partial<Message> = {}): Message =>
+  message({ id: 'm-1', senderId: 'u-autre', content: 'bonjour', originalLanguage: 'fr', translations: [], createdAt: minutesAgo(5), ...overrides });
+const PHOTO = {
+  ...attachmentDefaults,
+  id: 'a-1',
+  messageId: 'm-1',
+  mimeType: 'image/jpeg',
+  fileName: 'p.jpg',
+  originalName: 'p.jpg',
+  fileUrl: '/f/p.jpg',
+  fileSize: 1024,
+  uploadedBy: 'u-autre',
+  createdAt: '2026-10-20T09:00:00.000Z',
+} as Attachment;
+const actionsOf = (subject: Message) => messageMenuContextOf(subject, { now: NOW, scope: menuScope() }).actions;
+const THEIRS = actionsOf(row());
+const MINE = actionsOf(row({ senderId: 'u-viewer' }));
+const THEIR_PHOTO = actionsOf(row({ content: '', attachments: [PHOTO] }));
+
+/** Un `MessageMenuContext` de base — « rien de protégé, deux langues », le texte d'un autre. */
 const ctx = (overrides: Partial<MessageMenuContext> = {}): MessageMenuContext => ({
   hasText: true,
   isProtected: false,
   languageCount: 2,
   canForward: true,
+  ...(THEIRS === undefined ? {} : { actions: THEIRS }),
   ...overrides,
 });
 
 describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réduit (#5814 §1.2)', () => {
-  test('message standard, deux langues ⇒ select, translate, copy, forward, reply, export, more', () => {
-    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'export', 'more']);
+  test('message standard, deux langues ⇒ reply, copy, forward, translate · select, export · more (#11210)', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).toEqual(['reply', 'copy', 'forward', 'translate', 'select', 'export', 'more']);
   });
 
-  test('message SANS texte (m3) ⇒ select, forward, reply, more — ni copy ni translate', () => {
-    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).toEqual(['select', 'forward', 'reply', 'more']);
+  test('message SANS texte (m3) ⇒ reply, forward · select · more — ni copy ni translate', () => {
+    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).toEqual(['reply', 'forward', 'select', 'more']);
   });
 
   test('message PROTÉGÉ (D-23) ⇒ ni copy ni translate, même avec du texte', () => {
-    expect(messageMenuItems(ctx({ isProtected: true })).map((i) => i.id)).toEqual(['select', 'forward', 'reply', 'more']);
+    expect(messageMenuItems(ctx({ isProtected: true })).map((i) => i.id)).toEqual(['reply', 'forward', 'select', 'more']);
   });
 
   test('une seule langue ⇒ pas de translate, copy reste', () => {
-    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['select', 'copy', 'forward', 'reply', 'export', 'more']);
+    expect(messageMenuItems(ctx({ languageCount: 1 })).map((i) => i.id)).toEqual(['reply', 'copy', 'forward', 'select', 'export', 'more']);
   });
 
   /**
@@ -74,21 +103,21 @@ describe('messageMenuItems — miroir MessageActionResolver.primaryActions, réd
    */
   test('ces clés se SERVENT — anglais puis arabe, jamais une recopie du français', async () => {
     await Promise.all([loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
-    expect(messageMenuItems(ctx()).map((i) => translate('en', i.labelKey))).toEqual([
-      'Select',
-      'Translate',
+    expect(messageMenuItems(ctx()).flatMap((i) => (i.catalog === 'pieces' ? [] : [translate('en', i.labelKey)]))).toEqual([
+      'Reply',
       'Copy',
       'Forward',
-      'Reply',
+      'Translate',
+      'Select',
       'Make an image',
       'More…',
     ]);
-    expect(messageMenuItems(ctx()).map((i) => translate('ar', i.labelKey))).toEqual([
-      'تحديد',
-      'ترجمة',
+    expect(messageMenuItems(ctx()).flatMap((i) => (i.catalog === 'pieces' ? [] : [translate('ar', i.labelKey)]))).toEqual([
+      'رد',
       'نسخ',
       'إعادة توجيه',
-      'رد',
+      'ترجمة',
+      'تحديد',
       'تحويل إلى صورة',
       'المزيد…',
     ]);
@@ -239,11 +268,11 @@ describe('« Exporter en image » suit la garde de « Copier »', () => {
 });
 
 describe('« Transférer » n\'apparaît que si la règle du serveur l\'admet (#5866)', () => {
-  test('message transférable ⇒ l\'entrée est là, entre Copier et Répondre', () => {
+  test('message transférable ⇒ l\'entrée est là, entre Copier et Traduire', () => {
     const ids = messageMenuItems(ctx()).map((i) => i.id);
     expect(ids).toContain('forward');
     expect(ids.indexOf('forward')).toBeGreaterThan(ids.indexOf('copy'));
-    expect(ids.indexOf('forward')).toBeLessThan(ids.indexOf('reply'));
+    expect(ids.indexOf('forward')).toBeLessThan(ids.indexOf('translate'));
   });
 
   // La garde vit côté client AVANT l'aller-retour : `admitMessageForward`
@@ -364,5 +393,101 @@ describe('forwardMenuItems — le sous-menu de « Transférer » (#9039)', () =>
       expect(translate(language, 'message.menu.exportDiscussion')).not.toBe('message.menu.exportDiscussion');
     }
     expect(translate('fr', 'message.menu.exportDiscussion')).toBe('Imager la discussion');
+  });
+});
+
+describe('« Modifier » — juste après « Répondre », dans le groupe principal (#10581, #11210)', () => {
+  test('offert sur mon message ⇒ « Modifier » suit « Répondre »', () => {
+    expect(messageMenuItems(ctx({ canEdit: true, ...(MINE === undefined ? {} : { actions: MINE }) })).map((i) => i.id)).toEqual([
+      'reply',
+      'edit',
+      'copy',
+      'forward',
+      'translate',
+      'select',
+      'export',
+      'more',
+    ]);
+  });
+
+  test('sur le message d’un autre, l’hôte a beau le croire : la loi ne l’admet pas', () => {
+    expect(messageMenuItems(ctx({ canEdit: true })).map((i) => i.id)).not.toContain('edit');
+  });
+
+  test('non offert (défaut) ⇒ absent', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).not.toContain('edit');
+    expect(messageMenuItems(ctx({ canEdit: false })).map((i) => i.id)).not.toContain('edit');
+  });
+
+  test('sans texte, rien à modifier — même offert', () => {
+    expect(messageMenuItems(ctx({ canEdit: true, hasText: false })).map((i) => i.id)).not.toContain('edit');
+  });
+
+  test('une vue unique reste réduite à « Plus… »', () => {
+    expect(messageMenuItems(ctx({ canEdit: true, isViewOnce: true })).map((i) => i.id)).toEqual(['more']);
+  });
+
+  test('son libellé est une clé du catalogue du fil, son glyphe le crayon', () => {
+    const edit = messageMenuItems(ctx({ canEdit: true, ...(MINE === undefined ? {} : { actions: MINE }) })).find((i) => i.id === 'edit');
+    expect(edit).toEqual({ id: 'edit', catalog: 'pieces', labelKey: 'message.edit.action', glyph: 'pencilSimple', group: 'primary' });
+  });
+});
+
+describe('« Enregistrer » — un message à exactement une pièce enregistrable (#10599)', () => {
+  const photo = (overrides: Partial<MessageMenuContext> = {}) =>
+    ctx({ hasText: false, hasImageableMedia: true, ...(THEIR_PHOTO === undefined ? {} : { actions: THEIR_PHOTO }), ...overrides });
+
+  test('dans le groupe principal, après « Transférer », comme la loi partagée le range (#11210)', () => {
+    expect(messageMenuItems(photo({ canSave: true })).map((i) => i.id)).toEqual(['reply', 'forward', 'save', 'select', 'export', 'more']);
+  });
+
+  test('le mot est celui de la visionneuse, le glyphe celui de la pièce', async () => {
+    const save = messageMenuItems(photo({ canSave: true })).find((i) => i.id === 'save');
+    expect(save).toEqual({ id: 'save', catalog: 'interface', labelKey: 'media.viewer.save', glyph: 'downloadSimple', group: 'primary' });
+    await loadInterfaceCatalog('fr');
+    expect(translate('fr', 'media.viewer.save')).toBe('Enregistrer');
+  });
+
+  test('sans pièce enregistrable, pas d’entrée', () => {
+    expect(messageMenuItems(ctx()).map((i) => i.id)).not.toContain('save');
+  });
+
+  test('fail-closed : un contenu protégé ou qui ne sort pas ne l’offre jamais, même si l’hôte le croit', () => {
+    expect(messageMenuItems(photo({ canSave: true, isProtected: true })).map((i) => i.id)).not.toContain('save');
+    expect(messageMenuItems(photo({ canSave: true, leaves: false })).map((i) => i.id)).not.toContain('save');
+    expect(messageMenuItems(photo({ canSave: true, isViewOnce: true })).map((i) => i.id)).toEqual(['more']);
+  });
+});
+
+describe('messageMenuItems — « Ajouter à mes stickers » (#10630)', () => {
+  const sticker = { hasText: false, sticker: { inLibrary: false, hasPicture: true } } as const;
+
+  test('offert SEULEMENT quand le sticker n’est pas déjà dans la bibliothèque, rangé dans « Organiser » (#11210)', () => {
+    expect(messageMenuItems(ctx(sticker)).map((i) => i.id)).toEqual(['reply', 'forward', 'select', 'addSticker', 'more']);
+    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true, hasPicture: true } })).map((i) => i.id)).not.toContain('addSticker');
+    expect(messageMenuItems(ctx({ hasText: false })).map((i) => i.id)).not.toContain('addSticker');
+  });
+
+  test('son libellé vit dans le catalogue du fil', () => {
+    expect(messageMenuItems(ctx(sticker)).find((i) => i.id === 'addSticker')).toEqual({
+      id: 'addSticker',
+      catalog: 'pieces',
+      labelKey: 'message.sticker.add',
+      glyph: 'downloadSimple',
+      group: 'organize',
+    });
+  });
+
+  test('jamais « Enregistrer » sur un sticker, rangé ou non, même avec une pièce enregistrable', () => {
+    expect(messageMenuItems(ctx({ ...sticker, canSave: true })).map((i) => i.id)).not.toContain('save');
+    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: true, hasPicture: true }, canSave: true })).map((i) => i.id)).not.toContain('save');
+  });
+
+  test('un sticker SANS image jointe (glyphe emoji, gabarit seul) n’offre pas un ajout voué à l’échec', () => {
+    expect(messageMenuItems(ctx({ hasText: false, sticker: { inLibrary: false, hasPicture: false } })).map((i) => i.id)).not.toContain('addSticker');
+  });
+
+  test('un contenu qui ne sort pas ne s’ajoute pas', () => {
+    expect(messageMenuItems(ctx({ ...sticker, isProtected: true })).map((i) => i.id)).not.toContain('addSticker');
   });
 });

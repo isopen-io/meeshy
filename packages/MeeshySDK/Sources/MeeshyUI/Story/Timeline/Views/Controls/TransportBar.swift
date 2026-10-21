@@ -131,12 +131,12 @@ public struct TransportBar: View {
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)
-        .frame(minHeight: 44)
+        .frame(minHeight: MeeshyControlSize.tapTarget)
         .background(rowBackground)
         // MARK: - Keyboard Shortcuts (iPad / external keyboard)
-        // Space — play/pause
-        .keyboardShortcut(" ", modifiers: [])
-        // ← / → — step backward / forward by 1 frame (handled via the scrub callback)
+        // Space — play/pause, porté par le SEUL bouton invisible de l'overlay. Posé aussi sur le `HStack`, le raccourci
+        // s'appliquait à CHAQUE bouton de la rangée (lecture, annuler, refaire, aimant, zoom, son) : l'action de la
+        // barre d'espace dépendait de l'ordre de résolution de SwiftUI.
         .background(keyboardShortcutOverlay)
     }
 
@@ -189,7 +189,7 @@ public struct TransportBar: View {
     /// Documented HIG contract: effective touch target (visual frame + contentShape inset)
     /// must meet Apple's 44×44pt minimum. Visual icons are 30×30 (or 36×36 for play)
     /// extended via `.contentShape(Rectangle().inset(by: -7))` / `inset(by: -4)`.
-    public static let minimumHitTargetSize = CGSize(width: 44, height: 44)
+    public static let minimumHitTargetSize = CGSize(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
 
     // MARK: - Sub-views
 

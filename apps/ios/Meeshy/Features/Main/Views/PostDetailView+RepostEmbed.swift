@@ -72,7 +72,9 @@ extension PostDetailView {
                         name: repost.author,
                         context: .postComment,
                         accentColor: repost.authorColor,
-                        avatarURL: repost.authorAvatarURL
+                        avatarURL: repost.authorAvatarURL,
+                        presenceState: PresenceManager.shared.knownPresenceState(for: repost.authorId),
+                        ring: repost.authorRing
                     )
                     .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {

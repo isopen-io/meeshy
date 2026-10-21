@@ -33,6 +33,15 @@ import { purgeViewOnceIn } from './view-once-seal';
  * conversation n'est pas touchée.
  */
 
+/**
+ * CE QU'UNE ÉDITION DOIT PORTER POUR ÊTRE APPLIQUÉE (#10581) — l'identité et
+ * le texte ; le reste suit s'il est servi. L'édition que le lecteur vient de
+ * faire lui-même (`edit-message.ts`) passe par les mêmes puits que celle
+ * reçue d'ailleurs, sans fabriquer une charge de socket entière.
+ */
+export type MessageEditPayload = Pick<SocketIOMessage, 'id' | 'conversationId' | 'content'> &
+  Partial<Pick<SocketIOMessage, 'isEdited' | 'editedAt' | 'translations' | 'attachments' | 'metadata' | 'validatedMentions' | 'systemEvent'>>;
+
 export function isMessageEditedEvent(payload: unknown): payload is SocketIOMessage {
   if (typeof payload !== 'object' || payload === null) return false;
   const p = payload as Record<string, unknown>;
@@ -59,14 +68,14 @@ const isStaleEdit = (known: Message, incomingEditedAt: unknown): boolean => {
 
 
 /** Les traductions de l'ANCIEN texte sont périmées ; seule une carte servie AVEC l'édition peut la suivre. */
-const servedTranslations = (data: SocketIOMessage): Message['translations'] =>
+const servedTranslations = (data: MessageEditPayload): Message['translations'] =>
   Array.isArray(data.translations) && data.translations.length > 0 ? (data.translations as Message['translations']) : [];
 
 /** Une rediffusion qui porte ses pièces jointes les pose (l'enregistrement rattaché à la bulle d'un appel, #8064) ; une charge qui n'en dit rien garde celles en place. */
 const isServedAttachment = (value: unknown): value is Attachment =>
   typeof value === 'object' && value !== null && typeof (value as { readonly id?: unknown }).id === 'string';
 
-const servedAttachments = (data: SocketIOMessage): Pick<Message, 'attachments'> | Record<string, never> =>
+const servedAttachments = (data: MessageEditPayload): Pick<Message, 'attachments'> | Record<string, never> =>
   Array.isArray(data.attachments) ? { attachments: data.attachments.filter(isServedAttachment).map(decodeAttachment) } : {};
 
 /**
@@ -75,14 +84,14 @@ const servedAttachments = (data: SocketIOMessage): Pick<Message, 'attachments'> 
  * personne ne l'a modifié, et la rangée le relit depuis `metadata`. Une
  * charge qui tait `isEdited` reste une édition d'utilisateur.
  */
-const wasEdited = (data: SocketIOMessage): boolean => data.isEdited !== false;
+const wasEdited = (data: MessageEditPayload): boolean => data.isEdited !== false;
 
-const servedMetadata = (data: SocketIOMessage): Pick<Message, 'metadata'> | Record<string, never> =>
+const servedMetadata = (data: MessageEditPayload): Pick<Message, 'metadata'> | Record<string, never> =>
   typeof data.metadata === 'object' && data.metadata !== null
     ? { metadata: data.metadata as NonNullable<Message['metadata']> }
     : {};
 
-const editedRow = (known: Message, data: SocketIOMessage): Message => ({
+const editedRow = (known: Message, data: MessageEditPayload): Message => ({
   ...known,
   ...servedAttachments(data),
   ...servedMetadata(data),
@@ -100,14 +109,14 @@ const editedRow = (known: Message, data: SocketIOMessage): Message => ({
  */
 const isSealedQuote = (quote: Message): boolean => quote.deletedAt !== undefined && quote.deletedAt !== null;
 
-const editedQuote = (quote: Message, data: SocketIOMessage): Message =>
+const editedQuote = (quote: Message, data: MessageEditPayload): Message =>
   quotedIsProtected(quote) || isSealedQuote(quote) || isStaleEdit(quote, data.editedAt) ? quote : editedRow(quote, data);
 
 
 
 export { tombstoneQuotesOf } from './quote-tombstone';
 
-export function applyMessageEdited(queryClient: QueryClient, data: SocketIOMessage): void {
+export function applyMessageEdited(queryClient: QueryClient, data: MessageEditPayload): void {
   const known = findCachedThreadMessage(queryClient, data.conversationId, data.id);
   const rowMayChange = known !== undefined && belongsTo(known, data.conversationId) && !isStaleEdit(known, data.editedAt);
 

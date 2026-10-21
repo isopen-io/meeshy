@@ -4,9 +4,7 @@ import type frPublicEntry from './catalog-fr-public-entry';
 const ptPublicEntry = {
   'publicHeader.home': 'Início do Meeshy',
   'publicHeader.language': 'Idioma',
-  'login.world.title': 'Entrar no {title}',
-  'login.world.subtitle': 'Sem conta · seu nome e seu idioma',
-  'login.world.or': 'ou com sua conta',
+  'brand.credit.hint': 'abre a plataforma services.ceo em uma nova aba',
   'login.offline': 'Offline — não é possível entrar no momento.',
   'login.twoFactor.title': 'Autenticação em dois fatores',
   'login.twoFactor.lead': 'Digite o código do seu aplicativo de autenticação.',
@@ -35,6 +33,17 @@ const ptPublicEntry = {
   'magicLink.offline': 'Sem conexão. Verifique sua rede e tente novamente.',
   'magicLink.submit': 'Receber o link',
   'magicLink.submit.busy': 'Enviando…',
+  'magicLink.flowTitle': 'Entrar com e-mail',
+  'magicLink.validating': 'Verificando o link…',
+  'magicLink.invalid.title': 'Link inválido ou expirado',
+  'magicLink.invalid.body': 'Um link de acesso expira após 10 minutos e funciona apenas uma vez.',
+  'magicLink.requestNew': 'Solicitar um novo link',
+  'magicLink.backToLogin': 'Voltar para o login',
+  'magicLink.retry': 'Tentar novamente',
+  'magicLink.resend': 'Reenviar',
+  'magicLink.resend.label': 'Reenviar o link',
+  'magicLink.cancel': 'Cancelar',
+  'magicLink.linkExpired': 'Link expirado, solicite um novo',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default ptPublicEntry;

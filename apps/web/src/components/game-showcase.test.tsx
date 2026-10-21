@@ -56,7 +56,7 @@ describe('la vitrine', () => {
   test('un trophée par clé, chacun avec son titre et sa date d’obtention', () => {
     expect((html.match(/data-game-trophy="trophy/g) ?? []).length).toBe(3);
     const t = text(html);
-    expect(t).toContain('Coupe d’or — ligue Ambre, semaine du 19 octobre');
+    expect(t).toContain('Coupe d’or — joute Ambre, semaine du 19 octobre');
     expect(t).toContain('Trophée de Flamme, 100 jours');
     expect(t).toMatch(/Obtenu le \d+ octobre 2026/);
   });
@@ -105,7 +105,7 @@ describe('la vitrine', () => {
 
   test('une vitrine vide se dit, sans rangement ni étagère', () => {
     const html = renderToStaticMarkup(<GameShowcase {...props({ trophies: { items: [], order: [] } })} />);
-    expect(text(html)).toContain('Ta vitrine est vide');
+    expect(text(html)).toContain('Tes trophées t’attendent');
     expect(html).not.toContain('data-game-trophy-shelf');
   });
 
@@ -155,13 +155,13 @@ describe('qui voit', () => {
   });
 
   test('chaque niveau montre où est le focus clavier : la pastille porte le marqueur que game.css entoure', () => {
-    const html = renderToStaticMarkup(<GameVisibilityPicker legend="Vitrine" value="friends" disabled={false} onChange={() => undefined} />);
+    const html = renderToStaticMarkup(<GameVisibilityPicker legend="Trophées" value="friends" disabled={false} onChange={() => undefined} />);
     expect((html.match(/data-game-level-pill=/g) ?? []).length).toBe(3);
     expect(CSS).toMatch(/\[data-game-level-pill\]:has\(:focus-visible\)\s*\{[^}]*outline:/);
   });
 
   test('le sélecteur seul : sa légende nomme ce qu’il règle', () => {
-    expect(text(renderToStaticMarkup(<GameVisibilityPicker legend="Trésor et Flamme" value="friends" disabled={false} onChange={() => undefined} />))).toContain('Trésor et Flamme');
+    expect(text(renderToStaticMarkup(<GameVisibilityPicker legend="Héritage et Flamme" value="friends" disabled={false} onChange={() => undefined} />))).toContain('Héritage et Flamme');
   });
 });
 

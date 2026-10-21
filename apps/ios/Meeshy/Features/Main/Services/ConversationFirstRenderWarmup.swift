@@ -1,6 +1,7 @@
 #if DEBUG
 import SwiftUI
 import MeeshySDK
+import os
 
 /// DEV-ONLY — éteint une CLASSE de crashs, pas un point.
 ///
@@ -138,7 +139,8 @@ enum ConversationFirstRenderWarmup {
         // crash au lancement, pas une optimisation.
         //
         // Garde : `ConversationWarmupHasNoRenderStageTests`.
-        NSLog("[ConversationFirstRenderWarmup] done in %.0f ms", (CFAbsoluteTimeGetCurrent() - start) * 1000)
+        let elapsedMs = (CFAbsoluteTimeGetCurrent() - start) * 1000
+        MeeshyLog.logger(.firstRenderWarmup).debug("[ConversationFirstRenderWarmup] done in \(elapsedMs, format: .fixed(precision: 0)) ms")
     }
 
     /// Exécute les getters @Published de `ConversationViewModel` sur une
@@ -221,7 +223,7 @@ enum ConversationFirstRenderWarmup {
         _ = vm.translatingTextLanguages
         _ = vm.unreadSeparatorCount
         _ = vm.voiceConsentMissing
-        NSLog("[ConversationFirstRenderWarmup] viewmodel keypaths warmed (47)")
+        MeeshyLog.logger(.firstRenderWarmup).debug("[ConversationFirstRenderWarmup] viewmodel keypaths warmed (47)")
     }
 
     /// Même patron que `warmUpViewModelKeyPaths`, pour `ReadingModeController`
@@ -257,7 +259,7 @@ enum ConversationFirstRenderWarmup {
         )
         _ = controller.decision
         _ = controller.mode
-        NSLog("[ConversationFirstRenderWarmup] reading mode controller warmed")
+        MeeshyLog.logger(.firstRenderWarmup).debug("[ConversationFirstRenderWarmup] reading mode controller warmed")
     }
 }
 #endif

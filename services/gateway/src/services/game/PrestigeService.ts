@@ -14,31 +14,26 @@
  *    `trophy.prestige.<n>`) : la Gloire ne baisse jamais et un Prestige ne se
  *    paie qu'une fois.
  *
- * ## Ce que le Prestige ferme (conformité G-5, DÉCISION PORTEUR ATTENDUE)
+ * ## Étincelles (#10846, décision du porteur 2026-10-16) — la « DÉCISION PORTEUR ATTENDUE » est tranchée
  *
- * La loi remet le niveau RECORD à 1. Les ligues (niveau 10) et le duo (niveau
- * 20) lisent ce record : un Prestige les FERME en silence jusqu'à ce que le
- * compte les rouvre. Son consentement à la ligue publique n'est pas retiré (la
- * colonne reste), il se retrouve en `locked` puis `open` sans nouveau geste. Soit
- * le record devient « tous cycles », soit l'écran annonce la perte d'accès avant
- * la confirmation : tant que ce n'est pas tranché, la loi est appliquée telle
- * qu'écrite et la confirmation côté client doit le dire.
- *
- * Le score remis à zéro l'est AUSSI sur les points des compteurs par axe (#9675) :
- * le score est leur somme, et la frappe les débite. Les laisser intacts laissait
- * une frappe dépenser des points que le Prestige avait déjà pris, et faisait
- * passer le score sous zéro. Les ACTIONS comptées (badges) ne bougent pas.
+ * Le Prestige vide la poche et le cycle d'étincelles et ramène le niveau actuel à 1 ; le TOTAL À VIE et le NIVEAU MAX À
+ * VIE ne bougent pas. Les ligues (niveau 10) et le duo (niveau 20) lisent ce max à vie (`unlockLevelOf`) : un Prestige
+ * ne les ferme plus. Seul le record du CYCLE (`levelRecord`) repart à 1. Les compteurs par axe ne sont plus remis à zéro.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { PrestigeResponse } from '@meeshy/shared/types/game';
-import { prestigeTransition } from '@meeshy/shared/utils/game/prestige';
+import { closedCycleRecord, prestigeTransition } from '@meeshy/shared/utils/game/prestige';
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { prestigeTrophy, trophyKey } from '@meeshy/shared/utils/game/trophies';
 import { EngagementQuotas } from '../engagement/EngagementQuotas';
+import { SPARKS_USER_SELECT, currentLevelOf, levelSparksOf, sparksOf } from './SparksFacts';
+import { GAME_LEVEL_MIN } from '@meeshy/shared/utils/game/levels';
 import { GameRefusal } from './GameRefusal';
 import { GloryService } from './GloryService';
 import { TrophyService } from './TrophyService';
+import { announceGameState } from './GameStateBroadcast';
+import { stampGameRevisionAfterWrite } from './GameRevision';
 
 const REQUEST_OPERATION = 'game.prestige';
 const WRITE_ATTEMPTS = 3;
@@ -62,7 +57,7 @@ export class PrestigeService {
   }
 
   private async account(userId: string) {
-    return this.prisma.user.findUnique({ where: { id: userId }, select: { engagementScore: true, prestige: true, levelRecord: true } });
+    return this.prisma.user.findUnique({ where: { id: userId }, select: { ...SPARKS_USER_SELECT, prestige: true } });
   }
 
   async pass(params: { readonly userId: string; readonly requestId: string; readonly now?: Date }): Promise<PrestigeResponse> {
@@ -79,33 +74,57 @@ export class PrestigeService {
     for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt += 1) {
       const account = await this.account(userId);
       const stars = account?.prestige ?? 0;
-      const verdict = prestigeTransition({ score: account?.engagementScore ?? 0, prestige: stars, levelRecord: account?.levelRecord ?? null });
+      const sparks = sparksOf(account);
+      // Le niveau 100 se lit sur la POCHE (#10892) ; les étapes faites (le plus haut des deux records) ne se défont pas.
+      const proof = Math.max(account?.levelRecord ?? 0, account?.levelMaxLifetime ?? 0);
+      const verdict = prestigeTransition({ score: levelSparksOf(sparks), prestige: stars, levelRecord: proof === 0 ? null : proof });
       if (verdict.allowed === false) {
         throw new GameRefusal(verdict.reason === 'at-maximum' ? 'PRESTIGE_AT_MAXIMUM' : 'PRESTIGE_LEVEL_TOO_LOW');
       }
 
       if (!(await this.quotas.claim(userId, REQUEST_OPERATION, bucket, 1))) return this.replayed(userId, now);
-      // Le score et les points DÉPENSABLES des compteurs bougent ensemble (#9675) : le score est la somme
-      // des points des compteurs, et la frappe débite ces compteurs. Les remettre à 0 dans la même
-      // transaction empêche qu'une frappe dépense après coup des points que le Prestige a déjà pris.
-      // Les actions comptées (`count`, qui tiennent les badges) ne bougent pas.
-      const written = await this.prisma.$transaction(async (tx) => {
-        const user = await tx.user.updateMany({
-          where: { id: userId, engagementScore: account?.engagementScore ?? 0, ...(stars === 0 ? NO_PRESTIGE : { prestige: stars }) },
-          data: { prestige: verdict.prestigeAfter, engagementScore: verdict.scoreAfter, levelRecord: verdict.levelRecordAfter },
-        });
-        if (user.count > 0) await tx.engagementCounter.updateMany({ where: { userId }, data: { points: 0 } });
-        return user;
+      // La poche et le cycle repartent de zéro (#10846). Le total à vie et le niveau max à vie sont POSÉS en valeur avant
+      // que le cycle ne soit vidé — un compte d'avant le rattrapage n'a pas encore ces champs, et les perdrait. Les
+      // compteurs par axe ne bougent plus : la frappe ne les débite plus.
+      const maxLifetime = Math.max(account?.levelMaxLifetime ?? 0, account?.levelRecord ?? 0, currentLevelOf(account), GAME_LEVEL_MIN);
+      const written = await this.writePassage(userId, bucket, {
+        where: { id: userId, engagementScore: account?.engagementScore ?? 0, ...(stars === 0 ? NO_PRESTIGE : { prestige: stars }) },
+        data: {
+          prestige: verdict.prestigeAfter,
+          engagementScore: verdict.scoreAfter,
+          sparksSincePrestige: BigInt(0),
+          sparksEarnedLifetime: BigInt(sparks.lifetime),
+          levelMaxLifetime: maxLifetime,
+          levelRecord: verdict.levelRecordAfter,
+          // Le record du cycle que ce passage clôt (#10911) — dans la même écriture conditionnelle : une fois par Prestige.
+          prestigeLevelRecords: { push: closedCycleRecord({ levelRecord: account?.levelRecord ?? null, level: currentLevelOf(account) }) },
+        },
       });
       if (written.count === 0) {
         // Un crédit ou un autre passage s'est glissé : on rend la demande et on relit.
         await this.prisma.engagementQuota.deleteMany({ where: { userId, operationKey: REQUEST_OPERATION, bucket } });
         continue;
       }
+      // L'écriture du passage est conditionnelle (`updateMany`) : la révision (#10912) se grave juste après, atomiquement.
+      await stampGameRevisionAfterWrite(this.prisma, userId);
       const gloryGained = await this.followUps(userId, verdict.prestigeAfter, verdict.gloryGained, now);
+      announceGameState(userId, 'prestige');
       return { status: 'passed', prestige: verdict.prestigeAfter, score: 0, level: 1, gloryGained, trophyKey: verdict.trophyKey };
     }
     throw new Error('prestige contended');
+  }
+
+  /**
+   * L'écriture conditionnelle du passage. Une écriture qui TOMBE (réseau, base) rend la réservation de la demande avant de
+   * relancer (#10895) : sans cela, la demande restait « en cours » à jamais et son rejeu échouait sans fin.
+   */
+  private async writePassage(userId: string, bucket: string, args: Parameters<PrismaClient['user']['updateMany']>[0]): Promise<{ count: number }> {
+    try {
+      return await this.prisma.user.updateMany(args);
+    } catch (error) {
+      await this.prisma.engagementQuota.deleteMany({ where: { userId, operationKey: REQUEST_OPERATION, bucket } });
+      throw error;
+    }
   }
 
   /** La Gloire et le trophée, par clé : rejouables, jamais payés deux fois. */

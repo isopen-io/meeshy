@@ -26,9 +26,13 @@ struct StoryCommentRowView: View, Equatable {
     var root: FeedComment? = nil
     /// Les réponses chargées d'une racine — « Imager » peut en emporter une.
     var loadedReplies: [FeedComment] = []
+    /// La story du commentaire (#10915) : « Imager » met son visuel en HERO de la carte.
+    var story: PostCommentCardStory? = nil
     /// Enregistre le texte édité EN PLACE. Fourni par le lecteur de story ;
     /// le menu ne l'offre qu'à l'auteur (`CommentMenuPolicy`).
     var onCommitEdit: ((String) -> Void)? = nil
+    /// #11159 — la modération retire ce commentaire d'un autre ; reçoit le motif.
+    var onRemove: ((String) -> Void)? = nil
     /// Lieu du commentaire ouvert plein écran (tap sur le sticker).
     @State private var rowFullscreenPlace: BubbleFullscreenPlace?
     /// Édition en place (#8709) : le texte remplace la ligne le temps de la saisie.
@@ -51,9 +55,11 @@ struct StoryCommentRowView: View, Equatable {
         // #8709 — le menu « … » : l'éligibilité à l'édition et l'arbre
         // qu'« Imager » emporte font partie de ce que la ligne montre.
         (lhs.onCommitEdit == nil) == (rhs.onCommitEdit == nil) &&
+        (lhs.onRemove == nil) == (rhs.onRemove == nil) &&
         lhs.root?.id == rhs.root?.id &&
         lhs.root?.displayContent == rhs.root?.displayContent &&
-        lhs.loadedReplies.map(\.id) == rhs.loadedReplies.map(\.id)
+        lhs.loadedReplies.map(\.id) == rhs.loadedReplies.map(\.id) &&
+        lhs.story?.id == rhs.story?.id
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -322,7 +328,7 @@ struct StoryCommentRowView: View, Equatable {
 
             // Le menu « … » des commentaires de post, à la même place — bout
             // de la rangée d'actions (#8709) : Copier, Imager, Modifier (auteur),
-            // Signaler (les autres).
+            // Signaler (les autres), Retirer (la modération, #11159).
             CommentMoreMenu(
                 comment: comment,
                 servedText: displayContent,
@@ -330,7 +336,8 @@ struct StoryCommentRowView: View, Equatable {
                 accentColor: comment.authorColor,
                 root: root,
                 loadedReplies: loadedReplies,
-                onEdit: onCommitEdit == nil ? nil : { beginEditing() },
+                story: story,
+                onEdit: onCommitEdit == nil ? nil : { beginEditing() }, onRemove: onRemove,
                 glyphSize: 13,
                 glyphColor: overlayColor.opacity(MeeshyOpacity.intense)
             )

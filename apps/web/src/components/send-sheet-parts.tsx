@@ -2,10 +2,12 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 import type { PublishFormat, SendPayload } from '@/lib/send/send-sheet-plan';
 
-import { Avatar } from './avatar';
+import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
+
 import { Glyph, GlyphSvg } from './glyph';
 import type { GlyphName } from './glyphs';
 import { SEND_SHEET_GLYPHS } from './glyphs-send-sheet';
+import { PeerAvatar } from './peer-avatar';
 import type { PreviewView, RecipientRow, StatusView } from './send-sheet-model';
 import { BUTTON, GLYPH_SIZE } from './ui-chrome';
 
@@ -37,10 +39,13 @@ const KIND_GLYPH: Readonly<Record<PreviewView['kind'], GlyphName | null>> = {
   text: null,
   messages: 'checks',
   image: 'image',
+  sticker: null,
   video: null,
   audio: 'microphone',
   file: 'file',
   publication: null,
+  profile: 'user',
+  invitation: 'linkSimple',
 };
 
 /** La vignette d'un fichier IMAGE neuf — une adresse locale, rendue au démontage. */
@@ -192,8 +197,23 @@ export function ForwardDurationRow({
   );
 }
 
-function RowAvatar({ row, size }: { readonly row: RecipientRow; readonly size: number }) {
-  return <Avatar initials={row.initials} color={row.color} size={size} {...(row.avatarUrl === undefined ? {} : { src: row.avatarUrl })} />;
+/**
+ * L'AVATAR D'UN DESTINATAIRE — son contour équipé (#10713) et sa présence
+ * SERVIE (#10944) : une personne a sa clé, un groupe n'en a pas (aucun point).
+ * Le contour est décoratif, muet ; la présence se dit dans l'étiquette de la ligne.
+ */
+export function RowAvatar({ row, size }: { readonly row: RecipientRow; readonly size: number }) {
+  const ring = useRingDesign(row.ringBearer === undefined ? null : servedRingOf(row.ringBearer));
+  return (
+    <PeerAvatar
+      presenceKey={row.presenceKey}
+      initials={row.initials}
+      color={row.color}
+      size={size}
+      ring={ring}
+      {...(row.avatarUrl === undefined ? {} : { src: row.avatarUrl })}
+    />
+  );
 }
 
 function CheckDisc({ on }: { readonly on: boolean }) {
@@ -212,15 +232,19 @@ function CheckDisc({ on }: { readonly on: boolean }) {
   );
 }
 
+/** Une ligne est UN élément pour le lecteur d'écran : « Équipe Lyon, Groupe · 12 membres ». */
 export function RecipientLine({
   row,
   on,
   inert,
+  detail,
   onToggle,
 }: {
   readonly row: RecipientRow;
   readonly on: boolean;
   readonly inert: boolean;
+  /** La ligne secondaire, déjà traduite. */
+  readonly detail?: string;
   readonly onToggle: () => void;
 }) {
   return (
@@ -230,13 +254,22 @@ export function RecipientLine({
         role="checkbox"
         aria-checked={on}
         aria-disabled={inert ? true : undefined}
+        aria-label={detail === undefined ? row.label : `${row.label}, ${detail}`}
         data-send-target={row.key}
         onClick={inert ? undefined : onToggle}
-        className="flex min-h-14 w-full items-center gap-3 px-4 text-start"
+        className="send-sheet-row flex min-h-14 w-full items-center gap-3 px-4 text-start"
         style={{ color: 'var(--color-ios-ink)', opacity: inert ? 0.45 : 1 }}
       >
         <RowAvatar row={row} size={40} />
-        <span className="min-w-0 flex-1 truncate text-body">{row.label}</span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-body">{row.label}</span>
+          {detail === undefined ? null : (
+            <span className="flex items-center gap-1 truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {row.encrypted ? <Glyph name="lock" size={GLYPH_SIZE.xs} /> : null}
+              {detail}
+            </span>
+          )}
+        </span>
         {row.isGroup ? <GlyphSvg glyph={SEND_SHEET_GLYPHS.usersThree} size={GLYPH_SIZE.md} style={{ color: 'var(--color-ios-ink-3)' }} /> : null}
         <CheckDisc on={on} />
       </button>
@@ -309,6 +342,7 @@ export function SelectedChip({ row, ariaLabel, onRemove }: { readonly row: Recip
 
 const TONE_INK: Readonly<Record<StatusView['tone'], string>> = {
   sending: 'var(--color-ios-ink-2)',
+  queued: 'var(--color-ios-ink-2)',
   sent: 'var(--color-ok)',
   failed: 'var(--color-error)',
 };
@@ -348,6 +382,7 @@ export function StatusLine({
       <span className="inline-flex shrink-0 items-center gap-1 text-caption font-medium" style={{ color: TONE_INK[view.tone] }}>
         {view.tone === 'sent' ? <Glyph name="check" size={GLYPH_SIZE.sm} /> : null}
         {view.tone === 'failed' ? <Glyph name="warningCircle" size={GLYPH_SIZE.sm} /> : null}
+        {view.tone === 'queued' ? <Glyph name="clock" size={GLYPH_SIZE.sm} /> : null}
         {statusLabel}
       </span>
       {view.retry ? (

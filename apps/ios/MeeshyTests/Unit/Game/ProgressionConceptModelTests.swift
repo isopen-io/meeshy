@@ -310,7 +310,7 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(ProgressionConceptModel.concept(for: .flame(.braise, days: 7)), .flame)
         XCTAssertEqual(ProgressionConceptModel.concept(for: .meesh(number: 10, edition: .silver)), .meesh)
         XCTAssertEqual(ProgressionConceptModel.concept(for: .leagueUp(.jade)), .league)
-        XCTAssertEqual(ProgressionConceptModel.concept(for: .achievement), .succes)
+        XCTAssertEqual(ProgressionConceptModel.concept(for: .achievement(rarity: nil)), .succes)
     }
 
     // MARK: - Les gestes vivent dans les fiches
@@ -362,6 +362,22 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(state(.points, jcnm, meesh: jcnmWallet), ConceptText.statePointsMissing(
             held: GameCopy.points(77_099), convertible: GameCopy.convertiblePoints(5_823), number: n(79),
             price: GameCopy.points(7_662), missing: GameCopy.convertiblePoints(1_839)
+        ))
+    }
+
+    /// Les étincelles (#10846) : UN seul solde — la poche, toute convertible. La phrase ne redit plus deux fois le
+    /// même nombre, et lit la POCHE, jamais le cycle (`score`).
+    func test_state_points_underSparks_saysTheSinglePocket() {
+        let base = jcnm
+        let level = GameBlock.Level(level: base.level.level, tier: base.level.tier, score: 77_099, floorScore: base.level.floorScore,
+                                    nextThreshold: base.level.nextThreshold, pointsToNext: base.level.pointsToNext,
+                                    progress: base.level.progress, record: base.level.record, prestige: 0, canPrestige: false,
+                                    ladder: base.level.ladder, sparks: 5_823, sparksCycle: 77_099, sparksLifetime: 90_000)
+        let sparked = GameBlock(level: level, glory: base.glory, treasury: base.treasury, mint: base.mint, missions: base.missions,
+                                chest: base.chest, flame: base.flame, boosts: base.boosts, guideSeen: base.guideSeen,
+                                wave2: base.wave2)
+        XCTAssertEqual(state(.points, sparked, meesh: jcnmWallet), ConceptText.statePointsMissingPlain(
+            held: GameCopy.points(5_823), number: n(79), price: GameCopy.points(7_662), missing: GameCopy.points(1_839)
         ))
     }
 
@@ -568,5 +584,21 @@ final class ProgressionConceptModelTests: XCTestCase {
         let glory = ProgressionConceptModel.facts(.glory, progress: served, game: jcnm)
         XCTAssertEqual(glory.first { $0.detail == .gloryMissing }?.label,
                        jcnm.glory.next.map { ConceptText.missingForRank(rank: GameCopy.rankLabel($0.rank, division5: $0.shownDivision)) })
+    }
+
+    // MARK: - Le Vent arrière (#10896)
+
+    /// Le Vent arrière ne se dit aux Élans que quand il souffle : la passerelle sert `tailwind > 1` à 7 niveaux ou plus
+    /// sous le record de niveau, et 1 sinon — un « ×1 » ne se montre jamais.
+    func test_theTailwind_isSaidByTheElans_onlyWhileItBlows() {
+        let game = GameFixture.game()
+        func tailwind(_ factor: Double) -> ProgressionConceptFact? {
+            let windy = game.replacing(boosts: game.boosts.replacing(tailwind: factor))
+            return ProgressionConceptModel.facts(.elans, progress: progress(windy), game: windy).first { $0.detail == .tailwind }
+        }
+        XCTAssertNil(tailwind(1), "le Vent arrière éteint ne se dit pas")
+        let blowing = try? XCTUnwrap(tailwind(1.25))
+        XCTAssertEqual(blowing?.label, GameRulesGlossary.name(.tailwind))
+        XCTAssertEqual(blowing?.value, ConceptText.valueFactor(GameCopy.factor(1.25)))
     }
 }

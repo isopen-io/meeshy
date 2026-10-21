@@ -8,6 +8,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { href, navigate } from '@/routes/route-table';
 
+import { ContentRemovalSheet } from './content-removal-sheet';
 import type { PostMenuHost } from './feed-post-menu';
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
@@ -33,7 +34,7 @@ const PublicationEditSheet = lazy(() => import('./publication-edit-sheet').then(
  * placement restent chez le bouton, qui connaît l'ancre.
  */
 const MENU_ITEM_HEIGHT = 44;
-const DESTRUCTIVE: ReadonlySet<PostMenuEntry> = new Set(['delete', 'report']);
+const DESTRUCTIVE: ReadonlySet<PostMenuEntry> = new Set(['delete', 'remove', 'report']);
 
 export type PostMenuPanelProps = {
   readonly open: boolean;
@@ -62,6 +63,9 @@ export type PostMenuPanelProps = {
   readonly setEditing: (value: boolean) => void;
   readonly viewing: boolean;
   readonly setViewing: (value: boolean) => void;
+  /** « RETIRER » (#11150) — la feuille du motif est ouverte. */
+  readonly removing: boolean;
+  readonly setRemoving: (value: boolean) => void;
 };
 
 export function PostMenuPanel(props: PostMenuPanelProps) {
@@ -91,6 +95,8 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
     setEditing,
     viewing,
     setViewing,
+    removing,
+    setRemoving,
   } = props;
   const language = currentInterfaceLanguage();
 
@@ -118,6 +124,8 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
           return { id, label: translate(language, 'feed.post.edit'), icon: <GlyphSvg glyph={THREAD_MENU_GLYPHS.pencilSimple} size={16} />, run: () => (studioEditable ? navigate(href('postEdit', { post: postId })) : setEditing(true)) };
         case 'delete':
           return { id, label: translate(language, 'feed.post.menu.delete'), icon: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />, run: () => menu.onDelete(postId) };
+        case 'remove':
+          return { id, label: translate(language, 'moderation.remove.action'), icon: <GlyphSvg glyph={NOTIFICATIONS_GLYPHS.trash} size={16} />, run: () => setRemoving(true) };
         case 'report':
           return {
             id,
@@ -146,9 +154,9 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
             >
               {items.map((item, index) => {
                 const destructive = DESTRUCTIVE.has(item.id);
-                /* Le séparateur d'iOS (`Divider()`) : AVANT « Supprimer », et
-                   avant « Signaler » quand il ferme seul la liste. */
-                const separe = item.id === 'delete' || (item.id === 'report' && !entries.includes('delete'));
+                /* Le séparateur d'iOS (`Divider()`) : AVANT « Supprimer » ou
+                   « Retirer », et avant « Signaler » quand il ferme seul la liste. */
+                const separe = item.id === 'delete' || item.id === 'remove' || (item.id === 'report' && !entries.includes('delete') && !entries.includes('remove'));
                 return (
                   <button
                     key={item.id}
@@ -194,6 +202,19 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
             menu.onReport(postId, reason);
           }}
           onClose={() => setReporting(false)}
+        />
+      ) : null}
+
+      {removing ? (
+        <ContentRemovalSheet
+          onConfirm={(reason) => {
+            setRemoving(false);
+            menu.onRemove?.(postId, reason);
+          }}
+          onCancel={() => {
+            setRemoving(false);
+            closeAndFocusButton();
+          }}
         />
       ) : null}
 

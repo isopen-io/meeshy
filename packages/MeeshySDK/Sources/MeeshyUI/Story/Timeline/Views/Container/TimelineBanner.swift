@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Ce que la timeline a besoin d'ANNONCER, sans rien savoir de la façon dont
 /// c'est affiché.
@@ -100,8 +101,7 @@ struct TimelineBannerOverlay: View {
             // remplace le premier avant son expiration — sans ça le nouveau
             // message héritait du reliquat du précédent.
             .task(id: banner) {
-                try? await Task.sleep(nanoseconds: UInt64(banner.displayDuration * 1_000_000_000))
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .seconds(banner.displayDuration)) else { return }
                 acknowledge(banner)
             }
         }

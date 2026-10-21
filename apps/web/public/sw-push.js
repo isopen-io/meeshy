@@ -62,6 +62,7 @@
 const PUSH_ROUTE_PATTERNS = {
   thread: '/c/$conversation',
   story: '/story/$post',
+  mood: '/mood/$post',
   post: '/post/$post',
   discover: '/discover',
   userProfile: '/u/$username',
@@ -87,6 +88,8 @@ const EPHEMERAL_ONLY_TYPES = [
   'friend_new_story',
   'friend_new_mood',
 ];
+/** JUMEAU de `MOOD_TYPES` (#10813) : la nouvelle humeur d'un contact a sa page. */
+const MOOD_TYPES = ['friend_new_mood'];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
 const PROFILE_TYPES = ['contact_joined', 'contact_recently_active'];
 const PROGRESSION_TYPES = [
@@ -313,6 +316,7 @@ function demandes() {
 /** JUMEAU de `resolveTarget()` + son repli de tap (`pushTapTarget()`). */
 function resolvePushTarget(data) {
   const postId = texte(data.postId);
+  if (postId !== '' && MOOD_TYPES.indexOf(texte(data.type)) >= 0) return { route: 'mood', params: { post: postId }, search: {} };
   if (postId !== '') {
     const surface = surfaceSociale(data);
     /* `?from=notification` (#10483) — le détail compte son impression en
@@ -1046,6 +1050,7 @@ self.meeshyPushTarget = {
   REQUEST_FILTER_PARAM: REQUEST_FILTER_PARAM,
   EPHEMERAL_ENTITIES: EPHEMERAL_ENTITIES,
   EPHEMERAL_ONLY_TYPES: EPHEMERAL_ONLY_TYPES,
+  MOOD_TYPES: MOOD_TYPES,
   REQUEST_TYPES: REQUEST_TYPES,
   PROFILE_TYPES: PROFILE_TYPES,
   GAME_LEAGUE_TYPES: GAME_LEAGUE_TYPES,

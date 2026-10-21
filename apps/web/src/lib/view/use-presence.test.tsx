@@ -7,7 +7,7 @@ import { createPresenceStore } from '@/lib/api/presence-store';
 import type { Participant } from '@/lib/api/types';
 
 import type { IntervalClock } from './interval-clock';
-import { usePresence } from './use-presence';
+import { usePresence, usePresenceOfUser } from './use-presence';
 
 /**
  * LA PASTILLE SUIT LE TEMPS RÉEL ET DÉCROÎT D'ELLE-MÊME (#10571) — et ne se
@@ -134,6 +134,74 @@ describe('usePresence', () => {
     const before = view.renders();
 
     view.advanceTo(T0 + 30_000);
+    act(() => view.store.getState().put('user-carol', { isOnline: true, lastActiveAt: new Date(T0).toISOString() }));
+
+    expect(view.renders()).toBe(before);
+  });
+});
+
+function mountUser(userId: string | undefined) {
+  const store = createPresenceStore();
+  const { clock, tick } = manualClock();
+  let at = T0;
+  let renders = 0;
+  const seen: string[] = [];
+  function Dot() {
+    renders += 1;
+    const status = usePresenceOfUser(userId, { now: () => at, store, clock });
+    seen.push(status);
+    return <span data-status={status} />;
+  }
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  const mounted = createRoot(container);
+  root = mounted;
+  act(() => mounted.render(<Dot />));
+  return {
+    store,
+    status: () => seen[seen.length - 1],
+    renders: () => renders,
+    advanceTo: (next: number) => {
+      at = next;
+      act(() => tick(next));
+    },
+  };
+}
+
+/**
+ * LA PRÉSENCE D'UNE PERSONNE CONNUE PAR SON SEUL IDENTIFIANT (#10944) — le fil,
+ * les commentaires, les notifications : la charge n'en porte aucune, la carte
+ * vivante est la seule présence SERVIE, et rien ne se fabrique sans elle.
+ */
+describe('usePresenceOfUser', () => {
+  test('absente de la carte vivante, la personne ne porte aucune présence', () => {
+    const view = mountUser('user-bob');
+
+    expect(view.status()).toBe('offline');
+  });
+
+  test('sans identifiant, aucune présence, même quand la carte en porte', () => {
+    const view = mountUser(undefined);
+
+    act(() => view.store.getState().put('user-bob', { isOnline: true, lastActiveAt: new Date(T0).toISOString() }));
+
+    expect(view.status()).toBe('offline');
+  });
+
+  test('un user:status servi allume la pastille, et elle décroît d’elle-même', () => {
+    const view = mountUser('user-bob');
+
+    act(() => view.store.getState().put('user-bob', { isOnline: false, lastActiveAt: new Date(T0).toISOString() }));
+    expect(view.status()).toBe('online');
+
+    view.advanceTo(T0 + 2 * 60_000);
+    expect(view.status()).toBe('away');
+  });
+
+  test('la présence d’un autre ne repeint pas la pastille', () => {
+    const view = mountUser('user-bob');
+    const before = view.renders();
+
     act(() => view.store.getState().put('user-carol', { isOnline: true, lastActiveAt: new Date(T0).toISOString() }));
 
     expect(view.renders()).toBe(before);

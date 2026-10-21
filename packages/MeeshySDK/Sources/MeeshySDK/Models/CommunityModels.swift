@@ -33,12 +33,15 @@ public enum CommunityPermissions {
 
 // MARK: - API Community User
 
-public struct APICommunityUser: Codable, Sendable {
+public struct APICommunityUser: Codable, Sendable, ProfileDecorWearer {
     public let id: String
     public let username: String
     public let displayName: String?
     public let avatar: String?
     public let isOnline: Bool?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
+    public var profileDecor: ServedProfileDecor? = nil
 
     public var name: String { displayName ?? username }
 }

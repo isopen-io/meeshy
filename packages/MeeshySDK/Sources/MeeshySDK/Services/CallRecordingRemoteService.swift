@@ -26,7 +26,7 @@ public protocol CallRecordingRemoteServiceProviding: Sendable {
 /// La passerelle vérifie seule que l'appelant EST l'enregistreur d'un
 /// enregistrement réellement démarré, et que la pièce jointe est un audio
 /// qu'il a lui-même déposé. Atome réseau : quand réessayer est app-side.
-public final class CallRecordingRemoteService: CallRecordingRemoteServiceProviding, @unchecked Sendable {
+public final class CallRecordingRemoteService: CallRecordingRemoteServiceProviding, Sendable {
     public static let shared = CallRecordingRemoteService()
     private let api: APIClientProviding
 

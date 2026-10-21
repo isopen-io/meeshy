@@ -192,6 +192,32 @@ const shareLinkArrivalsScreen = () =>
    (pied de contexte, palier nommé, gestes), en parallèle : la bannière in-app
    le charge aussi avec son propre chunk, et `translateNotificationRow` lève
    sur un catalogue non chargé. */
+/* LE MOT DE PASSE OUBLIÉ ET SA RÉINITIALISATION (#10823) — leur chunk ET le
+   catalogue `recovery.*`, en parallèle : le catalogue d'interface est à son
+   plafond, et `translateRecovery` lève sur un catalogue non chargé. */
+const withAccountRecoveryCatalog = <Screen,>(screen: Promise<Screen>) =>
+  Promise.all([
+    screen,
+    import('@/lib/i18n-account-recovery-catalog').then((m) => m.loadAccountRecoveryCatalog(currentInterfaceLanguage())),
+  ]).then(([loaded]) => loaded);
+
+/* LA CONFIRMATION D'UN LIEN DE CONNEXION (« Se connecter en tant que @x ? », 8da83d255f) — le lien magique et la
+   vérification d'adresse la montrent : leur chunk ET le catalogue `signInLink.confirm.*`, en parallèle — le
+   catalogue d'interface est à son plafond, et `translateSignInLink` lève sur un catalogue non chargé. */
+const withSignInLinkCatalog = <Screen,>(screen: Promise<Screen>) =>
+  Promise.all([
+    screen,
+    import('@/lib/i18n-sign-in-link-catalog').then((m) => m.loadSignInLinkCatalog(currentInterfaceLanguage())),
+  ]).then(([loaded]) => loaded);
+
+/* LE LIEN « CE N'ÉTAIT PAS MOI » — la page et son catalogue `revokeSessions.*` en parallèle ; `translateRevokeSessions`
+   lève sur un catalogue non chargé. */
+const withRevokeSessionsCatalog = <Screen,>(screen: Promise<Screen>) =>
+  Promise.all([
+    screen,
+    import('@/lib/i18n-revoke-sessions-catalog').then((m) => m.loadRevokeSessionsCatalog(currentInterfaceLanguage())),
+  ]).then(([loaded]) => loaded);
+
 const notificationsScreen = () =>
   Promise.all([import('@/routes/notifications'), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
@@ -204,7 +230,16 @@ export const ROUTES = {
   home: { pattern: '/', screen: () => (__SHELL__ ? import('@/routes/home-shell') : import('@/routes/home')) },
   /* LA LISTE DES CONVERSATIONS déménage sur `/chats` (#10002, décision porteur
      du 2026-10-10) ; les adresses de fil (`/c/…`) ne changent pas. */
-  list: { pattern: '/chats', screen: () => import('@/routes/conversations') },
+  /* Le menu d'une ligne et les puces (#10593) parlent leur catalogue, chargé
+     AVEC l'écran — le cadre du grand écran passe par ce même chargeur. */
+  list: {
+    pattern: '/chats',
+    screen: () =>
+      Promise.all([
+        import('@/routes/conversations'),
+        import('@/lib/i18n-row-menu-catalog').then((m) => m.loadRowMenuCatalog(currentInterfaceLanguage())),
+      ]).then(([screen]) => screen),
+  },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
   /* NOUVELLE CONVERSATION (#5652) — nomenclature legacy reprise (D-5) :
      `apps/web/app/conversations/new` porte déjà ce chemin. */
@@ -372,18 +407,19 @@ export const ROUTES = {
      les deux au montage. `magicLinkValidate` est l'adresse du DIGEST
      (`jobs/notification-digest.ts:50`, `?token=&returnUrl=`) — même écran de
      validation, adresse SÉPARÉE. */
-  magicLink: { pattern: '/auth/magic-link', screen: () => import('@/routes/magic-link') },
-  magicLinkValidate: { pattern: '/auth/magic-link/validate', screen: () => import('@/routes/magic-link-validate') },
+  magicLink: { pattern: '/auth/magic-link', screen: () => withSignInLinkCatalog(import('@/routes/magic-link')) },
+  magicLinkValidate: { pattern: '/auth/magic-link/validate', screen: () => withSignInLinkCatalog(import('@/routes/magic-link-validate')) },
   /* MOT DE PASSE OUBLIÉ, flux E-MAIL (#5816) — le flux TÉLÉPHONE reste hors
      tranche (issue compagnon). */
-  forgotPassword: { pattern: '/forgot-password', screen: () => import('@/routes/forgot-password') },
+  forgotPassword: { pattern: '/forgot-password', screen: () => withAccountRecoveryCatalog(import('@/routes/forgot-password')) },
   /* ON FINIT D'ENTRER DANS MEESHY (T-verify/T-reset, #5672) — nomenclature
      legacy reprise (D-5) : `apps/web/app/auth/verify-email`,
-     `apps/web/app/reset-password`. L'e-mail et le jeton voyagent en QUERY
-     STRING (`?email=`, `?token=`) — un lien reçu par courriel reste valide
-     après un rafraîchissement, jamais une navigation en mémoire seule. */
-  verifyEmail: { pattern: '/auth/verify-email', screen: () => import('@/routes/verify-email') },
-  resetPassword: { pattern: '/reset-password', screen: () => import('@/routes/reset-password') },
+     `apps/web/app/reset-password`. Depuis #10859 le jeton (et l'adresse) d'un
+     lien d'e-mail voyagent dans le FRAGMENT, relevés puis rangés dans l'entrée
+     d'historique (`lib/links/email-link-secret.ts`) — un rafraîchissement les
+     retrouve, aucun journal d'accès ne les voit. */
+  verifyEmail: { pattern: '/auth/verify-email', screen: () => withSignInLinkCatalog(import('@/routes/verify-email')) },
+  resetPassword: { pattern: '/reset-password', screen: () => withAccountRecoveryCatalog(import('@/routes/reset-password')) },
   /* LES LIENS REÇUS (#6714, #6715) — des adresses que la PASSERELLE compose
      et qui circulent déjà : e-mails, messages, publications, Android. Chacune
      garde l'adresse exacte que le legacy servait (D-5) : sinon chaque lien
@@ -401,6 +437,10 @@ export const ROUTES = {
   trackingLink: { pattern: '/l/$token', screen: () => import('@/routes/tracking-link') },
   trackingLinkExpired: { pattern: '/l/$token/expired', screen: () => import('@/routes/tracking-link-expired') },
   accountDeletion: { pattern: '/account/deletion', screen: () => import('@/routes/account-deletion') },
+  /* « CE N'ÉTAIT PAS MOI » (#10859) — le lien de l'alerte de nouvelle connexion
+     (`revokeAllSessionsPageUrl`, `utils/email-secret-link.ts`), jeton dans le
+     fragment ; PUBLIC, comme la suppression de compte. */
+  revokeSessions: { pattern: '/auth/revoke-sessions', screen: () => withRevokeSessionsCatalog(import('@/routes/revoke-sessions')) },
   verifyEmailChange: { pattern: '/settings/verify-email-change', screen: () => import('@/routes/verify-email-change') },
   settingsNotifications: { pattern: '/settings/notifications', screen: () => import('@/routes/settings-notifications') },
   /* L'EXPORT DE DONNÉES (#6725) — la rangée « Exporter mes données » des
@@ -468,8 +508,24 @@ export const ROUTES = {
      côté — il « ne distingue que REEL du reste » (`lib/api/feed-pages.ts`), et
      le détail d'une publication n'a aucune branche sur `type`. Une humeur EST
      une publication ; lui écrire un second lecteur en ferait une jumelle à
-     faire diverger. D'où le MÊME `import()` que ses deux sœurs. */
-  mood: { pattern: '/mood/$post', screen: publicationScreen },
+     faire diverger. D'où le MÊME `import()` que ses deux sœurs.
+
+     L'HUMEUR EN GRAND (#10813) — la notification « nouvelle humeur » mène ici,
+     et un compte y lit désormais la page de l'humeur : la bannière de son
+     auteur, son avatar, son mot, la pluie de son emoji et la réponse en privé.
+     L'adresse ne change pas, et ce qu'elle servait non plus pour tout le reste :
+     un visiteur sans compte, ou une publication qui n'est pas une humeur,
+     retombent sur le MÊME détail de publication (`routes/mood.tsx` le délègue,
+     rien n'est réécrit). Le catalogue de l'humeur (sept langues) se charge
+     AVEC l'écran, jamais au démarrage. */
+  mood: {
+    pattern: '/mood/$post',
+    screen: () =>
+      Promise.all([
+        import('@/routes/mood'),
+        import('@/lib/i18n-mood-compose-catalog').then((m) => m.loadMoodComposeCatalog(currentInterfaceLanguage())),
+      ]).then(([screen]) => screen),
+  },
   /* LE PROFIL PUBLIC DE QUELQU'UN et LES PUBLICATIONS D'UN MOT-CLÉ (#7032) —
      les DEUX adresses que le texte enrichi vise, et elles arrivent AVANT les
      liens qui les visent : une mention qui tomberait sur « adresse inconnue »
@@ -709,7 +765,7 @@ export function DeferredSplitFrame(props: FrameProps): ReactNode {
 
 /* LE CATALOGUE D'INTERFACE (#6206) — chaque écran l'attend, en parallèle de
    son chunk : ce qui s'y rend lit ses libellés de façon synchrone. */
-export const { Router, Link, href, navigate } = createRouter(ROUTES, NotFound, {
+export const { Router, Link, href, navigate, preload } = createRouter(ROUTES, NotFound, {
   screenPrerequisite: () => loadInterfaceCatalog(currentInterfaceLanguage()),
   /* SUR GRAND ÉCRAN, LA LISTE ET LE FIL CÔTE À CÔTE (#10073, D-185) — sous
      1024 px, le cadre rend l'écran routé tel quel. */

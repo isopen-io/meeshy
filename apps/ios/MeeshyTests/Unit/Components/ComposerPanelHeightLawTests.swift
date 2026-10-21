@@ -144,8 +144,8 @@ final class ComposerPanelHeightLawTests: XCTestCase {
     /// « disparaître » ; la fin du masquage, elle, remet tout à zéro.
     @MainActor
     func test_keyboardObserver_zeroFrameWhileRaised_keepsTheHeight_untilTheKeyboardHides() {
-        let observer = KeyboardObserver()
-        let size = DeviceLayout.windowSize
+        let size = CGSize(width: 402, height: 874)
+        let observer = KeyboardObserver(windowHeight: { size.height })
         postKeyboardFrame(CGRect(x: 0, y: size.height - 336, width: size.width, height: 336))
         XCTAssertEqual(observer.height, 336)
 
@@ -157,6 +157,26 @@ final class ComposerPanelHeightLawTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(0.1))
         XCTAssertEqual(observer.height, 0)
         XCTAssertFalse(observer.isVisible)
+    }
+
+    /// Dépendance à l'ordre (cycle 8, une fois sur un grand lot) : le témoin ci-dessus lisait `DeviceLayout.windowSize`
+    /// pour poser son clavier, l'observateur la RELISAIT à la réception — et entre les deux, la fenêtre clé d'un test
+    /// précédent (402 × 800, cachée dans son `tearDown`) cédait la place à celle de l'app (874). Le clavier se lisait
+    /// alors « flottant » (0) ou plafonné. L'observateur mesure désormais contre UNE hauteur, injectée ici.
+    @MainActor
+    func test_keyboardObserver_measuresAgainstItsWindowHeight_whicheverWindowIsKey() {
+        let observer = KeyboardObserver(windowHeight: { 874 })
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        let other = scene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: .zero)
+        other.frame = CGRect(x: 0, y: 0, width: 402, height: 600)
+        other.rootViewController = UIViewController()
+        other.makeKeyAndVisible()
+        defer { other.isHidden = true }
+
+        postKeyboardFrame(CGRect(x: 0, y: 874 - 336, width: 402, height: 336))
+
+        XCTAssertEqual(observer.height, 336, "une autre fenêtre clé ne change pas la mesure du clavier")
     }
 
     // MARK: - Un écran, un observateur (#10544)

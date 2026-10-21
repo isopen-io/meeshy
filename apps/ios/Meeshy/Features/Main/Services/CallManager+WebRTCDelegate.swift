@@ -172,13 +172,12 @@ extension CallManager: WebRTCServiceDelegate {
         Task { @MainActor [weak self] in
             guard let self, case .connected = self.callState, !self.isGroupPrimaryVacated else { return }
             guard UIAccessibility.isReduceMotionEnabled == false else { return }
-            let generator = UINotificationFeedbackGenerator()
             switch level {
             case .poor, .critical:
-                generator.notificationOccurred(.error)
+                HapticFeedback.error()
             case .excellent, .good:
                 if previous <= .fair {
-                    generator.notificationOccurred(.success)
+                    HapticFeedback.success()
                 }
             case .fair:
                 break
@@ -256,5 +255,5 @@ extension CallManager: WebRTCServiceDelegate {
 
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

@@ -29,6 +29,12 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         try strippedSource("Meeshy/Features/Main/Views/ConversationView.swift")
     }
 
+    /// Le chip lui-même (`ConversationReadingModeAffordance`) a quitté l'hôte : l'hôte ne fait
+    /// que lui remettre le contrôleur et les capacités.
+    private func chipAffordanceSource() throws -> String {
+        try strippedSource("Meeshy/Features/Main/Views/ConversationView+ReadingModeChip.swift")
+    }
+
     /// Le type nominal qui ORDONNE réellement la grappe, extrait le 2026-09-13
     /// dans `ConversationExpandedHeaderBand.swift` — la grappe pesait sur la
     /// LARGEUR de la valeur `ConversationView` (débordement de pile à
@@ -44,7 +50,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         // `AnyView` (not `some View`) since 2026-08-17 — erasure at the
         // DECLARATION was required to stop a Swift metadata-decoder stack
         // overflow at first render (see ConversationFirstRenderWarmup.swift).
-        guard let range = code.range(of: "var headerButtonsCluster: AnyView {") else {
+        guard let range = code.range(of: "var headerButtonsCluster: some View {") else {
             XCTFail("headerButtonsCluster introuvable dans ConversationView.swift.")
             return
         }
@@ -55,7 +61,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         let body = code[range.lowerBound..<end]
         // L'HÔTE remet les trois fentes ; il ne les ORDONNE plus lui-même.
         guard body.range(of: "headerCallButtons") != nil,
-              body.range(of: "expandedHeaderSearchButton") != nil,
+              body.range(of: "headerSearchSlot") != nil,
               body.range(of: "readingModeAffordanceCluster") != nil
         else {
             XCTFail("Un des trois éléments de la grappe (appel, recherche, mode) est introuvable dans les 450 premiers caractères de headerButtonsCluster.")
@@ -76,7 +82,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
          d'être vérifié.
         */
         let cluster = try headerActionsClusterSource()
-        guard let clusterRange = cluster.range(of: "struct ConversationHeaderActionsCluster: View {") else {
+        guard let clusterRange = cluster.range(of: "struct ConversationHeaderActionsCluster<Call: View, Search: View, ReadingMode: View>: View {") else {
             XCTFail("ConversationHeaderActionsCluster introuvable — c'est lui qui ordonne la grappe.")
             return
         }
@@ -123,22 +129,31 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         // — le chip doit exister EN Bulles, c'est depuis lui qu'on en sort —
         // mais « le drapeau rend autre chose que des bulles » : drapeau OFF
         // (résolu TOUJOURS `.bubbles`, §WS-1) ⇒ ni chip ni bouton Aa.
-        let code = try strippedSource("Meeshy/Features/Main/Views/ConversationView.swift")
-            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+        let normalize: (String) -> String = {
+            $0.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        let host = normalize(try conversationViewSource())
+        let chip = normalize(try chipAffordanceSource())
         XCTAssertTrue(
-            code.contains("private var readingModeAffordanceCluster: AnyView { guard readingModeCapabilities.availableModes.contains(where: { $0 != .bubbles }) else { return AnyView(EmptyView()) }"),
+            host.contains("private var readingModeAffordanceCluster: ConversationReadingModeAffordance { ConversationReadingModeAffordance( controller: readingModeController, capabilities: readingModeCapabilities,"),
+            "L'hôte remet au chip les CAPACITÉS stockées — la garde de présence s'y lit, pas dans le mode courant."
+        )
+        XCTAssertTrue(
+            chip.contains("if capabilities.availableModes.contains(where: { $0 != .bubbles }) {"),
             "La grappe doit être gardée par les CAPACITÉS du drapeau (un mode autre que bulles est rendu), jamais par le mode courant : en Bulles (choix collant, drapeau ON) le chip reste — c'est la porte de sortie."
         )
-        XCTAssertFalse(
-            code.contains("guard readingModeController.mode != .bubbles else"),
-            "L'ancienne garde par le mode courant cacherait le chip en Bulles."
-        )
+        for code in [host, chip] {
+            XCTAssertFalse(
+                code.contains("guard readingModeController.mode != .bubbles else") || code.contains("guard controller.mode != .bubbles else"),
+                "L'ancienne garde par le mode courant cacherait le chip en Bulles."
+            )
+        }
     }
 
     // MARK: - P2 (spec 17/08) : PLUS de bouton Aa, nulle part
 
     func test_aaDensityButton_isGone() throws {
-        let code = try conversationViewSource()
+        let code = try conversationViewSource() + "\n" + chipAffordanceSource()
         XCTAssertFalse(
             code.contains("ReadingModeDensityButton"),
             "P2 : le bouton Aa est SUPPRIMÉ — le chip unique porte le cycle (tap) et le menu (appui long), plus aucune seconde affordance."
@@ -154,9 +169,9 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
     // MARK: - P2 : tap = CYCLE des modes disponibles (préférence collante)
 
     func test_chipTap_cyclesThroughAvailableModes_viaTheController() throws {
-        let code = try conversationViewSource()
-        guard let range = code.range(of: "private var readingModeAffordanceCluster: AnyView {") else {
-            return XCTFail("readingModeAffordanceCluster introuvable.")
+        let code = try chipAffordanceSource()
+        guard let range = code.range(of: "struct ConversationReadingModeAffordance: View {") else {
+            return XCTFail("ConversationReadingModeAffordance introuvable.")
         }
         let windowEnd = code.index(range.lowerBound, offsetBy: 1600, limitedBy: code.endIndex) ?? code.endIndex
         let window = code[range.lowerBound..<windowEnd]
@@ -165,7 +180,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
             "le tap du chip doit passer par la loi pure ReadingModeCycle.next — jamais un switch inline recopié."
         )
         XCTAssertTrue(
-            window.contains("readingModeController.select("),
+            window.contains("controller.select("),
             "le cycle écrit la préférence collante via le contrôleur GELÉ (F-080) — jamais un état local dupliqué."
         )
     }
@@ -173,13 +188,13 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
     // MARK: - P2 : appui long = menu listant les modes (même câblage contrôleur)
 
     func test_chipMenu_isWiredToTheController() throws {
-        let code = try conversationViewSource()
+        let code = try chipAffordanceSource()
         XCTAssertTrue(
-            code.contains("onSelect: { readingModeController.select($0) }"),
+            code.contains("onSelect: { controller.select($0) }"),
             "le menu du chip sélectionne via readingModeController.select(_:) — même préférence collante que l'ancienne feuille."
         )
         XCTAssertTrue(
-            code.contains("onAuto: { readingModeController.resetToAuto() }"),
+            code.contains("onAuto: { controller.resetToAuto() }"),
             "« Automatique » du menu réengage l'orchestrateur via resetToAuto()."
         )
     }
@@ -247,9 +262,11 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
 
     func test_chipMenu_readsStoredCapabilities_notASecondResolution() throws {
         let code = try conversationViewSource()
+        let chip = try chipAffordanceSource()
         XCTAssertTrue(
-            code.contains("capabilities: readingModeCapabilities,"),
-            "les lignes du menu doivent être bâties depuis `readingModeCapabilities` (propriété stockée) — jamais un second appel à `resolveCapabilities`."
+            code.contains("capabilities: readingModeCapabilities,")
+                && chip.contains("ReadingModeLensCatalog.rows(") && chip.contains("capabilities: capabilities,"),
+            "les lignes du menu doivent être bâties depuis `readingModeCapabilities` (propriété stockée, remise au chip) — jamais un second appel à `resolveCapabilities`."
         )
     }
 

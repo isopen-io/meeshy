@@ -427,5 +427,5 @@ final class DraftStore: @unchecked Sendable {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let drafts = Logger(subsystem: "me.meeshy.app", category: "draft-store")
+    nonisolated static let drafts = MeeshyLog.logger(.draftStore)
 }

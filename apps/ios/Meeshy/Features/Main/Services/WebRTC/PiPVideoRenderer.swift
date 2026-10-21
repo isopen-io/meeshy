@@ -23,7 +23,7 @@ import CoreMedia
 
 nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked Sendable {
 
-    private let displayLayer: AVSampleBufferDisplayLayer
+    private let sink: PiPSampleSink
     private let converter = VideoFrameConverter()
     private let queue = DispatchQueue(label: "me.meeshy.pip.render", qos: .userInteractive)
     private var minIntervalNs: UInt64
@@ -36,10 +36,10 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
     /// live frame frozen indefinitely (spec 2026-06-20 §5.3).
     private var isRemoteVideoMuted = false
 
-    init(displayLayer: AVSampleBufferDisplayLayer,
+    init(sink: PiPSampleSink,
          maxFrameRate: Int,
          onRotation: (@Sendable (Int) -> Void)?) {
-        self.displayLayer = displayLayer
+        self.sink = sink
         self.minIntervalNs = UInt64(1_000_000_000 / max(1, maxFrameRate))
         self.onRotation = onRotation
         super.init()
@@ -103,11 +103,11 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
 
     // MARK: - Surface d'enqueue (iOS 16 vs 17+)
 
-    private var isReadyForMoreMediaData: Bool { displayLayer.isReadyForMoreMediaDataCompat }
+    private var isReadyForMoreMediaData: Bool { sink.isReadyForMoreMediaData }
 
-    private func enqueue(_ sample: CMSampleBuffer) { displayLayer.enqueueCompat(sample) }
+    private func enqueue(_ sample: sending CMSampleBuffer) { sink.enqueue(sample) }
 
-    private func flush() { displayLayer.flushCompat() }
+    private func flush() { sink.flush() }
 
     /// Synchronously flushes the display layer from this renderer's own serial
     /// `queue`, for callers detaching from a different thread (`PiPCallController.
@@ -123,7 +123,7 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
         queue.sync { flush() }
     }
 
-    private func flushIfFailed() { displayLayer.flushIfFailedCompat() }
+    private func flushIfFailed() { sink.flushIfFailed() }
 
     private func notifyRotationIfChanged(_ rotation: Int) {
         guard rotation != lastRotation, let onRotation else { return }

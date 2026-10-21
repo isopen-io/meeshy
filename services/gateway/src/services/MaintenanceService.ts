@@ -3,9 +3,9 @@
  * Gestion des tâches de maintenance automatiques
  */
 
-import { apiPath } from '@meeshy/shared/api/prefix';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
+import { buildDeletionPageUrl } from '../utils/email-secret-link';
 import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
@@ -862,7 +862,6 @@ export class MaintenanceService {
             if (!user?.email) continue;
 
             const name = user.displayName || user.firstName || 'Utilisateur';
-            const baseUrl = process.env.GATEWAY_URL || process.env.API_URL || 'https://gate.meeshy.me';
 
             // We need the raw tokens to build links, but we only store hashes.
             // The reminder email uses confirmTokenHash for delete-now and cancelTokenHash for cancel.
@@ -885,8 +884,11 @@ export class MaintenanceService {
               }
             });
 
-            const deleteNowLink = `${baseUrl}${apiPath('/me/delete-account/delete-now')}?token=${newConfirmToken}`;
-            const cancelLink = `${baseUrl}${apiPath('/me/delete-account/cancel')}?token=${newCancelToken}`;
+            // #10859 — la page web, jeton dans le fragment : les anciennes
+            // adresses `GET` de la passerelle (`delete-now`, `cancel`) ne font
+            // plus que rediriger vers elle, et journalisaient le jeton.
+            const deleteNowLink = buildDeletionPageUrl('purge', newConfirmToken);
+            const cancelLink = buildDeletionPageUrl('cancel', newCancelToken);
             // La date se lit DANS l'e-mail, donc dans la langue de l'e-mail :
             // un `'fr-FR'` en dur datait « à la française » un courrier
             // allemand ou espagnol.

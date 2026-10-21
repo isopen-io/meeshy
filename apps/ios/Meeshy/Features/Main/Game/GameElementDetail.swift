@@ -602,8 +602,8 @@ enum GameElementDetails {
             name: GameText.bannerLevel(level: count(level.level)) + " · " + GameCopy.tierName(level.tier),
             status: .value(atTop ? GameCopy.levelTop(cap: level.cap) : GameCopy.levelToNext(remaining: level.pointsToNext, nextLevel: level.level + 1),
                            progress: atTop ? nil : level.progress),
-            facts: [
-                fact(ConceptText.factHeld, GameCopy.points(block.score)),
+            // Les deux paires des étincelles (#10846), toujours — la poche, base du niveau (#10892), et le cumul indicatif.
+            facts: GameSparkPairs(block).facts + [
                 atTop ? fact(ConceptText.factNextLevel, GameCopy.levelTopShort(cap: level.cap)) : nil,
                 record,
             ].compactMap { $0 },

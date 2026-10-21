@@ -23,8 +23,7 @@ final class ActiveConversationHandoffTests: XCTestCase {
 
     private func neuf() -> NotificationToastManager {
         let m = NotificationToastManager.shared
-        m.onConversationClosed("__reset__")
-        m.onConversationClosed(m.activeConversationId ?? "__reset__")
+        m.forgetOpenConversations()
         return m
     }
 
@@ -75,5 +74,71 @@ final class ActiveConversationHandoffTests: XCTestCase {
 
         XCTAssertEqual(MessageSocketManager.shared.activeConversationId, "B",
                        "Deux champs posés ensemble ne peuvent pas diverger à la fermeture.")
+    }
+
+    // MARK: - iPad multi-fenêtre
+
+    /// A reste dans la fenêtre principale, B s'ouvre dans une fenêtre
+    /// détachée : les DEUX sont à l'écran.
+    func test_deuxFenetres_lesDeuxConversationsSontOuvertes() {
+        let m = neuf()
+        m.onConversationOpened("A")
+        m.onConversationOpened("B")
+
+        XCTAssertTrue(m.isConversationOpen("A"),
+                      "A est toujours affichée dans la fenêtre principale.")
+        XCTAssertTrue(m.isConversationOpen("B"))
+        XCTAssertEqual(m.openConversationIds, ["A", "B"])
+        XCTAssertEqual(m.activeConversationId, "B", "La plus récente reste l'active.")
+    }
+
+    /// Fermer la fenêtre détachée rend la main à la conversation qui reste
+    /// affichée — pas à « nulle part ».
+    func test_fermerLaFenetreDetachee_rendLaMainALaConversationRestante() {
+        let m = neuf()
+        // Les deux écrans déclarent leur conversation au moteur, chacun la sienne : il n'a plus besoin que les toasts
+        // le relancent sur celle qui reste — il ne l'a jamais quittée.
+        let engine = ConversationSyncEngine.shared
+        engine.openConversation("A")
+        engine.openConversation("B")
+        defer { engine.closeConversation("A") }
+        m.onConversationOpened("A")
+        m.onConversationOpened("B")
+        m.onConversationClosed("B")
+        engine.closeConversation("B")
+
+        XCTAssertTrue(engine.isConversationOpen("A"),
+                      "A est à l'écran : le moteur ne doit pas recompter ses messages comme non lus.")
+        XCTAssertFalse(engine.isConversationOpen("B"))
+        XCTAssertEqual(m.activeConversationId, "A")
+        XCTAssertEqual(MessageSocketManager.shared.activeConversationId, "A")
+        XCTAssertEqual(MessageSocketManager.shared.openConversationIds, ["A"])
+        XCTAssertFalse(m.isConversationOpen("B"))
+    }
+
+    /// La même conversation dans deux fenêtres : fermer l'une ne la retire pas.
+    func test_memeConversationDansDeuxFenetres_seuleLaDerniereFermetureLaRetire() {
+        let m = neuf()
+        m.onConversationOpened("A")
+        m.onConversationOpened("A")
+        m.onConversationClosed("A")
+
+        XCTAssertTrue(m.isConversationOpen("A"), "Une fenêtre affiche encore A.")
+        XCTAssertEqual(m.activeConversationId, "A")
+
+        m.onConversationClosed("A")
+        XCTAssertFalse(m.isConversationOpen("A"))
+        XCTAssertNil(m.activeConversationId)
+    }
+
+    /// Une fermeture sans ouverture (écran jamais activé) ne fait pas tomber
+    /// le compte d'une autre fenêtre.
+    func test_uneFermetureOrpheline_neRetireRien() {
+        let m = neuf()
+        m.onConversationOpened("A")
+        m.onConversationClosed("Z")
+
+        XCTAssertTrue(m.isConversationOpen("A"))
+        XCTAssertEqual(m.activeConversationId, "A")
     }
 }

@@ -44,6 +44,7 @@ const NOTICE = {
   attachments: [],
   _count: { attachments: 0 },
 };
+const BEFORE_NOTICE_EXPIRY = new Date('2026-10-08T10:10:00.000Z');
 const PLAIN = { ...NOTICE, id: 'plain', messageType: 'text', metadata: null, expiresAt: null };
 
 const prismaWith = (row: typeof NOTICE) => ({
@@ -61,7 +62,7 @@ describe('un avis de capture ne se cite pas', () => {
 
 describe('un avis de capture ne se transfère pas', () => {
   it('refuse le transfert d’un avis comme une source introuvable, admet celui d’un message ordinaire', async () => {
-    const params = { forwardedFromId: 'notice', senderParticipantId: 'p-capturer', at: new Date(), bodyOnlyFromSource: true };
+    const params = { forwardedFromId: 'notice', senderParticipantId: 'p-capturer', at: BEFORE_NOTICE_EXPIRY, bodyOnlyFromSource: true };
     expect(await admitMessageForward(prismaWith(NOTICE) as never, params)).toEqual({ admitted: false, reason: 'forward-source-unavailable' });
     expect((await admitMessageForward(prismaWith(PLAIN) as never, { ...params, forwardedFromId: 'plain', bodyOnlyFromSource: false })).admitted).toBe(true);
   });
@@ -69,8 +70,9 @@ describe('un avis de capture ne se transfère pas', () => {
 
 describe('un avis de capture ne se met pas en favori', () => {
   it('rend « non mis en favori » pour un avis, pose l’étoile sur un message ordinaire', async () => {
-    expect(await new MessageStarWriter(prismaWith(NOTICE) as never).star('u-1', 'notice')).toEqual({ kind: 'not-starrable' });
-    expect((await new MessageStarWriter(prismaWith(PLAIN) as never).star('u-1', 'plain')).kind).toBe('starred');
+    const beforeNoticeExpiry = () => BEFORE_NOTICE_EXPIRY;
+    expect(await new MessageStarWriter(prismaWith(NOTICE) as never, beforeNoticeExpiry).star('u-1', 'notice')).toEqual({ kind: 'not-starrable' });
+    expect((await new MessageStarWriter(prismaWith(PLAIN) as never, beforeNoticeExpiry).star('u-1', 'plain')).kind).toBe('starred');
   });
 });
 

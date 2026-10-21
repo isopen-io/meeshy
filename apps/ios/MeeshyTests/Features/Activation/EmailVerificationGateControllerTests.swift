@@ -101,6 +101,38 @@ final class EmailVerificationGateControllerTests: XCTestCase {
         XCTAssertEqual(answers, [false, false])
     }
 
+    func test_verifyEmail_cancelledCaller_answersFalseAtOnceAndTheOtherStillReceivesTheVerdict() async {
+        let (sut, presenter) = makeSUT(user: makeUser())
+
+        let kept = Task { await sut.verifyEmail(for: .publish) }
+        await waitUntilPresented(presenter)
+        let cancelled = Task { await sut.verifyEmail(for: .link) }
+        for _ in 0..<20 { await Task.yield() }
+        cancelled.cancel()
+        let cancelledAnswer = await cancelled.value
+        XCTAssertFalse(cancelledAnswer)
+        XCTAssertEqual(presenter.shown.count, 1)
+
+        presenter.settle?(true)
+        let keptAnswer = await kept.value
+        XCTAssertTrue(keptAnswer)
+        XCTAssertEqual(presenter.dismissCount, 1)
+    }
+
+    func test_verifyEmail_everyCallerCancelled_laterVerdictStillDismissesAndRecordsTheProof() async {
+        let (sut, presenter) = makeSUT(user: makeUser())
+
+        let only = Task { await sut.verifyEmail(for: .publish) }
+        await waitUntilPresented(presenter)
+        only.cancel()
+        _ = await only.value
+
+        presenter.settle?(true)
+        XCTAssertEqual(presenter.dismissCount, 1)
+        let stillUnproven = await sut.emailKnownUnproven()
+        XCTAssertFalse(stillUnproven)
+    }
+
     func test_verifyEmail_duringOnboarding_answersFalseWithoutPresenting() async {
         let (sut, presenter) = makeSUT(user: makeUser(), onboarding: true)
         let verified = await sut.verifyEmail(for: .publish)

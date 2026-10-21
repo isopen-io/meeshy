@@ -19,7 +19,7 @@ import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { handOffVideoPosition } from '@/lib/view/video-handoff';
 import { useCarriedPlayback } from '@/lib/view/audio-carry';
-import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
+import { PLAYBACK_SPEEDS, formatMediaTime, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import {
   karaokeSegments,
   karaokeTone,
@@ -28,14 +28,20 @@ import {
 } from '@/lib/view/transcript-karaoke';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
+import { transcriptionOffered } from '@/lib/view/audio-on-demand';
+import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
+import { useVoiceNowPlaying } from '@/lib/view/use-voice-now-playing';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { fileWeightLabel } from '@/lib/view/file-weight';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MaskedAttachment } from './masked-attachment';
 import { MediaGrid } from './media-grid';
+import { AttachmentReactionBadge } from './attachment-reaction-badge';
+import { VoiceFileName, VoiceTranscribeZone } from './voice-bubble-parts';
 import { VeilRevealContext, revealedAttachment, useAttachmentMasked } from './view-once-opened';
 
 /**
@@ -103,19 +109,37 @@ const KARAOKE_STYLE: Readonly<Record<KaraokeTone, Readonly<Record<string, string
 };
 
 function VoiceAttachment({
-  attachment,
+  attachment: received,
   languages,
   displayLanguage,
   fallbackLanguage,
   onExpand,
+  carrier,
+  message,
+  trackOf,
+  deps,
 }: {
   readonly attachment: Attachment;
+  readonly deps?: ConversationsDeps | undefined;
+  /** Rang du vocal quand le message en porte plusieurs — annoncé « Vocal 2 sur 3 ». */
+  readonly trackOf?: { readonly index: number; readonly total: number } | undefined;
+  /** L'auteur et la date du vocal — décrits à la carte de lecture de la coque (#10624). */
+  readonly carrier?: MediaCarrier | undefined;
+  readonly message?: Message | undefined;
   readonly languages: readonly string[];
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
   /** Le lecteur plein écran (#8333, miroir de la pastille de pourcentage iOS) — la lecture en cours y reprend à la même seconde. */
   readonly onExpand: () => void;
 }) {
+  const thread = useContext(ThreadMediaContext);
+  const onDemand = useAudioOnDemand({
+    attachment: received,
+    fallbackLanguage,
+    readerLanguages: languages,
+    transcribable: transcriptionOffered({ attachment: received, message, conversationEncryptionMode: thread?.conversationEncryptionMode }),
+    ...(deps !== undefined ? { deps } : {}) });
+  const attachment = onDemand.served;
   const { described: transcript, track } = electAudio({
     attachment,
     readerLanguages: languages,
@@ -152,6 +176,16 @@ function VoiceAttachment({
      en est le seul moteur : la bulle reflète sa lecture et la commande, comme
      la bulle iOS reflète `ConversationAudioCoordinator`. Jamais un second son. */
   const carried = useCarriedPlayback(attachment.id);
+  /* LA CARTE DE LECTURE DE LA COQUE DIT CE VOCAL (#10624) — la coque les
+     relit sur l'`<audio>` qui joue (`data-np-attachment`), ici comme dans la
+     visionneuse et le mini-lecteur qui rejouent ce vocal. Coque seulement. */
+  useVoiceNowPlaying(attachment.id, {
+    carrier,
+    conversationTitle: thread?.conversationTitle,
+    conversationAvatarUrl: thread?.conversationAvatarUrl,
+    message,
+    attachment,
+  });
   const { bind, reportedFraction } = own;
   const { status, progress, toggle, position, duration, seek, rate, setRate } = carried ?? own;
   const uiLanguage = currentInterfaceLanguage();
@@ -249,7 +283,17 @@ function VoiceAttachment({
 
   return (
     /* LE VOCAL EN CARTE TEINTÉE PAR L'ACCENT (#10004, `styles/conversation-look.css`). */
-    <div className="voice-card flex flex-col gap-1" data-voice-card data-attachment={attachment.id}>
+    <div
+      className="voice-card flex flex-col gap-1"
+      data-voice-card
+      data-attachment={attachment.id}
+      {...(trackOf !== undefined
+        ? {
+            role: 'group',
+            'aria-label': translate(uiLanguage, 'media.audio.track_of', { index: String(trackOf.index), total: String(trackOf.total) }),
+          }
+        : {})}
+    >
       {/* L'ÉLÉMENT N'EST JAMAIS AFFICHÉ (pas de `controls`) : le chrome est le
           bouton + l'onde ci-dessous, exactement comme iOS.
 
@@ -276,6 +320,7 @@ function VoiceAttachment({
         key={track.url}
         ref={bindAudio}
         preload="none"
+        data-np-attachment={attachment.id}
         data-track-language={track.language}
         className="hidden"
         {...(track.url === '' ? {} : { src: attachmentSrc(track.url) })}
@@ -290,7 +335,7 @@ function VoiceAttachment({
           style={{ background: 'linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, transparent))' }}
           // « Lire l'audio » (`media.audio.play`, `AudioPlayerView.swift:1278`)
           // — vocabulaire iOS REPRIS tel quel (§1.6 de la spécification #5805).
-          aria-label={isPlaying ? 'Mettre en pause' : "Lire l'audio"}
+          aria-label={translate(currentInterfaceLanguage(), isPlaying ? 'media.audio.pause' : 'media.audio.play')}
         >
           {isPlaying ? (
             <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={13} className="text-ios-on-brand" />
@@ -343,8 +388,10 @@ function VoiceAttachment({
             />
           ))}
         </span>
-        <span className="shrink-0 text-time tabular-nums">
-          {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+        {/* LE TEMPS QUI PASSE (#10625) — au repos la durée ; en lecture, et en
+            pause après lecture, la position courante, comme `AudioPlayerView`. */}
+        <span data-voice-time className="shrink-0 text-time tabular-nums">
+          {formatMediaTime(status === 'playing' || status === 'paused' ? position : seconds)}
         </span>
         {/* LA VITESSE (#6306) — un cycle, pas un menu : c'est le geste d'iOS
             (`cycleSpeed`), et un vocal se réécoute plus vite bien plus souvent
@@ -376,7 +423,14 @@ function VoiceAttachment({
         </button>
       </div>
 
-      {transcript.text !== '' ? (
+      <VoiceFileName originalName={attachment.originalName ?? ''} />
+      {/* LES RÉACTIONS DE LA PISTE (#10745) — la pastille partagée, au coin bas-gauche de la carte, comme sur une photo (`FocalAttachmentBlock.reactionsBadge`, toutes natures). */}
+      <AttachmentReactionBadge attachment={attachment} />
+      {onDemand.canTranscribe ? (
+        <VoiceTranscribeZone language={uiLanguage} busy={onDemand.transcribing} notice={onDemand.notice} onTranscribe={onDemand.transcribe} />
+      ) : null}
+
+      {transcript.text !== '' && transcript.text !== attachment.originalName ? (
         <p
           data-transcript
           className="text-title"
@@ -428,7 +482,7 @@ function VoiceAttachment({
       {isError ? (
         <div data-audio-status="error" className="flex items-center">
           <button type="button" onClick={toggle} className="text-mini underline" style={{ minHeight: 44 }}>
-            Lecture impossible — Réessayer
+            {translate(currentInterfaceLanguage(), 'media.playback.failed')}
           </button>
         </div>
       ) : null}
@@ -491,7 +545,7 @@ function FileAttachmentRow({
         {badge}
       </span>
       <span className="min-w-0 flex-1 truncate text-title font-semibold">{name}</span>
-      <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
+      {attachment.fileSize > 0 ? <span className="text-time opacity-70">{fileWeightLabel(attachment.fileSize, currentInterfaceLanguage())}</span> : null}
     </a>
   );
 }
@@ -582,6 +636,10 @@ export function Attachments({
             languages={languages}
             fallbackLanguage={fallbackLanguage}
             onExpand={() => setOpenAudioIndex(i)}
+            carrier={carrier}
+            message={message}
+            trackOf={audio.length > 1 ? { index: i + 1, total: audio.length } : undefined}
+            deps={deps}
             {...(displayLanguage !== undefined ? { displayLanguage } : {})}
           />
         ),

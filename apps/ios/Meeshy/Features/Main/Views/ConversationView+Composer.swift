@@ -13,39 +13,40 @@ extension ConversationView {
 
     // MARK: - Themed Composer (powered by UniversalComposerBar)
     //
-    // Garde anti-débordement de pile (2026-08-16, CORRIGÉE le 2026-09-03) :
-    // cette propriété empilait ~13 modificateurs système (.sheet ×2,
-    // .fullScreenCover ×6, .photosPicker, .fileImporter, .animation ×3,
-    // .adaptiveOnChange) sur UN SEUL `some View`. Chaque modificateur ajoute un
-    // niveau de générique `ModifiedContent<…>` distinct ; à la profondeur
-    // atteinte, la résolution runtime du type opaque
-    // (swift_getTypeByMangledName, récursive à ~17 Ko de pile par niveau)
-    // dépassait les 1008 Ko du thread principal — EXC_BAD_ACCESS dans la page
-    // de garde de la pile.
-    //
-    // Le découpage de 2026-08-16 en quatre maillons N'A PAS SUFFI, et le
-    // pourquoi est la leçon : les trois maillons-fonctions étaient GÉNÉRIQUES
-    // (`<Content: View>(_ content: Content) -> some View`). Composés en une
-    // seule expression, leurs types opaques se re-nichaient intégralement — le
-    // mangled name unique et géant se reformait dans le getter de
-    // `themedComposer`, et le crash a survécu treize jours de plus (device
-    // iPhone 16 Pro Max, `F22F88B0-…`, 2026-09-03 17:29, build 1800, atteint
-    // depuis `ConversationFirstRenderWarmup.performWarmup()` → 40 trames de
-    // décodeur de métadonnées → Stack Guard).
-    //
-    // > DÉCOUPER DES PROPRIÉTÉS NE DÉCOUPE PAS LE TYPE. Seule une frontière
-    // > `AnyView` posée à la DÉCLARATION de chaque maillon le fait : un
-    // > `AnyView` chez l'appelant ne borne rien, car le getter matérialise
-    // > quand même le type concret de son argument à sa propre profondeur de
-    // > pile (leçon payée par six `AnyView` successifs sur la chaîne du header
-    // > entre le 2026-07-30 et le 2026-08-17, qui ont déplacé le crash de
-    // > maillon en maillon sans jamais le supprimer).
-    //
-    // Chaque maillon prend donc `AnyView` et rend `AnyView` : aucun getter ne
-    // matérialise plus que ses PROPRES modificateurs. Garde :
+    // Garde anti-débordement de pile : chaque modificateur système ajoute un
+    // niveau de générique `ModifiedContent<…>`, et la résolution runtime du type
+    // opaque (`swift_getTypeByMangledName`, ~17 Ko de pile par niveau) dépassait
+    // les 1008 Ko du thread principal (device iPhone 16 Pro Max, 2026-09-03).
+    // DÉCOUPER DES PROPRIÉTÉS NE DÉCOUPE PAS LE TYPE. La chaîne est donc faite de
+    // frontières NOMINALES : une vue (`ConversationComposerCore`) et quatre
+    // `ViewModifier` (`ConversationComposerLayers.swift`, `+GuestAttachments`),
+    // chacun une struct à son propre nœud d'attribut, au `body` borné. Garde :
     // `ConversationComposerChainErasureSourceGuardTests`.
-    var themedComposer: AnyView {
-        composerEditingCovers(composerStickerSheet(composerGuestAttachments(composerPickersAndSheets(composerCore))))
+    var themedComposer: some View {
+        ConversationComposerCore(
+            recorder: audioRecorder,
+            composerText: composerText,
+            isFocusedOrRequested: isTyping || composerState.focusRequested,
+            replyToId: outgoingReplyRoute.replyToId,
+            animationKeys: composerAnimationKeys,
+            bar: { composerBar(textBinding: $0, isRecording: $1, recordingDuration: $2, audioLevels: $3) },
+            onReplyRoute: { viewModel.armReplyContagion(quoting: $0) },
+            onFold: { closeComposerEmojiPanel() }
+        )
+        .modifier(ConversationComposerPickers(
+            composerState: $composerState, accentColor: accentColor,
+            onFileImport: { handleFileImport($0) }, onCapture: { stageCapture($0) },
+            onLocation: { handleLocationSelection($0) }, onContact: { handleContactSelection($0) },
+            onPhotos: { handlePhotoSelection($0) }))
+        .modifier(ConversationComposerGuestSheet(
+            composerState: $composerState, conversationTitle: liveConversation?.name ?? "",
+            allowance: guestAttachmentAllowance, onAccepted: { handleFileImport(.success($0)) }))
+        .modifier(ConversationComposerStickerSheet(
+            composerState: $composerState, accentColor: accentColor, onChoice: { sendStickerChoice($0) }))
+        .modifier(ConversationComposerEditingCovers(
+            composerState: $composerState, scrollState: $scrollState, accentColor: accentColor,
+            onRetouched: { replacePendingWithRetouchedPieces($0) }, onSceneMedia: { stageSceneMedia($0) },
+            onRemovePiece: { detachPendingPieces([$0]) }))
     }
 
     /// Accent RÉSOLU que l'hôte remet au composer : le bleu de marque quand un
@@ -73,135 +74,70 @@ extension ConversationView {
             : DynamicColorGenerator.hueShiftedHex(composerAccent, degrees: 30)
     }
 
-    /// **LE VUMÈTRE NE FAIT PLUS BATTRE TOUTE LA CONVERSATION** (#6226).
-    ///
-    /// `AudioRecorderManager` publie `duration` ET `audioLevels` (quinze
-    /// valeurs) **vingt fois par seconde** (`Timer` à 0,05 s,
-    /// `AudioRecorderManager.swift:131`). Tenu en `@StateObject` par la RACINE
-    /// — 2 746 lignes, le pont `MessageListView` compris — il ré-évaluait tout
-    /// l'écran de conversation vingt fois par seconde pendant l'enregistrement
-    /// d'un vocal, alors que seule la barre de composition lit ces valeurs.
-    ///
-    /// Même remède que pour le TEXTE, écrit juste à côté et pour la même
-    /// raison (`ConversationComposerTextModel`, #4105) : la racine tient
-    /// l'objet en `@State` — elle le POSSÈDE sans s'y ABONNER — et un hôte
-    /// minuscule en est l'unique observateur. `startRecording`,
-    /// `stopRecording`, `cancelRecording` et la lecture de `duration` à
-    /// l'arrêt continuent de passer par la racine : appeler une méthode
-    /// n'exige aucun abonnement.
-    private var composerCore: AnyView {
-        AnyView(ComposerAudioHost(recorder: audioRecorder) { isRecording, recordingDuration, audioLevels in
-            AnyView(composerCoreBody(isRecording: isRecording, recordingDuration: recordingDuration, audioLevels: audioLevels))
-        })
+    private var composerAnimationKeys: ComposerBarAnimationKeys {
+        ComposerBarAnimationKeys(
+            ephemeralArmed: viewModel.ephemeralChoice != nil,
+            blurArmed: viewModel.isBlurEnabled,
+            viewOnceArmed: viewModel.isViewOnceEnabled,
+            hasAnyEffect: viewModel.pendingEffects.hasAnyEffect,
+            armedReplyContagion: viewModel.armedReplyContagion
+        )
     }
 
-    @ViewBuilder private func composerCoreBody(
+    /// **LE VUMÈTRE NE FAIT PLUS BATTRE TOUTE LA CONVERSATION** (#6226).
+    ///
+    /// `AudioRecorderManager` publie `duration` ET `audioLevels` vingt fois par
+    /// seconde : tenu en `@StateObject` par la racine, il ré-évaluait tout
+    /// l'écran à cette cadence pendant un vocal. La racine le POSSÈDE (`@State`)
+    /// sans s'y ABONNER ; `ComposerAudioHost` en est l'unique observateur, comme
+    /// `ComposerTextHost` pour la frappe (#4105). Appeler `startRecording` ou
+    /// `stopRecording` n'exige aucun abonnement.
+    ///
+    /// ⚠️ NE PAS câbler `viewModel.isSending` ici : il reste true pendant tout le
+    /// cycle REST(12 s)+repli socket(10 s) d'UN message — le bouton d'envoi serait
+    /// mort ~22 s par message en réseau dégradé (2026-07-02). Les double-taps
+    /// restent couverts par le champ vidé synchrone et la garde `isUploading`.
+    /// Aucun dédoublonnage par CONTENU : des emojis identiques partent en série (#7985).
+    func composerBar(
+        textBinding: Binding<String>,
         isRecording: Bool,
         recordingDuration: TimeInterval,
         audioLevels: [CGFloat]
-    ) -> some View {
-        ComposerTextHost(model: composerText) { textBinding in
-            UniversalComposerBar(
+    ) -> UniversalComposerBar {
+        let isEditing = composerState.editingMessageId != nil
+        return UniversalComposerBar(
             style: .light,
             mode: .message,
-            // Dépôt (Files / Finder) et collage d'URL `file://` résolus par la
-            // barre : chaque `.file` est DÉJÀ copié dans notre conteneur, cette
-            // surface en devient propriétaire et route vers ses pipelines
-            // existants (déclaré avant `accentColor` → doit apparaître ici pour
-            // l'ordre d'arguments de l'initialiseur memberwise synthétisé).
             onIngest: { items in ingestRespectingGuestAllowance(items) },
             accentColor: composerAccent,
             secondaryColor: composerSecondaryColor,
-            // Hide file/photo attachments in the notification preview composer
-            // (declared before `selectedLanguage` → must appear here for the
-            // synthesized memberwise initializer's argument order).
             forceHideAttachment: previewMode,
             selectedLanguage: composerState.selectedLanguage,
             onLanguageChange: { composerState.selectedLanguage = $0 },
-            onFocusChange: { focused in
-                isTyping = focused
-                if focused {
-                    withAnimation { composerState.showOptions = false }
-                } else {
-                    // Perte de focus du clavier (appel entrant, sheet,
-                    // fermeture clavier) → sauvegarde immédiate du brouillon.
-                    composerText.flushPendingChange()
-                }
-            },
+            onFocusChange: { composerFocusChanged($0) },
             onLocationRequest: guestDoor(guestAttachmentAllowance.offersContactsAndPlaces) { composerState.showLocationPicker = true },
             textBinding: textBinding,
-            editBanner: composerState.editingMessageId != nil
-                ? AnyView(composerEditBanner)
-                : nil,
-            replyBanner: composerState.editingMessageId == nil
-                ? composerState.pendingReplyReference.map { AnyView(composerReplyBanner($0)) }
-                : nil,
-            customAttachmentsPreview: (!composerState.pendingAttachments.isEmpty
-                                        || !composerState.preparingAttachments.isEmpty
-                                        || composerState.isLoadingMedia
-                                        || composerState.pendingPlace != nil)
-                ? AnyView(pendingAttachmentsRow)
-                : nil,
-            isEditMode: composerState.editingMessageId != nil,
-            onCustomSend: {
-                if composerState.editingMessageId != nil {
-                    submitEdit()
-                } else if audioRecorder.isRecording {
-                    stopAndSendRecording()
-                } else {
-                    sendMessageWithAttachments()
-                }
-            },
+            editBanner: isEditing ? ComposerBarSlot.erase(composerEditBanner) : nil,
+            replyBanner: isEditing ? nil : composerState.pendingReplyReference.map { ComposerBarSlot.erase(composerReplyBanner($0)) },
+            customAttachmentsPreview: showsPendingAttachmentsRow ? ComposerBarSlot.erase(pendingAttachmentsRow) : nil,
+            isEditMode: isEditing,
+            onCustomSend: { composerCustomSend() },
             onTextChange: { viewModel.onTextChanged($0) },
             onStartRecording: { startRecording() },
             onStopRecordingToAttachment: { stopRecordingToAttachment() },
             onSendRecording: { stopAndSendRecording() },
-            onCancelRecording: {
-                audioRecorder.cancelRecording()
-            },
+            onCancelRecording: { audioRecorder.cancelRecording() },
             externalIsRecording: isRecording,
             externalRecordingDuration: recordingDuration,
             externalAudioLevels: audioLevels,
-            // `pendingPlace` inclus (parité PostDetailView / StoryViewerView) :
-            // sans lui le bouton d'envoi reste inactif pour un message
-            // « lieu seul », que les gardes acceptent pourtant désormais.
             externalHasContent: !composerState.pendingAttachments.isEmpty || isRecording || composerState.pendingPlace != nil,
-            // ⚠️ NE PAS câbler `viewModel.isSending` ici : il reste true pendant
-            // tout le cycle REST(12s)+fallback socket(10s) d'UN message — le
-            // bouton d'envoi serait mort ~22s par message en réseau dégradé
-            // (bug « ⏳ bloque le composer », 2026-07-02). Un vrai messenger
-            // enchaîne les envois : chaque message a sa bulle + horloge, l'outbox
-            // les rejoue FIFO. Les double-taps restent couverts par : champ vidé
-            // synchrone (hasContent) et guard isUploading (attachments). Aucun
-            // dedup par CONTENU : des emojis identiques partent en série (#7985).
-            // #10006 — un invité restreint ne voit que les portes dont la
-            // famille est ouverte (`ConversationView+GuestAttachments`).
             onPhotoLibrary: guestDoor(guestAttachmentAllowance.offersVisualMedia) { openPhotoLibraryPreselecting([]) },
             onCamera: guestDoor(guestAttachmentAllowance.offersVisualMedia) { composerState.showCamera = true },
             onFilePicker: guestDoor(guestAttachmentAllowance.offersFiles) { openFileDoor() },
             onContactPicker: guestDoor(guestAttachmentAllowance.offersContactsAndPlaces) { composerState.showContactPicker = true },
-            onShowAttachments: {
-                // Carrousel de pièces jointes ouvert → ferme le panneau emoji
-                // pour ne jamais empiler deux surfaces d'entrée sous la barre.
-                if composerState.showTextEmojiPicker {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        composerState.showTextEmojiPicker = false
-                    }
-                }
-            },
-            onRequestTextEmoji: {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    composerState.showTextEmojiPicker.toggle()
-                }
-            },
-            // Tuile « Sticker » (#4823) : la palette monte en feuille ; ce
-            // qu'elle rend part comme un MESSAGE (`ConversationView+Sticker`).
+            onShowAttachments: { closeComposerEmojiPanel() },
+            onRequestTextEmoji: { toggleComposerEmojiPanel() },
             onRequestStickerPicker: guestDoor(guestAttachmentAllowance.offersVisualMedia) { composerState.showStickerPicker = true },
-            // Cadre à mots (#5326) : la pastille de la barre remet le gabarit
-            // choisi et le texte tapé ; l'envoi passe par le MÊME chemin que la
-            // palette (`sendTemplateSticker` → `sendStickerImage`), qui porte
-            // déjà la bulle optimiste, l'amorce de cache et l'outbox hors-ligne.
-            // Le champ est vidé par la barre, qui en est la source.
             onSendTextSticker: textStickerDoor,
             onRecentMediaSelected: recentMediaPickDoor,
             onRecentMediaEdit: recentMediaEditDoor,
@@ -210,179 +146,58 @@ extension ConversationView {
             onPhotoLibraryPreselecting: photoLibraryPreselectingDoor,
             injectedEmoji: $composerState.emojiToInject,
             ephemeralChoice: $viewModel.composerEphemeralChoice,
-            hideEphemeral: composerState.editingMessageId != nil,
+            hideEphemeral: isEditing,
             isBlurEnabled: $viewModel.composerBlurEnabled,
-            hideBlur: composerState.editingMessageId != nil,
-            // #7472 — la vue unique s'arme d'un TAP, à côté du flou, et se
-            // cache dans les mêmes cas que lui : en ÉDITION, où la protection
-            // d'un message déjà parti ne se change plus. Elle était auparavant
-            // réservée à l'aperçu de notification (`showViewOnce: previewMode`),
-            // donc invisible là où l'on écrit.
-            // `forceHideAttachment` est passé plus haut (sa propriété est
-            // déclarée avant `selectedLanguage`, l'init memberwise l'exige à
-            // cette position).
+            hideBlur: isEditing,
             isViewOnceEnabled: $viewModel.composerViewOnceEnabled,
-            hideViewOnce: composerState.editingMessageId != nil,
-            // #8557 — la citation impose son flou et son éphémère, verrouillés.
-            imposedProtection: composerState.editingMessageId == nil ? viewModel.replyImposedProtection : .none,
+            hideViewOnce: isEditing,
+            imposedProtection: isEditing ? .none : viewModel.replyImposedProtection,
             pendingEffects: $viewModel.pendingEffects,
-            hideEffects: composerState.editingMessageId != nil,
-            // Porte de focus (#6003) : une réponse lève le clavier sans tap.
+            hideEffects: isEditing,
             focusTrigger: $composerState.focusRequested
-            )
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.ephemeralChoice != nil)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isBlurEnabled)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isViewOnceEnabled)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.pendingEffects.hasAnyEffect)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.armedReplyContagion)
-        .adaptiveOnChange(of: outgoingReplyRoute.replyToId, initial: true) { _, replyToId in
-            viewModel.armReplyContagion(quoting: replyToId)
-        }
-        // #9955 (directive porteur 2026-10-10) — le ⌄ tout à droite de la
-        // barre, en permanence sauf quand on écrit ou qu'on enregistre : il
-        // réduit la barre à son seul bouton « commentaire », comme la story.
-        // Replié, la barre reste montée : brouillon, pièces jointes et réponse
-        // en cours survivent. Une demande de focus (répondre, éditer) la rouvre.
-        .foldableConversationComposer(
-            isComposing: ConversationComposerFold.isComposing(
-                isFocused: isTyping || composerState.focusRequested,
-                isRecording: isRecording),
-            onFold: {
-                guard composerState.showTextEmojiPicker else { return }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    composerState.showTextEmojiPicker = false
-                }
-            })
+        )
     }
 
-    /// 2e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :
-    /// pickers, sheets légers et l'unique fullScreenCover caméra.
-    private func composerPickersAndSheets(_ content: AnyView) -> AnyView {
-        AnyView(content
-        // `photoLibrary: .shared()` est requis pour la présélection : les
-        // PhotosPickerItem(itemIdentifier:) injectés depuis le strip ne
-        // matchent les assets du picker que sur la photothèque partagée.
-        .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: ConversationComposerState.maxMediaSelection, matching: .any(of: [.images, .videos]), photoLibrary: .shared())
-        .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            handleFileImport(result)
-        }
-        // **La caméra de la barre prend EN PLEIN ÉCRAN, hors de toute scène**
-        // (directive porteur 2026-10-04) : le viseur du composeur servi seul,
-        // le même que le fil, le statut et la page blanche. La prise rejoint
-        // le message en attente ; la scène reste à un geste, par « Éditer » sur
-        // la pièce posée (#9126).
-        .conversationCover(isPresented: $composerState.showCamera) {
-            ComposerViewfinder { result in
-                stageCapture(result)
-            }
-        }
-        .sheet(isPresented: $composerState.showLocationPicker) {
-            LocationPickerView(accentColor: accentColor) { place in
-                handleLocationSelection(place)
-            }
-        }
-        .sheet(isPresented: $composerState.showContactPicker) {
-            ContactPickerView(
-                onSelect: { contact in
-                    handleContactSelection(contact)
-                    composerState.showContactPicker = false
-                },
-                onCancel: { composerState.showContactPicker = false }
-            )
-        }
-        .adaptiveOnChange(of: composerState.selectedPhotoItems) { _, items in
-            handlePhotoSelection(items)
-        })
+    private var showsPendingAttachmentsRow: Bool {
+        !composerState.pendingAttachments.isEmpty
+            || !composerState.preparingAttachments.isEmpty
+            || composerState.isLoadingMedia
+            || composerState.pendingPlace != nil
     }
 
-    /// Maillon dédié de la chaîne (voir garde anti-débordement sur
-    /// `themedComposer`) : la palette de stickers (#4823). Un maillon à part
-    /// plutôt qu'un huitième modificateur sur le précédent — chaque maillon
-    /// garde son propre accesseur de type opaque, borné.
-    ///
-    /// La feuille se FERME au choix : dans une conversation un sticker est un
-    /// message à part entière, pas une décoration qu'on empile sur une scène.
-    ///
-    /// **La feuille est celle de tout le produit** (#9189) : `MeeshyStickerSheet`
-    /// porte les injecteurs et les détentes, une fois. La conversation ne dit
-    /// que sa destination — ENVOYER — et que ses gabarits partent contournés
-    /// de blanc, comme Mee (#9060).
-    private func composerStickerSheet(_ content: AnyView) -> AnyView {
-        AnyView(content
-        .sheet(isPresented: $composerState.showStickerPicker) {
-            MeeshyStickerSheet(destination: StickerSheetDestination(diesCut: true) { choice in
-                composerState.showStickerPicker = false
-                sendStickerChoice(choice)
-            }, accentColor: accentColor)
-        })
+    private func composerFocusChanged(_ focused: Bool) {
+        isTyping = focused
+        if focused {
+            withAnimation { composerState.showOptions = false }
+        } else {
+            composerText.flushPendingChange()
+        }
     }
 
-    /// 3e maillon de la chaîne (voir garde anti-débordement sur `themedComposer`) :
-    /// les 5 fullScreenCover d'édition de pièces jointes en attente — le groupe
-    /// le plus dense en types de closures distincts (un par éditeur média).
-    private func composerEditingCovers(_ content: AnyView) -> AnyView {
-        AnyView(content
-        // C. « Éditer » sur une pièce en attente (image ou vidéo) → TOUTES les
-        // pièces du message en scènes, ouvertes sur la touchée (#9126) ;
-        // « Terminé » rend chaque scène retouchée à SA pièce, en place. La
-        // série est préparée AVANT la présentation : la couverture ne peut pas
-        // s'ouvrir vide.
-        .conversationCover(item: Binding(
-            get: { scrollState.retouchSeries },
-            set: { scrollState.retouchSeries = $0 }
-        )) { serie in
-            ConversationRetouchSeriesEditor(series: serie, onDone: { rendues in
-                replacePendingWithRetouchedPieces(rendues)
-            }, onCancel: { scrollState.retouchSeries = nil })
+    private func composerCustomSend() {
+        if composerState.editingMessageId != nil {
+            submitEdit()
+        } else if audioRecorder.isRecording {
+            stopAndSendRecording()
+        } else {
+            sendMessageWithAttachments()
         }
-        // D2. "Éditer" from the recent-media strip → the editor opens BEFORE
-        // staging; the edited output goes through the same preparation pipeline
-        // as a camera capture (the pre-edit original is never staged).
-        .conversationCover(isPresented: Binding(
-            get: { scrollState.recentImageToEdit != nil },
-            set: { if !$0 { scrollState.recentImageToEdit = nil } }
-        )) {
-            if let image = scrollState.recentImageToEdit {
-                ConversationImageSceneEditor(image: image, staged: false, onDone: { media in
-                    scrollState.recentImageToEdit = nil
-                    stageSceneMedia(media)
-                }, onCancel: {
-                    scrollState.recentImageToEdit = nil
-                })
-            }
+    }
+
+    /// Le carrousel de pièces jointes, le repli de la barre et le recul du fil
+    /// referment le panneau emoji : jamais deux surfaces d'entrée empilées sous
+    /// la barre.
+    func closeComposerEmojiPanel() {
+        guard composerState.showTextEmojiPicker else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            composerState.showTextEmojiPicker = false
         }
-        .conversationCover(isPresented: Binding(
-            get: { scrollState.recentVideoToEdit != nil },
-            set: { if !$0 { scrollState.recentVideoToEdit = nil } }
-        )) {
-            if let url = scrollState.recentVideoToEdit {
-                ConversationVideoSceneEditor(url: url, staged: false, onDone: { media in
-                    scrollState.recentVideoToEdit = nil
-                    stageSceneMedia(media)
-                }, onCancel: { scrollState.recentVideoToEdit = nil })
-            }
+    }
+
+    private func toggleComposerEmojiPanel() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            composerState.showTextEmojiPicker.toggle()
         }
-        // E. Audio → MeeshyAudioEditorView
-        .conversationCover(item: Binding(
-            get: { scrollState.audioToEdit },
-            set: { scrollState.audioToEdit = $0 }
-        )) { target in
-            MeeshyAudioEditorView(url: target.url, accentColor: accentColor, onConfirm: { acceptedURL, _, trimStart, trimEnd in
-                let durationMs = Int((trimEnd - trimStart) * 1000)
-                // Replace the edited audio chip in place — editing must never
-                // spawn a second tray chip (same contract as image editing).
-                let staleURL = composerState.applyEditedAudio(
-                    attachmentId: target.id, editedURL: acceptedURL, durationMs: durationMs
-                )
-                if let staleURL {
-                    try? FileManager.default.removeItem(at: staleURL)
-                }
-                scrollState.audioToEdit = nil
-            }, onCancel: {
-                scrollState.audioToEdit = nil
-            })
-        })
     }
 
     // MARK: - Recent Media Strip Selection

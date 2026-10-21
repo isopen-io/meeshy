@@ -74,7 +74,10 @@ struct StoryAuthorIdentityCard: View {
 
     private var bannerBackground: some View {
         Group {
-            if let banner = intro.bannerURL, !banner.isEmpty {
+            // #10946 — la bannière ÉQUIPÉE de l'auteur, la même loi que sa fiche (`bannerPaint`) :
+            // la photo gagne toujours, le design ne se peint qu'à son défaut.
+            switch ProfileDecorResolver.bannerPaint(photo: intro.bannerURL, decor: intro.bannerDecor) {
+            case .photo(let banner):
                 // `showsStatusOverlays: false` : en échec/chargement de la
                 // bannière, AUCUN spinner ni bouton Retry ne doit saigner au
                 // centre de l'écran sous l'avatar (IMG_1155/1158, directive
@@ -87,7 +90,10 @@ struct StoryAuthorIdentityCard: View {
                     avatarColorFallbackGradient
                 }
                 .scaledToFill()
-            } else {
+            case .design(let design):
+                BannerDesignView(design: design, isDark: true, accentHex: avatarColor)
+                    .accessibilityHidden(true)
+            case .plain:
                 avatarColorFallbackGradient
             }
         }
@@ -108,7 +114,8 @@ struct StoryAuthorIdentityCard: View {
                 name: intro.displayName ?? intro.username,
                 context: .storyTray,
                 accentColor: avatarColor,
-                avatarURL: avatarURL
+                avatarURL: avatarURL,
+                ring: intro.avatarRing
             )
             VStack(spacing: MeeshySpacing.xs) {
                 Text(intro.displayName ?? intro.username)

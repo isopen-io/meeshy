@@ -6,7 +6,9 @@ import { useStore } from 'zustand/react';
 import '@/routes/thread-styles';
 
 import { Composer } from '@/components/composer';
+import { MessageEditDock } from '@/components/message-edit-composer';
 import { SelectionToolbar } from '@/components/selection-toolbar';
+import { ConversationBackdrop } from '@/components/conversation-backdrop';
 import { ThreadHeader } from '@/components/thread-header';
 import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
@@ -27,13 +29,15 @@ import { requestDeparture } from '@/lib/conversation-departure';
 import { useComposerAccess } from '@/lib/send/use-composer-access';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
-import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods';
+import { AuthorContexts } from '@/components/author-contexts';
 import { topActiveMembers } from '@/lib/view/top-active-members';
-import { accentOf, withAccent } from '@/lib/accent';
+import { accentOf, personalBubbleVars, withAccent } from '@/lib/accent';
+import { useColorScheme } from '@/lib/use-color-scheme';
 import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useOptionalRoute } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useDeviceTranslation } from '@/lib/device-translation/use-device-translation';
 import { useSharedTranslations } from '@/lib/device-translation/use-shared-translations';
@@ -41,6 +45,8 @@ import { useTypistAvatar } from '@/lib/view/use-typist-avatar';
 import { useSend } from '@/lib/view/use-send';
 import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
+import { menuConversationOf, menuViewerOf, webRepliesToMessage } from '@/lib/view/message-action-scope';
+import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
@@ -80,7 +86,7 @@ import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { threadAnchorOf } from '@/lib/view/thread-anchor';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
 import { summaryExits } from '@/lib/view/summary-exits';
-import { ThreadMediaContext } from '@/lib/view/thread-media-context';
+import { ThreadMediaContext, useThreadMediaValue } from '@/lib/view/thread-media-context';
 import { ThreadMessageSheets } from './thread-sheets';
 import { ThreadModes } from './thread-modes';
 
@@ -163,11 +169,11 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * (inchangé, observable nulle part) ; en `gateway`, la session RÉELLE tranche.
    */
   const session = useStore(sessionStore, (s) => s.session);
+  useColorScheme(); /* l'accent personnel dépend du schéma peint (#10663) */
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   /* QUITTER / SUPPRIMER depuis les détails (#7837, #7285) : un compte, comme la passerelle l'exige. */
   const signedIn = session.status === 'authenticated' || apiDeps.source === 'fixtures';
   const storyRingOf = useAuthorStoryRings(viewer);
-  const moodOf = useAuthorMoods(viewer);
 
   /**
    * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
@@ -318,7 +324,10 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
   const conversationEncryptionMode = conversation?.encryptionMode ?? null;
   useDeviceTranslation({ messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '', conversationEncryptionMode });
   useSharedTranslations({ conversationId, messages: threadData.messages, readerLanguages, viewerId: viewer.id ?? '', conversationEncryptionMode });
-  const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
+  /* Les séparateurs de jour sont du CHROME : ils parlent la langue
+     d'interface, jamais celle du Prisme (#10817). */
+  const interfaceLanguage = currentInterfaceLanguage();
+  const placed = useMemo(() => place(messages, { locale: interfaceLanguage }), [messages, interfaceLanguage]);
   const group = conversation !== undefined && isGroup(conversation);
   /** LES TROIS QUI PARLENT LE PLUS dans ce qui est chargé (#7830) — groupe seulement. */
   const activeMembers = useMemo(() => (group ? topActiveMembers(messages, viewer.id ?? '') : []), [group, messages, viewer.id]);
@@ -459,14 +468,14 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
 
   /**
    * LA COMPOSITION DU FIL — BROUILLON, CITATION, ENVOI (#5695, #6175, #7429)
-   * — extraite dans `useThreadCompose` (`lib/view/use-thread-compose.ts`) :
-   * un seul hook, appelé ICI, sans condition — les Rules of Hooks qui
-   * forçaient `replyToMessage`/`handleComposerSend`/`handleCancelReply` à
-   * rester déclarés APRÈS le brouillon mais AVANT les trois retours
-   * anticipés n'ont plus lieu d'être : il n'y a plus deux sites à garder
-   * synchronisés. `setReplyTarget` reste exposé — `useMessageMenu`
-   * (« Répondre ») et `summaryExits` (plus bas) l'appellent directement.
+   * — `useThreadCompose`, un seul hook appelé ICI sans condition (Rules of
+   * Hooks). `setReplyTarget` reste exposé au menu et à `summaryExits` ; la
+   * citation, d'où qu'elle vienne, ne monte que si la loi du menu l'admet
+   * (`webRepliesToMessage`, #11372 : le même lecteur, la même conversation).
    */
+  const platformRole = useServedGlobalRole();
+  const actionScope = { viewer: menuViewerOf({ viewer, participants: conversation?.participants, conversation, platformRole }), conversation: menuConversationOf(conversation) };
+  const sendFailed = (id: string) => deliveryOf(id) === 'failed' && !permanentOf(id);
   const compose = useThreadCompose({
     store: draftStore,
     scope,
@@ -474,6 +483,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     messages,
     readerLanguages,
     send,
+    announce: announcer.announce,
+    replyable: (m) => webRepliesToMessage(m, actionScope, { now: Date.now(), failed: sendFailed(m.id) }),
   });
   const composeSend = compose.onSend;
   const returnToPresent = threadData.returnToPresent;
@@ -495,26 +506,24 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * ne fait plus que CÂBLER le JSX sur ce qu'il rend (§5 étape 0 : le budget
    * de taille interdit d'ajouter une seconde machine ici).
    */
-  /**
-   * LA VISIONNEUSE DU FIL (#6303) — une tuile touchée dans le fil ouvre la
-   * visionneuse de TOUTE la conversation, et « Répondre » y arme la citation de
-   * la PIÈCE ; valeur STABLE, lue par chaque grille de médias (`Attachments`).
-   */
-  const threadMedia = useMemo(
-    () => ({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia }),
-    [viewer.id, compose.setReplyToMedia],
-  );
-
   const messageMenu = useMessageMenu({
     conversationId,
     messages,
     readerLanguages,
     readerLocale,
-    viewerId: viewer.id ?? '',
-    canStar: !viewer.isAnonymous,
+    viewer: actionScope.viewer,
+    conversation: actionScope.conversation,
+    send: { retry, failed: sendFailed },
     reply: compose,
     announce: announcer.announce,
   });
+  /**
+   * LA VISIONNEUSE DU FIL (#6303) — une tuile touchée dans le fil ouvre la
+   * visionneuse de TOUTE la conversation, et « Répondre » y arme la citation de
+   * la PIÈCE quand les verdicts du menu l'admettent (#11372) ; valeur STABLE,
+   * lue par chaque grille de médias (`Attachments`).
+   */
+  const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation, actionScope: messageMenu.scope });
 
   /**
    * LES TROIS SORTIES DU RÉSUMÉ VIVANT (#5695, #7429) — miroir
@@ -531,6 +540,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     selectMode: reading.selectReadingMode,
     requestJump: jump.requestJump,
     setReplyTarget: compose.setReplyTarget,
+    replyable: messageMenu.replyableOf,
     resumeTarget: () => resumeThreadTarget({ unreadBoundary, messages, viewerId: viewer.id ?? '' }),
   });
 
@@ -599,6 +609,8 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     /* Une fenêtre détachée du présent n'accuse rien (#7420, `windowIsAtTip` iOS). */
     lastMessageId: threadData.detached ? undefined : lastConfirmedMessageId,
     enabled: placed.length > 0,
+    /* Le Résumé ne monte aucune sentinelle : il accuse en partant (#10812). */
+    summaryShown: reading.readingDecision.mode === 'summary',
     onMark: onMarkCaughtUp,
   });
 
@@ -663,15 +675,6 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * retours anticipés) : `useSend` (#5813) en a besoin AVANT que `conversation`
    * ne soit narrowée non-optionnelle ici. */
 
-  /**
-   * LE CADRAGE DES DATES DU RÉSUMÉ (#5695, étape 11) — `lang` est RÉSOLU
-   * UNE FOIS ici, jamais une lecture DOM par nœud (`episode-list.tsx`,
-   * `living-summary.tsx` le reçoivent en prop). `undefined` quand la locale
-   * de cadrage EST celle du document — aucun `lang` superflu posé.
-   */
-  const summaryLang =
-    typeof document === 'object' && readerLocale !== document.documentElement.lang ? readerLocale : undefined;
-
   return (
     /* `h-app` (`100dvh` moins le clavier qui recouvre, #10005) +
        `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
@@ -699,13 +702,13 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     <HerePeersContext.Provider value={herePeers}>
     <ActivePeersContext.Provider value={activePeers}>
     <FocusedPeersContext.Provider value={focusedPeers}>
-    <AuthorMoodsContext.Provider value={moodOf}>
+    <AuthorContexts viewer={viewer} participants={conversation?.participants}>
     <div
       ref={chrome.host}
       className={`thread-root relative ${preview === undefined ? 'h-app' : 'h-full'} overflow-hidden`}
-      style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
+      style={{ ...withAccent(accent), ...personalBubbleVars(conversation), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
-      <div className="thread-backdrop" aria-hidden />
+      <ConversationBackdrop conversation={conversation} accent={accent} live={preview === undefined} />
       <ThreadHeader
         title={title}
         accent={accent}
@@ -727,6 +730,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         onSelectReadingMode={reading.selectReadingMode}
         onResetReadingModeToAuto={reading.resetReadingModeToAuto}
         preview={preview !== undefined}
+        onJumpToMessage={jump.requestJump}
       />
       {/*
         L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3 ; #5814, § 5 étape 5 ;
@@ -813,13 +817,11 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
           <ThreadModes
             mode={reading.readingDecision.mode}
             viewer={viewer}
-            readerLocale={readerLocale}
             summary={{
               conversation, messages, windowCoversUnread,
               onReplyToPerson: exits.onReplyToPerson,
               onOpenEpisode: exits.onOpenEpisode,
               onResumeThread: exits.onResumeThread,
-              ...(summaryLang !== undefined ? { lang: summaryLang } : {}),
             }}
             placed={placed}
             virtualizer={virtualizer}
@@ -838,7 +840,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             startedAtOf={startedAtOf}
             reasonOf={reasonOf}
             permanentOf={permanentOf}
-            retry={retry}
+            retry={retry} retryableOf={messageMenu.retryableOf}
             displayLanguageOf={messageMenu.displayLanguageOf}
             myReactionsOf={messageMenu.myReactionsOf}
             selection={messageMenu.selection}
@@ -847,7 +849,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             swipeActionsOf={messageMenu.swipeActionsOf}
             onSwipeAction={messageMenu.onMenuAction}
             onPickLanguage={messageMenu.onPickLanguage}
-            onReact={messageMenu.onMenuReact}
+            onReact={messageMenu.onMenuReact} reactableOf={messageMenu.reactableOf} onExpandReactions={messageMenu.setReactionSheetFor}
             onOpenDetail={messageMenu.setDetailFor}
             typists={typing.typists}
             typistAvatarOf={typistAvatarOf}
@@ -905,6 +907,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
           /* `placed` porte l'ordre du FIL — c'est lui qui ordonne les N
              transferts, jamais l'ordre des coches (#5866). */
           onForward={messageMenu.selectionOffers.forward ? () => messageMenu.onForwardSelection(placed) : null}
+          onDelete={messageMenu.selectionOffers.delete ? () => messageMenu.onDeleteSelection(placed) : null}
         />
       ) : (
         /*
@@ -934,6 +937,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             invisible, mais permettre qu'on manipule les éléments entre »). */
         <ThreadWriteLock conversationId={conversationId} conversation={conversation}>
         <ThreadComposerChrome onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
+          <MessageEditDock edit={compose.edit}>
           <Composer
             preferred={readerLanguages}
             onSend={sendAndReplayFlame}
@@ -947,6 +951,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
               ? { replyTo: compose.replyTo, onCancelReply: compose.onCancelReply, imposedProtection: compose.imposedProtection }
               : {})}
           />
+          </MessageEditDock>
         </ThreadComposerChrome>
         </ThreadWriteLock>
       )}
@@ -975,7 +980,6 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         messageMenu={messageMenu}
         messages={messages}
         readerLanguages={readerLanguages}
-        readerLocale={readerLocale}
         conversationId={conversationId}
         viewerId={viewer.id ?? ''}
         viewerName={viewer.displayName}
@@ -984,7 +988,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
         announce={announcer.announce}
       />
     </div>
-    </AuthorMoodsContext.Provider>
+    </AuthorContexts>
     </FocusedPeersContext.Provider>
     </ActivePeersContext.Provider>
     </HerePeersContext.Provider>

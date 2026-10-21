@@ -7,9 +7,42 @@ import Foundation
 // se montrent par le MÊME code. Le domaine choisit l'adresse ; le reste est
 // commun.
 
-public enum PackDomain: String, CaseIterable, Codable, Sendable, Hashable {
+public enum PackDomain: String, Codable, Sendable, Hashable, CaseIterable {
     case sticker
     case gloryFrame = "glory-frame"
+    case wallpaper
+    case avatarRing = "avatar-ring"
+    case banner
+    /// Le cadre posé SUR la photo de bannière, centre transparent (#10932, #10936).
+    case bannerFrame = "banner-frame"
+    /// Un domaine qu'une passerelle plus récente ajouterait (`capture-frame`,
+    /// ou tout autre) : il se lit, il ne fait pas tomber la liste qui le porte,
+    /// et il ne route JAMAIS une requête (§ 11 de la spécification 2026-10-14).
+    case unknown
+
+    /// Les domaines que ce client sait router — `unknown` n'en est pas un.
+    public static var allCases: [PackDomain] { [.sticker, .gloryFrame, .wallpaper, .avatarRing, .banner, .bannerFrame] }
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = PackDomain(rawValue: raw) ?? .unknown
+    }
+
+    /// La valeur de `?domaine=` d'un lien : `nil` pour l'absent, le blanc et
+    /// l'inconnu — la vitrine s'ouvre alors sur son premier domaine.
+    public init?(queryValue: String?) {
+        guard let raw = queryValue?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              let domain = PackDomain(rawValue: raw), domain != .unknown else { return nil }
+        self = domain
+    }
+
+    /// Un domaine dont le registre peut porter un prix (§ 4.3).
+    public var isPurchasable: Bool {
+        switch self {
+        case .wallpaper, .avatarRing, .banner, .bannerFrame: true
+        case .sticker, .gloryFrame, .unknown: false
+        }
+    }
 }
 
 /// `builtin` : dessiné par le client ; `official` : publié par Meeshy ;

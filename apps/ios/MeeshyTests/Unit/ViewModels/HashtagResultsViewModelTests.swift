@@ -43,6 +43,29 @@ final class HashtagResultsViewModelTests: XCTestCase {
         return JSONStub.decode(#"{"success":true,"data":\#(postsJSON),"pagination":\#(cursorJSON),"error":null}"#)
     }
 
+    /// Cycle 4 — un rafraîchissement pendant qu'une page arrive : la page de
+    /// l'ANCIENNE liste ne se colle plus à la nouvelle.
+    func test_loadMore_returningAfterARefresh_isDiscarded() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "p1")], hasMore: true, nextCursor: "c2"))
+        let sut = HashtagResultsViewModel(tag: "paris", service: service)
+        await sut.load()
+        service.getPostsByHashtagByCursor["c2"] = Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "p2")], hasMore: true, nextCursor: "c3")
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "n1")], hasMore: true, nextCursor: "n2"))
+        service.duringGetPostsByHashtag = { [weak sut] cursor in
+            guard cursor == "c2" else { return }
+            await sut?.load()
+        }
+
+        await sut.loadMore()
+
+        XCTAssertEqual(sut.posts.map(\.id), ["n1"], "la page 2 de l'ancienne liste ne rejoint pas la nouvelle")
+        XCTAssertFalse(sut.isLoading)
+    }
+
     func test_load_populatesPostsFromService() async {
         let service = MockPostService()
         let post = Self.makeAPIPost(id: "p1")
@@ -120,5 +143,39 @@ final class HashtagResultsViewModelTests: XCTestCase {
             .impression(postId: "p1", source: "search", surface: .hashtag),
             .impression(postId: "p1", source: "search", surface: .hashtag),
         ], "Revoir un résultat le recompte : aucun dédoublonnage.")
+    }
+
+    /// Le serveur pagine par décalage : un post publié entre deux pages fait
+    /// revenir le dernier montré en tête de la suivante. Un id en double dans
+    /// `ForEach(posts)` rend l'identité des cellules indéfinie.
+    func test_loadMore_whenThePageOverlapsTheShownOne_appendsEachPostOnce() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: ["p1", "p2", "p3"].map { Self.makeAPIPost(id: $0) }, hasMore: true, nextCursor: "3"))
+        let sut = HashtagResultsViewModel(tag: "paris", service: service)
+        await sut.load()
+
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: ["p3", "p4"].map { Self.makeAPIPost(id: $0) }, hasMore: false))
+        await sut.loadMore()
+
+        XCTAssertEqual(sut.posts.map(\.id), ["p1", "p2", "p3", "p4"])
+    }
+
+    /// Une requête perdue n'arrête pas le défilement infini pour toute la visite.
+    func test_loadMore_afterATransientFailure_triesAgainOnTheNextScroll() async {
+        let service = MockPostService()
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "p1")], hasMore: true, nextCursor: "1"))
+        let sut = HashtagResultsViewModel(tag: "paris", service: service)
+        await sut.load()
+
+        service.getPostsByHashtagResult = .failure(URLError(.networkConnectionLost))
+        await sut.loadMore()
+        service.getPostsByHashtagResult = .success(Self.makePaginatedResponse(
+            posts: [Self.makeAPIPost(id: "p2")], hasMore: false))
+        await sut.loadMore()
+
+        XCTAssertEqual(sut.posts.map(\.id), ["p1", "p2"])
     }
 }

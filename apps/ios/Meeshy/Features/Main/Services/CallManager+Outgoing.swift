@@ -33,9 +33,7 @@ extension CallManager {
             conversationId = nil
             callDuration = 0
             isVideoEnabled = false
-            isRemoteVideoEnabled = true
-            isRemoteAudioEnabled = true
-            isRemoteScreenCapturing = false
+            remoteMedia = .initial
             isMuted = false
             isSpeaker = false
             bubbleEdge = .trailing
@@ -128,7 +126,7 @@ extension CallManager {
         callState = .ringing(isOutgoing: true)
         lastCallWasOutgoing = true
         // Snapshot the dial context so a transient failure can be « Réessayer »-ed.
-        lastOutgoingContext = (conversationId, userId, displayName, isVideo)
+        lastOutgoingContext = OutgoingCallContext(conversationId: conversationId, userId: userId, displayName: displayName, kind: CallKind(isVideo: isVideo))
 
         // Phase 1.5 — Ringback tone démarré dans `provider:didActivate:audioSession`
         // (PAS ici). Démarrer AVAudioPlayer AVANT que CallKit ait posé sa
@@ -240,6 +238,10 @@ extension CallManager {
                 )
                 guard self.activeCallUUID == uuid else {
                     Logger.calls.info("[CALL_SETUP] ACK arrived after end — discarding (uuid changed)")
+                    // Raccroché AVANT l'accusé : le raccroché n'avait pas d'identifiant à clore, et le
+                    // serveur tient maintenant un appel que personne ne terminera — l'appelé sonnait
+                    // jusqu'au délai du serveur pour un appelant parti.
+                    self.emitCallEndReliably(callId: ack.callId)
                     return
                 }
                 let dynamicServers = ack.iceServers.map { server in
@@ -298,7 +300,7 @@ extension CallManager {
             conversationId: ctx.conversationId,
             userId: ctx.userId,
             displayName: ctx.displayName,
-            isVideo: ctx.isVideo
+            isVideo: ctx.kind.isVideo
         )
     }
 
@@ -396,5 +398,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

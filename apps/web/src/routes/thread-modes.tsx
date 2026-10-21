@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useState, type ReactNode, type Ref } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState, type ReactNode, type Ref } from 'react';
 import type { Virtualizer } from '@tanstack/react-virtual';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
@@ -9,6 +9,7 @@ import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
 import { MessageEffectsHost } from '@/components/message-effects-host';
 import { MessageSwipe } from '@/components/message-swipe';
+import { ReactionAddCapsule } from '@/components/reaction-quick-bar';
 import { UnfoldStage } from '@/components/unfold-stage';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
@@ -22,14 +23,16 @@ import type { TypingEntry } from '@/lib/api/typing-store';
 import type { Viewer } from '@/lib/api/viewer';
 import { dayLabel, type PlacedMessage } from '@/lib/grouping';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import type { useLongPress } from '@/lib/view/long-press';
+import type { MessageMenuController } from '@/lib/view/use-message-menu';
 import { checkStatusOf, isMineOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
 import { unreadSeparatorLabel } from '@/lib/view/unread-separator';
 import { collapseUnfolded } from '@/lib/view/unfold-store';
 import { composeMessageLabel } from '@/lib/view/message-a11y-label';
 import { isSystemMessage } from '@/lib/view/message-badges';
+import { reactionCapsuleInset, reactionCapsuleTargetId } from '@/lib/view/reaction-capsule';
 import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
 import { HighlightedPieceContext } from '@/lib/view/highlighted-piece';
@@ -145,7 +148,6 @@ export type ThreadSummaryCapability = {
 export function ThreadModes({
   mode,
   viewer,
-  readerLocale,
   summary,
   placed,
   virtualizer,
@@ -164,6 +166,7 @@ export function ThreadModes({
   reasonOf,
   permanentOf,
   retry,
+  retryableOf,
   displayLanguageOf,
   myReactionsOf,
   contentWithheld,
@@ -175,6 +178,8 @@ export function ThreadModes({
   onSwipeAction,
   onPickLanguage,
   onReact,
+  reactableOf,
+  onExpandReactions,
   onOpenDetail,
   storyRingOf,
   typists,
@@ -188,7 +193,6 @@ export function ThreadModes({
 }: {
   readonly mode: ConversationReadingMode;
   readonly viewer: Viewer;
-  readonly readerLocale: string;
   /**
    * LE RÉSUMÉ VIVANT (#5695), en UNE capacité — ses sept valeurs n'ont aucun
    * sens séparément, et les déclarer une à une obligeait tout hôte à en
@@ -242,6 +246,8 @@ export function ThreadModes({
   readonly reasonOf?: (messageId: string) => string | undefined;
   readonly permanentOf?: (messageId: string) => boolean;
   readonly retry?: (messageId: string) => void;
+  /** Le web sait-il renvoyer CE message d'ici (#11372, `useMessageMenu.retryableOf`) ? Absent : aucun bouton. */
+  readonly retryableOf?: (messageId: string) => boolean;
   readonly displayLanguageOf?: (messageId: string) => string | undefined;
   readonly myReactionsOf?: (messageId: string) => readonly string[] | undefined;
   /**
@@ -261,15 +267,21 @@ export function ThreadModes({
   readonly rowNoteOf?: (messageId: string) => ReactNode;
   readonly selection?: SelectionState | null;
   readonly onRowTap?: (messageId: string) => void;
-  readonly longPress?: ReturnType<typeof useLongPress>;
+  /** Les gestes d'une rangée : l'appui long (menu) et le double toucher (barre de réaction rapide, #10599). */
+  readonly longPress?: MessageMenuController['longPress'];
   /** Glisser → répondre, ← transférer, et l'icône « Répondre » du pointeur
    * fin (#7559, #8899) — l'offre et l'effet du MENU (`useMessageMenu`). */
   readonly swipeActionsOf?: (message: Message) => { readonly canReply: boolean; readonly canForward: boolean } | undefined;
   readonly onSwipeAction?: (messageId: string, outcome: SwipeOutcome) => void;
   readonly onPickLanguage?: (messageId: string, code: string) => void;
-  /** Retire une réaction MIENNE en tapant sa capsule (#5865) — même geste
-   * que `onPickLanguage`, une seule loi vers `useMessageMenu.onMenuReact`. */
+  /** Bascule MA réaction (#5865, #10583) — même geste que `onPickLanguage`,
+   * une seule loi vers `useMessageMenu.onMenuReact`. */
   readonly onReact?: (messageId: string, emoji: string) => void;
+  /** CE LECTEUR PEUT-IL RÉAGIR À CE MESSAGE (#11372, `useMessageMenu.reactableOf`, verdict `canReact`) ? Absent ⇒ non : ni pastille à basculer, ni capsule. */
+  readonly reactableOf?: (message: Message) => boolean;
+  /** « ＋ » de la barre rapide (#10583) : la feuille d'emojis complète, pour ce
+   * message. Sans elle, la capsule « + » ne se pose pas. */
+  readonly onExpandReactions?: (messageId: string) => void;
   /**
    * LA COCHE OUVRE LA FICHE (#7352, V4) — câblé UNIQUEMENT sur `<Bubble>`
    * (mode `bulles`), jamais sur `<FocalRow>` : sa ligne méta reste
@@ -345,6 +357,7 @@ export function ThreadModes({
   readonly unreadCount?: number;
 }) {
   const viewerId = viewer.id ?? '';
+  const capsuleTargetId = useMemo(() => reactionCapsuleTargetId({ messages: placed.map((p) => p.message), viewerId }), [placed, viewerId]);
 
   /**
    * LE REGISTRE DES PHASES DE RÉVÉLATION (#7142) — déclaré ICI, avant le
@@ -400,6 +413,16 @@ export function ThreadModes({
    */
   const renderNow = Date.now();
 
+  /* LA LANGUE D'INTERFACE, UNE FOIS PAR RENDU DE LISTE (#7337) — jamais une
+     fois par rangée : `composeMessageLabel` en a besoin pour ses tombstones et
+     son badge de transfert, et une virtualisation en rend des dizaines. C'est
+     une lecture de `document.documentElement.lang`, pas un abonnement — la
+     racine redessine déjà l'arbre quand la langue change. Elle cadre AUSSI
+     les dates du chrome (séparateurs, résumé, glissé) : une seule langue
+     d'interface, le Prisme ne gouverne que le contenu (#10817). Déclarée
+     avant le retour anticipé du mode Résumé, qui la lit aussi. */
+  const interfaceLanguage = currentInterfaceLanguage();
+
   if (mode === 'summary' && summary !== undefined) {
     /**
      * **UN ÉPHÉMÈRE N'Y SURVIT PAS À SON ÉCHÉANCE** (#7454, la moitié de la
@@ -438,7 +461,7 @@ export function ThreadModes({
           participants={summary.conversation.participants}
           viewer={viewer}
           windowCoversUnread={summary.windowCoversUnread}
-          locale={readerLocale}
+          locale={interfaceLanguage}
           {...(summary.lang !== undefined ? { lang: summary.lang } : {})}
           onReplyToPerson={summary.onReplyToPerson}
           onOpenEpisode={summary.onOpenEpisode}
@@ -448,12 +471,6 @@ export function ThreadModes({
     );
   }
 
-  /* LA LANGUE D'INTERFACE, UNE FOIS PAR RENDU DE LISTE (#7337) — jamais une
-     fois par rangée : `composeMessageLabel` en a besoin pour ses tombstones et
-     son badge de transfert, et une virtualisation en rend des dizaines. C'est
-     une lecture de `document.documentElement.lang`, pas un abonnement — la
-     racine redessine déjà l'arbre quand la langue change. */
-  const interfaceLanguage = currentInterfaceLanguage();
 
   return (
     <HighlightedPieceContext.Provider value={highlightedPieceId}>
@@ -465,13 +482,13 @@ export function ThreadModes({
             finit pas — sur un réseau lent, c'est l'interprétation la plus
             naturelle et la plus fausse.
           */
-          <div className="grid flex-1 place-items-center px-8 text-center">
+          <div data-thread-empty="" className="grid flex-1 place-items-center px-8 text-center">
             <div className="grid gap-2">
               <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                Aucun message pour l’instant
+                {translate(currentInterfaceLanguage(), 'thread.empty.title')}
               </p>
               <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-                Écrivez le premier — il sera traduit dans la langue de chacun.
+                {translate(currentInterfaceLanguage(), 'thread.empty.body')}
               </p>
             </div>
           </div>
@@ -524,8 +541,10 @@ export function ThreadModes({
                        permanent. Le bouton disparaît ; la cause reste affichée.
                        `permanentOf` absent retombe sur « permanent » pour la même
                        raison — fail-closed sur l'affordance, jamais un bouton qui
-                       promet un rejeu que l'hôte ne sait pas jouer. */
-                    ...(rowPermanent || retry === undefined ? {} : { onRetry: () => retry(p.message.id) }),
+                       promet un rejeu que l'hôte ne sait pas jouer. Même
+                       loi que le menu (#11372) : `retryableOf` dit si le web
+                       sait renvoyer d'ici — jamais en bout en bout. */
+                    ...(rowPermanent || retry === undefined || retryableOf?.(p.message.id) !== true ? {} : { onRetry: () => retry(p.message.id) }),
                     ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
                     ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
                   };
@@ -617,6 +636,13 @@ export function ThreadModes({
               contentWithheld: rowWithheld,
               phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
             });
+            const rowReact = onReact !== undefined && reactableOf?.(p.message) === true ? onReact : undefined;
+            const rowOffersReactionCapsule =
+              rowReact !== undefined &&
+              onExpandReactions !== undefined &&
+              rowSelected === undefined &&
+              rowProtection !== 'deleted' &&
+              rowProtection !== 'expired';
             const rowSwipeOffer =
               rowSelected !== undefined || isSystemMessage(p.message) || onSwipeAction === undefined
                 ? undefined
@@ -657,7 +683,7 @@ export function ThreadModes({
                         border: '0.5px solid var(--color-day-hairline)',
                       }}
                     >
-                      {dayLabel(p.message.createdAt, { locale: readerLocale })}
+                      {dayLabel(p.message.createdAt, { locale: interfaceLanguage })}
                     </span>
                   </div>
                 ) : null}
@@ -730,7 +756,13 @@ export function ThreadModes({
                   {...(rowServed.language === '' ? {} : { lang: rowServed.language })}
                   {...(rowSelected === undefined || onRowTap === undefined
                     ? {}
-                    : { onClick: () => onRowTap(p.message.id) })}
+                    : {
+                        onClickCapture: (event: { preventDefault: () => void; stopPropagation: () => void }) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onRowTap(p.message.id);
+                        },
+                      })}
                 >
                   {/* LES EFFETS S'EXÉCUTENT ICI (#7596), sur le nœud qui enveloppe
                       LES DEUX peaux — même raison que la destruction ci-dessus :
@@ -764,7 +796,7 @@ export function ThreadModes({
                     isMine={rowIsMine}
                     attachments={p.message.attachments}
                     createdAt={p.message.createdAt}
-                    locale={readerLocale}
+                    locale={interfaceLanguage}
                   >
                   <UnfoldStage messageId={p.message.id}>
                     <MessageEffectsHost effectFlags={p.message.effectFlags}>
@@ -789,7 +821,7 @@ export function ThreadModes({
                             : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
                           {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
                           {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
-                          {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                          {...(rowReact === undefined ? {} : { onReact: (emoji: string) => rowReact(p.message.id, emoji) })}
                           {...(rowSelected === undefined || onRowTap === undefined
                             ? {}
                             : { selected: rowSelected, onToggleSelect: onRowTap })}
@@ -815,7 +847,7 @@ export function ThreadModes({
                             : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
                           {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
                           {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
-                          {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                          {...(rowReact === undefined ? {} : { onReact: (emoji: string) => rowReact(p.message.id, emoji) })}
                           {...(rowSelected === undefined || onRowTap === undefined
                             ? {}
                             : { selected: rowSelected, onToggleSelect: onRowTap })}
@@ -827,6 +859,20 @@ export function ThreadModes({
                   </UnfoldStage>
                   </MessageSwipe>
                 </div>
+                {/* LA CAPSULE « + » (#10583) — sous le dernier message reçu, HORS de
+                    la rangée : un appui long dessus n'ouvre pas le menu du message. */}
+                {p.message.id === capsuleTargetId && rowOffersReactionCapsule ? (
+                  <div
+                    data-reaction-add-for={p.message.id}
+                    className="flex pt-1.5 pb-0.5"
+                    style={{ paddingInlineStart: reactionCapsuleInset({ flat: usesFlatRow(mode) }) }}
+                  >
+                    <ReactionAddCapsule
+                      onReact={(emoji) => rowReact?.(p.message.id, emoji)}
+                      onExpand={() => onExpandReactions?.(p.message.id)}
+                    />
+                  </div>
+                ) : null}
                 {rowNoteOf?.(p.message.id) ?? null}
               </li>
             );

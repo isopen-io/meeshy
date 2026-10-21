@@ -111,8 +111,22 @@ describe('bodyKindOf — sticker avant emoji avant texte', () => {
     expect(bodyKindOf(message({ content: '👍' })).kind).toBe('emoji-only');
   });
 
-  test('emoji seul AVEC replyTo ⇒ text (FocalRow.swift:612)', () => {
-    expect(bodyKindOf(message({ content: '👍', replyTo: message({ id: 'q1' }) })).kind).toBe('text');
+  test('emoji seul AVEC replyTo ⇒ emoji-only : la carte citée en petit, l’emoji en grand sans bulle (#10628)', () => {
+    expect(bodyKindOf(message({ content: '👍', replyTo: message({ id: 'q1' }) }))).toEqual({
+      kind: 'emoji-only',
+      text: '👍',
+      fontSize: 68,
+    });
+  });
+
+  test('trois emoji AVEC replyTo ⇒ ×3 (51), quatre ⇒ ×2 (34) : les tailles de l’emoji envoyé seul', () => {
+    const quoted = message({ id: 'q1' });
+    expect(bodyKindOf(message({ content: '🎉🎉🎉', replyTo: quoted }))).toMatchObject({ kind: 'emoji-only', fontSize: 51 });
+    expect(bodyKindOf(message({ content: '🎉🎉🎉🎉', replyTo: quoted }))).toMatchObject({ kind: 'emoji-only', fontSize: 34 });
+  });
+
+  test('texte AVEC replyTo reste text', () => {
+    expect(bodyKindOf(message({ content: 'ok 👍', replyTo: message({ id: 'q1' }) })).kind).toBe('text');
   });
 
   test('sinon text', () => {
@@ -180,6 +194,18 @@ describe('storyCitationOf — la carte subsiste, le geste non', () => {
       createdAt: '2026-09-10T08:00:00.000Z',
       unavailable: false,
     });
+  });
+
+  test('une réponse chargée par REST (postReplyTo sans storyReplyToId) construit la carte de la story (#10746)', () => {
+    const citation = storyCitationOf(
+      message({ metadata: { postReplyTo: { id: 'p9', type: 'STORY', moodEmoji: null, previewText: 'Plage', thumbnailUrl: null, createdAt: '2026-09-10T08:00:00.000Z' } } }),
+    );
+    expect(citation).toEqual({ id: 'p9', previewText: 'Plage', thumbnailUrl: null, createdAt: '2026-09-10T08:00:00.000Z', unavailable: false });
+  });
+
+  test('un post qui n’est pas une story, sans clé servie, ne fabrique pas de carte', () => {
+    expect(storyCitationOf(message({ metadata: { postReplyTo: { id: 'p7', type: 'POST', moodEmoji: null, previewText: 'x', createdAt: '2026-09-10T08:00:00.000Z' } } }))).toBeNull();
+    expect(storyCitationOf(message({}))).toBeNull();
   });
 
   test('une humeur (moodEmoji non nul) ⇒ null — pas de scène', () => {

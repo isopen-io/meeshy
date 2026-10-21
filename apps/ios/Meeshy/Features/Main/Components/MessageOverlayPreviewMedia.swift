@@ -8,10 +8,12 @@ import MeeshyUI
 ///
 /// Complément porteur du 2026-09-26 : « l'appui long sur un message protégé ne
 /// montre plus son contenu ». En Focal et en Script, l'aperçu élevé
-/// (`MessageOverlayMenu`, chemin sans cadre source) rendait `message.content`
+/// (`MessageOverlayMenu`, alors sans cadre source) rendait `message.content`
 /// et les pièces EN CLAIR : l'appui long contournait le flou et la vue unique
 /// que le fil venait de poser. L'aperçu montre désormais la forme protégée — la
-/// puce de la vue unique, ou le flou — et ne consomme rien.
+/// puce de la vue unique, ou le flou — et ne consomme rien. Depuis #11208, la
+/// forme se lit EN AMONT des deux faces de l'aperçu, rangée plate comme bulle
+/// (`MessageOverlayCellPreview`).
 nonisolated enum OverlayPreviewProtection: Equatable {
     /// Rien de protégé : l'aperçu rend le message.
     case clear
@@ -169,6 +171,7 @@ struct OverlayProtectedPreview: View {
     let message: Message
     let isDark: Bool
     let accentHex: String
+    @Environment(\.bubbleSkin) private var skin
 
     var body: some View {
         switch form {
@@ -205,7 +208,7 @@ struct OverlayProtectedPreview: View {
     private var blurredBubble: some View {
         Text(verbatim: String(repeating: "▆ ", count: max(3, min(24, message.content.count / 3))))
             .font(MeeshyFont.relative(MeeshyFont.bodySize))
-            .foregroundColor(message.isMe ? .white : (isDark ? .white : .black))
+            .foregroundColor(message.isMe ? skin.ink : (isDark ? .white : .black))
             .blur(radius: 6)
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.smPlus)
@@ -214,8 +217,62 @@ struct OverlayProtectedPreview: View {
             .overlay {
                 Image(systemName: MessageProtectionSymbols.blurredFilled)
                     .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundStyle(message.isMe ? .white : (isDark ? .white : .black))
+                    .foregroundStyle(message.isMe ? skin.ink : (isDark ? .white : .black))
             }
             .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Le texte de l'aperçu est celui de la cellule (#9838)
+
+/// Ce que l'aperçu de l'appui long recopie de la cellule pressée.
+struct OverlayPreviewServedText: Equatable {
+    let text: String
+    let flags: [String]
+    let activeFlag: String?
+}
+
+extension MessageOverlayMenu {
+
+    /// **Le texte et les drapeaux de la cellule pressée** (#9838).
+    ///
+    /// L'aperçu rendait `message.content` — l'ORIGINAL — pendant que la cellule
+    /// servait la traduction du Prisme : le fil disait « Plus que 12 jours ❤️ »,
+    /// l'appui long « 이제 12일만 기다리면 돼 ❤️ ». Les deux se lisent désormais
+    /// dans la MÊME source (`BubbleContent`), avec les mêmes entrées que la
+    /// cellule : traduction préférée (override manuel compris), drapeau basculé
+    /// dans le fil, langues secondaires. La bande suit la forme de la cellule :
+    /// une bulle montre les AUTRES langues (l'active soulignée seulement quand
+    /// elle est secondaire), une rangée plate (Focal, Script) y ajoute la langue
+    /// affichée, marquée active (`FocalRow.focusFlagCodes`).
+    static func previewServedText(
+        message: Message,
+        textTranslations: [MessageTranslation],
+        translatedAudios: [MessageTranslatedAudio],
+        preferredTranslation: MessageTranslation?,
+        userLanguages: (regional: String?, custom: String?),
+        selection: ConversationViewModel.BubbleLanguageSelection?,
+        usesFlatRow: Bool = false,
+        preferredAudioLangCode: String?,
+        currentUserId: String
+    ) -> OverlayPreviewServedText {
+        let cell = BubbleContent(
+            message: message, translations: textTranslations, preferredTranslation: preferredTranslation,
+            translatedAudios: translatedAudios, userLanguages: userLanguages,
+            secondaryLangCode: selection?.secondaryLangCode,
+            activeDisplayLangCode: selection?.activeDisplayLangCode,
+            preferredAudioLangCode: preferredAudioLangCode, currentUserId: currentUserId)
+        let text = cell.text?.raw ?? message.content
+        guard let translation = cell.translation else {
+            return OverlayPreviewServedText(text: text, flags: [], activeFlag: nil)
+        }
+        guard usesFlatRow else {
+            return OverlayPreviewServedText(text: text, flags: translation.availableFlags,
+                                            activeFlag: selection?.secondaryLangCode)
+        }
+        let flags = FocalRow.focusFlagCodes(
+            originalLangCode: translation.originalLangCode, availableFlags: translation.availableFlags,
+            activeLangCode: translation.activeLangCode, limit: FocalMetrics.FocusStrip.flagLimitPlain)
+        return OverlayPreviewServedText(text: text, flags: flags, activeFlag: translation.activeLangCode)
     }
 }

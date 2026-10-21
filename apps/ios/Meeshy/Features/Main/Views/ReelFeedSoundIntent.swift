@@ -114,6 +114,9 @@ final class ReelFeedSoundIntent: ObservableObject {
 
     @Published private(set) var isSoundOn: Bool = false
     @Published private(set) var audioTrackPresence: [String: Bool] = [:]
+    /// Borne du cache de sondage : un fil de réels parcouru des heures y ajoutait une entrée par média, à vie,
+    /// et chaque sondage republiait — et chaque cellule montée recopiait — le dictionnaire entier.
+    static let presenceCapacity = 400
 
     /// `internal`, not `private` — `.shared` is the production entry point,
     /// but tests need an ISOLATED instance so mutating sound-on/probe state
@@ -147,8 +150,16 @@ final class ReelFeedSoundIntent: ObservableObject {
     /// "has track" back to "no track".
     func recordAudioProbe(mediaId: String, probedTrackCount: Int?) {
         guard audioTrackPresence[mediaId] == nil else { return }
-        audioTrackPresence = StoryAudioAvailability.merging(audioTrackPresence, id: mediaId, probedTrackCount: probedTrackCount)
+        var merged = StoryAudioAvailability.merging(audioTrackPresence, id: mediaId, probedTrackCount: probedTrackCount)
+        guard merged[mediaId] != nil else { return }
+        probeOrder.append(mediaId)
+        // Le plus ancien sondage sort : un média revu plus tard sera simplement re-sondé.
+        while probeOrder.count > Self.presenceCapacity { merged.removeValue(forKey: probeOrder.removeFirst()) }
+        audioTrackPresence = merged
     }
+
+    /// Ordre d'arrivée des sondages résolus, pour l'éviction.
+    private var probeOrder: [String] = []
 
     func hasAudioTrack(mediaId: String) -> Bool {
         audioTrackPresence[mediaId] ?? false

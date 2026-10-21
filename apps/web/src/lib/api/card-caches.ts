@@ -200,6 +200,39 @@ export function replaceCardContent(queryClient: QueryClient, postId: string, app
 }
 
 /** LA CARTE QUITTE TOUS LES ÉCRANS (`post:deleted`), les Réels compris. */
+type CardPlace = { readonly queryKey: QueryKey; readonly page: number; readonly index: number; readonly post: FeedPost };
+
+const placesIn = (queryKey: QueryKey, data: CardPages | undefined, postId: string): readonly CardPlace[] =>
+  (data?.pages ?? []).flatMap((page, pageAt) => {
+    const index = page.posts.findIndex((post) => post.id === postId);
+    const post = page.posts[index];
+    return post === undefined ? [] : [{ queryKey, page: pageAt, index, post }];
+  });
+
+const reinsert = (data: CardPages | undefined, place: CardPlace): CardPages | undefined => {
+  if (data === undefined || holds(data, place.post.id) || data.pages[place.page] === undefined) return data;
+  const pages = data.pages.map((page, pageAt) =>
+    pageAt === place.page ? { ...page, posts: [...page.posts.slice(0, place.index), place.post, ...page.posts.slice(place.index)] } : page,
+  );
+  return { ...data, pages };
+};
+
+/**
+ * **CE QU'UN RETRAIT OPTIMISTE A ÔTÉ, ET DE QUOI LE RENDRE** (#11156) — la
+ * carte retrouve sa PLACE dans chaque caisse qui la tenait, et sa fiche. Le
+ * fil GELÉ des Réels ne se relit jamais (D-66) : sans ce retour, un retrait
+ * refusé y laissait un trou jusqu'à la réouverture de l'écran.
+ */
+export function snapshotCardPost(queryClient: QueryClient, postId: string): () => void {
+  const places = cardsOf(queryClient, CARD_LISTS).flatMap(([queryKey, data]) => placesIn(queryKey, data, postId));
+  const detailKey = postQueryKey(postId);
+  const detail = queryClient.getQueryData<FeedPost>(detailKey);
+  return () => {
+    places.forEach((place) => writeCardCache<CardPages>(queryClient, place.queryKey, (data) => reinsert(data, place)));
+    if (detail !== undefined && queryClient.getQueryData(detailKey) === undefined) queryClient.setQueryData(detailKey, detail);
+  };
+}
+
 export function removeCardPost(queryClient: QueryClient, postId: string): void {
   writeLists(queryClient, CARD_LISTS, (data) => dropCardPost(data, postId));
   queryClient.removeQueries({ queryKey: postQueryKey(postId) });

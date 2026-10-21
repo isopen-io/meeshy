@@ -16,7 +16,7 @@ final class ConversationSelectionGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent("Meeshy")
         return AppSourceGuard.stripComments(
-            try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+            try AppSourceGuard.text(at: root.appendingPathComponent(relativePath))
         )
     }
 
@@ -81,7 +81,10 @@ final class ConversationSelectionGuardTests: XCTestCase {
     }
 
     func test_bothMenuSites_callBeginSelectionMode() throws {
+        // Le menu custom « Plus… » et la liste appellent `beginSelectionMode` par les gestes que
+        // l'hôte leur remet (`messageActions`) ; le menu natif iOS 26+ l'appelle directement.
         let code = try source("Features/Main/Views/ConversationView.swift")
+            + source("Features/Main/Views/ConversationView+NativeMessageMenu.swift")
         let occurrences = code.components(separatedBy: "beginSelectionMode(seedingWith:").count - 1
         XCTAssertGreaterThanOrEqual(
             occurrences, 2,
@@ -142,35 +145,17 @@ final class ConversationSelectionGuardTests: XCTestCase {
         )
     }
 
-    func test_forwardPickerSheet_receivesAdditionalMessages_atItsExistingMountSite() throws {
-        // Le montage vit dans `ConversationView+Forward.swift` depuis #9039
-        // (extrait de l'hôte, hors budget de taille).
+    func test_shareSheet_receivesTheWholeSelection_atItsMountSite() throws {
+        // Le montage vit dans `ConversationView+Forward.swift` depuis #9039 ;
+        // l'écran de partage unique (#10947) y reçoit toute la sélection. Que
+        // CHAQUE message parte est éprouvé par `ShareSheetViewModelTests`.
         let code = try source("Features/Main/Views/ConversationView+Forward.swift")
-        // Ancre sur l'instanciation elle-même, pas sur `.sheet(...onDismiss: {`
-        // — ce closure `onDismiss` referme sur SA PROPRE accolade avant que
-        // `body(of:)` (brace-matché) atteigne le closure trailing suivant qui
-        // monte `ForwardPickerSheet`.
-        guard let call = body(of: "ForwardPickerSheet(", in: code) else {
-            return XCTFail("Site de montage de `ForwardPickerSheet` introuvable — la garde ne mesurerait rien.")
+        guard let subject = body(of: "func forwardSubject(for message: Message) -> ShareSubject {", in: code) else {
+            return XCTFail("`forwardSubject` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
-            call.contains("additionalMessages: composerState.forwardAdditionalMessages"),
-            "Le site de montage EXISTANT de `ForwardPickerSheet` doit transmettre `forwardAdditionalMessages` "
-                + "— pas un second site de montage."
-        )
-    }
-
-    // MARK: - `ForwardPickerSheet.perform` envoie TOUS les messages sélectionnés
-
-    func test_forwardPickerSheet_perform_sendsEveryMessage() throws {
-        let code = try source("Features/Main/Components/ForwardPickerSheet.swift")
-        guard let fn = body(of: "private func perform(_ target: ForwardTarget) async {", in: code) else {
-            return XCTFail("`perform` introuvable — la garde ne mesurerait rien.")
-        }
-        XCTAssertTrue(
-            fn.contains("for messageToSend in [message] + additionalMessages"),
-            "`perform` doit envoyer TOUS les messages ([message] + additionalMessages), pas seulement le "
-                + "premier — sinon un transfert groupé n'en enverrait qu'un."
+            subject.contains("[message] + composerState.forwardAdditionalMessages"),
+            "L'écran de partage doit recevoir TOUS les messages sélectionnés — pas seulement le premier."
         )
     }
 

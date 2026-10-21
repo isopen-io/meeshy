@@ -554,7 +554,7 @@ struct ProgressionSectionPage: View {
                         .accessibilityAddTraits(.isButton)
                         .accessibilityHint(Text(String(
                             localized: "progression.achievement.a11y.hint",
-                            defaultValue: "Ouvre le succès en grand",
+                            defaultValue: "Touche pour voir ce haut fait en grand.",
                             bundle: .main)))
                     }
                 }

@@ -67,10 +67,10 @@ extension MessageRecord {
         }
 
         // Un sticker relu du cache mais non rendable vaut absence — la règle
-        // vit dans `MessageSticker.ifRenderable`, elle n'est pas réécrite ici.
+        // vit dans `MessageSticker.ifWireWorthy`, elle n'est pas réécrite ici.
         let uiSticker = stickerJson.flatMap { json -> MessageSticker? in
             guard let data = json.data(using: .utf8) else { return nil }
-            return decoder.decodeOrLog(MessageSticker.self, from: data, field: "stickerJson", id: localId)?.ifRenderable
+            return decoder.decodeOrLog(MessageSticker.self, from: data, field: "stickerJson", id: localId)?.ifWireWorthy
         }
 
         var effects = MessageEffects.none
@@ -176,6 +176,7 @@ extension MessageRecord {
         // #7579 — l'état « déjà ouvert » d'une vue unique vit dans la colonne ;
         // le fil, qui ne lit que GRDB, le reçoit d'ici.
         message.viewOnceOpenedAt = viewOnceOpenedAt
+        message.senderRing = Self.decodeJSONText(ServedProfileDecorItem.self, senderRingJson, field: "senderRingJson", id: localId)
         message.trackedLinkMap = Self.decodeJSONText([TrackedLink].self, trackedLinksJson,
                                                      field: "trackedLinksJson", id: localId)?.trackedLinkMap ?? [:]
         return message

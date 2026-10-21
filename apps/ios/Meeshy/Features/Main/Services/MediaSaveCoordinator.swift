@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let mediaSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-save")
+private let mediaSaveLog = MeeshyLog.logger(.mediaSave)
 
 // MARK: - Request
 
@@ -287,12 +287,15 @@ final class MediaSaveCoordinator: ObservableObject {
     }
 
     func reportExportCompleted() {
+        // La copie de mise en scène a servi : elle part, sinon chaque export laissait le fichier entier dans `tmp`.
+        if let exportURL { Self.discardExportStaging(of: exportURL) }
         exportURL = nil
         lastOutcome = .saved(.files)
         Task { await reportDownloadedOnce() }
     }
 
     func reportExportCancelled() {
+        if let exportURL { Self.discardExportStaging(of: exportURL) }
         exportURL = nil
         activeRequest = nil
     }
@@ -316,7 +319,7 @@ final class MediaSaveCoordinator: ObservableObject {
         do {
             return try await PhotoLibraryMediaSignature.of(fileAt: file)
         } catch {
-            Logger(subsystem: "me.meeshy.app", category: "media-save").error("media-save signature unreadable: \(error.localizedDescription, privacy: .public)")
+            MeeshyLog.logger(.mediaSave).error("media-save signature unreadable: \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
@@ -332,6 +335,16 @@ final class MediaSaveCoordinator: ObservableObject {
             exportFileName(for: request, actualExtension: source.pathExtension))
         try FileManager.default.copyItem(at: source, to: destination)
         return destination
+    }
+
+    /// Supprime le dossier UNIQUE de `stageForExport` (`media-save-<UUID>`), qui ne contient que la copie
+    /// d'export. Tout autre dossier est laissé : le fichier résolu appartient au cache disque.
+    nonisolated static func discardExportStaging(of file: URL) {
+        let directory = file.deletingLastPathComponent()
+        let name = directory.lastPathComponent
+        let prefix = "media-save-"
+        guard name.hasPrefix(prefix), UUID(uuidString: String(name.dropFirst(prefix.count))) != nil else { return }
+        FileManager.default.removeItemLogging(at: directory, context: "media-save export staging cleanup")
     }
 
     /// Supprime le dossier temporaire d'une COPIE MARQUÉE, une fois celle-ci

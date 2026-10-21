@@ -60,12 +60,23 @@ final class DiscoverViewModel: ObservableObject {
         }
         loadState = .loading
         do {
-            searchResults = try await userService.searchUsers(query: query, limit: 20, offset: 0)
+            let results = try await userService.searchUsers(query: query, limit: 20, offset: 0)
+            guard isCurrentQuery(query) else { return }
+            searchResults = results
             loadState = .loaded
         } catch {
+            guard isCurrentQuery(query) else { return }
             searchResults = []
             loadState = .error(error.localizedDescription)
         }
+    }
+
+    /// Chaque frappe lance sa recherche, et les réponses reviennent dans le
+    /// désordre : celle de « ab » arrivée après « abc » remplaçait ses
+    /// résultats, et une requête en vol remplissait un champ déjà vidé. Seule
+    /// la réponse à ce qui est ENCORE tapé s'affiche.
+    private func isCurrentQuery(_ query: String) -> Bool {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines) == query
     }
 
     /// Cache-first load of the empty-query suggestion list. Hydrates

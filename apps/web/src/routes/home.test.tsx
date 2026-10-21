@@ -82,7 +82,10 @@ describe('/ sur le web, servie par la coquille (#10002)', () => {
     globalThis.fetch = answer(404, { success: false, error: 'x', code: 'WORLD_UNAVAILABLE', message: 'x' });
     await mount(<HomeScreen />);
     await settle();
-    expect(document.querySelector('[data-world-form]')?.hasAttribute('hidden')).toBe(true);
+    const qr = [...document.querySelectorAll('[data-world-qr]')];
+    expect(qr.length).toBe(2);
+    expect(qr.every((node) => node.hasAttribute('hidden'))).toBe(true);
+    expect(document.querySelector('[data-world-form]')).toBe(null);
     unmountAll();
     expect(document.documentElement.hasAttribute('data-session')).toBe(false);
   });

@@ -435,7 +435,7 @@ export function ChatJoin({
     setJoin({ kind: 'joined' });
     deps.adoptGuest(result.data.sessionToken, {
       participantId: result.data.participantId,
-      nickname: validated.body.nickname ?? '',
+      nickname: result.data.nickname ?? validated.body.nickname ?? '',
       conversationId: result.data.conversationId,
       link,
       mayWrite: result.data.mayWrite,

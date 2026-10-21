@@ -19,6 +19,7 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ANONYMOUS_SENDER_NAME_SELECT } from './anonymousSenderNameSelect';
+import { MESSAGE_AUTHOR_USER_SELECT } from './messageAuthorSelect';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentFullSelect, MESSAGE_ATTACHMENT_ORDER, QUOTED_VISUAL_ATTACHMENT_COUNT } from '../attachments/attachmentIncludes';
 import { performanceLogger, enhancedLogger } from '../../utils/logger-enhanced';
@@ -59,12 +60,7 @@ export async function findExistingMessage(params: {
               id: true, displayName: true, avatar: true, type: true,
               nickname: true, userId: true,
               ...ANONYMOUS_SENDER_NAME_SELECT,
-              user: {
-                select: {
-                  id: true, username: true, displayName: true,
-                  firstName: true, lastName: true, avatar: true
-                }
-              }
+              user: { select: MESSAGE_AUTHOR_USER_SELECT }
             }
           },
           attachments: { orderBy: MESSAGE_ATTACHMENT_ORDER },

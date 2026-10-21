@@ -14,11 +14,12 @@ import { conversationStatsMetaSchema } from './messages-advanced-shared';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import type { ConversationParams } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 // Logger dédié pour messages-advanced
@@ -74,6 +75,7 @@ export function registerDeleteMessageRoute(
             }
           }
         },
+        400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
@@ -123,7 +125,7 @@ export function registerDeleteMessageRoute(
       // global supprimait donc depuis Android et depuis le composer web, et
       // recevait 403 ici : c'est-à-dire depuis iOS et depuis la vue web, les
       // deux clients qui passent par cette route.
-      const { admitted: canDelete, actorParticipantId } = await admitMessageDelete({
+      const { admitted: canDelete, actorParticipantId, byModeration } = await admitMessageDelete({
         prisma,
         deleterUserId: userId,
         message: {
@@ -137,6 +139,10 @@ export function registerDeleteMessageRoute(
 
       if (!canDelete) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer ce message');
+      }
+      const moderationReason = byModeration ? moderationReasonOf(request.body) : null;
+      if (byModeration && moderationReason === null) {
+        return sendBadRequest(reply, MODERATION_REASON_MESSAGE, { code: MODERATION_REASON_REQUIRED });
       }
 
       // Supprimer les attachments et leurs fichiers physiques
@@ -209,6 +215,15 @@ export function registerDeleteMessageRoute(
         metadata: existingMessage.metadata,
         removedByParticipantId: actorParticipantId ?? null,
       });
+      if (moderationReason !== null) {
+        await completeModeratedMessageRemoval({ prisma }, {
+          actorUserId: userId,
+          authorUserId: existingMessage.sender?.userId,
+          messageId,
+          conversationId,
+          reason: moderationReason,
+        });
+      }
 
       // Invalider et recalculer les stats
       const stats = await conversationStatsService.getOrCompute(

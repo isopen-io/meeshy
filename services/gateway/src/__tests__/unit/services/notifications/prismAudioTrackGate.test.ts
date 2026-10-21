@@ -184,6 +184,20 @@ describe('bannière d\'un vocal — la piste attachée suit la langue SERVIE', (
     expect(data.attachmentDurationMs).toBe(String(FR_TRACK_DURATION_MS));
   });
 
+  /**
+   * #10641 — la coque Android JOUE cette piste depuis la notification et en
+   * rapporte l'écoute (`AttachmentStatusBodySchema.language`) : une piste
+   * traduite est l'écoute d'une AUTRE version du contenu. Sa langue voyage
+   * donc avec elle, comme son mime et sa durée.
+   */
+  it('la langue de la piste servie voyage avec elle', async () => {
+    const { service, sendToUser } = makeService('fr');
+
+    await runVoiceNote(service);
+
+    expect(pushedData(sendToUser).attachmentLanguage).toBe('fr');
+  });
+
   it('le corps AFFICHÉ compose sa durée depuis la piste servie', async () => {
     // 9400 ms → 0:09, jamais le 0:12 de l'original. Le corps est le seul texte
     // que les trois plateformes rendent (cycle 122).
@@ -227,6 +241,7 @@ describe('les trois cas où l\'ORIGINAL reste le bon fichier', () => {
     expect(data.attachmentUrl).toBe(SUR_LE_FIL(ORIGINAL_URL));
     expect(data.attachmentMimeType).toBe(ORIGINAL_MIME);
     expect(data.attachmentDurationMs).toBe(String(ORIGINAL_DURATION_MS));
+    expect(data.attachmentLanguage).toBe('');
   });
 
   it('langue élue SANS piste ⇒ fichier original — fail-OPEN sur le médium', async () => {
@@ -239,6 +254,7 @@ describe('les trois cas où l\'ORIGINAL reste le bon fichier', () => {
     const data = pushedData(sendToUser);
     expect(data.attachmentUrl).toBe(SUR_LE_FIL(ORIGINAL_URL));
     expect(data.attachmentMimeType).toBe(ORIGINAL_MIME);
+    expect(data.attachmentLanguage).toBe('');
     expect(pushedPayload(sendToUser).body ?? '').toContain(TRANSCRIPT_FR);
   });
 
@@ -313,6 +329,7 @@ describe('la protection reste au-dessus de l\'élection', () => {
     expect(data.attachmentUrl).toBe('');
     expect(data.attachmentMimeType).toBe('');
     expect(data.attachmentDurationMs).toBe('');
+    expect(data.attachmentLanguage).toBe('');
     expect(JSON.stringify(sendToUser.mock.calls)).not.toContain(FR_TRACK_URL);
   });
 });

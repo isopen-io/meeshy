@@ -34,7 +34,7 @@ enum LiveActivityCommandRouter {
 }
 
 @available(iOS 17.0, *)
-struct LiveActivityCommandIntent: LiveActivityIntent {
+struct LiveActivityCommandIntent: nonisolated LiveActivityIntent {
     static let title: LocalizedStringResource = "Meeshy"
     static let isDiscoverable = false
 

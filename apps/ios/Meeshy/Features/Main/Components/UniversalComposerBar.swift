@@ -329,6 +329,8 @@ struct UniversalComposerBar: View {
     // MARK: - State (internal for cross-file extension access)
 
     @State var text = ""
+    /// Clavier matériel : le prochain saut de ligne vient de Maj+Retour / Option+Retour (iOS 17+) — il ne doit pas envoyer.
+    @State var literalNewlinePending = false
     /// La sélection du champ (`TextSelection`, iOS 18+), rangée en `Any?`
     /// parce qu'une propriété stockée ne peut pas être `@available` (#7849).
     @State var formatSelectionStorage: Any? = nil
@@ -344,6 +346,9 @@ struct UniversalComposerBar: View {
     /// L'instant où la rangée des emojis rapides est revenue — la garde
     /// d'arrivée (`QuickEmojiArrivalGuard`) s'y mesure (#7985).
     @State var quickEmojiArrivedAt: Date?
+    /// Le défilement de la rangée des emojis rapides : posé, et en cours (#10842).
+    @State var quickEmojiScroll: CGFloat = 0
+    @State var quickEmojiDrag: CGFloat = 0
 
     @FocusState var isFocused: Bool
     @State var sendBounce = false
@@ -380,6 +385,10 @@ struct UniversalComposerBar: View {
     @State var typeWave: Bool = false
 
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    /// La taille de la fenêtre qui porte la barre, publiée par sa racine (`publishingSceneWindowSize`).
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
     var isDark: Bool { colorScheme == .dark }
     var theme: ThemeManager { ThemeManager.shared }
 
@@ -410,23 +419,29 @@ struct UniversalComposerBar: View {
     /// height so swapping keyboard <-> carousel keeps the input row still,
     /// never shorter than the panel's own content, and never so tall that the
     /// composer leaves the screen (`ComposerPanelHeightLaw`, #8869).
+    /// La hauteur de la fenêtre qui porte la barre (Stage Manager, Split View, fenêtre détachée) — la fenêtre clé en repli.
+    private var hostWindowHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
+
+    /// Les marges de la fenêtre qui porte la barre, la fenêtre clé en repli.
+    private var hostInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
+
     var attachmentPanelHeight: CGFloat {
         let keyboard = max(ownKeyboard.lastKnownHeight(host: hostKeyboard), 260)
-        // iPad / macOS gets a taller floor so the roomy recent-media grid has
-        // breathing room; iPhone keeps a floor that shows two rows of the grid.
-        let recentFloor: CGFloat = DeviceLayout.isPad ? 460 : 324
+        // Une largeur « regular » a un plancher plus haut pour la grille aérée des médias récents ; une largeur
+        // compacte — iPhone, ou iPad en Slide Over / Split View étroit — garde celui qui montre deux rangées.
+        let recentFloor = ComposerPanelHeightLaw.recentMediaFloor(horizontalSizeClass: horizontalSizeClass)
         let contentFloor: CGFloat = onRecentMediaSelected != nil ? recentFloor : 150
         let resting = ComposerPanelHeightLaw.restingHeight(
             lastKeyboardHeight: keyboard,
             contentFloor: contentFloor,
-            windowHeight: DeviceLayout.windowSize.height,
-            safeAreaTop: DeviceLayout.safeAreaTop,
-            safeAreaBottom: DeviceLayout.safeAreaBottom
+            windowHeight: hostWindowHeight,
+            safeAreaTop: hostInsets.top,
+            safeAreaBottom: hostInsets.bottom
         )
         guard isExpandingToLibrary else { return resting }
         return ComposerLibraryHandoff.expandedHeight(
             resting: resting,
-            windowHeight: DeviceLayout.windowSize.height
+            windowHeight: hostWindowHeight
         )
     }
 

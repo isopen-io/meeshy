@@ -145,6 +145,22 @@ describe('GET /conversations — la description et les réglages de conteneur (#
     await app.close();
   });
 
+  it('sert le mode de chiffrement de la ligne, et null pour une conversation en clair (#10720)', async () => {
+    const prisma = makePrisma([
+      makeConversation({ encryptionMode: 'e2ee' }),
+      makeConversation({ id: '507f1f77bcf86cd799439102', encryptionMode: null }),
+    ]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
+    const [chiffree, enClair] = res.json().data;
+
+    expect(chiffree.encryptionMode).toBe('e2ee');
+    expect(enClair.encryptionMode).toBeNull();
+
+    await app.close();
+  });
+
   it('sert autoTranslateEnabled === false sans le confondre avec une absence (falsy ≠ non chargé)', async () => {
     // `false` et `0` sont les deux valeurs les plus exposées à un bug de
     // spread/copie qui les confondrait avec `undefined` (piège classique

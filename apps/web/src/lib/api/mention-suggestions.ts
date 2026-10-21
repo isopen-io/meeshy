@@ -2,6 +2,9 @@ import * as z from 'zod/mini';
 
 import type { MentionSuggestion } from '@meeshy/shared/types/mention';
 import * as mentionsEndpoints from '@meeshy/shared/api/endpoints/mentions';
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
@@ -34,6 +37,8 @@ export type MentionCandidate = {
   readonly displayName: string;
   readonly avatar?: string;
   readonly badge?: MentionBadge;
+  /** Le contour équipé servi avec la suggestion (#10945) ; absent sans contour (#10946). */
+  readonly ring?: ServedProfileDecorItem;
 };
 
 const BADGES: readonly MentionBadge[] = ['conversation', 'friend', 'other'];
@@ -61,12 +66,14 @@ export function decodeMentionSuggestion(raw: unknown): MentionCandidate | null {
   const { id, username, displayName, avatar, badge } = parsed.data;
   const photo = nonBlank(avatar);
   const rank = badgeOf(badge);
+  const ring = servedRingOf(raw);
   return {
     id,
     username,
     displayName: nonBlank(displayName) ?? username,
     ...(photo === undefined ? {} : { avatar: photo }),
     ...(rank === undefined ? {} : { badge: rank }),
+    ...(ring === null ? {} : { ring }),
   };
 }
 

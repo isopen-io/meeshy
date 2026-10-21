@@ -73,6 +73,12 @@ struct StoryViewerContainer: View {
     /// regarde garde sa barre, sinon l'index courant glisserait sur sa voisine
     /// (#7887).
     @State private var presentedAt = Date()
+    /// Le lecteur a été monté une fois. Si le groupe qui l'a ouvert disparaît
+    /// ensuite (toutes ses stories supprimées ou expirées pendant qu'on regarde
+    /// un autre auteur), `groupIndex(forUserId:)` rend `nil` : le conteneur
+    /// tombait sur le spinner de chargement, que rien ne relançait — l'écran
+    /// restait bloqué avec le seul bouton Fermer. Il se referme.
+    @State private var hasPresentedViewer = false
 
     private var uid: String { userId ?? "" }
 
@@ -138,6 +144,7 @@ struct StoryViewerContainer: View {
                     targetParentCommentId: targetParentCommentId
                 )
                 .transition(.identity)
+                .onAppear { hasPresentedViewer = true }
                 // **La porte « Composer » est PRÉSENTÉE ICI** (#6085), et pas
                 // dans l'en-tête qui porte son entrée de menu.
                 //
@@ -153,6 +160,8 @@ struct StoryViewerContainer: View {
                 //     s'ouvrait. Ce conteneur, lui, est la racine STABLE du
                 //     cover : il tient l'état, l'en-tête ne fait que DEMANDER.
                 .environment(\.meeshyComposeSeedRequest, { composeSeedTarget = $0 })
+            } else if hasPresentedViewer {
+                Color.clear.onAppear { isPresented = false }
             } else if timedOut {
                 notFoundOverlay
             } else {
@@ -352,5 +361,156 @@ struct StoryViewerContainer: View {
         reloadAttempts += 1
         timedOut = false
         await ensureGroupAvailable(uid: uid)
+    }
+}
+
+// MARK: - Le couvercle UNIQUE du lecteur (#11197)
+
+/// **Le seul endroit qui monte le lecteur de stories.** Chaque hôte qui peut
+/// présenter — les trois racines par leur coordinateur, la conversation, les
+/// favoris — pose CE modificateur sur une `StoryViewerRequest`, et rien
+/// d'autre : le point d'appel dit QUOI lire, jamais COMMENT le monter.
+///
+/// Six `fullScreenCover` recopiaient `StoryViewerContainer(` à la main, et les
+/// copies avaient divergé : les favoris n'offraient pas « Répondre », la
+/// conversation ne posait pas `isStoryViewerPresenting` (la pastille de
+/// synchronisation chevauchait l'en-tête du lecteur), l'iPad gardait un
+/// couvercle que rien n'ouvrait.
+///
+/// Pourquoi un modificateur que chaque hôte monte, et pas le seul coordinateur
+/// de la racine : la conversation vit aussi dans une FEUILLE (aperçu de
+/// notification) et hors de toute racine (invité). Un couvercle de racine ne
+/// peut pas se présenter par-dessus une feuille déjà présentée ; le lecteur se
+/// monte donc chez l'hôte qui l'appelle — mais c'est le même lecteur, monté
+/// par le même code.
+///
+/// Les dépendances arrivent en PARAMÈTRES et non par `@EnvironmentObject` : à la
+/// racine, ce modificateur peut se poser hors de la couche qui les injecte.
+struct StoryReaderCover: ViewModifier {
+    @Binding var request: StoryViewerRequest?
+    let storyViewModel: StoryViewModel
+    let statusViewModel: StatusViewModel
+    let router: Router
+    let conversationList: ConversationListViewModel?
+    let presentationSource: String
+    var zoomNamespace: Namespace.ID? = nil
+    /// `true` chez la conversation : le lecteur la COUVRE (« est dans la
+    /// conversation » s'éteint, #9052) et se ferme quand une autre s'ouvre.
+    var coversConversation = false
+    /// Ce que fait « Répondre » une fois le lecteur fermé. `nil` ⇒ pas de bouton.
+    let onReply: ((ReplyContext) -> Void)?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if coversConversation {
+            content.conversationCover(item: $request) { reader(for: $0) }
+        } else {
+            content.fullScreenCover(item: $request) { reader(for: $0) }
+        }
+    }
+
+    private func reader(for presented: StoryViewerRequest) -> some View {
+        StoryViewerContainer(
+            viewModel: storyViewModel,
+            userId: presented.id,
+            isPresented: Binding(get: { request != nil }, set: { if !$0 { request = nil } }),
+            onReplyToStory: replyHandler,
+            singleGroup: presented.singleGroup,
+            postId: presented.postId,
+            initialStoryIndex: presented.initialStoryIndex,
+            startAtFirstUnviewed: presented.startAtFirstUnviewed,
+            presentationSource: presentationSource,
+            initialAction: presented.initialAction,
+            targetCommentId: presented.targetCommentId,
+            targetParentCommentId: presented.targetParentCommentId
+        )
+        // Un `fullScreenCover` n'hérite pas des EnvironmentObject : le trio que
+        // `StoryViewerView` déclare (feuille de partage interne) est remis ici,
+        // une fois pour tous les points d'appel.
+        .environmentObject(router)
+        .environmentObject(statusViewModel)
+        .conversationListObject(conversationList)
+        .environment(\.meeshyConversationList, conversationList)
+        // La pastille de synchronisation se masque sous le lecteur (2026-05-27).
+        .environment(\.isStoryViewerPresenting, true)
+        // Zoom depuis la bulle du tray quand elle est enregistrée (iOS 18+),
+        // cover standard sinon.
+        .zoomTransitionDestination(sourceID: presented.id, in: zoomNamespace)
+    }
+
+    private var replyHandler: ((ReplyContext) -> Void)? {
+        guard let onReply else { return nil }
+        let request = $request
+        return { context in
+            request.wrappedValue = nil
+            onReply(context)
+        }
+    }
+}
+
+// MARK: - L'aperçu d'une publication, par LE lecteur (#11197)
+
+/// L'aperçu d'un composer est rendu par le LECTEUR (`StoryViewerView` en mode
+/// aperçu), jamais par un composant maison — loi 6 : un autre chemin d'aperçu
+/// mentirait tôt ou tard sur ce qui sera publié. Cinq portes recopiaient ce
+/// montage à l'identique ; il vit ici, à côté du couvercle de lecture.
+struct StoryPreviewReader: View {
+    let assets: StoryPreviewAssets
+    @Binding var isPresented: Bool
+    let storyViewModel: StoryViewModel
+    let statusViewModel: StatusViewModel
+    let router: Router
+    let conversationList: ConversationListViewModel?
+
+    var body: some View {
+        StoryViewerView(
+            viewModel: storyViewModel,
+            groups: [Self.group(of: assets)],
+            currentGroupIndex: 0,
+            isPresented: $isPresented,
+            isPreviewMode: true,
+            preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
+            preloadedVideoURLs: assets.videoURLs,
+            preloadedAudioURLs: assets.audioURLs
+        )
+        // Les objets d'environnement ne traversent pas un `fullScreenCover` :
+        // sans eux, l'aperçu planterait à la première lecture de l'un d'eux.
+        .environmentObject(router)
+        .conversationListObject(conversationList)
+        .environmentObject(statusViewModel)
+    }
+
+    static func group(of assets: StoryPreviewAssets) -> StoryGroup {
+        StoryGroup(
+            id: "preview",
+            username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
+            avatarColor: MeeshyColors.brandPrimaryHex,
+            stories: assets.slides.map { $0.toPreviewStoryItem() }
+        )
+    }
+}
+
+/// Présente l'aperçu d'un composer sur `assets` ; à la fermeture, le canvas du
+/// composer retrouve son son.
+struct StoryPreviewReaderCover: ViewModifier {
+    @Binding var assets: StoryPreviewAssets?
+    let storyViewModel: StoryViewModel
+    let statusViewModel: StatusViewModel
+    let router: Router
+    let conversationList: ConversationListViewModel?
+
+    func body(content: Content) -> some View {
+        content.fullScreenCover(item: $assets, onDismiss: {
+            NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
+        }) { presented in
+            StoryPreviewReader(
+                assets: presented,
+                isPresented: Binding(get: { assets != nil }, set: { if !$0 { assets = nil } }),
+                storyViewModel: storyViewModel,
+                statusViewModel: statusViewModel,
+                router: router,
+                conversationList: conversationList
+            )
+        }
     }
 }

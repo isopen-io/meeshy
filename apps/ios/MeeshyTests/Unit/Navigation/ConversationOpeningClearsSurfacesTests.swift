@@ -35,6 +35,26 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         assertClosesAndOpens(.composer)
     }
 
+    func test_navigateToConversation_loneSheetPresented_closesItAndOpens() {
+        assertClosesAndOpens(.sheet)
+    }
+
+    func test_navigateToConversation_placeMapPresented_closesItAndOpens() {
+        assertClosesAndOpens(.place)
+    }
+
+    func test_navigateToConversation_globalSearchPresented_closesItAndOpens() {
+        assertClosesAndOpens(.search)
+    }
+
+    func test_navigateToConversation_profilePhotoPresented_closesItAndOpens() {
+        assertClosesAndOpens(.profilePhoto)
+    }
+
+    func test_navigateToConversation_contactCardPresented_closesItAndOpens() {
+        assertClosesAndOpens(.contactCard)
+    }
+
     private func assertClosesAndOpens(_ kind: PresentedSurfaceKind, line: UInt = #line) {
         let registry = PresentedSurfaceRegistry()
         let router = Router(surfaces: registry)
@@ -157,6 +177,108 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         XCTAssertEqual(openedConversationId(router), "0000000000000000000000ae")
     }
 
+    func test_navigateToConversation_gameScreenPresented_waitsForItToLeave() {
+        let registry = PresentedSurfaceRegistry()
+        let router = Router(surfaces: registry)
+        var closed = 0
+        let game = registry.declare(.game, answer: { .retains }) { closed += 1 }
+
+        router.navigateToConversation(makeConversation(id: "0000000000000000000000af"))
+
+        XCTAssertEqual(closed, 0)
+        XCTAssertTrue(router.path.isEmpty)
+
+        registry.retire(game)
+
+        XCTAssertEqual(openedConversationId(router), "0000000000000000000000af")
+    }
+
+    // MARK: - `push(.conversation)` passe par le site (#10543)
+
+    func test_push_conversationUnderASurface_closesItThenStacks() {
+        let registry = PresentedSurfaceRegistry()
+        let router = Router(surfaces: registry)
+        router.push(.profile)
+        var closed = 0
+        _ = registry.declare(.search, answer: { .closes }) { closed += 1 }
+
+        router.push(.conversation(makeConversation(id: "0000000000000000000000ba")))
+
+        XCTAssertEqual(closed, 1)
+        XCTAssertEqual(router.path.count, 2)
+        XCTAssertEqual(router.currentConversationId, "0000000000000000000000ba")
+    }
+
+    func test_push_conversationWithNothingPresented_stacksAtOnce() {
+        let router = Router(surfaces: PresentedSurfaceRegistry())
+
+        router.push(.conversation(makeConversation(id: "0000000000000000000000bb")))
+
+        XCTAssertEqual(openedConversationId(router), "0000000000000000000000bb")
+    }
+
+    func test_push_conversationUnderARetainingSurface_waitsForItToLeave() {
+        let registry = PresentedSurfaceRegistry()
+        let router = Router(surfaces: registry)
+        let game = registry.declare(.game, answer: { .retains }) {}
+
+        router.push(.conversation(makeConversation(id: "0000000000000000000000bc")))
+
+        XCTAssertTrue(router.path.isEmpty)
+
+        registry.retire(game)
+
+        XCTAssertEqual(openedConversationId(router), "0000000000000000000000bc")
+    }
+
+    func test_push_anotherRoute_leavesTheSurfacePresented() {
+        let registry = PresentedSurfaceRegistry()
+        let router = Router(surfaces: registry)
+        var closed = 0
+        _ = registry.declare(.sheet, answer: { .closes }) { closed += 1 }
+
+        router.push(.profile)
+
+        XCTAssertEqual(closed, 0)
+        XCTAssertEqual(router.path.count, 1)
+    }
+
+    // MARK: - Un post ou une story ouverts par une notification (#10543)
+
+    func test_clearPresentedSurfaces_postOpenedFromANotification_closesTheStoryFirst() {
+        let registry = PresentedSurfaceRegistry()
+        let router = Router(surfaces: registry)
+        var events: [String] = []
+        _ = registry.declare(.storyViewer, answer: { .closes }) { events.append("story refermée") }
+
+        router.clearPresentedSurfaces { _ in
+            events.append("post ouvert")
+            router.push(.postDetail("0000000000000000000000e1"))
+        }
+
+        XCTAssertEqual(events, ["story refermée", "post ouvert"])
+        XCTAssertEqual(router.path.count, 1)
+    }
+
+    // MARK: - Deux fenêtres, deux routeurs (#10543)
+
+    func test_navigateToConversation_surfaceOfTheOtherWindow_staysPresented() {
+        let registry = PresentedSurfaceRegistry()
+        let thisWindow = Router(surfaces: registry)
+        let otherWindow = Router(surfaces: registry)
+        var closedHere = 0
+        var closedElsewhere = 0
+        _ = registry.declare(.storyViewer, scope: thisWindow.surfaceScope, answer: { .closes }, close: { closedHere += 1 })
+        _ = registry.declare(.reels, scope: otherWindow.surfaceScope, answer: { .closes }, close: { closedElsewhere += 1 })
+
+        thisWindow.navigateToConversation(makeConversation(id: "0000000000000000000000ca"))
+
+        XCTAssertEqual(closedHere, 1)
+        XCTAssertEqual(closedElsewhere, 0)
+        XCTAssertEqual(openedConversationId(thisWindow), "0000000000000000000000ca")
+        XCTAssertTrue(otherWindow.path.isEmpty)
+    }
+
     func test_clearPresentedSurfaces_iPadOpening_closesBeforeItsOwnOpening() {
         let registry = PresentedSurfaceRegistry()
         let router = Router(surfaces: registry)
@@ -176,7 +298,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy")
         return AppSourceGuard.stripComments(
-            try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8))
+            try AppSourceGuard.text(at: root.appendingPathComponent(relativePath)))
     }
 
     func test_everySurfaceFamily_declaresItselfAtItsMountPoint() throws {
@@ -191,6 +313,90 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         }
         let covers = try appSource("Features/Main/Views/Modifiers/ConversationViewingVisibilityModifier.swift")
         XCTAssertEqual(covers.components(separatedBy: ".closesForConversationOpening(.conversationCover)").count - 1, 2)
+    }
+
+    private func occurrences(of needle: String, in relativePath: String) throws -> Int {
+        try appSource(relativePath).components(separatedBy: needle).count - 1
+    }
+
+    func test_loneSheets_declareThemselvesAtTheirMountPoint() throws {
+        let sheet = ".closesForConversationOpening(.sheet"
+        XCTAssertEqual(try occurrences(of: sheet, in: "Features/Main/Views/FeedCommentsSheet.swift"), 1)
+        XCTAssertEqual(try occurrences(of: sheet, in: "Features/Main/Components/ConversationInfoSheet.swift"), 1)
+        for layers in ["Features/Main/Views/RootLayers/RootViewLayers.swift",
+                       "Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
+            XCTAssertEqual(try occurrences(of: sheet, in: layers), 3,
+                           "\(layers) : aperçu d'un toast, sélecteur de partage, nouvelle conversation")
+        }
+        XCTAssertEqual(try occurrences(of: ".closesForConversationOpening(.mediaGallery)",
+                                       in: "Features/Main/Components/MediaHub/ConversationMediaHubView.swift"), 1)
+    }
+
+    func test_remainingFullScreens_declareThemselvesAtTheirMountPoint() throws {
+        let place = ").closesForConversationOpening(.place)"
+        let mounts: [(String, String, Int)] = [
+            ("Features/Main/Views/Bubble/BubbleStandardLayout.swift", place, 2),
+            ("Features/Main/Views/FeedPostCard.swift", place, 1),
+            ("Features/Main/Views/PostDetailView.swift", place, 1),
+            ("Features/Main/Views/ReelFeedCard.swift", place, 1),
+            ("Features/Main/Views/CommentRowView.swift", place, 1),
+            ("Features/Main/Views/GlobalSearchView.swift", ".closesForConversationOpening(.search)", 1),
+            ("Features/Main/Views/ProfileView.swift", ").closesForConversationOpening(.profilePhoto)", 1),
+            ("Features/Main/Components/ContactCardView.swift", ".closesForConversationOpening(.contactCard)", 1),
+        ]
+        for (file, declaration, count) in mounts {
+            XCTAssertEqual(try occurrences(of: declaration, in: file), count, "\(file) ne se déclare plus")
+        }
+    }
+
+    func test_gameScreens_retainInsteadOfClosing() throws {
+        for file in ["Features/Main/Game/Photo/GamePhotoFlowView.swift",
+                     "Features/Main/Views/AchievementRevealView.swift"] {
+            XCTAssertEqual(try occurrences(of: ".retainsAgainstConversationOpening(.game)", in: file), 1, file)
+            XCTAssertEqual(try occurrences(of: "closesForConversationOpening", in: file), 0,
+                           "\(file) : une partie en cours ne se referme pas")
+        }
+    }
+
+    func test_composerClosing_goesThroughTheAtelierExit() throws {
+        let host = try appSource("Features/Main/Composer/MeeshyComposerHost+Autosave.swift")
+        XCTAssertTrue(host.contains("ComposerConversationYield.close(atelierWritesItsDraft: atelierWritesItsDraft"))
+        XCTAssertTrue(host.contains("exitIsArmed: publishTrigger.offersExit"))
+    }
+
+    func test_pushOfAConversation_goesThroughTheRouterSite() throws {
+        let router = try appSource("Features/Main/Navigation/Router.swift")
+        let push = try XCTUnwrap(router.components(separatedBy: "func push(_ route: Route) {").dropFirst().first)
+        let body = push.components(separatedBy: "private func place(_ route: Route) {")[0]
+        XCTAssertTrue(body.contains("guard case .conversation = route else"))
+        XCTAssertTrue(body.contains("clearPresentedSurfaces"))
+    }
+
+    func test_notificationOpeningAPostOrAStory_goesThroughTheRouterSite() throws {
+        let iPhone = try appSource("Features/Main/Views/RootNotificationNavigator.swift")
+        let opening = try XCTUnwrap(iPhone.components(separatedBy: "private func openSocialContent(").dropFirst().first)
+        XCTAssertTrue(opening.components(separatedBy: "private func showSocialContent(")[0]
+            .contains("router.clearPresentedSurfaces { _ in showSocialContent(ctx, postId: postId) }"))
+        XCTAssertEqual(iPhone.components(separatedBy: "switch socialSurface(ctx, postId: postId)").count - 1, 1,
+                       "un seul aiguillage social : la branche des notifications passe par openSocialContent")
+
+        let iPad = try appSource("Features/Main/Views/iPadRootView+Navigation.swift")
+        let routing = try XCTUnwrap(iPad.components(separatedBy: "func routeSocialNotification(").dropFirst().first)
+        XCTAssertTrue(routing.components(separatedBy: "private func showSocialSurface(")[0]
+            .contains("router.clearPresentedSurfaces"))
+    }
+
+    func test_eachWindow_putsItsRouterScopeAboveItsLayers() throws {
+        let scope = ".environment(\\.presentedSurfaceScope, router.surfaceScope)"
+        let iPhone = try appSource("Features/Main/Views/RootLayers/RootViewLayers.swift")
+        let sheets = try XCTUnwrap(iPhone.components(separatedBy: "struct RootSheetsLayer").dropFirst().first)
+        XCTAssertTrue(sheets.contains(scope), "RootSheetsLayer est la dernière couche de RootView")
+
+        let iPad = try appSource("Features/Main/Views/RootLayers/iPadRootViewLayers.swift")
+        let covers = try XCTUnwrap(iPad.components(separatedBy: "struct iPadCoversAndChromeLayer").dropFirst().first)
+        XCTAssertTrue(covers.contains(scope), "iPadCoversAndChromeLayer est la dernière couche de iPadRootView")
+        XCTAssertTrue(try appSource("Features/Main/Navigation/PresentedSurfaceModifier.swift")
+            .contains("registry.declare(kind, scope: scope"))
     }
 
     func test_iPadOpening_goesThroughTheRouterSite() throws {
@@ -208,12 +414,12 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
         var askers: [String] = []
         for case let url as URL in enumerator where url.pathExtension == "swift" {
-            let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
             if source.contains(".clearForConversation(") || source.contains(".clearForConversation {") {
                 askers.append(url.lastPathComponent)
             }
         }
-        XCTAssertEqual(askers.sorted(), ["PresentedSurfaceRegistry.swift", "Router.swift"])
+        XCTAssertEqual(askers.sorted(), ["Router.swift"])
     }
 
     func test_callScreen_neverDeclaresItself() throws {
@@ -225,7 +431,7 @@ final class ConversationOpeningClearsSurfacesTests: XCTestCase {
         var callFiles = 0
         for case let url as URL in enumerator where url.pathExtension == "swift" && url.lastPathComponent.contains("Call") {
             callFiles += 1
-            let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
             XCTAssertFalse(source.contains("closesForConversationOpening"), "\(url.lastPathComponent) : un appel ne se referme pas")
         }
         XCTAssertGreaterThan(callFiles, 3)

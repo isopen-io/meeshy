@@ -277,7 +277,9 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
                         .foregroundColor(.secondary)
 
                     Button {
-                        recordedSamples.remove(at: index)
+                        // Par identité : deux croix touchées avant le re-rendu visaient un indice disparu, ou
+                        // l'échantillon voisin.
+                        recordedSamples.removeAll { $0.id == sample.id }
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: MeeshyIconSize.md))
@@ -304,7 +306,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "arrow.forward.circle.fill")
                     .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                Text(String(localized: "voiceProfile.recording.createProfile", defaultValue: "Creer le profil vocal", bundle: .module))
+                Text(String(localized: "voiceProfile.recording.createProfile", defaultValue: "Créer le profil vocal", bundle: .module))
                     .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
             }
             .foregroundColor(.white)
@@ -348,9 +350,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     }
 
     private func formattedDuration(_ duration: TimeInterval) -> String {
-        let minutes = Int(duration) / 60
-        let seconds = Int(duration) % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        DurationFormat.clock(duration)
     }
 }
 

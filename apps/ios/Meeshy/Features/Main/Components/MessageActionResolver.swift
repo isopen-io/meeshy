@@ -39,6 +39,17 @@ enum PrimaryAction: String, Equatable {
     case replyToPiece
     /// **Supprimer CETTE pièce** (#9908) — après confirmation, jamais une voisine.
     case deletePiece
+    /// **Transférer CETTE pièce** (#9914, #10947) — l'écran de partage unique
+    /// s'ouvre sur la seule pièce visée ; « Tout le message » y élargit.
+    case forwardPiece
+    /// **Ajouter le sticker REÇU à « Mes stickers »** (#10630) — à la place
+    /// qu'« Enregistrer » tient pour une photo, comme le menu du web : offert
+    /// seulement quand il n'y est pas déjà (loi 4 : un contrôle existe s'il a un effet).
+    case addSticker
+    /// **Mettre en favori un sticker qu'on possède déjà** (#10688) — emoji,
+    /// gabarit du catalogue ou Mee : à la place d'« Ajouter à mes stickers »,
+    /// qui n'a de sens que pour ce qu'on n'a pas.
+    case favoriteSticker, unfavoriteSticker
 }
 
 /// Item d'une section de la feuille « Plus… ».
@@ -117,6 +128,12 @@ struct MessageMenuContext: Equatable {
     /// « épingler ». Deux booléens auraient laissé représentable un quatrième
     /// état qui n'existe pas (« pas un sticker, mais épinglé »).
     var stickerFavorite: Bool? = nil
+    /// **Le message EST un sticker** (#10630) : son image jointe n'est pas une
+    /// photo, donc « Enregistrer » (Photos) n'est JAMAIS offert.
+    var isSticker: Bool = false
+    /// « Ajouter à mes stickers » est offert : image à déposer ET absente de la
+    /// bibliothèque (`ReceivedSticker.offersAdd`).
+    var stickerAddable: Bool = false
     /// Réciprocité : qui ne partage pas ses accusés de lecture ne voit pas ceux
     /// des autres. L'entrée « vues » disparaît plutôt que d'ouvrir une feuille
     /// vide — le serveur ne renverrait rien de toute façon.
@@ -304,7 +321,11 @@ enum MessageActionResolver {
             out.append(.exportImage)
             if ctx.hasDefaultExportFormat { out.append(.exportQuick) }
         }
-        if ctx.saveableAttachmentCount == 1 && showsContent && ctx.exits.offers(.save) { out.append(.saveMedia) }
+        if ctx.saveableAttachmentCount == 1 && !ctx.isSticker && showsContent && ctx.exits.offers(.save) { out.append(.saveMedia) }
+        if ctx.stickerAddable && showsContent && ctx.exits.offers(.save) { out.append(.addSticker) }
+        if let favorite = ctx.stickerFavorite, showsContent {
+            out.append(favorite ? .unfavoriteSticker : .favoriteSticker)
+        }
         // « Composer » suit immédiatement « Enregistrer » : ce sont les deux
         // gestes qui EMPORTENT le média hors de la conversation, et le second se
         // cherche à côté du premier. La CONDITION, elle, n'est pas ici : elle

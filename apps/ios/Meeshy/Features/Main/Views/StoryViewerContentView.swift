@@ -64,31 +64,33 @@ struct StoryViewerContentView: View {
                     // body, and we double-down here so neither the
                     // `scaleEffect` nor any unexpected intrinsic content
                     // size can leak beyond the viewport's actual bounds.
-                    // Vrai cube inter-groupes (Lot 3) : angle proportionnel à
-                    // la position écran, anchor sur l'arête intérieure — les
-                    // deux faces (carte sortante + aperçu voisin) tournent
-                    // autour de l'arête commune. À 90° la face est de profil :
+                    // Vrai cube inter-groupes (#11192) : chaque face reçoit sa
+                    // transformation COMPLÈTE (`StoryGroupCube`), dans le même
+                    // repère que sa voisine — jamais `.offset` puis une rotation
+                    // ancrée, dont l'ancre reste sur le bord de l'ÉCRAN. Les deux
+                    // faces partagent leur arête ; à 90° la face est de profil et
                     // le swap de contenu au commit y est invisible.
                     let cubeWidth = max(geometry.size.width, 1)
+                    let cubeFace = RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous)
+                    let current = StoryGroupCube.face(offsetX: totalSlideX, size: geometry.size)
                     makeStoryCard(geometry)
                         .frame(width: geometry.size.width, height: geometry.size.height)
-                        .scaleEffect(cardScale * (1.0 - slideProgress * 0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
-                        .opacity(cardOpacity)
-                        .offset(x: totalSlideX, y: cardOffsetY)
-                        .rotation3DEffect(
-                            .degrees(Double(totalSlideX / cubeWidth) * 90.0),
-                            axis: (x: 0, y: 1, z: 0),
-                            anchor: totalSlideX > 0 ? .leading : .trailing,
-                            perspective: 0.5
-                        )
+                        .scaleEffect(cardScale)
+                        .clipShape(cubeFace)
+                        .overlay(cubeFace.fill(Color.black.opacity(current.shade)).allowsHitTesting(false))
+                        .opacity(current.isFacingViewer ? cardOpacity : 0)
+                        .projectionEffect(ProjectionTransform(current.transform))
+                        .offset(y: cardOffsetY)
                         .shadow(
                             color: .black.opacity(dragProgress > 0.05 || slideProgress > 0.02 ? 0.5 : 0),
                             radius: 40, y: 15
                         )
 
                     if let neighborGroup, neighborDirection != 0 {
-                        let incomingX = totalSlideX + (neighborDirection == 1 ? cubeWidth : -cubeWidth)
+                        let incoming = StoryGroupCube.face(
+                            offsetX: totalSlideX + (neighborDirection == 1 ? cubeWidth : -cubeWidth),
+                            size: geometry.size
+                        )
                         NeighborGroupCubeFace(
                             entryStory: neighborEntryStory,
                             intro: neighborIntro,
@@ -99,14 +101,11 @@ struct StoryViewerContentView: View {
                             revealProgress: slideProgress
                         )
                             .frame(width: geometry.size.width, height: geometry.size.height)
-                            .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
-                            .offset(x: incomingX, y: cardOffsetY)
-                            .rotation3DEffect(
-                                .degrees(Double(incomingX / cubeWidth) * 90.0),
-                                axis: (x: 0, y: 1, z: 0),
-                                anchor: incomingX > 0 ? .leading : .trailing,
-                                perspective: 0.5
-                            )
+                            .clipShape(cubeFace)
+                            .overlay(cubeFace.fill(Color.black.opacity(incoming.shade)))
+                            .opacity(incoming.isFacingViewer ? 1 : 0)
+                            .projectionEffect(ProjectionTransform(incoming.transform))
+                            .offset(y: cardOffsetY)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
                     }

@@ -385,6 +385,76 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     /// Editing a message while offline must enqueue a durable `.editMessage`
     /// outbox row (flushed on reconnect via T10), NOT hit the REST edit
     /// directly and lose the change on failure.
+    // MARK: - Étapes de l'envoi : stageOffline et item de relance
+
+    private func makeOutgoing(
+        conversationId: String,
+        relation: MessageRelation = .none
+    ) -> OutgoingMessage {
+        OutgoingMessage(
+            conversationId: ConversationID(conversationId),
+            content: "Hors ligne",
+            relation: relation,
+            attachments: OutgoingAttachments(ids: nil, previews: nil)
+        )
+    }
+
+    func test_stageOffline_enqueuesItemAndReturnsQueuedOfflineReceipt() async throws {
+        let fx = try await makeFixture()
+        let outgoing = makeOutgoing(conversationId: fx.conversationId, relation: .storyReply(to: StoryID("s1"), reference: nil))
+
+        let result = await fx.sut.stageOffline(outgoing, intent: .none)
+
+        guard case .success(let receipt) = result else { return XCTFail("la mise en file doit réussir") }
+        XCTAssertEqual(receipt.delivery, .queuedOffline)
+        let items = await fx.offlineQueue.enqueuedItems
+        XCTAssertEqual(items.map(\.clientMessageId), [receipt.clientMessageId.rawValue])
+        XCTAssertEqual(items.first?.storyReplyToId, "s1")
+        let record = try await fx.fetchRecord(localId: receipt.clientMessageId.rawValue)
+        XCTAssertEqual(record?.state, .sending)
+    }
+
+    func test_stageOffline_enqueueThrows_marksRowFailed_returnsOfflineEnqueueFailed() async throws {
+        let fx = try await makeFixture(offlineQueueThrows: true)
+
+        let result = await fx.sut.stageOffline(makeOutgoing(conversationId: fx.conversationId), intent: .none)
+
+        guard case .failure(let failure) = result, case .offlineEnqueueFailed = failure else {
+            return XCTFail("l'échec de l'outbox doit remonter en offlineEnqueueFailed")
+        }
+        let cmid = try await fx.persistencePool.read { db in try String.fetchOne(db, sql: "SELECT localId FROM messages") }
+        let record = try await fx.fetchRecord(localId: try XCTUnwrap(cmid))
+        XCTAssertEqual(record?.state, .failed)
+    }
+
+    func test_onlineFailure_retryItem_carriesStoryReplyLink() async throws {
+        let fx = try await makeFixture(
+            isOnline: true,
+            restSendFailure: NSError(domain: "ConversationViewModelOfflineQueueTests", code: 500)
+        )
+
+        _ = await fx.sut.sendMessage(content: "réponse à une story", storyReplyToId: "s1")
+
+        let items = await fx.offlineQueue.enqueuedItems
+        XCTAssertEqual(items.count, 1)
+        XCTAssertEqual(items.first?.storyReplyToId, "s1")
+    }
+
+    func test_onlineFailure_retryItem_carriesForward_andNeverOffersItToTheSocket() async throws {
+        let fx = try await makeFixture(
+            isOnline: true,
+            restSendFailure: NSError(domain: "ConversationViewModelOfflineQueueTests", code: 500)
+        )
+
+        _ = await fx.sut.sendMessage(content: "transfert", forwardedFromId: "m9", forwardedFromConversationId: "c9")
+
+        let items = await fx.offlineQueue.enqueuedItems
+        let socketCalls = fx.messageSocket.sendViaSocketFallbackCallCount
+        XCTAssertEqual(items.first?.forwardedFromId, "m9")
+        XCTAssertEqual(items.first?.forwardedFromConversationId, "c9")
+        XCTAssertEqual(socketCalls, 0)
+    }
+
     func test_editMessage_offline_enqueuesEditThroughOutbox() async throws {
         let fx = try await makeFixture(isOnline: false)
 

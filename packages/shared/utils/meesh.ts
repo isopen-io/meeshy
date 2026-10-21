@@ -5,6 +5,16 @@
  * Meesh, l'opération se fait par une action MANUELLE. Ce qui fait redescendre
  * le niveau de chaque élément ayant permis de l'obtenir. »
  *
+ * ## ⚠️ LA LOI D'HIER (étincelles, #10846 — porteur 2026-10-16)
+ *
+ * Tout ce qui suit décrit la frappe qui reprenait des points PAR AXE et en retirait des ACTIONS (donc éteignait des
+ * badges). Elle n'existe plus côté serveur : la frappe dépense la poche (`User.engagementScore`), tout est
+ * convertible, elle ne débite ni `count` ni les points d'un axe, et n'éteint aucun badge. La passerelle ne lit plus
+ * `computeMeeshMintPlan` ni `MEESH_DEBIT_ORDER` pour frapper (`MeeshService`, `utils/game/sparks.ts`). Restent,
+ * @deprecated et sans autre usage : `computeMeeshMintPlan` (la prévision que rejouent encore les clients publiés,
+ * retirée avec eux), `MEESH_DEBIT_ORDER` (aussi l'ordre où la REPRISE d'un contenu retiré va chercher son reliquat),
+ * et `MEESH_POINTS_ONLY_AXES`. La distinction « points à convertir » (`MEESH_OPERATIONS_OUTSIDE_DEBIT`) est supprimée.
+ *
  * ## Ce que ce module contient, et ce qu'il ne contient pas
  *
  * Il contient la LOI : le prix, l'ordre du débit, et le PLAN qu'une frappe
@@ -28,7 +38,6 @@
  */
 
 import { ENGAGEMENT_AXES, type EngagementAxisKey } from '../types/engagement.js';
-import { ENGAGEMENT_OPERATIONS, type EngagementOperationKey } from '../types/engagement-operations.js';
 
 /** Le prix d'une Meesh, en points. */
 export const MEESH_MINT_COST = 1221;
@@ -77,85 +86,6 @@ export const MEESH_DEBIT_ORDER: readonly (readonly EngagementAxisKey[])[] = [
 export const axesHorsOrdreDeDebit = (): readonly EngagementAxisKey[] => {
   const ranges = new Set<string>(MEESH_DEBIT_ORDER.flat());
   return (ENGAGEMENT_AXES as readonly EngagementAxisKey[]).filter((a) => !ranges.has(a));
-};
-
-/**
- * Les opérations du catalogue que la frappe NE reprend PAS — l'état de fait au
- * 2026-10-13, écrit pour être lu, pas une décision (#10541).
- *
- * ## Pourquoi cette liste existe
- *
- * Le catalogue a grandi de vingt axes à cinquante-cinq opérations (#8959). Les
- * trente-cinq ajoutées créditent le score et leur propre compteur, mais
- * `computeMeeshMintPlan` et `MeeshService.axisStates` ne lisent que
- * `ENGAGEMENT_AXES` : leurs points montent le niveau et ne paient aucune Meesh.
- * Mesuré en production le 2026-10-13 : 54 526 points sur 360 711 (15 %), et
- * jusqu'à la moitié du score d'un compte sur dix.
- *
- * Personne n'a décidé cela : `axesHorsOrdreDeDebit` ne confronte l'ordre de
- * débit qu'aux axes, donc une opération nouvelle n'a jamais rien fait rougir.
- * Une liste absente se lit exactement comme une liste complète.
- *
- * ## Ce qu'elle engage
- *
- * Rien sur la loi de frappe — aucun calcul ne la lit. Elle rend l'exclusion
- * VISIBLE, et `operationsNonRangees` rend l'oubli impossible : une opération
- * ajoutée au catalogue doit entrer dans `MEESH_DEBIT_ORDER` ou ici, par un
- * geste écrit.
- *
- * Faire passer une opération d'ici à l'ordre de débit — et à quel rang, et si
- * `streak.bonus` ou les `profile.*` (une fois par compte) se dépensent — est une
- * décision du PORTEUR (#10541, option C). La trancher demandera aussi d'élargir
- * le type de `MEESH_DEBIT_ORDER` et les deux filtres cités plus haut.
- */
-export const MEESH_OPERATIONS_OUTSIDE_DEBIT: readonly EngagementOperationKey[] = [
-  'tool.quote_reply',
-  'tool.forward',
-  'tool.pin',
-  'tool.voice_listened',
-  'tool.translation_request',
-  'tool.location',
-  'conversation.call_started',
-  'conversation.call_joined',
-  'conversation.call_minutes',
-  'conversation.call_participant_added',
-  'social.conversation_invite',
-  'social.conversation_link_joined',
-  'social.community_created',
-  'social.community_joined',
-  'content.status',
-  'tool.post_reaction',
-  'tool.comment_like',
-  'social.repost',
-  'tool.post_bookmark',
-  'tool.story_viewed',
-  'tool.poll_answered',
-  'social.affiliate_link_created',
-  'social.conversation_link_created',
-  'social.link_visit',
-  'social.email_invite',
-  'social.contacts_synced',
-  'profile.avatar',
-  'profile.bio',
-  'profile.second_language',
-  'profile.email_verified',
-  'profile.phone_verified',
-  'profile.two_factor',
-  'profile.voice_profile',
-  'tool.sticker_created',
-  'streak.bonus',
-];
-
-/**
- * Les opérations qui ne sont rangées NULLE PART : ni dans l'ordre de débit, ni
- * dans `MEESH_OPERATIONS_OUTSIDE_DEBIT`. Vide tant que le catalogue est tenu.
- *
- * `catalogue` est un paramètre pour que le témoin prouve que la garde ROUGIT —
- * une garde qu'on ne peut pas faire tomber n'atteste rien.
- */
-export const operationsNonRangees = (catalogue: readonly string[] = ENGAGEMENT_OPERATIONS): readonly string[] => {
-  const rangees = new Set<string>([...MEESH_DEBIT_ORDER.flat(), ...MEESH_OPERATIONS_OUTSIDE_DEBIT]);
-  return catalogue.filter((operation) => !rangees.has(operation));
 };
 
 /**

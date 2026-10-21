@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
-import { NOTHING_RECEIVED_LABEL, NOTHING_RECEIVED_TEXT } from '@/lib/view/auth-copy';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 import { Glyph } from './glyph';
 import { AUTH_GLYPHS } from './glyphs-auth';
@@ -26,10 +27,29 @@ import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from './info
  * CE QUE LA PASSERELLE NE DIT PAS, ET QUE L'ÉCRAN DOIT DIRE (#6404) — la
  * première cause d'un e-mail « jamais reçu », repliée derrière un (i) dont la
  * question reste LUE à côté du glyphe (#6626) : posé seul sous l'adresse, un
- * (i) muet ne dirait pas de quoi il parle. Texte et libellé PARTAGÉS
- * (`lib/view/auth-copy.ts`, #6583).
+ * (i) muet ne dirait pas de quoi il parle. Texte et libellé PARTAGÉS par les
+ * deux hôtes (#6583), dans la langue d'interface (`emailSent.*`, #10823).
  */
-const NOTHING_RECEIVED: InfoHint = { label: NOTHING_RECEIVED_LABEL, text: NOTHING_RECEIVED_TEXT, glyph: AUTH_GLYPHS.info };
+const nothingReceivedHint = (language: InterfaceLanguage): InfoHint => ({
+  label: translate(language, 'emailSent.nothingReceived'),
+  text: translate(language, 'emailSent.nothingReceived.text'),
+  glyph: AUTH_GLYPHS.info,
+});
+
+/** L'adresse se met en valeur DANS la phrase traduite : l'ordre des mots est
+ * celui de la langue, jamais celui du français. */
+const EMAIL_SLOT = '\u0000';
+
+function OpenLinkSentence({ email, language }: { readonly email: string; readonly language: InterfaceLanguage }) {
+  const [before = '', after = ''] = translate(language, 'emailSent.openLink', { email: EMAIL_SLOT }).split(EMAIL_SLOT);
+  return (
+    <>
+      {before}
+      <strong style={{ color: 'var(--ios-indigo-400)' }}>{email}</strong>
+      {after}
+    </>
+  );
+}
 
 export function EmailSentNotice({
   email,
@@ -45,6 +65,8 @@ export function EmailSentNotice({
   readonly children?: ReactNode;
 }) {
   const nothingReceived = useInfoHint();
+  const language = currentInterfaceLanguage();
+  const hint = nothingReceivedHint(language);
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center">
       <div
@@ -56,21 +78,15 @@ export function EmailSentNotice({
       </div>
 
       <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-        E-mail envoyé
+        {translate(language, 'emailSent.title')}
       </h2>
-      <p style={{ color: 'var(--color-ios-ink-2)' }}>
-        {lead ?? (
-          <>
-            Ouvrez le lien reçu à <strong style={{ color: 'var(--ios-indigo-400)' }}>{email}</strong>
-          </>
-        )}
-      </p>
+      <p style={{ color: 'var(--color-ios-ink-2)' }}>{lead ?? <OpenLinkSentence email={email} language={language} />}</p>
 
       {status}
 
       <div className="grid justify-items-center">
-        <InfoHintButton hint={NOTHING_RECEIVED} state={nothingReceived} showsLabel />
-        <InfoHintText hint={NOTHING_RECEIVED} state={nothingReceived} />
+        <InfoHintButton hint={hint} state={nothingReceived} showsLabel />
+        <InfoHintText hint={hint} state={nothingReceived} />
       </div>
 
       {children}

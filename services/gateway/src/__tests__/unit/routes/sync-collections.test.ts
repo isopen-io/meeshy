@@ -235,6 +235,27 @@ describe('GET /sync — collection conversations', () => {
     await app.close();
   });
 
+  it("sert le contour équipé de l'autre participant d'un direct, jamais la colonne brute (#10757)", async () => {
+    const withRing = directParticipants.map((p) =>
+      p.id === 'p-peer' ? { ...p, user: { ...p.user, equippedAvatarRing: 'contours-essentiels/laurier' } } : { ...p, user: { ...p.user, equippedAvatarRing: null } },
+    );
+    const findMany = scopedStore(
+      [{ ...conv(CONV_MINE, '2026-07-02T00:00:00Z', '2026-07-02T10:00:00Z'), type: 'direct', participants: withRing }],
+      'id',
+    );
+    const prisma = makePrisma({ conversation: { findMany } });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=conversations` });
+    const [me, peer] = res.json().data.collections.conversations.added[0].participants;
+
+    expect(peer.profileDecor).toMatchObject({ avatarRing: { pack: 'contours-essentiels', item: 'laurier', origin: 'builtin' } });
+    expect('profileDecor' in me).toBe(false);
+    expect(JSON.stringify(res.json())).not.toContain('equippedAvatarRing');
+    expect(findMany.mock.calls[0][0].select.participants.select.user.select.equippedAvatarRing).toBe(true);
+    await app.close();
+  });
+
   it('vide `participants` pour tout type AUTRE que direct — jamais le roster complet', async () => {
     const prisma = makePrisma({
       conversation: { findMany: scopedStore(

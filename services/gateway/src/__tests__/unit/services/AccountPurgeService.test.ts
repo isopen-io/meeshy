@@ -14,6 +14,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from '../../../services/AccountPurgeService';
 import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
+import { accountReaderKeyOf } from '../../../services/posts/readerKey';
 import { sharedTranslationRow, sharedTranslationTable } from '../../helpers/shared-translation-table';
 import { fakeFileStore, fakePackDb } from './pack-privacy.fakes';
 
@@ -82,8 +83,8 @@ function shareLinkTable(initial: ShareLinkRow[]) {
 }
 
 function packTables(db: ReturnType<typeof fakePackDb>) {
-  const { userStickerPack, userSticker, stickerPack, stickerPackItem } = db;
-  return { userStickerPack, userSticker, stickerPack, stickerPackItem };
+  const { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack } = db;
+  return { userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack };
 }
 
 const NO_FILES = { packFiles: fakeFileStore([]).store };
@@ -112,7 +113,11 @@ describe('purgeAccountIsolatedData', () => {
     });
     const summary = await purgeAccountIsolatedData(prisma, USER_ID, NO_FILES);
 
-    for (const model of ['postImpression', 'postEngagement', 'postView', 'contentEvent']) {
+    // Les lignes sans consentement portent l'empreinte du compte (#10771, #10773) : elles partent avec lui.
+    for (const model of ['postImpression', 'postEngagement']) {
+      expect(prisma[model].deleteMany).toHaveBeenCalledWith({ where: { OR: [{ userId: USER_ID }, { readerKey: accountReaderKeyOf(USER_ID) }] } });
+    }
+    for (const model of ['postView', 'contentEvent']) {
       expect(prisma[model].deleteMany).toHaveBeenCalledWith({ where: { userId: USER_ID } });
     }
     expect(summary.readingTelemetry).toEqual({ impressions: 40, engagements: 7, views: 5, contentEvents: 12 });
@@ -281,6 +286,10 @@ describe('purgeAccountIsolatedData — les packs du compte (#10151)', () => {
         { id: 'c2', userId: VOISIN, packSlug: 'mee', installedAt: new Date(), updatedAt: new Date() },
       ],
       userSticker: [{ id: 's1', userId: USER_ID, filePath: `stickers/${USER_ID}/a.webp` }],
+      userPackOwnership: [
+        { id: 'o1', userId: USER_ID, packKey: 'banner.echantillon', priceMeeshes: 25, requestId: 'achat-0001', acquiredAt: new Date() },
+        { id: 'o2', userId: VOISIN, packKey: 'banner.echantillon', priceMeeshes: 25, requestId: 'achat-0002', acquiredAt: new Date() },
+      ],
     });
     const files = fakeFileStore([`stickers/${USER_ID}/a.webp`, `stickers/${VOISIN}/b.webp`]);
     const prisma = fakePrisma(packTables(db));
@@ -290,7 +299,8 @@ describe('purgeAccountIsolatedData — les packs du compte (#10151)', () => {
     expect(db.tables.userStickerPack.rows.map((row) => row.id)).toEqual(['c2']);
     expect(db.tables.userSticker.rows).toEqual([]);
     expect([...files.files]).toEqual([`stickers/${VOISIN}/b.webp`]);
-    expect(summary.packs).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 1 });
+    expect(db.tables.userPackOwnership.rows.map((row) => row.id)).toEqual(['o2']);
+    expect(summary.packs).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 1, ownershipsDeleted: 1 });
   });
 });
 
@@ -327,6 +337,14 @@ describe('anonymizeUserIdentity', () => {
       searchTokens: [],
       blockedUserIds: [],
     });
+  });
+
+  it('retire le contour d’avatar et la bannière de design ÉQUIPÉS (#10632) : un compte supprimé ne garde aucun décor de profil', async () => {
+    const prisma = fakeUserPrisma();
+    await anonymizeUserIdentity(prisma, USER_ID);
+
+    const [{ data }] = (prisma.user.updateMany as jest.Mock<any>).mock.calls[0] as [{ data: any }];
+    expect(data).toMatchObject({ equippedAvatarRing: null, equippedBanner: null, equippedBannerFrame: null });
   });
 
   it('clears authentication secrets — 2FA, Signal Protocol keys, and rehashes the password', async () => {

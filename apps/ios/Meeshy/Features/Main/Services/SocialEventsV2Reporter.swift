@@ -123,7 +123,7 @@ final class SocialEventsV2Reporter: SocialEventsV2Reporting {
 
     static let shared = SocialEventsV2Reporter()
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "social-events-v2")
+    private static let logger = MeeshyLog.logger(.socialEventsV2)
 
     private let outbox: SocialEventsV2Outbox
     private let postService: PostServiceProviding

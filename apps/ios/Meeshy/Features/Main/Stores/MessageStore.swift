@@ -38,7 +38,7 @@ private final class WeakBox: @unchecked Sendable {
 }
 
 // Notification.Name `messageStoreShouldRefresh` is defined in
-// `packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift`
+// `packages/MeeshySDK/Sources/MeeshySDK/Persistence/PersistenceNotifications.swift`
 // so both MessageStore (iOS app) and MessagePersistenceActor (SDK) can use it.
 
 /// Fetches the message window from GRDB based on `WindowMode`. Declared at
@@ -78,9 +78,7 @@ private nonisolated func fetchMessageWindow(
             // on very large match sets (deep search pagination), then re-sort
             // the union chronologically. The common case (≤ a page of results)
             // is a single query + a trivial sort.
-            let chunks = stride(from: 0, to: ids.count, by: 900).map {
-                Array(ids[$0 ..< min($0 + 900, ids.count)])
-            }
+            let chunks = MessageStore.searchIdChunks(ids)
             var collected: [MessageRecord] = []
             for chunk in chunks {
                 let rows = try MessageRecord
@@ -229,6 +227,14 @@ public final class MessageStore: ObservableObject {
     /// CHAQUE accusé de lecture émis pendant le défilement. Une lecture
     /// réellement DELTA (par `changeVersion`) est la suite naturelle.
     static let realtimeAnchoredWindowCap = 500
+
+    /// Plafond de la fenêtre `.latest` JAMAIS REMONTÉE (aucune ancre). La fusion protectrice de `publish`
+    /// préserve tout ce qui sort des 200 dernières lignes relues : sur un fil laissé ouvert — un iPad posé
+    /// sur un groupe actif — la fenêtre gagnait chaque message reçu et ne rendait rien, et chaque accusé
+    /// re-triait le tout sur la boucle principale. Sans ancre, la personne n'a jamais paginé vers le passé :
+    /// les lignes retirées sont à plus de mille rangées du présent, et `loadOlder` les relit depuis GRDB.
+    /// Une fenêtre ANCRÉE (historique remonté) n'est pas touchée — on ne retire rien sous les yeux de qui lit.
+    static let unanchoredWindowCap = 1_000
 
     // MARK: - Public State
 
@@ -508,13 +514,23 @@ public final class MessageStore: ObservableObject {
     /// fois, sur le chemin chaud. `apply(records:)` n'a pas cette garantie et
     /// continue d'appeler `publish`.
     private func publishUnchecked(records: [MessageRecord], mergeInMemory: Bool) {
-        let next: [MessageRecord]
+        var next: [MessageRecord]
+        #if DEBUG
+        var cappedIds: Set<String> = []
+        #endif
         if mergeInMemory, windowMode == .latest {
             let snapshotIds = Set(records.map(\.localId))
             let preserved = messages.filter { !snapshotIds.contains($0.localId) }
             next = preserved.isEmpty
                 ? records
                 : (records + preserved).sorted { $0.createdAt < $1.createdAt }
+            if windowAnchor == nil, next.count > Self.unanchoredWindowCap {
+                let overflow = next.count - Self.unanchoredWindowCap
+                #if DEBUG
+                cappedIds = Set(next.prefix(overflow).map(\.localId))
+                #endif
+                next.removeFirst(overflow)
+            }
         } else {
             next = records
         }
@@ -539,7 +555,8 @@ public final class MessageStore: ObservableObject {
         let beforeCount = messages.count
         let beforeIds = Set(messages.map(\.localId))
         let afterIds = Set(published.map(\.localId))
-        let droppedIds = beforeIds.subtracting(afterIds)
+        // Les lignes rendues par le plafond (`unanchoredWindowCap`) sont un retrait VOULU, pas une perte.
+        let droppedIds = beforeIds.subtracting(afterIds).subtracting(cappedIds)
         if !droppedIds.isEmpty {
             let beforeById = Dictionary(messages.map { ($0.localId, $0) }, uniquingKeysWith: { a, _ in a })
             // Classify each dropped row: when its serverId survives in the
@@ -644,6 +661,21 @@ public final class MessageStore: ObservableObject {
     /// identity and the send flow's cid tracking survive — matching the
     /// successful-reconcile outcome. Rows without a serverId (un-acked) are
     /// distinct messages and never merged; survivor order is preserved.
+    /// Les ids d'une recherche filtrée, sans doublon, par paquets de `size` (plafond SQLite des `IN`).
+    ///
+    /// Les pages de recherche se recouvrent quand de nouveaux résultats arrivent entre deux curseurs :
+    /// un même id tombé dans DEUX paquets ramenait la même ligne deux fois — même `localId` — et
+    /// `MessageListSnapshotPrep.baseline` comme l'`apply` du diffable plantaient sur l'identifiant
+    /// dupliqué.
+    nonisolated static func searchIdChunks(_ ids: [String], size: Int = 900) -> [[String]] {
+        var seen = Set<String>()
+        let unique = ids.filter { seen.insert($0).inserted }
+        let step = Swift.max(1, size)
+        return stride(from: 0, to: unique.count, by: step).map {
+            Array(unique[$0 ..< Swift.min($0 + step, unique.count)])
+        }
+    }
+
     static func collapsingDuplicateServerIds(_ records: [MessageRecord]) -> [MessageRecord] {
         // Fast path: bail out unless a serverId actually repeats.
         var seen = Set<String>()

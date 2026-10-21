@@ -18,6 +18,9 @@ import MeeshyUI
 ///
 /// iOS 16 et 17 gardent le geste SwiftUI d'origine.
 struct AudioFullscreenDismissDrag: ViewModifier {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
     @Binding var offset: CGFloat
     let onDismiss: () -> Void
 
@@ -35,7 +38,7 @@ struct AudioFullscreenDismissDrag: ViewModifier {
     private func conclude(translation: CGFloat, velocity: CGFloat) {
         guard offset > 0 else { return }
         if AudioFullscreenDismissRule.dismisses(translation: translation, velocity: velocity,
-                                                height: DeviceLayout.windowSize.height) {
+                                                height: hostHeight) {
             onDismiss()
         } else {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { offset = 0 }

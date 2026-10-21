@@ -4,9 +4,7 @@ import type frPublicEntry from './catalog-fr-public-entry';
 const enPublicEntry = {
   'publicHeader.home': 'Meeshy home',
   'publicHeader.language': 'Language',
-  'login.world.title': 'Enter {title}',
-  'login.world.subtitle': 'No account · your name and your language',
-  'login.world.or': 'or with your account',
+  'brand.credit.hint': 'opens the services.ceo platform in a new tab',
   'login.offline': 'Offline — signing in isn’t possible right now.',
   'login.twoFactor.title': 'Two-factor authentication',
   'login.twoFactor.lead': 'Enter the code from your authenticator app.',
@@ -35,6 +33,17 @@ const enPublicEntry = {
   'magicLink.offline': 'No connection. Check your network and try again.',
   'magicLink.submit': 'Get the link',
   'magicLink.submit.busy': 'Sending…',
+  'magicLink.flowTitle': 'Sign in with email',
+  'magicLink.validating': 'Checking the link…',
+  'magicLink.invalid.title': 'Invalid or expired link',
+  'magicLink.invalid.body': 'A sign-in link expires after 10 minutes and works only once.',
+  'magicLink.requestNew': 'Request a new link',
+  'magicLink.backToLogin': 'Back to sign-in',
+  'magicLink.retry': 'Try again',
+  'magicLink.resend': 'Resend',
+  'magicLink.resend.label': 'Resend the link',
+  'magicLink.cancel': 'Cancel',
+  'magicLink.linkExpired': 'Link expired — request a new one',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default enPublicEntry;

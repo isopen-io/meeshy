@@ -18,7 +18,9 @@ import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { publishSampleStickerPack, type Credentials } from '../src/services/packs/samplePackPublisher';
 
-const MEE_STICKERS = resolve(__dirname, '../../../packages/MeeshySDK/Sources/MeeshyUI/Resources/MeeStickers');
+// Les WebP du pack d'exemple vivent avec la passerelle depuis que les `MeeStickers` du SDK sont passés en
+// `.lottie` (94e9d51898) : une soumission de pack n'accepte que des images, et ces quatre-là en restent.
+const MEE_STICKERS = resolve(__dirname, '../assets/sample-sticker-pack');
 
 function credentials(userKey: string, passwordKey: string, fallback?: readonly [string, string]): Credentials {
   const username = process.env[userKey] ?? (fallback ? process.env[fallback[0]] : undefined);

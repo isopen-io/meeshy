@@ -72,7 +72,11 @@ function seed() {
     'sticker-packs/p3-dir/trois.webp',
     'sticker-packs/p4-dir/quatre.webp',
   ]);
-  const db = fakePackDb({ userStickerPack, userSticker, stickerPack, stickerPackItem });
+  const userPackOwnership: Row[] = [
+    { id: 'o1', userId: PARTI, packKey: 'wallpaper.echantillon', priceMeeshes: 40, requestId: 'achat-0001', acquiredAt: LATER },
+    { id: 'o2', userId: VOISIN, packKey: 'banner.echantillon', priceMeeshes: 25, requestId: 'achat-0002', acquiredAt: AT },
+  ];
+  const db = fakePackDb({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership });
   return { db, files };
 }
 
@@ -135,6 +139,15 @@ describe('exportPackData — ce que le compte a fait des packs (#10151)', () => 
     expect(data.submissions.items.map((pack) => pack.slug).sort()).toEqual(['en-attente', 'publie', 'refuse']);
   });
 
+  it('exporte ses ACHATS de packs (#10632) : domaine, slug, prix payé et date, sans l’identifiant technique de la dépense', async () => {
+    const { db } = seed();
+
+    const data = await exportPackData(db as never, PARTI, PAGE);
+
+    expect(data.ownerships.total).toBe(1);
+    expect(data.ownerships.items).toEqual([{ domain: 'wallpaper', slug: 'echantillon', priceMeeshes: 40, acquiredAt: LATER }]);
+  });
+
   it('ne sort rien du voisin', async () => {
     const { db } = seed();
 
@@ -143,6 +156,7 @@ describe('exportPackData — ce que le compte a fait des packs (#10151)', () => 
 
     expect(text).not.toContain(VOISIN);
     expect(text).not.toContain('du-voisin');
+    expect(text).not.toContain('banner.echantillon');
   });
 });
 
@@ -156,6 +170,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
     expect(db.tables.userSticker.rows.map((row) => row.id)).toEqual(['s2']);
     expect(db.tables.stickerPack.rows.map((row) => row.id).sort()).toEqual(['p3', 'p4']);
     expect(db.tables.stickerPackItem.rows.map((row) => row.id).sort()).toEqual(['i3', 'i4']);
+    expect(db.tables.userPackOwnership.rows.map((row) => row.id)).toEqual(['o2']);
     expect([...files.files].sort()).toEqual([
       'sticker-packs/p3-dir/trois.webp',
       'sticker-packs/p4-dir/quatre.webp',
@@ -167,6 +182,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
       submissionsDeleted: 2,
       publishedAnonymized: 1,
       filesDeleted: 4,
+      ownershipsDeleted: 1,
     });
   });
 
@@ -187,7 +203,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
 
     const second = await purgePackData(db as never, PARTI, { files: files.store });
 
-    expect(second).toEqual({ choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0 });
+    expect(second).toEqual({ choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0, ownershipsDeleted: 0 });
     expect(JSON.stringify(db.tables)).toBe(after);
   });
 
@@ -197,7 +213,7 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
 
     const measured = await measurePackData(db as never, PARTI, { files: files.store });
 
-    expect(measured).toEqual({ choicesDeleted: 3, libraryDeleted: 1, submissionsDeleted: 2, publishedAnonymized: 1, filesDeleted: 4 });
+    expect(measured).toEqual({ choicesDeleted: 3, libraryDeleted: 1, submissionsDeleted: 2, publishedAnonymized: 1, filesDeleted: 4, ownershipsDeleted: 1 });
     expect(JSON.stringify(db.tables)).toBe(before);
     expect(db.writes).toEqual([]);
     expect(files.removed).toEqual([]);
@@ -210,5 +226,41 @@ describe('purgePackData — la purge à l’expiration de la grâce (#10151)', (
 
     expect(summary.filesDeleted).toBe(0);
     expect(files.removed).toEqual([]);
+  });
+});
+
+describe('les propositions d’apparence d’un tiers suivent le compte (#10709)', () => {
+  const appearance = (id: string, submitterId: string, status: string, author = 'Awa'): Row => ({
+    id, domain: 'wallpaper', slug: `pack-${id}`, name: 'Dunes', description: '', author, submitterId, status, reviewNote: null, reviewedAt: null, price: null, installCount: 3, createdAt: AT, contractJson: '{"domain":"wallpaper","designs":[]}',
+  });
+  const rows = (): Row[] => [appearance('a1', PARTI, 'pending'), appearance('a2', PARTI, 'rejected'), appearance('a3', PARTI, 'approved'), appearance('a4', VOISIN, 'pending', 'Voisin')];
+
+  it('les exporte, contrat compris, sans rien du voisin', async () => {
+    const db = fakePackDb({ communityAppearancePack: rows() });
+    const data = await exportPackData(db as never, PARTI, PAGE);
+    expect(data.appearanceSubmissions.total).toBe(3);
+    expect(data.appearanceSubmissions.items.map((row) => row.slug).sort()).toEqual(['pack-a1', 'pack-a2', 'pack-a3']);
+    expect(data.appearanceSubmissions.items[0]).toHaveProperty('contractJson');
+    expect(JSON.stringify(data)).not.toContain('Voisin');
+  });
+
+  it('efface les non publiées, anonymise la publiée, laisse le voisin', async () => {
+    const db = fakePackDb({ communityAppearancePack: rows() });
+    const { files } = { files: fakeFileStore([]) };
+    const summary = await purgePackData(db as never, PARTI, { files: files.store });
+    expect(db.tables.communityAppearancePack.rows.map((row) => [row.id, row.author])).toEqual([
+      ['a3', DELETED_ACCOUNT_PACK_AUTHOR],
+      ['a4', 'Voisin'],
+    ]);
+    expect(summary).toMatchObject({ submissionsDeleted: 2, publishedAnonymized: 1 });
+    const again = await purgePackData(db as never, PARTI, { files: files.store });
+    expect(again).toMatchObject({ submissionsDeleted: 0, publishedAnonymized: 0 });
+  });
+
+  it('mesure à blanc ce que la purge effacerait', async () => {
+    const db = fakePackDb({ communityAppearancePack: rows() });
+    const measured = await measurePackData(db as never, PARTI, { files: fakeFileStore([]).store });
+    expect(measured).toMatchObject({ submissionsDeleted: 2, publishedAnonymized: 1 });
+    expect(db.tables.communityAppearancePack.rows).toHaveLength(4);
   });
 });

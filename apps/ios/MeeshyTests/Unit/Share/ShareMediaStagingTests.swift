@@ -104,6 +104,50 @@ final class ShareMediaStagingTests: XCTestCase {
         XCTAssertEqual(staged.relPath, "cid_abc/0.bin")
     }
 
+    /// L'extension vient du nom de fichier que l'app hôte a choisi : seule une
+    /// extension courte, minuscule, alphanumérique se garde (#11134).
+    func test_fileExtension_replacesAnythingButAShortLowercaseAlphanumeric() {
+        let hostile = ["..", "a/b", String(repeating: "x", count: 40), "jpé", "j p", "-1"]
+        hostile.forEach { ext in
+            XCTAssertEqual(ShareMediaStaging.fileExtension(sourceExtension: ext, mime: "image/png"), "png", ext)
+            XCTAssertEqual(ShareMediaStaging.fileExtension(sourceExtension: ext, mime: "application/octet-stream"), "bin", ext)
+        }
+        XCTAssertEqual(ShareMediaStaging.fileExtension(sourceExtension: "JPG", mime: "image/png"), "jpg")
+        XCTAssertEqual(ShareMediaStaging.fileExtension(sourceExtension: "mp4", mime: "image/png"), "mp4")
+    }
+
+    func test_stage_aShareIdThatClimbsOut_isRefusedAndWritesNothingOutside() throws {
+        let dir = try makeDirectory()
+        let source = try makeFile(bytes: 16, ext: "jpg", in: dir)
+        let mediaRoot = try makeDirectory().appendingPathComponent("share_pending_media", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaRoot, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try ShareMediaStaging.stage(
+            source: source, into: mediaRoot, shareId: "../evade",
+            index: 0, mime: "image/jpeg", freeBytes: 1_000_000_000
+        )) { error in
+            XCTAssertEqual(error as? ShareMediaStagingError, .destinationOutsideShare)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaRoot.deletingLastPathComponent().appendingPathComponent("evade").path))
+    }
+
+    func test_stage_aShareDirectoryThatIsASymlink_isRefused() throws {
+        let dir = try makeDirectory()
+        let source = try makeFile(bytes: 16, ext: "jpg", in: dir)
+        let mediaRoot = try makeDirectory()
+        let elsewhere = try makeDirectory()
+        try FileManager.default.createSymbolicLink(
+            at: mediaRoot.appendingPathComponent("cid_abc"), withDestinationURL: elsewhere)
+
+        XCTAssertThrowsError(try ShareMediaStaging.stage(
+            source: source, into: mediaRoot, shareId: "cid_abc",
+            index: 0, mime: "image/jpeg", freeBytes: 1_000_000_000
+        )) { error in
+            XCTAssertEqual(error as? ShareMediaStagingError, .destinationOutsideShare)
+        }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: elsewhere.path), [])
+    }
+
     /// Un disque plein transformerait la copie en fichier TRONQUÉ, donc en
     /// pièce jointe corrompue livrée sans un mot. Le refus est explicite.
     func test_stage_withoutEnoughFreeSpace_refusesBeforeCopying() throws {
@@ -117,7 +161,7 @@ final class ShareMediaStagingTests: XCTestCase {
         )) { error in
             XCTAssertEqual(
                 error as? ShareMediaStagingError,
-                .insufficientFreeSpace(needed: 4096 + ShareLimits.freeSpaceMarginBytes, free: 4096)
+                .insufficientFreeSpace(needed: 4096 + ShareUploadBudget.freeSpaceMarginBytes, free: 4096)
             )
         }
         XCTAssertFalse(FileManager.default.fileExists(
@@ -127,7 +171,7 @@ final class ShareMediaStagingTests: XCTestCase {
 
     func test_requiredFreeBytes_addsTheSafetyMargin() {
         XCTAssertEqual(ShareMediaStaging.requiredFreeBytes(for: 1_000),
-                       1_000 + ShareLimits.freeSpaceMarginBytes)
+                       1_000 + ShareUploadBudget.freeSpaceMarginBytes)
     }
 
     // MARK: - iCloud non téléchargé

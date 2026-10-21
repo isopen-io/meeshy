@@ -192,7 +192,7 @@ export async function stickerPacksRoutes(fastify: FastifyInstance, options: Stic
     summaryJsonSchema,
     detailJsonSchema,
     notFound: { message: 'Sticker pack not found', code: STICKER_PACK_ERROR_CODES.NOT_FOUND },
-    notRemovable: null,
+    notRemovable: { message: 'This pack is included and cannot be removed', code: 'PACK_NOT_REMOVABLE' },
     texts: {
       list: {
         description: 'La boutique des packs de stickers (#9141) : les packs intégrés (Mee, Meo, Mee & Meo) puis les packs publiés, avec leur état d’installation.',

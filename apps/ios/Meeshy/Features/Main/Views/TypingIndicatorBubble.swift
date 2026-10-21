@@ -59,7 +59,9 @@ struct TypingIndicatorBubble: View {
                 context: .custom(size),
                 accentColor: accentHex,
                 avatarURL: lead.avatarURL,
+                presenceState: PresenceManager.shared.presenceState(for: lead.id),
                 isHere: here[lead.id],
+                ring: lead.ring,
                 isDark: isDark
             )
         }

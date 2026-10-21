@@ -52,4 +52,58 @@ final class RiverCardsProjectionTests: XCTestCase {
         XCTAssertTrue(source.contains("BubbleLinkEmbed("))
         XCTAssertTrue(source.contains("BubbleAttachmentView("))
     }
+
+    // MARK: - #10637 — l'emoji seul
+
+    private func emojiMessage(_ content: String, replyTo: ReplyReference? = nil) -> MeeshyMessage {
+        var m = MeeshyMessage(id: "m1", conversationId: "c", senderId: "alice", content: content,
+                              createdAt: Self.t0, updatedAt: Self.t0)
+        m.senderName = "Alice"
+        m.replyTo = replyTo
+        return m
+    }
+
+    private func projectedEmoji(_ message: MeeshyMessage) -> RiverBubbleContent? {
+        let messages = [message]
+        let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))
+        return RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me",
+            text: { $0.content }, time: { _ in "12:00" }
+        ).first
+    }
+
+    private func bubbleSize(_ message: MeeshyMessage) -> CGFloat? {
+        BubbleContent(message: message, translations: [], preferredTranslation: nil,
+                      currentUserId: "me", timeString: "12:00").text?.emojiFontSize
+    }
+
+    func test_contents_loneEmoji_carriesTheSizeTheBubbleResolved() {
+        let m = emojiMessage("😀")
+        XCTAssertNotNil(bubbleSize(m))
+        XCTAssertEqual(projectedEmoji(m)?.emojiFontSize, bubbleSize(m))
+    }
+
+    func test_contents_threeEmojis_carryTheSmallerSizeOfTheLadder() {
+        let one = projectedEmoji(emojiMessage("😀"))?.emojiFontSize
+        let three = projectedEmoji(emojiMessage("😀😀😀"))?.emojiFontSize
+        XCTAssertNotNil(three)
+        XCTAssertLessThan(three ?? 0, one ?? 0)
+    }
+
+    func test_contents_ordinaryText_carriesNoEmojiSize() {
+        XCTAssertNil(projectedEmoji(emojiMessage("Bonjour 😀"))?.emojiFontSize)
+    }
+
+    func test_contents_emojiOnlyReply_keepsTheSizeAndItsQuotedCard() {
+        let reply = ReplyReference(messageId: "p", authorName: "Bob", previewText: "Salut")
+        let content = projectedEmoji(emojiMessage("😀", replyTo: reply))
+        XCTAssertEqual(content?.emojiFontSize, bubbleSize(emojiMessage("😀", replyTo: reply)))
+        XCTAssertNotNil(content?.replyPreview)
+    }
+
+    func test_contents_emojiWithAttachment_staysInItsBubble() {
+        var m = emojiMessage("😀")
+        m.attachments = [MeeshyMessageAttachment(id: "a", fileName: "p.jpg", originalName: "p.jpg", mimeType: "image/jpeg", fileSize: 1)]
+        XCTAssertNil(projectedEmoji(m)?.emojiFontSize)
+    }
 }

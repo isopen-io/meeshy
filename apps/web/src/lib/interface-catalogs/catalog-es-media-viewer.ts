@@ -38,6 +38,7 @@ const esMediaViewer = {
   'media.sound.library': 'Sonido de la biblioteca',
   'media.sound.mute': 'Silenciar sonido de fondo',
   'media.sound.unmute': 'Activar sonido de fondo',
+  'media.audio.track_of': 'Mensaje de voz {index} de {total}',
 };
 
 export default esMediaViewer;

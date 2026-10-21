@@ -5232,10 +5232,7 @@
       "input": {
         "law": "guide",
         "event": {
-          "kind": "first-mint",
-          "levelBefore": 14,
-          "levelAfter": 9,
-          "tailwindUntilLevel": 14
+          "kind": "first-mint"
         },
         "seen": []
       },
@@ -5243,12 +5240,8 @@
         "key": "first-mint",
         "speaker": "duo",
         "mood": "minting",
-        "action": "regain-levels",
-        "data": {
-          "levelBefore": 14,
-          "levelAfter": 9,
-          "tailwindUntilLevel": 14
-        },
+        "action": "see-progress",
+        "data": {},
         "presentation": "full"
       }
     },
@@ -5257,10 +5250,7 @@
       "input": {
         "law": "guide",
         "event": {
-          "kind": "first-mint",
-          "levelBefore": 14,
-          "levelAfter": 9,
-          "tailwindUntilLevel": 14
+          "kind": "first-mint"
         },
         "seen": [
           "first-mint"
@@ -5270,56 +5260,8 @@
         "key": "first-mint",
         "speaker": "duo",
         "mood": "minting",
-        "action": "regain-levels",
-        "data": {
-          "levelBefore": 14,
-          "levelAfter": 9,
-          "tailwindUntilLevel": 14
-        },
-        "presentation": "short"
-      }
-    },
-    {
-      "_label": "guide « badge-extinguished » la première fois",
-      "input": {
-        "law": "guide",
-        "event": {
-          "kind": "badge-extinguished",
-          "missingActions": 37
-        },
-        "seen": []
-      },
-      "expected": {
-        "key": "badge-extinguished",
-        "speaker": "meo",
-        "mood": "calm",
-        "action": "relight-badge",
-        "data": {
-          "missingActions": 37
-        },
-        "presentation": "full"
-      }
-    },
-    {
-      "_label": "guide « badge-extinguished » déjà vu",
-      "input": {
-        "law": "guide",
-        "event": {
-          "kind": "badge-extinguished",
-          "missingActions": 37
-        },
-        "seen": [
-          "badge-extinguished"
-        ]
-      },
-      "expected": {
-        "key": "badge-extinguished",
-        "speaker": "meo",
-        "mood": "calm",
-        "action": "relight-badge",
-        "data": {
-          "missingActions": 37
-        },
+        "action": "see-progress",
+        "data": {},
         "presentation": "short"
       }
     },
@@ -18029,7 +17971,9 @@
             "emblem": {
               "kind": "tier",
               "tier": "lueur",
-              "level": 10
+              "level": 10,
+              "prestige": 0,
+              "times": 1
             }
           },
           {
@@ -18038,7 +17982,9 @@
             "emblem": {
               "kind": "tier",
               "tier": "lumiere",
-              "level": 20
+              "level": 20,
+              "prestige": 0,
+              "times": 1
             }
           },
           {
@@ -18047,7 +17993,9 @@
             "emblem": {
               "kind": "tier",
               "tier": "eclat",
-              "level": 30
+              "level": 30,
+              "prestige": 0,
+              "times": 1
             }
           }
         ],
@@ -18105,83 +18053,101 @@
           },
           {
             "track": "tier",
-            "id": "tier:lueur",
+            "id": "tier:lueur:2",
             "emblem": {
               "kind": "tier",
               "tier": "lueur",
-              "level": 10
+              "level": 10,
+              "prestige": 2,
+              "times": 3
             }
           },
           {
             "track": "tier",
-            "id": "tier:lumiere",
+            "id": "tier:lumiere:2",
             "emblem": {
               "kind": "tier",
               "tier": "lumiere",
-              "level": 20
+              "level": 20,
+              "prestige": 2,
+              "times": 3
             }
           },
           {
             "track": "tier",
-            "id": "tier:eclat",
+            "id": "tier:eclat:2",
             "emblem": {
               "kind": "tier",
               "tier": "eclat",
-              "level": 30
+              "level": 30,
+              "prestige": 2,
+              "times": 3
             }
           },
           {
             "track": "tier",
-            "id": "tier:rayon",
+            "id": "tier:rayon:2",
             "emblem": {
               "kind": "tier",
               "tier": "rayon",
-              "level": 40
+              "level": 40,
+              "prestige": 2,
+              "times": 3
             }
           },
           {
             "track": "tier",
-            "id": "tier:aurore",
+            "id": "tier:aurore:2",
             "emblem": {
               "kind": "tier",
               "tier": "aurore",
-              "level": 50
+              "level": 50,
+              "prestige": 2,
+              "times": 3
             }
           },
           {
             "track": "tier",
-            "id": "tier:comete",
+            "id": "tier:comete:2",
             "emblem": {
               "kind": "tier",
               "tier": "comete",
-              "level": 60
+              "level": 60,
+              "prestige": 2,
+              "times": 3
             }
           },
           {
             "track": "tier",
-            "id": "tier:etoile",
+            "id": "tier:etoile:2",
             "emblem": {
               "kind": "tier",
               "tier": "etoile",
-              "level": 70
+              "level": 70,
+              "prestige": 2,
+              "times": 3
             }
           },
           {
             "track": "tier",
-            "id": "tier:constellation",
+            "id": "tier:constellation:2",
             "emblem": {
               "kind": "tier",
               "tier": "constellation",
-              "level": 80
+              "level": 80,
+              "prestige": 2,
+              "times": 3
             }
           },
           {
             "track": "tier",
-            "id": "tier:galaxie",
+            "id": "tier:galaxie:2",
             "emblem": {
               "kind": "tier",
               "tier": "galaxie",
-              "level": 90
+              "level": 90,
+              "prestige": 2,
+              "times": 3
             }
           },
           {
@@ -18217,58 +18183,58 @@
             "blockedBy": null
           },
           {
-            "id": "tier:lueur",
+            "id": "tier:lueur:2",
             "track": "tier",
             "state": "open",
             "blockedBy": null
           },
           {
-            "id": "tier:lumiere",
+            "id": "tier:lumiere:2",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:2"
           },
           {
-            "id": "tier:eclat",
+            "id": "tier:eclat:2",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:2"
           },
           {
-            "id": "tier:rayon",
+            "id": "tier:rayon:2",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:2"
           },
           {
-            "id": "tier:aurore",
+            "id": "tier:aurore:2",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:2"
           },
           {
-            "id": "tier:comete",
+            "id": "tier:comete:2",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:2"
           },
           {
-            "id": "tier:etoile",
+            "id": "tier:etoile:2",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:2"
           },
           {
-            "id": "tier:constellation",
+            "id": "tier:constellation:2",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:2"
           },
           {
-            "id": "tier:galaxie",
+            "id": "tier:galaxie:2",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:2"
           },
           {
             "id": "level-100:0",
@@ -18317,11 +18283,13 @@
           },
           {
             "track": "tier",
-            "id": "tier:lueur",
+            "id": "tier:lueur:1",
             "emblem": {
               "kind": "tier",
               "tier": "lueur",
-              "level": 10
+              "level": 10,
+              "prestige": 1,
+              "times": 2
             }
           },
           {
@@ -18349,7 +18317,7 @@
             "blockedBy": null
           },
           {
-            "id": "tier:lueur",
+            "id": "tier:lueur:1",
             "track": "tier",
             "state": "open",
             "blockedBy": null
@@ -18819,83 +18787,101 @@
           },
           {
             "track": "tier",
-            "id": "tier:lueur",
+            "id": "tier:lueur:1",
             "emblem": {
               "kind": "tier",
               "tier": "lueur",
-              "level": 10
+              "level": 10,
+              "prestige": 1,
+              "times": 2
             }
           },
           {
             "track": "tier",
-            "id": "tier:lumiere",
+            "id": "tier:lumiere:1",
             "emblem": {
               "kind": "tier",
               "tier": "lumiere",
-              "level": 20
+              "level": 20,
+              "prestige": 1,
+              "times": 2
             }
           },
           {
             "track": "tier",
-            "id": "tier:eclat",
+            "id": "tier:eclat:1",
             "emblem": {
               "kind": "tier",
               "tier": "eclat",
-              "level": 30
+              "level": 30,
+              "prestige": 1,
+              "times": 2
             }
           },
           {
             "track": "tier",
-            "id": "tier:rayon",
+            "id": "tier:rayon:1",
             "emblem": {
               "kind": "tier",
               "tier": "rayon",
-              "level": 40
+              "level": 40,
+              "prestige": 1,
+              "times": 2
             }
           },
           {
             "track": "tier",
-            "id": "tier:aurore",
+            "id": "tier:aurore:1",
             "emblem": {
               "kind": "tier",
               "tier": "aurore",
-              "level": 50
+              "level": 50,
+              "prestige": 1,
+              "times": 2
             }
           },
           {
             "track": "tier",
-            "id": "tier:comete",
+            "id": "tier:comete:1",
             "emblem": {
               "kind": "tier",
               "tier": "comete",
-              "level": 60
+              "level": 60,
+              "prestige": 1,
+              "times": 2
             }
           },
           {
             "track": "tier",
-            "id": "tier:etoile",
+            "id": "tier:etoile:1",
             "emblem": {
               "kind": "tier",
               "tier": "etoile",
-              "level": 70
+              "level": 70,
+              "prestige": 1,
+              "times": 2
             }
           },
           {
             "track": "tier",
-            "id": "tier:constellation",
+            "id": "tier:constellation:1",
             "emblem": {
               "kind": "tier",
               "tier": "constellation",
-              "level": 80
+              "level": 80,
+              "prestige": 1,
+              "times": 2
             }
           },
           {
             "track": "tier",
-            "id": "tier:galaxie",
+            "id": "tier:galaxie:1",
             "emblem": {
               "kind": "tier",
               "tier": "galaxie",
-              "level": 90
+              "level": 90,
+              "prestige": 1,
+              "times": 2
             }
           },
           {
@@ -18958,58 +18944,58 @@
             "blockedBy": null
           },
           {
-            "id": "tier:lueur",
+            "id": "tier:lueur:1",
             "track": "tier",
             "state": "open",
             "blockedBy": null
           },
           {
-            "id": "tier:lumiere",
+            "id": "tier:lumiere:1",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:1"
           },
           {
-            "id": "tier:eclat",
+            "id": "tier:eclat:1",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:1"
           },
           {
-            "id": "tier:rayon",
+            "id": "tier:rayon:1",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:1"
           },
           {
-            "id": "tier:aurore",
+            "id": "tier:aurore:1",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:1"
           },
           {
-            "id": "tier:comete",
+            "id": "tier:comete:1",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:1"
           },
           {
-            "id": "tier:etoile",
+            "id": "tier:etoile:1",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:1"
           },
           {
-            "id": "tier:constellation",
+            "id": "tier:constellation:1",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:1"
           },
           {
-            "id": "tier:galaxie",
+            "id": "tier:galaxie:1",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:1"
           },
           {
             "id": "level-100:0",
@@ -19516,92 +19502,112 @@
           },
           {
             "track": "tier",
-            "id": "tier:lueur",
+            "id": "tier:lueur:3",
             "emblem": {
               "kind": "tier",
               "tier": "lueur",
-              "level": 10
+              "level": 10,
+              "prestige": 3,
+              "times": 4
             }
           },
           {
             "track": "tier",
-            "id": "tier:lumiere",
+            "id": "tier:lumiere:3",
             "emblem": {
               "kind": "tier",
               "tier": "lumiere",
-              "level": 20
+              "level": 20,
+              "prestige": 3,
+              "times": 4
             }
           },
           {
             "track": "tier",
-            "id": "tier:eclat",
+            "id": "tier:eclat:3",
             "emblem": {
               "kind": "tier",
               "tier": "eclat",
-              "level": 30
+              "level": 30,
+              "prestige": 3,
+              "times": 4
             }
           },
           {
             "track": "tier",
-            "id": "tier:rayon",
+            "id": "tier:rayon:3",
             "emblem": {
               "kind": "tier",
               "tier": "rayon",
-              "level": 40
+              "level": 40,
+              "prestige": 3,
+              "times": 4
             }
           },
           {
             "track": "tier",
-            "id": "tier:aurore",
+            "id": "tier:aurore:3",
             "emblem": {
               "kind": "tier",
               "tier": "aurore",
-              "level": 50
+              "level": 50,
+              "prestige": 3,
+              "times": 4
             }
           },
           {
             "track": "tier",
-            "id": "tier:comete",
+            "id": "tier:comete:3",
             "emblem": {
               "kind": "tier",
               "tier": "comete",
-              "level": 60
+              "level": 60,
+              "prestige": 3,
+              "times": 4
             }
           },
           {
             "track": "tier",
-            "id": "tier:etoile",
+            "id": "tier:etoile:3",
             "emblem": {
               "kind": "tier",
               "tier": "etoile",
-              "level": 70
+              "level": 70,
+              "prestige": 3,
+              "times": 4
             }
           },
           {
             "track": "tier",
-            "id": "tier:constellation",
+            "id": "tier:constellation:3",
             "emblem": {
               "kind": "tier",
               "tier": "constellation",
-              "level": 80
+              "level": 80,
+              "prestige": 3,
+              "times": 4
             }
           },
           {
             "track": "tier",
-            "id": "tier:galaxie",
+            "id": "tier:galaxie:3",
             "emblem": {
               "kind": "tier",
               "tier": "galaxie",
-              "level": 90
+              "level": 90,
+              "prestige": 3,
+              "times": 4
             }
           },
           {
             "track": "tier",
-            "id": "tier:nebuleuse",
+            "id": "tier:nebuleuse:3",
             "emblem": {
               "kind": "tier",
               "tier": "nebuleuse",
-              "level": 101
+              "level": 101,
+              "prestige": 3,
+              "times": 1
             }
           },
           {
@@ -20048,58 +20054,64 @@
             "blockedBy": "rank:murmure:4"
           },
           {
-            "id": "tier:lueur",
+            "id": "tier:lueur:3",
             "track": "tier",
             "state": "open",
             "blockedBy": null
           },
           {
-            "id": "tier:lumiere",
+            "id": "tier:lumiere:3",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:3"
           },
           {
-            "id": "tier:rayon",
+            "id": "tier:eclat:3",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:3"
           },
           {
-            "id": "tier:aurore",
+            "id": "tier:rayon:3",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:3"
           },
           {
-            "id": "tier:comete",
+            "id": "tier:aurore:3",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:3"
           },
           {
-            "id": "tier:etoile",
+            "id": "tier:comete:3",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:3"
           },
           {
-            "id": "tier:constellation",
+            "id": "tier:etoile:3",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:3"
           },
           {
-            "id": "tier:galaxie",
+            "id": "tier:constellation:3",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:3"
           },
           {
-            "id": "tier:nebuleuse",
+            "id": "tier:galaxie:3",
             "track": "tier",
             "state": "locked",
-            "blockedBy": "tier:lueur"
+            "blockedBy": "tier:lueur:3"
+          },
+          {
+            "id": "tier:nebuleuse:3",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:3"
           },
           {
             "id": "level-100:0",
@@ -20219,6 +20231,370 @@
             "track": "start",
             "state": "open",
             "blockedBy": null
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — un palier refait après un Prestige (#10911)",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 34,
+          "prestige": 1,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0
+        },
+        "kept": [
+          "start",
+          "tier:lueur",
+          "tier:lumiere",
+          "tier:eclat"
+        ]
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lueur:1",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lueur",
+              "level": 10,
+              "prestige": 1,
+              "times": 2
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lumiere:1",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lumiere",
+              "level": 20,
+              "prestige": 1,
+              "times": 2
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:eclat:1",
+            "emblem": {
+              "kind": "tier",
+              "tier": "eclat",
+              "level": 30,
+              "prestige": 1,
+              "times": 2
+            }
+          },
+          {
+            "track": "summit",
+            "id": "level-100:0",
+            "emblem": {
+              "kind": "level-hundred",
+              "prestige": 0
+            }
+          },
+          {
+            "track": "summit",
+            "id": "prestige:1",
+            "emblem": {
+              "kind": "prestige",
+              "number": 1
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "tier:lueur:1",
+            "track": "tier",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lumiere:1",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:1"
+          },
+          {
+            "id": "tier:eclat:1",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:1"
+          },
+          {
+            "id": "level-100:0",
+            "track": "summit",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "prestige:1",
+            "track": "summit",
+            "state": "locked",
+            "blockedBy": "level-100:0"
+          }
+        ]
+      }
+    },
+    {
+      "_label": "rattrapage — au-delà de 100, le record des cycles clos (#10911)",
+      "input": {
+        "law": "photo-catch-up",
+        "standing": {
+          "rank": "murmure",
+          "division": 5,
+          "levelRecord": 120,
+          "prestige": 2,
+          "minted": 0,
+          "treasuryTier": null,
+          "flameRecord": 0,
+          "pastCycleRecords": [
+            150,
+            100
+          ]
+        },
+        "kept": []
+      },
+      "expected": {
+        "steps": [
+          {
+            "track": "start",
+            "id": "start",
+            "emblem": {
+              "kind": "start"
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lueur:2",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lueur",
+              "level": 10,
+              "prestige": 2,
+              "times": 3
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:lumiere:2",
+            "emblem": {
+              "kind": "tier",
+              "tier": "lumiere",
+              "level": 20,
+              "prestige": 2,
+              "times": 3
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:eclat:2",
+            "emblem": {
+              "kind": "tier",
+              "tier": "eclat",
+              "level": 30,
+              "prestige": 2,
+              "times": 3
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:rayon:2",
+            "emblem": {
+              "kind": "tier",
+              "tier": "rayon",
+              "level": 40,
+              "prestige": 2,
+              "times": 3
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:aurore:2",
+            "emblem": {
+              "kind": "tier",
+              "tier": "aurore",
+              "level": 50,
+              "prestige": 2,
+              "times": 3
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:comete:2",
+            "emblem": {
+              "kind": "tier",
+              "tier": "comete",
+              "level": 60,
+              "prestige": 2,
+              "times": 3
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:etoile:2",
+            "emblem": {
+              "kind": "tier",
+              "tier": "etoile",
+              "level": 70,
+              "prestige": 2,
+              "times": 3
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:constellation:2",
+            "emblem": {
+              "kind": "tier",
+              "tier": "constellation",
+              "level": 80,
+              "prestige": 2,
+              "times": 3
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:galaxie:2",
+            "emblem": {
+              "kind": "tier",
+              "tier": "galaxie",
+              "level": 90,
+              "prestige": 2,
+              "times": 3
+            }
+          },
+          {
+            "track": "tier",
+            "id": "tier:nebuleuse:2",
+            "emblem": {
+              "kind": "tier",
+              "tier": "nebuleuse",
+              "level": 101,
+              "prestige": 2,
+              "times": 2
+            }
+          },
+          {
+            "track": "summit",
+            "id": "level-100:0",
+            "emblem": {
+              "kind": "level-hundred",
+              "prestige": 0
+            }
+          },
+          {
+            "track": "summit",
+            "id": "prestige:1",
+            "emblem": {
+              "kind": "prestige",
+              "number": 1
+            }
+          },
+          {
+            "track": "summit",
+            "id": "prestige:2",
+            "emblem": {
+              "kind": "prestige",
+              "number": 2
+            }
+          }
+        ],
+        "entries": [
+          {
+            "id": "start",
+            "track": "start",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lueur:2",
+            "track": "tier",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "tier:lumiere:2",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:2"
+          },
+          {
+            "id": "tier:eclat:2",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:2"
+          },
+          {
+            "id": "tier:rayon:2",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:2"
+          },
+          {
+            "id": "tier:aurore:2",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:2"
+          },
+          {
+            "id": "tier:comete:2",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:2"
+          },
+          {
+            "id": "tier:etoile:2",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:2"
+          },
+          {
+            "id": "tier:constellation:2",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:2"
+          },
+          {
+            "id": "tier:galaxie:2",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:2"
+          },
+          {
+            "id": "tier:nebuleuse:2",
+            "track": "tier",
+            "state": "locked",
+            "blockedBy": "tier:lueur:2"
+          },
+          {
+            "id": "level-100:0",
+            "track": "summit",
+            "state": "open",
+            "blockedBy": null
+          },
+          {
+            "id": "prestige:1",
+            "track": "summit",
+            "state": "locked",
+            "blockedBy": "level-100:0"
+          },
+          {
+            "id": "prestige:2",
+            "track": "summit",
+            "state": "locked",
+            "blockedBy": "level-100:0"
           }
         ]
       }
@@ -21004,6 +21380,119 @@
         "minted": 12,
         "treasuryTier": "reserve",
         "flameRecord": 23
+      }
+    },
+    {
+      "_label": "situation — le record des cycles clos (#10911)",
+      "input": {
+        "law": "photo-standing",
+        "game": {
+          "glory": {
+            "glory": 7000,
+            "rank": "voix",
+            "division": 3,
+            "division5": 5,
+            "next": {
+              "rank": "voix",
+              "division": 3,
+              "division5": 4,
+              "minGlory": 7800
+            },
+            "gloryMissing": 800,
+            "progress": 0.5555555555555556,
+            "mythic": null
+          },
+          "level": {
+            "level": 34,
+            "tier": "eclat",
+            "score": 121800,
+            "floorScore": 115600,
+            "nextThreshold": 122500,
+            "pointsToNext": 700,
+            "progress": 0.8985507246376812,
+            "record": 36,
+            "prestige": 2,
+            "canPrestige": false,
+            "ladder": {
+              "level": 34,
+              "tier": "eclat",
+              "floorScore": 115600,
+              "nextThreshold": 122500,
+              "pointsToNext": 700,
+              "progress": 0.8985507246376812,
+              "record": 36,
+              "cap": 499,
+              "isMax": false,
+              "held": false,
+              "pastCycleRecords": [
+                150,
+                100
+              ],
+              "step": {
+                "level": 40,
+                "kind": "flame",
+                "target": 7,
+                "current": 23,
+                "met": true,
+                "rank": null
+              },
+              "steps": {
+                "minted": 12,
+                "missionsDone": 3,
+                "flameRecord": 23
+              }
+            }
+          },
+          "mint": {
+            "number": 13,
+            "price": 1587,
+            "edition": "silver",
+            "canMint": true,
+            "missingPoints": 0,
+            "levelBefore": 34,
+            "levelAfter": 34,
+            "levelsLost": 0,
+            "gloryGained": 1000,
+            "ladder": {
+              "levelBefore": 34,
+              "levelAfter": 34,
+              "levelsLost": 0
+            }
+          },
+          "treasury": {
+            "held": 9,
+            "tier": "bourse",
+            "next": {
+              "key": "escarcelle",
+              "minHeld": 10,
+              "missing": 1
+            }
+          },
+          "flame": {
+            "days": 4,
+            "form": "braise",
+            "bonusPercent": 8,
+            "freezes": 1,
+            "maxFreezes": 2,
+            "freezePrice": 1,
+            "relightPrice": 3,
+            "status": "lit",
+            "canRelight": false
+          }
+        }
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 5,
+        "levelRecord": 36,
+        "prestige": 2,
+        "minted": 12,
+        "treasuryTier": "bourse",
+        "flameRecord": 23,
+        "pastCycleRecords": [
+          150,
+          100
+        ]
       }
     },
     {

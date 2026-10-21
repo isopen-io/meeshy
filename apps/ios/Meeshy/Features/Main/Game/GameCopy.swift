@@ -27,35 +27,37 @@ enum GameCopy {
         count.formatted(.number)
     }
 
+    /// « 8,7 k » dès 10 000, le chiffre plein en dessous — pour les textes serrés du bandeau (#11125).
+    static func compactCount(_ count: Int) -> String {
+        count < 10_000 ? formatCount(count) : count.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)))
+    }
+
+    /// « 976 étincelles » — UNE clé aux variations plurielles du catalogue (#10846) : chaque langue y dit ses formes,
+    /// dont les six de l'arabe. Le nombre est un entier, formaté selon la langue.
     static func points(_ count: Int) -> String {
-        let number = formatCount(count)
-        return isSingular(count)
-            ? String(localized: "game.points.one", defaultValue: "\(number) point", bundle: .main)
-            : String(localized: "game.points.other", defaultValue: "\(number) points", bundle: .main)
+        String(localized: "game.sparks.count", defaultValue: "\(count) étincelles", bundle: .main)
     }
 
     /// « 5 823 points à convertir » — le SECOND solde (#10540) : la part des points que la frappe peut reprendre, seule
     /// à payer une Meesh. Les points EN POCHE (`points`) font le niveau ; les deux soldes ont deux noms stables.
+    /// « 976 étincelles convertibles » — même clé plurielle que `points`.
     static func convertiblePoints(_ count: Int) -> String {
-        let number = formatCount(count)
-        return isSingular(count)
-            ? String(localized: "game.points.convertible.one", defaultValue: "\(number) point à convertir", bundle: .main)
-            : String(localized: "game.points.convertible.other", defaultValue: "\(number) points à convertir", bundle: .main)
+        String(localized: "game.sparks.convertible.count", defaultValue: "\(count) étincelles de ta lumière", bundle: .main)
     }
 
     /// « Gloire 1 800 » — une quantité de Gloire, déjà formatée.
     static func gloryAmount(_ glory: String) -> String {
-        String(localized: "game.rank.glory", defaultValue: "Gloire \(glory)", bundle: .main)
+        String(localized: "game.rank.glory", defaultValue: "\(glory) de gloire", bundle: .main)
     }
 
     /// « Encore 3 pour Coffret » — ce qu'il manque au trésor, avec le palier visé.
     static func treasuryNext(missing: String, tier: String) -> String {
-        String(localized: "game.treasury.next", defaultValue: "Encore \(missing) pour \(tier)", bundle: .main)
+        String(localized: "game.treasury.next", defaultValue: "\(missing) jusqu’au \(tier)", bundle: .main)
     }
 
     /// Avant le niveau 5 : où les missions s'ouvrent, et où l'on en est.
-    static func missionsLocked(level: String) -> String {
-        String(localized: "game.missions.locked", defaultValue: "Les missions s’ouvrent au niveau 5 : trois par jour, et un coffre. Tu es au niveau \(level).", bundle: .main)
+    static func missionsLocked(level shown: String) -> String {
+        String(localized: "game.missions.locked", defaultValue: "Au niveau 5, tes aïeux t’envoient chaque nuit un rêve en trois actes, et une Offrande. Tu es au niveau \(shown).", bundle: .main)
     }
 
     static func meeshes(_ count: Int) -> String {
@@ -100,7 +102,7 @@ enum GameCopy {
         switch tier {
         case .etincelle: String(localized: "game.tier.etincelle", defaultValue: "Étincelle", bundle: .main)
         case .lueur: String(localized: "game.tier.lueur", defaultValue: "Lueur", bundle: .main)
-        case .lumiere: String(localized: "game.tier.lumiere", defaultValue: "Lumière", bundle: .main)
+        case .lumiere: String(localized: "game.tier.lumiere", defaultValue: "Clarté", bundle: .main)
         case .eclat: String(localized: "game.tier.eclat", defaultValue: "Éclat", bundle: .main)
         case .rayon: String(localized: "game.tier.rayon", defaultValue: "Rayon", bundle: .main)
         case .aurore: String(localized: "game.tier.aurore", defaultValue: "Aurore", bundle: .main)
@@ -162,7 +164,7 @@ enum GameCopy {
     /// sans plafond connu (serveur antérieur, qui s'arrêtait à 100), il est au sommet.
     static func levelTop(cap: Int?) -> String {
         guard let cap, let rank = rankOpening(beyond: cap) else {
-            return String(localized: "game.level.top", defaultValue: "Tu es au sommet.", bundle: .main)
+            return String(localized: "game.level.top", defaultValue: "Ta lumière brille à son sommet.", bundle: .main)
         }
         let capText = formatCount(cap)
         let name = rankName(rank)
@@ -185,14 +187,14 @@ enum GameCopy {
     static func levelToNext(remaining: Int, nextLevel: Int) -> String {
         let pointsText = points(remaining)
         let levelText = formatCount(nextLevel)
-        return String(localized: "game.level.to_next", defaultValue: "Encore \(pointsText) avant le niveau \(levelText)", bundle: .main)
+        return String(localized: "game.level.to_next", defaultValue: "\(pointsText) jusqu’au niveau \(levelText)", bundle: .main)
     }
 
     /// Ce que VoiceOver lit sur l'anneau de niveau : « Niveau 34, palier Éclat, quatrième palier ».
     static func levelRingAccessibility(level: Int, tier: LevelTierKey) -> String {
         String(
             localized: "game.level.ring.a11y",
-            defaultValue: "Niveau \(formatCount(level)), palier \(tierName(tier)), \(tierOrdinal(tier)) palier",
+            defaultValue: "Niveau \(formatCount(level)), \(tierName(tier)), \(tierOrdinal(tier)) état de ta lumière",
             bundle: .main
         )
     }
@@ -213,8 +215,8 @@ enum GameCopy {
                 : String(localized: "game.level.step.mint_many", defaultValue: "frapper \(targetText) Meeshes", bundle: .main)
         case .missions:
             return step.target == 1
-                ? String(localized: "game.level.step.missions_one", defaultValue: "accomplir une mission du jour", bundle: .main)
-                : String(localized: "game.level.step.missions_many", defaultValue: "accomplir \(targetText) missions du jour", bundle: .main)
+                ? String(localized: "game.level.step.missions_one", defaultValue: "réaliser un rêve", bundle: .main)
+                : String(localized: "game.level.step.missions_many", defaultValue: "réaliser \(targetText) rêves", bundle: .main)
         case .flame:
             return String(localized: "game.level.step.flame", defaultValue: "tenir une Flamme de \(targetText) jours", bundle: .main)
         case .rank:
@@ -228,18 +230,18 @@ enum GameCopy {
     static func levelStepLine(_ step: GameLevelStep) -> String {
         let levelText = formatCount(step.level)
         let what = levelStepGoal(step)
-        return String(localized: "game.level.step.line", defaultValue: "Étape du niveau \(levelText) : \(what)", bundle: .main)
+        return String(localized: "game.level.step.line", defaultValue: "Épreuve du niveau \(levelText) : \(what)", bundle: .main)
     }
 
     static var levelStepDone: String {
-        String(localized: "game.level.step.done", defaultValue: "faite", bundle: .main)
+        String(localized: "game.level.step.done", defaultValue: "réussie", bundle: .main)
     }
 
     /// Où en est l'étape : « 0 / 1 » ; pour un rang, la Gloire « Gloire 1 200 / 2 000 ».
     static func levelStepProgress(_ step: GameLevelStep) -> String {
         let ratio = ConceptText.ratio(formatCount(min(step.current, step.target)), formatCount(step.target))
         guard step.kind == .rank else { return ratio }
-        return String(localized: "game.rank.glory", defaultValue: "Gloire \(ratio)", bundle: .main)
+        return String(localized: "game.rank.glory", defaultValue: "\(ratio) de gloire", bundle: .main)
     }
 
     /// L'état de l'étape en une ligne : « faite », ou où elle en est.
@@ -258,7 +260,7 @@ enum GameCopy {
         let level = formatCount(step.level)
         return String(
             localized: "game.level.held",
-            defaultValue: "Tes points ouvrent déjà la suite : \(what) pour passer le niveau \(level).",
+            defaultValue: "Ta lumière ouvre déjà la suite : \(what) pour passer le niveau \(level).",
             bundle: .main
         )
     }
@@ -359,10 +361,10 @@ enum GameCopy {
 
     static func difficultyName(_ difficulty: MissionDifficulty) -> String {
         switch difficulty {
-        case .easy: String(localized: "game.difficulty.easy", defaultValue: "Facile", bundle: .main)
-        case .medium: String(localized: "game.difficulty.medium", defaultValue: "Moyenne", bundle: .main)
-        case .hard: String(localized: "game.difficulty.hard", defaultValue: "Difficile", bundle: .main)
-        case .gold: String(localized: "game.difficulty.gold", defaultValue: "Or", bundle: .main)
+        case .easy: String(localized: "game.difficulty.easy", defaultValue: "Acte I", bundle: .main)
+        case .medium: String(localized: "game.difficulty.medium", defaultValue: "Acte II", bundle: .main)
+        case .hard: String(localized: "game.difficulty.hard", defaultValue: "Acte III", bundle: .main)
+        case .gold: String(localized: "game.difficulty.gold", defaultValue: "Acte d’or", bundle: .main)
         }
     }
 
@@ -375,8 +377,8 @@ enum GameCopy {
         switch templateKey {
         case "react-messages", "duo-reactions":
             return one
-                ? String(localized: "game.mission.react_messages.one", defaultValue: "Réagir à \(n) message", bundle: .main)
-                : String(localized: "game.mission.react_messages.other", defaultValue: "Réagir à \(n) messages", bundle: .main)
+                ? String(localized: "game.mission.react_messages.one", defaultValue: "Réagir à \(n) message dans une conversation", bundle: .main)
+                : String(localized: "game.mission.react_messages.other", defaultValue: "Réagir à \(n) messages dans tes conversations", bundle: .main)
         case "send-voice", "duo-voice":
             return one
                 ? String(localized: "game.mission.send_voice.one", defaultValue: "Envoyer un message vocal", bundle: .main)
@@ -482,7 +484,7 @@ enum GameCopy {
                 ? String(localized: "game.mission.invite_joined.one", defaultValue: "Faire rejoindre Meeshy à une personne invitée", bundle: .main)
                 : String(localized: "game.mission.invite_joined.other", defaultValue: "Faire rejoindre Meeshy à \(n) personnes invitées", bundle: .main)
         default:
-            return String(localized: "game.mission.generic", defaultValue: "Mission du jour", bundle: .main)
+            return String(localized: "game.mission.generic", defaultValue: "Un acte du rêve", bundle: .main)
         }
     }
 
@@ -491,61 +493,67 @@ enum GameCopy {
     static func errorMessage(for code: GameErrorCode?) -> String {
         switch code {
         case .insufficientPoints:
-            String(localized: "game.error.insufficient_points", defaultValue: "Pas assez de points à convertir pour frapper une Meesh.", bundle: .main)
+            String(localized: "game.error.insufficient_points", defaultValue: "Ta lumière ne compte pas encore assez d’étincelles pour frapper une Meesh.", bundle: .main)
         case .insufficientMeeshes:
             String(localized: "game.error.insufficient_meeshes", defaultValue: "Il te faut une Meesh de plus pour ça.", bundle: .main)
+        case .mintBlockedByDebt:
+            String(localized: "game.mint.blocked.debt_plain", defaultValue: "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont. Tant qu’elle est là, on ne frappe pas.", bundle: .main)
+        case .treasuryLocked:
+            String(localized: "game.error.treasury_locked", defaultValue: "Cette Meesh entrerait dans un contenant de ton Héritage que ton rang n’ouvre pas encore.", bundle: .main)
         case .freezeAtMaximum:
-            String(localized: "game.error.freeze_at_maximum", defaultValue: "Tu as déjà deux gels en réserve : c’est le maximum.", bundle: .main)
+            String(localized: "game.error.freeze_at_maximum", defaultValue: "Deux Veilleuses gardent déjà ta Flamme : c’est le plus possible.", bundle: .main)
         case .relightNotAllowed:
             String(localized: "game.error.relight_not_allowed", defaultValue: "La Flamme ne peut pas être rallumée maintenant.", bundle: .main)
         case .missionNotFound:
-            String(localized: "game.error.mission_not_found", defaultValue: "Cette mission n’existe plus : l’écran se remet à jour.", bundle: .main)
+            String(localized: "game.error.mission_not_found", defaultValue: "Cet acte n’existe plus : l’écran se remet à jour.", bundle: .main)
         case .missionRerollExhausted:
-            String(localized: "game.error.mission_reroll_exhausted", defaultValue: "Tu as déjà changé une mission aujourd’hui.", bundle: .main)
+            String(localized: "game.error.mission_reroll_exhausted", defaultValue: "Tu as déjà changé un acte aujourd’hui.", bundle: .main)
         case .missionRerollUnavailable:
-            String(localized: "game.error.mission_reroll_unavailable", defaultValue: "Cette mission ne peut pas être changée.", bundle: .main)
+            String(localized: "game.error.mission_reroll_unavailable", defaultValue: "Cet acte ne peut pas être changé.", bundle: .main)
         case .missionsLocked:
-            String(localized: "game.error.missions_locked", defaultValue: "Les missions s’ouvrent au niveau 5.", bundle: .main)
+            String(localized: "game.error.missions_locked", defaultValue: "Tes aïeux t’envoient leurs rêves dès le niveau 5.", bundle: .main)
         case .chestNotReady:
-            String(localized: "game.error.chest_not_ready", defaultValue: "Termine d’abord les missions du jour pour ouvrir le coffre.", bundle: .main)
+            String(localized: "game.error.chest_not_ready", defaultValue: "Réalise d’abord les trois actes du rêve : l’Offrande apparaîtra.", bundle: .main)
         case .requestIdConflict:
             String(localized: "game.error.request_id_conflict", defaultValue: "Cette demande a déjà servi pour une autre action : réessaie.", bundle: .main)
         case .leagueLocked:
-            String(localized: "game.error.league_locked", defaultValue: "Les ligues s’ouvrent au niveau 10.", bundle: .main)
+            String(localized: "game.error.league_locked", defaultValue: "La joute s’ouvre au niveau 10.", bundle: .main)
         case .leagueMinor:
-            String(localized: "game.error.league_minor", defaultValue: "La ligue publique est réservée aux comptes dont la majorité est vérifiée.", bundle: .main)
+            String(localized: "game.error.league_minor", defaultValue: "La joute publique est réservée aux comptes dont la majorité est vérifiée.", bundle: .main)
         case .leagueConsentRequired:
-            String(localized: "game.error.league_consent_required", defaultValue: "Accepte d’abord de rejoindre la ligue publique.", bundle: .main)
+            String(localized: "game.error.league_consent_required", defaultValue: "Accepte d’abord de rejoindre la joute publique.", bundle: .main)
         case .leaguePseudonymInvalid:
-            String(localized: "game.error.league_pseudonym_invalid", defaultValue: "Ce pseudonyme n’est pas valable : 3 à 20 lettres, chiffres, points, tirets ou tirets bas.", bundle: .main)
+            String(localized: "game.error.league_pseudonym_invalid", defaultValue: "Ce nom de joute n’est pas valable : 3 à 20 lettres, chiffres, points, tirets ou tirets bas.", bundle: .main)
         case .leaguePseudonymTaken:
-            String(localized: "game.error.league_pseudonym_taken", defaultValue: "Ce pseudonyme est déjà pris.", bundle: .main)
+            String(localized: "game.error.league_pseudonym_taken", defaultValue: "Ce nom de joute est déjà pris.", bundle: .main)
         case .leaguePseudonymForbidden:
-            String(localized: "game.error.league_pseudonym_forbidden", defaultValue: "Ce pseudonyme n’est pas permis : ni un nom réservé, ni ton nom.", bundle: .main)
+            String(localized: "game.error.league_pseudonym_forbidden", defaultValue: "Ce nom de joute n’est pas permis : ni un nom réservé, ni ton nom.", bundle: .main)
         case .duoLocked:
-            String(localized: "game.error.duo_locked", defaultValue: "Le duo s’ouvre au niveau 20, pour vous deux.", bundle: .main)
+            String(localized: "game.error.duo_locked", defaultValue: "L’alliance s’ouvre au niveau 20, pour vous deux.", bundle: .main)
         case .duoNotFriends:
-            String(localized: "game.error.duo_not_friends", defaultValue: "Le duo se joue avec un ami accepté.", bundle: .main)
+            String(localized: "game.error.duo_not_friends", defaultValue: "L’alliance se fait avec un ami accepté.", bundle: .main)
         case .duoAlreadyActive:
-            String(localized: "game.error.duo_already_active", defaultValue: "L’un de vous a déjà un duo cette semaine.", bundle: .main)
+            String(localized: "game.error.duo_already_active", defaultValue: "L’un de vous a déjà une alliance cette semaine.", bundle: .main)
         case .duoNotFound:
-            String(localized: "game.error.duo_not_found", defaultValue: "Ce duo n’existe plus : l’écran se remet à jour.", bundle: .main)
+            String(localized: "game.error.duo_not_found", defaultValue: "Cette alliance n’existe plus : l’écran se remet à jour.", bundle: .main)
         case .duoTransitionRefused:
-            String(localized: "game.error.duo_transition_refused", defaultValue: "Ce geste n’a pas de sens pour ce duo.", bundle: .main)
+            String(localized: "game.error.duo_transition_refused", defaultValue: "Ce geste n’a pas de sens pour cette alliance.", bundle: .main)
         case .seasonNotOpen:
-            String(localized: "game.error.season_not_open", defaultValue: "Aucune saison n’est ouverte pour l’instant.", bundle: .main)
+            String(localized: "game.error.season_not_open", defaultValue: "Aucun voyage n’est en cours pour l’instant.", bundle: .main)
         case .seasonStepNotFound:
-            String(localized: "game.error.season_step_not_found", defaultValue: "Cette étape n’existe pas.", bundle: .main)
+            String(localized: "game.error.season_step_not_found", defaultValue: "Cette halte n’existe pas.", bundle: .main)
         case .seasonStepLocked:
-            String(localized: "game.error.season_step_locked", defaultValue: "Cette étape n’est pas encore atteinte.", bundle: .main)
+            String(localized: "game.error.season_step_locked", defaultValue: "Cette halte n’est pas encore atteinte.", bundle: .main)
         case .seasonStepAlreadyClaimed:
             String(localized: "game.error.season_step_already_claimed", defaultValue: "Cette récompense est déjà réclamée.", bundle: .main)
         case .sealAlreadyOwned:
-            String(localized: "game.error.seal_already_owned", defaultValue: "Tu as déjà le Sceau de cette saison.", bundle: .main)
+            String(localized: "game.error.seal_already_owned", defaultValue: "Tu as déjà le Sceau de ce voyage.", bundle: .main)
         case .prestigeLevelTooLow:
-            String(localized: "game.error.prestige_level_too_low", defaultValue: "Le Prestige s’ouvre au niveau 100.", bundle: .main)
+            String(localized: "game.error.prestige_level_too_low", defaultValue: "La Renaissance s’ouvre au niveau 100.", bundle: .main)
         case .prestigeAtMaximum:
-            String(localized: "game.error.prestige_at_maximum", defaultValue: "Tu as déjà posé les cinq étoiles du Prestige.", bundle: .main)
+            String(localized: "game.error.prestige_at_maximum", defaultValue: "Ta légende a déjà vécu ses cinq renaissances.", bundle: .main)
+        case .priceChanged:
+            String(localized: "game.error.price_changed", defaultValue: "La part de lumière à figer a changé entre-temps : rien n’a été pris. Relis-la, puis frappe à nouveau.", bundle: .main)
         case nil:
             String(localized: "game.error.generic", defaultValue: "Ça n’a pas abouti — vérifie ta connexion et réessaie.", bundle: .main)
         }

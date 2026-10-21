@@ -108,7 +108,7 @@ nonisolated enum VideoColorTagging {
 actor MediaCompressor {
     static let shared = MediaCompressor()
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "media-compressor")
+    private static let logger = MeeshyLog.logger(.mediaCompressor)
 
     // MARK: - From UIImage (format already lost) → always JPEG
 
@@ -455,7 +455,15 @@ actor MediaCompressor {
                         continuation.resume()
                         return
                     }
-                    inp.append(sample)
+                    // L'écrivain a basculé en échec (disque plein, interruption) : le bloc ne serait
+                    // plus jamais rappelé et l'attente resterait suspendue pour toujours, l'envoi
+                    // avec elle. Le statut est relu par l'appelant.
+                    guard inp.append(sample) else {
+                        finished = true
+                        inp.markAsFinished()
+                        continuation.resume()
+                        return
+                    }
                 }
             }
         }

@@ -200,6 +200,8 @@ struct RootRouteDestination: View {
                 commentId: commentId,
                 parentCommentId: parentCommentId
             )
+        case .moodSpotlight(let statusId):
+            MoodSpotlightView(statusId: statusId)
         }
     }
 }

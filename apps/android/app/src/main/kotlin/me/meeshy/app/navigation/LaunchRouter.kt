@@ -76,10 +76,11 @@ object LaunchRouter {
             )
         }
 
-    /** Prefixes de deep link menant a la validation d'un magic link — le lien du
-     *  MAIL (`https://meeshy.me/...`, App Link) et son alias de scheme custom. */
+    /** Seul prefixe menant a la validation d'un magic link : le lien du MAIL
+     *  (`https://meeshy.me/...`, App Link verifie). Le scheme `meeshy://` s'ouvre
+     *  depuis n'importe quelle page ou app — un jeton d'e-mail recu par lui
+     *  connecterait la victime au compte de l'attaquant (#10873). */
     private val MAGIC_LINK_PREFIXES = listOf(
-        "meeshy://auth/magic-link",
         "https://meeshy.me/auth/magic-link",
     )
 

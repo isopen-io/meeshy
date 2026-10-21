@@ -213,6 +213,8 @@ extension CallManager {
         settlePendingAnswerAction(fulfilled: false, reason: "teardown before connect")
         outgoingRingTimeoutTask?.cancel()
         outgoingRingTimeoutTask = nil
+        incomingRingTimeoutTask?.cancel()
+        incomingRingTimeoutTask = nil
         // Cancel le Task de setup outgoing (force-leave + ACK + media +
         // listenForParticipantJoined). Sans ça, après endCallInternal, ce
         // Task continuait à tourner et pouvait re-armer la connexion, faire
@@ -265,7 +267,7 @@ extension CallManager {
         voipFreshnessTask = nil
         analyticsSnapshotTask?.cancel()
         analyticsSnapshotTask = nil
-        isRemoteQualityDegraded = false
+        remoteMedia = remoteMedia.applying(.qualityDegraded(false))
         isSignalingDegraded = false
         pendingRemoteOffer = nil
         pendingIceCandidates = []
@@ -288,9 +290,7 @@ extension CallManager {
         // (placeholder "Caméra désactivée" fantôme) et d'un FSM de survie
         // vidéo potentiellement suspendu — violation du contrat documenté de
         // `VideoSurvivalControlling.reset()`.
-        isRemoteVideoEnabled = true
-        isRemoteAudioEnabled = true
-        isRemoteScreenCapturing = false
+        remoteMedia = .initial
         screenShare.callEnded()
         recording.callEnded()
         videoSurvivalController.reset()
@@ -384,5 +384,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

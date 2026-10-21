@@ -1,6 +1,7 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack/react-query';
 
 import { createAccountCacheShelf } from './account-caches';
+import { ENGAGEMENT_PROGRESS_QUERY_KEY, keepNewerGameState } from './game-state-order';
 import { pruneGoneEphemerals } from './ephemeral-cache';
 import { ApiError } from './client';
 import { apiConfig } from './config';
@@ -205,6 +206,8 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
       },
     },
   }) as AppQueryClient;
+  /* L'état du jeu ne recule jamais (#10898, #10900) : une écriture plus ancienne que celle en cache est ignorée. */
+  client.setQueryDefaults(ENGAGEMENT_PROGRESS_QUERY_KEY, { structuralSharing: keepNewerGameState });
 
   /** Hydrate depuis une entrée SÉRIALISÉE si elle porte le `buster` attendu —
    * `false` sinon (absente, périmée, corrompue) : rien n'est alors restauré. */

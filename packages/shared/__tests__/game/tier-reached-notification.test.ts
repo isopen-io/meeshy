@@ -15,24 +15,24 @@ if (!conversationsRejointes) throw new Error('famille absente du catalogue');
 const CASES: readonly TierReached[] = [
   { kind: 'achievement', family: conversationsRejointes, tier: 1_000 },
   { kind: 'badge', axisKey: 'comment.text', threshold: 1_000 },
-  { kind: 'level', threshold: 1_000 },
+  { kind: 'level', level: 3, sparks: 1_000 },
 ];
 
 describe('tierReachedNotification', () => {
   it('dit en français le palier en titre, l’exploit chiffré et le palier en corps', () => {
     expect(tierReachedNotification('fr', CASES[0])).toEqual({
       title: '🏆 Palier 4 atteint',
-      body: '1\u202f000 conversations rejointes — bravo, vous êtes au palier 4 !',
+      body: '1\u202f000 conversations rejointes — bravo, tu atteins le palier 4 !',
       rank: 4,
       value: 1_000,
     });
     expect(tierReachedNotification('fr', CASES[1])).toMatchObject({
       title: '🏆 Palier 6 atteint',
-      body: 'Commentaires écrits : 1\u202f000 — bravo, vous êtes au palier 6 !',
+      body: 'Commentaires écrits : 1\u202f000 — bravo, tu atteins le palier 6 !',
     });
     expect(tierReachedNotification('fr', CASES[2])).toMatchObject({
-      title: '⭐ Niveau 5 atteint !',
-      body: '1\u202f000 points — bravo, vous êtes au niveau 5 !',
+      title: '✨ Niveau 3 : ta lumière grandit !',
+      body: 'Ta lumière compte 1\u202f000 étincelles — bravo, elle atteint le niveau 3 !',
     });
   });
 
@@ -48,6 +48,18 @@ describe('tierReachedNotification', () => {
 
   it('n’annonce rien pour une valeur hors de son échelle', () => {
     expect(tierReachedNotification('fr', { kind: 'badge', axisKey: 'comment.text', threshold: 999 })).toBeNull();
-    expect(tierReachedNotification('fr', { kind: 'level', threshold: 7 })).toBeNull();
+    expect(tierReachedNotification('fr', { kind: 'level', level: 0, sparks: 7 })).toBeNull();
+    expect(tierReachedNotification('fr', { kind: 'level', level: 2.5, sparks: 400 })).toBeNull();
+  });
+
+  it('le niveau est celui du JEU et le corps parle d\'étincelles dans les huit langues, jamais de points (#10901)', () => {
+    const words: Record<string, string> = { fr: 'étincelles', en: 'sparks', es: 'chispas', pt: 'faíscas', de: 'Funken', it: 'scintille', ar: 'شرارة', 'zh-Hans': '火花' };
+    for (const lang of NOTIFICATION_LANGUAGES) {
+      const banner = tierReachedNotification(lang, { kind: 'level', level: 12, sparks: 14_400 });
+      expect(banner).toMatchObject({ rank: 12, value: 14_400 });
+      expect(banner!.title).toContain('12');
+      expect(banner!.body).toContain(words[lang]!);
+      expect(banner!.body).not.toMatch(/points|puntos|pontos|Punkte|punti|نقطة|积分/);
+    }
   });
 });

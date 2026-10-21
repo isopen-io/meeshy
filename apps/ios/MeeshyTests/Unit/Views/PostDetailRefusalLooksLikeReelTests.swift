@@ -12,6 +12,7 @@ import XCTest
 /// jamais « Réessayer ». Le rendu n'est pas interrogeable sans harnais de
 /// snapshot ; le MONTAGE l'est, sur le texte source — c'est la marche qu'une
 /// jumelle redessinée à côté manquerait.
+@MainActor
 final class PostDetailRefusalLooksLikeReelTests: XCTestCase {
 
     private var absenceStatesSource: String {

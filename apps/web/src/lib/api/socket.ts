@@ -29,6 +29,8 @@ import {
   isMessageDeletedEvent,
   isMessageEditedEvent,
 } from './realtime-message-mutations';
+import { applyMessageHiddenForMe, isMessageHiddenForMeEvent } from './realtime-message-hidden';
+import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import {
   applyMediaCaptionTranslation,
@@ -73,6 +75,7 @@ import {
   isReadStatusUpdated,
   isSocketMessage,
 } from './realtime-apply';
+import { applyTranscriptionReady, isTranscriptionReady } from './realtime-transcription-ready';
 import {
   applyMessageCountdownStarted,
   applyMessageExpired,
@@ -414,6 +417,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     applyMessageAttachmentUpdated(deps.queryClient, payload);
   };
 
+  /** `audio:transcription-ready` (#10742) — la transcription demandée rejoint la bonne pièce sans rechargement. */
+  const onTranscriptionReady = (payload: unknown): void => {
+    if (!isTranscriptionReady(payload)) return;
+    applyTranscriptionReady(deps.queryClient, payload);
+  };
+
   /**
    * `attachment-status:updated` (#7226, W7) — LA FEUILLE « INFOS DU MESSAGE »
    * SUIT UNE OUVERTURE/UN TÉLÉCHARGEMENT/UNE ÉCOUTE EN DIRECT.
@@ -455,6 +464,20 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageDeleted = (payload: unknown): void => {
     if (!isMessageDeletedEvent(payload)) return;
     applyMessageDeleted(deps.queryClient, payload);
+  };
+
+  /** `message:pinned` / `message:unpinned` (#7558) — l'épingle posée ailleurs se voit sans rechargement. Règle : `realtime-message-pin.ts`. */
+  const onMessagePinned = (payload: unknown): void => {
+    if (isMessagePinnedEvent(payload)) applyMessagePinnedEvent(deps.queryClient, payload);
+  };
+
+  const onMessageUnpinned = (payload: unknown): void => {
+    if (isMessageUnpinnedEvent(payload)) applyMessageUnpinnedEvent(deps.queryClient, payload);
+  };
+
+  /** `message:hidden-for-me` (#10587) — masqué pour moi sur un autre appareil : la rangée quitte le fil. Règle : `realtime-message-hidden.ts`. */
+  const onMessageHiddenForMe = (payload: unknown): void => {
+    if (isMessageHiddenForMeEvent(payload)) applyMessageHiddenForMe(deps.queryClient, payload, deps.viewerId());
   };
 
   /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
@@ -974,6 +997,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+  socket.on<unknown>(SERVER_EVENTS.TRANSCRIPTION_READY, onTranscriptionReady);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
@@ -981,6 +1005,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -1061,6 +1088,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+      socket.off<unknown>(SERVER_EVENTS.TRANSCRIPTION_READY, onTranscriptionReady);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
@@ -1068,6 +1096,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);

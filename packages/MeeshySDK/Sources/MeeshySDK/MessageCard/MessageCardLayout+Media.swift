@@ -91,8 +91,14 @@ struct MessageCardMediaPlan {
         }
     }
 
+    /// Une photo remplit la colonne (plafonnée par `cap`, recadrée) ; un STICKER
+    /// prend un cadre à SON rapport, centré, jamais plus haut que `cap` (#10915).
     fileprivate static func single(_ media: MessageCardMedia, width: Double, cap: Double) -> MessageCardMediaSlot {
-        MessageCardMediaSlot(media: media, x: 0, y: 0, width: width, height: min(cap, (width / media.aspect).rounded()))
+        guard media.isSticker else {
+            return MessageCardMediaSlot(media: media, x: 0, y: 0, width: width, height: min(cap, (width / media.aspect).rounded()))
+        }
+        let frame = MessageCardSticker.frame(aspect: media.aspect, width: width, cap: cap)
+        return MessageCardMediaSlot(media: media, x: ((width - frame.width) / 2).rounded(.down), y: 0, width: frame.width, height: frame.height)
     }
 
     /// Les visuels PEINTS, agencés dans `width` : un seul, la grille, ou une
@@ -161,8 +167,9 @@ extension MessageCardLayoutEngine {
     /// règle les deux pour que la carte tienne (revue #8979).
     func mediaPlan(columnWidth width: Double, canvasWidth: Double, budget: Double, scale: Double, transcriptLines: Int) -> MessageCardMediaPlan {
         let disposition = input.disposition
-        let painted = disposition.paintedVisuals(of: input.media)
-        let total = input.media.filter { $0.kind.isVisual }.count
+        let painted = disposition.bodyVisuals(of: input.media)
+        let heroID = disposition.heroVisual(of: input.media)?.id
+        let total = input.media.filter { $0.kind.isVisual && $0.id != heroID }.count
         let audio = input.media.first { $0.kind == .audio }
         let cap = max(160, budget * MessageCardMediaPlan.visualShare) * scale
         let placement = disposition.effectiveMediaLayout(hasVisuals: !painted.isEmpty)
@@ -239,17 +246,10 @@ extension MessageCardLayoutEngine {
         let left = x + block.x
         var ops: [MessageCardOp] = block.slots.flatMap { slot -> [MessageCardOp] in
             let frame = (x: left + slot.x, y: y + slot.y)
-            var painted: [MessageCardOp] = [.media(MessageCardMediaOp(
-                mediaID: slot.media.id, kind: slot.media.kind,
-                x: frame.x, y: frame.y, width: slot.width, height: slot.height,
-                radius: MessageCardMetrics.mediaRadius, placeholder: palette.quotePanel
-            ))]
+            var painted: [MessageCardOp] = [mediaOp(slot.media, x: frame.x, y: frame.y, width: slot.width, height: slot.height)]
             // Une vidéo FIXE dit qu'elle est une vidéo ; animée, elle se lit d'elle-même.
             if slot.media.kind == .video && input.time == nil && slot.overflow == 0 {
-                let radius = min(64, min(slot.width, slot.height) * 0.14)
-                let center = (x: frame.x + slot.width / 2, y: frame.y + slot.height / 2)
-                painted.append(.dot(MessageCardDotOp(x: center.x, y: center.y, radius: radius, color: Self.shade)))
-                painted.append(.glyph(MessageCardGlyphOp(glyph: .play, x: center.x, y: center.y, size: radius * 0.9, color: Self.white)))
+                painted.append(contentsOf: playBadge(x: frame.x, y: frame.y, width: slot.width, height: slot.height))
             }
             // Ce qui reste à voir, jamais le total — la loi des posts (#9235).
             if slot.overflow > 0 {
@@ -273,6 +273,58 @@ extension MessageCardLayoutEngine {
         }
         if let transcript = block.transcript {
             ops.append(contentsOf: transcriptOps(transcript, x: x, y: y + block.transcriptTop, width: width))
+        }
+        return ops
+    }
+
+    /// Le média peint dans son cadre : une photo REMPLIT (coins arrondis) ; un
+    /// sticker s'INSCRIT en entier, sans arrondi ni rognage (#10915).
+    func mediaOp(_ media: MessageCardMedia, x: Double, y: Double, width: Double, height: Double) -> MessageCardOp {
+        .media(MessageCardMediaOp(
+            mediaID: media.id, kind: media.kind,
+            x: x, y: y, width: width, height: height,
+            radius: media.isSticker ? 0 : MessageCardMetrics.mediaRadius, placeholder: palette.quotePanel,
+            fit: media.isSticker ? .contain : .cover
+        ))
+    }
+
+    /// **La séparation d'une entrée de fil** (#10915) : la liaison du template, en version
+    /// compacte, au retrait du niveau — `x` est le bord de départ de l'entrée.
+    func threadSeparatorOps(_ link: MessageCardLinkID, x: Double, y: Double, rtl: Bool, level: Int) -> [MessageCardOp] {
+        let length = MessageCardThread.separatorWidth(level: level)
+        let ends = rtl ? [x - length, x] : [x, x + length]
+        let accent = palette.accent
+        switch link {
+        case .orbite, .guillemets:
+            return [.separator(MessageCardSeparatorOp(x1: ends[0], x2: ends[1], y: y, radius: 0, color: accent, dash: [2, 14], lineWidth: 3))]
+        case .filet, .fil:
+            return [.separator(MessageCardSeparatorOp(x1: ends[0], x2: ends[1], y: y, radius: 0, color: accent, dash: [], lineWidth: 4))]
+        case .fleche:
+            return [.text(MessageCardTextOp(
+                text: rtl ? "↲" : "↳", x: x, y: y + 18, font: MessageCardFont(face: .system(700), size: 40),
+                color: accent, align: rtl ? .right : .left, direction: .ltr
+            ))]
+        case .bulles, .silence:
+            return []
+        }
+    }
+
+    /// Le disque et la flèche d'une vidéo fixe, centrés dans son cadre.
+    func playBadge(x: Double, y: Double, width: Double, height: Double) -> [MessageCardOp] {
+        let radius = min(64, min(width, height) * 0.14)
+        let center = (x: x + width / 2, y: y + height / 2)
+        return [
+            .dot(MessageCardDotOp(x: center.x, y: center.y, radius: radius, color: Self.shade)),
+            .glyph(MessageCardGlyphOp(glyph: .play, x: center.x, y: center.y, size: radius * 0.9, color: Self.white)),
+        ]
+    }
+
+    /// **Le HERO** (#10915) : le visuel du support, en tête de la carte, dans son
+    /// cadre `frame` (pleine largeur, `MessageCardHero.height`).
+    func heroOps(_ media: MessageCardMedia, frame: MessageCardFrame) -> [MessageCardOp] {
+        var ops: [MessageCardOp] = [mediaOp(media, x: frame.x, y: frame.y, width: frame.width, height: frame.height)]
+        if media.kind == .video && input.time == nil {
+            ops.append(contentsOf: playBadge(x: frame.x, y: frame.y, width: frame.width, height: frame.height))
         }
         return ops
     }

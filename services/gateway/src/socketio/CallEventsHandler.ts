@@ -115,6 +115,7 @@ import type {
   CallIceServersRefreshedEvent,
 } from '@meeshy/shared/types/video-call';
 import { guardedInterval, guardedTimeout } from '../utils/guarded-timer';
+import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from '../services/calls/liveCallParticipations';
 
 /**
  * CALL-RESILIENCE — the shape of an active participation row read by the
@@ -3926,14 +3927,11 @@ export class CallEventsHandler {
           userId
         });
 
-        // Find any active calls the user is in. Audit C5 (2026-07-02) —
-        // `{leftAt: null}` alone misses Mongo docs whose leftAt field was
-        // never written (pre-C5 participants).
-        const activeParticipations = await this.prisma.callParticipant.findMany({
-          where: {
-            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-            participant: { userId }
-          },
+        // Active calls keyed on the account's Participant ids (indexed), never the
+        // `participant: { userId }` relation filter — a full-collection `$lookup` (#10831).
+        const participantIds = await accountParticipantIds(this.prisma, userId);
+        const activeParticipations = participantIds.length === 0 ? [] : await this.prisma.callParticipant.findMany({
+          where: { ...LIVE_CALL_PARTICIPATION, participantId: { in: participantIds } },
           include: {
             callSession: true
           }

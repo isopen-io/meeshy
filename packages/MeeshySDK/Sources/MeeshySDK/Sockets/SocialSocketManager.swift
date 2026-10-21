@@ -3,339 +3,6 @@ import SocketIO
 import Combine
 import os
 
-// MARK: - Socket.IO Event Data Models
-
-public struct SocketPostCreatedData: Decodable, Sendable {
-    public let post: APIPost
-    /// U1 — echoed from the createPost request's cmid so an offline author can
-    /// reconcile its optimistic temp post (id == cmid) with this server post
-    /// instead of rendering a duplicate. Absent for posts created without a cmid.
-    public let clientMutationId: String?
-
-    public init(post: APIPost, clientMutationId: String?) {
-        self.post = post
-        self.clientMutationId = clientMutationId
-    }
-}
-
-public struct SocketPostUpdatedData: Decodable, Sendable {
-    public let post: APIPost
-}
-
-public struct SocketPostDeletedData: Decodable, Sendable {
-    public let postId: String
-    public let authorId: String
-}
-
-public struct SocketPostLikedData: Decodable, Sendable {
-    public let postId: String
-    public let userId: String
-    public let emoji: String
-    public let likeCount: Int
-    public let reactionSummary: [String: Int]
-}
-
-public struct SocketPostUnlikedData: Decodable, Sendable {
-    public let postId: String
-    public let userId: String
-    public let likeCount: Int
-    public let reactionSummary: [String: Int]
-}
-
-public struct SocketPostRepostedData: Decodable, Sendable {
-    public let originalPostId: String
-    public let repost: APIPost
-}
-
-public struct SocketStoryCreatedData: Decodable, Sendable {
-    public let story: APIPost
-}
-
-public struct SocketStoryUpdatedData: Decodable, Sendable {
-    public let story: APIPost
-    /// true quand l'édition a remis l'engagement à zéro côté serveur (vues,
-    /// réactions, impressions) — les clients doivent repasser la story en
-    /// « non vue ». Absent/false sur les mises à jour de métadonnées seules
-    /// (visibilité). Miroir de `StoryUpdatedEventData.engagementReset`.
-    public let engagementReset: Bool?
-}
-
-public struct SocketStoryDeletedData: Decodable, Sendable {
-    public let storyId: String
-    public let authorId: String
-}
-
-public struct SocketStoryViewedData: Decodable, Sendable {
-    public let storyId: String
-    public let viewerId: String
-    public let viewerUsername: String
-    public let viewCount: Int
-}
-
-public struct SocketStoryReactedData: Decodable, Sendable {
-    public let storyId: String
-    public let userId: String
-    public let emoji: String
-}
-
-public struct SocketStoryUnreactedData: Decodable, Sendable {
-    public let storyId: String
-    public let userId: String
-    public let emoji: String
-    public init(storyId: String, userId: String, emoji: String) {
-        self.storyId = storyId
-        self.userId = userId
-        self.emoji = emoji
-    }
-}
-
-public struct SocketStatusCreatedData: Decodable, Sendable {
-    public let status: APIPost
-}
-
-public struct SocketStatusDeletedData: Decodable, Sendable {
-    public let statusId: String
-    public let authorId: String
-}
-
-public struct SocketStatusReactedData: Decodable, Sendable {
-    public let statusId: String
-    public let userId: String
-    public let emoji: String
-}
-
-public struct SocketStatusUnreactedData: Decodable, Sendable {
-    public let statusId: String
-    public let userId: String
-    public let emoji: String
-    public init(statusId: String, userId: String, emoji: String) {
-        self.statusId = statusId
-        self.userId = userId
-        self.emoji = emoji
-    }
-}
-
-public struct SocketConversationDeletedData: Decodable, Sendable {
-    public let conversationId: String
-}
-
-public struct SocketCommentAddedData: Decodable, Sendable {
-    public let postId: String
-    public let comment: APIPostComment
-    public let commentCount: Int
-    /// cmid du POST créateur, ré-émis par le gateway dans l'écho — permet à
-    /// l'ÉMETTEUR de remplacer sa ligne optimiste (insérée sous cet id local)
-    /// au lieu d'en insérer une seconde sous l'id serveur. `nil` quand le
-    /// créateur n'a pas envoyé de `X-Client-Mutation-Id`.
-    public let clientMutationId: String?
-
-    public init(postId: String, comment: APIPostComment, commentCount: Int, clientMutationId: String? = nil) {
-        self.postId = postId
-        self.comment = comment
-        self.commentCount = commentCount
-        self.clientMutationId = clientMutationId
-    }
-}
-
-/// Écho d'édition d'un commentaire (`comment:updated`) — porte le commentaire
-/// COMPLET : le client remplace la ligne en place (idempotent par id).
-public struct SocketCommentUpdatedData: Decodable, Sendable {
-    public let postId: String
-    public let comment: APIPostComment
-
-    public init(postId: String, comment: APIPostComment) {
-        self.postId = postId
-        self.comment = comment
-    }
-}
-
-public struct SocketCommentDeletedData: Decodable, Sendable {
-    public let postId: String
-    public let commentId: String
-    public let commentCount: Int
-}
-
-/// Charge utile de `comment:liked` ET de sa jumelle descendante
-/// `comment:unliked` : le contrat déclare deux interfaces de forme identique
-/// (`CommentLikedEventData` / `CommentUnlikedEventData`), parce que `likeCount`
-/// y est le total ABSOLU après application — jamais un delta. Une seule forme
-/// suffit donc ici, comme `SocketCommentReactionUpdateEvent` sert déjà
-/// `comment:reaction-added` et `comment:reaction-removed`. Le SENS vit dans le
-/// sujet, pas dans les champs.
-public struct SocketCommentLikedData: Decodable, Sendable {
-    public let postId: String
-    public let commentId: String
-    public let userId: String
-    public let likeCount: Int
-}
-
-public struct SocketCommentReactionAggregation: Codable, Sendable {
-    public let emoji: String
-    public let count: Int
-    public let userIds: [String]
-    public let hasCurrentUser: Bool
-}
-
-public struct SocketCommentReactionUpdateEvent: Codable, Sendable {
-    public let commentId: String
-    public let postId: String
-    public let userId: String
-    public let emoji: String
-    public let action: String
-    public let aggregation: SocketCommentReactionAggregation
-    public let timestamp: Date?
-}
-
-public struct SocketCommentReactionSyncEvent: Codable, Sendable {
-    public let commentId: String
-    // postId is required so a sync (request-sync ACK) can locate the comment in
-    // a post-scoped cache — the gateway's getCommentReactions returns it and the
-    // shared CommentReactionSyncEventData declares it required. Without it iOS
-    // could not key the comment to its post.
-    public let postId: String
-    public let reactions: [SocketCommentReactionAggregation]
-    public let totalCount: Int
-    public let userReactions: [String]
-}
-
-public struct SocketPostBookmarkedData: Decodable, Sendable {
-    public let postId: String
-    public let bookmarked: Bool
-    /// Absolute bookmark count after the mutation (mirrors `likeCount` on the
-    /// like events). Optional so decoding survives an older gateway that does
-    /// not yet emit it — clients then leave the displayed count untouched.
-    public let bookmarkCount: Int?
-}
-
-public struct SocketPostReactionAggregation: Codable, Sendable {
-    public let emoji: String
-    public let count: Int
-}
-
-public struct SocketPostReactionUpdateEvent: Codable, Sendable {
-    public let postId: String
-    public let userId: String
-    public let emoji: String
-    public let action: String
-    public let aggregation: SocketPostReactionAggregation
-    public let timestamp: Date?
-}
-
-public struct SocketPostReactionSyncEvent: Codable, Sendable {
-    public let postId: String
-    public let reactions: [SocketPostReactionAggregation]
-    public let totalCount: Int
-    public let userReactions: [String]
-}
-
-public struct SocketStoryTranslationUpdatedData: Decodable, Sendable {
-    public let postId: String
-    public let textObjectIndex: Int
-    public let translations: [String: String]
-}
-
-// Socket payloads use camelCase (unlike REST which uses snake_case)
-public struct SocketTranslationPayload: Decodable, Sendable {
-    public let text: String
-    public let translationModel: String?
-    public let confidenceScore: Double?
-    public let createdAt: String?
-}
-
-public struct SocketPostTranslationUpdatedData: Decodable, Sendable {
-    public let postId: String
-    public let language: String
-    public let translation: SocketTranslationPayload
-}
-
-public struct SocketCommentTranslationUpdatedData: Decodable, Sendable {
-    public let commentId: String
-    public let postId: String
-    public let language: String
-    public let translation: SocketTranslationPayload
-}
-
-/// `comment:media-updated` — émis quand le pipeline audio d'un média de commentaire
-/// a produit une transcription/traductions. Porte le commentaire enrichi (média
-/// transcrit/traduit) à substituer en cache.
-public struct SocketCommentMediaUpdatedData: Decodable, Sendable {
-    public let postId: String
-    public let commentId: String
-    public let comment: APIPostComment
-}
-
-/// `media:caption-translation-updated` — émis quand le pipeline ZMQ a traduit la
-/// LÉGENDE (`PostMedia.caption`) d'un média, post OU commentaire (#6280).
-/// DISTINCT de `SocketPostTranslationUpdatedData` (traduit `Post.content`) et de
-/// `SocketCommentMediaUpdatedData` (recharge le commentaire ENTIER pour une
-/// transcription audio prête). `commentId` est absent quand le média appartient
-/// directement à un post.
-public struct SocketMediaCaptionTranslationUpdatedData: Decodable, Sendable {
-    public let mediaId: String
-    public let postId: String
-    public let commentId: String?
-    public let language: String
-    public let translation: SocketTranslationPayload
-}
-
-// MARK: - Protocol
-
-public protocol SocialSocketProviding: Sendable {
-    var postCreated: PassthroughSubject<SocketPostCreatedData, Never> { get }
-    var postUpdated: PassthroughSubject<APIPost, Never> { get }
-    var postDeleted: PassthroughSubject<String, Never> { get }
-    var postLiked: PassthroughSubject<SocketPostLikedData, Never> { get }
-    var postUnliked: PassthroughSubject<SocketPostUnlikedData, Never> { get }
-    var postReposted: PassthroughSubject<SocketPostRepostedData, Never> { get }
-    var postBookmarked: PassthroughSubject<SocketPostBookmarkedData, Never> { get }
-    var storyCreated: PassthroughSubject<APIPost, Never> { get }
-    var storyUpdated: PassthroughSubject<SocketStoryUpdatedData, Never> { get }
-    var storyDeleted: PassthroughSubject<SocketStoryDeletedData, Never> { get }
-    var storyViewed: PassthroughSubject<SocketStoryViewedData, Never> { get }
-    var storyReacted: PassthroughSubject<SocketStoryReactedData, Never> { get }
-    var storyUnreacted: PassthroughSubject<SocketStoryUnreactedData, Never> { get }
-    var statusCreated: PassthroughSubject<APIPost, Never> { get }
-    var statusDeleted: PassthroughSubject<String, Never> { get }
-    var statusUpdated: PassthroughSubject<APIPost, Never> { get }
-    var statusReacted: PassthroughSubject<SocketStatusReactedData, Never> { get }
-    var statusUnreacted: PassthroughSubject<SocketStatusUnreactedData, Never> { get }
-    var conversationDeleted: PassthroughSubject<String, Never> { get }
-    var commentAdded: PassthroughSubject<SocketCommentAddedData, Never> { get }
-    var commentUpdated: PassthroughSubject<SocketCommentUpdatedData, Never> { get }
-    var commentDeleted: PassthroughSubject<SocketCommentDeletedData, Never> { get }
-    var commentLiked: PassthroughSubject<SocketCommentLikedData, Never> { get }
-    var commentUnliked: PassthroughSubject<SocketCommentLikedData, Never> { get }
-    var commentReactionAdded: PassthroughSubject<SocketCommentReactionUpdateEvent, Never> { get }
-    var commentReactionRemoved: PassthroughSubject<SocketCommentReactionUpdateEvent, Never> { get }
-    var commentReactionSync: PassthroughSubject<SocketCommentReactionSyncEvent, Never> { get }
-    var postReactionAdded: PassthroughSubject<SocketPostReactionUpdateEvent, Never> { get }
-    var postReactionRemoved: PassthroughSubject<SocketPostReactionUpdateEvent, Never> { get }
-    var postReactionSync: PassthroughSubject<SocketPostReactionSyncEvent, Never> { get }
-    var storyTranslationUpdated: PassthroughSubject<SocketStoryTranslationUpdatedData, Never> { get }
-    var postTranslationUpdated: PassthroughSubject<SocketPostTranslationUpdatedData, Never> { get }
-    var commentTranslationUpdated: PassthroughSubject<SocketCommentTranslationUpdatedData, Never> { get }
-    var commentMediaUpdated: PassthroughSubject<SocketCommentMediaUpdatedData, Never> { get }
-    var mediaCaptionTranslationUpdated: PassthroughSubject<SocketMediaCaptionTranslationUpdatedData, Never> { get }
-    /// Fires on every reconnect (a `.connect` that follows a previous one).
-    /// App-side feed handlers (FeedViewModel) observe this to backfill posts /
-    /// reactions missed while the social socket was down.
-    var didReconnect: PassthroughSubject<Void, Never> { get }
-    var isConnected: Bool { get }
-    var connectionState: ConnectionState { get }
-    func connect()
-    func disconnect()
-    func subscribeFeed()
-    func unsubscribeFeed()
-    func joinPostRoom(postId: String)
-    func leavePostRoom(postId: String)
-    func addCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent
-    func removeCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent
-    func requestCommentReactionSync(commentId: String) async throws -> SocketCommentReactionSyncEvent
-    func addPostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent
-    func removePostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent
-    func requestPostReactionSync(postId: String) async throws -> SocketPostReactionSyncEvent
-}
-
 // MARK: - Social Socket Manager
 
 public final class SocialSocketManager: ObservableObject, SocialSocketProviding, @unchecked Sendable {
@@ -393,7 +60,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// (résumé d'app / réseau revenu), le gateway a oublié nos rooms — sans re-join
     /// les likes/commentaires/réactions temps réel du post ouvert cessaient
     /// silencieusement. Préservé à travers `suspendTransport`, vidé au `disconnect()`.
-    private var joinedPostRooms: Set<String> = []
+    /// Les salons de post et combien d'ÉCRANS en tiennent chacun. Un ensemble ne comptait pas : un réel affiché
+    /// rejoignait son salon, la feuille de commentaires ouverte puis fermée par-dessus le QUITTAIT — et l'écran
+    /// resté visible perdait likes et commentaires en direct, jusqu'au re-join de la reconnexion suivante.
+    private var joinedPostRooms: [String: Int] = [:]
     /// Fires on every reconnect (a `.connect` that follows a previous one).
     /// R2 — feed re-sync trigger; FeedViewModel observes this to backfill
     /// posts/reactions missed while the social socket was down.
@@ -467,30 +137,12 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         let attempt = backoff.attempt
         Logger.socket.info("SocialSocket: backoff reconnect attempt=\(attempt) delay=\(delay, format: .fixed(precision: 2))s")
         reconnectTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(delay))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(delay)) else { return }
             await MainActor.run { [weak self] in
                 guard let self, !self.isConnected else { return }
                 self.forceReconnect()
             }
         }
-    }
-
-    // MARK: - JWT Helpers
-
-    private static func isJWTExpired(_ token: String) -> Bool {
-        let parts = token.split(separator: ".")
-        guard parts.count == 3 else { return true }
-        var base64 = String(parts[1])
-            .replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-        while base64.count % 4 != 0 { base64.append("=") }
-        // Fail-safe : un JWT illisible est traité comme expiré (déclenche un
-        // refresh) plutôt que présumé valide.
-        guard let data = Data(base64Encoded: base64),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let exp = json["exp"] as? TimeInterval else { return true }
-        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < Date()
     }
 
     // MARK: - Connection
@@ -517,11 +169,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             return .notArmed
         }
 
-        let tokenExpired = Self.isJWTExpired(token)
+        let tokenExpired = SocketConnectionRules.isJWTExpired(token)
         if tokenExpired {
             Logger.socket.warning("SocialSocket: JWT expired, triggering refresh instead of connecting")
+            // #10904 — au nom du jeton lu ici : il ne rafraîchit rien s'il
+            // n'est plus celui du compte actif quand la tâche s'exécute.
             Task { @MainActor in
-                AuthManager.shared.handleUnauthorized()
+                AuthManager.shared.handleUnauthorized(presentedToken: token)
             }
             return .notArmed
         }
@@ -549,6 +203,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         return .armed
     }
 
+    /// Les transports démontés sont gardés vivants par `SocketTransportRetirement`
+    /// le temps que leurs accusés en attente tombent.
+    private let transportRetirement = SocketTransportRetirement()
+
     /// Transport-only teardown (R1 — sibling of MessageSocketManager.suspendTransport).
     /// Drops the socket so a stale `isConnected == true` cannot fool
     /// the resume path, but PRESERVES `hadPreviousConnection` so the next
@@ -558,6 +216,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         reconnectTask?.cancel()
         reconnectTask = nil
         socket?.disconnect()
+        transportRetirement.retire(manager)
         socket = nil
         manager = nil
         isConnected = false
@@ -660,7 +319,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public func joinPostRoom(postId: String) {
         // Tracker AVANT toute émission : le handler `.connect` re-émet `post:join`
         // pour toutes les rooms de `joinedPostRooms` une fois le handshake terminé.
-        joinedPostRooms.insert(postId)
+        let holders = (joinedPostRooms[postId] ?? 0) + 1
+        joinedPostRooms[postId] = holders
+        // Déjà tenu par un autre écran : le serveur l'a, rien à émettre.
+        guard holders == 1 else { return }
         guard socket?.status == .connected else {
             // Socket pas encore connecté : émettre serait perdu. Le re-join du
             // handler `.connect` prendra le relais (miroir de joinConversation).
@@ -671,14 +333,20 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     }
 
     public func leavePostRoom(postId: String) {
-        joinedPostRooms.remove(postId)
+        guard let holders = joinedPostRooms[postId] else { return }
+        guard holders <= 1 else {
+            // Un autre écran le tient encore : on ne le quitte pas sous ses yeux.
+            joinedPostRooms[postId] = holders - 1
+            return
+        }
+        joinedPostRooms[postId] = nil
         socket?.emit("post:leave", ["postId": postId])
         Logger.socket.info("SocialSocket left post room: \(postId)")
     }
 
     /// Rooms à re-joindre après un (re)connect, ordre déterministe pour les tests.
     func postRoomsToRejoinOnConnect() -> [String] {
-        joinedPostRooms.sorted()
+        joinedPostRooms.keys.sorted()
     }
 
     // MARK: - Comment Reaction Emission
@@ -700,77 +368,31 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     }
 
     public func addCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
-        guard let socket else { throw CommentReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("comment:reaction-add", ["commentId": commentId, "postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: CommentReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: CommentReactionError.serverError(message))
-                    return
-                }
-                continuation.resume(returning: Self.decodeCommentReactionAck(data, decoder: self.decoder, commentId: commentId, postId: postId, emoji: emoji, action: "add"))
-            }
-        }
+        try await emitCommentReaction(.commentReactionAdd, commentId: commentId, postId: postId, emoji: emoji, action: "add")
     }
 
     public func removeCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
+        try await emitCommentReaction(.commentReactionRemove, commentId: commentId, postId: postId, emoji: emoji, action: "remove")
+    }
+
+    private func emitCommentReaction(
+        _ event: SocketEvent, commentId: String, postId: String, emoji: String, action: String
+    ) async throws -> SocketCommentReactionUpdateEvent {
         guard let socket else { throw CommentReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("comment:reaction-remove", ["commentId": commentId, "postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: CommentReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: CommentReactionError.serverError(message))
-                    return
-                }
-                continuation.resume(returning: Self.decodeCommentReactionAck(data, decoder: self.decoder, commentId: commentId, postId: postId, emoji: emoji, action: "remove"))
-            }
-        }
+        let ack = await socket.emitWithAck(
+            event, ["commentId": commentId, "postId": postId, "emoji": emoji] as [String: Any],
+            as: SocketCommentReactionUpdateEvent.self, payloadAt: .data, timingOutAfter: 10, decoder: decoder
+        )
+        return try Self.commentReactionEvent(from: ack, commentId: commentId, postId: postId, emoji: emoji, action: action)
     }
 
     public func requestCommentReactionSync(commentId: String) async throws -> SocketCommentReactionSyncEvent {
         guard let socket else { throw CommentReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("comment:reaction-request-sync", ["commentId": commentId]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: CommentReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: CommentReactionError.serverError(message))
-                    return
-                }
-                let event: SocketCommentReactionSyncEvent
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: data)
-                    event = try self.decoder.decode(SocketCommentReactionSyncEvent.self, from: jsonData)
-                } catch {
-                    // L'appelant ne reçoit qu'un `.malformedResponse` : sans
-                    // ce log, la cause réelle du désaccord de schéma est perdue.
-                    Logger.socket.error("comment reaction sync ACK undecodable: \(error.localizedDescription, privacy: .public)")
-                    continuation.resume(throwing: CommentReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
-            }
-        }
+        let ack = await socket.emitWithAck(
+            .commentReactionRequestSync, ["commentId": commentId] as [String: Any],
+            as: SocketCommentReactionSyncEvent.self, payloadAt: .data, timingOutAfter: 10, decoder: decoder
+        )
+        return try Self.commentReactionSyncEvent(from: ack)
     }
 
     // MARK: - Post Reaction Emission
@@ -791,108 +413,120 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         }
     }
 
-    /// Décode l'ACK d'une réaction post. Contrat aligné (gateway `PostReactionHandler`) :
+    /// Lit l'ACK d'une réaction post. Contrat aligné (gateway `PostReactionHandler`) :
     /// `data` == l'`updateEvent` du broadcast `post:reaction-added/-removed`.
     /// TOLÉRANT : si le shape de l'ACK dérive (success==true mais champs inattendus), on
     /// synthétise un événement minimal au lieu de jeter `malformedResponse` — l'agrégation
     /// autoritaire arrive via le broadcast et tous les appelants ignorent ce retour
     /// (`_ = try await …`). Évite l'ancien bug où chaque réaction socket échouait.
-    nonisolated static func decodePostReactionAck(
-        _ data: [String: Any], decoder: JSONDecoder, postId: String, emoji: String, action: String
-    ) -> SocketPostReactionUpdateEvent {
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: data)
-            return try decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData)
-        } catch {
+    nonisolated static func postReactionEvent(
+        from ack: SocketAck<SocketPostReactionUpdateEvent>, postId: String, emoji: String, action: String
+    ) throws -> SocketPostReactionUpdateEvent {
+        switch ack {
+        case .accepted(let event):
+            return event
+        case .undecodable(let reason):
             // Reconstruction minimale depuis les paramètres : l'UI reste juste
             // sur l'essentiel mais perd les champs enrichis du serveur.
-            Logger.socket.error("post reaction event undecodable, rebuilding a minimal event: \(error.localizedDescription, privacy: .public)")
+            Logger.socket.error("post reaction event undecodable, rebuilding a minimal event: \(reason, privacy: .public)")
+            return SocketPostReactionUpdateEvent(
+                postId: postId, userId: "", emoji: emoji, action: action,
+                aggregation: SocketPostReactionAggregation(emoji: emoji, count: 0), timestamp: nil)
+        case .acceptedWithoutPayload:
+            throw PostReactionError.serverError("unknown error")
+        case .refused(let refusal):
+            throw postReactionAckFailure(refusal)
+        case .timedOut:
+            throw PostReactionError.timeout
         }
-        return SocketPostReactionUpdateEvent(
-            postId: postId, userId: "", emoji: emoji, action: action,
-            aggregation: SocketPostReactionAggregation(emoji: emoji, count: 0), timestamp: nil)
     }
 
-    /// Décode l'ACK d'une réaction commentaire (même contrat/tolérance que `decodePostReactionAck`).
-    nonisolated static func decodeCommentReactionAck(
-        _ data: [String: Any], decoder: JSONDecoder, commentId: String, postId: String, emoji: String, action: String
-    ) -> SocketCommentReactionUpdateEvent {
-        do {
-            let jsonData = try JSONSerialization.data(withJSONObject: data)
-            return try decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData)
-        } catch {
-            Logger.socket.error("comment reaction event undecodable, rebuilding a minimal event: \(error.localizedDescription, privacy: .public)")
+    /// Lit l'ACK d'une réaction commentaire (même contrat/tolérance que `postReactionEvent`).
+    nonisolated static func commentReactionEvent(
+        from ack: SocketAck<SocketCommentReactionUpdateEvent>, commentId: String, postId: String, emoji: String, action: String
+    ) throws -> SocketCommentReactionUpdateEvent {
+        switch ack {
+        case .accepted(let event):
+            return event
+        case .undecodable(let reason):
+            Logger.socket.error("comment reaction event undecodable, rebuilding a minimal event: \(reason, privacy: .public)")
+            return SocketCommentReactionUpdateEvent(
+                commentId: commentId, postId: postId, userId: "", emoji: emoji, action: action,
+                aggregation: SocketCommentReactionAggregation(emoji: emoji, count: 0, userIds: [], hasCurrentUser: false),
+                timestamp: nil)
+        case .acceptedWithoutPayload:
+            throw CommentReactionError.serverError("unknown error")
+        case .refused(let refusal):
+            throw CommentReactionError.serverError(refusal.message ?? "unknown error")
+        case .timedOut:
+            throw CommentReactionError.timeout
         }
-        return SocketCommentReactionUpdateEvent(
-            commentId: commentId, postId: postId, userId: "", emoji: emoji, action: action,
-            aggregation: SocketCommentReactionAggregation(emoji: emoji, count: 0, userIds: [], hasCurrentUser: false),
-            timestamp: nil)
+    }
+
+    nonisolated static func commentReactionSyncEvent(
+        from ack: SocketAck<SocketCommentReactionSyncEvent>
+    ) throws -> SocketCommentReactionSyncEvent {
+        switch ack {
+        case .accepted(let event):
+            return event
+        case .undecodable(let reason):
+            // L'appelant ne reçoit qu'un `.malformedResponse` : sans
+            // ce log, la cause réelle du désaccord de schéma est perdue.
+            Logger.socket.error("comment reaction sync ACK undecodable: \(reason, privacy: .public)")
+            throw CommentReactionError.malformedResponse
+        case .acceptedWithoutPayload:
+            throw CommentReactionError.serverError("unknown error")
+        case .refused(let refusal):
+            throw CommentReactionError.serverError(refusal.message ?? "unknown error")
+        case .timedOut:
+            throw CommentReactionError.timeout
+        }
+    }
+
+    nonisolated static func postReactionSyncEvent(
+        from ack: SocketAck<SocketPostReactionSyncEvent>
+    ) throws -> SocketPostReactionSyncEvent {
+        switch ack {
+        case .accepted(let event):
+            return event
+        case .undecodable(let reason):
+            Logger.socket.error("post reaction sync ACK undecodable: \(reason, privacy: .public)")
+            throw PostReactionError.malformedResponse
+        case .acceptedWithoutPayload:
+            throw PostReactionError.serverError("unknown error")
+        case .refused(let refusal):
+            throw PostReactionError.serverError(refusal.message ?? "unknown error")
+        case .timedOut:
+            throw PostReactionError.timeout
+        }
     }
 
     public func addPostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent {
-        guard let socket else { throw PostReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("post:reaction-add", ["postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: PostReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    continuation.resume(throwing: Self.postReactionAckFailure(response))
-                    return
-                }
-                continuation.resume(returning: Self.decodePostReactionAck(data, decoder: self.decoder, postId: postId, emoji: emoji, action: "add"))
-            }
-        }
+        try await emitPostReaction(.postReactionAdd, postId: postId, emoji: emoji, action: "add")
     }
 
     public func removePostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent {
+        try await emitPostReaction(.postReactionRemove, postId: postId, emoji: emoji, action: "remove")
+    }
+
+    private func emitPostReaction(
+        _ event: SocketEvent, postId: String, emoji: String, action: String
+    ) async throws -> SocketPostReactionUpdateEvent {
         guard let socket else { throw PostReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("post:reaction-remove", ["postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: PostReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    continuation.resume(throwing: Self.postReactionAckFailure(response))
-                    return
-                }
-                continuation.resume(returning: Self.decodePostReactionAck(data, decoder: self.decoder, postId: postId, emoji: emoji, action: "remove"))
-            }
-        }
+        let ack = await socket.emitWithAck(
+            event, ["postId": postId, "emoji": emoji] as [String: Any],
+            as: SocketPostReactionUpdateEvent.self, payloadAt: .data, timingOutAfter: 10, decoder: decoder
+        )
+        return try Self.postReactionEvent(from: ack, postId: postId, emoji: emoji, action: action)
     }
 
     public func requestPostReactionSync(postId: String) async throws -> SocketPostReactionSyncEvent {
         guard let socket else { throw PostReactionError.noSocket }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck("post:reaction-request-sync", ["postId": postId]).timingOut(after: 10) { items in
-                guard let response = items.first as? [String: Any] else {
-                    continuation.resume(throwing: PostReactionError.timeout)
-                    return
-                }
-                guard let success = response["success"] as? Bool, success,
-                      let data = response["data"] as? [String: Any] else {
-                    let message = (response["error"] as? [String: Any])?["message"] as? String
-                        ?? (response["error"] as? String)
-                        ?? "unknown error"
-                    continuation.resume(throwing: PostReactionError.serverError(message))
-                    return
-                }
-                let event: SocketPostReactionSyncEvent
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: data)
-                    event = try self.decoder.decode(SocketPostReactionSyncEvent.self, from: jsonData)
-                } catch {
-                    Logger.socket.error("post reaction sync ACK undecodable: \(error.localizedDescription, privacy: .public)")
-                    continuation.resume(throwing: PostReactionError.malformedResponse)
-                    return
-                }
-                continuation.resume(returning: event)
-            }
-        }
+        let ack = await socket.emitWithAck(
+            .postReactionRequestSync, ["postId": postId] as [String: Any],
+            as: SocketPostReactionSyncEvent.self, payloadAt: .data, timingOutAfter: 10, decoder: decoder
+        )
+        return try Self.postReactionSyncEvent(from: ack)
     }
 
     // MARK: - Event Handlers
@@ -930,8 +564,11 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             Logger.socket.info("SocialSocket connected")
         }
 
-        socket.on(clientEvent: .disconnect) { [weak self] _, _ in
+        socket.on(clientEvent: .disconnect) { [weak self, weak socket] data, _ in
             guard let self else { return }
+            // Seul le socket COURANT réarme : un ancien, remplacé, n'a plus rien à rouvrir.
+            let retries = SocketDisconnectPolicy.retries(afterReason: SocketDisconnectPolicy.reason(in: data))
+                && socket != nil && socket === self.socket
             DispatchQueue.main.async {
                 self.isConnected = false
                 if self.hadPreviousConnection {
@@ -939,8 +576,26 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                 } else {
                     self.connectionState = .disconnected
                 }
+                // Coupure prononcée par la passerelle, sur le socket COURANT :
+                // Socket.IO ne la rattrape pas (`SocketDisconnectPolicy`).
+                if retries {
+                    self.scheduleReconnectWithBackoff()
+                }
             }
             Logger.socket.info("SocialSocket disconnected")
+        }
+
+        // Une perte de transport n'émet PAS `.disconnect` quand la reconnexion automatique est active :
+        // Socket.IO émet `.reconnect` (`SocketManager.tryReconnect`). Sans ce récepteur, `isConnected`
+        // restait vrai pendant toute la coupure — chaque envoi attendait son accusé avant le repli REST,
+        // et le retour du réseau ne relançait rien.
+        socket.on(clientEvent: .reconnect) { [weak self] _, _ in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.isConnected = false
+                self.connectionState = .reconnecting(attempt: 0)
+            }
+            Logger.socket.info("SocialSocket transport lost — reconnecting")
         }
 
         socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in

@@ -392,3 +392,46 @@ describe('applyMessageAttachmentUpdated (#7017) — la transcription arrive SANS
     expect(attachmentOf(client, 'c-a', 'm-audio').transcription).toBeNull();
   });
 });
+
+describe('la transcription demandée arrive sans rechargement (#10742)', () => {
+  const threePieces = (): Message =>
+    localMessage({
+      id: 'm-audio',
+      conversationId: 'c-a',
+      content: '',
+      messageType: 'audio',
+      attachments: ['a-1', 'a-2', 'a-3'].map((id) => socketAttachment({ id })),
+    } as unknown as Partial<Message>);
+
+  test('audio:transcription-ready greffe le texte sur la BONNE pièce d’un message à trois vocaux', async () => {
+    const { applyTranscriptionReady, isTranscriptionReady } = await import('./realtime-transcription-ready');
+    const client = new QueryClient();
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([threePieces()]));
+    const event = { conversationId: 'c-a', messageId: 'm-audio', attachmentId: 'a-2', transcription: { id: 't1', text: 'Bonjour à tous', language: 'fr', confidence: 0.9 } };
+    expect(isTranscriptionReady(event)).toBe(true);
+
+    applyTranscriptionReady(client, event);
+
+    const pieces = threadOf(client, 'c-a')!.messages[0]!.attachments as unknown as readonly Record<string, unknown>[];
+    expect(pieces[0]!.transcription ?? null).toBeNull();
+    expect(pieces[2]!.transcription ?? null).toBeNull();
+    expect(pieces[1]!.transcription).toMatchObject({ type: 'audio', transcribedText: 'Bonjour à tous', language: 'fr' });
+  });
+
+  test('une pièce voilée, inconnue ou déjà transcrite n’est pas touchée ; une charge informe est rejetée', async () => {
+    const { applyTranscriptionReady, isTranscriptionReady } = await import('./realtime-transcription-ready');
+    const client = new QueryClient();
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([threePieces()]));
+    applyTranscriptionReady(client, { conversationId: 'c-a', messageId: 'm-audio', attachmentId: 'inconnue', transcription: { id: 't', text: 'x', language: 'fr' } });
+    expect((threadOf(client, 'c-a')!.messages[0]!.attachments as unknown as readonly Record<string, unknown>[]).every((p) => p.transcription == null)).toBe(true);
+    expect(isTranscriptionReady({ conversationId: 'c-a', messageId: 'm-audio', attachmentId: 'a-1', transcription: { text: 3 } })).toBe(false);
+    expect(isTranscriptionReady(null)).toBe(false);
+  });
+
+  test('un attachment-updated à transcription null n’efface pas la transcription déjà greffée', () => {
+    const client = new QueryClient();
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([cachedAudioMessage(socketAttachment({ transcription: { type: 'audio', text: 'Hola', language: 'es' } }))]));
+    applyMessageAttachmentUpdated(client, { conversationId: 'c-a', messageId: 'm-audio', attachment: socketAttachment({ transcription: null }) });
+    expect(attachmentOf(client, 'c-a', 'm-audio').transcription).toEqual({ type: 'audio', text: 'Hola', language: 'es' });
+  });
+});

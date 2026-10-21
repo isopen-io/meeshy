@@ -41,6 +41,12 @@ const until = async (ready: () => boolean) => {
   expect(ready()).toBe(true);
 };
 
+const at = (path: string): void => {
+  const happyDom: unknown = Reflect.get(window, 'happyDOM');
+  const setUrl: unknown = typeof happyDom === 'object' && happyDom !== null ? Reflect.get(happyDom, 'setURL') : undefined;
+  if (typeof setUrl === 'function') Reflect.apply(setUrl, happyDom, [`http://localhost${path}`]);
+};
+
 describe('SettingsPacksScreen', () => {
   test('« Stickers » montre la Boutique des stickers ; « Cadres du jeu » celle des cadres', async () => {
     const host = await mounter.mount(
@@ -55,5 +61,66 @@ describe('SettingsPacksScreen', () => {
     await mounter.click(host.querySelector<HTMLElement>('[data-packs-segment="frames"]'));
     await until(() => host.querySelector('[data-pack-shop="glory-frame"] [data-pack-shop-empty]') !== null);
     expect(host.querySelector('[data-sticker-shop]')).toBe(null);
+  });
+
+  test('?pack=<slug> met CE pack en avant dans la boutique des stickers (#10703)', async () => {
+    at('/settings?volet=packs');
+    const first = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <SettingsPacksScreen language="fr" />
+      </QueryClientProvider>,
+    );
+    await until(() => first.querySelectorAll('[data-pack-shop="sticker"] [data-shop-pack]').length === 3);
+    const slug = first.querySelector('[data-shop-pack]')?.getAttribute('data-shop-pack') ?? '';
+    expect(first.querySelector('[data-shop-pack-focused]')).toBeNull();
+    mounter.unmountAll();
+
+    at(`/settings?volet=packs&pack=${slug}`);
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <SettingsPacksScreen language="fr" />
+      </QueryClientProvider>,
+    );
+    await until(() => host.querySelector('[data-shop-pack-focused]') !== null);
+    expect(host.querySelector('[data-shop-pack-focused]')?.getAttribute('data-shop-pack')).toBe(slug);
+    expect(host.querySelectorAll('[data-shop-pack-focused]')).toHaveLength(1);
+    expect(host.querySelector('[data-shop-pack-focused]')?.getAttribute('aria-current')).toBe('true');
+    at('/');
+  });
+
+  test('?domaine=<d> ouvre la vitrine filtrée sur ce domaine ; type=cadres reste lu', async () => {
+    at('/settings?volet=packs&domaine=banner');
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <SettingsPacksScreen language="fr" />
+      </QueryClientProvider>,
+    );
+    expect(host.querySelector('[data-packs-segment="shop"]')?.getAttribute('aria-checked')).toBe('true');
+    expect(host.querySelector('[data-unified-shop="banner"]')).not.toBe(null);
+    mounter.unmountAll();
+
+    at('/settings?volet=packs&type=cadres');
+    const frames = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <SettingsPacksScreen language="fr" />
+      </QueryClientProvider>,
+    );
+    expect(frames.querySelector('[data-packs-segment="frames"]')?.getAttribute('aria-checked')).toBe('true');
+    at('/');
+  });
+
+  test('un domaine inconnu ne casse rien : la page s’ouvre comme avant, sur les stickers', async () => {
+    at('/settings?volet=packs&domaine=inconnu');
+    try {
+      const host = await mounter.mount(
+        <QueryClientProvider client={appQueryClient}>
+          <SettingsPacksScreen language="fr" />
+        </QueryClientProvider>,
+      );
+      expect(host.querySelector('[data-packs-segment="stickers"]')?.getAttribute('aria-checked')).toBe('true');
+      expect(host.querySelector('[data-unified-shop]')).toBe(null);
+    } finally {
+      at('/');
+    }
   });
 });

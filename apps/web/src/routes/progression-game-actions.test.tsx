@@ -155,8 +155,41 @@ describe('la frappe', () => {
     await settle();
     expect(gameOf(cached()).level.score).toBe(gameOf(before).level.score);
     expect(gameOf(cached()).treasury.held).toBe(gameOf(before).treasury.held);
-    expect(actions().errors.mint).toContain('points');
+    expect(actions().errors.mint).toContain('étincelles');
     expect(actions().celebration).toBeNull();
+  });
+
+  test('le prix montré part avec la frappe (#10903) : la passerelle refuse au-delà, sans débiter', async () => {
+    const before = seed();
+    const { actions, calls } = await bench(before, (req) =>
+      pathOf(req) === '/api/v1/me/meesh/mint' ? ok({ status: 'minted', balance: 5, mintedLifetime: 4 }) : undefined,
+    );
+    await act(async () => actions().mint());
+    await settle();
+    const sent = calls().find((c) => pathOf(c) === '/api/v1/me/meesh/mint');
+    expect(sent?.body).toMatchObject({ maxPrice: gameOf(before).mint.price });
+  });
+
+  test('PRICE_CHANGED : rien n’a bougé, le prix se relit et l’écran dit de frapper à nouveau', async () => {
+    const before = seed();
+    const { actions, cached, client } = await bench(before, (req) =>
+      pathOf(req) === '/api/v1/me/meesh/mint' ? refused('PRICE_CHANGED') : undefined,
+    );
+    await act(async () => actions().mint());
+    await settle();
+    expect(gameOf(cached()).level.score).toBe(gameOf(before).level.score);
+    expect(gameOf(cached()).mint.number).toBe(gameOf(before).mint.number);
+    expect(actions().errors.mint).toContain('à figer');
+    expect(client.getQueryState(ENGAGEMENT_PROGRESS_QUERY_KEY)?.isInvalidated).toBe(true);
+  });
+
+  test('la frappe confirmée relève la révision en cache (#10900)', async () => {
+    const { actions, cached } = await bench({ ...seed(), gameRevision: 100 }, (req) =>
+      pathOf(req) === '/api/v1/me/meesh/mint' ? ok({ status: 'minted', balance: 5, mintedLifetime: 4, gameRevision: 200 }) : undefined,
+    );
+    await act(async () => actions().mint());
+    await settle();
+    expect(cached().gameRevision).toBe(200);
   });
 
   test('le requestId survit à un échec (le retry n’est pas une seconde frappe) et change après un succès', async () => {
@@ -262,7 +295,7 @@ describe('le coffre, le gel et le rallumage', () => {
     await act(async () => actions().claimChest());
     await settle();
     expect(gameOf(cached()).chest.status).toBe('ready');
-    expect(actions().errors.chest).toContain('missions');
+    expect(actions().errors.chest).toContain('actes du rêve');
   });
 
   test('un gel acheté : un de plus, le solde servi', async () => {
@@ -282,7 +315,7 @@ describe('le coffre, le gel et le rallumage', () => {
     await act(async () => actions().buyFreeze());
     await settle();
     expect(gameOf(cached()).flame.freezes).toBe(gameOf(before).flame.freezes);
-    expect(actions().errors.freeze).toContain('maximum');
+    expect(actions().errors.freeze).toContain('le plus possible');
   });
 
   test('le rallumage : la série servie, le solde servi', async () => {
@@ -347,6 +380,41 @@ describe('la frappe séquencée', () => {
     expect(gameOf(cached()).treasury.held).toBe(gameOf(before).treasury.held);
     expect(actions().errors.mint).toBeDefined();
     expect(actions().pending.mint).toBe(false);
+  });
+
+  test('la confirmation arrive à la scène pendant le geste, avec la pièce frappée (#11177)', async () => {
+    const before = seed();
+    const { gate } = staged();
+    const { actions } = await bench(before, (req) => (mintPath(req) ? ok({ status: 'minted', balance: 5, mintedLifetime: 4, number: 4, edition: 'silver' }) : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(gate.answer()).toEqual({ kind: 'confirmed', coin: { number: 4, edition: 'silver' } });
+  });
+
+  test('un refus arrive à la scène avec son code : Mee dira ce qui bloque (#11177)', async () => {
+    const { gate } = staged();
+    const { actions } = await bench(seed(), (req) => (mintPath(req) ? refused('MINT_BLOCKED_BY_DEBT') : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(gate.answer()).toEqual({ kind: 'refused', code: 'MINT_BLOCKED_BY_DEBT' });
+  });
+
+  test('la passerelle injoignable : la scène l’apprend comme un refus réseau (#11177)', async () => {
+    const { gate } = staged();
+    const { actions } = await bench(seed(), (req) => (mintPath(req) ? { ok: false, status: 0, error: 'hors ligne' } : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(gate.answer()).toEqual({ kind: 'refused', code: 'NETWORK' });
+  });
+
+  test('une frappe que la passerelle juge impossible est un refus, pas une fête (#11177)', async () => {
+    const before = seed();
+    const { gate } = staged();
+    const { actions, cached } = await bench(before, (req) => (mintPath(req) ? ok({ status: 'insufficient', balance: 5 }) : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(gate.answer()).toEqual({ kind: 'refused', code: 'INSUFFICIENT_POINTS' });
+    expect(gameOf(cached()).treasury.held).toBe(gameOf(before).treasury.held);
   });
 
   test('sans scène à l’écran, rien n’attend : le compteur monte tout de suite', async () => {

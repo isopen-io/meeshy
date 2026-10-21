@@ -137,14 +137,13 @@ enum MessagePieceMenu {
     /// - la suppression suit le droit de l'utilisateur, protégée ou non ;
     /// - « Tout le message » ferme toujours la liste : l'aperçu d'une pièce ne
     ///   retire jamais l'accès au message entier.
-    ///
-    /// **Transférer une seule pièce n'est pas offert** : la passerelle copie
-    /// TOUTES les pièces du message transféré (`copyForwardedAttachments`), et
-    /// une entrée « Transférer » enverrait le lot entier sous le nom d'une
-    /// pièce. Elle entrera ici quand la passerelle saura copier une pièce.
+    /// - « Transférer » ouvre l'écran de partage sur CETTE pièce (V2) : la
+    ///   passerelle ne recopie que la pièce choisie (`forwardedAttachmentIds`,
+    ///   #9914) — jamais une pièce protégée, ni quand la loi refuse le transfert.
     static func actions(_ ctx: Context) -> [PrimaryAction] {
         var out: [PrimaryAction] = []
         if !ctx.isProtected { out.append(.replyToPiece) }
+        if !ctx.isProtected && ctx.exits.offers(.forward) { out.append(.forwardPiece) }
         if !ctx.isProtected && ctx.exits.offers(.save) { out.append(.saveMedia) }
         if ctx.canDelete { out.append(.deletePiece) }
         out.append(.wholeMessage)

@@ -21,12 +21,17 @@ public protocol ShareLinkManaging: Sendable {
     func deleteLink(linkId: String) async throws
 }
 
-public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, @unchecked Sendable {
+public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, Sendable {
     public static let shared = ShareLinkService()
     #if DEBUG
     /// Vitrine App Store (#8855, DEBUG uniquement) : un aperçu de lien fixé, servi sans
     /// passerelle, pour capturer le VRAI accueil d'un invité. `nil` hors vitrine.
-    nonisolated(unsafe) public static var debugLinkInfoOverride: (@Sendable (String) -> ShareLinkInfo?)?
+    public static var debugLinkInfoOverride: (@Sendable (String) -> ShareLinkInfo?)? {
+        get { debugLinkInfoOverrideSlot.read { $0 } }
+        set { debugLinkInfoOverrideSlot.mutate { $0 = newValue } }
+    }
+
+    private static let debugLinkInfoOverrideSlot = Locked<(@Sendable (String) -> ShareLinkInfo?)?>(nil)
     #endif
     private let api: APIClientProviding
 

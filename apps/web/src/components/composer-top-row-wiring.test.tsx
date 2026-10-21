@@ -294,7 +294,7 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
       panel!.querySelector<HTMLButtonElement>('[aria-label="Confettis, inactif"]')!.click();
     });
 
-    expect(el.querySelector('[data-composer-effects]')?.getAttribute('aria-label')).toBe('1 effet(s) actif(s)');
+    expect(el.querySelector('[data-composer-effects]')?.getAttribute('aria-label')).toBe('1 effet actif');
 
     act(() => {
       el.querySelector<HTMLButtonElement>('[aria-label="Envoyer"]')!.click();

@@ -32,12 +32,15 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   isPackInstalled,
+  isPackOwned,
   packChoiceKey,
   parsePackChoiceKey,
   type PackDomain,
   type PackRegistries,
 } from '@meeshy/shared/types/content-pack';
 import type { PackInstallationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { GameRefusal } from '../game/GameRefusal';
+import { MeeshSpend, type SpendTx } from '../game/MeeshSpend';
 
 export type PackViewer = { readonly userId: string; readonly canModerate: boolean };
 
@@ -48,24 +51,38 @@ export type RegistryPack<D> = {
   readonly removable: boolean;
   /** Masqué : absent de la boutique, ni installable s'il ne l'est pas déjà ; servi en LECTURE (une photo gardée se reprend). */
   readonly hidden: boolean;
-  readonly project: (installed: boolean) => D;
+  /** Le prix en Meeshes (#10632) ; absent = gratuit, possédé par tout compte inscrit. */
+  readonly price?: number;
+  /** La version du pack au registre, consignée sur la ligne de dépense. */
+  readonly version?: number;
+  /** `owned` : la loi de possession (`isPackOwned`) pour ce lecteur ; les domaines sans prix l'ignorent. */
+  readonly project: (installed: boolean, owned: boolean) => D;
 };
 
 /** Un pack communautaire qu'un utilisateur peut installer : son identité en base, et sa projection selon l'état et le compteur. */
 export type CommunityInstallTarget<D> = {
   readonly id: string;
   readonly installCount: number;
-  readonly project: (installed: boolean, installCount: number) => D;
+  /** Le prix en Meeshes (#10709) ; absent = gratuit. Lu en base à chaque geste, jamais reçu d'un client. */
+  readonly price?: number;
+  readonly version?: number;
+  /** `owned` : la loi de possession pour ce lecteur ; les domaines sans prix l'ignorent. */
+  readonly project: (installed: boolean, installCount: number, owned?: boolean) => D;
 };
 
 /** Les packs proposés par des tiers et publiés — aujourd'hui la seule table `StickerPack`. */
 export interface CommunityPackStore<D> {
+  /**
+   * Vrai pour un magasin dont les packs peuvent être PAYANTS (#10709) : le moteur lui
+   * passe alors les clés de possession du lecteur (`ownedKeys`) ; sinon aucune lecture en plus.
+   */
+  readonly priced?: boolean;
   /** Les packs publiés, dans l'ordre de la boutique. */
-  catalogue(installedOf: (slug: string) => boolean): Promise<readonly D[]>;
+  catalogue(installedOf: (slug: string) => boolean, ownedKeys?: ReadonlySet<string>): Promise<readonly D[]>;
   /** Les packs publiés parmi `slugs`, installés, dans l'ordre de `slugs`. */
-  installed(slugs: readonly string[]): Promise<readonly D[]>;
+  installed(slugs: readonly string[], ownedKeys?: ReadonlySet<string>): Promise<readonly D[]>;
   /** Un pack, publié pour tous ; en attente ou refusé pour son auteur et les modérateurs seulement. */
-  detail(slug: string, viewer: PackViewer, installedOf: (slug: string) => boolean): Promise<D | null>;
+  detail(slug: string, viewer: PackViewer, installedOf: (slug: string) => boolean, ownedKeys?: ReadonlySet<string>): Promise<D | null>;
   /** `null` pour un pack qu'on ne peut pas installer (inconnu, non publié). */
   installable(slug: string): Promise<CommunityInstallTarget<D> | null>;
   /** Ajoute `delta` au compteur, atomiquement (`{ increment }`), et rend la nouvelle valeur. */
@@ -89,7 +106,28 @@ export type PackDomainSpec<S, D extends S> = {
 export type SetInstalledOutcome<S> =
   | { readonly kind: 'done'; readonly pack: S }
   | { readonly kind: 'not-found' }
-  | { readonly kind: 'not-removable' };
+  | { readonly kind: 'not-removable' }
+  | { readonly kind: 'not-owned' };
+
+export type PurchaseOutcome<S> =
+  | { readonly kind: 'done'; readonly pack: S; readonly balance: number }
+  | { readonly kind: 'not-found' }
+  | { readonly kind: 'free' }
+  | { readonly kind: 'already-owned' }
+  | { readonly kind: 'insufficient'; readonly balance: number }
+  | { readonly kind: 'request-id-conflict' };
+
+/** La ligne de registre rejouée est-elle l'achat de CE pack ? `null` : une autre écriture a gagné la course. */
+const purchasedPack = (meta: unknown): { readonly domain?: unknown; readonly slug?: unknown } | null =>
+  typeof meta === 'object' && meta !== null ? (meta as { domain?: unknown; slug?: unknown }) : null;
+
+class PurchaseRefusal extends Error {
+  constructor(readonly reason: 'already-owned' | 'not-found') {
+    super(reason);
+  }
+}
+
+type SettleClient = Pick<PrismaClient, 'userStickerPack'>;
 
 export type PackInstallationBroadcast = (userId: string, event: PackInstallationUpdatedEventData) => void;
 
@@ -98,6 +136,7 @@ export type PackCatalogDeps<S, D extends S> = {
   readonly spec: PackDomainSpec<S, D>;
   readonly now?: () => Date;
   readonly broadcast?: PackInstallationBroadcast;
+  readonly spend?: MeeshSpend;
 };
 
 type Choices = ReadonlyMap<string, { readonly installed: boolean }>;
@@ -119,6 +158,7 @@ export class PackCatalog<S, D extends S> {
   private readonly now: () => Date;
   private readonly broadcast: PackInstallationBroadcast | undefined;
   private readonly registries: PackRegistries;
+  private readonly spend: MeeshSpend;
 
   constructor(deps: PackCatalogDeps<S, D>) {
     this.prisma = deps.prisma;
@@ -126,6 +166,7 @@ export class PackCatalog<S, D extends S> {
     this.domain = deps.spec.domain;
     this.now = deps.now ?? (() => new Date());
     this.broadcast = deps.broadcast;
+    this.spend = deps.spend ?? new MeeshSpend(deps.prisma);
     this.registries = { [deps.spec.domain]: deps.spec.registry.map(({ slug, installedByDefault }) => ({ slug, installedByDefault })) };
   }
 
@@ -133,8 +174,9 @@ export class PackCatalog<S, D extends S> {
   async catalogue(userId: string): Promise<readonly S[]> {
     const choices = await this.choices(userId);
     const installedOf = this.installedOf(choices);
-    const official = this.spec.registry.filter((pack) => !pack.hidden).map((pack) => this.spec.toSummary(pack.project(installedOf(pack.slug))));
-    const community = this.spec.community === null ? [] : await this.spec.community.catalogue(installedOf);
+    const ownedOf = await this.ownedOf(userId);
+    const official = this.spec.registry.filter((pack) => !pack.hidden).map((pack) => this.spec.toSummary(pack.project(installedOf(pack.slug), ownedOf(pack))));
+    const community = this.spec.community === null ? [] : await this.spec.community.catalogue(installedOf, await this.communityOwnedKeys(userId));
     return [...official, ...community.map(this.spec.toSummary)];
   }
 
@@ -142,10 +184,11 @@ export class PackCatalog<S, D extends S> {
   async installed(userId: string): Promise<readonly D[]> {
     const choices = await this.choices(userId);
     const installedOf = this.installedOf(choices);
-    const official = this.spec.registry.filter((pack) => installedOf(pack.slug)).map((pack) => pack.project(true));
+    const ownedOf = await this.ownedOf(userId);
+    const official = this.spec.registry.filter((pack) => installedOf(pack.slug)).map((pack) => pack.project(true, ownedOf(pack)));
     const chosen = [...choices.entries()].filter(([slug, choice]) => choice.installed && this.registryPack(slug) === undefined).map(([slug]) => slug);
     if (chosen.length === 0 || this.spec.community === null) return official;
-    return [...official, ...(await this.spec.community.installed(chosen))];
+    return [...official, ...(await this.spec.community.installed(chosen, await this.communityOwnedKeys(userId)))];
   }
 
   /** Un pack — du registre (masqué compris, en lecture), sinon communautaire et visible de ce lecteur. */
@@ -153,8 +196,8 @@ export class PackCatalog<S, D extends S> {
     const choices = await this.choices(viewer.userId);
     const installedOf = this.installedOf(choices);
     const pack = this.registryPack(slug);
-    if (pack !== undefined) return pack.project(installedOf(slug));
-    return this.spec.community === null ? null : this.spec.community.detail(slug, viewer, installedOf);
+    if (pack !== undefined) return pack.project(installedOf(slug), (await this.ownedOf(viewer.userId))(pack));
+    return this.spec.community === null ? null : this.spec.community.detail(slug, viewer, installedOf, await this.communityOwnedKeys(viewer.userId));
   }
 
   /**
@@ -167,16 +210,95 @@ export class PackCatalog<S, D extends S> {
     const target = pack === undefined && this.spec.community !== null ? await this.spec.community.installable(slug) : null;
     if (pack === undefined && target === null) return { kind: 'not-found' };
     if (pack?.hidden === true && installed && !(await this.isInstalledNow(userId, pack))) return { kind: 'not-found' };
+    if (installed && pack !== undefined && !(await this.ownedOf(userId))(pack)) return { kind: 'not-owned' };
+    if (installed && target !== null && target.price !== undefined && !(await this.communityOwned(userId, slug))) return { kind: 'not-owned' };
     if (!installed && pack !== undefined && !pack.removable) return { kind: 'not-removable' };
     if (!installed && this.spec.removalGuard !== null && !(await this.spec.removalGuard(userId, slug))) return { kind: 'not-removable' };
 
     const byDefault = isPackInstalled(this.domain, slug, undefined, this.registries);
-    const { delta, at } = await this.settle(userId, packChoiceKey(this.domain, slug), installed, byDefault);
+    const { delta, at } = await this.settle(this.prisma, userId, packChoiceKey(this.domain, slug), installed, byDefault);
     this.broadcast?.(userId, { domain: this.domain, slug, installed, at: at.toISOString() });
 
-    if (target === null) return { kind: 'done', pack: this.spec.toSummary((pack as RegistryPack<D>).project(installed)) };
+    if (target === null) return { kind: 'done', pack: this.spec.toSummary((pack as RegistryPack<D>).project(installed, true)) };
     const installCount = delta === 0 ? target.installCount : await (this.spec.community as CommunityPackStore<D>).addInstalls(target.id, delta);
-    return { kind: 'done', pack: this.spec.toSummary(target.project(installed, installCount)) };
+    return { kind: 'done', pack: this.spec.toSummary(target.project(installed, installCount, true)) };
+  }
+
+  /**
+   * ACHÈTE un pack payant du registre (#10632, § 4.3) : la dépense, la
+   * possession et l'installation s'écrivent dans UNE transaction
+   * (`MeeshSpend.spend`), idempotente par `(userId, requestId)`. Le prix est
+   * celui du REGISTRE, jamais celui d'un client. Un rejeu rend le même pack,
+   * MÊME masqué depuis : le masquage refuse un geste NEUF (dans la garde, que
+   * le rejeu ne traverse pas), jamais la réponse d'un achat déjà payé.
+   */
+  async purchase(userId: string, slug: string, requestId: string): Promise<PurchaseOutcome<S>> {
+    const registry = this.registryPack(slug);
+    const target = registry === undefined && this.spec.community?.priced === true ? await this.spec.community.installable(slug) : null;
+    if (registry === undefined && target === null) return { kind: 'not-found' };
+    const price = registry?.price ?? target?.price;
+    if (price === undefined) return { kind: 'free' };
+    const version = registry?.version ?? target?.version ?? 1;
+    const hidden = registry?.hidden ?? false;
+    const project = (installed: boolean): S =>
+      this.spec.toSummary(registry !== undefined ? registry.project(installed, true) : (target as CommunityInstallTarget<D>).project(installed, (target as CommunityInstallTarget<D>).installCount, true));
+    const key = packChoiceKey(this.domain, slug);
+    const byDefault = isPackInstalled(this.domain, slug, undefined, this.registries);
+    try {
+      const outcome = await this.spend.spend<{ readonly at: Date; readonly delta: number }>({
+        userId,
+        requestId,
+        price,
+        kind: 'pack-purchase',
+        meta: { domain: this.domain, slug, version },
+        guard: async () => {
+          if (hidden) throw new PurchaseRefusal('not-found');
+          const owned = await this.prisma.userPackOwnership.findUnique({ where: { userId_packKey: { userId, packKey: key } }, select: { id: true } });
+          if (owned !== null) throw new PurchaseRefusal('already-owned');
+        },
+        apply: async (tx: SpendTx) => {
+          await tx.userPackOwnership.create({ data: { userId, packKey: key, priceMeeshes: price, requestId } });
+          return this.settle(tx, userId, key, true, byDefault);
+        },
+      });
+      if (outcome.status === 'insufficient') return { kind: 'insufficient', balance: outcome.balance };
+      if (outcome.status === 'spent' && outcome.result !== undefined) {
+        if (target !== null && outcome.result.delta !== 0) await (this.spec.community as CommunityPackStore<D>).addInstalls(target.id, outcome.result.delta);
+        this.broadcast?.(userId, { domain: this.domain, slug, installed: true, owned: true, at: outcome.result.at.toISOString() });
+        return { kind: 'done', pack: project(true), balance: outcome.balance };
+      }
+      if (outcome.status === 'already-spent') {
+        const replayed = purchasedPack(outcome.meta);
+        if (replayed === null) return { kind: 'already-owned' };
+        if (replayed.domain !== this.domain || replayed.slug !== slug) return { kind: 'request-id-conflict' };
+      }
+      const installed = this.installedOf(await this.choices(userId))(slug);
+      return { kind: 'done', pack: project(installed), balance: outcome.balance };
+    } catch (error) {
+      if (error instanceof PurchaseRefusal) return { kind: error.reason };
+      if (error instanceof GameRefusal && error.code === 'REQUEST_ID_CONFLICT') return { kind: 'request-id-conflict' };
+      throw error;
+    }
+  }
+
+  /** Les clés de possession du lecteur, lues seulement pour un magasin communautaire à packs payants. */
+  private async communityOwnedKeys(userId: string): Promise<ReadonlySet<string> | undefined> {
+    if (this.spec.community?.priced !== true) return undefined;
+    const rows = await this.prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } });
+    return new Set(rows.map((row) => row.packKey));
+  }
+
+  private async communityOwned(userId: string, slug: string): Promise<boolean> {
+    const row = await this.prisma.userPackOwnership.findUnique({ where: { userId_packKey: { userId, packKey: packChoiceKey(this.domain, slug) } }, select: { id: true } });
+    return row !== null;
+  }
+
+  /** La loi de possession pour ce lecteur ; sans pack payant dans le domaine, aucune lecture. */
+  private async ownedOf(userId: string): Promise<(pack: RegistryPack<D>) => boolean> {
+    if (!this.spec.registry.some((pack) => pack.price !== undefined)) return () => true;
+    const rows = await this.prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } });
+    const keys = new Set(rows.map((row) => row.packKey));
+    return (pack) => isPackOwned({ domain: this.domain, slug: pack.slug, price: pack.price }, keys);
   }
 
   /**
@@ -185,17 +307,17 @@ export class PackCatalog<S, D extends S> {
    * L'ordre des choix suit `updatedAt` : une écriture le touche toujours, même
    * sans bascule (la boutique servie avant LP0 le faisait par `upsert`).
    */
-  private async settle(userId: string, key: string, installed: boolean, byDefault: boolean): Promise<{ delta: -1 | 0 | 1; at: Date }> {
+  private async settle(db: SettleClient, userId: string, key: string, installed: boolean, byDefault: boolean): Promise<{ delta: -1 | 0 | 1; at: Date }> {
     const sign = installed ? 1 : -1;
     for (let attempt = 0; attempt < MAX_SETTLE_ATTEMPTS; attempt += 1) {
       const at = this.now();
       const data = { installedAt: installed ? at : null, updatedAt: at };
-      const flipped = await this.prisma.userStickerPack.updateMany({ where: { userId, packSlug: key, ...stateFilter(!installed) }, data });
+      const flipped = await db.userStickerPack.updateMany({ where: { userId, packSlug: key, ...stateFilter(!installed) }, data });
       if (flipped.count > 0) return { delta: sign, at };
-      const already = await this.prisma.userStickerPack.updateMany({ where: { userId, packSlug: key, ...stateFilter(installed) }, data: { updatedAt: at } });
+      const already = await db.userStickerPack.updateMany({ where: { userId, packSlug: key, ...stateFilter(installed) }, data: { updatedAt: at } });
       if (already.count > 0) return { delta: 0, at };
       try {
-        await this.prisma.userStickerPack.create({ data: { userId, packSlug: key, ...data } });
+        await db.userStickerPack.create({ data: { userId, packSlug: key, ...data } });
         return { delta: installed === byDefault ? 0 : sign, at };
       } catch (error) {
         if (!isUniqueViolation(error)) throw error;

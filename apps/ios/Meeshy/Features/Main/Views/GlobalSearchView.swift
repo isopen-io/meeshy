@@ -33,11 +33,7 @@ struct GlobalSearchView: View {
                 resultsList
             }
         }
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isSearchFieldFocused = true
-            }
-        }
+        .onAppear(after: .milliseconds(100)) { isSearchFieldFocused = true }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -57,6 +53,7 @@ struct GlobalSearchView: View {
             .presentationDragIndicator(.visible)
         }
         .withStatusBubble()
+        .closesForConversationOpening(.search)
     }
 
     // MARK: - Header Bar
@@ -215,7 +212,7 @@ struct GlobalSearchView: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .accessibilityLabel("\(tab.localizedName), \(count) " + String(localized: "accessibility.results", defaultValue: "resultats"))
+        .accessibilityLabel("\(tab.localizedName), \(count) " + String(localized: "accessibility.results", defaultValue: "résultats"))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
@@ -376,12 +373,12 @@ struct GlobalSearchView: View {
     private var emptyResultsView: some View {
         EmptyStateView(
             icon: "magnifyingglass",
-            title: String(localized: "search.no_results", defaultValue: "Aucun resultat"),
+            title: String(localized: "search.no_results", defaultValue: "Aucun résultat"),
             subtitle: String(localized: "search.try_other_terms", defaultValue: "Essayez avec d'autres termes de recherche")
         )
         .padding(.top, 40)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "search.no_results", defaultValue: "Aucun resultat") + ". " + String(localized: "search.try_other_terms", defaultValue: "Essayez avec d'autres termes de recherche"))
+        .accessibilityLabel(String(localized: "search.no_results", defaultValue: "Aucun résultat") + ". " + String(localized: "search.try_other_terms", defaultValue: "Essayez avec d'autres termes de recherche"))
     }
 
     // MARK: - Recent Searches
@@ -401,7 +398,7 @@ struct GlobalSearchView: View {
                                 )
                             )
                             .accessibilityHidden(true)
-                        Text(String(localized: "search.recent", defaultValue: "Recherches recentes"))
+                        Text(String(localized: "search.recent", defaultValue: "Recherches récentes"))
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
                             .foregroundColor(theme.textPrimary)
                             .accessibilityAddTraits(.isHeader)
@@ -418,7 +415,7 @@ struct GlobalSearchView: View {
                                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                                 .foregroundColor(MeeshyColors.error)
                         }
-                        .accessibilityLabel(String(localized: "accessibility.clear_recent_searches", defaultValue: "Effacer les recherches recentes"))
+                        .accessibilityLabel(String(localized: "accessibility.clear_recent_searches", defaultValue: "Effacer les recherches récentes"))
                     }
                     .padding(.horizontal, MeeshySpacing.xs)
 
@@ -480,10 +477,10 @@ struct GlobalSearchView: View {
             HapticFeedback.light()
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "accessibility.recent_search_label", defaultValue: "Recherche recente") + ": \(query)")
+        .accessibilityLabel(String(localized: "accessibility.recent_search_label", defaultValue: "Recherche récente") + ": \(query)")
         .accessibilityHint(String(localized: "accessibility.recent_search_hint", defaultValue: "Relance la recherche"))
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction(named: Text(String(localized: "accessibility.remove_recent_search", defaultValue: "Supprimer des recherches recentes"))) {
+        .accessibilityAction(named: Text(String(localized: "accessibility.remove_recent_search", defaultValue: "Supprimer des recherches récentes"))) {
             removeRecentSearch(query)
         }
     }
@@ -574,7 +571,9 @@ struct GlobalSearchView: View {
             MeeshyAvatar(
                 name: result.name,
                 context: .conversationList,
-                avatarURL: result.avatar
+                avatarURL: result.avatar,
+                presenceState: result.type == .direct ? result.conversation.participantUserId.map { PresenceManager.shared.presenceState(for: $0) } : nil,
+                ring: result.type == .direct ? result.conversation.participantRing : nil
             )
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
@@ -714,6 +713,7 @@ struct GlobalSearchView: View {
                 storyState: storyRingResolver?(result.id) ?? .none,
                 moodEmoji: moodEmojiResolver?(result.id),
                 presenceState: presence,
+                ring: result.ring,
                 onViewStory: {
                     presentStoryViewer?(StoryViewerRequest(
                         id: result.id,

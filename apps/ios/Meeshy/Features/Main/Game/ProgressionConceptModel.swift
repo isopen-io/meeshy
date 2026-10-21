@@ -87,7 +87,7 @@ extension GameCopy {
         case .none: String(localized: "game.flame.status.none", defaultValue: "Un geste aujourd’hui allume ta Flamme", bundle: .main)
         case .lit: nil
         case .atRisk: String(localized: "game.flame.status.at_risk", defaultValue: "Fais un geste avant minuit", bundle: .main)
-        case .covered: String(localized: "game.flame.status.covered", defaultValue: "Un gel la protège", bundle: .main)
+        case .covered: String(localized: "game.flame.status.covered", defaultValue: "Une Veilleuse la garde", bundle: .main)
         case .out: String(localized: "game.flame.status.out", defaultValue: "Éteinte", bundle: .main)
         }
     }
@@ -95,7 +95,7 @@ extension GameCopy {
     /// « 23 jours », ou « Pas de série » à zéro : une série nulle ne se dit pas « 0 jour ».
     static func flameDays(_ days: Int) -> String {
         days <= 0
-            ? String(localized: "game.flame.no_streak", defaultValue: "Pas de série", bundle: .main)
+            ? String(localized: "game.flame.no_streak", defaultValue: "Flamme à allumer", bundle: .main)
             : GameCopy.days(days)
     }
 
@@ -587,8 +587,11 @@ enum ProgressionConceptModel {
             // La pièce (les Élans) dit le multiplicateur, les familles et la fenêtre ; les multiplicateurs du jeu sont
             // ici, et seulement ici (règle n° 1).
             guard let boosts = game?.boosts else { return [] }
+            // Le Vent arrière ne se dit que quand il souffle (#10896) : à 7 niveaux ou plus sous le record de niveau.
             rows = [
-                boosts.tailwind > 1 ? fact(ConceptText.factTailwind, ConceptText.valueFactor(GameCopy.factor(boosts.tailwind)), .tailwind) : nil,
+                boosts.tailwind > 1
+                    ? fact(GameRulesGlossary.name(.tailwind), ConceptText.valueFactor(GameCopy.factor(boosts.tailwind)), .tailwind)
+                    : nil,
                 boosts.prismHour.map { fact(ConceptText.factPrismHour, ConceptText.valueFactor(GameCopy.factor($0.multiplier))) },
             ]
         case .badges:
@@ -659,6 +662,7 @@ enum ProgressionConceptModel {
         case .meesh, .treasury: .meesh
         case .flame: .flame
         case .achievement: .succes
+        case .mission: .missions
         case .trophy: .showcase
         case .leagueUp: .league
         case .season: .season
@@ -731,9 +735,17 @@ extension ProgressionConceptModel {
     private static func pointsState(_ progress: EngagementProgress, _ game: GameBlock?) -> String? {
         guard let game else { return nil }
         let mint = game.mint
-        let held = GameCopy.points(game.level.score)
         let number = count(mint.number)
         let price = GameCopy.points(mint.price)
+        // Les étincelles (#10846) : UN seul solde, la poche, toute convertible — jamais le cycle, indicatif (#10892).
+        if game.level.sparks != nil {
+            let pocket = GameCopy.points(game.level.sparkFacts.pocket)
+            return mint.canMint
+                ? ConceptText.statePointsReadyPlain(held: pocket, number: number, price: price)
+                : ConceptText.statePointsMissingPlain(held: pocket, number: number, price: price,
+                                                      missing: GameCopy.points(mint.missingPoints))
+        }
+        let held = GameCopy.points(game.level.score)
         guard let convertible = convertiblePoints(progress: progress, game: game) else {
             return ConceptText.statePointsReadyPlain(held: held, number: number, price: price)
         }

@@ -620,8 +620,8 @@ final class SocialSocketEventTests: XCTestCase {
             "postId": "p1", "userId": "u1", "emoji": "❤️", "action": "add",
             "aggregation": ["emoji": "❤️", "count": 5]
         ]
-        let event = SocialSocketManager.decodePostReactionAck(
-            data, decoder: decoder, postId: "p1", emoji: "❤️", action: "add")
+        let ack = SocketAck<SocketPostReactionUpdateEvent>.parse(["success": true, "data": data], payloadAt: .data, decoder: decoder)
+        let event = try SocialSocketManager.postReactionEvent(from: ack, postId: "p1", emoji: "❤️", action: "add")
         XCTAssertEqual(event.postId, "p1")
         XCTAssertEqual(event.userId, "u1")
         XCTAssertEqual(event.action, "add")
@@ -637,8 +637,8 @@ final class SocialSocketEventTests: XCTestCase {
             "id": "r1", "postId": "p1", "userId": "u1", "emoji": "❤️",
             "createdAt": "2026-06-18T10:00:00.000Z", "updatedAt": "2026-06-18T10:00:00.000Z"
         ]
-        let event = SocialSocketManager.decodePostReactionAck(
-            rawReaction, decoder: decoder, postId: "p1", emoji: "❤️", action: "remove")
+        let ack = SocketAck<SocketPostReactionUpdateEvent>.parse(["success": true, "data": rawReaction], payloadAt: .data, decoder: decoder)
+        let event = try SocialSocketManager.postReactionEvent(from: ack, postId: "p1", emoji: "❤️", action: "remove")
         XCTAssertEqual(event.postId, "p1")
         XCTAssertEqual(event.emoji, "❤️")
         XCTAssertEqual(event.action, "remove")
@@ -649,8 +649,8 @@ final class SocialSocketEventTests: XCTestCase {
             "commentId": "c1", "postId": "p1", "userId": "u1", "emoji": "👍", "action": "add",
             "aggregation": ["emoji": "👍", "count": 3, "userIds": ["u1"], "hasCurrentUser": true]
         ]
-        let event = SocialSocketManager.decodeCommentReactionAck(
-            data, decoder: decoder, commentId: "c1", postId: "p1", emoji: "👍", action: "add")
+        let ack = SocketAck<SocketCommentReactionUpdateEvent>.parse(["success": true, "data": data], payloadAt: .data, decoder: decoder)
+        let event = try SocialSocketManager.commentReactionEvent(from: ack, commentId: "c1", postId: "p1", emoji: "👍", action: "add")
         XCTAssertEqual(event.commentId, "c1")
         XCTAssertEqual(event.action, "add")
         XCTAssertEqual(event.aggregation.count, 3)
@@ -661,8 +661,8 @@ final class SocialSocketEventTests: XCTestCase {
         let rawReaction: [String: Any] = [
             "id": "r1", "commentId": "c1", "postId": "p1", "userId": "u1", "emoji": "👍"
         ]
-        let event = SocialSocketManager.decodeCommentReactionAck(
-            rawReaction, decoder: decoder, commentId: "c1", postId: "p1", emoji: "👍", action: "remove")
+        let ack = SocketAck<SocketCommentReactionUpdateEvent>.parse(["success": true, "data": rawReaction], payloadAt: .data, decoder: decoder)
+        let event = try SocialSocketManager.commentReactionEvent(from: ack, commentId: "c1", postId: "p1", emoji: "👍", action: "remove")
         XCTAssertEqual(event.commentId, "c1")
         XCTAssertEqual(event.action, "remove")
     }

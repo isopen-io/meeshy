@@ -19,6 +19,7 @@ import {
   loadPackCatalogue,
   setPackInstalled,
 } from '@/lib/api/sticker-packs';
+import { purchasePack } from '@/lib/api/packs-shop';
 import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -91,6 +92,20 @@ export const stickerShopAdapter = (language: InterfaceLanguage, deps: Conversati
     const detail: StickerPackDetail = { ...result.data, installed: true };
     return (queryClient) => writeInstalled(queryClient, pack.slug, detail);
   },
+  price: (pack) => pack.price ?? null,
+  owned: (pack) => pack.owned ?? true,
+  purchase: async (pack, requestId) => {
+    const result = await purchasePack(deps, 'sticker', pack.slug, requestId);
+    return result.ok ? { ok: true, data: { balance: result.data.balance } } : result;
+  },
+  applyPurchased: (queryClient, pack, confirmed) => {
+    queryClient.setQueryData<readonly StickerPackSummary[]>(PACK_CATALOGUE_QUERY_KEY, (list) =>
+      (list ?? []).map((candidate) => (candidate.slug === pack.slug ? { ...candidate, owned: true, installed: true } : candidate)),
+    );
+    if (confirmed === null) return;
+    void queryClient.invalidateQueries({ queryKey: INSTALLED_PACKS_QUERY_KEY });
+    void queryClient.invalidateQueries({ queryKey: PACK_CATALOGUE_QUERY_KEY });
+  },
   title: (pack) => pack.name,
   description: (pack) => pack.description,
   meta: (pack) => [
@@ -101,7 +116,7 @@ export const stickerShopAdapter = (language: InterfaceLanguage, deps: Conversati
   cover: (pack) => <PackCover pack={pack} />,
 });
 
-export function StickerShop({ language }: { readonly language: InterfaceLanguage }) {
+export function StickerShop({ language, focusSlug }: { readonly language: InterfaceLanguage; readonly focusSlug?: string | undefined }) {
   const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
 
@@ -141,6 +156,7 @@ export function StickerShop({ language }: { readonly language: InterfaceLanguage
         <PackShop
           adapter={stickerShopAdapter(language)}
           language={language}
+          focusSlug={focusSlug}
           hint={translateStickerPacks(language, 'stickerPacks.shop.hint')}
           footer={<SubmissionsFooter language={language} mine={mine} onSubmit={() => setSubmitting(true)} />}
         />

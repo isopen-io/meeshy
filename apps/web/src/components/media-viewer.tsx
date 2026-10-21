@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
@@ -31,6 +31,7 @@ import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { yieldingChrome } from '@/lib/view/chrome-yields';
+import { useIdleChrome } from '@/lib/view/use-idle-chrome';
 import { SCENE_OPENING_EASING, SCENE_OPENING_MS, takeSceneOpening } from '@/lib/view/scene-opening';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useConversationViewingFocus } from '@/lib/view/use-conversation-viewing';
@@ -40,6 +41,7 @@ import { useViewerPinch } from '@/lib/view/use-viewer-pinch';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { READER_LOCALE } from '@/lib/reader';
+import { useMediaSystemBars } from '@/lib/use-media-system-bars';
 
 import '@/styles/media-viewer.css';
 
@@ -88,7 +90,7 @@ const ViewerVideoPage = lazy(() => import('./viewer-video-page'));
  *
  * GESTES — ce qui est LIVRÉ : tap (bascule plateau ⇄ plein cadre), glissement
  * vertical qui SUIT le doigt (ferme ≥ 150, entre en plein cadre ≤ −150 depuis
- * `carded`), appui long 500 ms (plein cadre + pause), double-tap (zoom
+ * `carded`), appui long `LONG_PRESS_MS` (plein cadre + pause), double-tap (zoom
  * 1 ↔ 2,5 sur une page IMAGE), pincement à deux doigts (#9532, borné par
  * `MAX_SCALE`, centré où les doigts se posent — `useViewerPinch` ; un second
  * doigt n'est jamais un glissé ni un appui long), déplacement d'une image
@@ -169,8 +171,26 @@ export type MediaViewerProps = {
   readonly container?: Element | null;
 };
 
+/** L'accent résolu de l'écran de conversation ouvert, ou `undefined` hors d'une conversation (le repli CSS prend alors la marque). */
+function threadAccent(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const root = document.querySelector('.thread-root');
+  if (root === null) return undefined;
+  const value = getComputedStyle(root).getPropertyValue('--accent').trim();
+  return value === '' ? undefined : value;
+}
+
 /** À combien de pages du bout l'hôte est prié d'étendre la liste. */
 export const NEAR_END_PAGES = 3;
+
+const CLICK_AFTER_HOLD_MS = 700;
+
+const SPACE_OWNERS = 'button, a[href], input, textarea, select, [role="slider"], [role="checkbox"], [role="button"], [contenteditable="true"]';
+
+/** Un contrôle focalisé garde Espace pour son activation native : la lecture ne bascule que depuis la scène. */
+function ownsSpace(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(SPACE_OWNERS) !== null;
+}
 
 function clampIndex(index: number, count: number): number {
   return Math.max(0, Math.min(count - 1, index));
@@ -237,11 +257,13 @@ function carrierIdentity(carrier: MediaCarrier | undefined): ViewerIdentityModel
   return {
     name: carrier.sender.displayName,
     initials: initialsOf(carrier.sender.displayName),
-    avatarColor: 'var(--accent)',
+    avatarColor: 'var(--accent, var(--color-ios-brand))',
     ...(carrier.sender.avatarUrl === null ? {} : { avatarSrc: carrier.sender.avatarUrl }),
+    ...(carrier.sender.presenceKey === undefined ? {} : { presenceKey: carrier.sender.presenceKey }),
+    ...(carrier.sender.ringRef === undefined ? {} : { ringRef: carrier.sender.ringRef }),
     time: {
       iso: carrier.sentAt,
-      label: new Date(carrier.sentAt).toLocaleString(READER_LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
+      label: new Date(carrier.sentAt).toLocaleString(currentInterfaceLanguage(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
     },
   };
 }
@@ -411,6 +433,7 @@ export default function MediaViewer({
   shareMedia,
   container,
 }: MediaViewerProps) {
+  useMediaSystemBars();
   /* LA PAGE SE SUIT PAR SON IDENTITÉ (#6303), miroir `GalleryPagePinning`
      (`+SourceGrowth.swift`) : la liste peut GRANDIR par le début (pages plus
      anciennes) pendant qu'on regarde — une position figée glisserait alors sur
@@ -432,9 +455,14 @@ export default function MediaViewer({
   const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
   const [zoomedId, setZoomedId] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  /* L'ACCENT DE LA CONVERSATION TRAVERSE LE PORTAIL (#10743) : `--accent` est posée par
+     `routes/thread.tsx` sur sa racine, et cette couche vit hors d'elle. On lit la valeur
+     RÉSOLUE à l'ouverture (motif `message-menu.tsx`), jamais un second calcul de couleur. */
+  const [accent] = useState(() => threadAccent());
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
   const activePlayToggleRef = useRef<(() => void) | null>(null);
+  const heldOpenAtRef = useRef<number | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
   useBackDismiss(onClose);
@@ -475,11 +503,13 @@ export default function MediaViewer({
      que la visionneuse le tient inerte, « Partager » ouvrirait une feuille
      qu'aucun doigt ni aucune touche n'atteint. Elle lève l'inertie le temps de
      la feuille (modale elle-même : le reste est inerte par `showModal`) et la
-     rétablit à sa fermeture. DÉCLARÉ AVANT l'effet d'ouverture : au démontage,
-     les nettoyages courent dans l'ordre — celui-ci remet l'inertie, celui de
-     l'ouverture la retire, et `#root` ne reste jamais inerte derrière nous. */
+     rétablit à sa fermeture. DÉCLARÉ AVANT l'effet d'ouverture, et de la MÊME
+     nature (mise en page) : au démontage, les nettoyages courent dans l'ordre —
+     celui-ci remet l'inertie, celui de l'ouverture la retire, et `#root` ne
+     reste jamais inerte derrière nous. Un passif ici, différé par Preact après
+     le nettoyage de mise en page de l'ouverture, la REMETTRAIT pour toujours. */
   const sendSheetOpen = useSendSheetOpen();
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!sendSheetOpen) return;
     const root = document.getElementById('root');
     root?.removeAttribute('inert');
@@ -489,7 +519,12 @@ export default function MediaViewer({
   // #root INERT le temps de l'ouverture — même dispositif que le clone du
   // menu de message (`message-menu.tsx:380-391`), porté ICI au NIVEAU DE LA
   // COUCHE plutôt qu'à un aperçu cloné.
-  useEffect(() => {
+  // EFFET DE MISE EN PAGE (#11100) : Preact diffère le nettoyage d'un `useEffect`
+  // démonté à l'après-peinture — la couche quittait le DOM en laissant `#root`
+  // INERTE et le focus au `<body>` (des centaines de ms sous charge). Posé et
+  // levé dans le commit qui insère et retire la couche, comme son entrée
+  // d'historique (`useBackDismiss`, #6319).
+  useLayoutEffect(() => {
     const root = document.getElementById('root');
     const previousOverflow = document.body.style.overflow;
     root?.setAttribute('inert', '');
@@ -533,7 +568,19 @@ export default function MediaViewer({
     if (index < NEAR_END_PAGES) onNearStartRef.current?.();
   }, [index, items.length]);
 
+  /* Paginer rend la page quittée INERTE (#10744) : le focus qu'elle tenait sortait de la visionneuse, et Échap,
+     les Flèches et Espace — écoutés sur elle — ne répondaient plus. La visionneuse (`tabIndex={-1}`) le reprend. */
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (dialog === null) return;
+    const active = document.activeElement;
+    if (active !== null && dialog.contains(active) && active.closest('[inert]') === null) return;
+    if (active !== null && active !== document.body && !dialog.contains(active)) return;
+    dialog.focus({ preventScroll: true });
+  }, [index]);
+
   const goTo = (next: number): void => {
+    heldOpenAtRef.current = null;
     const at = clampIndex(next, items.length);
     setPinned({ id: items[at]?.id, index: at });
     setPresentation(CARDED_STAGE);
@@ -545,17 +592,14 @@ export default function MediaViewer({
       onClose();
       return;
     }
-    if (e.key === 'ArrowRight') {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
-      goTo(index + 1);
-      return;
-    }
-    if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      goTo(index - 1);
+      const forward = (e.key === 'ArrowRight') !== (document.dir === 'rtl');
+      goTo(forward ? index + 1 : index - 1);
       return;
     }
     if (e.key === ' ') {
+      if (ownsSpace(e.target)) return;
       if (activePlayToggleRef.current !== null) {
         e.preventDefault();
         activePlayToggleRef.current();
@@ -578,9 +622,17 @@ export default function MediaViewer({
   };
 
   const audioPage = current !== undefined && kindOf(current) === 'audio';
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  /* PAS DE PRESSION (#11207) : la scène est plein écran et chaque toucher y
+     bascule le chrome — l'enfoncer à chaque tap serait un tressaut. Sur une
+     page AUDIO, l'appui long n'ouvre rien : il ne vibre pas. */
   const longPress = useLongPress({
+    pressFeedback: false,
     onOpen: () => {
-      if (!audioPage) setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
+      heldOpenAtRef.current = performance.now();
+      if (audioPage) return false;
+      setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
+      return true;
     },
   });
 
@@ -605,6 +657,9 @@ export default function MediaViewer({
   // eux-mêmes leurs événements (`viewer-chrome.tsx`) : le tap sur une action
   // réelle ne bascule rien. Un toucher qui a glissé n'est pas un tap.
   const onStageClick = (): void => {
+    const heldAt = heldOpenAtRef.current;
+    heldOpenAtRef.current = null;
+    if (heldAt !== null && performance.now() - heldAt < CLICK_AFTER_HOLD_MS) return;
     if (swipe.wasDrag() || audioPage) return;
     setPresentation((p) => stageAfter(p, 'tap'));
   };
@@ -613,7 +668,29 @@ export default function MediaViewer({
      se lit pas sous « Fermer », sa légende et la pellicule. Au navigateur, un
      double tap est aussi deux taps (la bascule plein cadre s'annule) : c'est
      l'état zoomé de la page COURANTE qui compte. */
-  const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id);
+  /* UNE OUVERTURE GAGNE SUR L'EFFACEMENT (#10629, `FullscreenChromeState.autoHiding`
+     iOS) : la rangée d'émojis ou le menu « … » ouvert tient le chrome. L'état
+     est daté par la pièce : changer de page oublie ce qui visait la précédente. */
+  const [overlay, setOverlay] = useState<{ readonly attachmentId: string; readonly rail: boolean; readonly menu: boolean }>({ attachmentId: '', rail: false, menu: false });
+  const overlayChange =
+    (slot: 'rail' | 'menu', attachmentId: string) =>
+    (open: boolean): void =>
+      setOverlay((now) => ({ ...(now.attachmentId === attachmentId ? now : { attachmentId, rail: false, menu: false }), [slot]: open }));
+  const overlayHeld = overlay.attachmentId === current?.id && (overlay.rail || overlay.menu);
+  const chromeIdle = useIdleChrome({ active: audioPage && audioPlaying, held: overlayHeld });
+  const coversViewport = presentation.kind === 'full' && !audioPage && currentSceneEntry === undefined;
+  const corridorPlacement = coversViewport ? 'floating' : 'corridor';
+  const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id) || chromeIdle;
+  /* Un chrome effacé est INERTE : le focus qu'il tenait (la croix, posée à
+     l'ouverture) tomberait au `<body>`, hors de la visionneuse — Échap n'y
+     fermerait plus rien. Il revient à la visionneuse. */
+  useEffect(() => {
+    if (!chromeIdle) return;
+    const dialog = dialogRef.current;
+    const focused = document.activeElement;
+    const lost = focused === null || focused === document.body || (focused instanceof HTMLElement && focused.closest('[inert]') !== null);
+    if (dialog !== null && lost) dialog.focus({ preventScroll: true });
+  }, [chromeIdle]);
   if (current === undefined) return null;
 
   const identity = carrierIdentity(currentCarrier);
@@ -630,7 +707,16 @@ export default function MediaViewer({
       <div className="flex flex-col items-center gap-2">
         {page !== null && railOffered ? (
           <Suspense fallback={null}>
-            <ViewerMediaActions key={`rail:${current.id}`} slot="rail" page={page} language={language} onClose={onClose} announce={announce} hidden={chromeHidden} />
+            <ViewerMediaActions
+              key={`rail:${current.id}`}
+              slot="rail"
+              page={page}
+              language={language}
+              onClose={onClose}
+              announce={announce}
+              hidden={chromeHidden}
+              onOverlayChange={overlayChange('rail', current.id)}
+            />
           </Suspense>
         ) : null}
         {playsVideo ? <div ref={setRailSlot} data-viewer-video-controls="" className="flex flex-col items-center gap-2" /> : null}
@@ -651,7 +737,7 @@ export default function MediaViewer({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label={`${scenes !== undefined ? 'Scène' : 'Média'} ${index + 1} sur ${items.length}`}
+      aria-label={translate(language, scenes !== undefined ? 'media.viewer.position.scene' : 'media.viewer.position.media', { index: String(index + 1), total: String(items.length) })}
       data-media-viewer
       data-viewer-index={index}
       data-viewer-attachment={current.id}
@@ -659,6 +745,7 @@ export default function MediaViewer({
       className="media-viewer-layer fixed inset-0 flex flex-col bg-media-backdrop"
       onKeyDown={onKeyDown}
       tabIndex={-1}
+      {...(accent === undefined ? {} : { style: { '--accent': accent } as CSSProperties })}
     >
       {/* Barre haute — le chrome COMMUN des plein écrans (#8879) : l'auteur et
           l'heure, « … » (Enregistrer y vit, iOS #6145), puis la croix EN FIN de
@@ -669,15 +756,23 @@ export default function MediaViewer({
           qui ne voit rien. Au-dessus d'une page scène en plein viewport
           (`z-10`, #6902). */}
       <ViewerTopBar
-        placement="corridor"
+        placement={corridorPlacement}
         hidden={chromeHidden}
-        exit={{ kind: 'close', label: 'Fermer', onExit: onClose, buttonRef: closeButtonRef }}
+        exit={{ kind: 'close', label: translate(language, 'common.close'), onExit: onClose, buttonRef: closeButtonRef }}
         {...(identity !== undefined ? { identity } : {})}
         {...(page !== null && page.offers.save
           ? {
               trailing: (
                 <Suspense fallback={null}>
-                  <ViewerMediaActions key={`menu:${current.id}`} slot="menu" page={page} language={language} onClose={onClose} announce={announce} />
+                  <ViewerMediaActions
+                    key={`menu:${current.id}`}
+                    slot="menu"
+                    page={page}
+                    language={language}
+                    onClose={onClose}
+                    announce={announce}
+                    onOverlayChange={overlayChange('menu', current.id)}
+                  />
                 </Suspense>
               ),
             }
@@ -712,6 +807,7 @@ export default function MediaViewer({
               longPress.onPointerCancel();
               return;
             }
+            heldOpenAtRef.current = null;
             swipe.handlers.onPointerDown(e);
             longPress.onPointerDown(e);
           }}
@@ -720,6 +816,7 @@ export default function MediaViewer({
             longPress.onPointerMove(e);
           }}
           onPointerUp={(e: ReactPointerEvent<HTMLDivElement>) => {
+            if (heldOpenAtRef.current !== null) heldOpenAtRef.current = performance.now();
             swipe.handlers.onPointerUp(e);
             longPress.onPointerUp();
           }}
@@ -741,6 +838,7 @@ export default function MediaViewer({
                 data-full-pixels={fullPixels}
                 className="media-viewer-page absolute inset-0"
                 style={{ transform: `translateX(${distance * 100}%)`, display: Math.abs(distance) > 1 ? 'none' : 'block' }}
+                {...(distance === 0 ? {} : { inert: true, 'aria-hidden': true })}
               >
                 {!fullPixels ? (
                   <ViewerBackdropPage attachment={attachment} />
@@ -779,11 +877,15 @@ export default function MediaViewer({
                       language={language}
                       pageIndex={i}
                       pageCount={items.length}
+                      transcribable={actionsAt?.(i)?.transcribe ?? true}
                       onToggleRef={(fn) => {
                         if (i === index) activePlayToggleRef.current = fn;
                       }}
                       onCarryRef={(carry) => {
                         if (i === index) registerCarry(attachment.id, carry);
+                      }}
+                      onPlayingChange={(playing) => {
+                        if (i === index) setAudioPlaying(playing);
                       }}
                       {...(displayLanguage !== undefined ? { displayLanguage } : {})}
                       {...(deps !== undefined ? { deps } : {})}
@@ -844,7 +946,7 @@ export default function MediaViewer({
           scène, jamais sur le noir du plateau), légende et colonne sur une même
           rangée, comme sous un vocal. */}
       {floatsRail ? (
-        <ViewerBottomBar placement="corridor" hidden={chromeHidden} probe={{ 'data-viewer-footer': '' }}>
+        <ViewerBottomBar placement={corridorPlacement} hidden={chromeHidden} probe={{ 'data-viewer-footer': '' }}>
           <div ref={setTransportSlot} data-viewer-transport-slot />
           {playsVideo ? (
             <div ref={setInfoSlot} data-viewer-info-slot="" />
@@ -865,7 +967,7 @@ export default function MediaViewer({
         </ViewerBottomBar>
       ) : (
         <ViewerBottomBar
-          placement={currentSceneEntry !== undefined ? 'overlay' : 'corridor'}
+          placement={currentSceneEntry !== undefined ? 'overlay' : corridorPlacement}
           hidden={chromeHidden}
           probe={{ 'data-viewer-footer': '' }}
           {...(footer !== undefined ? { caption: footer } : {})}

@@ -298,7 +298,7 @@ final class AffiliateViewModel: ObservableObject {
     @Published var tokens: [AffiliateToken] = []
     @Published var isLoading = false
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "affiliate")
+    private static let logger = MeeshyLog.logger(.affiliate)
 
     func load() async {
         let cached = await CacheCoordinator.shared.affiliateTokens.load(for: "list")

@@ -242,9 +242,8 @@ final class ComposerCaptureEditTests: XCTestCase {
         // sans confirmation à demander comme après elle, c'est la RETOUCHE qu'elle abandonne.
         XCTAssertTrue(chrome.contains("return retouche ? session.cancelEditing() : onDisarm()"),
                       "la croix abandonne la retouche au lieu de fermer le viseur")
-        XCTAssertTrue(chrome.contains("guard discardsTake else { return onDisarm() }")
-                      && chrome.contains("guard session.phase.isEditing else { return }"),
-                      "l'abandon confirmé d'une prise en retouche revient viser, il ne ferme pas le viseur")
+        XCTAssertTrue(chrome.contains("if ComposerCaptureDiscardFlow.confirm(session) { onDisarm() }"),
+                      "l'abandon confirmé passe par la réponse de la session (ComposerCaptureDiscardFlow)")
     }
 
     func test_editScreen_paintsTheEditedSource_reframesWithTheFingers_andOffersDone() throws {
@@ -377,18 +376,19 @@ final class ComposerCaptureEditTests: XCTestCase {
         session.toggleEditTool(.crop)
         XCTAssertEqual(session.activeEditTools, [], "hors retouche, pas de recadrage")
         session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
-        XCTAssertEqual(session.editPanels, [.presets], "Crop d'office sur une photo (#9754)")
+        session.revealEditChrome()
+        session.toggleEditTool(.crop)
         XCTAssertTrue(session.showsCropBrackets)
         session.toggleFamily(.filters)
         XCTAssertEqual(session.activeEditTools, [.crop], "ouvrir une bande n'éteint pas l'outil")
-        XCTAssertEqual(session.editPanels, [.band], "elle replie seulement les proportions")
+        XCTAssertEqual(session.editPanels, [.band])
         XCTAssertTrue(session.showsCropBrackets, "les équerres restent sur la scène")
         session.toggleEditTool(.crop)
         XCTAssertFalse(session.showsCropBrackets, "toucher Crop retire les équerres")
         XCTAssertEqual(session.openFamily, .filters, "et laisse la bande")
         session.toggleEditTool(.crop)
         XCTAssertNil(session.openFamily, "rallumer Crop replie la bande pour montrer ses proportions")
-        XCTAssertEqual(session.editPanels, [.presets])
+        XCTAssertEqual(session.editPanels, [.presets], "les proportions retiennent leur bande sous la scène")
         session.cancelEditing()
         XCTAssertEqual(session.activeEditTools, [])
     }
@@ -415,15 +415,18 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertTrue(crochets.contains("ComposerEditScene.cropped("), "le geste passe par la règle")
         XCTAssertTrue(crochets.contains("MeeshyControlSize.tapTarget"), "chaque crochet est une cible de 44 pt")
         XCTAssertTrue(crochets.contains("lineCap: .round"), "des crochets arrondis")
+        XCTAssertTrue(chrome.contains("ComposerCropPresetBar("), "les proportions par presets, sur la scène (#10930)")
         let bas = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
-        XCTAssertTrue(bas.contains("ComposerCropPresetBar("), "les proportions par presets, après les cadres")
         XCTAssertTrue(bas.contains("onTool: { session.toggleEditTool($0) }"))
         let apercu = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(apercu.contains("ComposerCapturePlacement.radius(for: size, editing: session.phase.isEditing)"),
-                      "la scène de retouche a des coins arrondis")
-        XCTAssertEqual(ComposerCapturePlacement.radius(for: .fullScreen, editing: true), ComposerSceneCameraFrame.cardRadius)
-        XCTAssertEqual(ComposerCapturePlacement.radius(for: .fullScreen, editing: false), 0)
-        XCTAssertEqual(ComposerCapturePlacement.radius(for: .card, editing: false), ComposerSceneCameraFrame.cardRadius)
+        XCTAssertTrue(apercu.contains("ComposerCapturePlacement.radius(for: size, editing: session.phase.isEditing,\n                                                           framed: session.editFramesScene)"),
+                      "la scène recadrée a des coins arrondis")
+        XCTAssertEqual(ComposerCapturePlacement.radius(for: .fullScreen, editing: true, framed: true),
+                       ComposerSceneCameraFrame.cardRadius)
+        XCTAssertEqual(ComposerCapturePlacement.radius(for: .fullScreen, editing: true, framed: false), 0,
+                       "#10930 : la retouche plein écran va jusqu'aux bords")
+        XCTAssertEqual(ComposerCapturePlacement.radius(for: .fullScreen, editing: false, framed: false), 0)
+        XCTAssertEqual(ComposerCapturePlacement.radius(for: .card, editing: false, framed: false), ComposerSceneCameraFrame.cardRadius)
     }
 
     func test_trimTrack_showsItsBoundsToTheMillisecond_andWearsOneRoundedFrame() throws {

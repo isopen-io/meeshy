@@ -41,6 +41,39 @@ enum MessageDayStickyPlacement {
     }
 }
 
+/// **Quelle rangée la pastille flottante nomme — ou aucune** (#4602).
+///
+/// Règle : jamais deux pastilles de date visibles en même temps. La pastille
+/// flottante nomme le jour de la rangée RÉELLEMENT en haut du fil — la plus
+/// haute dont le bas dépasse la ligne de lecture (le haut de la pastille, sous
+/// la bande de l'en-tête) — et se tait dès qu'une pastille de section est
+/// visible entre cette ligne et le bas de l'écran du fil (sous la barre de
+/// composition, transparente, comprise : une pastille qui y affleure se voit).
+///
+/// Deux défauts qu'elle ferme (recettes du 2026-10-16) : l'item de tête était
+/// le plus grand `IndexPath` VISIBLE au sens de la collection, qui court
+/// jusqu'au bord de l'écran — un message déjà sorti sous l'en-tête restait «
+/// en haut » et la pastille retardait d'une section ; et la pastille ne se
+/// taisait que si la section ÉTAIT l'item de tête, d'où « Hier » flottant
+/// au-dessus de la pastille de section « Aujourd'hui ».
+///
+/// Coordonnées de l'écran du fil (la vue du contrôleur), haut vers le bas.
+nonisolated enum MessageDayStickyLaw {
+    struct Row: Equatable {
+        let isDayHeader: Bool
+        let minY: CGFloat
+        let maxY: CGFloat
+    }
+
+    /// L'indice, dans `rows`, de la rangée dont la pastille nomme le jour ;
+    /// `nil` : la pastille se tait.
+    static func stickyRow(rows: [Row], readingLine: CGFloat, viewportBottom: CGFloat) -> Int? {
+        let visible = rows.indices.filter { rows[$0].maxY > readingLine && rows[$0].minY < viewportBottom }
+        guard !visible.contains(where: { rows[$0].isDayHeader }) else { return nil }
+        return visible.min { rows[$0].minY < rows[$1].minY }
+    }
+}
+
 /// État réactif qui pilote l'affichage de la pill flottante « Aujourd'hui /
 /// Hier / Lundi 9 mai » au top de la liste des messages. Sert de pont entre
 /// `MessageListViewController.scrollViewDidScroll` (UIKit, calcul du

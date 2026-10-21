@@ -29,6 +29,7 @@ struct BubbleFooter: View, Equatable {
     let style: BubbleFooterStyle
     let isDark: Bool
     @Environment(\.bubbleSenderMoodTap) private var senderMoodTap
+    @Environment(\.bubbleSkin) private var skin
 
     static func == (lhs: BubbleFooter, rhs: BubbleFooter) -> Bool {
         lhs.model == rhs.model && lhs.style == rhs.style && lhs.isDark == rhs.isDark
@@ -100,6 +101,7 @@ struct BubbleFooter: View, Equatable {
                     moodEmoji: sender.moodEmoji,
                     presenceState: sender.presence,
                     isHere: sender.isHere,
+                    ring: sender.ring,
                     enablePulse: false,
                     onTap: actions.onSenderTap,
                     onViewProfile: actions.onSenderTap,
@@ -107,6 +109,7 @@ struct BubbleFooter: View, Equatable {
                     onMoodTap: senderMoodTap,
                     contextMenuItems: avatarMenu(sender: sender)
                 )
+                .modifier(MessageAvatarPressClaim(hasMenu: avatarMenu(sender: sender) != nil))
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     HStack(spacing: MeeshySpacing.xs) {
                         // Nom borné à 16 caractères (directive user 2026-07-30) :
@@ -311,7 +314,7 @@ struct BubbleFooter: View, Equatable {
     }
 
     private var metaColor: Color {
-        model.isMe ? .white.opacity(MeeshyOpacity.heavy) : MeeshyColors.textMuted(isDark: isDark)
+        model.isMe ? skin.ink(MeeshyOpacity.heavy) : MeeshyColors.textMuted(isDark: isDark)
     }
 
     private var readColor: Color {

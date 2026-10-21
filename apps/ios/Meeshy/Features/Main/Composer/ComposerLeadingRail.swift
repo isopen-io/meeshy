@@ -342,6 +342,7 @@ struct ComposerLeadingRail: View {
               longPress: longPress(of: door)) {
             onDoor?(door)
         }
+        .accessibilityIdentifier("composer.rail.\(door.rawValue)")
     }
 
     /// L'appui long de la porte, s'il en a un et que l'hôte l'écoute : le

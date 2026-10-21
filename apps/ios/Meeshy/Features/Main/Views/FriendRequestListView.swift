@@ -145,6 +145,7 @@ struct FriendRequestListView: View {
                 accentColor: color,
                 avatarURL: sender?.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: request.senderId)?.moodEmoji,
+                ring: sender?.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: request.senderId)
             )
 

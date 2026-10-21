@@ -39,11 +39,24 @@ final class ConversationTopChromeFadeTests: XCTestCase {
         )
     }
 
-    private func messageListControllerSource() throws -> String {
+    /// Le pont de la liste vit dans sa couche (`ConversationMessageListLayer`), extraite de l'hôte.
+    private func messageListLayerSource() throws -> String {
         try String(
-            contentsOf: viewsDirectory().appendingPathComponent("MessageListViewController.swift"),
+            contentsOf: viewsDirectory().appendingPathComponent("ConversationView+MessageListLayer.swift"),
             encoding: .utf8
         )
+    }
+
+    /// Les contrôles de l'en-tête déplié (titre, recherche), extraits de l'hôte.
+    private func headerControlsSource() throws -> String {
+        try String(
+            contentsOf: viewsDirectory().appendingPathComponent("ConversationView+HeaderControls.swift"),
+            encoding: .utf8
+        )
+    }
+
+    private func messageListControllerSource() throws -> String {
+        try AppSourceGuard.text(at: viewsDirectory().appendingPathComponent("MessageListViewController.swift"))
     }
 
     // MARK: - Pas de scrim status bar
@@ -75,12 +88,11 @@ final class ConversationTopChromeFadeTests: XCTestCase {
     // contenu défiler sous un verre translucide jusqu'au bord. La liste doit
     // donc s'étendre sous la safe area haute.
     func test_messageList_extendsUnderTopSafeArea() throws {
-        let source = try conversationViewSource()
-        guard let listStart = source.range(of: "MessageListView("),
-              let listEnd = source.range(of: "floatingHeaderSection", range: listStart.upperBound..<source.endIndex) else {
-            return XCTFail("MessageListView introuvable dans ConversationView")
+        let source = try messageListLayerSource()
+        guard let listStart = source.range(of: "MessageListView(") else {
+            return XCTFail("MessageListView introuvable dans ConversationMessageListLayer")
         }
-        let listBlock = String(source[listStart.lowerBound..<listEnd.lowerBound])
+        let listBlock = String(source[listStart.lowerBound...])
 
         // Recalibré — déplacé par `050e15f4` (« le fil court jusqu'au bord bas
         // physique »), l'invariant est inchangé : la liste ignore la safe area
@@ -108,8 +120,10 @@ final class ConversationTopChromeFadeTests: XCTestCase {
             "cette bande ne montre que le fond, une couleur unie jusqu'au bord. " +
             "Bords déclarés : `\(edges.trimmingCharacters(in: .whitespacesAndNewlines))`."
         )
+        let hostSource = try conversationViewSource()
         XCTAssertTrue(
-            listBlock.contains("topInset: previewMode ? 0 : DeviceLayout.safeAreaTop"),
+            listBlock.contains("topInset: insets.top")
+                && hostSource.contains("top: previewMode ? 0 : windowInsets.top"),
             "Sous `ignoresSafeArea`, ni le GeometryReader ni le contrôleur " +
             "hébergé ne connaissent l'inset haut : il doit venir de la fenêtre."
         )
@@ -221,29 +235,33 @@ final class ConversationTopChromeFadeTests: XCTestCase {
     // MARK: - Bande DÉPLIÉE sans boutons d'action (user 2026-08-18)
 
     func test_expandedBand_carriesNoActionButtons_titleOpensDetails_directLongPressOffersProfile() throws {
+        // La bande dépliée est montée par l'hôte (`expandedHeaderTitleAndTags`) ; le bouton-titre et son
+        // menu vivent dans `ConversationHeaderTitleBlock` (`ConversationView+HeaderControls.swift`).
         let viewSource = try conversationViewSource()
+        let controls = try headerControlsSource()
         guard let start = viewSource.range(of: "var expandedHeaderTitleAndTags"),
-              let end = viewSource.range(of: "private var expandedHeaderTitleButton")
+              let end = viewSource.range(of: "private var expandedHeaderBackground")
         else { return XCTFail("bornes de la bande dépliée introuvables") }
         let band = viewSource[start.lowerBound..<end.lowerBound]
         XCTAssertFalse(
             band.contains("headerButtonsCluster"),
             "La bande DÉPLIÉE ne porte AUCUN bouton d'action (mode/recherche/appel) — titre + tags seulement, les membres actifs vivant dans l'avatar-view (arbitrage user 2026-08-18)."
         )
-        guard let btnStart = viewSource.range(of: "private var expandedHeaderTitleButton"),
-              let btnEnd = viewSource.range(of: "private var expandedHeaderTitleLabel")
+        guard let btnStart = controls.range(of: "private var titleButton"),
+              let btnEnd = controls.range(of: "private var titleLabel")
         else { return XCTFail("bornes du bouton-titre introuvables") }
-        let button = viewSource[btnStart.lowerBound..<btnEnd.lowerBound]
+        let button = controls[btnStart.lowerBound..<btnEnd.lowerBound]
         XCTAssertTrue(
-            button.contains("showConversationInfo = true"),
+            band.contains("onOpenInfo: { composerState.showConversationInfo = true }") && button.contains("onOpenInfo()"),
             "Le tap du titre ouvre les DÉTAILS de la conversation."
         )
         XCTAssertTrue(
-            button.contains("conversation?.type == .direct") && button.contains(".contextMenu"),
+            band.contains("isDirect: conversation?.type == .direct") && button.contains("if isDirect")
+                && button.contains(".contextMenu"),
             "En conversation DIRECTE, l'appui long du titre propose détails OU profil — le menu n'existe qu'en direct."
         )
         XCTAssertTrue(
-            button.contains("ProfileSheetUser.from(conversation:"),
+            band.contains("ProfileSheetUser.from(conversation:") && button.contains("onOpenProfile()"),
             "Le profil proposé est celui de l'interlocuteur (résolution existante ProfileSheetUser.from)."
         )
     }
@@ -251,16 +269,16 @@ final class ConversationTopChromeFadeTests: XCTestCase {
     // MARK: - La règle, sans passer par le rendu
 
     func test_hidesHeaderActions_whileScrolling_isTrue() {
-        XCTAssertTrue(ConversationView.hidesHeaderActions(isScrollingList: true, isSearchOpen: false))
+        XCTAssertTrue(ConversationViewRules.hidesHeaderActions(isScrollingList: true, isSearchOpen: false))
     }
 
     func test_hidesHeaderActions_atRest_isFalse() {
-        XCTAssertFalse(ConversationView.hidesHeaderActions(isScrollingList: false, isSearchOpen: false))
+        XCTAssertFalse(ConversationViewRules.hidesHeaderActions(isScrollingList: false, isSearchOpen: false))
     }
 
     /// La barre de recherche ouverte est un champ de SAISIE : elle doit rester
     /// joignable pendant qu'on fait défiler les résultats.
     func test_hidesHeaderActions_whileSearchingAndScrolling_isFalse() {
-        XCTAssertFalse(ConversationView.hidesHeaderActions(isScrollingList: true, isSearchOpen: true))
+        XCTAssertFalse(ConversationViewRules.hidesHeaderActions(isScrollingList: true, isSearchOpen: true))
     }
 }

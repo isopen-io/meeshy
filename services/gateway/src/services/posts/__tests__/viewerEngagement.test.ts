@@ -22,6 +22,7 @@ import {
   readViewerInteractions,
   viewerEngagementGates,
   viewerListAccess,
+  viewerListCounts,
   type ViewerEngagementGates,
   type ViewerEngagementPrisma,
 } from '../viewerEngagement';
@@ -671,6 +672,20 @@ describe('« et N visiteurs » — la part anonyme des vues (#10483)', () => {
     expect(ancienne).toMatchObject({ anonymousViewCount: 9, uniqueViewCount: 5, anonymousUniqueViewCount: 0 });
     expect(prisma.post.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       select: expect.objectContaining({ uniqueViewCount: true, anonymousUniqueViewCount: true }),
+    }));
+  });
+
+  it("#11065 — l'en-tête lit les compteurs relus AVEC la liste : vues et impressions servies, lues avec la porte", async () => {
+    const post = { ...story(0), viewCount: 4, uniqueViewCount: 3, impressionCount: 7 };
+    const prisma = makePrisma({ post });
+    const enrichie = await read(prisma, { id: AUTHOR, role: 'USER' });
+    const ancienne = await readPostViews(prisma as unknown as ViewerEngagementPrisma, POST, { id: AUTHOR, role: 'USER' }, 50, 0, SINCE);
+
+    expect(enrichie).toMatchObject({ viewCount: 4, uniqueViewCount: 3, impressionCount: 7 });
+    expect(ancienne).toMatchObject({ viewCount: 4, uniqueViewCount: 3, impressionCount: 7 });
+    expect(viewerListCounts(enrichie!)).toMatchObject({ viewCount: 4, impressionCount: 7 });
+    expect(prisma.post.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ viewCount: true, impressionCount: true }),
     }));
   });
 

@@ -8,9 +8,10 @@ import { initialsOf } from '@/lib/view/conversation';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { AuthorMoodsContext } from '@/lib/view/use-author-moods';
+import { AuthorRingsContext } from '@/lib/profile-decor/author-ring';
 import { ActivePeersContext, FocusedPeersContext, HerePeersContext } from '@/lib/view/use-conversation-viewing';
 
-import { Avatar } from './avatar';
+import { RingedAvatar } from './peer-avatar';
 import { AvatarMenuTrigger } from './avatar-menu';
 
 /**
@@ -45,6 +46,7 @@ export function ActiveMembersStack({
   readonly storyRingOf?: StoryRingOf | undefined;
   readonly onOpenDetails?: (() => void) | undefined;
 }) {
+  const rings = useContext(AuthorRingsContext);
   const herePeers = useContext(HerePeersContext);
   const activePeers = useContext(ActivePeersContext);
   const focusedPeers = useContext(FocusedPeersContext);
@@ -67,7 +69,8 @@ export function ActiveMembersStack({
             style={{ marginInlineStart: index === 0 ? 0 : -OVERLAP, zIndex: members.length - index }}
           >
             <AvatarMenuTrigger entries={entries} name={member.name} onOpenDetails={onOpenDetails}>
-              <Avatar
+              <RingedAvatar
+                ringRef={rings.get(member.id)}
                 initials={initialsOf(member.name)}
                 color={accent}
                 size={SIZE}

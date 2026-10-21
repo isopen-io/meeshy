@@ -34,3 +34,30 @@ export function deviceTranslationTarget(params: {
   }
   return null;
 }
+
+/**
+ * **CE QUE LA FILE CALCULE POUR UN MESSAGE CONFIÉ** (#9898, #11372) — rien
+ * pour un message chiffré sans clair ici ni pour un texte vide ; sinon la
+ * descente ci-dessus. La file (`scheduler.ts`) et l'offre du menu
+ * (`deviceTranslationWanted`) lisent cette seule loi : le menu n'offre jamais
+ * un geste que la file sauterait.
+ */
+export function offeredMessageTarget(params: {
+  readonly message: {
+    readonly encrypted: boolean;
+    readonly content: string;
+    readonly originalLanguage: string | null | undefined;
+    readonly translatedLanguages: readonly string[];
+  };
+  readonly preferredLanguages: readonly string[];
+  readonly canTranslate: (source: string, target: string) => boolean;
+}): DeviceTranslationPair | null {
+  const { message, preferredLanguages, canTranslate } = params;
+  if (message.encrypted || message.content.trim() === '') return null;
+  return deviceTranslationTarget({
+    preferredLanguages,
+    originalLanguage: message.originalLanguage,
+    translatedLanguages: message.translatedLanguages,
+    canTranslate,
+  });
+}

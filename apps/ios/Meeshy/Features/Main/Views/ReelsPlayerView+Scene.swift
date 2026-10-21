@@ -58,6 +58,8 @@ final class ReelAudioEngineBox: ObservableObject {
 /// (`ReelMediaAutostart.shouldStart`) : page active, révélation terminée, aucun
 /// appel. Le tap de la page la met en pause ; quitter la page la relâche.
 struct ReelSceneView: View {
+    /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
     let reel: FeedPost
     let document: CanvasV3
     let isActive: Bool
@@ -179,7 +181,7 @@ struct ReelSceneView: View {
                 // **Les réels VIDÉO et IMAGE ne sont pas visés par ce lot** : ce
                 // fichier ne porte que le réel à SCÈNE, et le lot #6904 est la
                 // convergence des surfaces de SCÈNE (carte, sol, forme, voile).
-                StoryReaderScrims(topInset: DeviceLayout.safeAreaTop,
+                StoryReaderScrims(topInset: WindowInsets(published: sceneSafeAreaInsets).top,
                                   chromeVisible: true)
             }
             .frame(width: geo.size.width, height: geo.size.height)

@@ -9,6 +9,7 @@ import {
   spokenCountdown,
   type MagicLinkRequestData,
 } from './magic-link';
+import { SECRET_RETURN_PATHS } from '../../test-support/email-link-secret-paths';
 
 /**
  * LES LOIS PURES DU LIEN MAGIQUE (#5816, T4/T4b/T4c) — miroir
@@ -122,6 +123,31 @@ describe('safeReturnPath', () => {
   test('caractères de contrôle (tab, saut de ligne, DEL…) ⇒ /', () => {
     for (const hostile of ['/\t/evil.com', '/\n/evil.com', '/\r/evil.com', '/chat/x ', `/chat/x${String.fromCharCode(0)}`, `/chat/x${String.fromCharCode(127)}`]) {
       expect({ hostile: JSON.stringify(hostile), safe: safeReturnPath(hostile) }).toEqual({ hostile: JSON.stringify(hostile), safe: '/' });
+    }
+  });
+});
+
+describe('safeReturnPath — jamais une page à jeton d’e-mail (#10877)', () => {
+  test('toute forme d’un chemin à secret ⇒ /', () => {
+    for (const hostile of SECRET_RETURN_PATHS) {
+      expect({ hostile: JSON.stringify(hostile), safe: safeReturnPath(hostile) }).toEqual({ hostile: JSON.stringify(hostile), safe: '/' });
+    }
+  });
+
+  test('un voisin sans secret passe : les noms proches ne sont pas des pages à jeton', () => {
+    for (const path of ['/auth/magic-linker', '/settings/verify', '/login?next=/chats', '/c/abc?q=/search']) {
+      expect(safeReturnPath(path)).toBe(path);
+    }
+  });
+
+  test('sert la forme NORMALISÉE : segments `.` et `..` résolus', () => {
+    expect(safeReturnPath('/c/./abc')).toBe('/c/abc');
+    expect(safeReturnPath('/x/../c/abc?x=1#m')).toBe('/c/abc?x=1#m');
+  });
+
+  test('une normalisation qui mènerait HORS du domaine ⇒ /', () => {
+    for (const hostile of ['/.//evil.com', '/x/..//evil.com', '/%2e//evil.com']) {
+      expect({ hostile, safe: safeReturnPath(hostile) }).toEqual({ hostile, safe: '/' });
     }
   });
 });

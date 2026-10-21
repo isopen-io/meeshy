@@ -77,7 +77,7 @@ describe('exhaustivité de la purge', () => {
 describe('purgeGameData', () => {
   const seed = () => {
     const db = fakeGameDb();
-    seedUser(db, { levelRecord: 40, prestige: 2, flameFreezes: 1, guideSeen: ['a'], publicLeagueConsentAt: new Date(), publicLeagueConsentVersion: 'v1' });
+    seedUser(db, { levelRecord: 40, prestige: 2, prestigeLevelRecords: [120, 100], flameFreezes: 1, guideSeen: ['a'], publicLeagueConsentAt: new Date(), publicLeagueConsentVersion: 'v1' });
     seedUser(db, { levelRecord: 10 }, OTHER);
     for (const [model, rows] of Object.entries({
       dailyMission: [{ id: 'a', userId: USER }, { id: 'a2', userId: OTHER }],
@@ -135,7 +135,7 @@ describe('purgeGameData', () => {
   it('efface les colonnes de jeu et le consentement de ligue du compte, pas ceux des autres', async () => {
     const db = seed();
     await purgeGameData(db.prisma, USER);
-    expect(db.user.rows.find((u) => u.id === USER)).toMatchObject({ publicLeagueConsentAt: null, publicLeagueConsentVersion: null, levelRecord: null, prestige: null, flameFreezes: null, guideSeen: [] });
+    expect(db.user.rows.find((u) => u.id === USER)).toMatchObject({ publicLeagueConsentAt: null, publicLeagueConsentVersion: null, levelRecord: null, prestige: null, prestigeLevelRecords: [], flameFreezes: null, guideSeen: [] });
     expect(db.user.rows.find((u) => u.id === OTHER)!.levelRecord).toBe(10);
   });
 

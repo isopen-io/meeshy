@@ -90,6 +90,10 @@ extension UniversalComposerBar {
                         guard !ComposerActionSlot.exceedsTextStickerLimit(text) else { return }
                         handleSend()
                     }
+                    // Clavier MATÉRIEL (iPad) : Maj+Retour / Option+Retour passe à la ligne (iOS 17+, `onKeyPress` ;
+                    // iOS 16 garde la règle du texte seule).
+                    .modifier(HardwareReturnModifiers { literalNewlinePending = true })
+                    .modifier(PublishesComposerSend(send: handleSend))
                     .accessibilityLabel(String(localized: "a11y.composer.textField", defaultValue: "Champ de message", bundle: .main))
                     .accessibilityValue(text.isEmpty ? resolvedPlaceholder : text)
                     .accessibilityHint(protection?.accessibilityState ?? "")
@@ -108,7 +112,9 @@ extension UniversalComposerBar {
                         // mais lire `oldValue` dit sans ambiguïté ce que l'auteur
                         // avait sous les yeux en appuyant (#6537).
                         let passeALaLigne = ComposerActionSlot.exceedsTextStickerLimit(oldValue)
-                        if !passeALaLigne, ComposerReturnKey.submits(previous: oldValue, current: newValue) {
+                        let literal = literalNewlinePending
+                        literalNewlinePending = false
+                        if !passeALaLigne, ComposerReturnKey.submits(previous: oldValue, current: newValue, literalNewline: literal) {
                             // Le texte SANS son saut de ligne est poussé à
                             // l'hôte AVANT l'envoi : `onCustomSend` lit la
                             // source de l'hôte SYNCHRONEMENT, alors que la

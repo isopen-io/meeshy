@@ -12,6 +12,8 @@ const ar = {
   'frame.usage.achievementOnly': 'الإنجازات فقط',
   'frame.usage.achievementRarityOnly': 'إنجازات {rarity} فقط',
   'frame.usage.momentOnly': 'لحظات «{family}» فقط',
+  'frame.usage.avatarOnly': 'إطار الملف الشخصي فقط',
+  'frame.usage.bannerFrameOnly': 'إطار اللافتة فقط',
 } as const satisfies FrameUsageCatalog;
 
 export default ar;

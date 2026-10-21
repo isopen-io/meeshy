@@ -143,6 +143,8 @@ export const frameShopAdapter = (language: InterfaceLanguage, deps: Conversation
   loadCatalogue: (signal) => loadFramePackCatalogue({ ...deps, signal }),
   setInstalled: (pack, installed) => setFramePackInstalled(deps, pack.slug, installed),
   applyInstalled: writeInstalled,
+  price: (pack) => pack.price ?? null,
+  owned: (pack) => pack.owned ?? true,
   title: (pack) => nameOf(pack, language).name,
   description: (pack) => nameOf(pack, language).description,
   meta: (pack) => [

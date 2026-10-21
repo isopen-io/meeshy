@@ -114,4 +114,21 @@ final class CallAudioSessionActivationPolicyTests: XCTestCase {
     func test_activation_withoutCallKit_activatesNow() {
         XCTAssertEqual(CallAudioSessionPolicy.activation(usesCallKit: false), true)
     }
+
+    /// Une session que l'APP a activée (sonnerie in-app promue en CallKit,
+    /// filet « micro muet ») n'est jamais rendue par `didDeactivate` : elle
+    /// restait active en `.playAndRecord` + `.duckOthers`, la musique des
+    /// autres apps atténuée après l'appel.
+    func test_shouldDeactivateOnEnd_selfActivatedSessionUnderCallKit_isReleased() {
+        XCTAssertTrue(CallAudioSessionPolicy.shouldDeactivateOnEnd(usesCallKit: true, sessionSelfActivated: true))
+        XCTAssertFalse(CallAudioSessionPolicy.shouldDeactivateOnEnd(usesCallKit: true, sessionSelfActivated: false))
+        XCTAssertTrue(CallAudioSessionPolicy.shouldDeactivateOnEnd(usesCallKit: false, sessionSelfActivated: false))
+    }
+
+    func test_deactivateAudioSession_followsTheSelfActivationRule() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+AudioSession.swift")
+        XCTAssertTrue(source.contains("CallAudioSessionPolicy.shouldDeactivateOnEnd("))
+        XCTAssertTrue(source.contains("self.audioSessionSelfActivated = true"), "le filet « micro muet » note son activation")
+        XCTAssertTrue(source.contains("if activation == true { audioSessionSelfActivated = true }"))
+    }
 }

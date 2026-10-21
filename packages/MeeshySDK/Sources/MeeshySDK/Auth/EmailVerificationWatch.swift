@@ -81,7 +81,7 @@ extension AuthService {
     public func requestEmailCode(email: String) async throws -> EmailCodeDispatch {
         let response: APIResponse<EmailCodeDispatch> = try await api.post(
             AuthEndpoint.magicLinkRequest,
-            body: MagicLinkRequest(email: email, deviceFingerprint: nil)
+            body: MagicLinkRequest(email: email, deviceFingerprint: nil, linkDeviceHash: linkDevice.issueHash())
         )
         return response.data
     }

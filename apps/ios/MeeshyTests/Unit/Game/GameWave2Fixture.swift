@@ -3,6 +3,7 @@ import Foundation
 import MeeshySDK
 
 /// Les extensions de la vague 2, construites par les LOIS (jamais écrites à la main quand une loi les produit).
+@MainActor
 enum GameWave2Fixture {
 
     static func league(

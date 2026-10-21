@@ -232,7 +232,7 @@ export function WorldGuestEntry({
     }
     deps.adoptGuest(result.data.sessionToken, {
       participantId: result.data.participantId,
-      nickname,
+      nickname: result.data.nickname ?? nickname,
       conversationId: result.data.conversationId,
       link,
       mayWrite: result.data.mayWrite,

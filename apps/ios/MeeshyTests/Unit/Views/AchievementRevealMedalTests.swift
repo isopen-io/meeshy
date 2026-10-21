@@ -137,4 +137,11 @@ final class AchievementRevealMedalTests: XCTestCase {
         XCTAssertTrue(view.contains("ProgressionCopy.badgeTierTitle("))
         XCTAssertFalse(view.contains(".lowercased())\""), "le titre d'axe ne se met plus en minuscule en bloc")
     }
+
+    /// #10829 — sur la carte indigo, la ligne de rareté prend l'encre claire
+    /// de l'explication : la couleur discrète du thème y tombe sous l'AA.
+    func test_theRarityLine_onTheIndigoCard_wearsTheReadableInk() throws {
+        let view = try source("Meeshy/Features/Main/Views/AchievementRevealView.swift")
+        XCTAssertTrue(view.contains("GameRarityLine(entry: rarity, ink: MeeshyColors.indigo200)"))
+    }
 }

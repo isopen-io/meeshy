@@ -8,6 +8,8 @@ public protocol StoryServiceProviding: Sendable {
     /// timestamp. `nil` = tray complet (comportement historique).
     func list(cursor: String?, limit: Int, updatedSince: Date?) async throws -> PaginatedAPIResponse<[APIPost]>
     func delete(storyId: String) async throws
+    /// #11151 — le retrait de la story d'un AUTRE porte son motif.
+    func delete(storyId: String, reason: String?) async throws
     func react(storyId: String, emoji: String) async throws
     func repost(storyId: String) async throws
     func cachedPost(id: String) -> APIPost?
@@ -33,6 +35,11 @@ public protocol StoryServiceProviding: Sendable {
 }
 
 public extension StoryServiceProviding {
+    func delete(storyId: String, reason: String?) async throws {
+        guard reason == nil else { throw APIError.serverError(501, "delete(reason:) not implemented by \(Self.self)") }
+        try await delete(storyId: storyId)
+    }
+
     /// Compat : les call sites historiques (tray complet) restent binaires —
     /// seule l'exigence 3-params est à implémenter par les conformers.
     func list(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -40,7 +47,7 @@ public extension StoryServiceProviding {
     }
 }
 
-public final class StoryService: StoryServiceProviding, @unchecked Sendable {
+public final class StoryService: StoryServiceProviding, Sendable {
     public static let shared = StoryService()
     private let api: APIClientProviding
 
@@ -50,8 +57,7 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     // Borné (éviction FIFO via BoundedFIFOMap) et purgé au logout : sans ça
     // les payloads de l'utilisateur A restaient résidents pendant la session
     // de l'utilisateur B.
-    private let cacheLock = NSLock()
-    private var postCache = BoundedFIFOMap<String, APIPost>(capacity: 500)
+    private let postCache = Locked(BoundedFIFOMap<String, APIPost>(capacity: 500))
 
     init(api: APIClientProviding = APIClient.shared) {
         self.api = api
@@ -76,7 +82,11 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     }
 
     public func delete(storyId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(PostsEndpoint.byPostId(postId: storyId))
+        try await delete(storyId: storyId, reason: nil)
+    }
+
+    public func delete(storyId: String, reason: String?) async throws {
+        try await api.deleteRemovingContent(PostsEndpoint.byPostId(postId: storyId), reason: reason)
     }
 
     public func react(storyId: String, emoji: String) async throws {
@@ -123,9 +133,7 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     // MARK: - Single-post cache & fetch
 
     public func cachedPost(id: String) -> APIPost? {
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        return postCache[id]
+        postCache.read { $0[id] }
     }
 
     public func fetchPost(id: String) async throws -> APIPost {
@@ -140,28 +148,24 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
 
     public func invalidate(postIds: Set<String>) {
         guard !postIds.isEmpty else { return }
-        cacheLock.lock()
-        for id in postIds { _ = postCache.removeValue(forKey: id) }
-        cacheLock.unlock()
+        postCache.mutate { cache in
+            for id in postIds { cache.removeValue(forKey: id) }
+        }
     }
 
     private func cachePost(_ post: APIPost) {
-        cacheLock.lock()
-        postCache[post.id] = post
-        cacheLock.unlock()
+        postCache.mutate { $0[post.id] = post }
     }
 
     private func cachePosts(_ posts: [APIPost]) {
-        cacheLock.lock()
-        for post in posts { postCache[post.id] = post }
-        cacheLock.unlock()
+        postCache.mutate { cache in
+            for post in posts { cache[post.id] = post }
+        }
     }
 
     /// Purge au logout (cascade `AuthManager.logout`) — isolation des données
     /// entre comptes sur le même device.
     public func reset() {
-        cacheLock.lock()
-        postCache.removeAll()
-        cacheLock.unlock()
+        postCache.mutate { $0.removeAll() }
     }
 }

@@ -3,7 +3,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { createHttpTransport } from '@/lib/api/http';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
-import { messagesQueryKey } from '@/lib/api/messages';
+import { findCachedThreadMessage, messagesQueryKey } from '@/lib/api/messages';
+import { applyMessageNew } from '@/lib/api/realtime-apply';
 import type { Conversation, Message, MessageTranslation } from '@/lib/api/types';
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
@@ -229,6 +230,49 @@ describe('performSend', () => {
     const entry = entriesOf(outbox.getState(), 'c-a')[0];
     expect(entry?.message.replyToId).toBe(m1.id);
     expect(entry?.message.replyTo).toBe(m1);
+  });
+
+  /**
+   * RÉPONDRE À UNE HUMEUR, C'EST LA CITER (#10813) — `storyReplyToId` part
+   * dans le corps (la passerelle y gèle l'instantané `postReplyTo`,
+   * `storyReplyAdmission.ts`) ET reste sur la bulle optimiste, pour qu'elle
+   * porte sa citation avant tout accusé.
+   */
+  test('un brouillon qui cite une humeur part avec `storyReplyToId`, et la bulle locale le porte', async () => {
+    const outbox = createOutboxStore();
+    const fetched = fakeFetch({ status: 200, body: { success: true, data: { id: 'srv-1', conversationId: 'c-a', createdAt: '2026-10-16T10:00:00.000Z' } } });
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'Trop bien !', originalLanguage: 'fr', storyReplyToId: 'st-1' },
+      viewerId: 'u-viewer',
+      deps: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: fetched.impl }), queryClient: seededClient(), outbox, online: true },
+    });
+    const body = JSON.parse(String(fetched.calls[0]?.init.body)) as Record<string, unknown>;
+    expect(body.storyReplyToId).toBe('st-1');
+    expect(body.content).toBe('Trop bien !');
+    expect(body.replyToId).toBeUndefined();
+  });
+
+  test('sans humeur citée, aucune clé `storyReplyToId` ne part', async () => {
+    const fetched = fakeFetch({ status: 200, body: { success: true, data: { id: 'srv-2', conversationId: 'c-a', createdAt: '2026-10-16T10:00:00.000Z' } } });
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'salut', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: fetched.impl }), queryClient: seededClient(), outbox: createOutboxStore(), online: true },
+    });
+    expect('storyReplyToId' in (JSON.parse(String(fetched.calls[0]?.init.body)) as object)).toBe(false);
+  });
+
+  test('la bulle optimiste porte l’humeur citée avant tout accusé', async () => {
+    const outbox = createOutboxStore();
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'Trop bien !', originalLanguage: 'fr', storyReplyToId: 'st-1' },
+      viewerId: 'u-viewer',
+      deps: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: fakeFetch({ status: 200 }).impl }), queryClient: seededClient(), outbox, online: false },
+    });
+    expect(entriesOf(outbox.getState(), 'c-a')[0]?.message.storyReplyToId).toBe('st-1');
   });
 
   /**
@@ -664,6 +708,50 @@ describe('performSend — pièces jointes (#5668)', () => {
     expect(sentBody.messageType).toBe('audio');
     expect('content' in sentBody).toBe(false);
     expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
+  });
+
+  /**
+   * **L'ÉCHO AVANT L'ACCUSÉ (#10690)** — la passerelle peut diffuser
+   * `message:new` (pièces SERVIES) avant que la réponse REST ne revienne.
+   * L'accusé repartait des pièces LOCALES (`pending-N`, `blob:`) et les
+   * réimposait : le vocal restait lu depuis le blob, et sa transcription,
+   * keyée par l'identifiant servi, était ignorée jusqu'à la réouverture.
+   */
+  test('un vocal dont l’écho précède l’accusé garde ses pièces SERVIES', async () => {
+    const queryClient = seededClient();
+    const outbox = createOutboxStore();
+    const served = { id: 'A1', messageId: 'm9', fileName: 'voix.webm', originalName: 'voix.webm', mimeType: 'audio/webm', fileSize: 3, fileUrl: 'https://x/voix.webm' };
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/attachments/upload')) {
+        return new Response(JSON.stringify({ success: true, data: { attachments: [served] } }), { status: 200 });
+      }
+      const sent = JSON.parse(String(init?.body));
+      applyMessageNew(queryClient, outbox, {
+        id: 'm9', clientMessageId: sent.clientMessageId, conversationId: 'c-a', senderId: 'u-viewer',
+        content: '', originalLanguage: 'fr', messageType: 'audio', createdAt: '2026-09-09T10:00:00.000Z',
+        attachments: [served],
+      } as unknown as Parameters<typeof applyMessageNew>[2]);
+      return new Response(JSON.stringify(ackBody('m9', sent.clientMessageId)), { status: 200 });
+    }) as typeof fetch;
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: '', originalLanguage: 'fr', attachments: [pendingAttachmentOf(new File([new Uint8Array(3)], 'voix.webm', { type: 'audio/webm' }), { durationMs: 900 })] },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const row = findCachedThreadMessage(queryClient, 'c-a', 'm9');
+    expect(row?.attachments?.map((a) => a.id)).toEqual(['A1']);
+    expect(row?.attachments?.[0]?.fileUrl).toBe('https://x/voix.webm');
   });
 
   test('texte + photo : messageType image, une seule photo ⇒ une seule catégorie', async () => {

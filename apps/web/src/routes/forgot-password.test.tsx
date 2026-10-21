@@ -3,7 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import ForgotPasswordScreen, { type ForgotPasswordDeps } from '@/routes/forgot-password';
-import { NOTHING_RECEIVED_TEXT } from '@/lib/view/auth-copy';
+import { loadAccountRecoveryCatalog } from '@/lib/i18n-account-recovery-catalog';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { controlledBy, perceivableText } from '@/test-support/perceivable-text';
@@ -21,9 +22,14 @@ import { controlledBy, perceivableText } from '@/test-support/perceivable-text';
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+const NOTHING_RECEIVED_TEXT = 'Regardez vos indésirables (spam) : le message peut y être tombé.';
+
+beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/forgot-password' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await Promise.all(
+    (['fr', 'en', 'de'] as const).flatMap((language) => [loadInterfaceCatalog(language), loadAccountRecoveryCatalog(language)]),
+  );
 });
 
 afterAll(async () => {
@@ -39,6 +45,7 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  document.documentElement.lang = 'fr';
 });
 
 const EMAIL = 'ada@meeshy.example';
@@ -94,6 +101,31 @@ describe('/forgot-password prend la forme de /login', () => {
     expect(text(el)).toContain('Recevez par e-mail un lien pour choisir un nouveau mot de passe.');
     expect(el.querySelector('#forgot-email')).not.toBeNull();
     expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Recevoir le lien');
+  });
+
+  test('champ vide ou adresse incomplète : le bouton est désactivé et rien ne part (#10885)', async () => {
+    const { calls, deps } = acceptedRequest();
+    const el = mount(deps);
+    const bouton = el.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(bouton.disabled).toBe(true);
+    await act(async () => {
+      (el.querySelector('form') as HTMLFormElement).requestSubmit();
+    });
+    const champ = el.querySelector('#forgot-email') as HTMLInputElement;
+    act(() => {
+      champ.value = 'ada@meeshy';
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(bouton.disabled).toBe(true);
+    await act(async () => {
+      (el.querySelector('form') as HTMLFormElement).requestSubmit();
+    });
+    expect(calls).toEqual([]);
+    act(() => {
+      champ.value = EMAIL;
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(bouton.disabled).toBe(false);
   });
 
   test('le retour vers la connexion est une ANCRE, dès la première seconde', () => {
@@ -156,7 +188,7 @@ describe('« Mot de passe oublié » sert aussi à créer un premier mot de pass
 /**
  * L'ÉCRAN D'ENVOI EST CELUI DE LA CONNEXION PAR E-MAIL (#6583, #6643) — même
  * attente, mêmes mots : « E-mail envoyé », l'adresse, et le (i) « Rien reçu ? »
- * dont le TEXTE est partagé (`lib/view/auth-copy.ts`). Il disait « un lien de
+ * dont le TEXTE est partagé (`emailSent.*`, catalogue d'interface). Il disait « un lien de
  * réinitialisation vient d'être envoyé » : une seconde phrase pour le même
  * fait, et un mot faux pour qui n'a jamais eu de mot de passe.
  */
@@ -176,5 +208,38 @@ describe('l’écran d’envoi est celui de la connexion par e-mail', () => {
     const retour = [...el.querySelectorAll('a')].find((a) => text(a).trim() === 'Retour à la connexion');
     expect(retour?.getAttribute('href')).toBe('/login');
     expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+});
+
+/**
+ * UNE SEULE LANGUE D'INTERFACE (#10823) — l'écran entier suit la langue
+ * d'interface, jusqu'à l'écran d'envoi qu'il partage avec la connexion.
+ */
+describe('/forgot-password parle la langue d’interface', () => {
+  test('interface en : la phrase, le (i), le bouton, le retour — aucun mot français', () => {
+    document.documentElement.lang = 'en';
+    const el = mount();
+    expect(text(el)).toContain('Get a link by email to choose a new password.');
+    expect(text(el)).toContain('Never had a password?');
+    expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Get the link');
+    expect(text(el)).toContain('Back to sign in');
+    expect(text(el)).not.toMatch(/Recevez|Jamais eu|Recevoir le lien|Retour à la connexion/u);
+  });
+
+  test('interface en : l’écran d’envoi dit « Email sent » et « Nothing received? »', async () => {
+    document.documentElement.lang = 'en';
+    const el = mount(acceptedRequest().deps);
+    await sendFrom(el);
+    expect(el.querySelector('h2')?.textContent).toBe('Email sent');
+    expect(text(el)).toContain(`Open the link sent to ${EMAIL}`);
+    expect(el.querySelector('button[aria-label="Nothing received?"]')).not.toBeNull();
+    expect(text(el)).not.toMatch(/E-mail envoyé|Ouvrez|Rien reçu/u);
+  });
+
+  test('interface de : la phrase vient du catalogue allemand', () => {
+    document.documentElement.lang = 'de';
+    const el = mount();
+    expect(text(el)).toContain('Erhalte per E-Mail einen Link, um ein neues Passwort festzulegen.');
+    expect(text(el)).toContain('Noch nie ein Passwort gehabt?');
   });
 });

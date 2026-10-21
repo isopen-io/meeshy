@@ -68,6 +68,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// type absent : ici l'absence ne prouve rien, donc ses liens restent
     /// inertes (fail-closed). Ne gouverne QUE les liens.
     public var senderHasAccount: Bool = true
+    /// Le contour d'avatar équipé de l'auteur (#10713) ; `nil` sans contour ou ancien serveur.
+    public var senderRing: ServedProfileDecorItem?
     public var deliveryStatus: DeliveryStatus = .sent
     public var isMe: Bool = false
     public var deliveredToAllAt: Date?
@@ -111,7 +113,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// Sticker porté par le message (#4823), restitué depuis la colonne
     /// `stickerJson` du cache GRDB ou depuis `APIMessage.sticker`. `nil` pour
     /// un message sans sticker — et pour un sticker NON RENDABLE, ramené à
-    /// l'absence dès le décodage (`MessageSticker.ifRenderable`) : une bulle
+    /// l'absence dès le décodage (`MessageSticker.ifWireWorthy` : un `stickerId` de
+    /// bibliothèque seul est gardé, son image jointe le rend, #10655) : une bulle
     /// ne dessine jamais un sticker vide.
     public var sticker: MessageSticker?
 
@@ -204,6 +207,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
                 senderIsAnonymous: Bool = false,
                 senderHasAccount: Bool = true,
+                senderRing: ServedProfileDecorItem? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0, recipientCount: Int = 0,
@@ -231,6 +235,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.senderName = senderName; self.senderUsername = senderUsername; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL; self.senderUserId = senderUserId
         self.senderIsAnonymous = senderIsAnonymous
         self.senderHasAccount = senderHasAccount
+        self.senderRing = senderRing
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
@@ -253,7 +258,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case pinnedAt, pinnedBy, isEncrypted, encryptionMode
         case createdAt, updatedAt, attachments, reactions
         case replyTo, forwardedFrom
-        case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId, senderIsAnonymous, senderHasAccount
+        case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId, senderIsAnonymous, senderHasAccount, senderRing
         case deliveryStatus, isMe
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case cachedTimeString
@@ -310,6 +315,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         // #10286 — blob antérieur : compte inconnu ⇒ liens inertes chez autrui.
         senderHasAccount = try c.decodeIfPresent(Bool.self, forKey: .senderHasAccount)
             ?? (isMe || messageSource != .user)
+        senderRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .senderRing)
         deliveredToAllAt = try c.decodeIfPresent(Date.self, forKey: .deliveredToAllAt)
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
@@ -333,7 +339,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         // la relecture du cache, pour qu'une ligne ancienne ou malformée ne
         // ressuscite jamais un sticker vide.
         let cachedSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
-        sticker = cachedSticker?.ifRenderable
+        sticker = cachedSticker?.ifWireWorthy
         // Backward-compatible: rows cached before this field decode to `[:]`.
         trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
@@ -383,6 +389,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(senderUserId, forKey: .senderUserId)
         if senderIsAnonymous { try c.encode(true, forKey: .senderIsAnonymous) }
         try c.encode(senderHasAccount, forKey: .senderHasAccount)
+        try c.encodeIfPresent(senderRing, forKey: .senderRing)
         try c.encode(deliveryStatus, forKey: .deliveryStatus)
         try c.encode(isMe, forKey: .isMe)
         try c.encodeIfPresent(deliveredToAllAt, forKey: .deliveredToAllAt)
@@ -415,3 +422,4 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
 
 public typealias MeeshyChatMessage = MeeshyMessage
 
+extension MeeshyMessage: CacheIdentifiable {}

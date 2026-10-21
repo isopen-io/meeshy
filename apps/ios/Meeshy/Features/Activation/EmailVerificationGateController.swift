@@ -29,7 +29,7 @@ final class EmailVerificationGateController: EmailVerificationGating {
     private let currentUser: @MainActor () -> MeeshyUser?
     private let onboardingPresented: @MainActor () -> Bool
     private let present: Present
-    private var waiting: [CheckedContinuation<Bool, Never>] = []
+    private let waiters = CancellableWaiters<Bool>()
     private var dismiss: (() -> Void)?
     private var provenUserId: String?
 
@@ -51,21 +51,20 @@ final class EmailVerificationGateController: EmailVerificationGating {
 
     func verifyEmail(for reason: EmailGateReason) async -> Bool {
         guard !onboardingPresented(), let email = currentUser().flatMap(address(of:)) else { return false }
-        if waiting.isEmpty {
+        if dismiss == nil {
             guard let dismiss = present(reason, email, { [weak self] verified in self?.settle(verified) }) else { return false }
             self.dismiss = dismiss
         }
-        return await withCheckedContinuation { waiting.append($0) }
+        let ticket = waiters.enroll()
+        return await waiters.suspendCancellable(ticket, cancelledValue: false)
     }
 
     private func settle(_ verified: Bool) {
-        guard !waiting.isEmpty else { return }
+        guard dismiss != nil || !waiters.isEmpty else { return }
         if verified { provenUserId = currentUser()?.id }
-        let answered = waiting
-        waiting = []
         dismiss?()
         dismiss = nil
-        answered.forEach { $0.resume(returning: verified) }
+        waiters.resolveAll(with: verified)
     }
 
     private func address(of user: MeeshyUser) -> String? {

@@ -166,7 +166,7 @@ final class ConversationMediaCatalogTests: XCTestCase {
         XCTAssertEqual(service.listMediaCallCount, 3)
         XCTAssertEqual(service.listMediaCursors, [nil, "msg-5", "msg-3"])
         XCTAssertEqual(sut.snapshot.attachments.map(\.id), ["att-2", "att-3", "att-4", "att-5", "att-6"])
-        let persisted = await store.completed
+        let persisted = store.completed
         XCTAssertTrue(persisted, "l'épuisement se retient : la prochaine ouverture ne refeuillette pas tout")
     }
 
@@ -216,7 +216,7 @@ final class ConversationMediaCatalogTests: XCTestCase {
         await sut.load(preferredLanguages: ["fr"])
 
         XCTAssertEqual(sut.snapshot.attachments.map(\.id), ["att-1", "att-9"])
-        let completed = await store.completed
+        let completed = store.completed
         XCTAssertFalse(completed, "un refus n'est pas un épuisement : la remontée reprendra plus tard")
     }
 
@@ -306,6 +306,25 @@ final class GalleryPagePinningTests: XCTestCase {
         XCTAssertNil(GalleryPagePinning.pageToRestore(pinned: "att-9", among: ["att-1", "att-2"]))
     }
 
+    /// La pièce regardée quitte la source (supprimée pour tous, éphémère
+    /// expiré) : la page passe à sa voisine, pas à la première pièce — sur
+    /// laquelle « Partager » ou « Enregistrer » agissaient.
+    func test_pageAfterRemoval_theViewedPieceLeaves_movesToItsSurvivingNeighbour() {
+        let previous = ["a", "b", "c", "d"]
+        XCTAssertEqual(GalleryPagePinning.pageAfterRemoval(pinned: "c", previous: previous, now: ["a", "b", "d"]), "d")
+        XCTAssertEqual(GalleryPagePinning.pageAfterRemoval(pinned: "d", previous: previous, now: ["a", "b", "c"]), "c")
+        XCTAssertEqual(GalleryPagePinning.pageAfterRemoval(pinned: "c", previous: previous, now: ["a", "b"]), "b")
+        XCTAssertNil(GalleryPagePinning.pageAfterRemoval(pinned: "c", previous: previous, now: previous))
+        XCTAssertNil(GalleryPagePinning.pageAfterRemoval(pinned: "c", previous: previous, now: []))
+    }
+
+    /// Sans page, pas de position : la galerie rendait 0, donc la première pièce.
+    func test_currentIndex_withoutItsPage_isOutOfBounds_notTheFirstPiece() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
+        XCTAssertTrue(source.contains("let index = indexByID[currentPageID] else { return allAttachments.count }"))
+        XCTAssertFalse(source.contains("let index = indexByID[currentPageID] else { return 0 }"))
+    }
+
     func test_signature_growthAtTheHead_changesTheSignature() {
         let before = [MeeshyMessageAttachment(id: "att-5"), MeeshyMessageAttachment(id: "att-6")]
         let after = [MeeshyMessageAttachment(id: "att-1")] + before
@@ -316,7 +335,8 @@ final class GalleryPagePinningTests: XCTestCase {
 
 // MARK: - Index en mémoire
 
-actor InMemoryConversationMediaIndexStore: ConversationMediaIndexStoring {
+@MainActor
+private final class InMemoryConversationMediaIndexStore: ConversationMediaIndexStoring {
     private var items: [MeeshyMessage]?
     private(set) var completed: Bool
     private var fresh: Bool
@@ -326,6 +346,8 @@ actor InMemoryConversationMediaIndexStore: ConversationMediaIndexStoring {
         self.completed = completed
         self.fresh = fresh
     }
+
+    nonisolated deinit {}
 
     func load(conversationId: String) async -> CacheResult<[MeeshyMessage]> {
         guard let items else { return .empty }

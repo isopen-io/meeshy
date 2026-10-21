@@ -61,11 +61,46 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     }
 
     public struct Level: Codable, Sendable, Equatable {
+        /// La poche (#10846) — ce que la frappe dépense. Nom historique, toujours servi.
         public let engagementScore: Int
+        /// LES ÉTINCELLES (#10846) — optionnelles : un serveur antérieur ne les sert pas. Des entiers JSON
+        /// saturés à 2^53 − 1, décodés en `Int` (64 bits sur tout appareil iOS).
+        public let sparks: Int?
+        /// Accumulées depuis le dernier prestige — la base du niveau.
+        public let sparksCycle: Int?
+        /// Accumulées à vie : ne baissent ni à la frappe ni au prestige.
+        public let sparksLifetime: Int?
+        /// Le niveau max à vie, qui survit au prestige.
+        public let levelMaxLifetime: Int?
+        /// La dette d'étincelles : déduite des prochains gains, elle bloque la frappe.
+        public let sparksDebt: Int?
 
-        public init(engagementScore: Int) {
+        public init(engagementScore: Int, sparks: Int? = nil, sparksCycle: Int? = nil,
+                    sparksLifetime: Int? = nil, levelMaxLifetime: Int? = nil, sparksDebt: Int? = nil) {
+            self.sparksDebt = sparksDebt
             self.engagementScore = engagementScore
+            self.sparks = sparks
+            self.sparksCycle = sparksCycle
+            self.sparksLifetime = sparksLifetime
+            self.levelMaxLifetime = levelMaxLifetime
         }
+
+        private enum CodingKeys: String, CodingKey {
+            case engagementScore, sparks, sparksCycle, sparksLifetime, levelMaxLifetime, sparksDebt
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            engagementScore = try c.decode(Int.self, forKey: .engagementScore)
+            sparks = GameSparks.count(c, .sparks)
+            sparksCycle = GameSparks.count(c, .sparksCycle)
+            sparksLifetime = GameSparks.count(c, .sparksLifetime)
+            levelMaxLifetime = GameSparks.count(c, .levelMaxLifetime)
+            sparksDebt = GameSparks.count(c, .sparksDebt)
+        }
+
+        /// La poche : `sparks` servi, sinon `engagementScore` (même nombre, nom d'hier).
+        public var pocket: Int { sparks ?? engagementScore }
     }
 
     /// L'ÉLAN COURANT (#5749) — OPTIONNEL, comme `Meesh`.
@@ -114,6 +149,14 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         public let missingPoints: Int
         /// Le prix, SERVI par la passerelle — aucun client ne le code en dur.
         public let mintCost: Int
+        /// Le prix de rang de la pièce, avant le facteur du niveau actuel (#10847) — `nil` devant un serveur antérieur.
+        public let baseMintCost: Int?
+        /// Le facteur du niveau actuel appliqué, de 0,5 à 1 (#10847).
+        public let costFactor: Double?
+        /// La dette d'étincelles qui bloque la frappe — `nil` ou `0` : aucune (contrat en cours côté passerelle).
+        public let sparksDebt: Int?
+        /// Ce qui bloque la frappe hors prix et rang : `.debt` tant qu'une dette existe.
+        public let blockedBy: GameSparks.MintBlock?
         /// ISO 8601 des BORNES du registre de frappe (#5839) — la première et
         /// la dernière, `nil` quand il n'y en a eu aucune.
         ///
@@ -133,8 +176,16 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
             missingPoints: Int,
             mintCost: Int,
             firstMintedAt: String? = nil,
-            lastMintedAt: String? = nil
+            lastMintedAt: String? = nil,
+            baseMintCost: Int? = nil,
+            costFactor: Double? = nil,
+            sparksDebt: Int? = nil,
+            blockedBy: GameSparks.MintBlock? = nil
         ) {
+            self.blockedBy = blockedBy
+            self.baseMintCost = baseMintCost
+            self.costFactor = costFactor
+            self.sparksDebt = sparksDebt
             self.balance = balance
             self.mintedLifetime = mintedLifetime
             self.debitablePoints = debitablePoints
@@ -164,6 +215,9 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     /// progression ENTIÈRE. `nil` ⇒ aucun élément du jeu n'est montré, jamais un
     /// niveau peint depuis un bloc à moitié lu.
     public let game: GameBlock?
+    /// Le marqueur d'ORDRE de l'état du jeu (#10900) — millisecondes serveur, croissant pour un même compte : toute
+    /// écriture du jeu terminée avant lui est reflétée dans cette charge. `nil` devant une passerelle antérieure.
+    public let gameRevision: Int?
 
     public init(
         counters: [Counter],
@@ -173,7 +227,8 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         meesh: Meesh? = nil,
         elan: Elan? = nil,
         achievementReach: [String: Int]? = nil,
-        game: GameBlock? = nil
+        game: GameBlock? = nil,
+        gameRevision: Int? = nil
     ) {
         self.counters = counters
         self.milestones = milestones
@@ -183,6 +238,7 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         self.elan = elan
         self.achievementReach = achievementReach
         self.game = game
+        self.gameRevision = gameRevision
     }
 
     public init(from decoder: Decoder) throws {
@@ -195,6 +251,7 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
         elan = try container.decodeIfPresent(Elan.self, forKey: .elan)
         achievementReach = try container.decodeIfPresent([String: Int].self, forKey: .achievementReach)
         game = (try? container.decodeIfPresent(GameBlock.self, forKey: .game)) ?? nil
+        gameRevision = (try? container.decodeIfPresent(Int.self, forKey: .gameRevision)) ?? nil
     }
 
     /// Aucune activité — la charge qu'un compte neuf reçoit.
@@ -206,6 +263,6 @@ public struct APIEngagementProgress: Codable, Sendable, Equatable, CacheIdentifi
     )
 
     private enum CodingKeys: String, CodingKey {
-        case counters, milestones, streak, level, meesh, elan, achievementReach, game
+        case counters, milestones, streak, level, meesh, elan, achievementReach, game, gameRevision
     }
 }

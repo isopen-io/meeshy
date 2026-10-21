@@ -47,7 +47,7 @@ extension StoryBackgroundLayer {
         // Pose la session de lecture via la source UNIQUE (call-aware) si pas déjà
         // `.playback` — idempotent, no-op pendant un appel (micro préservé).
         if AVAudioSession.sharedInstance().category != .playback {
-            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
+            MediaSessionCoordinator.shared.activateContentPlayback(ContentPlaybackAudibility.of(self.avPlayer))
         }
         let pl = AVPlayerLayer(player: avPlayer)
         pl.frame = bounds

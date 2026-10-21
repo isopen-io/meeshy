@@ -35,343 +35,6 @@ struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
-// MARK: - ShareableLink
-
-/// Identifiable wrapper around the freshly-minted post/story share URL so
-/// SwiftUI's `.sheet(item:)` can drive presentation directly. `URL` doesn't
-/// conform to `Identifiable`; wrapping is the lightest fix without leaking
-/// state booleans across the view tree.
-struct ShareableLink: Identifiable {
-    let id = UUID()
-    let url: URL
-    /// Ce que la feuille peut AUSSI emporter en fichier, rendu à la demande (#9682).
-    var fileSource: ShareFileSource? = nil
-
-    /// Public web origin posts/stories live on. Hardcoded to the production
-    /// host because an external share must always resolve from a third-party
-    /// network — a staging URL would dead-end for the recipient.
-    static let webBaseURL = "https://meeshy.me"
-
-    /// Raw post detail URL used as a graceful fallback when the gateway can't
-    /// mint a TrackingLink (offline, rate-limited, etc.). The recipient still
-    /// lands on the post; only the attribution analytics are skipped.
-    /// Mirrors the `originalUrl` the gateway uses when minting the link.
-    static func fallback(forPostId postId: String, fileSource: ShareFileSource? = nil) -> ShareableLink? {
-        URL(string: "\(webBaseURL)/feeds/post/\(postId)").map { ShareableLink(url: $0, fileSource: fileSource) }
-    }
-
-    /// UN seul élément quand il y a un fichier à emporter : la source paresseuse,
-    /// qui rend le FICHIER aux activités de fichier et le LIEN à toutes les autres
-    /// (recette #9682 : un lien http À CÔTÉ du fichier — « 1 Link and 1 Document » —
-    /// faisait disparaître « Enregistrer dans Fichiers », qui ne sait enregistrer
-    /// que des fichiers). Sans fichier, le lien seul.
-    var activityItems: [Any] {
-        guard let provider = fileSource?.makeProvider(link: url) else { return [url] }
-        return [provider]
-    }
-}
-
-/// **Ce qu'une feuille de partage peut emporter en FICHIER** (#9682).
-enum ShareFileSource {
-    case post(FeedPost)
-    case story(StoryItem, author: StoryExportAuthor?)
-
-    /// `nil` quand rien ne s'emporte : la règle de « Sauvegarder » (`PostSaveRoute`)
-    /// décide pour un post — une publication est ouverte à la sortie, comme ses
-    /// hôtes le déclarent (`MediaSaveCoordinator(exitGate: .open)`).
-    func makeProvider(link: URL) -> LazyShareFileProvider? {
-        switch self {
-        case .story(let story, let author):
-            return ShareFilePlaceholder.video(named: "Meeshy-\(story.id).mp4").map { placeholder in
-                LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier, link: link) {
-                    await StoryPhotoSaveService.shared.renderStoryFile(of: story, author: author)
-                }
-            }
-        case .post(let post):
-            switch PostSaveRoute.resolve(for: post, mayLeave: ContentExitGate.open.mayLeave()) {
-            case .unavailable:
-                return nil
-            case .renderScene:
-                return ShareFilePlaceholder.video(named: "Meeshy-\(post.id).mp4").map { placeholder in
-                    LazyShareFileProvider(placeholder: placeholder, typeIdentifier: UTType.mpeg4Movie.identifier, link: link) {
-                        await StoryPhotoSaveService.shared.renderSceneFile(of: post)
-                    }
-                }
-            case .rawFile(let media):
-                return Self.rawFileProvider(media, link: link)
-            }
-        }
-    }
-
-    private static func rawFileProvider(_ media: PostSaveMedia, link: URL) -> LazyShareFileProvider? {
-        guard media.kind == .image || media.kind == .video else { return nil }
-        let request = media.request
-        let name = MediaSaveCoordinator.exportFileName(for: request)
-        let fallbackType: UTType = media.kind == .video ? .movie : .image
-        let type = UTType(filenameExtension: (name as NSString).pathExtension) ?? fallbackType
-        let placeholder = media.kind == .video ? ShareFilePlaceholder.video(named: name) : ShareFilePlaceholder.image(named: name)
-        guard let placeholder else { return nil }
-        return LazyShareFileProvider(placeholder: placeholder, typeIdentifier: type.identifier, link: link) {
-            guard let local = try? await AttachmentMediaSaveResolver().resolveLocalFile(for: request) else { return nil }
-            let branded = await MeeshyMediaSaveBranding().stamp(local, kind: request.kind, origin: request.origin,
-                                                                author: request.authorUsername)
-            defer { if branded.isStamped { MediaSaveCoordinator.discardStagingDirectory(of: branded.url) } }
-            return try? MediaSaveCoordinator.stageForExport(branded.url, request: request)
-        }
-    }
-}
-
-// MARK: - Fichier de partage rendu à la demande (#9682)
-
-/// **Les activités qui emportent un FICHIER** — elles seules paient le rendu :
-/// « Enregistrer la vidéo » (Photos), « Enregistrer dans Fichiers », AirDrop.
-/// Messages, Mail, copier… reçoivent le LIEN seul, sans attendre aucun rendu.
-nonisolated enum ShareFileActivity {
-    static let fileActivityTypes: Set<String> = [
-        "com.apple.UIKit.activity.SaveToCameraRoll",
-        "com.apple.DocumentManagerUICore.SaveToFiles",
-        "com.apple.UIKit.activity.AirDrop",
-    ]
-
-    static func wantsFile(_ activityType: String?) -> Bool {
-        activityType.map(fileActivityTypes.contains) ?? false
-    }
-}
-
-/// Source de fichier PARESSEUSE de la feuille de partage. Son placeholder est un
-/// VRAI fichier minuscule sous le nom final (`ShareFilePlaceholder`, dont le
-/// doc-comment cite la documentation Apple) : c'est sur lui que la feuille offre
-/// « Enregistrer la vidéo » et « Enregistrer dans Fichiers ». Le fichier réel —
-/// scène rendue, ou média résolu — n'est produit que lorsque l'utilisateur choisit
-/// l'une de ces activités, sur le fil secondaire de l'opération
-/// (`UIActivityItemProvider.item`). Placeholder et fichier produit sont jetés
-/// avec la source.
-nonisolated final class LazyShareFileProvider: UIActivityItemProvider, @unchecked Sendable {
-    private let typeIdentifier: String
-    /// Ce que reçoivent les activités qui ne prennent pas de fichier (Messages,
-    /// copier, Mail…) : le lien. `UIActivityItemSource.activityViewController(_:itemForActivityType:)`
-    /// est documenté pour rendre un objet DIFFÉRENT selon l'activité choisie.
-    private let link: URL?
-    private let produce: @MainActor @Sendable () async -> URL?
-    private let lock = NSLock()
-    private var produced: URL?
-
-    init(placeholder: URL, typeIdentifier: String, link: URL? = nil,
-         produce: @escaping @MainActor @Sendable () async -> URL?) {
-        self.typeIdentifier = typeIdentifier
-        self.link = link
-        self.produce = produce
-        super.init(placeholderItem: placeholder)
-    }
-
-    deinit {
-        if let directory = (placeholderItem as? URL)?.deletingLastPathComponent(),
-           directory.lastPathComponent.hasPrefix("share-placeholder-") {
-            try? FileManager.default.removeItem(at: directory)
-        }
-        guard let produced else { return }
-        let directory = produced.deletingLastPathComponent()
-        let ownsDirectory = directory.lastPathComponent.hasPrefix("media-save-")
-        try? FileManager.default.removeItem(at: ownsDirectory ? directory : produced)
-    }
-
-    override var item: Any {
-        guard ShareFileActivity.wantsFile(activityType?.rawValue), !Thread.isMainThread else { return link ?? "" }
-        let done = DispatchSemaphore(value: 0)
-        let produce = self.produce
-        Task { @concurrent [weak self] in
-            let url = await produce()
-            self?.store(url)
-            done.signal()
-        }
-        done.wait()
-        guard !isCancelled, let url = lock.withLock({ produced }) else { return "" }
-        return url
-    }
-
-    override func activityViewController(_ activityViewController: UIActivityViewController,
-                                         itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
-        guard ShareFileActivity.wantsFile(activityType?.rawValue) else { return link }
-        return super.activityViewController(activityViewController, itemForActivityType: activityType)
-    }
-
-    override func activityViewController(_ activityViewController: UIActivityViewController,
-                                         dataTypeIdentifierForActivityType activityType: UIActivity.ActivityType?) -> String {
-        typeIdentifier
-    }
-
-    private func store(_ url: URL?) {
-        lock.withLock { produced = url }
-    }
-}
-
-// MARK: - Download Badge View (3 states: idle → downloading → cached)
-struct DownloadBadgeView: View {
-    let attachment: MessageAttachment
-    let accentColor: String
-    let messageDeliveryStatus: Message.DeliveryStatus
-    var onShareFile: ((URL) -> Void)? = nil
-    /// L'URL que la surface AFFICHE réellement — la variante élue par
-    /// `ImageVariantSelector`, souvent distincte de `attachment.fileUrl`.
-    /// Sur le disque, elle suffit à taire le badge (#10370).
-    var displayedURL: String? = nil
-    /// L'hôte a vu l'image affichée ARRIVER (`ProgressiveCachedImage`
-    /// `onFullImageLoaded`) : elle a été téléchargée par un autre chemin que
-    /// ce badge, qui ne l'observe pas — sans ce signal, il restait « ↓ » pour
-    /// toujours au-dessus d'une image nette (#10370).
-    var displayedImageLanded: Bool = false
-
-    @StateObject private var downloader = AttachmentDownloader()
-    private var accent: Color { Color(hex: accentColor) }
-
-    /// Local optimistic media (a `file://` URL) and messages still in their
-    /// optimistic phase (`.sending` / `.slow` / `.invisible`) are already on
-    /// disk — a download badge must never appear for them. `.slow` is a row
-    /// that failed once and is retrying via the outbox: still optimistic, still
-    /// local. See Sprint 3 RC3.2.
-    /// **Une vidéo n'a qu'UN composant de téléchargement : le bouton de son
-    /// lecteur** (#7492). `VideoAvailabilityResolver` + `MeeshyVideoPlayer`
-    /// portent déjà « ↓ taille », l'anneau de progression et l'auto-DL selon la
-    /// politique réseau. Ce badge se posait PAR-DESSUS la même tuile (rangée
-    /// plate, carrousel) : deux boutons, deux anneaux, deux téléchargeurs dont
-    /// aucun ne voyait l'autre. Il ne sert plus que l'image, dont la vue n'a pas
-    /// d'autre affordance.
-    ///
-    /// Depuis #8231 ce lecteur, dans le fil, n'a que trois contrôles (son,
-    /// lecture/pause, plein écran) ; son bouton central garde le
-    /// téléchargement. La tuile de débordement et la pièce protégée ne
-    /// montrent qu'un poster : c'est le plein écran qui y télécharge.
-    var yieldsToThePlayer: Bool {
-        attachment.type == .video
-    }
-
-    var hidesForLocalOrOptimisticMedia: Bool {
-        attachment.fileUrl.hasPrefix("file://")
-            || messageDeliveryStatus == .sending
-            || messageDeliveryStatus == .slow
-            || messageDeliveryStatus == .invisible
-    }
-
-    /// **Un média déjà sur l'appareil n'a pas de badge « télécharger »**
-    /// (#10370), dès le PREMIER rendu : la règle unique et synchrone
-    /// `AttachmentDownloadCenter.isOnDevice` lit le disque (et, pour l'image,
-    /// toute variante décodée en mémoire) pour l'original, la variante
-    /// affichée et les variantes déclarées. Le `checkCache` asynchrone ne fait
-    /// plus que confirmer.
-    private var isAlreadyOnDevice: Bool {
-        displayedImageLanded || AttachmentDownloadCenter.isOnDevice(attachment, displayedURL: displayedURL)
-    }
-
-    private var totalSizeText: String {
-        if downloader.totalBytes > 0 { return AttachmentDownloader.fmt(downloader.totalBytes) }
-        if attachment.fileSize > 0 { return AttachmentDownloader.fmt(Int64(attachment.fileSize)) }
-        return ""
-    }
-
-    var body: some View {
-        Group {
-            if yieldsToThePlayer || hidesForLocalOrOptimisticMedia || isAlreadyOnDevice {
-                EmptyView()
-            } else if downloader.isCached {
-                EmptyView()
-            } else if downloader.isDownloading {
-                downloadingBadge
-                    .transition(.scale(scale: 0.8).combined(with: .opacity))
-            } else {
-                idleBadge
-                    .transition(.scale(scale: 0.8).combined(with: .opacity))
-            }
-        }
-        .animation(.easeInOut(duration: 0.15), value: downloader.isCached)
-        .animation(.easeInOut(duration: 0.15), value: downloader.isDownloading)
-    }
-
-    private var idleBadge: some View {
-        Button {
-            downloader.start(attachment: attachment, origin: .manual, onShare: onShareFile)
-        } label: {
-            centredIdleBadge
-        }
-        .task {
-            await downloader.checkCache(attachment)
-        }
-        .accessibilityLabel(String(localized: "a11y.media.download.action", defaultValue: "Télécharger", bundle: .main))
-        .accessibilityValue(totalSizeText)
-    }
-
-    private var centredIdleBadge: some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 56, height: 56)
-                Circle()
-                    .fill(accent.opacity(MeeshyOpacity.intense))
-                    .frame(width: 48, height: 48)
-                Image(systemName: "arrow.down.to.line")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .bold))
-                    .foregroundColor(.white)
-            }
-            .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
-
-            if !totalSizeText.isEmpty {
-                Text(totalSizeText)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, MeeshySpacing.sm)
-                    .padding(.vertical, MeeshySpacing.xxs)
-                    .background(Capsule().fill(MeeshyColors.mediaScrim))
-            }
-        }
-    }
-
-    private var downloadingBadge: some View {
-        Button { downloader.cancel() } label: {
-            VStack(spacing: MeeshySpacing.xxs) {
-                ZStack {
-                    Circle()
-                        .stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.strong)
-                    Circle()
-                        .trim(from: 0, to: downloader.progress)
-                        .stroke(accent, style: StrokeStyle(lineWidth: MeeshyBorder.strong, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .animation(.linear(duration: 0.2), value: downloader.progress)
-
-                    if downloader.progress > 0 {
-                        Text("\(Int(downloader.progress * 100))")
-                            .font(MeeshyFont.relative(7, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                    } else {
-                        RoundedRectangle(cornerRadius: 1.5)
-                            .fill(Color.white)
-                            .frame(width: 7, height: 7)
-                    }
-                }
-                .frame(width: 24, height: 24)
-
-                Text("\(AttachmentDownloader.fmt(downloader.downloadedBytes))/\(totalSizeText)")
-                    .font(MeeshyFont.relative(7, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-            }
-            .padding(MeeshySpacing.xs)
-            .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.mediaScrim))
-        }
-        .padding(MeeshySpacing.xs)
-        .accessibilityLabel(String(localized: "a11y.media.download.cancel", defaultValue: "Annuler le téléchargement", bundle: .main))
-        .accessibilityValue(downloader.progress.formatted(.percent))
-    }
-}
-
-// `AttachmentDownloader` vit dans `AttachmentDownloadCenter.swift` depuis #7492 :
-// une façade par vue sur le registre UNIQUE des téléchargements.
-
-// `CachedPlayIcon` a vécu ici jusqu'au 2026-08-26 : ZÉRO site d'appel, et sa
-// `.task` bouclait `FileManager.fileExists` toutes les 1,5 s SANS TERMINAISON
-// pour un média jamais mis en cache (auto-DL refusé par la policy) — une mine
-// d'E/S disque périodique qu'un futur montage aurait réarmée sans bruit.
-// Supprimé plutôt que laissé en piège (audit chauffe 2026-08-26).
 
 // MARK: - Audio Media View (shows placeholder until cached, then full player)
 struct AudioMediaView: View, Equatable {
@@ -606,6 +269,14 @@ struct AudioMediaView: View, Equatable {
         return .audioTranslation
     }
 
+    /// #10691 — la langue d'origine de CETTE piste (sa transcription), repli : le message.
+    internal var trackOriginLanguage: String {
+        AudioTrackLanguageResolver.originLanguage(
+            transcriptionLanguage: transcription?.language,
+            messageOriginal: message.originalLanguage
+        )
+    }
+
     /// Prisme Linguistique — resolves the STARTING transcription-display
     /// language the same way `ConversationViewModel.preferredTranslation`
     /// resolves text: walk the ordered preference chain (systemLanguage >
@@ -630,7 +301,7 @@ struct AudioMediaView: View, Equatable {
         // pendant que le coordinateur en jouait une autre.
         AudioTrackLanguageResolver.resolve(
             manualOverride: activeAudioLanguageOverride,
-            originalLanguage: message.originalLanguage,
+            originalLanguage: trackOriginLanguage,
             preferredLanguages: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved,
             translatedAudios: translatedAudios
         )
@@ -749,7 +420,7 @@ struct AudioMediaView: View, Equatable {
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 selectedAudioLangCode = AudioTrackLanguageResolver.resolve(
                     manualOverride: newLang,
-                    originalLanguage: message.originalLanguage,
+                    originalLanguage: trackOriginLanguage,
                     preferredLanguages: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved,
                     translatedAudios: translatedAudios
                 )
@@ -849,11 +520,11 @@ struct AudioMediaView: View, Equatable {
     /// toujours montrée (info), les langues traduites sont ajoutées au fur et
     /// à mesure qu'elles arrivent. La position du 🌐 ne dépend PAS du nombre
     /// de drapeaux (cf. `BubbleFooter.metaLeading`).
-    private var audioFooter: (BubbleFooterModel, BubbleFooterActions)? {
+    var audioFooter: (BubbleFooterModel, BubbleFooterActions)? {
         guard var model = footerModel else { return nil }
         var actions = footerActions
 
-        let origCode = message.originalLanguage.lowercased()
+        let origCode = trackOriginLanguage.lowercased()
         var codes = [origCode]
         for audio in translatedAudios {
             let code = audio.targetLanguage.lowercased()

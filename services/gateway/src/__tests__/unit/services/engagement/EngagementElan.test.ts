@@ -51,9 +51,9 @@ function makePrisma(recentAxes: string[], milestones: Array<{ milestoneType: str
 /** Les points crédités par la commande brute de score. */
 function pointsDuScore(runCommandRaw: jest.Mock): number {
   const cmd = runCommandRaw.mock.calls[0][0] as {
-    update: Array<{ $set: { engagementScore: { $add: [unknown, number] } } }>;
+    update: Array<{ $set: { sparksSincePrestige: { $add: [unknown, number] } } }>;
   };
-  return cmd.update[0].$set.engagementScore.$add[1];
+  return cmd.update[0].$set.sparksSincePrestige.$add[1];
 }
 
 describe('l\'élan multiplie les points crédités', () => {

@@ -69,7 +69,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)
         defaults?.removePersistentDomain(forName: suite)
         let writer = MockBadgeWriter()
-        // `openConversationIdProvider: { nil }` — EXPLICITE, pas un détail de
+        // `openConversationIdsProvider: { [] }` — EXPLICITE, pas un détail de
         // confort. Le défaut lit `MessageSocketManager.shared.activeConversationId`,
         // un singleton qu'une AUTRE suite du même process laisse posé
         // (`MessageSocketReconnectLifecycleTests` y écrit « A » et ne l'efface
@@ -79,7 +79,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         // gate injectent leur propre valeur (`makeSUTWithOpenConversation`).
         let sut = NotificationCoordinator(
             badgeWriter: writer, appGroupSuiteName: suite,
-            openConversationIdProvider: { nil }, ledger: makeLedger()
+            openConversationIdsProvider: { [] }, ledger: makeLedger()
         )
         let sink = MockWidgetSink()
         sut.widgetSink = sink
@@ -103,7 +103,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
                                        currentUserIdProvider: { userId },
-                                       openConversationIdProvider: { nil }, ledger: makeLedger())
+                                       openConversationIdsProvider: { [] }, ledger: makeLedger())
     }
 
     private func makeSUTWithOpenConversation(_ openId: String?) -> NotificationCoordinator {
@@ -111,7 +111,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         createdSuiteNames.append(suite)
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
-                                       openConversationIdProvider: { openId }, ledger: makeLedger())
+                                       openConversationIdsProvider: { Set([openId].compactMap { $0 }) }, ledger: makeLedger())
     }
 
     // MARK: - Réveil background — syncNow ne doit RIEN écraser sans snapshot autoritaire
@@ -196,7 +196,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         createdSuiteNames.append(suite)
         let sut = NotificationCoordinator(
             badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
-            openConversationIdProvider: { nil }, ledger: ledger
+            openConversationIdsProvider: { [] }, ledger: ledger
         )
 
         ledger.apply(.serverUnread(conversationId: "c1", unreadCount: 6))
@@ -246,7 +246,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         createdSuiteNames.append(suite)
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
-                                       openConversationIdProvider: { box.id }, ledger: makeLedger())
+                                       openConversationIdsProvider: { Set([box.id].compactMap { $0 }) }, ledger: makeLedger())
     }
 
     /// Recette 2026-09-21, étape 7 : l'API dit « 1 conversation non lue », le
@@ -726,7 +726,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         let sut = NotificationCoordinator(
             badgeWriter: writer, appGroupSuiteName: suite,
             badgeEnabledProvider: { false },
-            openConversationIdProvider: { nil },
+            openConversationIdsProvider: { [] },
             ledger: makeLedger()
         )
         sut.widgetSink = sink
@@ -813,7 +813,7 @@ final class NotificationCoordinatorTests: XCTestCase {
             appGroupSuiteName: suite,
             badgeEnabledProvider: { badgeEnabled },
             badgeEnabledChanges: changes.eraseToAnyPublisher(),
-            openConversationIdProvider: { nil },
+            openConversationIdsProvider: { [] },
             ledger: makeLedger()
         )
         sut.start()

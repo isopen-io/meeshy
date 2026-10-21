@@ -49,6 +49,7 @@ struct AffiliatesListView: View {
                             name: referral.resolvedName,
                             subtitle: referral.referredUser.map { "@\($0.username)" },
                             avatarURL: referral.referredUser?.avatar,
+                            presence: referral.referredUser.map { PresenceManager.shared.resolvedState(userId: $0.id, isOnline: $0.isOnline) },
                             action: .write,
                             isDark: colorScheme == .dark,
                             onAction: { open(referral) }

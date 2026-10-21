@@ -62,4 +62,8 @@ struct ConversationListSheetTargets {
     /// 992 octets alors qu'elle est une cible de feuille comme les sept autres
     /// — la preuve qu'un regroupement se relit après coup, champ par champ.
     @Indirect var rename: Conversation? = nil
+
+    /// La recherche demandée sur une conversation verrouillée, armée seulement
+    /// une fois le PIN franchi (`ConversationOpenRoute.searchesAfterUnlock`).
+    var searchAfterUnlock: Bool = false
 }

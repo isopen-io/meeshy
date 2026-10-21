@@ -43,26 +43,12 @@ final class CachedBannerImagePixelSizeTests: XCTestCase {
 
     func test_loadBanner_passesHeightDerivedMaxPixelSize() throws {
         let bannerSource = try extractBannerSource()
-        XCTAssertTrue(bannerSource.contains("Self.pixelSize(for: height)"),
-                      "loadBanner must derive maxPixelSize from the banner's rendered height, like CachedAvatarImage.loadAvatar derives it from size.")
-        XCTAssertTrue(bannerSource.contains("maxPixelSize: maxPixel"),
-                      "loadBanner must pass the derived maxPixelSize into CacheCoordinator.images.image(for:maxPixelSize:) instead of the generic 1200px default.")
+        XCTAssertTrue(bannerSource.contains("DecodeBudget.maxPixelWidth(for: .fullBleed(height: height))"))
+        XCTAssertTrue(bannerSource.contains("maxPixelSize: maxPixel"))
     }
 
-    func test_pixelSize_accountsForTheUnconstrainedFullBleedWidth() throws {
-        let bannerSource = try extractBannerSource()
-        guard let pixelSizeStart = bannerSource.range(of: "private static func pixelSize(for height: CGFloat) -> CGFloat {") else {
-            XCTFail("pixelSize(for:) not found on CachedBannerImage")
-            return
-        }
-        guard let bodyEnd = bannerSource.range(of: "\n    }", range: pixelSizeStart.upperBound..<bannerSource.endIndex) else {
-            XCTFail("Could not bound pixelSize(for:)'s body")
-            return
-        }
-        let pixelSizeBody = String(bannerSource[pixelSizeStart.upperBound..<bodyEnd.lowerBound])
-        XCTAssertTrue(pixelSizeBody.contains("UIScreen.main.bounds.width"),
-                      "pixelSize(for:) must account for the banner's unconstrained (and typically dominant) rendered width via UIScreen.main.bounds.width, not just height — every known call site is full-bleed, so a height-only cap under-resolves the image's actual larger dimension and produces a visible blur regression.")
-        XCTAssertFalse(pixelSizeBody.contains("height * UIScreen.main.scale"),
-                       "pixelSize(for:) must not regress to the height-only computation — it must take max(width, height) like its CachedAsyncImage/ProgressiveCachedImage siblings.")
+    func test_fullBleedBudget_accountsForTheUnconstrainedFullBleedWidth() {
+        let display = DisplayMetrics(points: CGSize(width: 390, height: 844), scale: 3)
+        XCTAssertEqual(DecodeBudget.maxPixelWidth(for: .fullBleed(height: 200), on: display), 1170)
     }
 }

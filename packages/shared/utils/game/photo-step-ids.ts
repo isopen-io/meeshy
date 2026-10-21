@@ -7,6 +7,7 @@
  * constructeurs du web (`apps/web/src/lib/game-photo/moments.ts`) et d'iOS (`GamePhotoMoments.swift`) :
  *
  *   start · rank:<rang>:<V..I> · rank:mythe:0 · tier:<palier> (sauf le premier, où l'on commence)
+ *   tier:<palier>:<1..Prestige max> — le même palier atteint de nouveau dans un cycle neuf (#10911)
  *   level-100:<0..Prestige max> · prestige:<1..Prestige max> · meesh:<1, puis chaque dixième, ≤ PHOTO_MEESH_MAX>
  *   treasury:<palier> · flame:<7|30|100|365> · achievement:<clé du catalogue>
  *   trophy:<clé du catalogue des trophées> · league-up:<lundi>:<ligue> · season:<n> · day:<AAAA-MM-JJ>
@@ -60,6 +61,7 @@ export const PHOTO_STATIC_STEP_IDS: readonly string[] = [
   ...GLORY_RANKS.flatMap((rank) => GLORY_DIVISIONS.map((division) => `rank:${rank.key}:${division}`)),
   'rank:mythe:0',
   ...LEVEL_TIER_KEYS.slice(1).map((tier) => `tier:${tier}`),
+  ...LEVEL_TIER_KEYS.slice(1).flatMap((tier) => range(1, GAME_PRESTIGE_MAX).map((prestige) => `tier:${tier}:${prestige}`)),
   ...range(0, GAME_PRESTIGE_MAX).map((prestige) => `level-100:${prestige}`),
   ...range(1, GAME_PRESTIGE_MAX).map((number) => `prestige:${number}`),
   ...[1, ...range(1, PHOTO_MEESH_MAX / 10).map((tenth) => tenth * 10)].map((number) => `meesh:${number}`),

@@ -1,12 +1,15 @@
 package me.meeshy.app;
 
 import android.content.ActivityNotFoundException;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
+import androidx.browser.customtabs.CustomTabsClient;
 import androidx.browser.customtabs.CustomTabsIntent;
+import androidx.browser.customtabs.CustomTabsServiceConnection;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.annotation.CapacitorPlugin;
@@ -31,9 +34,53 @@ import java.util.List;
  * (Android 11+, ou par comparaison aux navigateurs avant, #10456), puis un
  * Custom Tab pose au-dessus de l'app, comme
  * `SFSafariViewController` sur iPhone.
+ *
+ * Le navigateur de ce Custom Tab est prechauffe des le chargement de la coque
+ * (#10888) : sans cette liaison, chaque premier lien externe demarrait le
+ * navigateur a froid, la ou le web ouvre un onglet d'un navigateur deja lance.
  */
 @CapacitorPlugin(name = "MeeshyLinks")
 public class MeeshyLinksPlugin extends Plugin {
+
+    private CustomTabsServiceConnection customTabs;
+
+    @Override
+    public void load() {
+        String browser = CustomTabsClient.getPackageName(getContext(), null);
+        if (browser == null) {
+            return;
+        }
+        CustomTabsServiceConnection connection = new CustomTabsServiceConnection() {
+            @Override
+            public void onCustomTabsServiceConnected(ComponentName name, CustomTabsClient client) {
+                client.warmup(0L);
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName name) {}
+        };
+        try {
+            if (CustomTabsClient.bindCustomTabsService(getContext(), browser, connection)) {
+                customTabs = connection;
+            }
+        } catch (SecurityException e) {
+            customTabs = null;
+        }
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        super.handleOnDestroy();
+        if (customTabs == null) {
+            return;
+        }
+        try {
+            getContext().unbindService(customTabs);
+        } catch (IllegalArgumentException e) {
+            // Deja deliee par le systeme.
+        }
+        customTabs = null;
+    }
 
     @Override
     protected void handleOnNewIntent(Intent intent) {

@@ -219,7 +219,7 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
 
     expect(host.querySelector('[data-admin-meta="state"]')?.textContent).toContain('Fermé');
     expect(host.querySelector('[data-admin-meta="state"]')?.textContent).toContain('plus personne n’entre par ce lien');
-    expect(host.querySelector('[data-admin-meta="expires"] time')?.getAttribute('title')).toContain('2026');
+    expect(host.querySelector('[data-admin-meta="expires"] time')?.getAttribute('title')).toContain('2099');
     expect(host.querySelector('[data-admin-meta="expires"]')?.textContent).toContain('·');
     expect(host.querySelector('[data-admin-meta="created"]')).not.toBeNull();
     expect(host.querySelector('[data-admin-meta="updated"]')).not.toBeNull();

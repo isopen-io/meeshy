@@ -243,7 +243,7 @@ describe('EngagementService.recordActivity', () => {
       // palier 10 » a été servi en production (2026-09-08). `route` dit où le
       // tap mène — l'écran « Progression ».
       title: '🏆 Palier 2 atteint',
-      content: 'Publications : 10 — bravo, vous êtes au palier 2 !',
+      content: 'Publications : 10 — bravo, tu atteins le palier 2 !',
       context: {},
       metadata: { action: 'view_details', route: 'progression', axisKey: 'content.post', threshold: 10, tierRank: 2, value: 10 },
     });
@@ -284,14 +284,15 @@ describe('EngagementService.recordActivity', () => {
     expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 
-  it('propagates a milestone create error that is not a unique-constraint conflict', async () => {
+  it('a milestone create error that is not a unique-constraint conflict never takes back the credit already written (#10895)', async () => {
     const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockRejectedValue(new Error('connection lost'));
     const prisma = makePrisma({ counterWrite, create });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
-    await expect(svc.recordActivity('user-1', 'tool.sticker')).rejects.toThrow('connection lost');
+    await expect(svc.recordActivity('user-1', 'tool.sticker')).resolves.toBe(true);
+    expect(counterWrite).toHaveBeenCalledTimes(1);
   });
 
   it('resolves two concurrent calls on the same threshold with a single milestone and notification', async () => {
@@ -497,7 +498,7 @@ describe('EngagementService streak tracking (#5544)', () => {
       userId: 'user-1',
       type: 'streak_milestone',
       priority: 'normal',
-      content: '🔥 Série de 3 jours !',
+      content: '🔥 Ta Flamme brûle depuis 3 jours !',
       context: {},
       metadata: { action: 'view_details', route: 'progression', threshold: 3 },
     });
@@ -702,9 +703,31 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(runCommandRaw).toHaveBeenCalledWith({
       findAndModify: 'User',
       query: { _id: { $oid: 'user-1' } },
-      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, attendu] } } }],
+      // Poche, cycle et total à vie montent du même montant, null-safely (#10846).
+      update: [
+        {
+          $set: {
+            sparksEarnedLifetime: {
+              $add: [
+                { $max: [{ $ifNull: ['$sparksEarnedLifetime', 0] }, { $ifNull: ['$sparksSincePrestige', 0] }, { $ifNull: ['$engagementScore', 0] }] },
+                attendu,
+              ],
+            },
+            sparksSincePrestige: {
+              $add: [{ $max: [{ $ifNull: ['$sparksSincePrestige', 0] }, { $ifNull: ['$engagementScore', 0] }] }, attendu],
+            },
+            // La dette se déduit d'abord du gain : seul le reste va en poche (porteur, 2026-10-16).
+            engagementScore: {
+              $add: [{ $ifNull: ['$engagementScore', 0] }, { $subtract: [attendu, { $min: [{ $ifNull: ['$sparksDebt', 0] }, attendu] }] }],
+            },
+            sparksDebt: { $subtract: [{ $ifNull: ['$sparksDebt', 0] }, { $min: [{ $ifNull: ['$sparksDebt', 0] }, attendu] }] },
+            // La révision de l'état du jeu monte dans la MÊME écriture, sans jamais reculer (#10912).
+            gameRevision: { $max: [{ $toLong: expect.any(Number) }, { $add: [{ $toLong: { $ifNull: ['$gameRevision', 0] } }, 1] }] },
+          },
+        },
+      ],
       new: true,
-      fields: { engagementScore: 1, levelRecord: 1 },
+      fields: { engagementScore: 1, levelRecord: 1, levelMaxLifetime: 1, prestige: 1 },
     });
   });
 
@@ -734,9 +757,9 @@ describe('EngagementService level tracking (#5545)', () => {
     await svc.recordActivity('user-1', 'tool.sticker');
 
     const command = runCommandRaw.mock.calls[0][0] as {
-      update: Array<{ $set: { engagementScore: { $add: [unknown, number] } } }>;
+      update: Array<{ $set: { sparksSincePrestige: { $add: [unknown, number] } } }>;
     };
-    expect(command.update[0].$set.engagementScore.$add[1]).toBe(1);
+    expect(command.update[0].$set.sparksSincePrestige.$add[1]).toBe(1);
   });
 
   it('does not create a level milestone or notify when the increment crosses no level threshold', async () => {
@@ -753,7 +776,7 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 
-  it('awards LEVEL_UP and notifies exactly once when the increment lands on a threshold', async () => {
+  it('records the score milestone but never pushes a score-tier « level » (the game level is announced by GloryService, #10901)', async () => {
     const create = jest.fn().mockResolvedValue({});
     const runCommandRaw = makeRawScore(10); // 5 -> 10, crosses threshold 10
     const prisma = makeLevelPrisma({ create, runCommandRaw });
@@ -766,17 +789,7 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(create).toHaveBeenCalledWith({
       data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:10' },
     });
-    expect(notificationService.createNotification).toHaveBeenCalledWith({
-      userId: 'user-1',
-      type: 'level_up',
-      priority: 'normal',
-      // Le RANG du palier (niveau 1), jamais le seuil de score (10 points) :
-      // « Niveau 150 atteint » se lisait comme un cent-cinquantième niveau.
-      title: '⭐ Niveau 1 atteint !',
-      content: '10 points — bravo, vous êtes au niveau 1 !',
-      context: {},
-      metadata: { action: 'view_details', route: 'progression', threshold: 10, level: 1, tierRank: 1, value: 10 },
-    });
+    expect(notificationService.createNotification).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'level_up', metadata: expect.objectContaining({ threshold: 10 }) }));
   });
 
   it.each([

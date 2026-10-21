@@ -12,19 +12,16 @@
  *  3. changer de langue depuis le sélecteur, en retenant le choix pour
  *     l'application ;
  *  4. lire `GET /world` (#10000) : la clé de jonction, ou l'absence d'entrée
- *     ouverte — et masquer alors l'entrée. L'EFFECTIF ne se montre qu'à un
- *     COMPTE (#10205, directive porteur du 2026-10-11 : pas de nombre de
- *     participants pour qui n'est pas membre de Meeshy), et seulement s'il est
- *     servi : son absence n'empêche jamais d'entrer ;
- *  5. faire entrer dans World Wide d'UN clic (#10098, amende D-186) : le nom
- *     et la langue de lecture, choisie dans la liste déroulante posée avant
- *     « Rejoindre » (celle de la page par défaut) ; la langue choisie devient celle de l'interface d'un visiteur
- *     sans compte. Une soumission sans clé
- *     RELANCE `GET /world` et dit l'échec s'il se répète (#10067) — jamais un
- *     bouton inerte ;
- *     Juste avant de naviguer, un JETON DE PASSAGE est posé dans l'onglet
- *     (`sessionStorage`, #10094) : sans lui, la jonction ne crée personne sans
- *     geste — une adresse d'entrée forgée ailleurs n'ouvre qu'un formulaire ;
+ *     ouverte — et masquer alors les QR (`data-world-entry`). L'EFFECTIF ne se
+ *     montre qu'à un COMPTE (#10205, directive porteur du 2026-10-11 : pas de
+ *     nombre de participants pour qui n'est pas membre de Meeshy), et
+ *     seulement s'il est servi ;
+ *  5. RIEN d'autre pour World Wide : on n'y entre plus sans compte depuis la
+ *     landing (#10784, directive porteur du 2026-10-16) — ni formulaire, ni
+ *     bouton, ni jeton de passage. L'entrée anonyme ne passe plus que par le
+ *     QR de la page, FLASHÉ vers `/world`, où le parcours invité attend
+ *     (`routes/world-entry.tsx`) ; une panne de `GET /world` laisse les QR en
+ *     place, sans relance ;
  *  5 bis. proposer « Revenir dans World Wide » à l'invité qui y est déjà ;
  *  6. rendre la LISTE à l'application INSTALLÉE (`appPath`) : une PWA posée
  *     avant #10002 garde `start_url: '/'` (iOS ne relit jamais le manifeste),
@@ -49,10 +46,7 @@ export type LandingBootConfig = {
   readonly worldPath: string;
   readonly sessionKey: string;
   readonly languageKey: string;
-  readonly entryTemplate: string;
   readonly threadTemplate: string;
-  /** La clé du jeton de passage posé dans l'onglet avant l'entrée (#10094, `WORLD_ENTRY_HANDOFF_KEY`). */
-  readonly handoffKey: string;
   readonly appPath: string;
   readonly presence: string;
 };
@@ -172,89 +166,23 @@ export function landingBoot(win: Window & typeof globalThis, config: LandingBoot
     };
     offerReturn(null);
 
-    let link: string | null = null;
-    let closed = false;
-    let reading = false;
-    let waiting: (() => void) | null = null;
-    const form = scope.querySelector('[data-world-form]');
-    const field = (): Element | null => scope.querySelector('[data-world-form] input[name="name"]');
-    const chooser = scope.querySelector('[data-world-form] select[data-world-language]');
-    const focus = (node: Element | null | undefined): void => {
-      if (node instanceof win.HTMLInputElement) node.focus();
-    };
-
-    if (chooser instanceof win.HTMLSelectElement) chooser.value = config.language;
-
-    const enter = (name: string, language: string): void => {
-      if (link === null) return;
-      if (session !== 'member') {
-        try {
-          win.localStorage.setItem(config.languageKey, language);
-        } catch {
-          /* Stockage refusé : la jonction porte la langue, l'interface suivra. */
+    void win
+      .fetch(config.apiBase + config.worldPath, { headers: { Accept: 'application/json' } })
+      .then(async (response) => {
+        const raw: unknown = await response.json().catch(() => null);
+        const entry = response.ok ? entryOf(raw) : null;
+        if (entry === null) {
+          if (!unavailable(response.status, raw)) return;
+          flag('[data-world-entry]', false);
+          flag('[data-world-unavailable]', true);
+          return;
         }
-      }
-      try {
-        win.sessionStorage.setItem(config.handoffKey, JSON.stringify({ link, name, language, at: Date.now() }));
-      } catch {
-        /* Onglet sans stockage : la jonction demandera le geste (fail-closed). */
-      }
-      win.location.assign(
-        config.entryTemplate
-          .replace('{link}', encodeURIComponent(link))
-          .replace('{name}', encodeURIComponent(name))
-          .replace('{language}', encodeURIComponent(language)),
-      );
-    };
-
-    const failed = (): void => {
-      reading = false;
-      if (waiting !== null) flag('[data-world-error]', true);
-      waiting = null;
-    };
-    const readWorld = (): void => {
-      reading = true;
-      void win
-        .fetch(config.apiBase + config.worldPath, { headers: { Accept: 'application/json' } })
-        .then(async (response) => {
-          const raw: unknown = await response.json().catch(() => null);
-          const entry = response.ok ? entryOf(raw) : null;
-          if (entry === null && !unavailable(response.status, raw)) return failed();
-          reading = false;
-          const go = waiting;
-          waiting = null;
-          if (entry === null) {
-            closed = true;
-            flag('[data-world-entry]', false);
-            flag('[data-world-unavailable]', true);
-            return;
-          }
-          link = entry.link;
-          offerReturn(link);
-          const count = session === 'member' ? entry.count : null;
-          for (const slot of all('[data-world-count]')) slot.textContent = count === null ? '' : config.presence.replace('{count}', count);
-          flag('[data-world-presence]', count !== null);
-          go?.();
-        })
-        .catch(failed);
-    };
-
-    form?.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const input = field();
-      const name = input instanceof win.HTMLInputElement ? input.value.trim() : '';
-      if (name === '' || closed) return focus(input);
-      const language = chooser instanceof win.HTMLSelectElement && chooser.value !== '' ? chooser.value : config.language;
-      if (link !== null) return enter(name, language);
-      waiting = () => enter(name, language);
-      flag('[data-world-error]', false);
-      if (!reading) readWorld();
-    });
-    for (const cta of all('[data-world-cta]')) {
-      cta.addEventListener('click', () => focus(field()));
-    }
-
-    readWorld();
+        offerReturn(entry.link);
+        const count = session === 'member' ? entry.count : null;
+        for (const slot of all('[data-world-count]')) slot.textContent = count === null ? '' : config.presence.replace('{count}', count);
+        flag('[data-world-presence]', count !== null);
+      })
+      .catch(() => undefined);
   };
 
   if (phase !== 'body') head();

@@ -112,6 +112,64 @@ nonisolated enum ComposerCaptureDiscardRule {
     }
 }
 
+/// **La question « Abandonner ? », portée par la SESSION** (recette iPhone
+/// 2026-10-20 : « Abandonner » touché, la photo restait en retouche). Tenue
+/// par des états de la vue, la question se perdait avec elle ; ici elle
+/// survit à une vue recréée pendant l'alerte, et ce qu'elle abandonne est
+/// fixé quand on la pose. SwiftUI peut refermer l'alerte AVANT d'appeler son
+/// action : `dismiss()` ferme sans oublier la demande, que seule une
+/// réponse consomme.
+nonisolated struct ComposerCaptureDiscardPrompt: Equatable, Sendable {
+    struct Request: Equatable, Sendable {
+        /// La prise en retouche, sinon le viseur (#9781).
+        let take: Bool
+        let photo: Bool
+    }
+
+    private(set) var request: Request?
+    private(set) var isPresented = false
+    private(set) var closedAt: Date?
+
+    mutating func ask(take: Bool, photo: Bool) {
+        request = Request(take: take, photo: photo)
+        isPresented = true
+    }
+
+    mutating func dismiss(now: Date = Date()) {
+        guard isPresented else { return }
+        isPresented = false
+        closedAt = now
+    }
+
+    /// La réponse : la demande, consommée.
+    mutating func answer(now: Date = Date()) -> Request? {
+        dismiss(now: now)
+        defer { request = nil }
+        return request
+    }
+
+    /// Le toucher qui ferme l'alerte n'est pas un toucher sur la prise.
+    func swallowsTap(now: Date) -> Bool {
+        ComposerCaptureTapRule.belongsToAnAlert(presented: isPresented, closedAt: closedAt, now: now)
+    }
+}
+
+/// **Les deux réponses à « Abandonner ? »** : la retouche revient viser ; une
+/// question posée au viseur le range — `true`, l'hôte le ferme.
+@MainActor
+enum ComposerCaptureDiscardFlow {
+    static func confirm(_ session: ComposerCaptureSession) -> Bool {
+        guard let demande = session.discardPrompt.answer() else { return false }
+        guard demande.take else { return true }
+        if session.phase.isEditing { session.cancelEditing() }
+        return false
+    }
+
+    static func keep(_ session: ComposerCaptureSession) {
+        _ = session.discardPrompt.answer()
+    }
+}
+
 /// **Le curseur du flash s'efface après 2 s sans interaction** (#9753, porteur
 /// 2026-10-09). Toute interaction — allumer le flash, glisser le curseur, le
 /// régler à la voix — le fait paraître et réarme la minuterie ; un doigt posé

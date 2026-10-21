@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { DeliveryReceiptCredential } from '@/lib/notifications/delivery-receipt-credential';
 
 import { createCallStore, type ActiveCall, type CallMedia, type CallPhase } from './call-store';
 import {
@@ -147,7 +146,6 @@ function harness(options: { readonly failing?: boolean } = {}) {
   const store = createCallStore();
   const sent: Array<{ readonly method: string; readonly options: object }> = [];
   const events: Array<(data: unknown) => void> = [];
-  const credentialWriters: Array<(value: DeliveryReceiptCredential) => void> = [];
   const accepted: number[] = [];
   const floating: Array<(data: unknown) => void> = [];
   const pictureInPicture: boolean[] = [];
@@ -168,10 +166,6 @@ function harness(options: { readonly failing?: boolean } = {}) {
     pictureInPicture: (active) => void pictureInPicture.push(active),
     store,
     accept: () => void accepted.push(1),
-    watchCredential: (write) => {
-      credentialWriters.push(write);
-      return () => undefined;
-    },
     now: () => 1_000,
   };
   const stop = bindShellCall(env);
@@ -185,7 +179,6 @@ function harness(options: { readonly failing?: boolean } = {}) {
     press: (data: unknown) => windowButtons.forEach((listener) => listener(data)),
     gestures,
     pictureInPicture,
-    writeCredential: (value: DeliveryReceiptCredential) => credentialWriters.forEach((write) => write(value)),
   };
 }
 
@@ -226,17 +219,6 @@ describe('bindShellCall — la page branchée au plugin natif', () => {
     expect(h.sent).toContainEqual({ method: 'dismissIncomingCall', options: { callId: 'call-1' } });
   });
 
-  test('le credential du refus sans socket suit la session : posé au login, retiré à la déconnexion', () => {
-    const h = harness();
-    h.writeCredential({ apiBase: 'https://gate.meeshy.me', credential: { kind: 'registered', token: 'jwt' } });
-    h.writeCredential({ apiBase: 'https://gate.meeshy.me', credential: { kind: 'anonymous', sessionToken: 's1' } });
-    h.writeCredential({ apiBase: 'https://gate.meeshy.me', credential: null });
-    expect(h.sent).toEqual([
-      { method: 'setCredential', options: { apiBase: 'https://gate.meeshy.me', kind: 'registered', token: 'jwt' } },
-      { method: 'setCredential', options: { apiBase: 'https://gate.meeshy.me', kind: 'anonymous', token: 's1' } },
-      { method: 'clearCredential', options: {} },
-    ]);
-  });
 
   test('un plugin qui rejette ne casse pas l’abonnement', async () => {
     const h = harness({ failing: true });

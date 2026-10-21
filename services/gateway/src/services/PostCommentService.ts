@@ -1,7 +1,7 @@
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import type { MobileTranscription } from '../routes/posts/types';
-import { authorSelect, commentMediaInclude, NOT_DELETED } from './posts/postIncludes';
+import { commentMediaInclude, NOT_DELETED, postAuthorSelect } from './posts/postIncludes';
 import { TrackingLinkService } from './TrackingLinkService';
 import { syncCommentTrackingLinks } from './posts/publicationTrackingLinks';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -40,7 +40,7 @@ const CREATED_COMMENT_SELECT = {
   createdAt: true,
   metadata: true,
   postId: true,
-  author: { select: authorSelect },
+  author: { select: postAuthorSelect },
 } as const;
 
 export class PostCommentService {
@@ -296,7 +296,7 @@ export class PostCommentService {
         // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
         // écrites avant elle.
         postId: true,
-        author: { select: authorSelect },
+        author: { select: postAuthorSelect },
       },
     });
 
@@ -375,7 +375,7 @@ export class PostCommentService {
         createdAt: true,
         metadata: true,
         postId: true,
-        author: { select: authorSelect },
+        author: { select: postAuthorSelect },
       },
     });
     if (!comment) return null;
@@ -429,7 +429,7 @@ export class PostCommentService {
         // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
         // écrites avant elle.
         postId: true,
-        author: { select: authorSelect },
+        author: { select: postAuthorSelect },
         media: commentMediaInclude,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -512,7 +512,7 @@ export class PostCommentService {
         // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
         // écrites avant elle.
         postId: true,
-        author: { select: authorSelect },
+        author: { select: postAuthorSelect },
         media: commentMediaInclude,
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],

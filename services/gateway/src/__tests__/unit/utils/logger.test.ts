@@ -220,6 +220,15 @@ describe('logError — la ligne SORT, quel que soit le logger reçu', () => {
     expect(printed).toContain('duplicate key');
   });
 
+  it('nomme le CODE de la cause quand elle en porte un (#10852 — P2023 de Prisma)', () => {
+    const cause = Object.assign(new Error('Malformed ObjectID'), { code: 'P2023' });
+    logError(noopFastifyLog(), 'Error adding reaction', cause);
+
+    const printed = errorSpy.mock.calls.flat().join(' ');
+    expect(printed).toContain('Malformed ObjectID');
+    expect(printed).toContain('P2023');
+  });
+
   it('écrit aussi sans aucun logger', () => {
     logError(null, 'boom', new Error('bad'));
 

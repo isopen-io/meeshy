@@ -4,9 +4,7 @@ import type frPublicEntry from './catalog-fr-public-entry';
 const dePublicEntry = {
   'publicHeader.home': 'Meeshy-Startseite',
   'publicHeader.language': 'Sprache',
-  'login.world.title': '{title} betreten',
-  'login.world.subtitle': 'Ohne Konto · dein Name und deine Sprache',
-  'login.world.or': 'oder mit deinem Konto',
+  'brand.credit.hint': 'öffnet die Plattform services.ceo in einem neuen Tab',
   'login.offline': 'Offline – eine Anmeldung ist gerade nicht möglich.',
   'login.twoFactor.title': 'Zwei-Faktor-Authentifizierung',
   'login.twoFactor.lead': 'Gib den Code aus deiner Authentifizierungs-App ein.',
@@ -35,6 +33,17 @@ const dePublicEntry = {
   'magicLink.offline': 'Keine Verbindung. Prüfe dein Netzwerk und versuche es erneut.',
   'magicLink.submit': 'Link erhalten',
   'magicLink.submit.busy': 'Wird gesendet…',
+  'magicLink.flowTitle': 'Mit E-Mail anmelden',
+  'magicLink.validating': 'Link wird geprüft…',
+  'magicLink.invalid.title': 'Link ungültig oder abgelaufen',
+  'magicLink.invalid.body': 'Ein Anmeldelink läuft nach 10 Minuten ab und funktioniert nur einmal.',
+  'magicLink.requestNew': 'Neuen Link anfordern',
+  'magicLink.backToLogin': 'Zurück zur Anmeldung',
+  'magicLink.retry': 'Erneut versuchen',
+  'magicLink.resend': 'Erneut senden',
+  'magicLink.resend.label': 'Link erneut senden',
+  'magicLink.cancel': 'Abbrechen',
+  'magicLink.linkExpired': 'Link abgelaufen – fordere einen neuen an',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default dePublicEntry;

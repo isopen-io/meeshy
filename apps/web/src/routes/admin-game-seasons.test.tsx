@@ -26,7 +26,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/adm/game-seasons' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await Promise.all([loadAdminInterfaceCatalog('fr'), loadInterfaceCatalog('fr')]);
+  await Promise.all([loadAdminInterfaceCatalog('fr'), loadInterfaceCatalog('fr'), import('@/lib/media/deliver-file')]);
 });
 afterAll(async () => {
   delete globals.IS_REACT_ACT_ENVIRONMENT;

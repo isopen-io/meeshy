@@ -429,10 +429,7 @@ enum GameLawVectorEvaluator {
         case "missions-unlocked": return .missionsUnlocked
         case "first-mint-possible":
             return .firstMintPossible(price: int(json, "price"), levelsLost: int(json, "levelsLost"), gloryGain: int(json, "gloryGain"))
-        case "first-mint":
-            return .firstMint(levelBefore: int(json, "levelBefore"), levelAfter: int(json, "levelAfter"),
-                              tailwindUntilLevel: int(json, "tailwindUntilLevel"))
-        case "badge-extinguished": return .badgeExtinguished(missingActions: int(json, "missingActions"))
+        case "first-mint": return .firstMint
         case "price-rises": return .priceRises(nextPrice: int(json, "nextPrice"))
         case "new-rank":
             guard let rank = GloryRank(rawValue: string(json, "rank")) else { throw GameLawVectorError.malformed("rang") }
@@ -461,11 +458,8 @@ enum GameLawVectorEvaluator {
             object([:])
         case .firstMintPossible(let price, let levelsLost, let gloryGain):
             object(["price": .int(price), "levelsLost": .int(levelsLost), "gloryGain": .int(gloryGain)])
-        case .firstMint(let levelBefore, let levelAfter, let tailwindUntilLevel):
-            object(["levelBefore": .int(levelBefore), "levelAfter": .int(levelAfter),
-                    "tailwindUntilLevel": .int(tailwindUntilLevel)])
-        case .badgeExtinguished(let missingActions):
-            object(["missingActions": .int(missingActions)])
+        case .firstMint:
+            object([:])
         case .priceRises(let nextPrice):
             object(["nextPrice": .int(nextPrice)])
         case .newRank(let rank, let division, let glory, let gloryMissing):

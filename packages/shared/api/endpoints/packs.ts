@@ -12,6 +12,75 @@
  * Les paramètres sont encodés ICI (encodeURIComponent) : passer la valeur brute.
  */
 
+/** GET /api/v1/packs/avatar-ring */
+export const avatarRing = '/api/v1/packs/avatar-ring';
+
+/** GET /api/v1/packs/avatar-ring/:slug */
+export const avatarRingBySlug = (slug: string): string => `/api/v1/packs/avatar-ring/${encodeURIComponent(slug)}`;
+
+/** GET /api/v1/packs/avatar-ring/:slug/contract */
+export const avatarRingBySlugContract = (slug: string): string => `/api/v1/packs/avatar-ring/${encodeURIComponent(slug)}/contract`;
+
+/** PUT · DELETE /api/v1/packs/avatar-ring/:slug/install */
+export const avatarRingBySlugInstall = (slug: string): string => `/api/v1/packs/avatar-ring/${encodeURIComponent(slug)}/install`;
+
+/** POST /api/v1/packs/avatar-ring/:slug/purchase */
+export const avatarRingBySlugPurchase = (slug: string): string => `/api/v1/packs/avatar-ring/${encodeURIComponent(slug)}/purchase`;
+
+/** POST /api/v1/packs/avatar-ring/:slug/review */
+export const avatarRingBySlugReview = (slug: string): string => `/api/v1/packs/avatar-ring/${encodeURIComponent(slug)}/review`;
+
+/** GET /api/v1/packs/avatar-ring/installed */
+export const avatarRingInstalled = '/api/v1/packs/avatar-ring/installed';
+
+/** GET /api/v1/packs/avatar-ring/pending */
+export const avatarRingPending = '/api/v1/packs/avatar-ring/pending';
+
+/** GET · POST /api/v1/packs/avatar-ring/submissions */
+export const avatarRingSubmissions = '/api/v1/packs/avatar-ring/submissions';
+
+/** GET /api/v1/packs/banner */
+export const banner = '/api/v1/packs/banner';
+
+/** GET /api/v1/packs/banner/:slug */
+export const bannerBySlug = (slug: string): string => `/api/v1/packs/banner/${encodeURIComponent(slug)}`;
+
+/** GET /api/v1/packs/banner/:slug/contract */
+export const bannerBySlugContract = (slug: string): string => `/api/v1/packs/banner/${encodeURIComponent(slug)}/contract`;
+
+/** PUT · DELETE /api/v1/packs/banner/:slug/install */
+export const bannerBySlugInstall = (slug: string): string => `/api/v1/packs/banner/${encodeURIComponent(slug)}/install`;
+
+/** POST /api/v1/packs/banner/:slug/purchase */
+export const bannerBySlugPurchase = (slug: string): string => `/api/v1/packs/banner/${encodeURIComponent(slug)}/purchase`;
+
+/** POST /api/v1/packs/banner/:slug/review */
+export const bannerBySlugReview = (slug: string): string => `/api/v1/packs/banner/${encodeURIComponent(slug)}/review`;
+
+/** GET /api/v1/packs/banner-frame */
+export const bannerFrame = '/api/v1/packs/banner-frame';
+
+/** GET /api/v1/packs/banner-frame/:slug */
+export const bannerFrameBySlug = (slug: string): string => `/api/v1/packs/banner-frame/${encodeURIComponent(slug)}`;
+
+/** PUT · DELETE /api/v1/packs/banner-frame/:slug/install */
+export const bannerFrameBySlugInstall = (slug: string): string => `/api/v1/packs/banner-frame/${encodeURIComponent(slug)}/install`;
+
+/** POST /api/v1/packs/banner-frame/:slug/purchase */
+export const bannerFrameBySlugPurchase = (slug: string): string => `/api/v1/packs/banner-frame/${encodeURIComponent(slug)}/purchase`;
+
+/** GET /api/v1/packs/banner-frame/installed */
+export const bannerFrameInstalled = '/api/v1/packs/banner-frame/installed';
+
+/** GET /api/v1/packs/banner/installed */
+export const bannerInstalled = '/api/v1/packs/banner/installed';
+
+/** GET /api/v1/packs/banner/pending */
+export const bannerPending = '/api/v1/packs/banner/pending';
+
+/** GET · POST /api/v1/packs/banner/submissions */
+export const bannerSubmissions = '/api/v1/packs/banner/submissions';
+
 /** GET /api/v1/packs/glory-frame */
 export const gloryFrame = '/api/v1/packs/glory-frame';
 
@@ -23,3 +92,33 @@ export const gloryFrameBySlugInstall = (slug: string): string => `/api/v1/packs/
 
 /** GET /api/v1/packs/glory-frame/installed */
 export const gloryFrameInstalled = '/api/v1/packs/glory-frame/installed';
+
+/** GET /api/v1/packs/shop */
+export const shop = '/api/v1/packs/shop';
+
+/** GET /api/v1/packs/wallpaper */
+export const wallpaper = '/api/v1/packs/wallpaper';
+
+/** GET /api/v1/packs/wallpaper/:slug */
+export const wallpaperBySlug = (slug: string): string => `/api/v1/packs/wallpaper/${encodeURIComponent(slug)}`;
+
+/** GET /api/v1/packs/wallpaper/:slug/contract */
+export const wallpaperBySlugContract = (slug: string): string => `/api/v1/packs/wallpaper/${encodeURIComponent(slug)}/contract`;
+
+/** PUT · DELETE /api/v1/packs/wallpaper/:slug/install */
+export const wallpaperBySlugInstall = (slug: string): string => `/api/v1/packs/wallpaper/${encodeURIComponent(slug)}/install`;
+
+/** POST /api/v1/packs/wallpaper/:slug/purchase */
+export const wallpaperBySlugPurchase = (slug: string): string => `/api/v1/packs/wallpaper/${encodeURIComponent(slug)}/purchase`;
+
+/** POST /api/v1/packs/wallpaper/:slug/review */
+export const wallpaperBySlugReview = (slug: string): string => `/api/v1/packs/wallpaper/${encodeURIComponent(slug)}/review`;
+
+/** GET /api/v1/packs/wallpaper/installed */
+export const wallpaperInstalled = '/api/v1/packs/wallpaper/installed';
+
+/** GET /api/v1/packs/wallpaper/pending */
+export const wallpaperPending = '/api/v1/packs/wallpaper/pending';
+
+/** GET · POST /api/v1/packs/wallpaper/submissions */
+export const wallpaperSubmissions = '/api/v1/packs/wallpaper/submissions';

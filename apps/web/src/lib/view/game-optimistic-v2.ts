@@ -1,14 +1,14 @@
 import type { GameBlock, GameDuoBlock, GameLeagueBlock, GameSeasonBlock, GameVisibility } from '@meeshy/shared/types/game';
-import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
+import { sparksTailwindFactor, tailwindFactor } from '@meeshy/shared/utils/game/boosts';
 import { gloryStanding, levelCapForRank } from '@meeshy/shared/utils/game/glory';
 import { levelOnTheWire, mintOnTheWire } from '@meeshy/shared/utils/game/level-wire';
 import { previewMint } from '@meeshy/shared/utils/game/mint';
-import { prestigeTransition } from '@meeshy/shared/utils/game/prestige';
+import { pastCycleRecordsAfterPrestige, prestigeTransition } from '@meeshy/shared/utils/game/prestige';
 import { seasonStepReward } from '@meeshy/shared/utils/game/season';
-import { treasuryTier } from '@meeshy/shared/utils/game/treasury';
+import { previewSparksMint, sparksAfterPrestige } from '@meeshy/shared/utils/game/sparks';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
-import { recordOf, stepFactsOf } from '@/lib/view/game-optimistic';
+import { recordOf, servedSparksOf, shownLevel, stepFactsOf, treasuryAt, withMintCounters } from '@/lib/view/game-optimistic';
 
 /**
  * LES MISES À JOUR OPTIMISTES DE LA VAGUE 2 (#9481, #9384 à #9389) — la même
@@ -103,10 +103,7 @@ export const afterSealBought = (view: EngagementWithGame): EngagementWithGame =>
   const held = view.game?.treasury.held ?? 0;
   if (season === undefined || season === null || season.sealOwned || held < season.sealPrice) return view;
   const bought = onSeason(view, (current) => ({ ...current, sealOwned: true }));
-  return onGame(bought, (game) => {
-    const tier = treasuryTier(Math.max(0, held - season.sealPrice));
-    return { ...game, treasury: { held: tier.held, tier: tier.tier, next: tier.next } };
-  });
+  return onGame(bought, (game) => ({ ...game, treasury: treasuryAt(game, held - season.sealPrice) }));
 };
 
 // --- La vitrine, la visibilité, le Prestige ---
@@ -122,11 +119,14 @@ export const withVisibility = (view: EngagementWithGame, patch: Partial<GameVisi
 };
 
 /**
- * Le passage en Prestige, par la MÊME loi que la passerelle (`prestigeTransition`) :
- * le niveau et le score repartent à 1 et à 0, l'étoile se pose, la Gloire monte,
- * le trophée numéroté entre dans la vitrine. Le niveau RECORD retombe à 1 avec le
- * niveau : la ligue (10) et le duo (20) se referment tant qu'il n'y est pas revenu —
- * le texte de confirmation l'annonce avant le geste (conformité G-5).
+ * Le passage en Prestige, par la MÊME loi que la passerelle (`prestigeTransition`, `PrestigeService.pass`) : le niveau et
+ * la poche repartent à 1 et à 0, l'étoile se pose, la Gloire monte, le trophée numéroté entre dans la vitrine.
+ *
+ * Devant un serveur des étincelles (#10846), le cycle repart à 0, le total à vie et la dette restent
+ * (`sparksAfterPrestige`), et le niveau MAX À VIE survit : la ligue (10) et le duo (20), qui le lisent, RESTENT ouverts —
+ * l'optimiste les garde tels que servis. Le record du cycle retombe à 1, le Vent arrière ne souffle pas, le prix suivant
+ * est celui de la pièce suivante au facteur du niveau 1, et les réserves du trésor se relisent sur la Gloire d'après.
+ * Devant un serveur antérieur, la loi d'hier : le record retombé referme la ligue et le duo.
  *
  * Refusé (même référence) sans proposition ouverte, ou au maximum.
  */
@@ -134,25 +134,53 @@ export const afterPrestige = (view: EngagementWithGame): EngagementWithGame => {
   const game = view.game;
   const prestige = game?.prestige;
   if (game === undefined || prestige === undefined || !prestige.canPrestige) return view;
-  const transition = prestigeTransition({ score: game.level.score, prestige: game.level.prestige, levelRecord: recordOf(game.level) });
+  const served = servedSparksOf(game.level);
+  // Les étapes faites ne se défont pas : le plus haut des deux records les prouve, comme la passerelle les lit.
+  const proof = Math.max(recordOf(game.level), game.level.levelMaxLifetime ?? 0);
+  const transition = prestigeTransition({ score: served?.pocket ?? game.level.score, prestige: game.level.prestige, levelRecord: proof });
   if (!transition.allowed) return view;
 
+  const sparks = served === undefined ? undefined : sparksAfterPrestige(served);
   const standing = gloryStanding({ glory: game.glory.glory + transition.gloryGained, mythic: game.glory.rank === 'mythe', mythicSeat: game.glory.mythic ?? null });
   const levelCap = levelCapForRank(standing.rank);
   const steps = stepFactsOf(game.level, standing);
-  const level = levelOnTheWire({ score: transition.scoreAfter, levelCap, levelRecord: transition.levelRecordAfter, prestige: transition.prestigeAfter, steps });
+  // Le cycle que le passage clôt rejoint la liste, comme l'écrit la passerelle (#10911).
+  const pastCycleRecords = pastCycleRecordsAfterPrestige({
+    pastCycleRecords: game.level.ladder?.pastCycleRecords,
+    levelRecord: recordOf(game.level),
+    level: shownLevel(game.level),
+  });
+  const level = levelOnTheWire({
+    score: transition.scoreAfter,
+    levelCap,
+    levelRecord: transition.levelRecordAfter,
+    prestige: transition.prestigeAfter,
+    steps,
+    ...(sparks === undefined ? {} : { sparks, levelMaxLifetime: Math.max(proof, shownLevel(game.level)) }),
+    ...(pastCycleRecords === undefined ? {} : { pastCycleRecords }),
+  });
+  const mintedLifetime = Math.max(0, game.mint.number - 1);
   const trophies = game.trophies;
-  return onGame(view, (current) => ({
-    ...current,
-    level,
-    glory: { glory: standing.glory, rank: standing.rank, division: standing.division, division5: standing.division5, next: standing.next, gloryMissing: standing.gloryMissing, progress: standing.progress, mythic: standing.mythic },
-    mint: mintOnTheWire(previewMint({ score: transition.scoreAfter, mintedLifetime: current.mint.number, debitablePoints: 0, levelCap, steps })),
-    boosts: { ...current.boosts, tailwind: tailwindFactor({ level: transition.levelAfter, levelRecord: transition.levelRecordAfter }) },
-    prestige: { ...prestige, stars: transition.prestigeAfter, canPrestige: false },
-    ...(current.league === undefined ? {} : { league: { ...current.league, unlocked: false, access: 'locked' as const, current: null } }),
-    ...(current.duo === undefined ? {} : { duo: { ...current.duo, unlocked: false } }),
-    ...(trophies === undefined
-      ? {}
-      : { trophies: { items: [...trophies.items, { key: transition.trophyKey, awardedAt: new Date().toISOString() }], order: [transition.trophyKey, ...trophies.order] } }),
-  }));
+  const passed = onGame(view, (current) => {
+    const glory = { glory: standing.glory, rank: standing.rank, division: standing.division, division5: standing.division5, next: standing.next, gloryMissing: standing.gloryMissing, progress: standing.progress, mythic: standing.mythic };
+    const risen = { ...current, glory };
+    return {
+      ...risen,
+      level,
+      treasury: treasuryAt(risen, current.treasury.held),
+      mint: mintOnTheWire(
+        sparks === undefined
+          ? previewMint({ score: transition.scoreAfter, mintedLifetime, debitablePoints: 0, levelCap, steps })
+          : previewSparksMint({ sparks: sparks.pocket, mintedLifetime, held: current.treasury.held, glory: standing.glory, mythic: standing.rank === 'mythe', levelCap, steps, debt: sparks.debt }),
+      ),
+      boosts: { ...current.boosts, tailwind: (sparks === undefined ? tailwindFactor : sparksTailwindFactor)({ level: transition.levelAfter, levelRecord: transition.levelRecordAfter }) },
+      prestige: { ...prestige, stars: transition.prestigeAfter, canPrestige: false },
+      ...(sparks !== undefined || current.league === undefined ? {} : { league: { ...current.league, unlocked: false, access: 'locked' as const, current: null } }),
+      ...(sparks !== undefined || current.duo === undefined ? {} : { duo: { ...current.duo, unlocked: false } }),
+      ...(trophies === undefined
+        ? {}
+        : { trophies: { items: [...trophies.items, { key: transition.trophyKey, awardedAt: new Date().toISOString() }], order: [transition.trophyKey, ...trophies.order] } }),
+    };
+  });
+  return withMintCounters(passed, 0);
 };

@@ -321,87 +321,6 @@ struct ComposerSceneSurface: View {
     /// doit le RETIRER, sans quoi le trait s'affiche deux fois.
     var drawingSurface: AnyView?
 
-    // MARK: - Les sons POSÉS sur la scène (#4722)
-
-    /// **Les puces sonores de premier plan, peintes SUR la carte.**
-    ///
-    /// > Directive porteur 2026-09-01 : « lorsqu'on a posé une scène on puisse
-    /// > toujours ajouter un son sur la scène, en son de fond de la scène ou en
-    /// > chip resizable sur la scène. »
-    ///
-    /// Le meuble savait DÉJÀ répondre à cette puce — `onItemEdit` traite
-    /// `case .audio` depuis le #4671 — mais aucune surface ne la peignait :
-    /// `AudioForegroundChip` n'était monté que par l'atelier et par le viewer.
-    /// La branche était vivante, l'objet invisible ; le contrôle existait sans
-    /// être ALIMENTÉ.
-    ///
-    /// **Le canvas UIKit ne peut pas les rendre, et c'est structurel** : il n'a
-    /// pas de couche audio (`Layers/` en compte six, aucune pour le son) et
-    /// `manipulable` exclut `.audio` de ce qu'un geste peut saisir. La puce est
-    /// donc une vue SwiftUI posée par-dessus — d'où le slot `objectOverlay`,
-    /// qui borne à la carte SANS éteindre les touches du canvas, à la
-    /// différence de celui du dessin.
-    ///
-    /// **Pas de puce pendant le dessin**, comme dans l'atelier : le calque de
-    /// tracé capture la carte entière, et une puce qui resterait dessus
-    /// promettrait un doigt qu'elle ne recevrait pas.
-    @ViewBuilder
-    private func sceneSoundOverlay(canvasSize: CGSize) -> some View {
-        ForEach(foregroundSoundBindings, id: \.wrappedValue.id) { binding in
-            AudioForegroundChip(
-                audioObject: binding,
-                canvasSize: canvasSize,
-                mode: .composer,
-                isSelected: selectedItemId == binding.wrappedValue.id,
-                isUserMuted: binding.wrappedValue.volume <= 0,
-                onDragEnd: { HapticFeedback.light() },
-                onTap: { onItemTapped?(binding.wrappedValue.id, .audio) },
-                onToggleMute: {
-                    HapticFeedback.light()
-                    var objet = binding.wrappedValue
-                    objet.toggleMute()
-                    binding.wrappedValue = objet
-                }
-            )
-            // L'appui long d'une puce ouvre le MÊME menu de verre que les
-            // autres objets (#8717) — la puce est une vue SwiftUI, hors du
-            // canvas qui reconnaît l'appui long des quatre autres familles.
-            .simultaneousGesture(LongPressGesture(minimumDuration: 0.45).onEnded { _ in
-                let son = binding.wrappedValue
-                onItemMenu?(son.id, .audio, CGPoint(x: son.x, y: son.y))
-            })
-        }
-    }
-
-    /// Un binding par son de premier plan — **résolu par IDENTIFIANT, jamais
-    /// par index.**
-    ///
-    /// L'atelier capture l'index de l'énumération et le relit à chaque accès :
-    /// c'est juste tant que la liste ne bouge pas, et un son supprimé pendant
-    /// qu'un autre est saisi décale tous ceux qui le suivent — le geste finit
-    /// alors sur le voisin. La recherche par `id` coûte un parcours d'une liste
-    /// qui compte deux ou trois entrées, et ne peut pas se tromper de son.
-    ///
-    /// Une écriture dont l'objet a disparu est IGNORÉE plutôt que réinsérée :
-    /// le relâchement d'un geste sur un son qu'on vient de supprimer ne doit
-    /// pas le faire revenir.
-    private var foregroundSoundBindings: [Binding<StoryAudioPlayerObject>] {
-        SceneAudioStageRule.stagedAudios(in: slide.effects.audioPlayerObjects ?? [])
-            .map { objet in
-                Binding<StoryAudioPlayerObject>(
-                    get: {
-                        slide.effects.audioPlayerObjects?
-                            .first { $0.id == objet.id } ?? objet
-                    },
-                    set: { nouveau in
-                        guard let index = slide.effects.audioPlayerObjects?
-                            .firstIndex(where: { $0.id == objet.id }) else { return }
-                        slide.effects.audioPlayerObjects?[index] = nouveau
-                    }
-                )
-            }
-    }
-
     // MARK: - Le son de FOND de la slide (#4918)
 
     /// **Le fond sonore dont la scène montre la trace** — `nil` ⇒ aucun fond,
@@ -688,7 +607,7 @@ struct ComposerSceneSurface: View {
         // prend la taille proposée ; l'`overlay` ne peut plus la changer.
         Color.clear
             .overlay {
-                if let teinte = floorBackdropColor {
+                if let teinte = ComposerSceneFloorRules.backdropColor(slide: slide) {
                     teinte
                 } else {
                     SceneBackdropView(backdrop: .thumbHash, thumbHash: floorHash)
@@ -699,7 +618,7 @@ struct ComposerSceneSurface: View {
             .contentShape(Rectangle())
             .onTapGesture { onBackgroundTapped?() }
             .allowsHitTesting(drawingSurface == nil && timelinePanel == nil)
-            .task(id: floorKey) {
+            .task(id: ComposerSceneFloorRules.key(slide: slide, imagesVersion: sceneImagesVersion)) {
                 // Anti-rebond : un geste de cadrage change la clé à chaque image,
                 // et le sol n'a pas à suivre le doigt — il suit la COMPOSITION.
                 try? await Task.sleep(nanoseconds: 200_000_000)
@@ -728,30 +647,6 @@ struct ComposerSceneSurface: View {
         max(0, safeTop - ComposerTopBar.islandRowTop) * ComposerTopBar.liftShare
     }
 
-    /// Le fond choisi au Cadre, quand la scène AJUSTE un média : il s'applique
-    /// au sol aussi (directive porteur 2026-09-27). Le flou garde le hachage.
-    private var floorBackdropColor: Color? {
-        let transform = slide.effects.backgroundTransform
-        guard !StoryBackgroundFraming.rendersFilled(transform?.videoFitMode),
-              slide.effects.mediaObjects?.contains(where: \.isBackground) == true
-        else { return nil }
-        return StoryBackdrop.resolve(transform?.backdrop).solidColor
-    }
-
-    /// Ce qui change le RÉSULTAT au point de changer son hachage : la slide, son
-    /// fond, sa matière, son cadrage et les bitmaps chargés. Une position ou une échelle ne
-    /// la touchent pas — le sol n'a pas à être recalculé à chaque image d'un
-    /// geste, et un hachage de 32 pixels ne verrait pas la différence.
-    private var floorKey: ComposerSceneFloorKey {
-        ComposerSceneFloorKey(slideId: slide.id,
-                              background: slide.effects.background,
-                              media: slide.effects.mediaObjects?.map(\.id) ?? [],
-                              texts: slide.effects.textObjects.map(\.id),
-                              framing: [slide.effects.backgroundTransform?.videoFitMode,
-                                        slide.effects.backgroundTransform?.backdrop],
-                              imagesVersion: sceneImagesVersion)
-    }
-
     private var sceneLayer: some View {
         EmbeddedSceneCanvas(
             slide: $slide,
@@ -763,7 +658,9 @@ struct ComposerSceneSurface: View {
             // Les sons posés sur la scène (#4722) — retirés pendant le dessin,
             // dont le calque prend la carte entière.
             objectOverlay: drawingSurface == nil
-                ? { taille in AnyView(sceneSoundOverlay(canvasSize: taille)) }
+                ? { taille in AnyView(ComposerSceneSoundChips(
+                    slide: $slide, canvasSize: taille, selectedItemId: selectedItemId,
+                    onItemTapped: onItemTapped, onItemMenu: onItemMenu)) }
                 : nil,
             onItemTapped: onItemTapped,
             onItemDoubleTapped: onItemEdit,
@@ -1098,40 +995,4 @@ struct ComposerSceneSurface: View {
     // `description` et `descriptionPlaceholder` restent au contrat : la porte
     // est servie par le meuble, qui possède le texte. Les retirer obligerait
     // chaque site de montage à re-prouver qu'il n'en a pas besoin.
-}
-
-/// La clé du SOL de la scène — ce qui en change le hachage (#8370).
-struct ComposerSceneFloorKey: Hashable {
-    let slideId: String
-    let background: String?
-    let media: [String]
-    let texts: [String]
-    /// Le cadrage et le fond du panneau Cadre (#8414) : ils changent le composite.
-    let framing: [String?]
-    let imagesVersion: UInt64
-}
-
-/// La zone sûre du haut de la surface — la barre haute s'y loge (#8370).
-struct ComposerSafeTopKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-/// Le cadre de la scène libre, en repère global comme celui de la carte (#10542).
-struct ComposerFreeZoneFrameKey: PreferenceKey {
-    static let defaultValue: CGRect = .null
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
-        let suivant = nextValue()
-        if !suivant.isNull { value = suivant }
-    }
-}
-
-/// La hauteur des étages du bas de la scène (#8712).
-struct ComposerLowerFloorsHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
 }

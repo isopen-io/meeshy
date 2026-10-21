@@ -69,7 +69,7 @@ public struct GameReferralBannerView: View {
 
     private func decor(_ metrics: GameReferralBannerMetrics, k: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 16 * k, style: .continuous).fill(Self.ink.opacity(0.86))
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg * k, style: .continuous).fill(Self.ink.opacity(0.86))
             SignatureMark(style: .flat, color: .white, strokeWidth: 110)
                 .placed(metrics.signature)
             Text(title)
@@ -106,7 +106,7 @@ public struct GameReferralBannerView: View {
                     .placed(rect)
             }
         } else {
-            RoundedRectangle(cornerRadius: 4 * k, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xxs * k, style: .continuous)
                 .strokeBorder(Self.linkInk.opacity(0.85), style: StrokeStyle(lineWidth: max(2, rect.width * 0.02), dash: [rect.width * 0.08, rect.width * 0.06]))
                 .placed(rect)
                 .accessibilityHidden(true)

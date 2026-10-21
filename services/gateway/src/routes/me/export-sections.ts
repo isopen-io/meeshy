@@ -232,8 +232,9 @@ export async function exportVoiceProfile(prisma: PrismaClient, userId: string) {
 }
 
 /**
- * Les packs du compte (#10151) : ses choix d'installation des trois domaines,
- * sa bibliothèque de stickers et les packs qu'il a proposés. La lecture vit
+ * Les packs du compte (#10151) : ses choix d'installation des domaines, sa
+ * bibliothèque de stickers, les packs qu'il a proposés et ceux qu'il a achetés
+ * en Meeshes (#10632). La lecture vit
  * dans `services/packs/PackPrivacy.ts`, seul accès RGPD aux tables de packs ;
  * cette section n'y ajoute que le découpage en pages.
  */
@@ -243,6 +244,8 @@ export async function exportPacks(prisma: PrismaClient, userId: string, page: Ex
     choices: toSection(data.choices.items, data.choices.total, page),
     library: toSection(data.library.items, data.library.total, page),
     submissions: toSection(data.submissions.items, data.submissions.total, page),
+    ownerships: toSection(data.ownerships.items, data.ownerships.total, page),
+    appearanceSubmissions: toSection(data.appearanceSubmissions.items, data.appearanceSubmissions.total, page),
   };
 }
 

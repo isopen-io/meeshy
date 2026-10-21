@@ -6,6 +6,8 @@ import { PRESENCE_HERE_HEX, PRESENCE_HEX, presenceTone } from '@meeshy/shared/ut
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { UserPresenceStatus } from '@/lib/api/types';
+import type { AvatarRingDesign } from '@meeshy/shared/types/avatar-ring-design';
+import { AvatarRingFrame, ringedAvatarSize } from './avatar-ring';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { identityTarget } from '@/lib/view/identity-target';
@@ -22,8 +24,8 @@ import { Link } from '@/routes/route-table';
  * `MeeshyAvatar.swift:165-186` :
  *
  *   anneau      = taille + 6        police initiales = taille x 0.38
- *   pastille    = taille x 0.26     epaisseur anneau = taille <= 32 ? 1.5 : 2.5
- *   point « ici » = taille x 0.52 — deux fois la pastille (#9061)
+ *   pastille    = max(6, taille x 0.26)  epaisseur anneau = taille <= 32 ? 1.5 : 2.5
+ *   point « ici » = taille x 0.30 — un peu plus gros que la pastille (#10943)
  *
  * La PASTILLE DE PRESENCE se pose a 45 degres SUR LE BORD du cercle, pas dans
  * le coin de sa boite : `centre + rayon x cos(pi/4)`, soit 85,36 % du diametre.
@@ -39,26 +41,7 @@ import { Link } from '@/routes/route-table';
  * CSS locales aurait fait une quatrième table — celle qui dérive en silence.
  */
 
-export function Avatar({
-  initials,
-  color,
-  size,
-  presence,
-  here = false,
-  hereActive = false,
-  hereFocused = false,
-  hereDotRatio = HERE_DOT_RATIO,
-  name,
-  opacity,
-  src,
-  profileUsername,
-  storyRing,
-  mood,
-  moodPostId,
-  moodStill = false,
-  moodAuthorId,
-  redundant,
-}: {
+type AvatarProps = {
   initials: string;
   /** L'accent de la conversation — jamais une couleur codée en dur ici. */
   color: string;
@@ -82,12 +65,6 @@ export function Avatar({
    * `here`, rien.
    */
   hereFocused?: boolean;
-  /**
-   * La taille du point « ici », en fraction de l'avatar : `HERE_DOT_RATIO`
-   * partout, `HEADER_HERE_DOT_RATIO` dans l'en-tête de la conversation, où il
-   * se fait plus discret (#9065). Miroir de `AvatarContext.hereDotRatio` (iOS).
-   */
-  hereDotRatio?: number;
   name?: string;
   /**
    * Le fondu de SOURDINE, appliqué ICI plutôt qu'en enveloppant l'avatar
@@ -227,10 +204,58 @@ export function Avatar({
    * la photo tant qu'elle charge, et redécouverts si elle échoue.
    */
   src?: string;
-}) {
+  /**
+   * Le contour équipé (#10713) : une COUCHE autour de l'avatar, dans la MÊME empreinte `size`. L'avatar rétrécit pour tenir dans le cercle du contour ; un anneau de story reste CONCENTRIQUE, juste à l'intérieur (#10714, décision porteur du 2026-10-15).
+   */
+  ring?: AvatarRingDesign | null;
+};
+
+/**
+ * L'anneau de story. Dans l'empreinte d'un contour, il touche l'avatar : peint
+ * de la couleur même d'un avatar à initiales, il s'y fondait (#10739). Un liseré
+ * d'1 px de la surface le sépare alors de l'avatar — visible quelle que soit la
+ * couleur de ce dernier. Hors contour, le rendu d'avant reste intact.
+ */
+function storyRingShadow({ stroke, unseen, color, separated }: { readonly stroke: number; readonly unseen: boolean; readonly color: string; readonly separated: boolean }): string {
+  const ink = unseen ? color : `color-mix(in srgb, ${color} 40%, transparent)`;
+  if (!separated || !unseen) return `inset 0 0 0 ${stroke}px ${ink}`;
+  return `inset 0 0 0 ${stroke - 1}px ${ink}, inset 0 0 0 ${stroke}px var(--color-ios-surface)`;
+}
+
+export function Avatar(props: AvatarProps) {
+  const { ring, ...bare } = props;
+  if (ring !== undefined && ring !== null) {
+    return (
+      <AvatarRingFrame ring={ring} size={props.size}>
+        {renderAvatar({ ...bare, size: ringedAvatarSize(props.size, props.storyRing !== undefined) }, true)}
+      </AvatarRingFrame>
+    );
+  }
+  return renderAvatar(bare);
+}
+
+function renderAvatar({
+  initials,
+  color,
+  size,
+  presence,
+  here = false,
+  hereActive = false,
+  hereFocused = false,
+  name,
+  opacity,
+  src,
+  profileUsername,
+  storyRing,
+  mood,
+  moodPostId,
+  moodStill = false,
+  moodAuthorId,
+  redundant,
+}: Omit<AvatarProps, 'ring'>, storyRingSeparated = false) {
   const showsImage = src !== undefined && src !== '';
   const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
-  const dot = here ? size * hereDotRatio : size * PRESENCE_DOT_RATIO;
+  const dot = Math.max(MIN_DOT_DIAMETER, size * (here ? HERE_DOT_RATIO : PRESENCE_DOT_RATIO));
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
   // du diametre. On retranche la moitie de la pastille pour la CENTRER dessus.
   const offset = size * 0.8536 - dot / 2;
@@ -330,9 +355,7 @@ export function Avatar({
           className="pointer-events-none absolute rounded-chip"
           style={{
             inset: -(railRingBox(size) - size) / 2,
-            boxShadow: `inset 0 0 0 ${railStroke(size, storyRing.unseen)}px ${
-              storyRing.unseen ? color : `color-mix(in srgb, ${color} 40%, transparent)`
-            }`,
+            boxShadow: storyRingShadow({ stroke: railStroke(size, storyRing.unseen), unseen: storyRing.unseen, color, separated: storyRingSeparated }),
           }}
           aria-hidden
         />
@@ -463,9 +486,18 @@ export function MoodPeekTarget({
 
 /** La pastille de présence, en fraction du diamètre — `MeeshyAvatar.onlineDotSize`. */
 const PRESENCE_DOT_RATIO = 0.26;
-/** Le point indigo « ici », deux fois la pastille (#9061) — `MeeshyAvatar.hereDotSize`. */
-const HERE_DOT_RATIO = PRESENCE_DOT_RATIO * 2;
-export const HEADER_HERE_DOT_RATIO = 0.4;
+/**
+ * Le point indigo « ici », UNE taille partout, en-tête compris (#10943) : la
+ * moitié de l'ancien 0,52, toujours un peu plus gros que la pastille —
+ * `AvatarPresenceDot.hereRatio` (iOS).
+ */
+const HERE_DOT_RATIO = 0.3;
+/**
+ * JAMAIS SOUS 6 PX (#10955) — la présence se peint désormais sur les avatars de
+ * 20 à 28 px (réactions, frappe, commentaires) : à 0,26, un point de 5 px n'y
+ * se lit plus. `AvatarPresenceDot.minimumDiameter` (iOS), la même valeur.
+ */
+const MIN_DOT_DIAMETER = 6;
 
 /** Le temps que met le point sortant à diminuer (`presence-dot-shrink`, `avatar.css`). */
 const PRESENCE_LEAVE_MS = 220;

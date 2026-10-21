@@ -117,6 +117,9 @@ function makePrisma() {
     postImpression: {
       create: journalise('postImpression.create', {}),
       createMany: journalise('postImpression.createMany', { count: 1 }),
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: journalise('postImpression.deleteMany', { count: 0 }),
     },
     anonymousPostOpen: {
       create: journalise('anonymousPostOpen.create', {}),

@@ -23,7 +23,7 @@ import os
 /// et ses témoins partagent.
 enum StuckPublicationRetry {
 
-    private static let logger = Logger(subsystem: "com.meeshy.ios", category: "stuck-publication-retry")
+    private static let logger = MeeshyLog.logger(.stuckPublicationRetry, subsystem: .legacyIOS)
 
     /// L'identifiant à relancer pour cet item, ou `nil` si la ligne n'est pas
     /// dans un état terminal.

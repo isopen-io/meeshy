@@ -1,25 +1,34 @@
-import { memo } from 'react';
+import { memo, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { useStore } from 'zustand/react';
 
+import { ADMIN_PERMISSIONS_QUERY_KEY, type AdminIdentity } from '@/lib/api/admin';
 import { apiConfig } from '@/lib/api/config';
+import { appQueryClient } from '@/lib/api/query-client';
 import type { ListConversation } from '@/lib/api/list-preview';
 import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
 import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 import { callActions } from '@/lib/calls/call-actions';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { translate } from '@/lib/i18n-catalog';
-import type { ConversationFlags } from '@/lib/api/preferences';
+import { categoryIdOf, reactionOf, type ConversationFlags } from '@/lib/api/preferences';
+import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import { accentOf, withAccent } from '@/lib/accent';
+import { useColorScheme } from '@/lib/use-color-scheme';
 import { MUTED_OPACITY } from '@/lib/lens/law';
-import { isRowCallAction, type RowActionId, type RowFlagActionId } from '@/lib/view/row-actions';
+import { conversationRowSwipeSides } from '@/lib/view/conversation-row-swipe';
+import { isRowCallAction, isRowFlagAction, rowConversationActions, type RowActionId, type RowDetailsFocus, type RowFlagActionId, type RowIntent, type RowMenuMore } from '@/lib/view/row-actions';
+import { useLongPress } from '@/lib/view/long-press';
 import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
+import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { conversationAvatarDoor } from '@/lib/view/thread-header-offer';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { avatarOf, initialsOf, isGroup, peerOf, titleOf } from '@/lib/view/conversation';
+import { avatarOf, initialsOf, isGroup, peerOf, presenceKeyOf, titleOf } from '@/lib/view/conversation';
+import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { usePresence } from '@/lib/view/use-presence';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
-import { useIsCurrentPath } from '@/lib/router';
+import { navigate, useIsCurrentPath } from '@/lib/router';
 import { Link, href } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
@@ -28,7 +37,8 @@ import { LensJoinCallButton, LensPreviewLine } from './lens-preview-line';
 import { LensTime } from './lens-time';
 import { UnreadBadge } from './unread-badge';
 import { ConversationStreakMark } from './conversation-streak-mark';
-import { RowActions } from './row-actions';
+import { ConversationRowSwipeActions, useConversationRowSwipe } from './conversation-row-swipe';
+import { preloadConversationPeek, RowActions } from './row-actions';
 
 import '@/styles/lens-row-meta.css';
 
@@ -111,6 +121,19 @@ export type LensRowProps = {
    */
   onOpenDetails?: ((conversationId: string) => void) | undefined;
   /**
+   * LES ENTRÉES D'iOS DU MENU (#10593) — Renommer, Bloquer/Débloquer, Favori,
+   * Déplacer vers… : la ligne NOMME le geste, l'écran l'exécute (fenêtres,
+   * confirmation, store). Même discipline que `onRowAction` : une fonction
+   * STABLE qui reçoit l'id. Absente (un visiteur sans compte), le menu n'a
+   * pas ces entrées.
+   */
+  onRowIntent?: ((conversationId: string, intent: RowIntent) => void) | undefined;
+  /** Le pair d'un direct est-il bloqué par le lecteur — `undefined` : pas de
+   * pair à compte (groupe, invité), aucune entrée de blocage. */
+  peerBlocked?: boolean | undefined;
+  /** Les catégories du lecteur, dans son ordre — le sous-menu « Déplacer vers… ». */
+  categories?: readonly { readonly id: string; readonly name: string }[] | undefined;
+  /**
    * QUI ÉCRIT DANS CETTE CONVERSATION, MAINTENANT (#5793, #7547) — les noms
    * des frappeurs vivants qui ne sont pas le lecteur, distribués par l'écran
    * (`useTypistNames`, `lib/api/use-typists.ts`) : une rangée est rendue dans un
@@ -143,6 +166,13 @@ export type LensRowProps = {
   /** Le post de ce mood — ce que l'avatar compte quand il le montre (#10483). */
   peerMoodPostId?: string | undefined;
   /**
+   * L'ANNEAU DES STORIES DU PAIR D'UN DIRECT (#10598) — lu par l'écran dans le
+   * corpus du rail (`authorStoryRing`, aucune requête de plus), miroir de
+   * `LentilleConversationRow.storyRingState`. Non vue, l'avatar ouvre la story
+   * (`identityTarget`) ; vue, il garde le profil. Un groupe l'ignore.
+   */
+  peerStoryRing?: AuthorStoryRing | undefined;
+  /**
    * « N (M) 🔥 » (#8906) — l'état d'engagement EFFECTIF de la conversation pour
    * le lecteur (servi + direct, `effectiveEngagementOf`), distribué par
    * l'écran. Rendu à côté de l'heure, hors de la rangée ÉLUE, et comme elle
@@ -155,6 +185,54 @@ export type LensRowProps = {
   now?: (() => number) | undefined;
 };
 
+/** Le rôle de plateforme que la passerelle a servi, lu sans s'abonner : `null` tant qu'il ne l'a pas été. */
+const servedPlatformRole = (): string | null => appQueryClient.getQueryData<AdminIdentity>(ADMIN_PERMISSIONS_QUERY_KEY)?.role ?? null;
+
+type RowPointerHandler = (event: ReactPointerEvent<HTMLLIElement>) => void;
+type RowSwipeProps = ReturnType<typeof useConversationRowSwipe>['rowProps'];
+type RowPressProps = ReturnType<typeof useLongPress>;
+
+/**
+ * LE BALAYAGE ET L'APPUI LONG SUR LA MÊME LIGNE — chaque geste de pointeur
+ * passe aux deux, et l'appui précharge l'aperçu pendant ses 350 ms. Les
+ * gestionnaires des deux hooks sont stables : la composition l'est aussi.
+ */
+const both =
+  (first: RowPointerHandler, second: RowPointerHandler): RowPointerHandler =>
+  (event) => {
+    if (!startsInRow(event)) return;
+    first(event);
+    second(event);
+  };
+
+/**
+ * UN GESTE NÉ DANS LE PORTAIL N'EST PAS UN GESTE DE LA LIGNE (revue #11211) —
+ * React fait remonter les événements par l'ARBRE des composants : le voile, la
+ * carte et les entrées de l'aperçu, rendus dans `document.body`, atteignent le
+ * `<li>`. Sans ce filtre, toucher le voile relançait le minuteur de la ligne,
+ * et l'aperçu se rouvrait 350 ms après s'être refermé.
+ */
+const startsInRow = (event: ReactPointerEvent<HTMLLIElement>): boolean =>
+  event.target instanceof Node && event.currentTarget.contains(event.target);
+
+function useRowGestures(swipe: RowSwipeProps, press: RowPressProps) {
+  const { ref, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onClickCapture } = swipe;
+  return useMemo(
+    () => ({
+      ref,
+      onClickCapture,
+      onPointerDown: both(onPointerDown, (event) => {
+        press.onPointerDown(event);
+        if (event.button === 0) preloadConversationPeek();
+      }),
+      onPointerMove: both(onPointerMove, press.onPointerMove),
+      onPointerUp: both(onPointerUp, press.onPointerUp),
+      onPointerCancel: both(onPointerCancel, press.onPointerCancel),
+    }),
+    [ref, onClickCapture, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, press],
+  );
+}
+
 function LensRowImpl({
   conversation,
   languages,
@@ -164,12 +242,16 @@ function LensRowImpl({
   unreadCount,
   onRowAction,
   onOpenDetails,
+  onRowIntent,
+  peerBlocked,
+  categories,
   typists,
   peerHere = false,
   peerActive = false,
   peerFocused = false,
   peerMood,
   peerMoodPostId,
+  peerStoryRing,
   engagement,
   interfaceLanguage,
   now,
@@ -216,6 +298,11 @@ function LensRowImpl({
     const handle = peerOf(conversation, viewerId)?.user?.username;
     return typeof handle === 'string' && handle !== '' ? handle : undefined;
   })();
+  /* LE CONTOUR DU PAIR (#10713) — servi avec le participant, additif : sans lui, l'avatar d'avant. */
+  const peerRing = useRingDesign(servedRingOf(peerOf(conversation, viewerId)));
+  /* LE COMPTE DU PAIR, pour que l'appel lancé d'ici peigne sa présence servie (#10956). */
+  const callPeerKey = group ? null : (presenceKeyOf(peerOf(conversation, viewerId)) ?? null);
+  useColorScheme();
   const accent = accentOf(conversation);
   const guest = useSpeaksAsGuest();
   const avatarDoor = conversationAvatarDoor({
@@ -226,14 +313,54 @@ function LensRowImpl({
   });
   const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
   const liveCall = (conversation as ListConversation).activeCall ?? null;
-  /* Appeler depuis le menu de la ligne (#8109) : la passerelle refuse l'appel
-     à un invité anonyme (`CallEventsHandler.ts`), comme `ThreadCallButton`. */
-  const canCall = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiConfig.source === 'fixtures';
+  /* UN COMPTE (#7285, #10593) — supprimer pour soi, favori et catégorie. Il ne
+     décide plus de l'appel (#11211) : la loi partagée le juge sur le rôle,
+     comme `ThreadCallButton` (`canStartCall`). */
+  const account = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiConfig.source === 'fixtures';
+  /* LE FAVORI ET LA CATÉGORIE (#10593) — lus sur la conversation EFFECTIVE
+     (`withPreferenceOverrides`) : le geste se voit à l'instant. */
+  const favorite = reactionOf(conversation);
+  const menuMore: RowMenuMore | undefined =
+    onRowIntent === undefined
+      ? undefined
+      : {
+          details: onOpenDetails !== undefined,
+          rename: group,
+          organize: account,
+          favorite,
+          block: group || peerBlocked === undefined ? null : peerBlocked ? 'unblock' : 'block',
+        };
+  /* LES VERDICTS DU RÔLE (#11211), lus à l'ouverture du menu : le rôle de
+     plateforme servi (`GET /me`, déjà en cache dès qu'un écran l'a demandé). */
+  const actionsOf = () =>
+    rowConversationActions({ conversation, viewer: { id: viewerId, hasAccount: account, isAnonymous: guest, platformRole: servedPlatformRole() } });
+  const openDetailsOn = (focus: RowDetailsFocus) =>
+    onRowIntent === undefined ? onOpenDetails?.(conversation.id) : onRowIntent(conversation.id, { kind: 'details', focus });
   const onAction = (id: RowActionId) => {
-    if (id === 'delete') return requestDeparture({ conversationId: conversation.id, kind: 'delete', returnToList: false });
-    if (!isRowCallAction(id)) return onRowAction(conversation.id, id);
-    callActions.start({ conversationId: conversation.id, media: id === 'callVideo' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group });
+    if (id === 'delete' || id === 'leave') return requestDeparture({ conversationId: conversation.id, kind: id, returnToList: false });
+    if (id === 'invite' || id === 'manageMembers') return openDetailsOn(id === 'invite' ? 'invite' : 'members');
+    if (id === 'details') return onOpenDetails?.(conversation.id);
+    if (id === 'adminOpen') return navigate(href('adminConversation', { conversation: conversation.id }));
+    if (id === 'rename') return onRowIntent?.(conversation.id, { kind: 'rename' });
+    if (id === 'block') return onRowIntent?.(conversation.id, { kind: 'block', intent: peerBlocked === true ? 'unblock' : 'block' });
+    if (isRowFlagAction(id)) return onRowAction(conversation.id, id);
+    if (!isRowCallAction(id)) return undefined;
+    callActions.start({ conversationId: conversation.id, media: id === 'callVideo' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group, peerKey: callPeerKey });
   };
+
+  /* LE BALAYAGE DE LA LIGNE (#10580) — les actions du menu, rangées par bord.
+     Elles ne se calculent qu'au toucher et tant qu'un bord est montré. */
+  const swipeSides = () =>
+    conversationRowSwipeSides({ flags, unread, language: currentInterfaceLanguage(), canDelete: account });
+  const swipe = useConversationRowSwipe(swipeSides);
+  /* L'APPUI LONG OUVRE L'APERÇU (#11211) — `useLongPress`, sur la ligne
+     entière, à côté du balayage : un doigt qui bouge de plus de 6 px annule
+     l'appui avant que le balayage ne s'engage. Seuls ses gestes de POINTEUR
+     sont posés ici ; le clic droit et la touche menu sont écoutés par
+     `RowActions`, qui ouvre la même grappe. */
+  const peekOpener = useRef<(() => boolean) | null>(null);
+  const press = useLongPress({ onOpen: () => peekOpener.current?.() ?? false });
+  const rowGestures = useRowGestures(swipe.rowProps, press);
 
   /**
    * LA CLASSE DE TRONCATURE DE L'APERÇU — `truncate` au repos (une ligne,
@@ -262,6 +389,8 @@ function LensRowImpl({
         here: peerHere,
         hereActive: peerActive,
         hereFocused: peerFocused,
+        /* LE CONTOUR DU PAIR (#10713, #10946) — sur les TROIS portes de l'avatar, pas seulement celle du profil. */
+        ...(peerRing === null ? {} : { ring: peerRing }),
         /* DANS LA LISTE, L'HUMEUR NE BOUGE PAS (#10528). */
         ...(peerMood === undefined
           ? {}
@@ -281,6 +410,8 @@ function LensRowImpl({
        * visible SANS survol que sur la rangée magnifiée.
        */
       className="group"
+      {...rowGestures}
+      {...(swipe.shown === null ? {} : { 'data-row-swipe': swipe.shown.phase })}
       /**
        * `flexShrink: 0` n'est pas une précaution : la liste est un conteneur
        * flex, et un élément flex de hauteur fixe est COMPRIMÉ dès que la somme
@@ -296,7 +427,7 @@ function LensRowImpl({
        * PETITS-ENFANTS du `<li>`, jamais son premier enfant direct, donc rien
        * n'entre en conflit avec la passe de perspective).
        */
-      style={{ height: ROW_HEIGHT, flexShrink: 0, position: 'relative' }}
+      style={{ height: ROW_HEIGHT, flexShrink: 0, position: 'relative', touchAction: 'pan-y' }}
     >
       {/*
         **L'ENVELOPPE N'EST PLUS UN LIEN** (#7241, directive porteur du
@@ -414,6 +545,7 @@ function LensRowImpl({
             profileUsername={peerHandle}
             {...(photo === undefined ? {} : { src: photo })}
             {...peerSignals}
+            {...(group || peerStoryRing === undefined ? {} : { storyRing: peerStoryRing })}
             {...(peerMoodAuthor === undefined ? {} : { moodAuthorId: peerMoodAuthor })}
           />
         )}
@@ -445,10 +577,10 @@ function LensRowImpl({
               className="rounded-chip px-1.5 text-check font-semibold whitespace-nowrap"
               style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 18%, transparent)', color: 'var(--accent)' }}
             >
-              {group ? 'Groupe' : 'Direct'}
+              {translate(currentInterfaceLanguage(), group ? 'list.row.group' : 'list.row.direct')}
             </span>
             {flags.isArchived ? (
-              <Glyph name="archive" size={12} title="Archivée" style={{ color: 'var(--color-ios-ink-3)' }} />
+              <Glyph name="archive" size={12} title={translate(currentInterfaceLanguage(), 'list.row.archived')} style={{ color: 'var(--color-ios-ink-3)' }} />
             ) : null}
           </span>
 
@@ -496,16 +628,32 @@ function LensRowImpl({
               (`ThemedConversationRow.swift:296-300`, qui annonce épinglage ET
               sourdine).
             */}
+            {/* LE FAVORI (#10593) — l'emoji posé par le lecteur, à côté du nom,
+                comme le filtre « Favoris » le retient ; le lecteur d'écran
+                l'entend nommé. */}
+            {favorite === undefined ? null : (
+              <span
+                data-favorite
+                role="img"
+                aria-label={`${rowMenuText(currentInterfaceLanguage(), 'rowMenu.favorite')} ${favorite}`}
+                className="shrink-0 text-title leading-none"
+                style={{ opacity: chromeFade }}
+              >
+                {favorite}
+              </span>
+            )}
             {flags.isPinned ? (
-              <Glyph name="pushPin" size={12} title="Épinglée" style={{ color: 'var(--color-ios-ink-3)', opacity: chromeFade }} />
+              <Glyph name="pushPin" size={12} title={translate(currentInterfaceLanguage(), 'list.row.pinned')} style={{ color: 'var(--color-ios-ink-3)', opacity: chromeFade }} />
             ) : null}
-            {/* La sourdine, elle, ne prend PAS de glyphe : la peau Lentille la
-                rend par le seul fondu du CHROME (`chromeFade`, ci-dessus —
-                « pas de glyphe cloche sur le rang plat »). Une opacité n'est
-                lisible que par l'œil — le lecteur d'écran, lui, a besoin du
-                mot, et le texte hors écran est le seul porteur qui n'ajoute
-                aucun pixel ; il n'a donc, lui, aucune raison de se fondre. */}
-            {flags.isMuted ? <span className="sr-only">En sourdine</span> : null}
+            {/* LA SOURDINE SE VOIT (#10598) — la cloche barrée après le nom,
+                miroir du 🔕 d'iOS (`LentilleConversationRow.swift:262`) : le
+                fondu du chrome seul ne se lisait pas. Le glyphe porte le mot,
+                pour le lecteur d'écran. */}
+            {flags.isMuted ? (
+              <span data-muted className="flex shrink-0" style={{ opacity: chromeFade }}>
+                <Glyph name="bellSlash" size={12} title={rowMenuText(currentInterfaceLanguage(), 'listRow.muted')} style={{ color: 'var(--color-ios-ink-3)' }} />
+              </span>
+            ) : null}
             {/*
               LA PILE DE NON-LUS FINIT LA LIGNE DU NOM (#6080) — et l'HEURE a
               quitté cette ligne.
@@ -626,9 +774,9 @@ function LensRowImpl({
           </span>
         </Link>
         {/* « REJOINDRE » (H4) — frère du lien, jamais dedans : voir `LensJoinCallButton`. */}
-        {liveCall === null ? null : (
+        {liveCall === null || !callsAvailable() ? null : (
           <LensJoinCallButton
-            request={{ conversationId: conversation.id, callId: liveCall.id, media: liveCall.kind === 'video' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group }}
+            request={{ conversationId: conversation.id, callId: liveCall.id, media: liveCall.kind === 'video' ? 'video' : 'audio', title, avatar: photo ?? null, isGroup: group, peerKey: callPeerKey }}
             label={translate(currentInterfaceLanguage(), 'callJoin.named', { name: title })}
             text={translate(currentInterfaceLanguage(), 'callJoin.action')}
             onJoin={callActions.join}
@@ -636,14 +784,35 @@ function LensRowImpl({
         )}
       </div>
 
+      {/* LES ACTIONS BALAYÉES (#10580) — APRÈS le conteneur visuel, qui doit
+          rester le premier enfant (la scène n'anime que lui), et montées
+          seulement pendant le balayage ou l'ouverture. */}
+      {swipe.shown === null ? null : (
+        <ConversationRowSwipeActions
+          shown={swipe.shown}
+          held={swipe.held}
+          sides={swipeSides()}
+          label={translate(currentInterfaceLanguage(), 'rowActions.menu')}
+          onAction={onAction}
+          onClose={swipe.close}
+        />
+      )}
+
       <RowActions
         flags={flags}
         unread={unread}
         magnified={status.magnified}
         language={currentInterfaceLanguage()}
-        canCall={canCall}
-        canDelete={canCall}
+        canCall={callsAvailable()}
+        canDelete={account}
+        actionsOf={actionsOf}
+        peek={{ conversation, viewerId, languages, isAnonymous: guest }}
+        peekOpener={peekOpener}
+        {...(menuMore === undefined ? {} : { more: menuMore })}
+        categoryId={categoryIdOf(conversation)}
+        {...(categories === undefined ? {} : { categories })}
         onAction={onAction}
+        onChoice={(choice) => onRowIntent?.(conversation.id, choice)}
       />
     </li>
   );
@@ -674,6 +843,7 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if (prev.unreadCount !== next.unreadCount) return false;
   if (prev.onRowAction !== next.onRowAction) return false;
   if (prev.onOpenDetails !== next.onOpenDetails) return false;
+  if (prev.onRowIntent !== next.onRowIntent || prev.peerBlocked !== next.peerBlocked || prev.categories !== next.categories) return false;
   /* `typists` (#5793, #7547) — comparés par VALEUR (les noms joints) : l'écran
      redistribue une carte d'identité neuve à chaque `typing:start`/`stop` de
      n'importe quelle conversation, et sans cette ligne la rangée concernée
@@ -686,6 +856,7 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if ((prev.peerFocused ?? false) !== (next.peerFocused ?? false)) return false;
   if (prev.peerMood !== next.peerMood) return false;
   if (prev.peerMoodPostId !== next.peerMoodPostId) return false;
+  if (prev.peerStoryRing?.entryStoryId !== next.peerStoryRing?.entryStoryId || prev.peerStoryRing?.unseen !== next.peerStoryRing?.unseen) return false;
   /* L'instantané d'engagement (#8906) — comparé par RÉFÉRENCE : il vient du
      magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
   if (prev.engagement !== next.engagement) return false;

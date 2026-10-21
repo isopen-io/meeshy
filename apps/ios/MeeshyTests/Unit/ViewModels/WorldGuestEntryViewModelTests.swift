@@ -246,4 +246,24 @@ final class WorldGuestEntryViewModelTests: XCTestCase {
         XCTAssertNil(context)
         XCTAssertEqual(joiner.joinCallCount, 0)
     }
+
+    // MARK: - #10784 — la connexion ne propose plus World Wide
+
+    /// Directive porteur du 2026-10-16 : l'entrée anonyme dans World Wide ne
+    /// passe plus que par le QR de meeshy.me (`/world`). L'écran de connexion
+    /// s'ouvre sur la connexion, sans carte en tête — comme le web et la coque.
+    func test_loginView_offersNoWorldEntryCard() throws {
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // ViewModels
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+        let source = try String(
+            contentsOf: appRoot.appendingPathComponent("Meeshy/Features/Main/Views/LoginView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(source.contains("WorldEntryLoginCard"))
+        XCTAssertFalse(source.contains("WorldEntryCardModel"))
+        XCTAssertFalse(source.contains("requestedWorldEntry"))
+    }
 }

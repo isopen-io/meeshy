@@ -179,7 +179,9 @@ final class MediaGalleryChromeReachTests: XCTestCase {
                 allAttachments: attachments,
                 startAttachmentId: first.id,
                 accentColor: "6366F1",
-                sceneContext: sceneContext
+                sceneContext: sceneContext,
+                // Le témoin mesure le chrome, que le toucher pose (#10930).
+                entryPresentation: .carded
             )
             // **Le portillon de sortie que l'HÔTE pose** (#9573, b2e57f0932) :
             // il est FERMÉ par défaut, et le ⋯ n'est rendu que s'il laisse

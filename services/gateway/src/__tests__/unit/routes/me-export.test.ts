@@ -184,7 +184,7 @@ function makePrisma(opts: PrismaOpts = {}) {
     ),
     // Les packs (#10151) : aucun choix, aucune bibliothèque, aucune proposition.
     ...Object.fromEntries(
-      ['userStickerPack', 'userSticker', 'stickerPack'].map(
+      ['userStickerPack', 'userSticker', 'stickerPack', 'userPackOwnership', 'communityAppearancePack'].map(
         (model) => [model, { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) }],
       ),
     ),

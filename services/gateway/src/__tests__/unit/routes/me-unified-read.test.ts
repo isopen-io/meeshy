@@ -241,8 +241,12 @@ describe('GET /api/v1/me — JWT (utilisateur enregistré)', () => {
     });
     // Le gain visé par #4178 : la lecture de soi ne relit pas `User` une
     // deuxième fois — `authContext.registeredUser` (posé par le middleware)
-    // suffit. `findUnique` n'est appelé QUE par le middleware lui-même.
-    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+    // suffit. `findUnique` n'est appelé que par le middleware lui-même, et par
+    // la relecture du DÉCOR de profil (#10632) — deux colonnes que le cache d'auth
+    // ne porte pas (un contour équipé à l'instant doit se lire à l'instant), et
+    // qui ne s'ouvre que lorsque `profileDecor` est servi.
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+    expect(prisma.user.findUnique.mock.calls[1][0].select).toEqual({ equippedAvatarRing: true, equippedBanner: true, equippedBannerFrame: true });
   });
 
   it('sert des permissions ADMIN pour un rôle ADMIN — via servedUserPermissions, la loi centrale', async () => {

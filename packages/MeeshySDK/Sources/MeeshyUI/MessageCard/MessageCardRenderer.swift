@@ -265,21 +265,23 @@ public nonisolated enum MessageCardRenderer {
         cg.restoreGState()
     }
 
-    /// Un média REMPLIT son cadre (recadré au centre) ; sans pixels, la couleur d'attente.
+    /// Une photo REMPLIT son cadre (recadrée au centre, coins arrondis) ; un
+    /// STICKER s'y INSCRIT en entier, sans arrondi ni rognage (`op.fit`, #10915).
+    /// Sans pixels, la couleur d'attente.
     private static func paintMedia(_ op: MessageCardMediaOp, image: CGImage?, in cg: CGContext) {
         let frame = CGRect(x: op.x, y: op.y, width: op.width, height: op.height)
         let corner = max(0, min(CGFloat(op.radius), frame.width / 2, frame.height / 2))
         cg.saveGState()
-        cg.addPath(CGPath(roundedRect: frame, cornerWidth: corner, cornerHeight: corner, transform: nil))
-        cg.clip()
+        if op.fit == .cover || image == nil {
+            cg.addPath(CGPath(roundedRect: frame, cornerWidth: corner, cornerHeight: corner, transform: nil))
+            cg.clip()
+        }
         if let image, image.width > 0, image.height > 0 {
-            let pixels = CGSize(width: image.width, height: image.height)
-            let scale = max(frame.width / pixels.width, frame.height / pixels.height)
-            let drawn = CGSize(width: pixels.width * scale, height: pixels.height * scale)
-            UIImage(cgImage: image).draw(in: CGRect(
-                x: frame.midX - drawn.width / 2, y: frame.midY - drawn.height / 2,
-                width: drawn.width, height: drawn.height
-            ))
+            let drawn = op.fit.drawn(
+                pixelWidth: Double(image.width), pixelHeight: Double(image.height),
+                in: MessageCardFrame(x: op.x, y: op.y, width: op.width, height: op.height)
+            )
+            UIImage(cgImage: image).draw(in: CGRect(x: drawn.x, y: drawn.y, width: drawn.width, height: drawn.height))
         } else {
             cg.setFillColor(uiColor(op.placeholder).cgColor)
             cg.fill(frame)

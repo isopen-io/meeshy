@@ -69,7 +69,7 @@ public struct SoundPage: Sendable {
     }
 }
 
-public final class SoundLibraryService: SoundLibraryServiceProviding, @unchecked Sendable {
+public final class SoundLibraryService: SoundLibraryServiceProviding, Sendable {
     public static let shared = SoundLibraryService()
     private let api: APIClientProviding
 

@@ -8,6 +8,11 @@
  * la 20e, 12 948 pour la 100e (or), et le plafond de 16 556 dès la 101e. L'ancienne loi (+6 %, plafond 4 884)
  * aurait mis 451 frappes à l'atteindre.
  *
+ * ⚠️ LA LOI D'HIER. Avec les étincelles (#10846, #10847), le prix effectif d'une frappe est celui de
+ * `sparks.ts` (`effectiveMeeshPrice` : `meeshPrice(n)` × un facteur de niveau ACTUEL) et la frappe ne fait
+ * plus baisser le niveau (`previewSparksMint`). `previewMint` ci-dessous reste la loi que rejouent les
+ * clients publiés (vecteurs `mint-preview`) ; `meeshPrice` reste, lui, le prix de RANG de la pièce.
+ *
  * Une Meesh ne se frappe QU'EN DÉBITANT des points, au prix de son rang : aucun autre chemin n'existe — ni
  * fragment, ni frappe gratuite (porteur, 2026-10-10, #10011 ; `no-money-invariants.test.ts`).
  *

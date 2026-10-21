@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.sdk", category: "notifications")
+private let logger = MeeshyLog.logger(.notifications, subsystem: .sdk)
 
 /// High-level orchestrator for in-app notifications.
 ///
@@ -72,6 +72,40 @@ public final class NotificationToastManager: ObservableObject {
     /// d'abord une vue qui les LIT.
     public private(set) var activeConversationId: String?
     public var activePostId: String?
+
+    /// **Les conversations OUVERTES, et pas seulement la dernière** — iPad
+    /// multi-fenêtre. Une conversation détachée dans sa propre fenêtre laisse
+    /// celle de la fenêtre principale à l'écran : `activeConversationId` n'en
+    /// nomme qu'une (la plus récente), si bien que les messages de l'autre
+    /// remontaient en toast par-dessus le fil qu'on lisait, et que fermer la
+    /// fenêtre détachée remettait l'app « nulle part » alors qu'une
+    /// conversation restait affichée.
+    ///
+    /// Pile ordonnée (la plus récente en dernier) avec un compte par
+    /// conversation : la même conversation peut être ouverte dans deux
+    /// fenêtres, et seule la fermeture de la DERNIÈRE la retire. Alimentée
+    /// exclusivement par les écrans réellement activés
+    /// (`ConversationSocketHandler.activate()` / son `deinit`), une ouverture
+    /// pour une fermeture — c'est ce qui rend le compte juste.
+    private var openConversationStack: [String] = []
+    private var openConversationCounts: [String: Int] = [:]
+
+    /// Vrai tant qu'au moins un écran affiche cette conversation, dans
+    /// n'importe quelle fenêtre.
+    public func isConversationOpen(_ conversationId: String) -> Bool {
+        openConversationCounts[conversationId, default: 0] > 0
+    }
+
+    public var openConversationIds: Set<String> { Set(openConversationStack) }
+
+    /// Témoins uniquement : le singleton survit d'un test à l'autre.
+    func forgetOpenConversations() {
+        openConversationStack.removeAll()
+        openConversationCounts.removeAll()
+        activeConversationId = nil
+        MessageSocketManager.shared.activeConversationId = nil
+        MessageSocketManager.shared.openConversationIds = []
+    }
 
     public let newNotificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
     public let notificationMarkedRead = PassthroughSubject<String, Never>()
@@ -184,7 +218,7 @@ public final class NotificationToastManager: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     private var toastDismissTask: Task<Void, Never>?
-    private static let toastDuration: UInt64 = 7_000_000_000
+    private static let toastDuration: Duration = .seconds(7)
 
     // Dedup set: évite d'afficher 2x la même notification (APN foreground + socket simultanés)
     private var recentNotificationIds = Set<String>()
@@ -269,6 +303,14 @@ public final class NotificationToastManager: ObservableObject {
         // qui re-render le parent → boucle auto-entretenue (storm 429 sur `/read`).
         // Re-ouvrir réellement une autre conversation, ou la même après
         // `onConversationClosed()` (→ nil), passe normalement.
+        //
+        // Le compte, lui, passe AVANT le gate : la même conversation ouverte
+        // dans une seconde fenêtre est une seconde ouverture, que sa
+        // fermeture devra équilibrer.
+        openConversationCounts[conversationId, default: 0] += 1
+        openConversationStack.removeAll { $0 == conversationId }
+        openConversationStack.append(conversationId)
+        MessageSocketManager.shared.openConversationIds = openConversationIds
         guard conversationId != activeConversationId else { return }
 
         activeConversationId = conversationId
@@ -373,6 +415,21 @@ public final class NotificationToastManager: ObservableObject {
 
     /// Même gate que `markConversationNotificationsRead` : au plus un POST par
     /// post et par fenêtre, jamais deux en vol.
+    private func stampPostRead(_ postId: String) {
+        lastPostReadAt = Self.stampingCooldown(lastPostReadAt, key: postId, at: Date(), window: Self.conversationReadMinInterval)
+    }
+
+    /// Pose l'horodatage de `key` et oublie ceux dont la fenêtre est passée : ils ne bloquent plus rien.
+    /// Sans cet élagage, chaque conversation et chaque post jamais ouverts gardaient leur entrée jusqu'à la
+    /// déconnexion — des milliers sur une session de plusieurs jours.
+    nonisolated static func stampingCooldown(
+        _ stamps: [String: Date], key: String, at now: Date, window: TimeInterval
+    ) -> [String: Date] {
+        var kept = stamps.filter { now.timeIntervalSince($0.value) < window }
+        kept[key] = now
+        return kept
+    }
+
     private func markPostNotificationsRead(_ postId: String) {
         guard postReadTasks[postId] == nil else { return }
         if let last = lastPostReadAt[postId],
@@ -392,7 +449,7 @@ public final class NotificationToastManager: ObservableObject {
             // ce post, il n'y a rien à marquer. Cache vide ou inconnu → on
             // appelle quand même, le serveur fait autorité.
             if await Self.hasNoKnownUnreadNotification(forPost: postId) {
-                self?.lastPostReadAt[postId] = Date()
+                self?.stampPostRead(postId)
                 self?.postReadTasks[postId] = nil
                 return
             }
@@ -402,7 +459,7 @@ public final class NotificationToastManager: ObservableObject {
                 logger.error("Failed to mark post \(postId) read: \(error.localizedDescription)")
             }
             await self?.refreshUnreadCount()
-            self?.lastPostReadAt[postId] = Date()
+            self?.stampPostRead(postId)
             self?.postReadTasks[postId] = nil
         }
     }
@@ -587,7 +644,10 @@ public final class NotificationToastManager: ObservableObject {
                 logger.error("Failed to mark conversation \(conversationId) read: \(error.localizedDescription)")
             }
             await self?.refreshUnreadCount()
-            self?.lastConversationReadAt[conversationId] = Date()
+            if let self {
+                self.lastConversationReadAt = Self.stampingCooldown(
+                    self.lastConversationReadAt, key: conversationId, at: Date(), window: Self.conversationReadMinInterval)
+            }
             self?.conversationReadTasks[conversationId] = nil
         }
     }
@@ -606,10 +666,29 @@ public final class NotificationToastManager: ObservableObject {
     /// Une fermeture arrivée après l'ouverture de la suivante devient donc un
     /// no-op, ce qu'elle aurait toujours dû être. Un `deinit` ne dit pas
     /// seulement SI l'on ferme : il doit dire QUOI.
+    ///
+    /// **Multi-fenêtre** : fermer la conversation active rend la main à celle
+    /// qui reste affichée ailleurs (la plus récemment ouverte), au lieu de
+    /// remettre l'app « nulle part ». Le moteur de synchro, lui, tient son
+    /// propre ensemble de conversations ouvertes : celle qui reste à l'écran
+    /// ne s'est jamais remise à compter ses messages comme non lus.
     public func onConversationClosed(_ conversationId: String) {
-        guard conversationId == activeConversationId else { return }
-        activeConversationId = nil
-        MessageSocketManager.shared.activeConversationId = nil
+        if let count = openConversationCounts[conversationId] {
+            if count > 1 {
+                openConversationCounts[conversationId] = count - 1
+            } else {
+                openConversationCounts.removeValue(forKey: conversationId)
+                openConversationStack.removeAll { $0 == conversationId }
+            }
+        }
+        MessageSocketManager.shared.openConversationIds = openConversationIds
+        guard conversationId == activeConversationId,
+              !isConversationOpen(conversationId) else { return }
+        let remaining = openConversationStack.last
+        activeConversationId = remaining
+        MessageSocketManager.shared.activeConversationId = remaining
+        // Le moteur de synchro n'a plus à être relancé ici : il tient lui-même l'ENSEMBLE des conversations ouvertes
+        // (`openConversation` / `closeConversation`), celle qui reste à l'écran n'en est jamais sortie.
     }
 
     public func dismissToast() {
@@ -622,6 +701,8 @@ public final class NotificationToastManager: ObservableObject {
     public func reset() {
         dismissToast()
         activeConversationId = nil
+        openConversationStack.removeAll()
+        openConversationCounts.removeAll()
         activePostId = nil
         conversationReadTasks.values.forEach { $0.cancel() }
         conversationReadTasks = [:]
@@ -699,7 +780,7 @@ public final class NotificationToastManager: ObservableObject {
         // la notification ne doit pas rester non lue : on la marque lue côté
         // serveur (qui ré-émet `notification:counts`). On NE l'incrémente pas
         // localement (on sort avant `incrementInAppNotificationUnread`).
-        if let convId = event.conversationId, convId == activeConversationId {
+        if let convId = event.conversationId, isConversationOpen(convId) || convId == activeConversationId {
             markConsumedOnArrival(event)
             return
         }
@@ -725,7 +806,7 @@ public final class NotificationToastManager: ObservableObject {
         }
         recentNotificationIds.insert(event.id)
         Task { [weak self] in
-            try? await Task.sleep(for: .seconds(2))
+            _ = await cancellableSleep(for: .seconds(2))
             self?.recentNotificationIds.remove(event.id)
         }
 
@@ -866,8 +947,7 @@ public final class NotificationToastManager: ObservableObject {
         currentToast = event
 
         toastDismissTask = Task {
-            try? await Task.sleep(for: .nanoseconds(Self.toastDuration))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: Self.toastDuration) else { return }
             currentToastPresentation = nil
             currentToast = nil
         }

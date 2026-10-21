@@ -8,4 +8,9 @@
     <string name="playback_pause">Pause</string>
     <string name="playback_play">Abspielen</string>
     <string name="playback_paused">Audiowiedergabe pausiert</string>
+    <!-- #10624 — la carte de lecture dit le vocal et se pilote, comme iOS. -->
+    <string name="playback_voice_message">Sprachnachricht</string>
+    <string name="playback_protected">Geschützte Nachricht</string>
+    <string name="playback_back">15 Sekunden zurück</string>
+    <string name="playback_forward">15 Sekunden vor</string>
 </resources>

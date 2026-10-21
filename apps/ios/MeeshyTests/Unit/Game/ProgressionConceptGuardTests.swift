@@ -347,17 +347,85 @@ final class ProgressionConceptGuardTests: XCTestCase {
         }
     }
 
-    /// Les deux soldes ont deux noms stables : « à convertir » ne se dit plus « convertible », nulle part.
-    func test_theConvertibleBalance_hasOneName() throws {
+    /// Les étincelles (#10846) : un SEUL solde, la poche, toute convertible — « à convertir » ne se dit plus nulle part.
+    func test_theSingleBalance_isAllConvertible() throws {
         let table = try catalog(prefix: "game.")
-        for key in ["game.points.convertible.one", "game.points.convertible.other", "game.error.insufficient_points",
-                    "game.concept.fact.convertible", "game.fact.to_convert"] {
+        for key in ["game.error.insufficient_points", "game.concept.fact.convertible", "game.fact.to_convert"] {
             let french = try XCTUnwrap(table[key]?["fr"], "\(key) : absente du catalogue")
-            XCTAssertTrue(french.localizedCaseInsensitiveContains("à convertir"), "\(key) : le solde ne dit pas « à convertir » — « \(french) »")
-            XCTAssertFalse(french.contains("convertible"), "\(key) : l'ancien nom du solde — « \(french) »")
+            XCTAssertFalse(french.localizedCaseInsensitiveContains("à convertir"), "\(key) : l'ancien second solde — « \(french) »")
         }
-        XCTAssertEqual(table["game.concept.fact.held"]?["fr"], "Points en poche")
-        XCTAssertEqual(table["game.concept.fact.convertible"]?["fr"], "Points à convertir")
+        XCTAssertEqual(table["game.concept.fact.held"]?["fr"], "Ta lumière")
+    }
+
+    /// La poche fait le niveau (#10892) : aucune phrase ne promet plus que la frappe épargne le niveau, ni que le niveau
+    /// se lit sur les étincelles cumulées depuis le Prestige. Le rang et la Gloire, eux, ne baissent toujours jamais.
+    func test_theLevel_readsTheConvertibles_andTheMintLowersIt_inEveryLanguage() throws {
+        let table = try catalog(prefix: "game")
+        let stale = ["ne fait plus baisser", "sans faire baisser", "sans toucher à ton niveau", "jamais de ton niveau",
+                     "ne le fait jamais baisser", "depuis ton dernier Prestige", "Cumulées, elles font ton niveau", "reste acquis",
+                     "Frapper ne fait plus redescendre", "pas ton niveau", "ne baisse pas : il se lit",
+                     "elles, font ton niveau"]
+        for (key, entry) in table {
+            let french = entry["fr"] ?? ""
+            for phrase in stale {
+                XCTAssertFalse(french.contains(phrase), "\(key) : l'ancienne loi du niveau — « \(french) »")
+            }
+        }
+        XCTAssertEqual(table["game.concept.points.why"]?["fr"], "Tes étincelles forment ta lumière ; son éclat, c’est ton niveau.")
+        XCTAssertTrue((table["game.concept.level.what"]?["fr"] ?? "").contains("Il se lit sur ta lumière"))
+        XCTAssertTrue((table["game.rules.4.body"]?["fr"] ?? "").contains("ton niveau baisse d’autant"))
+        for key in ["game.rules.2.body", "game.rules.4.body", "game.concept.level.what", "game.concept.points.why",
+                    "game.guide.moment.first_mint.means", "game.mint.chip.level_a11y",
+                    "game.guide.moment.first_mint_possible.means_drop"] {
+            for locale in locales { XCTAssertFalse((table[key]?[locale] ?? "").isEmpty, "\(key) : pas de \(locale)") }
+        }
+    }
+
+    /// Le Vent arrière des étincelles (#10896) : +25 % à 7 niveaux ou plus sous le record de niveau, plus jamais « éteint »
+    /// — dans les règles et dans la fiche, dans les sept langues ; l'espace insécable précède « % » en fr, es et de.
+    func test_theTailwind_saysSevenLevelsBelowTheLevelRecord_inEveryLanguage() throws {
+        let table = try catalog(prefix: "game.")
+        XCTAssertEqual(table["game.rules.concept.tailwind.body"]?["fr"],
+                       "+25\u{00A0}% sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière. Il s’arrête dès que l’écart retombe à 6.")
+        let fiche = try XCTUnwrap(table["game.detail.fact.tailwind"]?["fr"])
+        XCTAssertEqual(fiche, "+25\u{00A0}% sur tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.")
+        XCTAssertLessThanOrEqual(fiche.count, 110, "la fiche tient en 110 caractères")
+        for key in ["game.rules.concept.tailwind.body", "game.detail.fact.tailwind"] {
+            for locale in locales {
+                let text = try XCTUnwrap(table[key]?[locale], "\(key) : pas de \(locale)")
+                let seven = locale == "ar" ? "سبع" : "7"
+                XCTAssertTrue(text.contains("25") && text.contains(seven), "\(key) [\(locale)] : la règle des 7 niveaux manque — « \(text) »")
+            }
+            for locale in ["fr", "es", "de"] {
+                XCTAssertTrue((table[key]?[locale] ?? "").contains("25\u{00A0}%"), "\(key) [\(locale)] : l'espace insécable devant « % »")
+            }
+        }
+        XCTAssertFalse(table.values.contains { ($0["fr"] ?? "").contains("Vent arrière est éteint") }, "le Vent arrière éteint se dit encore")
+    }
+
+    /// Les trois records (#10899) racontent l'épopée (#11179, § 4) : ta plus haute lumière, les étincelles reçues depuis
+    /// toujours, les Meeshes frappées depuis toujours — « à vie », « max à vie » et « total à vie » ne se disent plus
+    /// dans le Jeu, et « record » non plus (garde de vocabulaire : `GameEpicVocabularyGuardTests`).
+    func test_theGame_saysTheThreeRecords_andNoLongerLifetimeOrMax() throws {
+        let table = try catalog(prefix: "game").merging(try catalog(prefix: "progression.meesh.")) { first, _ in first }
+        for (key, entry) in table {
+            let french = entry["fr"] ?? ""
+            for stale in ["à vie", "Max à vie", "niveau max", "total à vie"] {
+                XCTAssertFalse(french.contains(stale), "\(key) : « \(stale) » se dit encore — « \(french) »")
+            }
+        }
+        XCTAssertEqual(table["game.sparks.levelMax.label"]?["fr"], "Au plus haut")
+        XCTAssertEqual(table["game.sparks.lifetime.label"]?["fr"], "Reçues depuis toujours")
+        XCTAssertEqual(table["game.concept.fact.minted"]?["fr"], "Frappées depuis toujours")
+        XCTAssertEqual(table["progression.meesh.minted.many"]?["fr"], "%lld frappées depuis toujours")
+        XCTAssertEqual(table["game.detail.fact.level_record"]?["fr"], "C’est ta plus haute lumière : le plus haut niveau que tu as atteint.")
+        XCTAssertEqual(table["game.detail.fact.minted"]?["fr"], "Ce sont toutes les Meeshes que tu as frappées depuis toujours.")
+        XCTAssertTrue((table["game2.prestige.meo"]?["fr"] ?? "").contains("Ce que tu as reçu depuis toujours et ta plus haute lumière restent gravés"))
+        XCTAssertTrue((table["game2.prestige.confirm.access"]?["fr"] ?? "").hasSuffix("car elles lisent ta plus haute lumière."))
+        for key in ["game.sparks.record.line", "game.sparks.cumul.record", "game.sparks.levelRecord.line", "game.concept.fact.minted",
+                    "progression.meesh.minted.one", "progression.meesh.minted.many", "game2.prestige.confirm.access"] {
+            for locale in locales { XCTAssertFalse((table[key]?[locale] ?? "").isEmpty, "\(key) : pas de \(locale)") }
+        }
     }
 
     /// Le « + » des gains par famille est retiré (« Contenu jusqu’à 16 », plus « jusqu’à +16 ») — dans le code et

@@ -168,8 +168,8 @@ struct CallCaptionsBand: View {
 }
 
 struct CallJournalList: View {
-    let segments: [TranscriptionSegment]
-    let line: (TranscriptionSegment) -> CallCaptionLine
+    let segments: [CallTranscriptionSegment]
+    let line: (CallTranscriptionSegment) -> CallCaptionLine
     let onToggleOriginal: (UUID) -> Void
     var contentPadding: CGFloat = 16
 
@@ -317,8 +317,8 @@ private nonisolated struct CallJournalScrollKey: PreferenceKey {
 /// Tout l'appel, Traduit ou Original — le réglage est celui du bouton
 /// Sous-titres (`showOriginalText`), un toucher par phrase l'inverse.
 struct CallCaptionsJournalSheet: View {
-    let segments: [TranscriptionSegment]
-    let line: (TranscriptionSegment) -> CallCaptionLine
+    let segments: [CallTranscriptionSegment]
+    let line: (CallTranscriptionSegment) -> CallCaptionLine
     @Binding var showsOriginal: Bool
     let onToggleOriginal: (UUID) -> Void
 

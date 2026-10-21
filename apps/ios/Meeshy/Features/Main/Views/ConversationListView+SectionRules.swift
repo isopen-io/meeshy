@@ -104,8 +104,16 @@ extension ConversationListView {
     /// La queue ne se pose que sous un contenu CONNU. Sous un squelette, elle
     /// disait « Aucune conversation » à un compte qui en a, puis les rangées
     /// réelles la repoussaient : elle attend que la liste soit là.
+    ///
+    /// Un chargement en ÉCHEC n'est pas un contenu connu non plus (#10923) :
+    /// sous « Impossible de charger vos conversations », la queue titrait
+    /// « Aucune conversation » avec ses raccourcis — deux verdicts
+    /// contradictoires sur le même écran. L'erreur est alors le seul état.
     nonisolated static func showsQuickActionsTail(emptyBranch: ConversationListEmptyBranch?) -> Bool {
-        emptyBranch != .skeleton
+        switch emptyBranch {
+        case .skeleton, .syncError: false
+        case nil, .searchNoResults, .createFirstConversation: true
+        }
     }
 
     /// `nil` ⇒ la liste a des sections à rendre.

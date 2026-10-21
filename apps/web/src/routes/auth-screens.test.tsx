@@ -312,4 +312,17 @@ describe('Les pages d’accès tiennent dans UNE colonne, la puce « Fermer » c
     expect(column?.querySelector('#signup-phone')).not.toBeNull();
     expect(strayFromAuthColumn(el)).toEqual([]);
   });
+
+  test('la puce se nomme dans la langue de l’interface, jamais « Fermer » en anglais (#10748)', async () => {
+    await loadInterfaceCatalog('en');
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = 'en';
+    try {
+      const el = mount(<SignupScreen />);
+      expect(authColumnIn(el)?.querySelector('a[aria-label="Close"]')?.getAttribute('href')).toBe('/login');
+      expect(el.querySelector('a[aria-label="Fermer"]')).toBeNull();
+    } finally {
+      document.documentElement.lang = previous;
+    }
+  });
 });

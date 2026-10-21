@@ -26,6 +26,7 @@ import itSignup from './catalog-it-signup';
 import itGallery from './catalog-it-gallery';
 import itMessageCard from './catalog-it-message-card';
 import itMentions from './catalog-it-mentions';
+import itShellLabels from './catalog-it-shell-labels';
 import itStudioChrome from './catalog-it-studio-chrome';
 import itEphemeral from './catalog-it-ephemeral';
 import itWriteRestriction from './catalog-it-write-restriction';
@@ -39,7 +40,9 @@ import itDownload from './catalog-it-download';
 import itPhonePrompt from './catalog-it-phone-prompt';
 import itUserProfile from './catalog-it-user-profile';
 import itContentRefused from './catalog-it-content-refused';
+import itContentRemoval from './catalog-it-content-removal';
 import itPublicEntry from './catalog-it-public-entry';
+import itThreadSearch from './catalog-it-thread-search';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -306,6 +309,7 @@ const it = {
   'notFound.title': 'Questo indirizzo non esiste.',
 
   'pending.back': 'Torna alle conversazioni',
+  'pending.screen': 'La schermata sta arrivando',
 
   'linkPage.home': 'Torna a Meeshy',
   'linkPage.retry': 'Riprova',
@@ -322,8 +326,6 @@ const it = {
   'trackingLink.opening': 'Apertura del link…',
   'trackingLink.dead.title': 'Questo link non è più disponibile',
   'trackingLink.dead.body': 'È scaduto, è stato disattivato o non è mai esistito.',
-  'accountDeletion.incomplete.title': 'Link incompleto',
-  'accountDeletion.incomplete.body': 'A questo link mancano le informazioni necessarie. Accedi per richiedere l’eliminazione del tuo account.',
   'accountDeletion.confirm.title': 'Conferma l’eliminazione del tuo account',
   'accountDeletion.confirm.body':
     'Il tuo account sarà disattivato al termine di un periodo di tolleranza di 30 giorni. Fino ad allora, il link «Annulla» dell’e-mail ti permette di tornare indietro.',
@@ -1054,6 +1056,7 @@ const it = {
   'message.detail.language.original': '{language} (originale)',
 
   ...itMentions,
+  ...itShellLabels,
   ...itStudioChrome,
   ...itEphemeral,
   ...itWriteRestriction,
@@ -1070,7 +1073,9 @@ const it = {
   ...itContactDiscovery,
   ...itUserProfile,
   ...itContentRefused,
+  ...itContentRemoval,
   ...itPublicEntry,
+  ...itThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default it;

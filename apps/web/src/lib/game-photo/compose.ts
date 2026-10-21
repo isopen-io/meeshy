@@ -58,6 +58,8 @@ export type PhotoArt = {
   readonly signature: CanvasImageSource;
   /** La Flamme du bandeau de parrainage ; absente sans bandeau ou si elle n'a pas pu être dessinée. */
   readonly flame?: CanvasImageSource;
+  /** La plaque d'auteur (#10816) ; absente pour un invité ou un moment sans plaque. */
+  readonly author?: CanvasImageSource;
 };
 
 /** Les textes du bandeau de parrainage (#7742), déjà localisés par l'appelant. */
@@ -250,6 +252,7 @@ export function paintPhoto(ctx: PaintContext, input: PaintInput): void {
   paintBackground(ctx, input);
   drawContained(ctx, art.emblem, layout.emblem);
   paintText(ctx, input);
+  if (art.author !== undefined) drawContained(ctx, art.author, layout.author);
   drawContained(ctx, art.mee, layout.mee);
   drawContained(ctx, art.meo, layout.meo);
   if (layout.banner !== undefined && banner !== undefined) paintBannerFrame(ctx, layout.banner, input.palette);

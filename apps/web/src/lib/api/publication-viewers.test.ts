@@ -86,6 +86,15 @@ describe('fetchStoryViewers — les visiteurs sans compte (#10483)', () => {
     expect(result.ok && result.data.anonymousViewCount).toBe(4);
   });
 
+  test('#11065 — le compte de vues RELU avec la liste est transmis ; absent ou invalide ⇒ rien', async () => {
+    const served = await fetchStoryViewers({ source: 'gateway', transport: page({ viewCount: 4 }), postId: 'p-1' });
+    expect(served.ok && served.data.viewCount).toBe(4);
+    for (const extra of [{}, { viewCount: null }, { viewCount: -1 }, { viewCount: 2.5 }, { viewCount: 'x' }]) {
+      const result = await fetchStoryViewers({ source: 'gateway', transport: page(extra), postId: 'p-1' });
+      expect(result.ok && result.data.viewCount).toBeUndefined();
+    }
+  });
+
   test('un ancien serveur (champ absent) ou une valeur invalide ⇒ aucun compte de visiteurs', async () => {
     for (const extra of [{}, { anonymousViewCount: null }, { anonymousViewCount: -1 }, { anonymousViewCount: 'x' }]) {
       const result = await fetchStoryViewers({ source: 'gateway', transport: page(extra), postId: 'p-1' });

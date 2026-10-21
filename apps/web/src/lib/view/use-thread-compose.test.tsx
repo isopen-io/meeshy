@@ -8,6 +8,9 @@ import { VIEWER_ID, message } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
+import { menuScope } from '@/test-support/menu-viewer';
+
+import { webRepliesToMessage } from './message-action-scope';
 import { mentionSourceStore } from './mention-source';
 import { useThreadCompose, type ThreadComposeState } from './use-thread-compose';
 
@@ -71,6 +74,8 @@ function mount(initial: {
     protection: unknown,
     place: unknown,
   ) => void;
+  readonly replyable?: (message: Message) => boolean;
+  readonly storedDraft?: { readonly text: string; readonly language: string; readonly protection: object; readonly replyToId?: string };
 }): {
   readonly state: () => ThreadComposeState;
   readonly rerender: () => void;
@@ -80,6 +85,7 @@ function mount(initial: {
   root = createRoot(container);
 
   const backend = fakeStorage();
+  if (initial.storedDraft !== undefined) backend.setItem('meeshy.draft.u_v1.c-1', JSON.stringify(initial.storedDraft));
   const store = createDraftStore(backend);
   let captured!: ThreadComposeState;
 
@@ -91,6 +97,7 @@ function mount(initial: {
       messages: initial.messages,
       readerLanguages: ['fr'],
       send: initial.send,
+      replyable: initial.replyable ?? (() => true),
     });
     return null;
   }
@@ -246,5 +253,63 @@ describe('useThreadCompose — publie la source des mentions du fil (#7826)', ()
     });
     expect(mentionSourceStore.getState().source).toBeNull();
     root = createRoot(container);
+  });
+});
+
+describe('useThreadCompose — le mode édition (#10581)', () => {
+  const MINE = messageOf({ id: 'm-mine', senderId: VIEWER_ID, content: 'mon texte' });
+  const OTHER = messageOf({ id: 'm-other' });
+
+  test('`beginEdit` arme le mode sur le texte d’origine, `edit.cancel` le referme', () => {
+    const { state } = mount({ messages: [MINE, OTHER], send: () => {} });
+    act(() => state().beginEdit('m-mine'));
+    expect(state().edit.editing).toEqual({ messageId: 'm-mine', original: 'mon texte' });
+    act(() => state().edit.cancel());
+    expect(state().edit.editing).toBeNull();
+  });
+
+  test('armer une réponse sort du mode édition : le composeur revient avec sa citation', () => {
+    const { state } = mount({ messages: [MINE, OTHER], send: () => {} });
+    act(() => state().beginEdit('m-mine'));
+    act(() => state().setReplyTarget('m-other'));
+    expect(state().edit.editing).toBeNull();
+    expect(state().replyTo).toBeDefined();
+  });
+
+  test('la citation déjà armée est mise de côté avec le brouillon, et revient à l’annulation', () => {
+    const { state } = mount({ messages: [MINE, OTHER], send: () => {} });
+    act(() => state().setReplyTarget('m-other'));
+    act(() => state().beginEdit('m-mine'));
+    expect(state().edit.editing).not.toBeNull();
+    act(() => state().edit.cancel());
+    expect(state().replyTo).toBeDefined();
+  });
+});
+
+describe('useThreadCompose — une citation ne s’arme que là où le web sait répondre (#11372, contre-vérification)', () => {
+  const QUOTED = messageOf({ id: 'm-quoted', content: 'à citer' });
+  const lawIn = (encryptionMode: 'e2ee' | null) => (m: Message) =>
+    webRepliesToMessage(m, menuScope({ id: VIEWER_ID }, { encryptionMode }), { now: Date.now() });
+  const storedDraft = { text: 'reprise', language: 'fr', protection: {}, replyToId: 'm-quoted' };
+
+  test('un brouillon restauré dans une conversation de bout en bout ne réarme AUCUNE citation, et l’envoi part sans', () => {
+    const calls: unknown[][] = [];
+    const { state } = mount({ messages: [QUOTED], send: (...args: unknown[]) => calls.push(args), replyable: lawIn('e2ee'), storedDraft });
+    expect(state().replyTo).toBeUndefined();
+    act(() => state().onSend({ text: 'x', attachments: [], language: 'fr', protection: {}, place: null }));
+    expect(calls[0]?.[2]).toBeNull();
+  });
+
+  test('en bout en bout, armer une citation par une autre porte ne la monte pas non plus', () => {
+    const { state } = mount({ messages: [QUOTED], send: () => {}, replyable: lawIn('e2ee') });
+    act(() => state().setReplyTarget('m-quoted'));
+    expect(state().replyTo).toBeUndefined();
+    act(() => state().setReplyToMedia('m-quoted', 'a-1'));
+    expect(state().replyTo).toBeUndefined();
+  });
+
+  test('en clair, le même brouillon réarme sa citation', () => {
+    const { state } = mount({ messages: [QUOTED], send: () => {}, replyable: lawIn(null), storedDraft });
+    expect(state().replyTo).toBeDefined();
   });
 });

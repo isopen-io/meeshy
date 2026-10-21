@@ -103,7 +103,11 @@ export function ExportSection({ language, deps }: { readonly language: AdminLang
             ]}
             primary={{
               label: translateAdmin(language, 'admin.gameSeasons.export.download'),
-              onClick: () => setNote(translateAdmin(language, downloadTextFile(fileNameOf(exported.revision), exported.yaml) ? 'admin.gameSeasons.export.downloaded' : 'admin.gameSeasons.export.downloadFailed')),
+              onClick: () => {
+                void downloadTextFile({ name: fileNameOf(exported.revision), text: exported.yaml }).then((outcome) =>
+                  setNote(outcome === 'cancelled' ? '' : translateAdmin(language, outcome === 'delivered' ? 'admin.gameSeasons.export.downloaded' : 'admin.gameSeasons.export.downloadFailed')),
+                );
+              },
               data: { 'data-gameseasons-yaml-download': '' },
             }}
           />

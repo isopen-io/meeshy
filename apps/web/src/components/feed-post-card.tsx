@@ -5,9 +5,9 @@ import type { ListingContext } from '@/lib/api/social-events-v2-types';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { lazy, Suspense, useCallback, useState, type ReactNode } from 'react';
 
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 import { FeedActionsRow, type CommentHandler, type GestureHandler, type RepostHandler, type ShareHandler } from './feed-actions-row';
-import { FeedPostMenu, type PostMenuHost } from './feed-post-menu';
+import { ModelPostMenu, type PostMenuHost } from './feed-post-menu';
 import { FeedRepostEmbed } from './feed-repost-embed';
 import { PersonName } from './person-name';
 import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
@@ -150,7 +150,9 @@ function FeedPostHeader({ model, storyRing, mood, isDetail, openOrigin, hosts }:
       {/* L'AVATAR OUVRE LE PROFIL (#6396). Posé ICI et pas sur la variante
           RÉEL : là-bas, la carte entière est déjà un `<Link to="reels">`, et un
           lien imbriqué dans un lien est invalide. */}
-      <Avatar
+      <PeerAvatar
+        presenceKey={model.author.id}
+        ringRef={model.author.ring}
         initials={model.author.initials}
         color={model.author.accentColor}
         size={40}
@@ -332,21 +334,7 @@ const hostsOf = ({ onGesture, onShare, onComment, onRepost }: CardHosts): Omit<C
 function CardMenu({ model, isDetail, tone, hosts }: { readonly model: FeedCardModel; readonly isDetail: boolean; readonly tone: 'card' | 'overlay'; readonly hosts: CardHosts }) {
   if (hosts.menu === undefined) return null;
   return (
-    <FeedPostMenu
-      postId={model.id}
-      authorId={model.author.id}
-      authorName={model.author.name}
-      text={model.text?.full}
-      originalText={model.text?.original}
-      originalLanguage={model.text?.originalLanguage}
-      bookmarked={model.viewer.bookmarked}
-      studioEditable={model.repostOf === undefined && (model.scene !== undefined || model.media.length > 0)}
-      isDetail={isDetail}
-      tone={tone}
-      menu={hosts.menu}
-      onShare={hosts.onShare}
-      onGesture={hosts.onGesture}
-    />
+    <ModelPostMenu model={model} isDetail={isDetail} tone={tone} menu={hosts.menu} onShare={hosts.onShare} onGesture={hosts.onGesture} />
   );
 }
 
@@ -412,7 +400,7 @@ function FeedReelCard({ model, impressionRef, openOrigin, ...hosts }: { readonly
       </div>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
         <div className="flex items-center gap-2">
-          <Avatar initials={model.author.initials} color={model.author.accentColor} size={34} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
+          <PeerAvatar presenceKey={model.author.id} ringRef={model.author.ring} initials={model.author.initials} color={model.author.accentColor} size={34} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
           <span className="text-body font-semibold text-on-media">{model.author.name}</span>
         </div>
         {model.text !== undefined ? (

@@ -168,7 +168,7 @@ async function buildApp(authenticated = true): Promise<FastifyInstance> {
       create: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
-    postImpression: {
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }),
       create: jest.fn().mockResolvedValue({}),
       createMany: jest.fn().mockResolvedValue({ count: 2 }),
     },

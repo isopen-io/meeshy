@@ -25,6 +25,23 @@ const digest = (bytes: Uint8Array): string => createHash('sha256').update(bytes)
 
 const sources = readGloryFrameSources();
 const generated = buildGloryFramePacks(sources);
+const APPEARANCE_REGISTRY_FILES = [
+  'packages/shared/design/appearance/wallpapers/packs.json',
+  'packages/shared/design/appearance/banners/packs.json',
+  'packages/shared/design/appearance/avatar-rings/packs.json',
+  'packages/shared/design/appearance/banner-frames/packs.json',
+  'packages/shared/design/packs/samples/wallpaper.json',
+].map((file) => join(REPO_ROOT, file));
+
+/** Chaque `src` d'une référence de fichier du magasin, à n'importe quelle profondeur. */
+const referencedSources = (node: unknown): string[] => {
+  if (Array.isArray(node)) return node.flatMap(referencedSources);
+  if (typeof node !== 'object' || node === null) return [];
+  const record = node as Record<string, unknown>;
+  const own = typeof record['src'] === 'string' ? [record['src'] as string] : [];
+  return own.concat(Object.values(record).flatMap(referencedSources));
+};
+
 const versioned = readJson(REGISTRY_FILE) as readonly RegistryEntry[];
 const { entries, rejected } = parsePackIndex(versioned);
 const collections = [...sources.collections.values()];
@@ -82,7 +99,16 @@ describe('chaque fichier déclaré est servi, octets et empreinte égaux', () =>
       return [entry.cover, entry.contract, ...Object.values(entry.strings).flatMap((ref) => (ref === undefined ? [] : [ref])), ...(contract?.contract.frames.map((frame) => frame.thumb) ?? [])];
     });
     const retained = Object.values(readJson(RETAINED_FILE) as Record<string, readonly string[]>).flat();
-    const engaged = new Set([...declared, ...sampleFiles].map((ref) => ref.src).concat(retained));
+    // Le magasin est PARTAGÉ : les registres d'apparence (#10632 — fonds, bannières, contours, et le pack
+    // d'exemple des fonds) y publient leurs couvertures, contrats et libellés. Leurs fichiers sont engagés.
+    const appearanceFiles = APPEARANCE_REGISTRY_FILES.flatMap((file) => {
+      const registryRefs = referencedSources(readJson(file));
+      const contractRefs = registryRefs
+        .filter((src) => src.endsWith('.json') && existsSync(join(PACK_ASSETS_DIR, src)))
+        .flatMap((src) => referencedSources(readJson(join(PACK_ASSETS_DIR, src))));
+      return [...registryRefs, ...contractRefs];
+    });
+    const engaged = new Set([...declared, ...sampleFiles].map((ref) => ref.src).concat(retained, appearanceFiles));
     expect(readdirSync(PACK_ASSETS_DIR).filter((file) => !engaged.has(file))).toEqual([]);
   });
 

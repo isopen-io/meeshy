@@ -3,6 +3,17 @@ import UIKit
 import SwiftUI
 import MeeshyUI
 
+/// Valeur de requête d'un lien `meeshy://` construit par un intent. `.urlQueryAllowed`
+/// laisse passer `&`, `=`, `+` et `#` : une dictée « Tom & Jerry ce soir » arrivait
+/// tronquée à « Tom », le reste lu comme un autre paramètre.
+nonisolated enum IntentURLQuery {
+    static let valueAllowed: CharacterSet = CharacterSet.urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&=+?#"))
+
+    static func encode(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: valueAllowed) ?? ""
+    }
+}
+
 // MARK: - App Shortcuts
 /// App Shortcuts are available on iOS 16+
 /// These appear in Spotlight, Siri, and Shortcuts app
@@ -103,7 +114,7 @@ struct SendMessageIntent: AppIntent {
         }
 
         // Build deep link
-        let urlString = "meeshy://send?contactId=\(selectedContact.id)&message=\(messageText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+        let urlString = "meeshy://send?contactId=\(selectedContact.id)&message=\(IntentURLQuery.encode(messageText))"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "me.meeshy.intents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid deep link URL"])
         }
@@ -224,7 +235,7 @@ struct TranslateTextIntent: AppIntent {
             textToTranslate = try await $text.requestValue("What would you like to translate?")
         }
 
-        let urlString = "meeshy://translate?text=\(textToTranslate.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")&target=\(targetLanguage.rawValue)"
+        let urlString = "meeshy://translate?text=\(IntentURLQuery.encode(textToTranslate))&target=\(targetLanguage.rawValue)"
         guard let url = URL(string: urlString) else {
             throw NSError(domain: "me.meeshy.intents", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid deep link URL"])
         }

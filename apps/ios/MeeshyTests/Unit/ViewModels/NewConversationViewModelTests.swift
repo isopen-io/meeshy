@@ -64,6 +64,16 @@ final class NewConversationViewModelTests: XCTestCase {
         """)
     }
 
+    /// #10946 — la recherche de personnes sert le contour équipé ; le résultat le garde.
+    func test_searchedUser_decodesTheServedRing() {
+        let user: SearchedUser = JSONStub.decode("""
+        {"id":"u1","username":"ana","firstName":null,"lastName":null,"displayName":null,"email":null,"isOnline":null,"lastActiveAt":null,"avatar":null,
+         "profileDecor":{"avatarRing":{"pack":"contours-essentiels","item":"filet","origin":"builtin"}}}
+        """)
+
+        XCTAssertEqual(user.avatarRing, ServedProfileDecorItem(pack: "contours-essentiels", item: "filet", origin: .builtin))
+    }
+
     private static func makeConversationResponse(id: String, type: String = "direct") -> APIResponse<APIConversation> {
         JSONStub.decode("""
         {
@@ -458,5 +468,16 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertTrue(sut.contacts.isEmpty)
         XCTAssertFalse(sut.isLoadingContacts,
                        "A failed contacts fetch must clear the loading flag so the empty state can render")
+    }
+
+    /// La frappe suivante annule la recherche en vol : l'annulation n'est pas
+    /// une panne. Elle vidait la liste et montrait l'échec à chaque lettre.
+    func test_performSearch_cancelledByTheNextKeystroke_isNotAFailure() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = CancellationError()
+
+        await sut.performSearch(query: "ab")
+
+        XCTAssertFalse(sut.searchFailed)
     }
 }

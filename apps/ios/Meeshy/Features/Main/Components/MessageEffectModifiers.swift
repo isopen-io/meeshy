@@ -432,8 +432,9 @@ struct RainbowEffect: ViewModifier {
     let animated: Bool
     /// Couleurs choisies par l'auteur (`MessageEffects.rainbowColors`).
     var colors: [String]? = nil
-    /// Rayon de la forme entourée. Défaut aligné sur la bulle et son média.
-    var cornerRadius: CGFloat = 18
+    /// Rayon de la forme entourée : par défaut CELUI de la bulle (`bubbleCornerRadius`), pour que le liseré
+    /// en épouse les coins — une seule source, jamais deux littéraux qui se ressemblent.
+    var cornerRadius: CGFloat = BubbleStandardLayout.bubbleCornerRadius
 
     @State private var cometPhase: CGFloat = 0
     /// La comète est `Animatable` : SwiftUI rappelle son `body` à la fréquence

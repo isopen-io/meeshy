@@ -1,31 +1,33 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
-import { lazy, Suspense, useId, useState } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import {
   conversationMembersQueryOptions,
   flattenConversationMembers,
   memberFromParticipant,
-  type ConversationMember,
 } from '@/lib/api/conversation-members';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
 import { departureKindsOf, type DepartureKind } from '@/lib/conversation-departure';
+import { conversationStore, effectiveFlagsOf } from '@/lib/conversation-store';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { translateConversationManage } from '@/lib/i18n-conversation-manage-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { avatarMenuEntries } from '@/lib/view/avatar-menu';
-import { avatarOf, initialsOf } from '@/lib/view/conversation';
+import { managementOf } from '@/lib/view/conversation-management';
 import { shareConversationLink, type ConversationShareOutcome } from '@/lib/view/conversation-share-link';
 import type { PortailPartage } from '@/lib/view/invitation';
 import { canCreateShareLink } from '@/lib/view/share-link-eligibility';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
-import { peekProfileOnClick } from '@/lib/view/profile-peek';
-import { Link } from '@/routes/route-table';
+import { useConversationManageCatalog } from '@/lib/view/use-conversation-manage-catalog';
 
-import { Avatar } from './avatar';
+import { ConversationDetailsAvatar } from './conversation-details-avatar';
+import { ConversationMembersSection } from './conversation-details-members';
+import { ConversationAppearanceEntry } from './conversation-appearance-entry';
 import { ConversationMediaSection } from './conversation-media-section';
-import { AvatarMenuTrigger } from './avatar-menu';
+import { ConversationOptionsSection } from './conversation-options-section';
+import { ConversationSettingsSection } from './conversation-settings-section';
 import { Glyph, GlyphSvg } from './glyph';
 import { CALLS_GLYPHS } from './glyphs-calls';
 import { SETTINGS_GLYPHS } from './glyphs-settings';
@@ -44,9 +46,14 @@ const ConversationStatsSection = lazy(() => import('./conversation-stats-section
  * (#7834, #8103 — l'aperçu et l'entrée vers l'écran « Médias, liens et
  * documents »), la section « Statistiques » (#7835, réservée à un membre
  * inscrit : la passerelle la refuse à un visiteur sans compte, la feuille ne
- * la demande donc pas) et l'onglet « Membres ». Les options (#7836) ne sont
- * pas encore portées ; « Quitter » et « Supprimer pour moi » le sont
- * (#7837, #7285).
+ * la demande donc pas) et l'onglet « Membres », que celui qui en a le rang
+ * GÈRE (#10613 : promouvoir, rétrograder, expulser, bannir, ajouter —
+ * `conversation-details-members.tsx`). Les réglages du groupe (#7836 : photo,
+ * titre, description, permissions — `conversation-settings-section.tsx`) et les
+ * options du lecteur (nom personnel, épingler, sourdine, archiver —
+ * `conversation-options-section.tsx`) suivent ; « Quitter » et « Supprimer pour
+ * moi » sont portés (#7837, #7285). Les mots de la gestion vivent dans leur
+ * propre catalogue, chargé avec la feuille (`i18n-conversation-manage-catalog.ts`).
  *
  * Une FEUILLE du fil, pas une adresse (D-118) : comme sur iOS, elle se pose
  * au-dessus du fil qui garde son défilement, le retour matériel la referme
@@ -58,7 +65,6 @@ const ConversationStatsSection = lazy(() => import('./conversation-stats-section
  * remplace quand elle arrive. Le squelette ne paraît que si le cache est VIDE.
  */
 type TypeKey = Extract<InterfaceCatalogKey, `conversation.details.type.${string}`>;
-type RoleKey = Extract<InterfaceCatalogKey, `conversation.details.role.${string}`>;
 
 const TYPE_KEYS: Readonly<Record<Conversation['type'], TypeKey>> = {
   direct: 'conversation.details.type.direct',
@@ -67,15 +73,6 @@ const TYPE_KEYS: Readonly<Record<Conversation['type'], TypeKey>> = {
   global: 'conversation.details.type.global',
   broadcast: 'conversation.details.type.broadcast',
 };
-
-const ROLE_KEYS: Readonly<Record<string, RoleKey>> = {
-  creator: 'conversation.details.role.creator',
-  admin: 'conversation.details.role.admin',
-  moderator: 'conversation.details.role.moderator',
-};
-
-const MEMBER_AVATAR = 40;
-const ROW_MIN_HEIGHT = 56;
 
 type ShareState = { readonly busy: boolean; readonly feedback: string | null };
 
@@ -106,6 +103,7 @@ export function ConversationDetailsSheet({
   onJumpToMessage,
   canJumpTo,
   onRequestDeparture,
+  focus,
 }: {
   readonly conversation: Conversation;
   readonly title: string;
@@ -125,10 +123,20 @@ export function ConversationDetailsSheet({
    * (visiteur sans compte), aucun des deux n'est rendu.
    */
   readonly onRequestDeparture?: ((kind: DepartureKind) => void) | undefined;
+  /**
+   * OÙ LA FICHE S'OUVRE (revue #11211) — « Inviter » depuis le menu d'une
+   * ligne ouvre l'ajout de membres, « Gérer les membres » amène la liste en
+   * vue. Absent, la fiche s'ouvre sur sa tête.
+   */
+  readonly focus?: 'invite' | 'members' | undefined;
 }) {
   const language = currentInterfaceLanguage();
-  const membersHeadingId = useId();
+  const queryClient = useQueryClient();
+  const manageReady = useConversationManageCatalog(language);
+  const management = managementOf(conversation);
+  const muted = useStore(conversationStore, (state) => effectiveFlagsOf(conversation, state.overrides).isMuted);
   const query = useInfiniteQuery(conversationMembersQueryOptions(deps, conversation.id));
+  useMembersLive({ deps, queryClient, conversationId: conversation.id, viewerId });
   const served = flattenConversationMembers(query.data);
   const members = served ?? conversation.participants.map(memberFromParticipant);
   const total = query.data?.pages[0]?.totalCount ?? conversation.memberCount;
@@ -136,7 +144,6 @@ export function ConversationDetailsSheet({
   const countLabel = translate(language, total === 1 ? 'conversation.details.members.one' : 'conversation.details.members.other', {
     count: `${total}${capped ? '+' : ''}`,
   });
-  const photo = avatarOf(conversation, viewerId);
   const description = conversation.description?.trim() ?? '';
 
   /**
@@ -144,7 +151,9 @@ export function ConversationDetailsSheet({
    * /conversations/:id/stats` refuse un invité ou un visiteur (`requiredAuth`,
    * `allowAnonymous: false`). Pour eux, rien n'est demandé ni montré.
    */
-  const canViewStats = useStore(sessionStore, (state) => state.session.status === 'authenticated') || deps.source === 'fixtures';
+  const signedIn = useStore(sessionStore, (state) => state.session.status === 'authenticated') || deps.source === 'fixtures';
+  const canViewStats = signedIn;
+  const createdOn = createdOnOf(conversation.createdAt, language);
 
   const departures = onRequestDeparture === undefined ? [] : departureKindsOf(conversation);
   const canLeave = departures.includes('leave');
@@ -165,7 +174,7 @@ export function ConversationDetailsSheet({
     <Sheet title={translate(language, 'conversation.details.title')} bodyAs="div" onClose={onClose}>
       <div className="flex-1 overflow-y-auto" data-conversation-details>
         <header className="flex flex-col items-center gap-2 px-4 pt-4 pb-6 text-center">
-          <Avatar initials={initialsOf(title)} color={accent} size={88} name={title} {...(photo === undefined ? {} : { src: photo })} />
+          <ConversationDetailsAvatar conversation={conversation} viewerId={viewerId} title={title} accent={accent} />
           <h3 className="text-section font-bold" style={{ color: 'var(--color-ios-ink)' }} data-conversation-details-name>
             {title}
           </h3>
@@ -177,6 +186,17 @@ export function ConversationDetailsSheet({
           <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }} data-conversation-details-meta>
             {translate(language, TYPE_KEYS[conversation.type])} · {countLabel}
           </p>
+          {manageReady && createdOn !== null ? (
+            <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }} data-conversation-details-created>
+              {translateConversationManage(language, 'conversationManage.header.created_on', { date: createdOn })}
+            </p>
+          ) : null}
+          {manageReady && muted ? (
+            <p className="flex items-center gap-1 text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }} data-conversation-details-muted>
+              <Glyph name="bellSlash" size={14} />
+              {translateConversationManage(language, 'conversationManage.header.muted')}
+            </p>
+          ) : null}
         </header>
 
         {canShare || canLeave ? (
@@ -221,34 +241,31 @@ export function ConversationDetailsSheet({
           </Suspense>
         ) : null}
 
-        <section aria-labelledby={membersHeadingId} className="pb-6">
-          <h4 id={membersHeadingId} className="px-4 pb-2 text-caption font-semibold uppercase" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translate(language, 'conversation.details.members.section')}
-          </h4>
-          <MembersBody
-            members={members}
-            pending={query.isPending}
-            failed={query.isError}
-            onRetry={() => void query.refetch()}
-            viewerId={viewerId}
-            accent={accent}
-            {...(storyRingOf === undefined ? {} : { storyRingOf })}
-          />
-          {query.hasNextPage === true ? (
-            <div className="flex justify-center px-4 pt-2">
-              <button
-                type="button"
-                disabled={query.isFetchingNextPage}
-                onClick={() => void query.fetchNextPage()}
-                data-conversation-details-more
-                className="rounded-chip px-4 font-semibold disabled:opacity-50"
-                style={{ minHeight: 44, color: 'var(--accent)' }}
-              >
-                {translate(language, 'conversation.details.members.more')}
-              </button>
-            </div>
-          ) : null}
-        </section>
+        <ConversationMembersSection
+          conversation={conversation}
+          members={members}
+          pending={query.isPending}
+          failed={query.isError}
+          onRetry={() => void query.refetch()}
+          hasMore={query.hasNextPage === true}
+          loadingMore={query.isFetchingNextPage}
+          onMore={() => void query.fetchNextPage()}
+          viewerId={viewerId}
+          accent={accent}
+          deps={deps}
+          language={language}
+          manageReady={manageReady}
+          {...(focus === undefined ? {} : { focus })}
+          {...(storyRingOf === undefined ? {} : { storyRingOf })}
+        />
+
+        {manageReady && management.editIdentity ? (
+          <ConversationSettingsSection conversation={conversation} title={title} accent={accent} deps={deps} language={language} management={management} />
+        ) : null}
+
+        {manageReady && signedIn ? <ConversationOptionsSection conversation={conversation} viewerId={viewerId} deps={deps} language={language} /> : null}
+
+        {signedIn ? <ConversationAppearanceEntry conversation={conversation} accent={accent} deps={deps} language={language} /> : null}
 
         {departures.includes('delete') ? (
           <div className="flex justify-center px-4 pb-8">
@@ -296,147 +313,41 @@ function DepartureButton({
   );
 }
 
-function MembersBody({
-  members,
-  pending,
-  failed,
-  onRetry,
-  viewerId,
-  accent,
-  storyRingOf,
-}: {
-  readonly members: readonly ConversationMember[];
-  readonly pending: boolean;
-  readonly failed: boolean;
-  readonly onRetry: () => void;
-  readonly viewerId: string;
-  readonly accent: string;
-  readonly storyRingOf?: StoryRingOf;
-}) {
-  const language = currentInterfaceLanguage();
-
-  if (members.length === 0 && pending) {
-    return (
-      <ul aria-busy data-conversation-details-loading>
-        <li className="offscreen">{translate(language, 'conversation.details.members.loading')}</li>
-        {[0, 1, 2].map((index) => (
-          <li key={index} aria-hidden className="flex items-center gap-3 px-4" style={{ minHeight: ROW_MIN_HEIGHT }}>
-            <span className="shrink-0 rounded-chip" style={{ width: MEMBER_AVATAR, height: MEMBER_AVATAR, backgroundColor: 'var(--color-ios-card)' }} />
-            <span className="rounded-field" style={{ width: '45%', height: 14, backgroundColor: 'var(--color-ios-card)' }} />
-          </li>
-        ))}
-      </ul>
-    );
-  }
-
-  const retry = failed ? (
-    <div className="flex flex-col items-center gap-2 px-4 py-4 text-center" role="alert" data-conversation-details-error>
-      <p className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'conversation.details.members.error')}
-      </p>
-      <button type="button" onClick={onRetry} className="rounded-chip px-4 font-semibold" style={{ minHeight: 44, color: 'var(--accent)' }}>
-        {translate(language, 'conversation.details.members.retry')}
-      </button>
-    </div>
-  ) : null;
-
-  if (members.length === 0) {
-    return (
-      retry ?? (
-        <p className="px-4 py-4 text-center text-body" style={{ color: 'var(--color-ios-ink-2)' }} data-conversation-details-empty>
-          {translate(language, 'conversation.details.members.empty')}
-        </p>
-      )
-    );
-  }
-
-  return (
-    <>
-      <ul data-conversation-details-members>
-        {members.map((member) => (
-          <MemberRow
-            key={member.id}
-            member={member}
-            self={member.userId !== null && member.userId === viewerId}
-            accent={accent}
-            {...(storyRingOf === undefined ? {} : { storyRingOf })}
-          />
-        ))}
-      </ul>
-      {retry}
-    </>
-  );
+/** « Créé le … » (iOS `conversation.info.created-on`) — la date dans la langue d'interface, ou rien si elle est illisible. */
+function createdOnOf(createdAt: Date | string | undefined, language: string): string | null {
+  if (createdAt === undefined) return null;
+  const date = createdAt instanceof Date ? createdAt : new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat(language, { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
 }
 
 /**
- * UNE RANGÉE DE MEMBRE — le toucher ouvre le PROFIL (la rangée entière est le
- * lien, comme la rangée d'un membre sur iOS), l'appui long ouvre le MÊME menu
- * que l'avatar d'un auteur dans le fil (#7828), sans l'entrée « Détails » :
- * on y est déjà. Un membre sans pseudo (anonyme) n'est pas un lien.
- *
- * L'avatar n'est pas lui-même un lien (un lien dans un lien est invalide) :
- * la story d'un membre s'ouvre par le menu.
+ * LA FEUILLE OUVERTE ÉCOUTE LES MEMBRES (#10613) — `participant:role-updated`,
+ * départs, bannissements et arrivées, sur la socket vivante, le temps où elle
+ * est montée (`watchLiveSocket`). Le temps réel se charge à la demande : la
+ * feuille n'en importe rien statiquement.
  */
-function MemberRow({
-  member,
-  self,
-  accent,
-  storyRingOf,
-}: {
-  readonly member: ConversationMember;
-  readonly self: boolean;
-  readonly accent: string;
-  readonly storyRingOf?: StoryRingOf;
-}) {
-  const language = currentInterfaceLanguage();
-  const roleKey = ROLE_KEYS[member.role.toLowerCase()];
-  const ring = storyRingOf?.(member.userId ?? undefined);
-  const entries = avatarMenuEntries({ username: member.username, storyRing: ring, details: false });
-
-  const contenu = (
-    <>
-      <Avatar initials={initialsOf(member.displayName)} color={accent} size={MEMBER_AVATAR} {...(member.avatar === undefined ? {} : { src: member.avatar })} />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
-          {member.displayName}
-          {self ? <span style={{ color: 'var(--color-ios-ink-2)' }}> · {translate(language, 'conversation.details.members.you')}</span> : null}
-        </span>
-        {member.username === null ? null : (
-          <span className="truncate text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-            @{member.username}
-          </span>
-        )}
-      </span>
-      {roleKey === undefined ? null : (
-        <span className="shrink-0 text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }} data-member-role={member.role}>
-          {translate(language, roleKey)}
-        </span>
-      )}
-    </>
-  );
-
-  const rowClass = 'flex items-center gap-3 px-4 py-2';
-  const rowStyle = { minHeight: ROW_MIN_HEIGHT };
-
-  return (
-    <li data-conversation-member={member.id}>
-      {member.username === null ? (
-        <div className={rowClass} style={rowStyle}>
-          {contenu}
-        </div>
-      ) : (
-        <AvatarMenuTrigger entries={entries} name={member.displayName}>
-          <Link
-            to="userProfile"
-            params={{ username: member.username }}
-            onClick={peekProfileOnClick(member.username)}
-            className={rowClass}
-            style={rowStyle}
-          >
-            {contenu}
-          </Link>
-        </AvatarMenuTrigger>
-      )}
-    </li>
-  );
+function useMembersLive(params: {
+  readonly deps: ConversationsDeps;
+  readonly queryClient: ReturnType<typeof useQueryClient>;
+  readonly conversationId: string;
+  readonly viewerId: string;
+}): void {
+  const { deps, queryClient, conversationId, viewerId } = params;
+  useEffect(() => {
+    if (deps.source !== 'gateway') return undefined;
+    let live = true;
+    let stop: (() => void) | null = null;
+    void Promise.all([import('@/lib/api/realtime'), import('@/lib/api/conversation-members-live')]).then(
+      ([{ watchLiveSocket }, { bindConversationMembersLive }]) => {
+        if (!live) return;
+        stop = watchLiveSocket((socket) => bindConversationMembersLive({ socket, queryClient, conversationId, viewerId }));
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+      stop?.();
+    };
+  }, [deps.source, queryClient, conversationId, viewerId]);
 }

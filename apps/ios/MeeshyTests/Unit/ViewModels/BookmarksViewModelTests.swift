@@ -138,6 +138,22 @@ final class BookmarksViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts[0].id, "b1")
     }
 
+    /// Retirer A échoue ; pendant l'appel, la page suivante (C) est arrivée.
+    /// L'instantané pris avant le retrait effaçait C.
+    func test_removeBookmark_error_restoresOnlyThatPost_keepingAPageLoadedMeanwhile() async {
+        let (sut, mock) = makeSUT()
+        mock.getBookmarksResult = .success(Self.makePaginatedPosts(
+            posts: [Self.makeAPIPost(id: "A"), Self.makeAPIPost(id: "B")], hasMore: true, nextCursor: "c2"))
+        await sut.loadBookmarks()
+
+        mock.getBookmarksResult = .success(Self.makePaginatedPosts(posts: [Self.makeAPIPost(id: "C")]))
+        mock.removeBookmarkResult = .failure(NSError(domain: "test", code: 500))
+        mock.onRemoveBookmark = { _ in await sut.loadMore() }
+        await sut.removeBookmark("A")
+
+        XCTAssertEqual(sut.posts.map(\.id), ["A", "B", "C"])
+    }
+
     // MARK: - refresh
 
     func test_refresh_resetsPaginationAndReloads() async {

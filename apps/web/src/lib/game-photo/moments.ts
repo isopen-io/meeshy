@@ -5,7 +5,7 @@ import { flameForm, type FlameFormKey } from '@meeshy/shared/utils/game/flame';
 import type { AchievementRarity, GloryDivision5, GloryRankOrMythic, MythicSeatRef } from '@meeshy/shared/utils/game/glory';
 import type { GuideMomentKey } from '@meeshy/shared/utils/game/guide';
 import { photoMomentId, photoMomentOfGuideEvent, type PhotoMomentEmblemV2 } from '@meeshy/shared/utils/game/photo-moments';
-import type { PhotoCatchUpEntry, PhotoStepEmblem, PhotoTrack } from '@meeshy/shared/utils/game/photo-catch-up';
+import { catchUpStandingOf, levelReachCount, photoTierStepId, type PhotoCatchUpEntry, type PhotoStepEmblem, type PhotoTrack } from '@meeshy/shared/utils/game/photo-catch-up';
 import type { LeagueKey } from '@meeshy/shared/utils/game/league';
 import { LEVEL_TIER_KEYS, levelTierStart, type LevelTierKey } from '@meeshy/shared/utils/game/levels';
 import { levelReading } from '@/lib/game/ladder';
@@ -15,7 +15,7 @@ import { TREASURY_TIERS, type TreasuryTierKey } from '@meeshy/shared/utils/game/
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { transitionGuideEventsV2 } from '@/lib/game-guide/events-v2';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { editionName, formatCount, levelTierName, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
+import { editionName, formatCount, levelTierName, missionTitle, standingLabel, treasuryName, shownRank } from '@/lib/view/game-copy';
 import { leagueName, rarityName, trophyView } from '@/lib/view/game-copy-v2';
 import { translateGame } from '@/lib/i18n-game-catalog';
 
@@ -41,7 +41,8 @@ import { translateGame } from '@/lib/i18n-game-catalog';
 export type PhotoEmblem =
   | { readonly kind: 'start' }
   | { readonly kind: 'rank'; readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null; readonly mythic: MythicSeatRef | null }
-  | { readonly kind: 'tier'; readonly tier: LevelTierKey; readonly level: number }
+  /* `prestige` / `times` (#10911) : le cycle où le palier est atteint, et combien de cycles l'ont atteint. Absents d'une entrée d'avant. */
+  | { readonly kind: 'tier'; readonly tier: LevelTierKey; readonly level: number; readonly prestige?: number; readonly times?: number }
   | { readonly kind: 'level-hundred'; readonly prestige: number }
   | { readonly kind: 'meesh'; readonly number: number; readonly edition: MeeshEdition }
   | { readonly kind: 'treasury'; readonly tier: TreasuryTierKey }
@@ -52,7 +53,9 @@ export type PhotoEmblem =
   | { readonly kind: 'trophy'; readonly trophyKey: string }
   | { readonly kind: 'league-up'; readonly league: LeagueKey; readonly weekKey: string }
   | { readonly kind: 'season'; readonly season: number }
-  | { readonly kind: 'prestige'; readonly number: number };
+  | { readonly kind: 'prestige'; readonly number: number }
+  /* LA FIN DE MISSION (#10816) : la mission personnelle accomplie se photographie, son pseudo gratté sur la plaque. */
+  | { readonly kind: 'mission'; readonly templateKey: string; readonly target: number };
 
 export type PhotoMoment = {
   readonly id: string;
@@ -78,11 +81,14 @@ export function momentLines(
       return { kicker: translateGame(language, 'game.photo.kicker.start'), title: translateGame(language, 'game.photo.title.start') };
     case 'rank':
       return { kicker: translateGame(language, 'game.photo.kicker.rank'), title: standingLabel(emblem, language) };
-    case 'tier':
+    case 'tier': {
+      const title = translateGame(language, 'game.photo.title.tier', { tier: levelTierName(emblem.tier, language) });
       return {
         kicker: translateGame(language, 'game.photo.kicker.tier', { level: formatCount(emblem.level, language) }),
-        title: translateGame(language, 'game.photo.title.tier', { tier: levelTierName(emblem.tier, language) }),
+        // Le palier refait dans un cycle neuf dit combien de fois il a été atteint (#10911) : « Palier Lueur ×2 ».
+        title: (emblem.times ?? 1) >= 2 ? `${title} ×${formatCount(emblem.times ?? 1, language)}` : title,
       };
+    }
     case 'level-hundred':
       return emblem.prestige === 0
         ? { kicker: translateGame(language, 'game.photo.kicker.summit'), title: translateGame(language, 'game.photo.title.level_100') }
@@ -125,6 +131,8 @@ export function momentLines(
       return { kicker: translateGame(language, 'game.photo.kicker.season'), title: translateGame(language, 'game.door.season', { number: formatCount(emblem.season, language) }) };
     case 'prestige':
       return { kicker: translateGame(language, 'game.photo.kicker.prestige'), title: translateGame(language, 'game.photo.title.prestige', { count: formatCount(emblem.number, language) }) };
+    case 'mission':
+      return { kicker: translateGame(language, 'game.photo.kicker.mission'), title: missionTitle(emblem.templateKey, emblem.target, language) };
   }
 }
 
@@ -135,8 +143,21 @@ export const startMoment = (): PhotoMoment => moment('start', { kind: 'start' })
 export const rankMoment = (params: { readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null; readonly mythic?: MythicSeatRef | null }): PhotoMoment =>
   moment(`rank:${params.rank}:${params.division ?? 0}`, { kind: 'rank', rank: params.rank, division: params.division, mythic: params.mythic ?? null });
 
-export const tierMoment = (params: { readonly tier: LevelTierKey; readonly level: number }): PhotoMoment =>
-  moment(`tier:${params.tier}`, { kind: 'tier', tier: params.tier, level: params.level });
+/** Un palier de niveau : une identité par cycle (#10911, `photoTierStepId`) — le même palier refait après un Prestige est un moment neuf. */
+export const tierMoment = (params: { readonly tier: LevelTierKey; readonly level: number; readonly prestige?: number; readonly times?: number }): PhotoMoment =>
+  moment(photoTierStepId(params.tier, params.prestige ?? 0), {
+    kind: 'tier',
+    tier: params.tier,
+    level: params.level,
+    ...(params.prestige === undefined ? {} : { prestige: params.prestige }),
+    ...(params.times === undefined ? {} : { times: params.times }),
+  });
+
+/** Le palier que le bloc vient d'atteindre, dans SON cycle, et combien de fois il l'a été (#10911). */
+const tierMomentOf = (game: GameBlock, tier: LevelTierKey): PhotoMoment => {
+  const level = tierLevel(tier);
+  return tierMoment({ tier, level, prestige: game.level.prestige, times: levelReachCount(catchUpStandingOf(game), level) });
+};
 
 export const levelHundredMoment = (prestige: number): PhotoMoment =>
   moment(`level-100:${prestige}`, { kind: 'level-hundred', prestige });
@@ -166,6 +187,10 @@ export const photoMomentOfEmblemV2 = (emblem: PhotoMomentEmblemV2): PhotoMoment 
   }
 };
 
+/** Une mission personnelle accomplie (#10816) : une identité par mission, jamais deux photos proposées pour la même. */
+export const missionMoment = (params: { readonly id: string; readonly templateKey: string; readonly target: number }): PhotoMoment =>
+  moment(`mission:${params.id}`, { kind: 'mission', templateKey: params.templateKey, target: params.target });
+
 export const treasuryMoment = (tier: TreasuryTierKey): PhotoMoment => moment(`treasury:${tier}`, { kind: 'treasury', tier });
 
 const FLAME_THRESHOLDS = [7, 30, 100, 365] as const;
@@ -186,7 +211,7 @@ export function photoMomentFromCard(key: GuideMomentKey, game: GameBlock): Photo
     case 'new-rank':
       return rankMoment(shownRank(game.glory));
     case 'new-tier':
-      return tierMoment({ tier: levelReading(game.level).tier, level: tierLevel(levelReading(game.level).tier) });
+      return tierMomentOf(game, levelReading(game.level).tier);
     case 'first-mint': {
       /* `mint.number` est la PROCHAINE pièce : celle qui vient d'être frappée porte le numéro d'avant. */
       const number = Math.max(1, game.mint.number - 1);
@@ -228,7 +253,7 @@ export function photoMomentsOfTransition(previous: EngagementWithGame, next: Eng
   const moments: (PhotoMoment | null)[] = [
     rankUp && after.glory.glory > before.glory.glory ? rankMoment(shownAfter) : null,
     LEVEL_TIER_KEYS.indexOf(levelReading(after.level).tier) > LEVEL_TIER_KEYS.indexOf(levelReading(before.level).tier)
-      ? tierMoment({ tier: levelReading(after.level).tier, level: tierLevel(levelReading(after.level).tier) })
+      ? tierMomentOf(after, levelReading(after.level).tier)
       : null,
     after.level.prestige > before.level.prestige && !prestigeCard ? levelHundredMoment(after.level.prestige) : null,
     after.mint.number > before.mint.number && (minted === 1 || minted % 10 === 0)
@@ -264,7 +289,7 @@ const momentOfStep = (emblem: PhotoStepEmblem): PhotoMoment => {
     case 'rank':
       return rankMoment({ rank: emblem.rank, division: emblem.division });
     case 'tier':
-      return tierMoment({ tier: emblem.tier, level: emblem.level });
+      return tierMoment({ tier: emblem.tier, level: emblem.level, prestige: emblem.prestige, times: emblem.times });
     case 'level-hundred':
       return levelHundredMoment(emblem.prestige);
     case 'prestige':

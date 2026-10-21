@@ -7,6 +7,12 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import Fastify, { type FastifyInstance } from 'fastify';
 
+const notifier = { createNotification: jest.fn<any>().mockResolvedValue({ id: 'n1' }) };
+jest.mock('../../../services/notifications/notification-service-registry', () => ({
+  getSharedNotificationService: () => notifier,
+  setSharedNotificationService: jest.fn(),
+}));
+
 import { adminPostGestureRoutes } from '../post-gestures';
 
 const AUTHOR = '507f1f77bcf86cd799439031';
@@ -26,7 +32,7 @@ const transaction = jest.fn<any>((fn: (tx: unknown) => Promise<unknown>) => fn(p
 const prisma = {
   post: { findMany: postFindMany, updateMany: postUpdateMany },
   adminAuditLog: { createMany: auditCreateMany },
-  user: { findMany: userFindMany },
+  user: { findMany: userFindMany, findUnique: jest.fn<any>().mockResolvedValue({ systemLanguage: 'fr' }) },
   notification: { findMany: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
   $transaction: transaction,
 } as any;
@@ -321,6 +327,44 @@ describe('POST /admin/posts/gestures — le lot', () => {
     const res = await app.inject({ method: 'POST', url: '/admin/posts/gestures', payload: { gesture: 'take-offline', postIds: ids } });
     expect(res.statusCode).toBe(400);
     expect(postFindMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("une mise hors ligne depuis la liste prévient l'auteur (#11158)", () => {
+  const flush = () => new Promise((resolve) => setImmediate(resolve));
+  const notified = () => notifier.createNotification.mock.calls.map(([call]) => call as { userId: string; type: string; metadata: Record<string, unknown> });
+
+  it("hors ligne : content_removed à l'auteur, typé par la publication, avec le motif", async () => {
+    reads([row({ type: 'REEL' })], [viewRow({ visibility: 'PRIVATE', moderationHiddenAt: UPDATED })]);
+    const app = await buildApp('ADMIN');
+    expect((await one(app, P1, { gesture: 'take-offline', reason: 'Contenu signalé' })).statusCode).toBe(200);
+    await flush();
+    expect(notified()).toEqual([
+      expect.objectContaining({ userId: AUTHOR, type: 'content_removed', metadata: { contentType: 'reel', contentId: P1, postId: P1, reason: 'Contenu signalé' } }),
+    ]);
+    await app.close();
+  });
+
+  it("passer en PRIVÉ prévient l'auteur que sa publication est privée", async () => {
+    reads([row()], [viewRow({ visibility: 'PRIVATE' })]);
+    const app = await buildApp('ADMIN');
+    expect((await one(app, P1, { gesture: 'set-visibility', visibility: 'PRIVATE', reason: 'Hors sujet' })).statusCode).toBe(200);
+    await flush();
+    expect(notified()).toEqual([
+      expect.objectContaining({ userId: AUTHOR, type: 'content_removed', metadata: { contentType: 'post', contentId: P1, postId: P1, reason: 'Hors sujet', madePrivate: true } }),
+    ]);
+    await app.close();
+  });
+
+  it('remettre en ligne ou resserrer l’audience à FRIENDS ne prévient personne', async () => {
+    const app = await buildApp('ADMIN');
+    reads([row({ visibility: 'PRIVATE', moderationHiddenAt: UPDATED, moderationHiddenById: ACTOR, moderationPriorVisibility: 'PUBLIC' })], [viewRow()]);
+    expect((await one(app, P1, { gesture: 'restore', reason: 'Erreur de modération' })).statusCode).toBe(200);
+    reads([row()], [viewRow({ visibility: 'FRIENDS' })]);
+    expect((await one(app, P1, { gesture: 'set-visibility', visibility: 'FRIENDS', reason: 'Resserrer' })).statusCode).toBe(200);
+    await flush();
+    expect(notified()).toEqual([]);
     await app.close();
   });
 });

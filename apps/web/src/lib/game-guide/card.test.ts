@@ -53,15 +53,15 @@ describe('les oiseaux de chaque humeur', () => {
 });
 
 describe('une carte pour un moment', () => {
-  const event: GuideEvent = { kind: 'first-mint', levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14 };
+  const event: GuideEvent = { kind: 'first-mint' };
 
   test('la première fois : complète, avec le locuteur et le bouton de la loi', () => {
     const card = cardOfMoment(guideMoment(event, []));
     expect(card.key).toBe('first-mint');
     expect(card.speaker).toBe('duo');
     expect(card.presentation).toBe('full');
-    expect(card.action).toBe('regain-levels');
-    expect(card.copy.means).toContain('de 14 à 9');
+    expect(card.action).toBe('see-progress');
+    expect(card.copy.means).toContain('ton niveau a baissé d’autant');
     expect(card.step).toBeUndefined();
   });
 
@@ -86,7 +86,6 @@ describe('une carte pour un moment', () => {
       'missions-unlocked': { kind: 'missions-unlocked' },
       'first-mint-possible': { kind: 'first-mint-possible', price: 1221, levelsLost: 5, gloryGain: 100 },
       'first-mint': event,
-      'badge-extinguished': { kind: 'badge-extinguished', missingActions: 37 },
       'price-rises': { kind: 'price-rises', nextPrice: 1294 },
       'new-rank': { kind: 'new-rank', rank: 'voix', division: 2, glory: 1700, gloryMissing: 300 },
       'treasury-tier': { kind: 'treasury-tier', tier: 'escarcelle', nextTierMissing: 40 },
@@ -131,8 +130,8 @@ describe('une étape qui attend son geste', () => {
     const waiting = cardOfStep(stepOf('missions'), view({ score: 800, missions: [] }));
     expect(waiting.awaiting).toBe(true);
     expect(waiting.action).toBe('see-missions');
-    expect(waiting.copy.action).toBe('Voir les missions');
-    expect(waiting.copy.next).toContain('mission la plus facile');
+    expect(waiting.copy.action).toBe('Voir mon rêve');
+    expect(waiting.copy.next).toContain('premier acte du rêve');
     expect(waiting.stepKey).toBe('missions');
   });
 

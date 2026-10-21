@@ -37,6 +37,11 @@ public protocol APIClientProviding: Sendable {
     func delete<T: Decodable, U: Encodable>(_ endpoint: any MeeshyEndpoint, body: U) async throws -> APIResponse<T>
     func paginatedRequest<T: Decodable>(_ endpoint: any MeeshyEndpoint, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[T]>
     func offsetPaginatedRequest<T: Decodable>(_ endpoint: any MeeshyEndpoint, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[T]>
+
+    /// #10927 — le jeton de compte à présenter sur un transport qui n'est PAS
+    /// ce client (`/sync`) : rafraîchi d'abord s'il est échu, comme les
+    /// requêtes de ce client le sont avant de partir. `nil` sans compte.
+    func freshAuthToken() async -> String?
 }
 
 /// UNE requête signée par un jeton FIGÉ par l'appelant, que rien ne
@@ -59,6 +64,9 @@ public protocol PinnedRequesting: Sendable {
 extension APIClient: PinnedRequesting {}
 
 public extension APIClientProviding {
+
+    /// Un double sans session ne rafraîchit rien : il présente ce qu'il porte.
+    func freshAuthToken() async -> String? { authToken }
 
     /// La forme que les conformants à `String` attendent : le chemin PRIVÉ de
     /// son préfixe d'API, tel que les 348 sites d'appel l'écrivent aujourd'hui.

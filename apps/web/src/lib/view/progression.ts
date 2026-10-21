@@ -1,8 +1,11 @@
-import type { EngagementAchievementKey, EngagementAxisFamily, EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import type { EngagementAchievementKey, EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { ENGAGEMENT_ACHIEVEMENT_LABELS, ENGAGEMENT_AXIS_LABELS } from '@meeshy/shared/utils/engagement-labels';
 import type { EngagementScaleProgress } from '@meeshy/shared/utils/engagement-progress';
 import { achievementLabel } from '@meeshy/shared/utils/achievement-labels';
 import type { AchievementFamily, AchievementSection } from '@meeshy/shared/types/achievement-catalog';
+import { formatGameNumber, translateGame } from '@/lib/i18n-game-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { awardedDate } from '@/lib/view/game-copy-v2';
 
 /**
  * CE QUE L'ÉCRAN « PROGRESSION » DIT (#5547) — les libellés, les glyphes et les
@@ -49,13 +52,11 @@ export type ProgressionGlyph =
 /**
  * Les MOTS viennent du catalogue partagé (`@meeshy/shared/utils/engagement-labels`),
  * le même que la passerelle prononce dans les bannières et que le miroir iOS
- * porte (`Localizable.xcstrings`, gardé par `engagement-labels-mirror-parity`).
- * La v3.1 parle français sur tous ses écrans à ce jour — le jour où elle
- * suivra la langue du lecteur, seule cette constante bouge.
+ * porte (`Localizable.xcstrings`, gardé par `engagement-labels-mirror-parity`),
+ * dans la langue d'INTERFACE (#10823) — lue à l'appel, jamais figée à l'import.
  */
-const WEB_LANGUAGE = 'fr';
-
-export const AXIS_LABELS: Record<EngagementAxisKey, string> = ENGAGEMENT_AXIS_LABELS[WEB_LANGUAGE];
+export const axisLabel = (key: EngagementAxisKey, language: InterfaceLanguage = currentInterfaceLanguage()): string =>
+  ENGAGEMENT_AXIS_LABELS[language][key];
 
 export const AXIS_GLYPHS: Record<EngagementAxisKey, ProgressionGlyph> = {
   'content.audio_message': 'microphone',
@@ -80,92 +81,68 @@ export const AXIS_GLYPHS: Record<EngagementAxisKey, ProgressionGlyph> = {
   'social.friendship': 'handshake',
 };
 
-export const FAMILY_LABELS: Record<EngagementAxisFamily, string> = {
-  content: 'Contenu produit',
-  comment: 'Commentaires',
-  conversation: 'Conversations',
-  tool: 'Outils',
-  social: 'Lien social',
-};
-
 export type AchievementCopy = {
   readonly title: string;
   /** La CONDITION, lisible verrouillée — ce qu'il reste à faire, jamais un mystère. */
   readonly condition: string;
 };
 
-export const ACHIEVEMENT_COPY: Record<EngagementAchievementKey, AchievementCopy> = ENGAGEMENT_ACHIEVEMENT_LABELS[WEB_LANGUAGE];
+export const achievementCopy = (
+  key: EngagementAchievementKey,
+  language: InterfaceLanguage = currentInterfaceLanguage(),
+): AchievementCopy => ENGAGEMENT_ACHIEVEMENT_LABELS[language][key];
+
+/** Le titre d'un succès nommé lu par sa clé SERVIE — une clé que ce client ne connaît pas encore rend `null`, jamais un titre inventé. */
+export const namedAchievementTitle = (key: string, language: InterfaceLanguage = currentInterfaceLanguage()): string | null => {
+  const known: Readonly<Partial<Record<string, AchievementCopy>>> = ENGAGEMENT_ACHIEVEMENT_LABELS[language];
+  return known[key]?.title ?? null;
+};
 
 export const progressPercent = (progress: number): number => Math.round(Math.min(1, Math.max(0, progress)) * 100);
 
-const plural = (count: number, singular: string, pluralForm: string): string =>
-  `${count} ${count > 1 ? pluralForm : singular}`;
-
-/** « Niveau 3 » — le niveau courant, 0 avant le premier palier. */
-export const levelTitle = (level: number): string => `Niveau ${level}`;
-
-/** « 350 points » — le score qui porte le niveau. */
-export const scoreLabel = (score: number): string => plural(score, 'point', 'points');
-
-/** « 5 jours d’affilée » / « Aucune série en cours ». */
-export const streakLabel = (currentDays: number): string =>
-  currentDays === 0 ? 'Aucune série en cours' : `${plural(currentDays, 'jour', 'jours')} d’affilée`;
-
-/** « Record : 12 jours » — la série la plus longue, qui tient les jalons pour atteints. */
-export const streakRecordLabel = (longestDays: number): string => `Record : ${plural(longestDays, 'jour', 'jours')}`;
+/** « Niveau 3 » (« Level 3 ») — le niveau courant, 0 avant le premier palier. */
+export const levelTitle = (level: number, language: InterfaceLanguage = currentInterfaceLanguage()): string =>
+  translateGame(language, 'game.banner.level', { level: formatGameNumber(language, level) });
 
 /**
- * La phrase de la barre — ce qu'il reste AVANT le prochain palier, depuis le
- * dernier franchi, ou l'échelle complète. Une barre sans phrase dit une
- * fraction ; la phrase dit le pas.
+ * La phrase de la barre d'un badge — ce qu'il reste AVANT le prochain palier,
+ * depuis le dernier franchi, ou l'échelle complète. Une barre sans phrase dit
+ * une fraction ; la phrase dit le pas. Dans la langue d'interface (#10823),
+ * avec les valeurs d'iOS (`progression.next.badge`, `progression.scale.complete`).
  */
-export function nextStepLabel(
-  scale: EngagementScaleProgress,
-  unit: { readonly singular: string; readonly plural: string; readonly goal: string },
-  /**
-   * Ce que la phrase NOMME comme but — le prochain palier par défaut. Le
-   * niveau passe son RANG (« niveau 4 »), jamais son seuil de points
-   * (« niveau 400 ») : c'est le défaut de la notification `level_up`
-   * relevé en production, et la carte de niveau le rejouait.
-   */
-  goalValue: number | null = scale.nextThreshold,
-): string {
-  if (scale.nextThreshold === null || goalValue === null) return 'Échelle complète';
+export function nextStepLabel(scale: EngagementScaleProgress, language: InterfaceLanguage = currentInterfaceLanguage()): string {
+  if (scale.nextThreshold === null) return translateGame(language, 'game.progression.scale_complete');
   const remaining = Math.max(0, scale.nextThreshold - scale.value);
-  const counted = unit.plural === '' ? `${remaining}` : plural(remaining, unit.singular, unit.plural);
-  return `Encore ${counted} avant ${unit.goal} ${goalValue}`;
-}
-
-export const BADGE_UNIT = { singular: '', plural: '', goal: 'le palier' } as const;
-export const LEVEL_UNIT = { singular: 'point', plural: 'points', goal: 'le niveau' } as const;
-export const STREAK_UNIT = { singular: 'jour', plural: 'jours', goal: 'le jalon de' } as const;
-
-/** « Obtenu le 3 septembre 2026 », ou `null` quand aucune trace gravée ne date le palier. */
-export function reachedAtLabel(reachedAt: string | null): string | null {
-  if (reachedAt === null) return null;
-  const date = new Date(reachedAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return `Obtenu le ${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+  return translateGame(language, 'game.progression.next_badge', {
+    missing: formatGameNumber(language, remaining),
+    goal: formatGameNumber(language, scale.nextThreshold),
+  });
 }
 
 /**
- * LES SECTIONS DE SUCCÈS GÉNÉRÉS (#5759) — un titre par rangée horizontale.
+ * « Obtenu le 3 septembre 2026 » (« Earned on September 3, 2026 »), dans la
+ * langue d'INTERFACE (#10822), ou `null` quand aucune trace gravée ne date le palier.
+ */
+export function reachedAtLabel(reachedAt: string | null, language: InterfaceLanguage = currentInterfaceLanguage()): string | null {
+  if (reachedAt === null) return null;
+  if (Number.isNaN(new Date(reachedAt).getTime())) return null;
+  return translateGame(language, 'game.detail.earned_on', { date: awardedDate(reachedAt, language) });
+}
+
+/**
+ * LES SECTIONS DE SUCCÈS GÉNÉRÉS (#5759) — un titre par rangée horizontale,
+ * dans la langue d'interface (#10823, valeurs d'iOS `achievement.section.*`).
  *
  * Les LIBELLÉS des succès viennent du catalogue partagé
- * (`achievementLabel`) ; seuls les TITRES de section sont ici, parce qu'ils
- * nomment un découpage d'écran, pas un fait de produit.
+ * (`achievementLabel`) ; seuls les TITRES de section sont au catalogue du jeu,
+ * parce qu'ils nomment un découpage d'écran, pas un fait de produit.
  */
-export const ACHIEVEMENT_SECTION_TITLES: Record<AchievementSection, string> = {
-  cercles: 'Cercles',
-  parole: 'Parole',
-  retouche: 'Retouches',
-  appels: 'Appels',
-  ambassade: 'Ambassade',
-  constance: 'Constance',
-  monnaie: 'Monnaie',
-  decouverte: 'Découverte',
-};
+export const achievementSectionTitle = (section: AchievementSection, language: InterfaceLanguage = currentInterfaceLanguage()): string =>
+  translateGame(language, `game.progression.section.${section}`);
 
-/** Le libellé d'un succès généré, dans la langue de l'écran. */
-export const generatedAchievementLabel = (family: AchievementFamily, tier: number): string =>
-  achievementLabel(WEB_LANGUAGE, family, tier) ?? '';
+/** Le libellé d'un succès généré, dans la langue d'interface. */
+export const generatedAchievementLabel = (
+  family: AchievementFamily,
+  tier: number,
+  language: InterfaceLanguage = currentInterfaceLanguage(),
+): string => achievementLabel(language, family, tier) ?? '';

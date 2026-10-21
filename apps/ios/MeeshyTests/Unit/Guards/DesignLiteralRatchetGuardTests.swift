@@ -175,7 +175,7 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             reason: "palettes proposées à l'utilisateur : nuanciers de fond et de communauté",
             globs: [
                 "\(app)/Components/BackgroundColorPalette.swift",
-                "\(ui)/Community/CommunitySettingsView.swift",
+                "\(ui)/Community/CommunitySettingsScreen.swift",
             ]
         ),
         Exemption(

@@ -23,6 +23,38 @@ final class WidgetDataManagerTests: XCTestCase {
         return (sut, defaults, dirs)
     }
 
+    /// Les fiches de relais et de studio de l'extension portent le texte et les
+    /// fichiers du compte sortant : le wipe de logout les purge avec le reste.
+    func test_theLogoutWipe_purgesTheShareRelaysAndStudioHandoffs() throws {
+        let relays = try XCTUnwrap(ShareRelayHandoff.directoryURL(), "le conteneur App Group est accessible à l'hôte des tests")
+        let composes = try XCTUnwrap(ShareComposeHandoffConsumer.directoryURL())
+        let purged = WidgetDataManager.accountStagingDirectories()
+        XCTAssertTrue(purged.contains(relays))
+        XCTAssertTrue(purged.contains(composes))
+    }
+
+    /// Ce que l'app tient EN MÉMOIRE d'une fiche de l'extension part avec la
+    /// déconnexion : un studio armé pour le compte sortant ne s'ouvre pas sous
+    /// le suivant (#10986).
+    func test_theLogoutForget_dropsTheStudioComposeHeldInMemory() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("wipe-compose-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let fiche = ShareComposeHandoff(shareId: "cid_a", createdAt: Date(timeIntervalSince1970: 1_000), text: "Texte",
+                                        media: [], ownerUserId: "alice")
+        try JSONEncoder.meeshyShareCompose.encode(fiche).write(to: dir.appendingPathComponent("cid_a.json"))
+        let compose = ShareComposeHandoffConsumer(directory: { dir }, mediaRoot: { nil }, currentUserId: { "alice" })
+        await compose.consumeNext()
+        XCTAssertNotNil(compose.pending)
+
+        WidgetDataManager.forgetHeldShares(
+            relay: ShareRelayConsumer(directory: { nil }, mediaRoot: { nil }, currentUserId: { nil }),
+            compose: compose
+        )
+
+        XCTAssertNil(compose.pending)
+    }
+
     func test_wipeAll_removesWidgetKeysAndStagingDirs() throws {
         let (sut, defaults, dirs) = try makeWipeSUT()
         let keys = [

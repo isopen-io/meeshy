@@ -5,10 +5,10 @@ import type { EngagementElanProgress } from '@meeshy/shared/utils/engagement-pro
 
 import { GameBird, LevelRing, RankBlason, Signature, useChoreography } from '@/components/game';
 import { earnRules, type EarnRule } from '@/lib/game/earn-rules';
-import { levelReading, shownLevelOf } from '@/lib/game/ladder';
+import { levelMaxReading, levelReading, shownLevelOf, sparksReading } from '@/lib/game/ladder';
 import { enamelToken } from '@/lib/game/medal';
 import { tierTint } from '@/lib/game/tier-emblem';
-import { familyName, formatCount, gameText, levelTierName, levelTopLine, pointsLabel, rankName, standingLabel, shownRank } from '@/lib/view/game-copy';
+import { familyName, formatCount, gameText, levelTierName, levelTopLine, pointsLabel, rankName, sparksCumulLine, standingLabel, shownRank } from '@/lib/view/game-copy';
 import { levelHeldLine, levelStepLine } from '@/lib/view/level-step-copy';
 import { levelRingLabelWithPrestige } from '@/lib/view/game-copy-v2';
 import { elanDetail, levelStepDetail, rankDetail, ringDetail } from '@/lib/view/game-detail';
@@ -102,6 +102,50 @@ function LevelStepChip({ game }: { readonly game: GameBlock }) {
   );
 }
 
+/**
+ * LA PAIRE CONVERTIBLES / CUMUL ET NIVEAU / MAX (porteur, 2026-10-16 puis 2026-10-17) — TOUJOURS affichée : les étincelles
+ * CONVERTIBLES en grand (la seule valeur réelle), le cycle rapporté au total à vie en petit dessous ; le niveau actuel, le
+ * niveau max à vie dessous (même quand il égale le niveau). Le cumul n'est pas inventé devant un serveur antérieur. Une
+ * dette d'étincelles se dit, elle bloque la frappe.
+ */
+function SparksPair({ game }: { readonly game: GameBlock }) {
+  const sparks = sparksReading(game.level);
+  const cumul = sparksCumulLine(sparks);
+  const level = shownLevelOf(game.level);
+  return (
+    <div className="flex flex-wrap gap-x-5 gap-y-1" data-game-pair="">
+      <div className="flex min-w-0 flex-col">
+        <span className="flex flex-wrap items-baseline gap-x-1.5">
+          <span data-game-sparks={sparks.pocket} className="text-title font-bold tabular-nums" style={{ color: GAME_INK }}>
+            {pointsLabel(sparks.pocket)}
+          </span>
+          <span className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
+            {gameText('game.sparks.pocket_label')}
+          </span>
+        </span>
+        {cumul === null ? null : (
+          <span data-game-sparks-lifetime={sparks.lifetime} className="text-caption tabular-nums" style={{ color: GAME_INK_2 }}>
+            {cumul}
+          </span>
+        )}
+        {sparks.debt > 0 ? (
+          <span data-game-sparks-debt={sparks.debt} className="text-caption font-semibold tabular-nums" style={{ color: 'var(--color-warn)' }}>
+            {gameText('game.sparks.debt', { debt: formatCount(sparks.debt) })}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex min-w-0 flex-col">
+        <span data-game-level-now={level.level} className="text-title font-bold tabular-nums" style={{ color: GAME_INK }}>
+          {gameText('game.banner.level', { level: formatCount(level.level) })}
+        </span>
+        <span data-game-level-max={levelMaxReading(game.level)} className="text-caption tabular-nums" style={{ color: GAME_INK_2 }}>
+          {gameText('game.level.max_lifetime', { level: formatCount(levelMaxReading(game.level)) })}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function WhereIAm({ game }: { readonly game: GameBlock }) {
   const { glory, boosts } = game;
   const level = shownLevelOf(game.level);
@@ -153,13 +197,12 @@ function WhereIAm({ game }: { readonly game: GameBlock }) {
               ? levelTopLine(level)
               : gameText('game.level.to_next', { points: pointsLabel(level.pointsToNext), level: formatCount(level.level + 1) })}
         </p>
+        <SparksPair game={game} />
         <LevelStepChip game={game} />
-        {level.record > level.level ? (
+        {/* Le record de niveau se lit dans la paire ; la puce ne dit que le Vent arrière, quand il souffle (#10896). */}
+        {boosts.tailwind > 1 ? (
           <span className="mt-1 self-start">
-            <GameChip tint="var(--color-warn)">
-              {gameText('game.level.record', { level: formatCount(level.record) })}
-              {boosts.tailwind > 1 ? gameText('game.level.tailwind', { factor: formatCount(boosts.tailwind) }) : ''}
-            </GameChip>
+            <GameChip tint="var(--color-warn)">{gameText('game.level.tailwind', { factor: formatCount(boosts.tailwind) })}</GameChip>
           </span>
         ) : null}
       </div>

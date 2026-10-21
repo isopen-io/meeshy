@@ -107,6 +107,10 @@ struct RiverBubbleContent: Equatable {
     /// La capture d'écran de ce message est bloquée (#9574) — projection de
     /// `Message.exitOffer.capture` : la bulle se rend dans la couche sécurisée.
     let capturesBlocked: Bool
+    /// #10637 — la taille d'un emoji envoyé SEUL (×4 / ×3 / ×2), telle que
+    /// `BubbleContent.emojiOnlyResult` l'a résolue pour les autres modes ;
+    /// `nil` : un texte ordinaire (ou rien à lire : vue unique scellée).
+    let emojiFontSize: CGFloat?
 
     init(
         bubble: RiverLaneResolver.RiverBubble,
@@ -139,6 +143,7 @@ struct RiverBubbleContent: Equatable {
         linksAreInert: Bool = false,
         contactCards: RiverContactCards = RiverContactCards(items: []),
         capturesBlocked: Bool = false,
+        emojiFontSize: CGFloat? = nil,
         identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
@@ -164,6 +169,7 @@ struct RiverBubbleContent: Equatable {
         self.linksAreInert = linksAreInert
         self.contactCards = contactCards
         self.capturesBlocked = capturesBlocked
+        self.emojiFontSize = emojiFontSize
     }
 }
 
@@ -188,6 +194,10 @@ struct RiverBubbleIdentity: Equatable {
     let profileUser: ProfileSheetUser
     /// Compte de l'auteur — la story s'ouvre par lui ; `nil` pour un visiteur.
     let userId: String?
+    /// L'auteur a l'écran de cette conversation ouvert (#8892, #10956).
+    var isHere: ConversationHere = .absent
+    /// Son contour équipé, la référence servie avec le message (#10946).
+    var ring: ServedProfileDecorItem? = nil
 }
 
 // MARK: - Contour de groupe — une forme PURE, éprouvée sans monter la vue
@@ -201,7 +211,7 @@ struct RiverBubbleIdentity: Equatable {
 ///
 /// Directive produit 2026-08-22 : « bordure jointe en pointillé et partagée,
 /// non pas des bordures fermées puis des pointillés en plus ».
-struct RiverBubbleOutline: Shape {
+nonisolated struct RiverBubbleOutline: Shape {
     let position: RiverGroupPosition
     let cornerRadius: CGFloat
     let lineWidth: CGFloat
@@ -518,7 +528,18 @@ struct RiverBubbleView: View, Equatable {
     /// #8147 — la Rivière tronque désormais comme les autres modes : l'extrait
     /// d'un message long, « … Lire la suite », dépliage en place. L'état vient
     /// de l'hôte par l'environnement (`longMessageFocus`).
+    @ViewBuilder
     private var riverText: some View {
+        if let emojiSize = content.emojiFontSize {
+            Text(content.text)
+                .font(MeeshyFont.emoji(emojiSize))
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            riverExpandableText
+        }
+    }
+
+    private var riverExpandableText: some View {
         BubbleExpandableText(
             content: content.text,
             isMe: false,
@@ -839,6 +860,8 @@ struct RiverBubbleView: View, Equatable {
                 avatarURL: identity.avatarURL,
                 storyState: identity.storyRing,
                 presenceState: identity.presence,
+                isHere: identity.isHere,
+                ring: identity.ring,
                 enablePulse: false,
                 isDark: isDark,
                 onViewStory: identity.userId.flatMap { userId in

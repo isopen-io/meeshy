@@ -61,7 +61,9 @@ protocol SignInLinkAuthorizing: AnyObject {
     var isAuthenticated: Bool { get }
     var currentUser: MeeshyUser? { get }
     func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession?
-    func verifyMagicLink(token: String) async throws -> EmailProvenSession
+    /// #10872 — lève `LinkConfirmationRequired` quand le lien n'a pas été
+    /// demandé par cet appareil ; `confirmed` rejoue la preuve après le « oui ».
+    func verifyMagicLink(token: String, confirmed: Bool) async throws -> EmailProvenSession
     /// `true` si la session est posée (#10450).
     @discardableResult
     func openSession(_ proven: EmailProvenSession) -> Bool
@@ -85,7 +87,7 @@ extension AuthManager: SignInLinkAuthorizing {}
 /// connexion présente une porte d'accès et lui demande de la refermer (#8076).
 @MainActor
 enum SignInLinkOpener {
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "sign-in-link")
+    private static let logger = MeeshyLog.logger(.signInLink)
 
     static func open(
         _ link: SignInLink,
@@ -93,22 +95,41 @@ enum SignInLinkOpener {
         toasts: FeedbackToastSurfacing = FeedbackToastManager.shared,
         sessionGate: SessionOpeningGate = .shared,
         celebration: ArrivalCelebrating = ArrivalCelebrationController.shared,
-        confirmation: AccountReplacementConfirming = AccountReplacementAlert.shared
+        confirmation: AccountReplacementConfirming = AccountReplacementAlert.shared,
+        signInConfirmation: LinkSignInConfirming = LinkSignInConfirmationSheet.shared
     ) async {
-        let proven: EmailProvenSession?
+        let proof: LinkProof
         do {
-            proven = try await prove(link, auth: auth)
+            proof = try await proveWithConsent(link, auth: auth, signInConfirmation: signInConfirmation)
         } catch {
             toasts.showError(EmailProofErrorText.linkMessage(for: error))
             logger.error("Sign-in link validation failed")
             return
+        }
+        let proven: EmailProvenSession?
+        let consentedAccountId: String?
+        switch proof {
+        case .declined:
+            return
+        case .unavailable:
+            toasts.showError(EmailProofErrorText.sessionNotOpened())
+            return
+        case .proven(let session, let consented):
+            proven = session
+            consentedAccountId = consented
         }
         guard let proven else {
             toasts.showSuccess(String(localized: "emailVerification.success", defaultValue: "Email vérifié !", bundle: .main))
             return
         }
         if SignInLink.replacesSignedInAccount(provenUserId: proven.user.id, isAuthenticated: auth.isAuthenticated, currentUserId: auth.currentUser?.id) {
-            await offerAccountSwitch(to: proven, auth: auth, toasts: toasts, confirmation: confirmation)
+            // #10872 — la confirmation a déjà nommé le compte ouvert et celui
+            // du lien : le « oui » vaut choix explicite, on ne redemande pas.
+            if consentedAccountId == proven.user.id {
+                await switchTo(proven, auth: auth, toasts: toasts)
+            } else {
+                await offerAccountSwitch(to: proven, auth: auth, toasts: toasts, confirmation: confirmation)
+            }
             return
         }
         let celebrates = link.celebratesArrival(isAuthenticated: auth.isAuthenticated)
@@ -136,15 +157,7 @@ enum SignInLinkOpener {
     ) async {
         switch await confirmation.confirmReplacing(signedIn: auth.currentUser, with: proven.user) {
         case .accepted:
-            // #10518 — la fenêtre d'adoption (#10513) se juge à UN endroit,
-            // le SDK, qui referme lui-même la session qu'il ne pose pas ;
-            // l'écran dit la raison qu'il rend.
-            switch await auth.switchToProvenAccount(proven) {
-            case .switched:
-                toasts.showSuccess(signedInMessage)
-            case .refused(let refusal):
-                toasts.showError(EmailProofErrorText.accountSwitchMessage(for: refusal))
-            }
+            await switchTo(proven, auth: auth, toasts: toasts)
         case .declined:
             await auth.discardProvenSession(proven)
         case .unavailable:
@@ -155,13 +168,60 @@ enum SignInLinkOpener {
         }
     }
 
+    /// #10518 — la fenêtre d'adoption (#10513) se juge à UN endroit, le SDK,
+    /// qui referme lui-même la session qu'il ne pose pas ; l'écran dit la
+    /// raison qu'il rend.
+    private static func switchTo(_ proven: EmailProvenSession, auth: SignInLinkAuthorizing, toasts: FeedbackToastSurfacing) async {
+        switch await auth.switchToProvenAccount(proven) {
+        case .switched:
+            toasts.showSuccess(signedInMessage)
+        case .refused(let refusal):
+            toasts.showError(EmailProofErrorText.accountSwitchMessage(for: refusal))
+        }
+    }
+
+    /// Ce que la preuve a rendu, une fois la confirmation éventuelle passée.
+    private enum LinkProof {
+        /// `consentedAccountId` : le compte que l'utilisateur a confirmé.
+        case proven(EmailProvenSession?, consentedAccountId: String?)
+        case declined
+        case unavailable
+    }
+
+    /// #10872 — un lien que cet appareil n'a pas demandé n'ouvre RIEN sans
+    /// « oui » : la passerelle rend l'identité du compte, sans session et sans
+    /// consommer le jeton. Le même compte que celui qui est ouvert se confirme
+    /// seul — il n'y a rien à usurper.
+    private static func proveWithConsent(
+        _ link: SignInLink,
+        auth: SignInLinkAuthorizing,
+        signInConfirmation: LinkSignInConfirming
+    ) async throws -> LinkProof {
+        do {
+            return .proven(try await prove(link, confirmed: false, auth: auth), consentedAccountId: nil)
+        } catch let pending as LinkConfirmationRequired {
+            let signedIn = auth.isAuthenticated ? auth.currentUser : nil
+            if let signedIn, signedIn.id == pending.account.id {
+                return .proven(try await prove(link, confirmed: true, auth: auth), consentedAccountId: nil)
+            }
+            switch await signInConfirmation.confirmSignIn(pending, signedIn: signedIn) {
+            case .accepted:
+                return .proven(try await prove(link, confirmed: true, auth: auth), consentedAccountId: pending.account.id)
+            case .declined:
+                return .declined
+            case .unavailable:
+                return .unavailable
+            }
+        }
+    }
+
     /// `nil` ⇒ adresse vérifiée sans session (passerelle antérieure à #8035).
-    private static func prove(_ link: SignInLink, auth: SignInLinkAuthorizing) async throws -> EmailProvenSession? {
+    private static func prove(_ link: SignInLink, confirmed: Bool, auth: SignInLinkAuthorizing) async throws -> EmailProvenSession? {
         switch link {
         case .magic(let token):
-            return try await auth.verifyMagicLink(token: token)
+            return try await auth.verifyMagicLink(token: token, confirmed: confirmed)
         case .emailVerification(let token, let email):
-            return try await auth.verifyEmail(.link(token: token, email: email))
+            return try await auth.verifyEmail(.link(token: token, email: email, confirmed: confirmed))
         }
     }
 
@@ -176,6 +236,15 @@ enum SignInLinkOpener {
 @MainActor
 protocol AccountReplacementConfirming: AnyObject {
     func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> AccountReplacementDecision
+}
+
+/// #10872 — la question posée avant qu'un lien que cet appareil n'a PAS
+/// demandé n'ouvre un compte : « Se connecter en tant que @x ? ». Elle nomme
+/// le compte du lien, et celui qui est ouvert s'il y en a un — et, pour une
+/// revendication d'adresse (#10883), dit que l'adresse passe à ce compte.
+@MainActor
+protocol LinkSignInConfirming: AnyObject {
+    func confirmSignIn(_ question: LinkConfirmationRequired, signedIn current: MeeshyUser?) async -> AccountReplacementDecision
 }
 
 /// Ce que rend la question (#10463) : la réponse de l'utilisateur, ou le
@@ -208,12 +277,17 @@ final class AccountReplacementAlert: AccountReplacementConfirming {
     private static let unansweredDismissalGrace: Duration = .milliseconds(500)
 
     func confirmReplacing(signedIn current: MeeshyUser?, with incoming: MeeshyUser) async -> AccountReplacementDecision {
-        guard let top = Self.topMostController() else { return .unavailable }
-        let alert = AccountReplacementAlertController(
+        await ask(
             title: String(localized: "signInLink.switchAccount.title", defaultValue: "Ouvrir un autre compte ?", bundle: .main),
             message: Self.message(signedIn: current, incoming: incoming),
-            preferredStyle: .alert
+            confirmTitle: String(localized: "signInLink.switchAccount.confirm", defaultValue: "Ouvrir ce compte", bundle: .main)
         )
+    }
+
+    /// Une question à deux réponses, « Annuler » mis en avant.
+    private func ask(title: String, message: String, confirmTitle: String) async -> AccountReplacementDecision {
+        guard let top = Self.topMostController() else { return .unavailable }
+        let alert = AccountReplacementAlertController(title: title, message: message, preferredStyle: .alert)
         return await withCheckedContinuation { continuation in
             let answer = AccountReplacementAnswer(continuation)
             let cancel = UIAlertAction(
@@ -222,7 +296,7 @@ final class AccountReplacementAlert: AccountReplacementConfirming {
             ) { _ in answer.give(.declined) }
             alert.addAction(cancel)
             alert.addAction(UIAlertAction(
-                title: String(localized: "signInLink.switchAccount.confirm", defaultValue: "Ouvrir ce compte", bundle: .main),
+                title: confirmTitle,
                 style: .default
             ) { _ in answer.give(.accepted) })
             alert.preferredAction = cancel

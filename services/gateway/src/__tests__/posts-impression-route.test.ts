@@ -104,7 +104,7 @@ const buildAuthMiddleware = (userId?: string) =>
 async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
-    postImpression: { createMany: impressionCreateMany },
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), createMany: impressionCreateMany },
     // #4146 puis #4150 — la route consulte l'audience du post AVANT de compter
     // une impression, désormais par la passe de LOT (`post.findMany`).
     $runCommandRaw: postCounterCommand,
@@ -152,7 +152,7 @@ describe('POST /posts/:postId/impression', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(true);
-    // La ligne porte désormais sa fin de conservation (90 j, #10510).
+    // La ligne porte le lecteur quel que soit le statut d'analyse (#10785) et sa fin de conservation (RAW_READING_RETENTION_DAYS, #10510).
     expect(impressionCreateMany).toHaveBeenCalledWith({
       data: [{ postId: POST_ID, userId: 'u1', source: 'detail', expiresAt: expect.any(Date) }],
     });

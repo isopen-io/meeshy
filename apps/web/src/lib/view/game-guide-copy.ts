@@ -4,11 +4,9 @@ import { translateGame } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 import {
-  actionsLabel,
   daysLabel,
   formatCount,
   levelTierName,
-  levelsLabel,
   meeshCount,
   pointsLabel,
   rankLabel,
@@ -81,8 +79,6 @@ const ACTION_KEYS: Readonly<Record<GuideAction, ActionKey>> = {
   'see-next-tier': 'game.guide.action.see_next_tier',
   'open-first-mission': 'game.guide.action.open_first_mission',
   'mint-or-climb': 'game.guide.action.mint_or_climb',
-  'regain-levels': 'game.guide.action.regain_levels',
-  'relight-badge': 'game.guide.action.relight_badge',
   'see-mint-preview': 'game.guide.action.see_mint_preview',
   'take-photo': 'game.guide.action.take_photo',
   'keep-or-spend': 'game.guide.action.keep_or_spend',
@@ -135,39 +131,22 @@ export function momentCopy(moment: GuideMoment, language: Language = currentInte
         short: translateGame(language, 'game.guide.moment.missions_unlocked.short'),
       });
     case 'first-mint-possible': {
-      const { price, levelsLost, gloryGain } = moment.data;
+      // La frappe fait baisser le niveau (#10892) : la phrase le dit, la puce de l'aperçu dit de combien.
+      const { price, gloryGain } = moment.data;
       return copy(moment.action, language, {
         what: translateGame(language, 'game.guide.moment.first_mint_possible.what'),
-        means:
-          levelsLost === 0
-            ? translateGame(language, 'game.guide.moment.first_mint_possible.means_free', { price: points(price), glory: number(gloryGain) })
-            : translateGame(language, 'game.guide.moment.first_mint_possible.means', {
-                price: points(price),
-                levels: levelsLabel(levelsLost, language),
-                glory: number(gloryGain),
-              }),
+        means: translateGame(language, 'game.guide.moment.first_mint_possible.means', { price: points(price), glory: number(gloryGain) }),
         next: translateGame(language, 'game.guide.moment.first_mint_possible.next'),
         short: translateGame(language, 'game.guide.moment.first_mint_possible.short', { price: points(price) }),
       });
     }
     case 'first-mint': {
-      const { levelBefore, levelAfter, tailwindUntilLevel } = moment.data;
-      const flow = { from: number(levelBefore), to: number(levelAfter) };
+      // Pas de Vent arrière (éteint) : la phrase dit que la poche, donc le niveau, remonte avec les gains.
       return copy(moment.action, language, {
         what: translateGame(language, 'game.guide.moment.first_mint.what'),
-        means: translateGame(language, 'game.guide.moment.first_mint.means', flow),
-        next: translateGame(language, 'game.guide.moment.first_mint.next', { level: number(tailwindUntilLevel) }),
-        short: translateGame(language, 'game.guide.moment.first_mint.short', { ...flow, level: number(tailwindUntilLevel) }),
-      });
-    }
-    case 'badge-extinguished': {
-      const { missingActions } = moment.data;
-      const actions = actionsLabel(missingActions, language);
-      return copy(moment.action, language, {
-        what: translateGame(language, 'game.guide.moment.badge_extinguished.what'),
-        means: translateGame(language, 'game.guide.moment.badge_extinguished.means'),
-        next: translateGame(language, 'game.guide.moment.badge_extinguished.next', { actions }),
-        short: translateGame(language, 'game.guide.moment.badge_extinguished.short', { actions }),
+        means: translateGame(language, 'game.guide.moment.first_mint.means'),
+        next: translateGame(language, 'game.guide.moment.first_mint.next'),
+        short: translateGame(language, 'game.guide.moment.first_mint.short'),
       });
     }
     case 'price-rises': {

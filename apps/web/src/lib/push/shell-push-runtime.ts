@@ -14,6 +14,7 @@ import { startShellPush, type ShellPushPlugin } from './shell-push';
 /** Le pont de la coque : l'écran système des notifications, et l'état de FCM (#8477). */
 type ShellNotificationBridge = NotificationSettingsBridge & {
   fcmStatus(): Promise<{ readonly configured: boolean }>;
+  deviceIdentity(): Promise<unknown>;
 };
 
 const notificationBridge = (): ShellNotificationBridge =>
@@ -41,7 +42,10 @@ export function shellPushUrl(target: PushTapTarget): string {
     case 'story':
       return href('story', target.params);
     case 'post':
-      return href('post', target.params);
+      /* `?from=notification` (#10483, #11097) — la vue du détail compte en `notification`, comme `sw-push.js`. */
+      return href('post', target.params, { from: 'notification' });
+    case 'mood':
+      return href('mood', target.params);
     case 'discover':
       return href('discover', undefined, target.search);
     case 'userProfile':
@@ -76,6 +80,10 @@ export async function startShellPushInShell(): Promise<void> {
     navigate: openNotificationTarget,
     urlOf: shellPushUrl,
     appVersion: __APP_VERSION__,
+    deviceIdentity: () => notificationBridge().deviceIdentity(),
+    record: (event) => {
+      void import('@/lib/view/reading-telemetry').then(({ readingTelemetry }) => readingTelemetry.recordV2(event));
+    },
   });
 }
 

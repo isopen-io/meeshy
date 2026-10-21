@@ -36,12 +36,16 @@ export function AccountReplacementPrompt({
   gestures = deviceProvenSessions,
   onAdopted,
   onDiscarded,
+  alreadyConfirmed = false,
 }: {
   readonly language: InterfaceLanguage;
   readonly replacement: AccountReplacement;
   readonly gestures?: ProvenSessionGestures;
   readonly onAdopted: () => void;
   readonly onDiscarded: () => void;
+  /** #10872 — le « oui » a déjà été donné à « Se connecter en tant que @x ? »,
+   * qui nommait le compte ouvert : la question ne se repose pas. */
+  readonly alreadyConfirmed?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [ending, setEnding] = useState<'failed' | 'expired' | null>(null);
@@ -122,6 +126,10 @@ export function AccountReplacementPrompt({
     else onDiscarded();
   }
 
+  useEffect(() => {
+    if (alreadyConfirmed) void answer(true);
+  }, []);
+
   if (ending !== null) {
     return (
       <section role="alert" className="grid gap-5 text-center">
@@ -138,6 +146,14 @@ export function AccountReplacementPrompt({
           {translate(language, 'signInLink.switchAccount.leave')}
         </button>
       </section>
+    );
+  }
+
+  if (alreadyConfirmed) {
+    return (
+      <p role="status" aria-busy="true" className="text-center" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {translate(language, 'signInLink.switchAccount.busy')}
+      </p>
     );
   }
 

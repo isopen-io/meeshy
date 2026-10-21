@@ -22,6 +22,7 @@ extension ComposerCaptureSession {
         framing = .identity
         openFamily = nil
         activeEditTools = ComposerEditTools.initial(.photo)
+        editChromeShown = true
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.photo)
         camera.pauseRunning()
@@ -49,6 +50,7 @@ extension ComposerCaptureSession {
         loopedTrim = trim
         openFamily = nil
         activeEditTools = ComposerEditTools.initial(.video(hasAudio: lecteur.hasAudio))
+        editChromeShown = true
         takeSound = ComposerTakeSound()
         editPaused = false
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
@@ -239,6 +241,7 @@ extension ComposerCaptureSession {
         framing = .identity
         editAspect = nil
         activeEditTools = []
+        editChromeShown = false
         takeSound = ComposerTakeSound()
         editPaused = false
         trimScrubbing = false
@@ -371,7 +374,7 @@ extension ComposerCaptureSession {
 
     /// Ce qui s'ouvre sous la scène de retouche, de haut en bas.
     var editPanels: [ComposerEditPanel] {
-        guard phase.isEditing else { return [] }
+        guard phase.isEditing, editChromeShown else { return [] }
         return ComposerEditTools.panels(familyOpen: openFamily != nil, active: activeEditTools)
     }
 
@@ -382,6 +385,7 @@ extension ComposerCaptureSession {
 
     /// Les outils dont la surface est à l'écran — ce que le rail allume.
     var shownEditTools: Set<ComposerEditTool> {
+        guard editChromeShown else { return [] }
         let familleOuverte = openFamily != nil
         return activeEditTools.filter {
             ComposerEditTools.isShown($0, active: activeEditTools, familyOpen: familleOuverte)
@@ -393,7 +397,29 @@ extension ComposerCaptureSession {
 
     /// Les équerres autour de l'image : Crop actif.
     var showsCropBrackets: Bool {
-        phase.isEditing && ComposerEditTools.showsBrackets(active: activeEditTools)
+        phase.isEditing && editChromeShown && ComposerEditTools.showsBrackets(active: activeEditTools)
+    }
+
+    /// **La prise se réduit-elle ?** Au recadrage montré, et seulement là (#10930).
+    var editFramesScene: Bool {
+        phase.isEditing && ComposerEditTools.framesScene(active: activeEditTools, chromeShown: editChromeShown)
+    }
+
+    /// **Le glissé vers le haut pose le chrome par-dessus la prise** (#10930) :
+    /// les outils comme on les a laissés.
+    func revealEditChrome() {
+        guard phase.isEditing, !isRenderingLook, !editChromeShown else { return }
+        editChromeShown = true
+        HapticFeedback.light()
+    }
+
+    /// Le glissé vers le bas rend tout l'écran à la prise ; la bande ouverte se
+    /// replie avec le reste.
+    func hideEditChrome() {
+        guard phase.isEditing, !isRenderingLook, editChromeShown else { return }
+        editChromeShown = false
+        openFamily = nil
+        HapticFeedback.light()
     }
 
     /// **Toucher un outil ne touche que lui** (#9754) : montré, il se retire ;

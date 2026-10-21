@@ -11,9 +11,12 @@
  *  - `PostImpression` : la ligne garde son compte (elle est du COMPTAGE, et
  *    la suppression du compte l'efface), et retombe à ce qu'un compte qui
  *    refuse l'analyse laisse : ni session, ni page, ni rang, ni visibilité,
- *    ni plateforme.
+ *    ni plateforme ;
+ *  - `PostEngagement` : la session garde son compte et sa mesure de comptage,
+ *    et perd sa trace (actions, échantillons de lecture) et le consentement
+ *    qu'elle déclarait (#10772).
  *
- * Idempotent (rejoué, il ne trouve plus rien à détacher) : deux commandes,
+ * Idempotent (rejoué, il ne trouve plus rien à détacher) : trois commandes,
  * quel que soit le volume.
  */
 type RawCommandRunner = { $runCommandRaw(command: Record<string, unknown>): Promise<unknown> };
@@ -54,6 +57,10 @@ export async function detachBehaviourOf(prisma: RawCommandRunner, userId: string
   await prisma.$runCommandRaw({
     update: 'PostImpression',
     updates: [{ q: { userId: { $oid: userId } }, u: { $unset: DENIED_IMPRESSION_UNSET }, multi: true }],
+  });
+  await prisma.$runCommandRaw({
+    update: 'PostEngagement',
+    updates: [{ q: { userId: { $oid: userId } }, u: { $set: { actions: [], watchSamples: [] }, $unset: { consent: '' } }, multi: true }],
   });
 }
 

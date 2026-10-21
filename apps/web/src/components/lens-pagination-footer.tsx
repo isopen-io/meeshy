@@ -2,6 +2,8 @@ import type { ReactNode, Ref } from 'react';
 
 import { TypingDots } from './typing-dots';
 import type { ListPaginationState } from '@/lib/lens/pagination';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 export type LensPaginationFooterProps = {
   readonly state: ListPaginationState;
@@ -41,7 +43,6 @@ export type LensPaginationFooterProps = {
 const SLOT_HEIGHT = '4.25rem';
 const SLOT = { height: SLOT_HEIGHT, flexShrink: 0 } as const;
 
-const DEFAULT_EXHAUSTED_LABEL = 'Toutes les conversations sont chargées';
 
 /**
  * L'ENCRE INDIGO DU PIED, LISIBLE DANS LES DEUX SCHÉMAS (revue-correction
@@ -73,11 +74,12 @@ export function LensPaginationFooter({
   showsAllLoadedHint,
   onRetry,
   sentinelRef,
-  exhaustedLabel = DEFAULT_EXHAUSTED_LABEL,
+  exhaustedLabel,
   loadingMoreContent,
   fixedSlot = false,
 }: LensPaginationFooterProps) {
   const slot = fixedSlot ? SLOT : undefined;
+  const language = currentInterfaceLanguage();
   if (state === 'loading-more') {
     return (
       /**
@@ -92,7 +94,7 @@ export function LensPaginationFooter({
       <li data-pagination-footer="loading-more" style={slot} className={loadingMoreContent ? 'py-1' : `grid place-items-center ${fixedSlot ? '' : 'py-4'}`}>
         <span role="status" className={loadingMoreContent ? 'block' : `inline-flex items-center ${FOOTER_INK}`}>
           {loadingMoreContent ?? <TypingDots color="currentColor" />}
-          <span className="sr-only">Chargement de la suite</span>
+          <span className="sr-only">{translate(language, 'list.footer.loadingMore')}</span>
         </span>
       </li>
     );
@@ -102,7 +104,7 @@ export function LensPaginationFooter({
     if (!showsAllLoadedHint) return fixedSlot ? <li data-pagination-footer="exhausted" aria-hidden="true" style={SLOT} /> : null;
     return (
       <li data-pagination-footer="exhausted" className={`${fixedSlot ? 'grid place-items-center' : 'py-4'} text-center text-caption`} style={{ ...slot, color: 'var(--color-ios-ink-2)' }}>
-        {exhaustedLabel}
+        {exhaustedLabel ?? translate(language, 'list.footer.exhausted')}
       </li>
     );
   }
@@ -111,7 +113,7 @@ export function LensPaginationFooter({
     return (
       <li data-pagination-footer="error" style={slot} className={`grid justify-items-center gap-1.5 ${fixedSlot ? 'content-center' : 'py-4'}`}>
         <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          Impossible de charger plus
+          {translate(language, 'list.footer.failed')}
         </p>
         <button
           type="button"
@@ -119,7 +121,7 @@ export function LensPaginationFooter({
           className={`grid place-items-center text-caption font-medium ${FOOTER_INK}`}
           style={{ minHeight: 44, minWidth: 44 }}
         >
-          Réessayer
+          {translate(language, 'common.retry')}
         </button>
       </li>
     );

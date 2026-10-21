@@ -59,6 +59,9 @@ const esSignup = {
   'signup.legal.privacy': 'Política de privacidad',
   'signup.haveAccount': '¿Ya tienes una cuenta?',
   'signup.signIn': 'Iniciar sesión',
+  'signup.country.title': 'País',
+  'signup.country.search': 'Buscar un país',
+  'signup.country.none': 'Ningún país coincide con «{query}».',
 };
 
 export default esSignup;

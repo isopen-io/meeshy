@@ -47,7 +47,17 @@ final class AppleTranslationEngine: ObservableObject, DeviceTranslationEnginePro
 
     /// Donnée à `.translationTask` par l'hôte. `nil` tant qu'aucun travail n'a
     /// été émis, et après `cancelPending()`.
-    @Published private(set) var configuration: TranslationSession.Configuration?
+    var configuration: TranslationSession.Configuration? {
+        issuedConfiguration as? TranslationSession.Configuration
+    }
+
+    /// #10592 — le stockage de `configuration`, sous un type qui existe sous
+    /// iOS 16 et 17. `@available` ne protège pas les MÉTADONNÉES d'une classe :
+    /// quiconque énumère les classes (XCTest, `objc_copyClassList`) les fait
+    /// compléter, et un `Published<TranslationSession.Configuration?>` stocké
+    /// fait avorter le processus là où le type n'existe pas. Garde :
+    /// `IOS18OnlyStoredTypeGuardTests`.
+    @Published private var issuedConfiguration: Any?
 
     /// Change à chaque configuration émise — voir l'en-tête du fichier.
     private(set) var epoch = 0
@@ -96,7 +106,7 @@ final class AppleTranslationEngine: ObservableObject, DeviceTranslationEnginePro
         let pending = queue
         queue.removeAll()
         epoch += 1
-        configuration = nil
+        issuedConfiguration = nil
         for job in pending { job.continuation?.resume(returning: []) }
     }
 
@@ -185,11 +195,11 @@ final class AppleTranslationEngine: ObservableObject, DeviceTranslationEnginePro
               current.source == resolution.source,
               current.target == resolution.target
         else {
-            configuration = TranslationSession.Configuration(source: resolution.source, target: resolution.target)
+            issuedConfiguration = TranslationSession.Configuration(source: resolution.source, target: resolution.target)
             return
         }
         current.invalidate()
-        configuration = current
+        issuedConfiguration = current
     }
 
     private func armWatchdog(for jobId: UUID) {
@@ -299,5 +309,5 @@ struct AppleTranslationHost: View {
 }
 
 private extension Logger {
-    nonisolated static let deviceTranslation = Logger(subsystem: "me.meeshy.app", category: "device-translation")
+    nonisolated static let deviceTranslation = MeeshyLog.logger(.deviceTranslation)
 }

@@ -117,7 +117,9 @@ struct ComposerMentionStrip: View {
                                 name: candidate.displayName,
                                 context: .userListItem,
                                 accentColor: accentColor,
-                                avatarURL: candidate.avatarURL
+                                avatarURL: candidate.avatarURL,
+                                presenceState: PresenceManager.shared.presenceState(for: candidate.id),
+                                ring: candidate.ring
                             )
                             // L'encre et la capsule viennent du FOND que l'hôte
                             // déclare (#4122) — voir `capsuleFill(on:)`. Un

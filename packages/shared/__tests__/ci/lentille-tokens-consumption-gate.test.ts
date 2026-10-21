@@ -204,6 +204,16 @@ interface DeadFamilyExclusion {
 // celle de son `avatar.tsx` — et l'entrée revient, datée.
 const EXCLUDED_DEAD_FAMILIES: readonly DeadFamilyExclusion[] = [
   {
+    family: 'list.rail',
+    since: '2026-10-19',
+    owner: 'Rail de stories unique (#11033) — suivi #11038',
+    reason:
+      'Son unique consommateur Swift était `StoriesVivantsRail`, supprimé quand la liste des ' +
+      'conversations a monté `StoryTrayView`, le rail du fil (#11033). `StoryTrayView` porte sa ' +
+      'propre géométrie, et le web ne lit pas la famille (elle décrit le rail des lives). La ' +
+      'brancher sur le rail unique, ou la retirer du JSON.',
+  },
+  {
     family: 'list.presenceDot',
     since: '2026-09-24',
     owner: 'Retrait du legacy web (#7668) — suivi #7722',

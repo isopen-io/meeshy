@@ -208,8 +208,7 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
-        let total = Int(seconds.rounded(.down))
-        return String(format: "%d:%02d", total / 60, total % 60)
+        DurationFormat.clock(seconds)
     }
 
     // MARK: - Language strip

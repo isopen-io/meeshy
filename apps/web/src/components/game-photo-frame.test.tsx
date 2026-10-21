@@ -6,7 +6,7 @@ import { referralOf, referralPlaceholder } from '@/lib/game-photo/referral';
 import { QR_DARK, QR_LIGHT, qrPath, referralQr } from '@/lib/game-photo/referral-qr';
 import { loadGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
-import { flameMoment, levelHundredMoment, meeshMoment, photoMomentOfEmblemV2, rankMoment, startMoment, tierMoment, treasuryMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import { achievementMoment, flameMoment, levelHundredMoment, meeshMoment, missionMoment, photoMomentOfEmblemV2, rankMoment, startMoment, tierMoment, treasuryMoment, type PhotoMoment } from '@/lib/game-photo/moments';
 
 import { GamePhotoFrame } from './game-photo-frame';
 
@@ -80,8 +80,10 @@ describe('un emblème par sorte de moment', () => {
     });
   }
 
-  test('une Meesh frappée montre son numéro', () => {
-    expect(text(render(meeshMoment({ number: 10, edition: 'silver' })))).toContain('N° 10');
+  test('une Meesh frappée montre son numéro, « Nº » dans toutes les langues (épopée § 6)', () => {
+    const html = render(meeshMoment({ number: 10, edition: 'silver' }));
+    expect(html).toContain('data-game-number="10"');
+    expect(text(html)).not.toContain('N° 10');
   });
 });
 
@@ -253,17 +255,57 @@ describe('les emblèmes de la vague 2', () => {
   test('une montée de ligue : la gemme de la ligue atteinte', () => {
     const html = render(photoMomentOfEmblemV2({ kind: 'league-up', league: 'saphir', weekKey: '2026-11-09' }));
     expect(html).toContain('data-game-league-gem="saphir"');
-    expect(text(html)).toContain('Ligue Saphir');
+    expect(text(html)).toContain('Joute Saphir');
   });
 
   test('une saison terminée et un Prestige : leur coupe, plaque numérotée', () => {
-    expect(render(photoMomentOfEmblemV2({ kind: 'season', season: 1 }))).toContain('>SAISON 1<');
+    expect(render(photoMomentOfEmblemV2({ kind: 'season', season: 1 }))).toContain('>VOYAGE 1<');
     const prestige = render(photoMomentOfEmblemV2({ kind: 'prestige', number: 2 }));
     expect(prestige).toContain('data-game-trophy="prestige"');
-    expect(prestige).toContain('>PRESTIGE 2<');
+    expect(prestige).toContain('>RENAISSANCE 2<');
   });
 
   test('un trophée d’une version plus récente : la coupe neutre, jamais une erreur', () => {
     expect(() => render(photoMomentOfEmblemV2({ kind: 'trophy', trophyKey: 'trophy.cometa.9' }))).not.toThrow();
+  });
+});
+
+/**
+ * LA PLAQUE D'AUTEUR (#10816) — « le cadre ne dit rien sur l'auteur ». Un
+ * succès, un rang ou une fin de mission gravent le pseudo de leur auteur dans
+ * le cadre ; le cadre porte un cinquième emplacement, `author`, que la
+ * composition relit — la plaque de l'aperçu est celle de l'image.
+ */
+describe('la plaque d’auteur', () => {
+  const withAuthor = (moment: PhotoMoment, format: 'story' | 'square' = 'story') =>
+    renderToStaticMarkup(<GamePhotoFrame moment={moment} dateLabel="5 octobre 2026" format={format} author={{ handle: 'atabeth', avatar: 'https://cdn.test/a.jpg' }} />);
+
+  test('un succès, un rang, une fin de mission : le pseudo gravé, à sa place dans la mise en page', () => {
+    const layout = photoLayout('story');
+    const percent = (n: number, of: number) => `${((n / of) * 100).toFixed(2)}%`;
+    for (const moment of [achievementMoment('achievement.first_content', 'epic'), rankMoment({ rank: 'voix', division: 2 }), missionMoment({ id: 'm1', templateKey: 'send_voice', target: 3 })]) {
+      const html = withAuthor(moment);
+      expect(html).toMatch(/data-photo-art="author"[^>]*>\s*<svg/);
+      expect(html).toContain('@atabeth');
+      expect(html).toContain(`top:${percent(layout.author.y, layout.height)}`);
+    }
+  });
+
+  test('l’image exportée garde le monogramme : aucune image extérieure dans le cadre', () => {
+    const html = withAuthor(achievementMoment('achievement.first_content', 'rare'));
+    expect(html).not.toContain('<image');
+    expect(html).toContain('data-plate-medallion="monogram"');
+  });
+
+  test('sans auteur, ou pour un moment sans plaque : le cadre d’avant', () => {
+    expect(render(achievementMoment('achievement.first_content'))).not.toContain('data-photo-art="author"');
+    expect(withAuthor(startMoment())).not.toContain('data-photo-art="author"');
+  });
+
+  test('le trophée d’un succès prend le métal de SA rareté', () => {
+    expect(withAuthor(achievementMoment('achievement.first_content', 'common'))).toContain('data-plate-metal="bronze"');
+    const rare = render(achievementMoment('achievement.first_content', 'rare'));
+    expect(rare).toContain('var(--game-silver-0)');
+    expect(rare).not.toContain('var(--game-gold-0)');
   });
 });

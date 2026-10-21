@@ -62,7 +62,7 @@ describe('les neuf familles sont dessinées', () => {
     expect(count(/data-game-rank=/g, html)).toBe(11);
     expect(html).toContain('Murmure');
     expect(html).toContain('Mythe');
-    expect(html).toContain('Les 100 premiers à atteindre 1 000 000 de Gloire');
+    expect(html).toContain('Les 100 premiers à atteindre 1 000 000 de gloire');
   });
 
   test('les cinq formes de la Flamme', () => {
@@ -81,14 +81,14 @@ describe('les neuf familles sont dessinées', () => {
   test('les médailles : trois formes, sept matières, l’empreinte', () => {
     const html = section('medals');
     expect(count(/data-game-badge=/g, html)).toBe(11);
-    for (const name of ['Accumulation', 'Record', 'Collection', 'Cuivre', 'Obsidienne', 'Prisme', 'Empreinte']) expect(html).toContain(name);
+    for (const name of ['Accumulation', 'Sommet', 'Collection', 'Cuivre', 'Obsidienne', 'Prisme', 'Empreinte']) expect(html).toContain(name);
   });
 
   test('les trophées : trois coupes de ligue, la saison, le Prestige, la Flamme', () => {
     const html = section('trophies');
     expect(count(/data-game-trophy=/g, html)).toBe(6);
-    expect(html).toContain('Coupe de ligue');
-    expect(html).toContain('Trophée de Prestige');
+    expect(html).toContain('Coupe de joute');
+    expect(html).toContain('Trophée de renaissance');
   });
 
   test('les cinq raretés, avec leur liseré, leur part des comptes et leur Gloire', () => {
@@ -96,7 +96,7 @@ describe('les neuf familles sont dessinées', () => {
     expect(count(/data-game-rarity=/g, html)).toBe(5);
     expect(html).toContain('Mythique');
     expect(html).toContain('moins de 0,2 % des comptes');
-    expect(html).toContain(`+${formatCount(gloryForAchievement('epic'), 'fr')} de Gloire`);
+    expect(html).toContain(`+${formatCount(gloryForAchievement('epic'), 'fr')} de gloire`);
   });
 });
 

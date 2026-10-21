@@ -6,6 +6,11 @@
  * chargé avec le fil (`useMessageMenu`), jamais au démarrage — le catalogue
  * d'interface a atteint son plafond (`budgets.json` › `interface_catalogs`).
  *
+ * CE CATALOGUE PORTE AUSSI CE QUE LE MENU FAIT DU MESSAGE ENTIER quand le
+ * libellé n'existait pas encore : `message.edit.*` (#10581) et
+ * `message.delete.*` (#10582), et l'état vide de la liste « qui a réagi »
+ * (`message.reactors.*`, #10583). Même raison, même chargement — avec le fil.
+ *
  * Aucun repli : une clé absente d'une langue est une erreur de compilation
  * (`satisfies MessagePiecesCatalog`) et un témoin rouge ; un catalogue lu
  * avant d'être chargé lève. Tant qu'il n'est pas chargé, l'appui long sur une

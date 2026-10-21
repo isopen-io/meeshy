@@ -516,8 +516,9 @@ export function buildGameVectors() {
     { kind: 'new-tier', tier: 'lueur', nextTierLevel: 20 },
     { kind: 'missions-unlocked' },
     { kind: 'first-mint-possible', price: 1221, levelsLost: 5, gloryGain: 100 },
-    { kind: 'first-mint', levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14 },
-    { kind: 'badge-extinguished', missingActions: 37 },
+    // `first-mint` revient SANS chiffres (porteur, 2026-10-16) : la frappe ne fait plus baisser le niveau ni n'ouvre de Vent arrière,
+    // et mène à la progression ; `badge-extinguished` n'existe plus. iOS le rejoue (GameLawVectorTests).
+    { kind: 'first-mint' },
     { kind: 'price-rises', nextPrice: 1294 },
     { kind: 'new-rank', rank: 'voix', division: 2, glory: 2200, gloryMissing: 634 },
     { kind: 'new-rank', rank: 'mythe', division: null, glory: 200_000, gloryMissing: null },

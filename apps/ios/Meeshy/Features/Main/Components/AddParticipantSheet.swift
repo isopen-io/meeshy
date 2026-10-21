@@ -6,7 +6,7 @@ import MeeshyUI
 
 // MARK: - User Search Result
 
-private struct UserSearchResult: Identifiable, Decodable {
+private struct UserSearchResult: Identifiable, Decodable, ProfileDecorWearer {
     let id: String
     let username: String
     let firstName: String?
@@ -15,6 +15,8 @@ private struct UserSearchResult: Identifiable, Decodable {
     let avatar: String?
     let isOnline: Bool?
     let lastActiveAt: Date?
+    /// Le décor servi avec la personne — son contour équipé (#10945, #10946).
+    let profileDecor: ServedProfileDecor?
 
     var name: String {
         displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").ifEmptyFallback(username)
@@ -191,7 +193,8 @@ struct AddParticipantSheet: View {
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: user.avatar,
-                presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt)
+                presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
+                ring: user.avatarRing
             )
             // Presentational avatar — MeeshyAvatar carries its own .accessibilityLabel(name),
             // which the adjacent name/username block already reads. Hide it so VoiceOver
@@ -350,5 +353,5 @@ struct AddParticipantSheet: View {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let participants = Logger(subsystem: "me.meeshy.app", category: "participants")
+    nonisolated static let participants = MeeshyLog.logger(.participants)
 }

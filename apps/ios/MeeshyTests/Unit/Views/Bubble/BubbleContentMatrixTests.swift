@@ -499,8 +499,8 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertFalse(content.visualHostsReply)
     }
 
-    /// Emoji-only + reply : l'emoji est rendu agrandi dans la bulle texte ;
-    /// ni audio ni visual ne hostent — comportement préservé.
+    /// Emoji-only + reply : ni audio ni visual n'hébergent la citation —
+    /// l'emoji se pose en grand SOUS sa carte citée, sans bulle (#10628).
     func test_neitherHostsReply_emojiOnlyWithReply_isFalse() {
         let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
         let msg = makeMessage(content: "🔥", replyTo: reply)

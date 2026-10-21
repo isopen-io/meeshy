@@ -10,7 +10,9 @@ import MeeshySDK
 ///
 /// Chaque cadre PLIE le texte à neuf corps de large : un sticker qui s'étire
 /// sur toute la scène pour une phrase n'est plus une décoration.
-extension StickerTemplateRenderer {
+enum TextStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .text
+
 
     // MARK: Le texte plié
 
@@ -146,7 +148,7 @@ extension StickerTemplateRenderer {
         return chemin
     }
 
-    static let textDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         TextFrame(
             id: StickerTemplateCatalog.ID.textSpeechBubble,
             name: { String(localized: "sticker.template.text.speechBubble", defaultValue: "Bulle", bundle: .module) },

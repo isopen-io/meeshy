@@ -48,9 +48,28 @@ nonisolated enum ComposerEditTools {
         }
     }
 
-    /// Tout ce qui est offert est actif à l'entrée.
+    /// **Aucun outil ouvert à l'entrée** (porteur 2026-10-20 : « afficher
+    /// immédiatement les touches d'édition »). Le rail est là, la prise remplit
+    /// le viewport, (x) et « Terminé » restent visibles tant qu'aucun élément
+    /// d'édition ne s'affiche.
     static func initial(_ take: ComposerEditTake) -> Set<ComposerEditTool> {
-        Set(offered(take))
+        []
+    }
+
+    /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur
+    /// 2026-10-20 : « on ne doit pas afficher (X) et Terminé en même temps que
+    /// les éléments d'édition ») : une famille ouverte ou un outil montré les
+    /// cache ; refermés, ils reviennent.
+    static func showsTopRow(familyOpen: Bool, shownTools: Set<ComposerEditTool>) -> Bool {
+        !familyOpen && shownTools.isEmpty
+    }
+
+    /// **Seul le recadrage réduit la prise** (#10930 : « seul le recadrage
+    /// réduit la vidéo pour coper avec les bords ») — et seulement quand le
+    /// chrome est montré. Tout le reste se pose PAR-DESSUS une prise qui garde
+    /// le viewport entier.
+    static func framesScene(active: Set<ComposerEditTool>, chromeShown: Bool) -> Bool {
+        chromeShown && active.contains(.crop)
     }
 
     /// Ce qu'un outil actif montre : les équerres restent sur la scène sous une
@@ -67,8 +86,11 @@ nonisolated enum ComposerEditTools {
         isShown(tool, active: active, familyOpen: familyOpen) ? active.subtracting([tool]) : active.union([tool])
     }
 
-    /// L'ordre des panneaux sous la scène, de haut en bas : les proportions, le
-    /// spectre, puis la coupe, au plus près des outils.
+    /// L'ordre des panneaux sous la scène, de haut en bas : les proportions,
+    /// le spectre, puis la coupe, au plus près des outils. Les proportions
+    /// retiennent leur bande SOUS la scène (porteur 2026-10-20 : « les rails
+    /// d'outils doivent être le moins coupés possible ») : aucun crochet ne
+    /// les coupe, et elles défilent jusqu'aux bords de l'écran.
     static let panelOrder: [ComposerEditTool] = [.crop, .sound, .trim]
 
     /// Les panneaux sous la scène : la bande d'une famille ouverte, sinon un par
@@ -227,5 +249,40 @@ nonisolated struct ComposerSeekChase: Equatable, Sendable {
     mutating func reset() {
         inFlight = nil
         pending = nil
+    }
+}
+
+/// **Le glissé vertical de la retouche montre et cache son chrome** (#10930,
+/// porteur 2026-10-18 : « swipe vers le haut : afficher par-dessus la vidéo ou
+/// l'image les contrôleurs »). Le doigt cadrait le média dans tous les sens ;
+/// il garde le cadrage là où il a un sens — à l'horizontale, sur un média
+/// agrandi, et pendant le recadrage, où les bords sont l'objet même du geste.
+nonisolated enum ComposerEditSwipe {
+
+    /// La course qui décide ; en deçà, une hésitation ne change rien.
+    static let threshold: CGFloat = 48
+
+    enum Mode: Equatable, Sendable {
+        case swipe
+        case reframe
+    }
+
+    enum Outcome: Equatable, Sendable {
+        case none
+        case reveal
+        case hide
+    }
+
+    /// Ce que le glissé EST, fixé à son premier pas.
+    static func mode(translation: CGSize, zoomed: Bool, cropping: Bool) -> Mode {
+        guard !zoomed, !cropping, abs(translation.height) > abs(translation.width) else { return .reframe }
+        return .swipe
+    }
+
+    /// Ce qu'un glissé de chrome décide à sa levée : le haut montre, le bas cache.
+    static func outcome(translationY: CGFloat) -> Outcome {
+        if translationY <= -threshold { return .reveal }
+        if translationY >= threshold { return .hide }
+        return .none
     }
 }

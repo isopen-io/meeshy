@@ -293,6 +293,15 @@ final class MessageTextRendererTests: XCTestCase {
         XCTAssertEqual(ranges.count, 3)
     }
 
+    func test_highlightRanges_staysInBounds_whenLowercasingLengthensTheText() {
+        // « İ » (U+0130) devient deux scalaires en minuscules : un indice pris dans la copie abaissée sortait
+        // des bornes du texte d'origine.
+        let text = "İİİİ İstanbul"
+        let ranges = MessageTextRenderer.highlightRanges(in: text, term: "bul")
+        XCTAssertEqual(ranges.count, 1)
+        XCTAssertEqual((text as NSString).substring(with: ranges[0]), "bul")
+    }
+
     func test_highlightRanges_emptyTerm_returnsEmpty() {
         let ranges = MessageTextRenderer.highlightRanges(in: "hello", term: "")
         XCTAssertTrue(ranges.isEmpty)
@@ -308,5 +317,36 @@ final class MessageTextRendererTests: XCTestCase {
         let ranges = MessageTextRenderer.highlightRanges(in: text, term: "jour")
         XCTAssertEqual(ranges.count, 1)
         XCTAssertEqual((text as NSString).substring(with: ranges[0]), "jour")
+    }
+}
+
+/// Le coloriseur AVANCE toujours : une directive lue depuis son préfixe (`#`) rendait l'indice de départ, et la
+/// boucle ne finissait jamais — l'aperçu d'un fichier C gelait la conversation à chaque ouverture.
+@MainActor
+final class SyntaxHighlighterProgressTests: XCTestCase {
+
+    func test_tokenize_terminatesOnPreprocessorLines_inEveryLanguage() {
+        let code = "#include <stdio.h>\n  #if DEBUG\n#\n# comment\nint x = 1;"
+        for language in CodeLanguage.allCases {
+            let lines = SyntaxHighlighter.tokenize(code, language: language)
+            XCTAssertEqual(lines.count, 5, "\(language)")
+            let rebuilt = lines.map { $0.map { $0.text }.joined() }.joined(separator: "\n")
+            XCTAssertEqual(rebuilt, code, "\(language) : chaque caractère est rendu une fois, aucun jeton vide en boucle")
+        }
+    }
+}
+
+/// Le cache des rapports d'aspect vidéo est borné : une longue session ne garde plus chaque vidéo jamais vue.
+final class VideoDisplayAspectCacheBoundTests: XCTestCase {
+    func test_theOldestRatiosLeave_beyondTheCapacity() async {
+        let cache = VideoDisplayAspectCache()
+        let capacity = VideoDisplayAspectCache.capacity
+        for index in 0...capacity {
+            await cache.store(1.5, for: "v\(index)")
+        }
+        let first = await cache.ratio(for: "v0")
+        let last = await cache.ratio(for: "v\(capacity)")
+        XCTAssertNil(first, "la plus ancienne est partie")
+        XCTAssertEqual(last, 1.5)
     }
 }

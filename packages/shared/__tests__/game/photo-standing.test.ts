@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildGameBlock, type GameBlockFacts } from '../../utils/game/game-block.js';
 import { catchUpStandingOf } from '../../utils/game/photo-catch-up.js';
+import { parseGameBlock } from '../../types/game.js';
 
 const facts = (over: Partial<GameBlockFacts> = {}): GameBlockFacts => ({
   userId: 'u1',
@@ -63,5 +64,14 @@ describe('la situation lue dans le bloc du jeu', () => {
 
   it('aucune Meesh frappée : zéro, jamais un nombre négatif', () => {
     expect(catchUpStandingOf(buildGameBlock(facts({ mintedLifetime: 0 }))).minted).toBe(0);
+  });
+
+  it('le record de chaque cycle clos, quand le bloc le sert (#10911) ; absent devant un serveur antérieur', () => {
+    expect(catchUpStandingOf(buildGameBlock(facts({ pastCycleRecords: [120] }))).pastCycleRecords).toEqual([120]);
+    expect('pastCycleRecords' in catchUpStandingOf(buildGameBlock(facts()))).toBe(false);
+  });
+
+  it('le contrat partagé garde le record des cycles clos : un champ non déclaré serait retiré à la validation', () => {
+    expect(parseGameBlock(buildGameBlock(facts({ pastCycleRecords: [120] })))?.level.ladder?.pastCycleRecords).toEqual([120]);
   });
 });

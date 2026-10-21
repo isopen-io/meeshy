@@ -48,7 +48,7 @@ public final class StoryLocationLayer: CALayer {
     public func configure(with location: StoryLocationObject,
                           geometry: CanvasGeometry,
                           mode: RenderMode,
-                          renderScale: CGFloat = UIScreen.main.scale) {
+                          renderScale: CGFloat = StoryCanvasDisplayScale.ambient) {
         self.locationObject = location
 
         let scale = contentsScale

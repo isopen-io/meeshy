@@ -55,6 +55,12 @@ extension CallManager {
     /// dropping any OTHER call's still-pending entry.
     func armPendingEndReconciliation(callId: String, reason: String?) {
         pendingEndReconciliations.removeAll { $0.callId == callId }
+        let armings = (endReconciliationArmings[callId] ?? 0) + 1
+        guard armings <= Self.maxEndReconciliationArmings else {
+            Logger.calls.warning("call:end reconciliation abandoned after \(Self.maxEndReconciliationArmings) armings (callId=\(callId))")
+            return
+        }
+        endReconciliationArmings[callId] = armings
         pendingEndReconciliations.append((callId: callId, reason: reason))
     }
 
@@ -155,5 +161,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

@@ -61,7 +61,13 @@ describe('une fiche depuis le journal en cache', () => {
       participants: [],
       live: false,
       reactions: [],
+      peerKey: 'u-kwame',
     });
+  });
+
+  test('la clé de présence du pair d’un direct voyage avec la fiche (#10956) ; un groupe n’en a pas', () => {
+    expect(callDetailFromRecord(record({ peer: null, conversationType: 'group', conversationTitle: 'Équipe' }), 'Inconnu').peerKey).toBeNull();
+    expect(callDetailFromSession(session(), { viewerId: 'u-me', unknown: 'Inconnu' }).peerKey).toBe('u-ada');
   });
 
   test('les réactions de l’appel se lisent dans l’ordre de la palette, emoji × compte (#8439)', () => {

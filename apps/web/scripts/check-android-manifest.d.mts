@@ -20,8 +20,16 @@ export declare function auditForbiddenPermissions(
   options: Readonly<{ readonly manifest: string; readonly forbidden?: readonly string[] }>,
 ): readonly string[];
 
+export declare const CALL_ONLY_PERMISSIONS: readonly string[];
+
+export declare function requiredPermissions(options: Readonly<{ readonly callsEnabled: boolean }>): readonly string[];
+
+export declare function forbiddenPermissions(options: Readonly<{ readonly callsEnabled: boolean }>): readonly string[];
+
+export declare function callsEnabledIn(callPushSource: string): boolean;
+
 export declare function auditCallComponents(
-  options: Readonly<{ readonly manifest: string }>,
+  options: Readonly<{ readonly manifest: string; readonly callsEnabled?: boolean }>,
 ): readonly string[];
 
 export declare function formatViolations(

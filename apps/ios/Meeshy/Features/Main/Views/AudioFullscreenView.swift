@@ -145,6 +145,9 @@ extension AudioFullscreenSource {
 /// que le lecteur partagé joue —, et les deux couches où l'on PARLE du vocal
 /// (rangée d'émojis, barre de réponse, #8916), au-dessus de tout.
 struct AudioFullscreenView: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
     let allAudioItems: [AudioFullscreenSource]
     let startAttachmentId: String
     let contactColor: String
@@ -212,8 +215,9 @@ struct AudioFullscreenView: View {
 
     private var coordinator: ConversationAudioCoordinator { .sharedForTesting }
     private var ids: [String] { allAudioItems.map(\.id) }
+    /// Par IDENTITÉ : la pièce regardée, jamais « celle qui occupe son ancien rang ».
     private var currentSource: AudioFullscreenSource? {
-        allAudioItems.indices.contains(currentIndex) ? allAudioItems[currentIndex] : nil
+        AudioFullscreenPaging.index(of: currentPageID, in: ids).map { allAudioItems[$0] }
     }
 
     var body: some View {
@@ -232,6 +236,10 @@ struct AudioFullscreenView: View {
                 .modifier(AudioFullscreenDismissDrag(offset: $dragOffset, onDismiss: dismissDownward))
                 .opacity(isDismissing ? 0 : 1)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
+                // La liste a bougé sous l'écran : la position suit la page regardée.
+                .adaptiveOnChange(of: ids) { _, newIds in
+                    if let idx = AudioFullscreenPaging.index(of: currentPageID, in: newIds), idx != currentIndex { currentIndex = idx }
+                }
                 .adaptiveOnChange(of: currentPageID) { _, newID in
                     guard let newID,
                           let newIdx = allAudioItems.firstIndex(where: { $0.id == newID })
@@ -521,7 +529,7 @@ struct AudioFullscreenView: View {
             // Course de sortie mesurée sur la fenêtre : sur le display, une
             // fenêtre Split View sortait de l'écran bien avant la fin de
             // l'animation, donc la vue disparaissait d'un coup au lieu de glisser.
-            dragOffset = DeviceLayout.windowSize.height
+            dragOffset = hostHeight
             isDismissing = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {

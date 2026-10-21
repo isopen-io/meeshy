@@ -4,7 +4,7 @@ import UIKit
 import UniformTypeIdentifiers
 import os
 
-private let photoLog = Logger(subsystem: "com.meeshy.sdk", category: "photo-library")
+private let photoLog = MeeshyLog.logger(.photoLibrary, subsystem: .legacySDK)
 
 /// Saves images and videos to a custom "Meeshy" album in the user's photo library.
 ///
@@ -285,7 +285,9 @@ struct PhotosAssetCreator: PhotoLibraryAssetCreating {
         // Album résolu HORS de `performChanges` : `fetchOrCreate` appelle
         // `performChangesAndWait`, qui se bloquerait sur la file de `performChanges`
         // (EXC_BREAKPOINT `__DISPATCH_WAIT_FOR_QUEUE__`).
-        let album = PhotosAlbum.fetchOrCreate(named: albumName)
+        let album = PhotosAlbum.isReachable(readWriteStatus: PHPhotoLibrary.authorizationStatus(for: .readWrite))
+            ? PhotosAlbum.fetchOrCreate(named: albumName)
+            : nil
         let identifier = PhotosCreatedIdentifier()
         return await withCheckedContinuation { continuation in
             PHPhotoLibrary.shared().performChanges {
@@ -331,6 +333,14 @@ private final class PhotosCreatedIdentifier: @unchecked Sendable {
 }
 
 enum PhotosAlbum {
+    /// **L'album n'est touché qu'avec l'accès en LECTURE** (#10805). Le chercher
+    /// ou le créer lit la photothèque : en accès « ajout seul », iOS ferait monter
+    /// une seconde alerte réclamant l'accès complet pour le même geste. Le média
+    /// part alors dans la photothèque, hors album.
+    static func isReachable(readWriteStatus: PHAuthorizationStatus) -> Bool {
+        readWriteStatus == .authorized || readWriteStatus == .limited
+    }
+
     static func fetch(named name: String) -> PHAssetCollection? {
         let options = PHFetchOptions()
         options.predicate = NSPredicate(format: "title = %@", name)

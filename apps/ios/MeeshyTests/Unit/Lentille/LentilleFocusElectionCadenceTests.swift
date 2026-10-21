@@ -263,7 +263,7 @@ final class LentilleFocusElectionCadenceTests: XCTestCase {
             "L'écriture du relais n'est plus la PREMIÈRE instruction du callback de " +
             "défilement. Elle doit précéder le `guard !isSearching, !showSearchOverlay` " +
             "qui suit : ce garde-là existe pour la barre du bas (`isScrollingDown`, " +
-            "throttlée à 0,15 s exprès), pas pour l'élection. Le faire passer AVANT " +
+            "basculée sous hystérésis, #11036), pas pour l'élection. Le faire passer AVANT " +
             "l'écriture gèlerait la focus card dès l'ouverture de la recherche."
         )
     }

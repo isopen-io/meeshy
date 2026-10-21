@@ -74,7 +74,7 @@ public protocol PermissionsServiceProviding: Sendable {
 /// En **S2** : lire ses propres permissions n'est pas un geste
 /// d'administration, et un compte ordinaire a le droit d'apprendre qu'il n'a
 /// aucun droit — c'est même la réponse la plus fréquente.
-public final class PermissionsService: PermissionsServiceProviding, @unchecked Sendable {
+public final class PermissionsService: PermissionsServiceProviding, Sendable {
     public static let shared = PermissionsService()
     private let api: APIClientProviding
 

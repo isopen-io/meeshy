@@ -52,7 +52,7 @@ final class GamePhotoNotebookTests: XCTestCase {
     func test_list_aPendingEntryNeverDisappears_evenOneWrittenWithAPastExpiry() async throws {
         let (sut, clock, directory) = makeSUT()
         try writeOldIndex([[
-            "momentId": "achievement:first_message", "emblem": try encoded(.achievement), "kicker": "Succès", "title": "Premier message",
+            "momentId": "achievement:first_message", "emblem": try encoded(.achievement(rarity: nil)), "kicker": "Succès", "title": "Premier message",
             "status": "pending", "createdAt": "2026-01-01T00:00:00Z", "expiresAt": "2026-01-08T00:00:00Z",
         ]], in: directory)
         clock.now = clock.now.addingTimeInterval(400 * 86_400)

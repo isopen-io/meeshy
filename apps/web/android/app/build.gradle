@@ -36,7 +36,7 @@ android {
         // posé par scripts/build-shells.mjs. Sans lui, 1 — la marque d'un build
         // fait HORS du site unique.
         versionCode = (project.findProperty('meeshyBuildNumber') ?: '1').toString().toInteger()
-        versionName "2.13.0"
+        versionName "2.19.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -84,6 +84,9 @@ dependencies {
     // coque recoit FCM elle-meme, le plugin n'etant atteint que par reflexion.
     implementation "com.google.firebase:firebase-messaging:$firebaseMessagingVersion"
     testImplementation "junit:junit:$junitVersion"
+    // #10626 — les regles des widgets decodent le JSON publie par la page :
+    // la vraie org.json remplace, en JVM, le bouchon d'android.jar.
+    testImplementation "org.json:json:20250517"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')

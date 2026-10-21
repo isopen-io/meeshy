@@ -173,9 +173,19 @@ export type LinkDestination = 'home' | 'list' | 'login' | 'settings';
  * remplacer évite que « retour » ramène sur un lien déjà consommé — un clic
  * recompté, un jeton déjà dépensé.
  */
-export function ActionLink({ to, tone, children }: { readonly to: LinkDestination; readonly tone: ActionTone; readonly children: string }) {
+export function ActionLink({
+  to,
+  search,
+  tone,
+  children,
+}: {
+  readonly to: LinkDestination;
+  readonly search?: Readonly<Record<string, string>>;
+  readonly tone: ActionTone;
+  readonly children: string;
+}) {
   return (
-    <Link to={to} replace className={ACTION_CLASS} style={{ ...ACTION_FILL[tone], minHeight: ACTION_HEIGHT }}>
+    <Link to={to} {...(search === undefined ? {} : { search: { ...search } })} replace className={ACTION_CLASS} style={{ ...ACTION_FILL[tone], minHeight: ACTION_HEIGHT }}>
       {children}
     </Link>
   );

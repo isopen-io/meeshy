@@ -41,6 +41,9 @@ struct SettingsView: View {
     @State private var showVoiceProfileManage = false
     @State private var showMediaDownload = false
     @State private var showPacks = false
+    @State private var packsInitialDomain: PackDomain?
+    @State private var packsFocusedPack: String?
+    @ObservedObject private var packShopLauncher = PackShopLauncher.shared
     @State private var scrollRelay = ScrollOffsetRelay()
     /// Miroirs des trois interrupteurs d'interface (#6482), lus UNE fois au
     /// montage comme `interfaceLanguageChoice` : chaque bascule écrit le miroir
@@ -150,7 +153,13 @@ struct SettingsView: View {
         .sheet(isPresented: $showSupport) { SupportView() }
         .sheet(isPresented: $showDataStorage) { DataStorageView() }
         .sheet(isPresented: $showMediaDownload) { MediaDownloadSettingsView() }
-        .sheet(isPresented: $showPacks) { PacksSettingsView() }
+        .sheet(isPresented: $showPacks) { PacksSettingsView(initialDomain: packsInitialDomain, focusedPack: packsFocusedPack) }
+        .onReceive(packShopLauncher.$pending.compactMap { $0 }) { _ in
+            let request = packShopLauncher.consume()
+            packsInitialDomain = request?.domain
+            packsFocusedPack = request?.pack
+            showPacks = true
+        }
         .sheet(isPresented: $showDeleteAccount) { DeleteAccountView() }
         .task { await prefs.fetchFromBackend() }
     }
@@ -222,7 +231,8 @@ struct SettingsView: View {
                     name: authManager.currentUser?.displayName ?? "?",
                     context: .conversationList,
                     avatarURL: authManager.currentUser?.avatar,
-                    presenceState: .online
+                    presenceState: .online,
+                    ring: authManager.currentUser?.profileDecor?.avatarRing
                 )
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
@@ -425,12 +435,12 @@ struct SettingsView: View {
         return locale.localizedString(forIdentifier: code)?.capitalized ?? code
     }
 
-    /// Enregistre le choix et prévient : `AppleLanguages` n'est relu qu'au
-    /// démarrage, donc l'écran courant reste dans l'ancienne langue.
+    /// Enregistre le choix et prévient : il s'applique au relancement
+    /// (`MeeshyLaunch.main()`). Écrire `AppleLanguages` maintenant basculerait
+    /// les dates et les vues système sans le reste de l'écran (#10804).
     private func selectInterfaceLanguage(_ code: String?) {
         HapticFeedback.light()
         UILanguageOverride.explicitChoice = code
-        UILanguageOverride.applyIfNeeded()
         UILanguageOverride.refreshNotificationLanguage()
         interfaceLanguageChoice = code
         showInterfaceLanguageRestartHint = true
@@ -581,6 +591,8 @@ struct SettingsView: View {
 
             Button {
                 HapticFeedback.light()
+                packsInitialDomain = nil
+                packsFocusedPack = nil
                 showPacks = true
             } label: {
                 settingsRow(icon: "shippingbox.fill", title: String(localized: "settings.packs.title", defaultValue: "Packs et téléchargements", bundle: .main), color: MeeshyColors.warningHex) {

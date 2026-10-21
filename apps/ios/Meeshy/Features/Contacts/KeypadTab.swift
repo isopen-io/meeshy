@@ -147,7 +147,8 @@ struct KeypadTab: View {
                         context: .userListItem,
                         accentColor: color,
                         avatarURL: user.avatar,
-                        presenceState: presence
+                        presenceState: presence,
+                        ring: user.avatarRing
                     )
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(name)

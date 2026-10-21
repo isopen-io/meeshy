@@ -33,6 +33,8 @@ public struct SwipeAction: Identifiable {
 // • Tap sur l'une des actions → déclenchement + fermeture animée
 // • Tap sur le contenu quand ouvert → fermeture
 // • Re-swipe dans la direction inverse pour fermer
+// • Trois actions au plus par côté ; une seule ligne ouverte à la fois, qui revient
+//   en place au toucher ailleurs, au défilement et quand elle quitte l'écran (#10579)
 //
 public struct SwipeableRow<Content: View>: View {
     public let content: Content
@@ -42,6 +44,8 @@ public struct SwipeableRow<Content: View>: View {
     @GestureState private var dragOffset: CGFloat = 0
     /// Position d'ouverture persistante (> 0 = leading ouvert, < 0 = trailing ouvert)
     @State private var openOffset: CGFloat = 0
+    @State private var rowID = UUID()
+    private let coordinator: SwipeRowCoordinator
 
     // Layout
     private let actionWidth: CGFloat = 76
@@ -53,10 +57,12 @@ public struct SwipeableRow<Content: View>: View {
     public init(
         leadingActions: [SwipeAction] = [],
         trailingActions: [SwipeAction] = [],
+        coordinator: SwipeRowCoordinator = .shared,
         @ViewBuilder content: () -> Content
     ) {
-        self.leadingActions = leadingActions
-        self.trailingActions = trailingActions
+        self.leadingActions = SwipeRowRules.capped(leadingActions)
+        self.trailingActions = SwipeRowRules.capped(trailingActions)
+        self.coordinator = coordinator
         self.content = content()
     }
 
@@ -130,9 +136,27 @@ public struct SwipeableRow<Content: View>: View {
                 )
                 .simultaneousGesture(swipeGesture)
         }
-        .clipped()
+        // Rognage HORIZONTAL seulement (#10835) : il masque les fonds d'action
+        // qui glissent sous la rangée, jamais ce qu'une rangée dessine au-dessus
+        // ou au-dessous de sa hauteur de layout (la rangée en focus de la liste
+        // y pose ses chips de catégorie, d'étiquettes, de mode et d'effectif).
+        .clipShape(SwipeableRowClip())
+        .background { if openOffset != 0 { openFrameReader } }
+        .onPreferenceChange(SwipeOpenRowFrameKey.self) { frame in
+            MainActor.assumeIsolated { coordinator.rowFrameDidChange(rowID, frame: frame) }
+        }
+        .onDisappear {
+            coordinator.rowDidClose(rowID)
+            openOffset = 0
+        }
         .animation(.spring(response: 0.40, dampingFraction: 0.74), value: dragOffset)
         .animation(.spring(response: 0.40, dampingFraction: 0.74), value: openOffset)
+    }
+
+    private var openFrameReader: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(key: SwipeOpenRowFrameKey.self, value: proxy.frame(in: .global))
+        }
     }
 
     // MARK: - Fonds d'action
@@ -207,6 +231,10 @@ public struct SwipeableRow<Content: View>: View {
                 guard abs(h) > v else { return }
                 state = h
             }
+            .onChanged { value in
+                guard openOffset != 0, abs(value.translation.height) > abs(value.translation.width) else { return }
+                close()
+            }
             .onEnded(handleDragEnd)
     }
 
@@ -229,10 +257,10 @@ public struct SwipeableRow<Content: View>: View {
             )
             if openLeading {
                 HapticFeedback.light()
-                openOffset = totalLeadingWidth
+                open(at: totalLeadingWidth)
             } else if openTrailing {
                 HapticFeedback.light()
-                openOffset = -totalTrailingWidth
+                open(at: -totalTrailingWidth)
             }
             // Sinon : dragOffset revient à 0 → ressort en place
 
@@ -241,6 +269,7 @@ public struct SwipeableRow<Content: View>: View {
             if translation < -totalLeadingWidth * snapThreshold ||
                (translation < -10 && velocity < -snapVelocity) {
                 HapticFeedback.light()
+                coordinator.rowDidClose(rowID)
                 openOffset = 0
             }
             // Sinon reste ouvert
@@ -250,15 +279,46 @@ public struct SwipeableRow<Content: View>: View {
             if translation > totalTrailingWidth * snapThreshold ||
                (translation > 10 && velocity > snapVelocity) {
                 HapticFeedback.light()
+                coordinator.rowDidClose(rowID)
                 openOffset = 0
             }
             // Sinon reste ouvert
         }
     }
 
+    private func open(at offset: CGFloat) {
+        openOffset = offset
+        coordinator.rowDidOpen(rowID) { close() }
+    }
+
     private func close() {
+        coordinator.rowDidClose(rowID)
         withAnimation(.spring(response: 0.40, dampingFraction: 0.74)) {
             openOffset = 0
         }
+    }
+}
+
+private struct SwipeOpenRowFrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .null
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if !next.isNull { value = next }
+    }
+}
+
+// MARK: - Rognage de la rangée (#10835)
+
+/// Le rectangle de la rangée, prolongé loin au-dessus et au-dessous : il
+/// rogne sur l'axe du glissement (les fonds d'action ne débordent pas sur les
+/// côtés) et laisse la rangée dessiner hors de sa hauteur de layout.
+nonisolated public struct SwipeableRowClip: Shape {
+    /// Assez pour toute rangée de liste, quelle que soit la taille de texte.
+    static let verticalReach: CGFloat = 10_000
+
+    public init() {}
+
+    public func path(in rect: CGRect) -> Path {
+        Path(rect.insetBy(dx: 0, dy: -Self.verticalReach))
     }
 }

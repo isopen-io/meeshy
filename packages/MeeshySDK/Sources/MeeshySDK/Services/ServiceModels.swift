@@ -464,8 +464,12 @@ public struct UpdateConversationPreferencesRequest: Encodable, Sendable {
     public var reaction: String?
     public var customName: String?
     public var mentionsOnly: Bool?
+    /// Le fond et l'accent personnels (#10631). `nil` = inchangé (écriture partielle) ;
+    /// pour revenir à Signature, envoyer `ConversationAppearance.default`.
+    public var appearance: ConversationAppearance?
 
-    public init(isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, tags: [String]? = nil, reaction: String? = nil, customName: String? = nil, mentionsOnly: Bool? = nil) {
+    public init(isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, tags: [String]? = nil, reaction: String? = nil, customName: String? = nil, mentionsOnly: Bool? = nil, appearance: ConversationAppearance? = nil) {
+        self.appearance = appearance
         self.isPinned = isPinned; self.isMuted = isMuted; self.isArchived = isArchived
         self.categoryId = categoryId; self.tags = tags; self.reaction = reaction
         self.customName = customName; self.mentionsOnly = mentionsOnly
@@ -525,20 +529,25 @@ public struct TranslateResponse: Decodable, Sendable {
 
 // MARK: - User Search
 
-public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendable, Equatable {
+public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendable, Equatable, ProfileDecorWearer {
     public let id: String
     public let username: String
     public let displayName: String?
     public let avatar: String?
     public let isOnline: Bool?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
+    public let profileDecor: ServedProfileDecor?
 
     public init(
         id: String,
         username: String,
         displayName: String? = nil,
         avatar: String? = nil,
-        isOnline: Bool? = nil
+        isOnline: Bool? = nil,
+        profileDecor: ServedProfileDecor? = nil
     ) {
+        self.profileDecor = profileDecor
         self.id = id
         self.username = username
         self.displayName = displayName

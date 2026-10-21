@@ -1,3 +1,5 @@
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
+
 import { newClientMessageId } from './client-message-id';
 import type { ConversationsDeps } from './conversations';
 import { sendMessage, type SendMessageBody } from './messages';
@@ -40,7 +42,14 @@ import type { Message } from './types';
  * `maxDurationSeconds` : la source est une flamme à durée, sa copie dure au
  * plus autant (#9573) ; absent pour toute autre source.
  */
-export type ForwardSource = Pick<Message, 'id' | 'content' | 'originalLanguage'> & { readonly maxDurationSeconds?: number };
+export type ForwardSource = Pick<Message, 'id' | 'content' | 'originalLanguage'> & {
+  readonly maxDurationSeconds?: number;
+  /**
+   * LE STICKER DE LA SOURCE (#10630) — la passerelle ne recopie que les pièces
+   * jointes : sans lui, la copie d'un sticker arrivait en image nue (PNG joint).
+   */
+  readonly sticker?: MessageSticker;
+};
 
 export type ForwardResult =
   | { readonly ok: true; readonly count: number }
@@ -68,17 +77,25 @@ export function forwardBodyOf(params: {
   readonly clientMessageId: string;
   /** La durée de la copie d'une flamme à durée (#9573) — déjà bornée par celle de la source. */
   readonly ephemeralDuration?: number;
+  /**
+   * LA PIÈCE SEULE (#9914) — les pièces du message source que la passerelle
+   * recopie, dans cet ordre ; absent ⇒ tout le lot. Un ancien serveur ignore
+   * la clé (schéma non strict) et recopie le lot, comme avant.
+   */
+  readonly forwardedAttachmentIds?: readonly string[];
 }): SendMessageBody {
-  const { message, sourceConversationId, clientMessageId, ephemeralDuration } = params;
+  const { message, sourceConversationId, clientMessageId, ephemeralDuration, forwardedAttachmentIds } = params;
   return {
     ...(message.content.trim().length > 0 ? { content: message.content } : {}),
     originalLanguage: message.originalLanguage,
     clientMessageId,
     forwardedFromId: message.id,
+    ...(message.sticker === undefined ? {} : { sticker: message.sticker }),
     ...(sourceConversationId === undefined || sourceConversationId === ''
       ? {}
       : { forwardedFromConversationId: sourceConversationId }),
     ...(ephemeralDuration === undefined ? {} : { ephemeralDuration }),
+    ...(forwardedAttachmentIds === undefined || forwardedAttachmentIds.length === 0 ? {} : { forwardedAttachmentIds }),
   };
 }
 

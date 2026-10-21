@@ -40,7 +40,7 @@ final class ImpressionBatcher: ObservableObject {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "impressions")
+    private static let logger = MeeshyLog.logger(.impressions)
 
     /// outbox-11 — préfixe partagé des clés de persistance (une par surface).
     static let storageKeyPrefix = "meeshy.impressions.pending."
@@ -66,6 +66,12 @@ final class ImpressionBatcher: ObservableObject {
 
     private var pending: [PendingImpression] = []
     private var pendingAccount: String?
+    /// Plafond de la file : une longue panne (hors ligne, 5xx, 429, session
+    /// expirée) la faisait grossir sans fin, et chaque carte apparue réencodait
+    /// tout le tableau dans `UserDefaults` sur le fil principal. Au-delà, les
+    /// plus anciennes impressions sont abandonnées (même règle que
+    /// `ContentOpenReporter.pendingCap`).
+    static let pendingCap = 500
     private var flushTask: Task<Void, Never>?
     /// Combine plutôt que des tokens `NotificationCenter` : ceux-ci exigeraient
     /// un `deinit` qui touche l'état isolé, ce que Swift 6 refuse (et qu'un
@@ -146,7 +152,7 @@ final class ImpressionBatcher: ObservableObject {
         RecentDisplayCaptureSource.shared.noteDisplayed(postId: postId, source: source, surface: surface)
         adoptCurrentAccount()
         let impression = PendingImpression(postId: postId, stamp: .minted(at: clock()), listing: listing)
-        pending.append(impression)
+        pending = Array((pending + [impression]).suffix(Self.pendingCap))
         persist()
         scheduleFlush()
         return impression.stamp.eventId
@@ -197,10 +203,11 @@ final class ImpressionBatcher: ObservableObject {
     private func keepForRetry(_ impressions: [PendingImpression], owner: String?) {
         guard owner == pendingAccount else {
             let key = Self.storageKey(source: source, surface: surface, accountId: owner)
-            Self.store(impressions + Self.restore(from: defaults, key: key), in: defaults, key: key)
+            Self.store(Array((impressions + Self.restore(from: defaults, key: key)).suffix(Self.pendingCap)),
+                       in: defaults, key: key)
             return
         }
-        pending.insert(contentsOf: impressions, at: 0)
+        pending = Array((impressions + pending).suffix(Self.pendingCap))
         persist()
     }
 

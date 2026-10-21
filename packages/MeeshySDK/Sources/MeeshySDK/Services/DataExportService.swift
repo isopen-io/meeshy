@@ -60,7 +60,7 @@ public protocol DataExportServiceProviding: AnyObject, Sendable {
     func requestExport(format: String, types: [String]) async throws -> DataExportData
 }
 
-public final class DataExportService: DataExportServiceProviding, @unchecked Sendable {
+public final class DataExportService: DataExportServiceProviding, Sendable {
     public static let shared = DataExportService()
     private let api: APIClientProviding
 

@@ -51,7 +51,7 @@ final class BubbleRenderBranchProtectionGuardTests: XCTestCase {
     }
 
     private func source(at relativePath: String) throws -> String {
-        try String(contentsOf: appRoot().appendingPathComponent(relativePath), encoding: .utf8)
+        try AppSourceGuard.text(at: appRoot().appendingPathComponent(relativePath))
     }
 
     // MARK: - Le voile, sur chaque branche

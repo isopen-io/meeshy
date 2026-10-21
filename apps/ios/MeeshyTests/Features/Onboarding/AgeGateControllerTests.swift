@@ -48,6 +48,25 @@ final class AgeGateControllerTests: XCTestCase {
         XCTAssertTrue(sut.isShowing)
     }
 
+    /// `AgeGateSignal.signal` poste depuis `APIClient`, sur l'exécuteur de
+    /// l'appelant de la requête — un actor, une file de fond. Le sink du
+    /// contrôleur, isolé au MainActor, trappait à son entrée (`SIGTRAP`,
+    /// `_dispatch_assert_queue_fail`) sans le saut sur le main qui le précède.
+    func test_ageRefusalPostedFromABackgroundQueue_showsTheGateWithoutTrapping() async {
+        let (sut, center, _) = makeSUT(isAuthenticated: false)
+        let body = ageRefusalBody
+
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global(qos: .utility).async {
+                AgeGateSignal.signal(statusCode: 403, body: body, center: center)
+                done.resume()
+            }
+        }
+        await awaitShowing(sut)
+
+        XCTAssertTrue(sut.isShowing)
+    }
+
     func test_otherForbiddenRefusal_keepsTheGateHidden() async {
         let (sut, center, _) = makeSUT(isAuthenticated: false)
 

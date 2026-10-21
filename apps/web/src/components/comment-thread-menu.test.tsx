@@ -128,6 +128,7 @@ describe('le commentaire d’un POST compose sa carte (#9687)', () => {
       content: 'Le post',
       author: { id: 'u-author', username: 'author', displayName: 'Auteur' },
       media: [],
+      visibility: 'PUBLIC',
     });
 
   const entriesOf = async (host: HTMLElement, rowId: string) => {

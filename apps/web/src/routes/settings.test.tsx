@@ -7,7 +7,6 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { AppPreferences } from '@/lib/api/app-preferences';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadDeviceTranslationCatalog } from '@/lib/i18n-device-translation-catalog';
-import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 
 import {
   AboutSection,
@@ -19,8 +18,7 @@ import {
   PacksSection,
   PrivacySection,
   ProfileCard,
-  SETTINGS_HEADER_HEIGHT,
-  SETTINGS_TOP_RESERVE,
+  SettingsContent,
   SettingsHeaderBar,
   ToolsSection,
   type PreferencesView,
@@ -74,12 +72,19 @@ const switchNamed = (host: HTMLElement, name: string) => host.querySelector(`[ro
 
 const linkTo = (host: HTMLElement, href: string) => host.querySelector(`a[href="${href}"]`);
 
-describe('le couloir des disques flottants', () => {
-  /* Les deux disques se posent entre 126 et 178 px du haut (`floating-corridor.ts`).
-     Au repos, la carte de profil — un contrôle — commence sous ce couloir,
-     comme la première rangée de la cloche et le plateau du Flux. */
-  test('le contenu réserve la hauteur du couloir sous l’en-tête', () => {
-    expect(SETTINGS_HEADER_HEIGHT + SETTINGS_TOP_RESERVE).toBe(FLOATING_CORRIDOR_BOTTOM);
+describe('le haut de l’écran', () => {
+  /* #10634 — l'écran réservait sous son en-tête la hauteur du couloir des
+     disques flottants (122 px vides). `SettingsView` d'iOS commence sous son
+     en-tête (`.padding(.top, MeeshySpacing.sm)`) et les disques flottent
+     par-dessus, comme sur le profil : la carte de profil y commence aussi. */
+  test('le contenu commence sous l’en-tête, à la même cote que le profil, sans réserver le couloir', () => {
+    const root = dom(
+      <SettingsContent>
+        <p>contenu</p>
+      </SettingsContent>,
+    ).firstElementChild;
+    expect(root?.getAttribute('style') ?? '').not.toContain('padding-top');
+    expect(root?.className.split(' ')).toContain('pt-2');
   });
 });
 

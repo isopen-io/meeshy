@@ -317,13 +317,19 @@ final class AuthManagerSessionReplacementGuardTests: XCTestCase {
         auth.sessionGeneration &+= 1
         auth.activeUserId = nil
         auth.isAuthenticated = false
-        try auth.applySession(token: "tok-b", sessionToken: "sess-b", user: makeUser("user-b"), origin: .login)
+        // #10904 — B porte un JWT VALIDE : avec un jeton illisible (donc
+        // expiré), B lance son PROPRE rafraîchissement, que ce stub refuse, et
+        // c'est alors à bon droit que B se ferme. Ce témoin ne tenait que parce
+        // que B rejoignait le rafraîchissement de A et héritait de son abandon.
+        let liveTokenOfB = "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjQxMDI0NDQ4MDB9.sig"
+        try auth.applySession(token: liveTokenOfB, sessionToken: "sess-b", user: makeUser("user-b"), origin: .login)
         authService.releaseRefresh()
         _ = try? await refresh.value
 
         XCTAssertEqual(auth.activeAccountId, "user-b")
         XCTAssertTrue(auth.isAuthenticated)
-        XCTAssertEqual(APIClient.shared.authToken, "tok-b")
+        XCTAssertEqual(APIClient.shared.authToken, liveTokenOfB)
+        XCTAssertEqual(authService.refreshCallCount, 1, "seul le rafraîchissement de A est parti")
     }
 
     // MARK: - #10463 F4 — rien ne se pose pendant un changement de compte

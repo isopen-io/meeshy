@@ -29,10 +29,10 @@ import MeeshyUI
 ///
 /// **Corrections de types vs le texte littéral du contrat (RE-PREUVE)** :
 /// - `allAudioItems: [AudioItem]` → `[ConversationViewModel.AudioItem]`.
-///   `AudioMediaView`/`AudioCarouselView` (réutilisés par WS-3,
+///   `AudioMediaView`/`AudioStackView` (réutilisés par WS-3,
 ///   `Focal/Row/FocalAudioBlock.swift`) typent LEUR PROPRE paramètre
 ///   `allAudioItems` en `[ConversationViewModel.AudioItem]`
-///   (`ConversationMediaViews.swift:541`, `AudioCarouselView.swift:47`) — le
+///   (`ConversationMediaViews.swift:541`, `AudioStackView.swift:47`) — le
 ///   type nested de la god view, PAS le `struct AudioItem` top-level de
 ///   `ConversationStateStore.swift` (qui existe aussi, homonyme, mais n'est
 ///   consommé par aucun composant réutilisé ici). Utiliser le mauvais des
@@ -102,6 +102,9 @@ struct FocalRowInput: Equatable {
     /// `Participant.type`). Porté en primitif jusqu'à la feuille pour que la
     /// rangée reste Equatable et ne se réévalue que sur changement réel.
     let senderIsAnonymous: Bool
+    /// Le contour d'avatar équipé de l'auteur (#10713) : la RÉFÉRENCE servie, que l'avatar
+    /// résout lui-même (#10946) ; `nil` sans contour.
+    let senderRing: ServedProfileDecorItem?
 
     /// L'auteur, prêt à être présenté — construit ICI, dans `Focal/Core/`.
     ///
@@ -205,6 +208,7 @@ struct FocalRowInput: Equatable {
         senderStoryRing: StoryRingState,
         senderMoodEmoji: String?,
         senderIsAnonymous: Bool = false,
+        senderRing: ServedProfileDecorItem? = nil,
         accentHex: String,
         isDark: Bool,
         isDirect: Bool,
@@ -247,6 +251,7 @@ struct FocalRowInput: Equatable {
         self.senderStoryRing = senderStoryRing
         self.senderMoodEmoji = senderMoodEmoji
         self.senderIsAnonymous = senderIsAnonymous
+        self.senderRing = senderRing
         self.accentHex = accentHex
         self.isDark = isDark
         self.isDirect = isDirect
@@ -297,6 +302,7 @@ struct FocalRowInput: Equatable {
             && lhs.senderPresence == rhs.senderPresence
             && lhs.senderIsHere == rhs.senderIsHere
             && lhs.senderIsAnonymous == rhs.senderIsAnonymous
+            && lhs.senderRing == rhs.senderRing
             && lhs.senderStoryRing == rhs.senderStoryRing
             && lhs.senderMoodEmoji == rhs.senderMoodEmoji
             && lhs.accentHex == rhs.accentHex
@@ -327,6 +333,124 @@ struct FocalRowInput: Equatable {
             && lhs.sentAt == rhs.sentAt
             && lhs.focusTimestamp == rhs.focusTimestamp
             && lhs.availableWidth == rhs.availableWidth
+    }
+}
+
+// MARK: - L'aperçu d'appui long (#11208)
+
+extension FocalRowInput {
+
+    /// Ce que l'aperçu reçoit du fil, au-delà du message, de ses traductions et
+    /// de la traduction servie — ce que la cellule reçoit de `MessageCellInputs`.
+    struct PreviewContext {
+        var selection: ConversationViewModel.BubbleLanguageSelection? = nil
+        var translatedAudios: [MessageTranslatedAudio] = []
+        var preferredAudioLangCode: String? = nil
+        var transcription: String? = nil
+        var userLanguages: (regional: String?, custom: String?) = (nil, nil)
+        var mentionDisplayNames: [String: String] = [:]
+        var currentUserId: String = ""
+        var senderPresence: PresenceState = .offline
+        var senderStoryRing: StoryRingState = .none
+        var senderMoodEmoji: String? = nil
+        var recipientCount: Int = 1
+        var isDark: Bool = false
+        var isDirect: Bool = false
+        var isRightToLeft: Bool = false
+        var availableWidth: CGFloat? = nil
+        /// La rangée dans sa suite (#11213) : l'aperçu d'une CONVERSATION montre
+        /// plusieurs messages et groupe ceux d'un même auteur, comme le fil.
+        /// Seul, un message est une tête ET une fin de groupe.
+        var isFirstInGroup: Bool = true
+        var isLastInGroup: Bool = true
+    }
+
+    /// **La rangée que le fil montre pour `message`, prête pour l'aperçu
+    /// d'appui long** (#11208, décision #11204). Pure : aucune lecture d'état.
+    ///
+    /// La rangée est une tête ET une fin de groupe — l'identité (pastille, nom)
+    /// et la méta (drapeaux) sont DANS son cadre — et jamais l'élue Focal, dont
+    /// le chrome (carte, pastille soulevée) déborde : c'est ce débordement que
+    /// la capture de la cellule tranchait (directive 2026-08-23). Elle est
+    /// immobile : ni envoi en cours, ni bouton d'ajout de réaction, ni effet
+    /// d'APPARITION rejoué sous le doigt — les effets PERSISTANTS, eux, restent,
+    /// comme la bulle les garde en Bulles.
+    ///
+    /// Le texte est celui de la cellule : la même `BubbleContent`, avec la
+    /// traduction que le fil sert DÉJÀ (`servedTranslation`, l'élue de
+    /// `preferredTranslation(for:)`, override manuel compris ; `nil` =
+    /// l'original) et le drapeau qu'il a basculé — la source que
+    /// `MessageOverlayMenu.previewServedText` lit aussi. La fabrique ne
+    /// redescend jamais le Prisme : une seconde descente à côté de celle du fil
+    /// serait une jumelle à tenir d'accord.
+    static func preview(
+        message: Message,
+        translations: [MessageTranslation],
+        servedTranslation: MessageTranslation?,
+        accentHex: String,
+        density: Density,
+        context: PreviewContext = PreviewContext()
+    ) -> FocalRowInput {
+        let selection = context.selection
+        let content = BubbleContent(
+            message: message,
+            translations: translations,
+            preferredTranslation: servedTranslation,
+            translatedAudios: context.translatedAudios,
+            userLanguages: context.userLanguages,
+            secondaryLangCode: selection?.secondaryLangCode,
+            activeDisplayLangCode: selection?.activeDisplayLangCode,
+            preferredAudioLangCode: context.preferredAudioLangCode,
+            currentUserId: context.currentUserId,
+            recipientCount: context.recipientCount
+        )
+        return FocalRowInput(
+            localId: message.id,
+            serverId: message.id,
+            content: content,
+            density: density,
+            isFirstInGroup: context.isFirstInGroup,
+            isLastInGroup: context.isLastInGroup,
+            senderId: message.senderId,
+            senderDisplayName: message.senderName ?? message.senderUsername ?? "",
+            senderUsername: message.senderUsername,
+            senderAvatarURL: message.senderAvatarURL,
+            senderThumbHash: nil,
+            senderColorHex: message.senderColor ?? accentHex,
+            senderPresence: message.isMe ? .offline : context.senderPresence,
+            senderStoryRing: message.isMe ? .none : context.senderStoryRing,
+            senderMoodEmoji: context.senderMoodEmoji,
+            senderIsAnonymous: message.senderIsAnonymous,
+            senderRing: message.isMe ? nil : message.senderRing,
+            accentHex: accentHex,
+            isDark: context.isDark,
+            isDirect: context.isDirect,
+            isRightToLeft: context.isRightToLeft,
+            isOptimistic: false,
+            isAgentAuthored: message.messageSource == .agent,
+            showsAgentGrammar: MeeshyFeatureFlags.isAgentGrammarEnabled,
+            highlightSearchTerm: nil,
+            mentionDisplayNames: context.mentionDisplayNames,
+            userLanguages: context.userLanguages,
+            activeDisplayLangCode: selection?.activeDisplayLangCode,
+            secondaryLangCode: selection?.secondaryLangCode,
+            voiceConsentMissing: false,
+            transcription: context.transcription,
+            translatedAudios: context.translatedAudios,
+            allAudioItems: [],
+            conversationName: "",
+            effects: stillEffects(of: message.effects),
+            sentAt: message.createdAt,
+            availableWidth: context.availableWidth
+        )
+    }
+
+    /// Les effets du message, moins ceux d'APPARITION : un aperçu ne rejoue pas
+    /// une entrée, mais garde l'arc-en-ciel ou la lueur que le fil montre.
+    private static func stillEffects(of effects: MessageEffects) -> MessageEffects {
+        var still = effects
+        still.flags = effects.flags.subtracting(.appearanceMask)
+        return still
     }
 }
 

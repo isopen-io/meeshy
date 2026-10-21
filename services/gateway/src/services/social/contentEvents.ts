@@ -1,5 +1,6 @@
 import { createHmac } from 'crypto';
 import {
+  COUNTING_EVENT_TYPES,
   SAMPLEABLE_V2_TYPES,
   SOCIAL_EVENT_V2_TYPES,
   type SocialEventV2Type,
@@ -27,10 +28,6 @@ export const CONTENT_EVENT_RETENTION_MS = 90 * DAY_MS;
  * après les 72 h d'autrefois. Passé ce délai, un renvoi recompte.
  */
 export const CONTENT_EVENT_RECEIPT_RETENTION_MS = 30 * DAY_MS;
-/** Les lignes `PostImpression` neuves vivent 90 j (#10510, O7). */
-export const POST_IMPRESSION_RETENTION_MS = 90 * DAY_MS;
-/** Les sessions de lecture `PostEngagement` (dwell) vivent 90 j (O7) : leurs agrégats sont déjà sur le post. */
-export const POST_ENGAGEMENT_RETENTION_MS = 90 * DAY_MS;
 
 const SHORT_LIVED: ReadonlySet<string> = new Set(SAMPLEABLE_V2_TYPES);
 
@@ -77,7 +74,7 @@ export function socialEventsV2Settings(env: Env = process.env): SocialEventsV2Se
 }
 
 export const acceptedEventTypes = (settings: SocialEventsV2Settings): readonly string[] => [
-  'impression', 'open', 'view', 'dwell', 'download',
+  ...COUNTING_EVENT_TYPES,
   ...(settings.enabled ? SOCIAL_EVENT_V2_TYPES : []),
 ];
 

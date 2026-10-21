@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
-import { PROGRESSION_CONCEPTS, progressionConcepts, type ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
+import { PROGRESSION_CONCEPTS, type ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
@@ -10,7 +10,7 @@ import { ALL_LEVEL_STEPS, GAME_EXTRAS_TODAY, gameBlockWithExtrasFixture } from '
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { interfaceDirection, SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { conceptView } from '@/lib/view/progression-concepts';
+import { conceptView, ficheView } from '@/lib/view/progression-concepts';
 import { conceptState } from '@/lib/view/progression-state';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -20,8 +20,8 @@ import type { GameActions } from './progression-game-actions';
 
 /**
  * CHAQUE SECTION DIT CE QU'ELLE CONTIENT ET COMMENT S'EN SERVIR (#10540) — la fiche d'un concept répond
- * à quatre questions (ce que c'est, à quoi ça sert, comment ça se gagne, comment s'en servir), et la
- * valeur en cours est suivie de la phrase d'état, sur la carte comme sur la fiche.
+ * à quatre questions (ce que c'est, à quoi ça sert, comment ça se gagne, comment s'en servir). La phrase
+ * d'état ne paraît que sur la fiche, et seulement quand elle ne redit rien de la tête (#11178).
  */
 beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/me/progression' });
@@ -67,28 +67,22 @@ const hub = (progress: EngagementWithGame): HTMLElement => dom(renderToStaticMar
 const fiche = (concept: ProgressionConcept, progress: EngagementWithGame): HTMLElement =>
   dom(renderToStaticMarkup(<ConceptFiche concept={concept} progress={progress} host={{ actions: idle, online: true }} now={NOW} />));
 
-describe('la carte : la valeur est suivie de sa phrase d’état', () => {
-  test('les quinze cartes portent la phrase que la loi de vue calcule', () => {
-    const page = hub(jcnm);
-    for (const concept of PROGRESSION_CONCEPTS) {
-      const line = page.querySelector(`[data-concept-card="${concept}"] [data-concept-state]`);
-      expect({ concept, line: plain(line?.textContent) }).toEqual({ concept, line: plain(conceptState(concept, jcnm)) });
-    }
+describe('la carte : un nom, une valeur, une ligne — plus de phrase (#11178)', () => {
+  test('aucune carte ne porte la phrase d’état : elle redisait la valeur', () => {
+    expect(hub(jcnm).querySelectorAll('[data-concept-state]')).toHaveLength(0);
   });
 
-  test('le porteur lit ses trois chiffres avec leur cible, sur la première page', () => {
+  test('le porteur lit ses chiffres avec leur cible, sur la première page', () => {
     const page = hub(jcnm);
-    expect(plain(page.querySelector('[data-concept-card="level"]')?.textContent)).toContain('Il en reste 1 301 pour le niveau 28.');
-    expect(plain(page.querySelector('[data-concept-card="points"]')?.textContent)).toContain('il manque 1 839 points à convertir');
-    expect(plain(page.querySelector('[data-concept-card="points"]')?.textContent)).toContain('5 823 points à convertir');
+    expect(plain(page.querySelector('[data-concept-card="level"] [data-concept-line]')?.textContent)).toBe('1 301 étincelles jusqu’au 28');
+    expect(plain(page.querySelector('[data-concept-card="points"] [data-concept-value]')?.textContent)).toBe('77 099 étincelles');
+    // UNE poche : plus de second solde « à convertir » à côté de la poche (porteur, 2026-10-16).
+    expect(plain(page.querySelector('[data-concept-card="points"]')?.textContent)).not.toContain('5 823');
   });
 
-  test('une carte sans phrase (ancien serveur) ne rend pas de ligne vide', () => {
-    const page = hub(before);
-    for (const concept of progressionConcepts(before)) {
-      const line = page.querySelector(`[data-concept-card="${concept}"] [data-concept-state]`);
-      if (conceptState(concept, before) === null) expect({ concept, rendered: line !== null }).toEqual({ concept, rendered: false });
-      else expect({ concept, empty: plain(line?.textContent) === '' }).toEqual({ concept, empty: false });
+  test('une carte sans ligne ne rend pas de ligne vide', () => {
+    for (const progress of [jcnm, before]) {
+      for (const line of hub(progress).querySelectorAll('[data-concept-line]')) expect(plain(line.textContent)).not.toBe('');
     }
   });
 });
@@ -111,16 +105,27 @@ describe('la fiche : quatre questions, et l’état avant les données', () => {
       expect(order.indexOf('earn')).toBeLessThan(order.indexOf('use'));
     });
 
-    test(`${concept} : « Où j’en suis » commence par la phrase d’état`, () => {
-      const where = fiche(concept, jcnm).querySelector('[data-fiche-section="where"]');
-      expect(plain(where?.querySelector('[data-fiche-state]')?.textContent)).toBe(plain(conceptState(concept, jcnm)));
+    test(`${concept} : « Où j’en suis » ne rend la phrase d’état que si elle ne redit rien de la tête`, () => {
+      const said = ficheView(concept, jcnm, NOW).state;
+      const rendered = fiche(concept, jcnm).querySelector('[data-fiche-section="where"] [data-fiche-state]');
+      if (said === null) expect({ concept, rendered: rendered !== null }).toEqual({ concept, rendered: false });
+      else expect({ concept, line: plain(rendered?.textContent) }).toEqual({ concept, line: plain(conceptState(concept, jcnm)) });
     });
   }
 
-  test('la fiche des Meeshes passe le solde à convertir à la pièce de frappe', () => {
+  test('une phrase qui apporte ce que la tête ne dit pas reste, en tête de « Où j’en suis » — et sa donnée n’est pas redite', () => {
+    const game = jcnm.game;
+    if (game === undefined) throw new Error('fixture sans jeu');
+    const out: EngagementWithGame = { ...jcnm, game: { ...game, flame: { ...game.flame, status: 'out' } } };
+    const where = fiche('flame', out).querySelector('[data-fiche-section="where"]');
+    expect(plain(where?.querySelector('[data-fiche-state]')?.textContent)).toBe(plain(conceptState('flame', out)));
+    expect(where?.querySelector('li[data-fact="flame_state"]')).toBeNull();
+  });
+
+  test('la fiche de l’Héritage passe ta lumière au cadre de la frappe', () => {
     const page = plain(fiche('meesh', jcnm).querySelector('#game-mint')?.textContent);
-    expect(page).toContain('À convertir 5 823 points');
-    expect(page).toContain('Il manque 1 839 points à convertir pour la Meesh n° 79.');
+    expect(page).toContain('qui en compte 77 099.');
+    expect(page).toContain('Il en manque encore 1 839 pour la frapper.');
   });
 });
 

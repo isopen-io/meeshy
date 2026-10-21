@@ -1,0 +1,22 @@
+# #10855 — journal d'accès Traefik (production ET staging : un seul Traefik).
+# Installé en /etc/logrotate.d/meeshy-traefik ; le compresseur en
+# /usr/local/sbin/meeshy-accesslog-redact-gzip (infrastructure/scripts/accesslog-redact-gzip.sh).
+# Un fichier par jour, 14 jours gardés compressés : au-delà, les adresses IP
+# qu'il contient sont effacées (finalité : sécurité et diagnostic d'incident).
+/var/log/meeshy/traefik/access.log {
+    daily
+    rotate 14
+    maxage 15
+    dateext
+    dateformat -%Y%m%d
+    missingok
+    notifempty
+    create 0640 root adm
+    compress
+    compresscmd /usr/local/sbin/meeshy-accesslog-redact-gzip
+    compressext .gz
+    sharedscripts
+    postrotate
+        docker kill --signal=USR1 meeshy-traefik >/dev/null 2>&1 || true
+    endscript
+}

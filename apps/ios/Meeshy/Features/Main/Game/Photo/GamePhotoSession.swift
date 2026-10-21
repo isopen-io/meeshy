@@ -70,6 +70,8 @@ final class GamePhotoSession: ObservableObject {
     @Published private(set) var squareFormat = false
 
     let moment: PhotoMoment
+    /// L'auteur dont la plaque grave le pseudo (#10816) : le compte connecté ; `nil` pour un invité.
+    let author: PhotoAuthor?
     let camera: GamePhotoCameraProviding
 
     private let composer: GamePhotoComposing
@@ -111,9 +113,11 @@ final class GamePhotoSession: ObservableObject {
         now: @escaping () -> Date = { Date() },
         strikeDuration: UInt64 = 1_200_000_000,
         flame: ReferralCard.Flame? = nil,
-        referralLinks: ReferralLinkProviding = ReferralLinkService.shared
+        referralLinks: ReferralLinkProviding = ReferralLinkService.shared,
+        author: PhotoAuthor? = PhotoAuthor.current()
     ) {
         self.moment = moment
+        self.author = author
         self.camera = camera
         self.composer = composer
         self.notebook = notebook
@@ -228,12 +232,12 @@ final class GamePhotoSession: ObservableObject {
     private func exportable() -> ComposedPhoto? {
         guard let composed else { return nil }
         guard referral?.isPlaceholder == true, let mode = composedMode else { return composed }
-        return composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: nil)
+        return composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: nil, author: author)
     }
 
     private func recompose() {
         guard case .result = state, let mode = composedMode else { return }
-        if let result = composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: referral) {
+        if let result = composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: referral, author: author) {
             composed = result
         }
     }
@@ -352,7 +356,7 @@ final class GamePhotoSession: ObservableObject {
         }
         composedSource = source
         composedMode = mode
-        guard let result = composer.compose(moment: moment, source: source, mode: mode, date: now(), referral: referral) else {
+        guard let result = composer.compose(moment: moment, source: source, mode: mode, date: now(), referral: referral, author: author) else {
             send(.composeFailed)
             return
         }
@@ -385,7 +389,7 @@ final class GamePhotoSession: ObservableObject {
         send(.kept(outcome == .kept))
         switch outcome {
         case .kept:
-            notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.kept", defaultValue: "Gardée au carnet de progression.", bundle: .main))
+            notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.kept", defaultValue: "Gardée dans ta Chronique.", bundle: .main))
         case .noSpace:
             notice = PhotoNotice(
                 tone: .error,
@@ -393,7 +397,7 @@ final class GamePhotoSession: ObservableObject {
                 action: .saveToLibrary
             )
         case .unavailable:
-            notice = PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.keep_failed", defaultValue: "Le carnet n’est pas disponible sur cet appareil : la photo n’a pas été gardée.", bundle: .main))
+            notice = PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.keep_failed", defaultValue: "La Chronique n’est pas disponible sur cet appareil : la photo n’a pas été gardée.", bundle: .main))
         }
     }
 

@@ -102,14 +102,26 @@ final class NSEAttachmentPolicyTests: XCTestCase {
 
     // MARK: - Le CÂBLAGE, faute de pouvoir recevoir un push en test
 
+    /// `NotificationService.swift` ET ce qui en est sorti (`NSEEnrichmentPlan.swift` et
+    /// `NotificationService+Enrichment.swift`, LOT-03 ; `NSEMessagePrePersister.swift`,
+    /// #10988), dans cet ordre : un interdit lu sur le seul fichier principal ne verrait
+    /// pas le code déplacé. `NSEDataSync.swift` reste hors de la lecture — ses `dataTask`
+    /// sont des lectures JSON, pas des corps de pièce jointe.
     private func nseSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
+        let folder = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Media/
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("MeeshyNotificationExtension/NotificationService.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+            .appendingPathComponent("MeeshyNotificationExtension")
+        return try [
+            "NotificationService.swift",
+            "NSEEnrichmentPlan.swift",
+            "NotificationService+Enrichment.swift",
+            "NSEMessagePrePersister.swift",
+        ]
+            .map { try String(contentsOf: folder.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     /// **Plus aucun corps de réponse ne transite par la mémoire.** C'est le
@@ -120,8 +132,8 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertFalse(source.contains("dataTask(with:"),
                        "Un `dataTask` ramène tout le corps en mémoire — l'enveloppe de la NSE "
                        + "est d'environ 24 Mo, et les téléchargements y sont CONCURRENTS.")
-        XCTAssertTrue(source.contains("downloadTask(with:"),
-                      "Le téléchargement doit écrire sur DISQUE.")
+        XCTAssertTrue(source.contains("download(for:"),
+                      "Le téléchargement doit écrire sur DISQUE (`URLSession.download(for:)`).")
     }
 
     /// **La loi précède la requête, et elle la précède DANS la branche du
@@ -132,7 +144,7 @@ final class NSEAttachmentPolicyTests: XCTestCase {
         XCTAssertTrue(source.contains("NSEAttachmentPolicy.mayAttach"),
                       "La NSE doit demander à la loi avant de descendre un média.")
         guard let debut = source.range(of: "userInfo[\"attachmentUrl\"]"),
-              let fin = source.range(of: "downloadFile(from: attachmentURL",
+              let fin = source.range(of: "downloadFile(from: source.url",
                                      range: debut.upperBound..<source.endIndex) else {
             return XCTFail("La branche du média du message a changé de forme.")
         }

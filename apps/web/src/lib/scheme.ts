@@ -27,7 +27,7 @@ function applyScheme(scheme: ColorScheme): void {
   const light = scheme === 'light';
   document.documentElement.classList.toggle('light', light);
   document.documentElement.classList.toggle('dark', !light);
-  syncShellSystemBars(scheme, syncBrowserBar(scheme));
+  syncBars();
 }
 
 /**
@@ -38,12 +38,16 @@ function applyScheme(scheme: ColorScheme): void {
  * schéma (`data-scheme`) ; on active celle du schéma PEINT et on éteint
  * l'autre, sans recopier ses couleurs ici.
  */
-function syncBrowserBar(scheme: ColorScheme): string | null {
+function syncBrowserBar(scheme: ColorScheme): void {
+  document.querySelectorAll('meta[name="theme-color"][data-scheme]').forEach((meta) => {
+    (meta as HTMLMetaElement).media = meta.getAttribute('data-scheme') === scheme ? 'all' : 'not all';
+  });
+}
+
+function themeColorOf(scheme: ColorScheme): string | null {
   let color: string | null = null;
   document.querySelectorAll('meta[name="theme-color"][data-scheme]').forEach((meta) => {
-    const painted = meta.getAttribute('data-scheme') === scheme;
-    (meta as HTMLMetaElement).media = painted ? 'all' : 'not all';
-    if (painted) color = meta.getAttribute('content');
+    if (meta.getAttribute('data-scheme') === scheme) color = meta.getAttribute('content');
   });
   return color;
 }
@@ -60,8 +64,27 @@ function syncBrowserBar(scheme: ColorScheme): string | null {
  * sombres se posaient sur une barre noire. `MeeshySystemBars` reçoit la
  * couleur `theme-color` du schéma peint, celle que Chrome donne à sa barre ;
  * la coque décide seule des versions où elle peint.
+ *
+ * UN PLEIN ÉCRAN SOMBRE TIENT LA BARRE (#10917). Sous Android 15 et plus, la
+ * page passe sous la barre d'état : en thème clair, des icônes sombres se
+ * posaient sur le noir de la visionneuse, d'une story ou d'un appel. Tant
+ * qu'une de ces surfaces est montée, la barre prend le schéma sombre.
  */
-function syncShellSystemBars(scheme: ColorScheme, color: string | null): void {
+let mediaSurfaces = 0;
+
+/**
+ * ET LE NAVIGATEUR SUIT LA COQUE (#10922) : la PWA installée prend sa barre
+ * d'état de `theme-color`, et Chrome Android sa barre d'outils. Les deux
+ * barres lisent le même schéma.
+ */
+function syncBars(): void {
+  const scheme: ColorScheme = mediaSurfaces > 0 ? 'dark' : currentScheme();
+  syncBrowserBar(scheme);
+  syncShellSystemBars(scheme);
+}
+
+function syncShellSystemBars(scheme: ColorScheme): void {
+  const color = themeColorOf(scheme);
   const coque = coqueCourante();
   const paint = appelNatif(coque, 'MeeshySystemBars');
   if (paint !== null && color) {
@@ -74,6 +97,19 @@ function syncShellSystemBars(scheme: ColorScheme, color: string | null): void {
   systemBars('setStyle', { style: scheme === 'light' ? 'LIGHT' : 'DARK' }).catch(() => {
     /* Barre non réglée : le thème de l'app, lui, est déjà peint. */
   });
+}
+
+/** Tient les barres de la coque et du navigateur en schéma sombre jusqu'à l'appel de la fonction rendue. */
+export function holdMediaSystemBars(): () => void {
+  mediaSurfaces += 1;
+  if (mediaSurfaces === 1) syncBars();
+  let held = true;
+  return () => {
+    if (!held) return;
+    held = false;
+    mediaSurfaces -= 1;
+    if (mediaSurfaces === 0) syncBars();
+  };
 }
 
 export function setScheme(scheme: ColorScheme): void {
@@ -137,7 +173,7 @@ export function setThemePreference(preference: ThemePreference): void {
  * seul basculement systeme suffirait a arreter tout suivi ulterieur.
  */
 export function followSystem(): () => void {
-  syncShellSystemBars(currentScheme(), syncBrowserBar(currentScheme()));
+  syncBars();
   const query = window.matchMedia('(prefers-color-scheme: light)');
   const onSchemeChange = (e: MediaQueryListEvent) => {
     if (currentThemePreference() === 'system') applyScheme(e.matches ? 'light' : 'dark');

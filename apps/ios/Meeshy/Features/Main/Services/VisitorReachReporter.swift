@@ -67,7 +67,7 @@ final class VisitorReachReporter: VisitorReachReporting {
     static let shared = VisitorReachReporter()
     static let storageKey = "meeshy.reach.pending.visitor"
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "visitor-reach")
+    private static let logger = MeeshyLog.logger(.visitorReach)
 
     private let postService: PostServiceProviding
     private let defaults: UserDefaults
@@ -96,7 +96,10 @@ final class VisitorReachReporter: VisitorReachReporting {
         self.flushDelay = flushDelay
         self.clock = clock
         self.pending = Self.restore(from: defaults)
+        // Un éditeur injecté peut livrer d'une file de fond, comme le vrai :
+        // le `sink` de ce type `@MainActor` ne se reçoit que sur le main.
         reconnects
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in Task { @MainActor in await self?.flushNow() } }
             .store(in: &cancellables)
         subscribeToAppLifecycle()
@@ -129,7 +132,23 @@ final class VisitorReachReporter: VisitorReachReporting {
     }
 
     static var liveReconnects: AnyPublisher<Void, Never> {
-        NetworkMonitor.shared.isOfflinePublisher
+        reconnects(from: NetworkMonitor.shared.isOfflinePublisher)
+    }
+
+    /// Les retours du réseau, LIVRÉS SUR LE MAIN.
+    ///
+    /// **Le saut sur le main précède le premier opérateur, et ce n'est pas
+    /// décoratif.** `isOfflinePublisher` débounce sur
+    /// `DispatchQueue.global(qos: .utility)` et livre sur cette file. Les
+    /// fermetures de `filter` et `map`, écrites dans ce type `@MainActor`,
+    /// sont isolées au MainActor : le runtime vérifie l'exécuteur à leur
+    /// entrée et trappe (`SIGTRAP`, `_dispatch_assert_queue_fail`). C'est le
+    /// plantage TestFlight des builds 1915/1916 — au lancement et à chaque
+    /// retour du réseau, « l'app s'arrête à chaque fois ». Même forme que
+    /// `NearbyDiscoveryViewModel.observeNetwork`.
+    static func reconnects(from offline: AnyPublisher<Bool, Never>) -> AnyPublisher<Void, Never> {
+        offline
+            .receive(on: DispatchQueue.main)
             .filter { !$0 }
             .map { _ in () }
             .eraseToAnyPublisher()
@@ -137,13 +156,17 @@ final class VisitorReachReporter: VisitorReachReporting {
 
     var pendingEvents: [PendingVisitorEvent] { pending }
 
+    /// Plafond de la file (même règle qu'`ImpressionBatcher.pendingCap`) : au-delà,
+    /// les plus anciens événements sont abandonnés.
+    static let pendingCap = 500
+
     func record(_ events: [SocialEvent]) {
         guard !events.isEmpty else { return }
         let identity = PendingVisitorEvent.identity(of: token())
         let now = clock()
-        pending.append(contentsOf: events.map {
+        pending = Array((pending + events.map {
             PendingVisitorEvent(stamped: .stamping($0, at: now), identity: identity)
-        })
+        }).suffix(Self.pendingCap))
         persist()
         scheduleFlush()
     }
@@ -174,7 +197,7 @@ final class VisitorReachReporter: VisitorReachReporting {
             }
         }
         guard !kept.isEmpty else { return }
-        pending.insert(contentsOf: kept, at: 0)
+        pending = Array((kept + pending).suffix(Self.pendingCap))
         persist()
     }
 

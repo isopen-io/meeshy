@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "calls")
+private let logger = MeeshyLog.logger(.calls)
 
 /// Local-only actor for call transcripts — never a network call, mirrors
 /// `ConversationDraftManager`'s shape. `saveMerging` merges with any existing

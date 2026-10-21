@@ -8,6 +8,12 @@ import XCTest
 /// refus passe sans bruit.
 final class GuestSessionEndTests: XCTestCase {
 
+    /// #10854 — les sockets de cette suite s'arment contre le loopback, dont
+    /// le sondage tombe sous le sceau réseau : aucune ne joint un serveur.
+    override func invokeTest() {
+        SocketConfig.$loopbackOrigin.withValue(URL(string: "http://127.0.0.1:9")) { super.invokeTest() }
+    }
+
     private final class Received: @unchecked Sendable {
         var notifications: [Notification] = []
     }
@@ -190,12 +196,12 @@ final class GuestSessionEndTests: XCTestCase {
     }
 
     func test_transport_signalsOnlyARequestThatCarriedAGuestToken() throws {
-        let api = try source("Sources/MeeshySDK/Networking/APIClient.swift")
+        let api = try source("Sources/MeeshySDK/Networking/APIClient+Perform.swift")
         XCTAssertTrue(api.contains(#"if let guestToken = urlRequest.value(forHTTPHeaderField: "X-Session-Token") { GuestSessionEnd.signal(statusCode: statusCode, body: data, refusedSessionToken: guestToken) }"#))
     }
 
     func test_socket_errorEventIsReadByTheGuestLaw() throws {
-        let socket = try source("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        let socket = try source("Sources/MeeshySDK/Sockets/MessageSocketManager+EventHandlers.swift")
         XCTAssertTrue(socket.contains("socket.on(clientEvent: .error) { [weak self] data, _ in"))
         XCTAssertTrue(socket.contains("self?.handleSocketError(data)"))
     }

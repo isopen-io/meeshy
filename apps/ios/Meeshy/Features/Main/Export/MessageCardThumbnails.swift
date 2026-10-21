@@ -9,13 +9,13 @@ import MeeshyUI
 /// montré par sa VRAIE carte, peinte sur le message de l'utilisateur.
 ///
 /// Une vignette coûte une peinture : elle ne se demande qu'à l'entrée à
-/// l'écran (`LazyVGrid`), DEUX à la fois, la PLUS RÉCENTE demande d'abord, et
+/// l'écran (`LazyVGrid`), DEUX à la fois (`LatestFirstGate`), la PLUS RÉCENTE demande d'abord, et
 /// jamais sur le MainActor. Le cache est BORNÉ (`countLimit`) et une clé nomme
 /// le template ET l'état de la carte (langue, titre, anonymat) : changer un
 /// détail ne ressert jamais une vignette périmée.
 final class MessageCardThumbnailStore {
     private let cache = NSCache<NSString, UIImage>()
-    private let gate = MessageCardRenderGate(limit: 2)
+    private let gate = LatestFirstGate(limit: 2)
 
     init(limit: Int = 240) {
         cache.countLimit = limit
@@ -29,7 +29,7 @@ final class MessageCardThumbnailStore {
 
     func image(_ key: String, input: MessageCardInput, width: Double, displayScale: Double, pictures: MessageCardPictures) async -> UIImage? {
         if let hit = cached(key) { return hit }
-        await gate.enter()
+        guard await gate.enter() else { return nil }
         guard !Task.isCancelled else {
             await gate.leave()
             return nil
@@ -40,33 +40,6 @@ final class MessageCardThumbnailStore {
         await gate.leave()
         if let image { cache.setObject(image, forKey: key as NSString) }
         return image
-    }
-}
-
-/// Au plus `limit` peintures à la fois ; la dernière demandée passe d'abord.
-actor MessageCardRenderGate {
-    private let limit: Int
-    private var running = 0
-    private var waiting: [CheckedContinuation<Void, Never>] = []
-
-    init(limit: Int) {
-        self.limit = limit
-    }
-
-    func enter() async {
-        guard running >= limit else {
-            running += 1
-            return
-        }
-        await withCheckedContinuation { waiting.append($0) }
-    }
-
-    func leave() {
-        guard let next = waiting.popLast() else {
-            running -= 1
-            return
-        }
-        next.resume()
     }
 }
 

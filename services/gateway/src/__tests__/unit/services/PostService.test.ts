@@ -160,6 +160,7 @@ function makePrisma(opts: {
       create: jest.fn<any>().mockResolvedValue({}),
     },
     postEngagement: {
+      findFirst: async () => null,
       findUnique: jest.fn<any>().mockResolvedValue(null),
       upsert: jest.fn<any>().mockResolvedValue({}),
     },

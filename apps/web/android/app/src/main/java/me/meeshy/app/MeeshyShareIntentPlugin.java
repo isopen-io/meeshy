@@ -178,7 +178,11 @@ public class MeeshyShareIntentPlugin extends Plugin {
             String name = ShareIntentRules.fileNameFor(displayNameOf(resolver, uri), mimeType, i);
             File target = new File(batch, i + "-" + name);
             long size = copyCapped(resolver, uri, target, ShareIntentRules.remainingBytes(used));
-            if (size < 0) {
+            ShareIntentRules.CopyVerdict verdict = ShareIntentRules.verdictOf(size);
+            if (verdict == ShareIntentRules.CopyVerdict.STOP) {
+                break;
+            }
+            if (verdict == ShareIntentRules.CopyVerdict.SKIP) {
                 continue;
             }
             used += size;
@@ -207,12 +211,17 @@ public class MeeshyShareIntentPlugin extends Plugin {
         return null;
     }
 
-    /** Copie {@code uri} dans {@code target} ; {@code -1} s'il depasse {@code limit} ou est illisible. */
+    /**
+     * Copie {@code uri} dans {@code target} ; {@link ShareIntentRules#OVER_BUDGET}
+     * s'il depasse {@code limit}, {@link ShareIntentRules#UNREADABLE} s'il est
+     * illisible. Seule une copie non vide reste sur le disque.
+     */
     private static long copyCapped(ContentResolver resolver, Uri uri, File target, long limit) {
         long copied = 0;
         try (InputStream input = resolver.openInputStream(uri); OutputStream output = new FileOutputStream(target)) {
             if (input == null) {
-                return -1;
+                target.delete();
+                return ShareIntentRules.UNREADABLE;
             }
             byte[] buffer = new byte[8192];
             int read;
@@ -220,15 +229,18 @@ public class MeeshyShareIntentPlugin extends Plugin {
                 copied += read;
                 if (copied > limit) {
                     target.delete();
-                    return -1;
+                    return ShareIntentRules.OVER_BUDGET;
                 }
                 output.write(buffer, 0, read);
+            }
+            if (copied == 0) {
+                target.delete();
             }
             return copied;
         } catch (IOException | SecurityException e) {
             // Une URI revoquee ou illisible : le fichier est ecarte, les autres partent.
             target.delete();
-            return -1;
+            return ShareIntentRules.UNREADABLE;
         }
     }
 

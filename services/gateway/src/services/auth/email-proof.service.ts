@@ -48,6 +48,12 @@ import { emailCodeMatches, emailTokenMatches } from './email-code';
 import { emailProofFields, settleEmailAddressProof } from './email-address-proof';
 import { proveEmailClaim } from './email-claim';
 import { creditContactProof, type ContactProofRecorder } from './contact-proof-engagement';
+import {
+  LINK_ACCOUNT_IDENTITY_SELECT,
+  linkConfirmation,
+  linkDeviceVerdict,
+  type LinkConfirmation,
+} from './link-device-binding';
 
 const logger = enhancedLogger.child({ module: 'EmailProof' });
 
@@ -57,6 +63,10 @@ export type EmailProof = {
   readonly token?: string;
   /** Appliqué avec `code` seulement, et seulement à un compte sans mot de passe. */
   readonly password?: string;
+  /** #10872 — le secret de l'appareil qui présente le LIEN (jamais avec le code). */
+  readonly linkDeviceSecret?: string;
+  /** #10872 — l'utilisateur a vu le compte cible et dit oui. */
+  readonly confirmed?: boolean;
 };
 
 export type EmailProofResult =
@@ -69,7 +79,25 @@ export type EmailProofResult =
       readonly passwordSet: boolean;
       readonly secondFactor: SecondFactorState;
     }
-  | { readonly success: false; readonly reason: 'invalid' | 'expired' | 'error'; readonly error: string };
+  | { readonly success: false; readonly reason: 'invalid' | 'expired' | 'error'; readonly error: string }
+  | ({
+      readonly success: false;
+      readonly reason: 'confirmation-required';
+      readonly error: string;
+    } & LinkConfirmation);
+
+/**
+ * #10872 — un lien présenté ailleurs que sur l'appareil qui l'a demandé, sans
+ * le oui de l'utilisateur : la preuve s'arrête AVANT toute écriture.
+ */
+export const confirmationRequired = (question: LinkConfirmation): EmailProofResult => ({
+  success: false,
+  reason: 'confirmation-required',
+  error: 'Confirmez le compte avant de vous connecter.',
+  account: question.account,
+  intent: question.intent,
+  maskedEmail: question.maskedEmail,
+});
 
 const REFUS = {
   codeInvalide: { success: false, reason: 'invalid', error: 'Code de vérification invalide.' },
@@ -81,6 +109,10 @@ const REFUS = {
 
 type ProofRow = {
   id: string;
+  username: string;
+  displayName: string | null;
+  avatar: string | null;
+  emailVerificationDeviceHash?: string | null;
   password: string | null;
   emailVerifiedAt: Date | null;
   twoFactorEnabledAt: Date | null;
@@ -101,6 +133,7 @@ async function preuveDeRevendication(
 ): Promise<EmailProofResult> {
   const issue = await proveEmailClaim(deps.prisma, proof);
   if (issue.kind === 'expired') return parCode ? REFUS.codeExpire : REFUS.lienExpire;
+  if (issue.kind === 'confirmation-required') return confirmationRequired(issue);
   if (issue.kind !== 'proven') return parCode ? REFUS.codeInvalide : REFUS.lienInvalide;
   // Le compte revendiquant reçoit une adresse qu'il vient de prouver : c'est
   // son geste, et c'est sa première adresse vérifiée (#8959).
@@ -135,13 +168,14 @@ export async function verifyEmailProof(
     const ligne = (await prisma.user.findFirst({
       where: { email: { equals: normalizeEmail(proof.email), mode: 'insensitive' }, isActive: true },
       select: {
-        id: true,
+        ...LINK_ACCOUNT_IDENTITY_SELECT,
         password: true,
         emailVerifiedAt: true,
         twoFactorEnabledAt: true,
         emailVerificationToken: true,
         emailVerificationCode: true,
         emailVerificationExpiry: true,
+        emailVerificationDeviceHash: true,
       },
     })) as ProofRow | null;
 
@@ -156,6 +190,17 @@ export async function verifyEmailProof(
       return parCode ? REFUS.codeExpire : REFUS.lienExpire;
     }
 
+    if (
+      !parCode &&
+      linkDeviceVerdict({
+        boundHash: ligne.emailVerificationDeviceHash,
+        presentedSecret: proof.linkDeviceSecret,
+        confirmed: proof.confirmed === true,
+      }) === 'confirmation-required'
+    ) {
+      return confirmationRequired(linkConfirmation(ligne, { intent: 'sign-in', email: normalizeEmail(proof.email) }));
+    }
+
     const maintenant = new Date();
     const posePassword = parCode && typeof proof.password === 'string' && ligne.password === null;
     const password = posePassword ? await hashPassword(proof.password as string) : null;
@@ -168,7 +213,7 @@ export async function verifyEmailProof(
       },
       data: {
         ...emailProofFields(ligne, maintenant),
-        ...(parCode ? { emailVerificationCode: null } : { emailVerificationToken: null }),
+        ...(parCode ? { emailVerificationCode: null } : { emailVerificationToken: null, emailVerificationDeviceHash: null }),
         ...(password ? { password, lastPasswordChange: maintenant } : {}),
       },
     });

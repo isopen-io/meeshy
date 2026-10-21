@@ -212,10 +212,17 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public static let defaultExpiryInterval: TimeInterval = 20 * 60 * 60
 
     public func isExpired(at now: Date = Date()) -> Bool {
+        Self.isExpired(createdAt: createdAt, expiresAt: expiresAt, at: now)
+    }
+
+    /// La loi d'expiration elle-même, pour qui tient une story sans `StoryItem`
+    /// (le support d'une carte, `PostCommentCardStory`) — l'échéance explicite,
+    /// sinon `defaultExpiryInterval` après la création.
+    public static func isExpired(createdAt: Date, expiresAt: Date?, at now: Date) -> Bool {
         if let explicit = expiresAt {
             return explicit <= now
         }
-        return createdAt.addingTimeInterval(Self.defaultExpiryInterval) <= now
+        return createdAt.addingTimeInterval(defaultExpiryInterval) <= now
     }
 
     /// Prisme realtime : traduction du CONTENU de la story (sa légende), que le
@@ -393,7 +400,8 @@ extension Array where Element == APIPost {
                        // payloads/caches antérieurs à l'enrichissement gateway).
                        authorPresence: data.author.isOnline.map {
                            UserPresence(isOnline: $0, lastActiveAt: data.author.lastActiveAt)
-                       })
+                       },
+                       authorRing: data.author.avatarRing)
         }
         groups.sort { a, b in
             if let uid = currentUserId {

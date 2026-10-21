@@ -31,11 +31,20 @@ const CALL_MANAGER_FILES = readdirSync(join(REPO_ROOT, CALL_MANAGER_DIRECTORY))
   .filter((name) => name === 'CallManager.swift' || /^CallManager\+.+\.swift$/.test(name))
   .map((name) => `${CALL_MANAGER_DIRECTORY}/${name}`);
 
+const MESSAGE_SOCKET_DIRECTORY = 'packages/MeeshySDK/Sources/MeeshySDK/Sockets';
+
+// Le gestionnaire de socket iOS est une famille depuis #10988 : ses émissions d'appel
+// vivent dans `+CallSignaling` et `+EventHandlers`, ses événements dans
+// `MessageSocketEvents+*`. Lire le seul fichier principal laisserait passer un
+// littéral hors contrat écrit dans un fichier frère.
+const MESSAGE_SOCKET_FILES = readdirSync(join(REPO_ROOT, MESSAGE_SOCKET_DIRECTORY))
+  .filter((name) => /^(MessageSocketManager|MessageSocketEvents|MessageSocketProviding)(\+.+)?\.swift$/.test(name))
+  .map((name) => `${MESSAGE_SOCKET_DIRECTORY}/${name}`);
+
 const CALL_SIGNALING_SOURCES: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = [
   [`${CALL_MANAGER_DIRECTORY}/CallManager(+*).swift`, CALL_MANAGER_FILES],
+  [`${MESSAGE_SOCKET_DIRECTORY}/MessageSocket(Manager|Events|Providing)(+*).swift`, MESSAGE_SOCKET_FILES],
   ...[
-    'packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift',
-    'packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+ScreenShare.swift',
     'apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt',
   ].map((path) => [path, [path]] as const),
 ];

@@ -4,9 +4,7 @@ import type frPublicEntry from './catalog-fr-public-entry';
 const itPublicEntry = {
   'publicHeader.home': 'Home di Meeshy',
   'publicHeader.language': 'Lingua',
-  'login.world.title': 'Entra in {title}',
-  'login.world.subtitle': 'Senza account · il tuo nome e la tua lingua',
-  'login.world.or': 'oppure con il tuo account',
+  'brand.credit.hint': 'apre la piattaforma services.ceo in una nuova scheda',
   'login.offline': 'Offline: al momento non è possibile accedere.',
   'login.twoFactor.title': 'Autenticazione a due fattori',
   'login.twoFactor.lead': 'Inserisci il codice della tua app di autenticazione.',
@@ -35,6 +33,17 @@ const itPublicEntry = {
   'magicLink.offline': 'Nessuna connessione. Controlla la rete e riprova.',
   'magicLink.submit': 'Ricevi il link',
   'magicLink.submit.busy': 'Invio…',
+  'magicLink.flowTitle': 'Accedi con e-mail',
+  'magicLink.validating': 'Verifica del link…',
+  'magicLink.invalid.title': 'Link non valido o scaduto',
+  'magicLink.invalid.body': 'Un link di accesso scade dopo 10 minuti e funziona una sola volta.',
+  'magicLink.requestNew': 'Richiedi un nuovo link',
+  'magicLink.backToLogin': 'Torna all’accesso',
+  'magicLink.retry': 'Riprova',
+  'magicLink.resend': 'Invia di nuovo',
+  'magicLink.resend.label': 'Invia di nuovo il link',
+  'magicLink.cancel': 'Annulla',
+  'magicLink.linkExpired': 'Link scaduto, richiedine uno nuovo',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default itPublicEntry;

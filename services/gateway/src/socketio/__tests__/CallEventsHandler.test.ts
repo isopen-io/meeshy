@@ -252,7 +252,7 @@ function makeIo() {
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     ...openCallRingTables(),
-    participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }), findMany: jest.fn<any>().mockResolvedValue([]) },
+    participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }), findMany: jest.fn<any>(async (a: any) => (Object.keys(a?.where ?? {}).join() === 'userId' && a?.select?.id ? [{ id: PARTICIPANT_ID }] : [])) },
     callSession: {
       findUnique: jest.fn<any>().mockResolvedValue({ id: CALL_ID, conversationId: CONV_ID }),
       findMany: jest.fn<any>().mockResolvedValue([]),

@@ -1,10 +1,12 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { ListHeader } from '@/components/list-header';
+import { SearchCommunitiesBand } from '@/components/search-communities-band';
 import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
+import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
 import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
 import { accentOf } from '@/lib/accent';
@@ -14,7 +16,7 @@ import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { PullIndicator } from '@/components/pull-indicator';
-import { useScene } from '@/lib/lens/scene';
+import { useListReorderFlip, useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { publicWebOrigin } from '@/lib/links/public-origin';
@@ -31,9 +33,15 @@ import { peerHereIn, peerKeyIn, useActiveHerePeers, useFocusedHerePeers, useHere
 import { effectiveEngagementOf } from '@/lib/api/conversation-engagement';
 import { useLiveEngagements } from '@/lib/view/use-conversation-engagement';
 import { resolveViewer } from '@/lib/api/viewer';
-import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
-import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
+import { conversationStore, effectiveFlagsOf, effectiveUnreadOf, withPreferenceOverrides } from '@/lib/conversation-store';
+import { blockedIdsOf, lazyBlockedUsersQueryOptions } from '@/lib/api/blocked-peers';
+import { blockTargetOf } from '@/lib/api/conversation-block-target';
+import { appQueryClient } from '@/lib/api/query-client';
+import { rowBlockAction, rowPreferenceAction } from '@/lib/api/row-intents';
+import type { RowDetailsFocus, RowIntent } from '@/lib/view/row-actions';
+import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, NEUTRAL_SELECTION, orderConversations, selectionLabel, toggleFilter, type ListSelection } from '@/lib/lens/filters';
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
+import { authorStoryRing } from '@/lib/view/author-story-ring';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
@@ -44,12 +52,17 @@ import { navigate } from '@/lib/router';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
+import { searchBarHidden, searchCommunitiesShown, useSearchBarScrolledAway } from '@/lib/view/search-bar-reveal';
+import { usePrefersReducedMotion } from '@/lib/lottie/use-reduced-motion';
 import { createDayPillRevealSubscriber } from '@/lib/view/day-pill-reveal';
 import { useLensMetaReveal } from '@/lib/view/lens-meta-reveal';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useMinute } from '@/lib/view/use-minute';
+import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * L'ECRAN DE LISTE.
@@ -110,6 +123,9 @@ import { useMinute } from '@/lib/view/use-minute';
  * `conversations` à chaque image et défairait les mémos qui en dépendent. */
 const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
 
+/* Renommer et confirmer un blocage (#10593) : chargés au geste. */
+const ConversationRowDialogs = lazy(() => import('@/components/conversation-row-dialogs'));
+
 /**
  * `content-center` ET NON `place-items-center` SEUL (#5650, revue-correction)
  * — `grid flex-1 place-items-center` centre chaque enfant DANS SA RANGÉE, et
@@ -119,13 +135,14 @@ const EMPTY_CONVERSATIONS: readonly Conversation[] = [];
  * rangées au centre ; `gap-3` redevient l'espacement réel entre elles.
  */
 function ListError({ online, onRetry }: { readonly online: boolean; readonly onRetry: () => void }) {
+  const language = currentInterfaceLanguage();
   return (
     <li role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-6 text-center">
       <span style={{ color: 'var(--color-error)' }}>
         <Glyph name="warningCircle" size={28} />
       </span>
       <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-        {online ? 'Impossible de charger vos conversations' : 'Hors ligne'}
+        {translate(language, online ? 'list.error.title' : 'common.offline')}
       </p>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
         {/*
@@ -139,9 +156,7 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
           autrement : `conversations.error.title` + un sous-titre FIXE
           (`ConversationListView.swift:1761-1793`), jamais l'erreur brute.
         */}
-        {online
-          ? 'Réessayez dans un instant — vos messages sont en sécurité.'
-          : 'Vos conversations s’afficheront à la reconnexion.'}
+        {translate(language, online ? 'list.error.body' : 'list.error.body.offline')}
       </p>
       <button
         type="button"
@@ -149,7 +164,7 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
         className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
-        Réessayer
+        {translate(language, 'common.retry')}
       </button>
     </li>
   );
@@ -199,11 +214,11 @@ function lecteurCourant(): string | null {
  * `inviter`) — le remplir avec un mauvais candidat rendrait cet écart
  * impossible à solder.
  */
-const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
+const actionsDeDemarrage = (language: InterfaceLanguage): readonly QuickAction[] => [
   {
     key: 'inviter',
-    label: 'Inviter des amis',
-    hint: 'Partagez votre lien Meeshy : c’est ainsi que naît une première conversation.',
+    label: translate(language, 'list.quick.invite'),
+    hint: translate(language, 'list.quick.invite.hint'),
     glyph: 'linkSimple',
     // HÉROS, alors qu'iOS range `invite` en TUILE. L'écart est assumé et
     // TEMPORAIRE : les trois héros d'iOS — chercher des membres, ses contacts,
@@ -217,8 +232,8 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
   },
   {
     key: 'story',
-    label: 'Créer une story',
-    hint: 'Une image, un son, quelques mots — visibles vingt heures.',
+    label: translate(language, 'list.quick.story'),
+    hint: translate(language, 'list.quick.story.hint'),
     glyph: 'image',
     run: () => {
       navigate('/stories/new');
@@ -227,8 +242,8 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
   },
   {
     key: 'humeur',
-    label: 'Poser une humeur',
-    hint: 'Un emoji dit où vous en êtes, sans écrire un message.',
+    label: translate(language, 'list.quick.mood'),
+    hint: translate(language, 'list.quick.mood.hint'),
     glyph: 'smiley',
     run: () => {
       navigate('/status/new');
@@ -238,9 +253,16 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
 ];
 
 export default function ConversationsScreen() {
-  const [filter, setFilter] = useState<ListFilter>('all');
+  const [selection, setSelection] = useState<ListSelection>(NEUTRAL_SELECTION);
   const [search, setSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const interfaceLanguage = currentInterfaceLanguage();
+  useDismissRowSwipeOnViewChange(`${selection.join(',')}\u0001${search}`);
   const frame = useRef<HTMLUListElement | null>(null);
+  /* #11036 — la barre suit le SENS du défilement ; une recherche en cours la tient. */
+  const searchBarScrolledAway = useSearchBarScrolledAway(frame);
+  const searchBarAway = searchBarHidden({ scrolledAway: searchBarScrolledAway, focused: searchFocused, query: search });
+  const searchMotionReduced = usePrefersReducedMotion();
 
   /**
    * LA RÉSERVE DE LA BARRE DE RECHERCHE (#6220) — MESURÉE, jamais supposée,
@@ -358,15 +380,60 @@ export default function ConversationsScreen() {
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const { languages: readerLanguages } = useReaderLanguages();
-  const conversations = list.data ?? EMPTY_CONVERSATIONS;
+  const overrides = useStore(conversationStore, (s) => s.overrides);
+  /* LA CONVERSATION EFFECTIVE (#10593) — le favori, la catégorie et le nom
+     personnel corrigés à l'instant du geste : filtres, sections, rangées et
+     fiche lisent la même valeur. */
+  const conversations = useMemo(() => withPreferenceOverrides(list.data ?? EMPTY_CONVERSATIONS, overrides), [list.data, overrides]);
   /* LA FICHE D'UNE CONVERSATION NON DIRECTE, OUVERTE DEPUIS SON AVATAR
      (#10300) — miroir de `ThemedConversationRow` (`onTap: onViewConversationInfo`).
-     `setDetailsId` est stable : les rangées mémoïsées ne se re-rendent pas. Un
+     `openDetailsOnTop` est stable : les rangées mémoïsées ne se re-rendent pas. Un
      visiteur sans compte n'ouvre aucune fiche (#10205). */
   const [detailsId, setDetailsId] = useState<string | null>(null);
-  const openDetails = useSpeaksAsGuest() ? undefined : setDetailsId;
+  const [detailsFocus, setDetailsFocus] = useState<RowDetailsFocus | undefined>(undefined);
+  const openDetailsOnTop = useCallback((id: string) => {
+    setDetailsFocus(undefined);
+    setDetailsId(id);
+  }, []);
+  const openDetails = useSpeaksAsGuest() ? undefined : openDetailsOnTop;
   const detailsConversation = detailsId === null ? undefined : conversations.find((c) => c.id === detailsId);
-  const overrides = useStore(conversationStore, (s) => s.overrides);
+  /**
+   * LES ENTRÉES D'iOS DU MENU D'UNE LIGNE (#10593) — Renommer ouvre la
+   * fenêtre, Bloquer la confirmation, Débloquer agit tout de suite (iOS ne
+   * confirme pas), Favori et Déplacer vers… écrivent la préférence. Un compte
+   * seulement : un visiteur n'a ni préférences ni blocages. Les refs gardent
+   * le rappel STABLE — `sameRowProps` ne repeint aucune rangée pour lui.
+   */
+  const account = apiDeps.source === 'fixtures' || session.status === 'authenticated';
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [blockId, setBlockId] = useState<string | null>(null);
+  const latest = useRef({ conversations, viewerId: viewer.id ?? '' });
+  latest.current = { conversations, viewerId: viewer.id ?? '' };
+  const handleRowIntent = useCallback((conversationId: string, intent: RowIntent) => {
+    if (intent.kind === 'rename') return setRenameId(conversationId);
+    if (intent.kind === 'details') {
+      setDetailsFocus(intent.focus);
+      return setDetailsId(conversationId);
+    }
+    if (intent.kind === 'favorite') return rowPreferenceAction(conversationId, { reaction: intent.emoji });
+    if (intent.kind === 'moveTo') return rowPreferenceAction(conversationId, { categoryId: intent.categoryId });
+    if (intent.intent === 'block') return setBlockId(conversationId);
+    const conversation = latest.current.conversations.find((c) => c.id === conversationId);
+    if (conversation !== undefined) void rowBlockAction({ conversation, viewerId: latest.current.viewerId, intent: 'unblock' });
+    return undefined;
+  }, []);
+  const onRowIntent = account && openDetails !== undefined ? handleRowIntent : undefined;
+  /* QUI LE LECTEUR A BLOQUÉ — le panier de « Découvrir », la MÊME source que
+     `performBlock` écrit : la ligne dit « Débloquer » à l'instant du geste.
+     Tant qu'il n'est pas lu, la ligne ne propose ni l'un ni l'autre. */
+  const blocked = useInfiniteQuery({ ...lazyBlockedUsersQueryOptions(apiDeps), enabled: onRowIntent !== undefined }, appQueryClient);
+  const blockedIds = useMemo(() => blockedIdsOf(blocked.data), [blocked.data]);
+  const peerBlockedOf = (c: Conversation): boolean | undefined => {
+    const peer = blockedIds === undefined ? undefined : blockTargetOf(c, viewer.id ?? '');
+    return peer === undefined || blockedIds === undefined ? undefined : blockedIds.has(peer.id);
+  };
+  const renameConversation = renameId === null ? undefined : conversations.find((c) => c.id === renameId);
+  const blockConversation = blockId === null ? undefined : conversations.find((c) => c.id === blockId);
   /**
    * LES CATÉGORIES DU LECTEUR (#10103) — un COMPTE seulement : un invité ou un
    * visiteur anonyme n'a pas de tiroirs, ses conversations tombent par date.
@@ -431,7 +498,7 @@ export default function ConversationsScreen() {
   const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
   const minute = useMinute();
   const { visible, emptiness, sections, world } = useMemo(() => {
-    const kept = applyFilter({ conversations, filter, search, viewerId: viewer.id ?? '', overrides });
+    const kept = applyFilter({ conversations, selection, search, viewerId: viewer.id ?? '', overrides });
     const ordered = orderConversations(kept, overrides);
     /* WORLD WIDE SORT DES SECTIONS ET SE POSE AU-DESSUS D'ELLES (#10004), en
        rangée ordinaire (#10191) — seulement si le filtre et la recherche la
@@ -446,7 +513,8 @@ export default function ConversationsScreen() {
     // `minute` n'entre dans AUCUNE des expressions ci-dessus : c'est
     // volontaire — elle y est la clé qui fait ré-évaluer `new Date()`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversations, filter, search, viewer.id, overrides, categories, timeZone, minute]);
+  }, [conversations, selection, search, viewer.id, overrides, categories, timeZone, minute]);
+  useListReorderFlip(frame, visible);
 
   /**
    * LE PLIAGE DES SECTIONS (#8694, toute section depuis #10103) — Épingles et
@@ -508,12 +576,16 @@ export default function ConversationsScreen() {
       unreadCount={effectiveUnreadOf(c, overrides)}
       onRowAction={rowAction}
       onOpenDetails={openDetails}
+      onRowIntent={onRowIntent}
+      peerBlocked={peerBlockedOf(c)}
+      categories={categories}
       typists={typists[c.id]}
       peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
       peerActive={peerHereIn(activePeers, c, viewer.id ?? '')}
       peerFocused={peerHereIn(focusedPeers, c, viewer.id ?? '')}
       peerMood={moodOf(peerKeyIn(c, viewer.id ?? ''))}
       peerMoodPostId={moodOf.postOf?.(peerKeyIn(c, viewer.id ?? ''))}
+      peerStoryRing={authorStoryRing(railProps.groups, peerKeyIn(c, viewer.id ?? '')) ?? undefined}
       engagement={effectiveEngagementOf({ byConversation: liveEngagements }, c)}
       status={{
         /**
@@ -587,7 +659,7 @@ export default function ConversationsScreen() {
            géométrie. La loi porte les DEUX régimes — doigt posé sans
            transition, retour animé — voir son doc-comment. */
         style={{ paddingBottom: searchBarHeight, ...pullTransform(pull.phase, pull.offsetPx) }}
-        {...(loading ? { 'aria-busy': true, 'aria-label': 'Chargement des conversations' } : {})}
+        {...(loading ? { 'aria-busy': true, 'aria-label': translate(interfaceLanguage, 'list.loading') } : {})}
       >
         {/*
           LE RAIL ET LES FILTRES VIVENT DÉSORMAIS DANS LA VUE DÉFILANTE
@@ -622,15 +694,20 @@ export default function ConversationsScreen() {
           <StoryRail ref={observeGrandRail} variant="grande" inert={pinned} {...railProps} />
         </li>
         <li className="-mx-2 shrink-0">
-          <nav aria-label="Filtres" className="scrollbar-none overflow-x-auto">
+          <nav data-list-filters aria-label={rowMenuText(interfaceLanguage, 'listFilter.nav')} className="scrollbar-none overflow-x-auto">
             <ul className="flex gap-2 px-4 py-1.5">
+              {/* LES PUCES SE COMPOSENT (#10598) — un appui pose, un second
+                  retire, « Tous » efface le reste : `toggleFilter`, la loi
+                  d'iOS (`ConversationFilterComposition`). `data-list-filter`
+                  est le crochet des gates : le nom suit la langue. */}
               {LIST_FILTERS.map((f) => {
-                const active = f === filter;
+                const active = selection.includes(f);
                 return (
                   <li key={f}>
                     <button
                       type="button"
-                      onClick={() => setFilter(f)}
+                      data-list-filter={f}
+                      onClick={() => setSelection((current) => toggleFilter(f, current))}
                       aria-pressed={active}
                       className="rounded-chip px-3 py-1.5 text-title font-medium whitespace-nowrap transition-colors"
                       style={
@@ -643,7 +720,7 @@ export default function ConversationsScreen() {
                             }
                       }
                     >
-                      {FILTER_LABELS[f]}
+                      {filterLabel(f, interfaceLanguage)}
                     </button>
                   </li>
                 );
@@ -734,7 +811,7 @@ export default function ConversationsScreen() {
           >
             <Glyph name="users" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
             <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-              Aucune conversation pour l’instant.
+              {translate(interfaceLanguage, 'list.empty')}
             </p>
             {/*
               LA SORTIE DE L'ÉCRAN DE DÉMARRAGE (2026-09-08). Cet état récitait
@@ -748,9 +825,9 @@ export default function ConversationsScreen() {
               était pire — il DÉCRIVAIT l'issue sans la donner.
             */}
             <QuickActions
-              title="Commencez ici"
-              subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
-              actions={ACTIONS_DE_DEMARRAGE}
+              title={translate(interfaceLanguage, 'list.quick.start')}
+              subtitle={translate(interfaceLanguage, 'list.quick.subtitle')}
+              actions={actionsDeDemarrage(interfaceLanguage)}
               conversationCount={0}
             />
           </li>
@@ -764,18 +841,18 @@ export default function ConversationsScreen() {
           >
             <Glyph name="magnifyingGlass" size={40} style={{ color: 'var(--color-ios-ink-3)' }} />
             <p className="text-body" style={{ color: 'var(--color-ios-ink)' }}>
-              Aucune conversation ne correspond à « {search || FILTER_LABELS[filter]} ».
+              {translate(interfaceLanguage, 'list.empty.filter', { query: search || selectionLabel(selection, interfaceLanguage) })}
             </p>
             <button
               type="button"
               onClick={() => {
                 setSearch('');
-                setFilter('all');
+                setSelection(NEUTRAL_SELECTION);
               }}
               className="rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
             >
-              Tout afficher
+              {translate(interfaceLanguage, 'list.showAll')}
             </button>
           </li>
         ) : null}
@@ -834,9 +911,9 @@ export default function ConversationsScreen() {
         {conversations.length > 0 ? (
           <li style={{ minHeight: visible.length > 0 ? '50dvh' : 0, flexShrink: 0 }}>
             <QuickActions
-              title="Et maintenant ?"
-              subtitle="Meeshy s’écrit à plusieurs — invitez quelqu’un à vous rejoindre."
-              actions={ACTIONS_DE_DEMARRAGE}
+              title={translate(interfaceLanguage, 'list.quick.next')}
+              subtitle={translate(interfaceLanguage, 'list.quick.subtitle')}
+              actions={actionsDeDemarrage(interfaceLanguage)}
               conversationCount={conversations.length}
             />
           </li>
@@ -854,7 +931,35 @@ export default function ConversationsScreen() {
         hauteur MESURÉE en `padding-block-end` (voir `searchBarRef` ci-dessus)
         : le contenu s'arrête toujours AU-DESSUS d'elle, jamais dessous.
       */}
-      <div ref={searchBarRef} data-search-bar className="absolute inset-x-0 bottom-0 z-10 px-4 pt-2 pb-safe">
+      {/*
+        LA BARRE ESCAMOTÉE NE DONNE AUCUNE COURSE AU CADRE (#11090). Escamotée,
+        elle déborde du bas par `transform` ; posée directement dans le cadre
+        (`overflow-hidden`, un scrollport), ce débordement le rendait défilable :
+        un focus ou un `scrollIntoView` le décalait jusqu'à 82 px, et le retour de
+        la barre le ramenait à 0 — l'écran entier glissait et refermait le menu de
+        rangée ouvert. Ce calque à la taille du cadre ROGNE le débordement
+        (`overflow-clip` ne crée pas de scrollport), et le cadre reste un
+        scrollport : le préchargement paresseux des avatars sous la ligne de
+        flottaison, qui en dépend, ne change pas.
+      */}
+      <div data-search-bar-layer className="pointer-events-none absolute inset-0 z-10 overflow-clip">
+      <div
+        ref={searchBarRef}
+        data-search-bar
+        data-search-bar-away={searchBarAway ? 'true' : 'false'}
+        inert={searchBarAway}
+        className="pointer-events-auto absolute inset-x-0 bottom-0 px-4 pt-2 pb-safe"
+        style={{
+          transform: searchBarAway ? 'translateY(calc(100% + 16px))' : 'translateY(0)',
+          opacity: searchBarAway ? 0 : 1,
+          transition: searchMotionReduced ? 'none' : 'transform 250ms ease-out, opacity 250ms ease-out',
+        }}
+      >
+        {/* #10924 — SES communautés au focus, ou rien ; posées AU-DESSUS de la
+          barre, hors de sa hauteur mesurée. #11036 — repliées dès le premier
+          caractère, pour laisser voir les résultats. `pointerdown` retenu : le focus
+          reste au champ jusqu'au clic d'une carte. */}
+        {searchCommunitiesShown({ focused: searchFocused, query: search }) ? <SearchCommunitiesBand language={interfaceLanguage} className="glass-prominent glass-card absolute inset-x-4 bottom-full mb-2" /> : null}
         <div
           className="glass-prominent glass-card flex items-center gap-3 px-4 py-3"
           style={{
@@ -867,17 +972,42 @@ export default function ConversationsScreen() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.currentTarget.value)}
-            placeholder="Rechercher…"
-            aria-label="Rechercher une conversation"
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            placeholder={translate(interfaceLanguage, 'list.search.placeholder')}
+            aria-label={translate(interfaceLanguage, 'list.search.label')}
             className="w-0 min-w-0 flex-1 bg-transparent text-input outline-none placeholder:text-ios-ink-3"
           />
           {search ? (
             <button type="button" onClick={() => setSearch('')} className="grid size-6 place-items-center">
-              <Glyph name="x" size={14} title="Effacer" style={{ color: 'var(--color-error)' }} />
+              <Glyph name="x" size={14} title={translate(interfaceLanguage, 'list.search.clear')} style={{ color: 'var(--color-error)' }} />
             </button>
           ) : null}
         </div>
       </div>
+      </div>
+      {renameConversation === undefined && blockConversation === undefined ? null : (
+        <Suspense fallback={null}>
+          <ConversationRowDialogs
+            language={interfaceLanguage}
+            viewerId={viewer.id ?? ''}
+            rename={renameConversation}
+            block={blockConversation}
+            onRename={(conversation, name) => {
+              setRenameId(null);
+              rowPreferenceAction(conversation.id, { customName: name });
+            }}
+            onBlock={(conversation) => {
+              setBlockId(null);
+              void rowBlockAction({ conversation, viewerId: viewer.id ?? '', intent: 'block' });
+            }}
+            onClose={() => {
+              setRenameId(null);
+              setBlockId(null);
+            }}
+          />
+        </Suspense>
+      )}
       {detailsConversation === undefined ? null : (
         <ConversationDetailsPortal
           open
@@ -887,8 +1017,12 @@ export default function ConversationsScreen() {
           viewerId={viewer.id ?? ''}
           deps={apiDeps}
           origin={publicWebOrigin(window.location.origin)}
-          onClose={() => setDetailsId(null)}
+          onClose={() => {
+            setDetailsId(null);
+            setDetailsFocus(undefined);
+          }}
           onRequestDeparture={(kind) => requestDeparture({ conversationId: detailsConversation.id, kind, returnToList: false })}
+          focus={detailsFocus}
         />
       )}
     </div>

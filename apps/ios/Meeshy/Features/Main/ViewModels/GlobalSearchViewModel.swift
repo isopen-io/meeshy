@@ -65,6 +65,8 @@ struct GlobalSearchUserResult: Identifiable, Sendable {
     let displayName: String?
     let avatar: String?
     let isOnline: Bool
+    /// Le contour équipé de la personne, la référence servie (#10946).
+    var ring: ServedProfileDecorItem? = nil
 }
 
 // MARK: - Ce qu'un volet de recherche rend
@@ -383,7 +385,16 @@ final class GlobalSearchViewModel: ObservableObject {
     func retryLastSearch() async {
         let trimmed = lastQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2 else { return }
-        await performSearch(query: lastQuery)
+        // Le réessai passe par LA tâche de recherche, comme une frappe : une
+        // frappe qui suit l'annule, et lui ne peut plus revenir après elle pour
+        // remettre les résultats de l'ancienne requête.
+        let query = lastQuery
+        searchTask?.cancel()
+        let task = Task<Void, Never> { [weak self] in
+            await self?.performSearch(query: query)
+        }
+        searchTask = task
+        await task.value
     }
 
     // MARK: - Search Conversations (FTS5-first, network fallback)
@@ -426,7 +437,7 @@ final class GlobalSearchViewModel: ObservableObject {
         case .expired, .empty:
             cached = []
         }
-        let byId = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
+        let byId = Dictionary(cached.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let preferred = preferredContentLanguages
 
         return ids.compactMap { id -> GlobalSearchConversationResult? in
@@ -543,7 +554,8 @@ final class GlobalSearchViewModel: ObservableObject {
                 username: user.username,
                 displayName: user.displayName,
                 avatar: user.avatar,
-                isOnline: user.isOnline ?? false
+                isOnline: user.isOnline ?? false,
+                ring: user.profileDecor?.avatarRing
             )
         }
     }
@@ -557,7 +569,8 @@ final class GlobalSearchViewModel: ObservableObject {
                     username: user.username,
                     displayName: user.displayName,
                     avatar: user.avatar,
-                    isOnline: user.isOnline ?? false
+                    isOnline: user.isOnline ?? false,
+                    ring: user.avatarRing
                 )
             }
             return GlobalSearchPeopleLeg(leg: .served(items), searchId: page.searchId)
@@ -658,7 +671,7 @@ final class GlobalSearchViewModel: ObservableObject {
         let conversationsById: [String: MeeshyConversation]
         switch cachedConvs {
         case .fresh(let v, _), .stale(let v, _):
-            conversationsById = Dictionary(uniqueKeysWithValues: v.map { ($0.id, $0) })
+            conversationsById = Dictionary(v.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         case .expired, .empty:
             conversationsById = [:]
         }

@@ -3,7 +3,25 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-nonisolated(unsafe) private var searchDebounceKey: UInt8 = 0
+/// Le debounce de la recherche dans la conversation, tenu par une RÉFÉRENCE que la vue garde en `@State`.
+///
+/// Il était rangé en objet associé sur `self` — or `ConversationView` est une struct : chaque accès
+/// emballait une copie neuve, le getter rendait toujours nil, et ni la frappe suivante ni la fermeture
+/// de la recherche n'annulaient rien. Chaque frappe lançait sa recherche, dans le désordre, et une
+/// recherche fermée dans les 400 ms filtrait quand même la conversation, interface de recherche partie.
+final class SearchDebounceBox {
+    private(set) var task: Task<Void, Never>?
+
+    /// Remplace la recherche en attente, en annulant la précédente.
+    func replace(with task: Task<Void, Never>?) {
+        self.task?.cancel()
+        self.task = task
+    }
+
+    func cancel() { replace(with: nil) }
+
+    nonisolated deinit { task?.cancel() }
+}
 
 // MARK: - Message Row, Reactions & Search
 extension ConversationView {
@@ -18,8 +36,7 @@ extension ConversationView {
     /// suppression locale part IMMÉDIATEMENT, sans `confirmationDialog`.
     /// Tout autre message garde la confirmation habituelle.
     func requestDeleteMessage(_ messageId: String) {
-        if let idx = viewModel.messageIndex(for: messageId),
-           viewModel.messages[idx].deliveryStatus == .failed {
+        if viewModel.outgoingState(of: messageId)?.isFailed == true {
             Task { await viewModel.deleteMessage(messageId: messageId, mode: .everyone) }
             return
         }
@@ -210,19 +227,28 @@ extension ConversationView {
 
     // MARK: - Search Actions
 
+    /// Ouverture depuis le bouton Recherche de l'aperçu long-press : active la barre de recherche.
+    ///
+    /// Consommée à l'ouverture ET à chaud : sur iPad, la liste reste à côté de la conversation ouverte,
+    /// et choisir « Rechercher » sur CELLE-CI ne recrée pas la vue (même `.id`) — le drapeau, lu par le
+    /// seul `.task` initial, restait levé et ouvrait la recherche dans la conversation suivante.
+    func consumePendingOpenSearch() async {
+        guard router.pendingOpenSearch else { return }
+        router.pendingOpenSearch = false
+        try? await Task.sleep(for: .milliseconds(250))
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            headerState.showSearch = true
+        }
+    }
+
     func triggerBackendSearch() {
         Task { await viewModel.searchMessages(query: headerState.searchQuery) }
     }
 
-    private var searchDebounceTask: Task<Void, Never>? {
-        get { objc_getAssociatedObject(self, &searchDebounceKey) as? Task<Void, Never> }
-        nonmutating set { objc_setAssociatedObject(self, &searchDebounceKey, newValue, .OBJC_ASSOCIATION_RETAIN) }
-    }
-
     func debounceSearch() {
-        searchDebounceTask?.cancel()
         let query = headerState.searchQuery
-        searchDebounceTask = Task {
+        searchDebounce.replace(with: Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
             if query.count >= 2 {
@@ -232,13 +258,13 @@ extension ConversationView {
                 // full conversation comes back.
                 await viewModel.endSearch()
             }
-        }
+        })
     }
 
     func dismissSearch() {
         // Cancel any pending debounce so a stale `endSearch` / `searchMessages`
         // can't fire after the search UI has been dismissed.
-        searchDebounceTask?.cancel()
+        searchDebounce.cancel()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             headerState.showSearch = false
             headerState.searchQuery = ""

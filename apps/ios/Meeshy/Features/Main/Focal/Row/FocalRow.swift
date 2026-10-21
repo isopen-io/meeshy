@@ -184,13 +184,13 @@ struct FocalRow: View {
                 // cadre et la bande se posent sur sa mesure réelle, lue par
                 // préférence, et gardent leur échelle d'origine.
                 .backgroundPreferenceValue(FocalElectedContentKey.self) { elected in
-                    if input.isFocused { electedCardBackground(elected) }
+                    if input.isFocused { focusChrome.electedCardBackground(elected) }
                 }
                 .overlay(alignment: .topLeading) {
-                    if input.isFocused { focusIdentityChip.offset(y: -focusLift) }
+                    if input.isFocused { focusChrome.focusIdentityChip.offset(y: -focusLift) }
                 }
                 .overlayPreferenceValue(FocalElectedContentKey.self) { elected in
-                    if input.isFocused { electedStrip(elected) }
+                    if input.isFocused { focusChrome.electedStrip(elected) }
                 }
 
             // En focus, `focusStampChip` dit la même chose dans le cadre : la
@@ -214,7 +214,7 @@ struct FocalRow: View {
         // #8147 — le message long DÉPLIÉ (hors élection) garde le bloc de
         // verre de la rangée entière, à ses marges d'origine.
         .background {
-            if input.isExpanded && !input.isFocused { focusCardBackground }
+            if input.isExpanded && !input.isFocused { focusChrome.focusCardBackground }
         }
         // F-083ter (F15) : l'effet épouse le bloc CONTENU, pas la rangée.
         // Il a vécu ici au nom d'un « même périmètre que la bulle » citant
@@ -230,6 +230,10 @@ struct FocalRow: View {
 
     private var focusLift: CGFloat {
         input.isFocused ? FocalScrollPerspective.electedContentLift(isFirstInGroup: input.isFirstInGroup) : 0
+    }
+
+    private var focusChrome: FocalFocusChrome {
+        FocalFocusChrome(input: input, actions: actions, focusLift: focusLift)
     }
 
     /// La PREMIÈRE colonne — la bulle elle-même. Son contenu n'a pas changé
@@ -262,7 +266,7 @@ struct FocalRow: View {
                     senderIsHere: input.senderIsHere,
                     senderStoryRing: input.senderStoryRing,
                     senderMoodEmoji: input.senderMoodEmoji,
-                    senderIsAnonymous: input.senderIsAnonymous,
+                    senderIsAnonymous: input.senderIsAnonymous, senderRing: input.senderRing,
                     profileUser: input.profileSheetUser,
                     isDark: input.isDark,
                     // WS-10 (F-089) : `input.showsAgentGrammar` PORTE DÉJÀ la
@@ -361,7 +365,7 @@ struct FocalRow: View {
         // mesuré en recette le 2026-09-23. `.frame(maxWidth:)` ÉTEND, il ne
         // borne pas : tout modificateur visuel monté après lui hérite de
         // l'écran, pas du contenu.
-        .messageEffects(input.effects)
+        .messageEffects(RainbowLetters.rowEffects(input.effects))
         // La bulle prend toute la laisse que la colonne lui laisse : sans cela
         // une rangée courte se rétracterait sur son texte et sa date viendrait
         // se coller au mot, au lieu de tenir la marge droite comme les autres.
@@ -625,15 +629,15 @@ struct FocalRow: View {
         }
     }
 
-    /// Miroir de la branche réelle (`:850-856`, lue jamais modifiée) :
-    /// emoji-only SANS citation ⇒ grand emoji libre ; sinon texte normal SI
+    /// Miroir de la bulle : emoji seul ⇒ grand emoji libre, citation ou non
+    /// (`flatRowRendersLargeEmoji`, #10628) ; sinon texte normal SI
     /// du contenu existe ET que l'audio ne l'héberge pas déjà en caption
     /// (`audioHostsCaption` ⇒ le texte vit DANS le widget audio, WS-3).
     @ViewBuilder
     private var textOrEmojiBlock: some View {
         if let sticker = content.sticker {
             stickerBlock(sticker)
-        } else if content.isEmojiOnly && content.reply == nil {
+        } else if content.flatRowRendersLargeEmoji {
             emojiBlock
         } else if content.hasTextOrNonMediaContent && audioMode != .hostsCaption {
             textBlock
@@ -664,6 +668,8 @@ struct FocalRow: View {
     @ViewBuilder
     private func stickerBlock(_ sticker: BubbleContent.Sticker) -> some View {
         MessageStickerArtwork(sticker: sticker, side: FocalMetrics.Sticker.side)
+            .stickerFloat()
+            .stickerSheetOnTap(sticker: sticker, isMine: content.isMe, senderName: content.senderName)
             .padding(.leading, indent)
             .accessibilityLabel(BubbleSticker.accessibilityLabel(for: sticker))
     }
@@ -728,7 +734,9 @@ struct FocalRow: View {
                 // `isFocused` (decisions.md 2026-08-22 bis) : seul le
                 // dépliage, geste explicite, change la hauteur — et l'hôte
                 // l'anime sans saut de défilement (#8147).
-                expansion: expansion
+                expansion: expansion,
+                // L'arc-en-ciel de la rangée plate colore les LETTRES (aucune bulle à entourer).
+                rainbowSeed: RainbowLetters.seed(for: input.effects, messageId: input.localId)
             )
             .equatable()
             .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: textSize))
@@ -742,26 +750,6 @@ struct FocalRow: View {
         }
         .padding(.leading, indent)
         .animation(.easeInOut(duration: 0.15), value: effectiveText)
-    }
-
-    /// En focus : « Aujourd'hui 12:30 », « Hier 18:30 », « Mardi 23:40 »,
-    /// « Sam. 3 oct. 2025 · 14:41 » (`FocalFocusTimestamp`) ; sinon l'heure seule.
-    /// En focus : la date complète PRÉ-CALCULÉE par la configuration
-    /// (`input.focusTimestamp`) ; le calcul en body n'est qu'un filet.
-    private var headerTimeString: String {
-        guard input.isFocused else { return content.meta.timeString }
-        if let precomputed = input.focusTimestamp { return precomputed }
-        guard let sentAt = input.sentAt else { return content.meta.timeString }
-        return FocalFocusTimestamp.label(
-            sentAt: sentAt,
-            timeString: content.meta.timeString,
-            now: Date(),
-            calendar: .current,
-            locale: .current,
-            today: String(localized: "date.today", defaultValue: "Aujourd'hui", bundle: .main),
-            yesterday: String(localized: "date.yesterday", defaultValue: "Hier", bundle: .main),
-            dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier", bundle: .main)
-        )
     }
 
     /// Le dépliage EN PLACE (#8147), tenu par l'hôte : un seul message
@@ -882,252 +870,6 @@ struct FocalRow: View {
         let kept = Array(ordered.prefix(limit))
         guard !kept.contains(where: { $0.lowercased() == activeLangCode.lowercased() }) else { return kept }
         return [activeLangCode] + kept.dropLast()
-    }
-
-    private var focusAccent: Color { Color(hex: input.accentHex) }
-
-    /// LA chip du focus — une seule coquille pour l'identité, la date, la
-    /// traduction, les drapeaux, le (+) et les réactions : capsule OPAQUE
-    /// (posée sur la ligne de la carte), teintée à l'accent de la scène —
-    /// SANS contour (directive 2026-08-24). L'état se lit désormais au fond
-    /// seul : dense pour le drapeau affiché (`isActive`), plein pour une
-    /// réaction qui est la mienne (`filled`).
-    private func focusChip<Content: View>(
-        isActive: Bool = false,
-        filled: Bool = false,
-        height: CGFloat = FocalMetrics.FocusStrip.chipHeight,
-        @ViewBuilder _ content: () -> Content
-    ) -> some View {
-        content()
-            .padding(.horizontal, MeeshySpacing.xsPlus)
-            .frame(minWidth: FocalMetrics.FocusStrip.chipMinWidth)
-            .frame(height: height)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(filled ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))
-                    .overlay(Capsule(style: .continuous).fill(filled ? Color.clear : focusAccent.opacity(FocalScrollPerspective.focusChipFillOpacity(isDark: input.isDark, isActive: isActive))))
-            )
-            .contentShape(Capsule(style: .continuous))
-    }
-
-    /// Sur la ligne BASSE de la carte du message en focus, dans CET ordre
-    /// (directive 2026-08-22) : l'icône de traduction (détails), les
-    /// drapeaux (afficher le contenu dans cette langue), le (+) emoji, puis
-    /// les réactions — fond PLEIN quand j'ai réagi. Superposition : aucune
-    /// hauteur réservée, donc affichage instantané au tick d'élection.
-    private var focusStrip: some View {
-        HStack(alignment: .center, spacing: 4) {
-            if let translation = content.translation, !content.requiresVeil {
-                Button {
-                    actions.onShowTranslationDetail?(content.messageId)
-                } label: {
-                    focusChip {
-                        Image(systemName: "character.bubble")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(focusAccent)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "focal.focus.translation_detail", defaultValue: "Détails de traduction", bundle: .main))
-                ForEach(
-                    Self.focusFlagCodes(
-                        originalLangCode: translation.originalLangCode,
-                        availableFlags: translation.availableFlags,
-                        activeLangCode: translation.activeLangCode,
-                        limit: FocalMetrics.FocusStrip.flagLimitMagnified
-                    ),
-                    id: \.self
-                ) { code in
-                    // DIXIÈME copie (252i, #4260). Elle garde sa VUE — le fond
-                    // `focusChip` n'existe que sur la bande magnifiée, et
-                    // `LanguageFlagChip` étant un `Button`, l'adopter ici
-                    // imbriquerait un bouton dans un bouton. Elle prend donc le
-                    // VOCABULAIRE : même table, même repli, étiquette d'action,
-                    // état porté par un trait et non par le seul fond de puce.
-                    Button {
-                        actions.onSetActiveDisplayLanguage?(content.messageId, code)
-                    } label: {
-                        focusChip(isActive: code.lowercased() == translation.activeLangCode.lowercased()) {
-                            Text(LanguageFlagChip.flag(for: code)).font(MeeshyFont.relative(MeeshyFont.smallSize))
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .languageFlagAccessibility(
-                        code: code,
-                        isActive: code.lowercased() == translation.activeLangCode.lowercased()
-                    )
-                }
-            }
-            Button {
-                actions.onOpenReactPicker?(content.messageId)
-            } label: {
-                focusChip {
-                    Image(systemName: "face.smiling")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(focusAccent)
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "focal.focus.add_reaction", defaultValue: "Ajouter une réaction", bundle: .main))
-            ForEach(content.reactions, id: \.emoji) { reaction in
-                focusReactionChip(reaction)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.leading, FocalMetrics.FocusStrip.chipInset)
-    }
-
-    /// Réaction sur la ligne : fond PLEIN (accent) si j'ai réagi, sinon la
-    /// chip neutre ; toucher = basculer, maintenir = qui a réagi.
-    private func focusReactionChip(_ reaction: MeeshyReactionSummary) -> some View {
-        let mine = reaction.includesMe
-        return Button {
-            HapticFeedback.light()
-            actions.onToggleReaction?(reaction.emoji)
-        } label: {
-            focusChip(filled: mine) {
-                HStack(spacing: MeeshySpacing.xxs) {
-                    Text(reaction.emoji).font(.caption2)
-                    if reaction.count > 1 {
-                        Text("\(reaction.count)")
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(mine ? .white : focusAccent)
-                    }
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-            HapticFeedback.medium()
-            actions.onShowReactions?(content.messageId)
-        })
-        .accessibilityLabel("\(reaction.emoji) \(reaction.count)")
-    }
-
-    /// Le FOND du message long DÉPLIÉ (#8147), dessiné dans le repère du
-    /// CONTENU. Mêmes cotes que `focusCardInsets` : il dépasse le bloc de
-    /// `focusCardInnerMargin` en haut et en bas, et s'arrête à
-    /// `focusCardHorizontalInset` du bord de la cellule.
-    private var focusCardBackground: some View {
-        FocalGlassBlock()
-            .padding(.horizontal, -(FocalMetrics.Row.paddingHorizontal - FocalScrollPerspective.focusCardHorizontalInset))
-            .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)
-    }
-
-    /// Le CADRE de l'élu Focal (#8506), fond de la colonne du message : il
-    /// englobe l'identité posée au-dessus du contenu descendu, le contenu
-    /// GROSSI (#8537) et la bande posée dessous, à `electedCardMargin` de
-    /// chacun — la disposition que la passe mesure (`electedGeometry`).
-    private func electedCardBackground(_ elected: FocalElectedContent?) -> some View {
-        GeometryReader { proxy in
-            let margin = FocalScrollPerspective.electedCardMargin
-            let span = electedSpan(elected, in: proxy)
-            FocalGlassBlock()
-                .padding(.leading, -margin)
-                .padding(.trailing, -(margin + span.extraWidth))
-                .padding(.top, -(focusLift + margin))
-                .padding(.bottom, -(span.stripTop + FocalMetrics.FocusStrip.chipHeight + margin - proxy.size.height))
-        }
-    }
-
-    /// La bande basse de l'élu — pastille de langue, drapeaux, réactions, date —
-    /// à l'échelle 1, sous le contenu grossi, sur toute la largeur du cadre.
-    private func electedStrip(_ elected: FocalElectedContent?) -> some View {
-        GeometryReader { proxy in
-            let span = electedSpan(elected, in: proxy)
-            HStack(alignment: .center, spacing: 4) {
-                focusStrip
-                Spacer(minLength: 4)
-                focusStampChip
-            }
-            .frame(width: proxy.size.width + span.extraWidth, height: FocalMetrics.FocusStrip.chipHeight)
-            .offset(y: span.stripTop)
-        }
-    }
-
-    private func electedSpan(_ elected: FocalElectedContent?, in proxy: GeometryProxy) -> (extraWidth: CGFloat, stripTop: CGFloat) {
-        let bounds = elected.map { proxy[$0.bounds] } ?? CGRect(x: 0, y: 0, width: 0, height: proxy.size.height)
-        let scale = elected?.scale ?? 1
-        return (
-            FocalScrollPerspective.electedExtraWidth(columnWidth: proxy.size.width, contentWidth: bounds.width, scale: scale),
-            FocalScrollPerspective.electedStripTop(columnHeight: proxy.size.height, contentMinY: bounds.minY, contentHeight: bounds.height, scale: scale)
-        )
-    }
-
-    /// HAUT-GAUCHE : l'auteur, en haut du cadre — pour TOUTES
-    /// les bulles en focus.
-    ///
-    /// **Directive 2026-08-24.** Cette chip recomposait une identité PAUVRE :
-    /// un avatar et un nom, rien d'autre. La présence, le mood, l'anneau de
-    /// story et le fantôme d'un visiteur sans compte — tout ce que
-    /// `FocalIdentityHeader` sait déjà porter — s'évaporaient au moment
-    /// précis où le message est le plus regardé. Elle réemploie donc l'en-tête,
-    /// à un gabarit plus grand, au lieu d'en réécrire une version amputée.
-    ///
-    /// Elle vit DANS le cadre depuis #8506, à sa marge — plus à cheval sur
-    /// sa ligne haute.
-    ///
-    /// Le toucher passe par `onOpenProfile`, le routage que l'hôte tient
-    /// déjà : la feuille de PROFIL pour un compte, la fiche de participation
-    /// pour un visiteur qui n'en a pas — lui n'a pas d'autre identité que
-    /// celle-là. (Cette fiche s'ouvrait pleine d'identifiants bruts : ses 39
-    /// clés étaient au catalogue sans une seule valeur française. Réparé le
-    /// même jour, avec la garde qui manquait.)
-    private var focusIdentityChip: some View {
-        focusChip(height: FocalMetrics.FocusStrip.identityChipHeight) {
-            FocalIdentityHeader(
-            isMe: content.isMe,
-                senderDisplayName: input.senderDisplayName,
-                senderUsername: input.senderUsername,
-                senderAvatarURL: input.senderAvatarURL,
-                senderThumbHash: input.senderThumbHash,
-                senderColorHex: input.senderColorHex,
-                senderPresence: input.senderPresence,
-                senderIsHere: input.senderIsHere,
-                senderStoryRing: input.senderStoryRing,
-                senderMoodEmoji: input.senderMoodEmoji,
-                senderIsAnonymous: input.senderIsAnonymous,
-                profileUser: input.profileSheetUser,
-            isDark: input.isDark,
-                agentStyle: AgentAuthoredStyle.resolve(
-                isAgentAuthored: input.isAgentAuthored,
-                isAgentGrammarEnabled: input.showsAgentGrammar
-                ),
-                onOpenProfile: actions.onOpenProfile,
-                onMoodTap: actions.onMoodTap,
-                avatarDiameter: FocalMetrics.FocusStrip.identityAvatarSize,
-                nameSize: FocalMetrics.FocusStrip.identityNameSize,
-                fillsWidth: false
-            )
-            .padding(.leading, -3)
-        }
-    }
-
-    /// BAS-DROITE : date complète (pré-calculée) + coche d'état de réception
-    /// (mes messages), sur la ligne basse à côté de la bande — toucher = les
-    /// DÉTAILS du message, la feuille qu'ouvre « Infos » (#8537). Elle a quitté la ligne du HAUT le 2026-08-23 : la
-    /// carte affichait alors sa date deux fois, en haut par cette chip et en
-    /// bas par la méta.
-    private var focusStampChip: some View {
-        let metaTint: Color = input.isDark ? .white.opacity(FocalMetrics.MetaText.darkOpacity) : .black.opacity(FocalMetrics.MetaText.lightOpacity)
-        let readTint: Color = input.isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo600
-        return Button {
-            actions.onShowMessageInfo?(content.messageId)
-        } label: {
-            focusChip {
-                HStack(spacing: 4) {
-                    Text(headerTimeString)
-                        .font(MeeshyFont.relative(10.5, weight: .semibold))
-                        .foregroundColor(metaTint)
-                        .lineLimit(1)
-                    if content.isMe, let status = content.meta.deliveryStatus {
-                        BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)
-                    }
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(headerTimeString)
     }
 
     /// Les drapeaux d'une rangée ORDINAIRE — trois au plus.

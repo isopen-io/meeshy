@@ -525,7 +525,8 @@ struct ComposerDocumentSurface: View {
             // Loi 6 — une vignette montre la DONNÉE. Le ThumbHash évite le
             // rond vide pendant que l'image arrive : le substitut porte
             // déjà les couleurs du vrai avatar.
-            thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
+            thumbHash: AuthManager.shared.currentUser?.avatarThumbHash,
+            ring: AuthManager.shared.currentUser?.profileDecor?.avatarRing
         )
         .padding(.leading, MeeshySpacing.lg)
         .accessibilityHidden(true)

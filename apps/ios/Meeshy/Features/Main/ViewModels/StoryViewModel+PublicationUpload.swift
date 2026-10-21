@@ -852,9 +852,11 @@ extension StoryViewModel {
     }
 
     /// Seul un fichier écrit sous l'extension d'un conteneur ANIMÉ en porte
-    /// (`StoryOfflineMediaWriter`) ; les JPEG et PNG fixes ne sont pas relus.
+    /// (`StoryOfflineMediaWriter`). Un `.png` est relu, car un Mee part en PNG
+    /// animé (#10639) ; `container` écarte le PNG fixe, qui n'a pas d'`acTL`.
+    /// Les JPEG ne sont pas relus.
     private static func animatedStickerBytes(at url: URL) -> Data? {
-        guard ["gif", "webp"].contains(url.pathExtension.lowercased()),
+        guard ["gif", "webp", "png"].contains(url.pathExtension.lowercased()),
               let data = try? Data(contentsOf: url),
               AnimatedImageEligibility.container(data) != nil else { return nil }
         return data
@@ -869,10 +871,8 @@ extension StoryViewModel {
         // se termine (ou qu'on annule) déclenche. Elle partirait NUE, en
         // parallèle du drain de fond qui détient peut-être encore l'item :
         // exactement la double publication que la phase ferme au premier tap.
-        mutateUpload(id: id) {
-            $0.progress = 0
-            $0.phase = .preparing
-        }
+        mutateUpload(id: id) { $0.phase = .preparing }
+        uploadProgress.forget(id: id)
         // Le VM détient DÉJÀ la revendication (cas nominal du retry après un
         // commit partiel : elle lui est conservée parce que lui seul sait où
         // reprendre). Re-revendiquer refuserait sa propre claim et figerait la

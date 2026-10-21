@@ -6,9 +6,9 @@
  * chunks des stickers n'embarquent pas ces schémas.
  */
 import * as z from 'zod/mini';
-import { FrameUsageSchema, type FrameUsage } from './frame-usage.js';
+import { FrameUsageSchema, type FrameUsage, type FreeFrameSurface } from './frame-usage.js';
 import { GLORY_ATMOSPHERES } from './glory-atmospheres.js';
-import { PACK_DOMAINS, PACK_LANGUAGES, PACK_LIMITS, PACK_SLUG_PATTERN, type PackAssetRef, type PackDefault, type PackDomain } from './content-pack.js';
+import { PACK_DOMAINS, PACK_PRICE_MAX, PACK_LANGUAGES, PACK_LIMITS, PACK_SLUG_PATTERN, type PackAssetRef, type PackDefault, type PackDomain } from './content-pack.js';
 
 // ── Les fichiers adressés par contenu ───────────────────────────────────
 
@@ -37,14 +37,33 @@ const collectionSchema = z.object({
   usage: z.optional(FrameUsageSchema),
 });
 
+/** Les domaines dont les packs portent des cadres, donc un usage. */
+const FRAME_DOMAINS: readonly PackDomain[] = ['glory-frame', 'capture-frame', 'avatar-ring', 'banner-frame'];
+
+/** Les domaines LIBRES (jamais une récompense du jeu). */
+const FREE_FRAME_DOMAINS: readonly PackDomain[] = ['capture-frame', 'avatar-ring', 'banner-frame'];
+
+/**
+ * Les surfaces RÉSERVÉES : chacune n'est déclarée que par son domaine, et ce
+ * domaine ne déclare qu'elle. Les anciens clients iOS rejetteraient une surface
+ * inconnue : une surface neuve ne voyage donc que dans le domaine neuf.
+ */
+const CONFINED_SURFACES: readonly { readonly surface: FreeFrameSurface; readonly domain: PackDomain }[] = [
+  { surface: 'avatar', domain: 'avatar-ring' },
+  { surface: 'banner', domain: 'banner-frame' },
+];
+
 type DeclaredUsages = { readonly usage?: FrameUsage; readonly collections?: readonly { readonly usage?: FrameUsage }[] };
 
 const declaredUsages = (entry: DeclaredUsages): readonly FrameUsage[] =>
   [entry.usage, ...(entry.collections ?? []).map((collection) => collection.usage)].filter((usage): usage is FrameUsage => usage !== undefined);
 
 /** Un cadre de gloire récompense le jeu, jamais une capture libre ; un cadre de capture est libre, jamais une récompense du jeu. */
-const usageFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain }): boolean =>
-  entry.domain === 'sticker' || declaredUsages(entry).every((usage) => (usage.kind === 'free') === (entry.domain === 'capture-frame'));
+const usageFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain }): boolean => {
+  if (!FRAME_DOMAINS.includes(entry.domain)) return entry.domain === 'sticker' || declaredUsages(entry).length === 0;
+  const freeDomain = FREE_FRAME_DOMAINS.includes(entry.domain);
+  return declaredUsages(entry).every((usage) => (usage.kind === 'free') === freeDomain) && surfacesConfined(entry);
+};
 
 /**
  * Un pack de stickers n'a pas d'usage ; un pack de CAPTURE porte le sien ; un
@@ -55,8 +74,21 @@ const usageFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain }
  * cadre (#10154). Jamais un usage de pack qui mentirait sur ses cadres.
  */
 const packUsageDeclared = (entry: { readonly domain: PackDomain; readonly usage?: FrameUsage }): boolean => {
-  if (entry.domain === 'sticker') return entry.usage === undefined;
+  if (!FRAME_DOMAINS.includes(entry.domain)) return entry.usage === undefined;
   return entry.domain === 'glory-frame' || entry.usage !== undefined;
+};
+
+const sameSurfaces = (surfaces: readonly string[], expected: readonly string[]): boolean =>
+  surfaces.length === expected.length && expected.every((surface) => surfaces.includes(surface));
+
+/** Un contour d'avatar sert l'avatar et rien d'autre, un cadre de bannière la bannière et rien d'autre ; aucun autre domaine ne déclare ces surfaces. */
+const surfacesConfined = (entry: DeclaredUsages & { readonly domain: PackDomain }): boolean => {
+  const own = CONFINED_SURFACES.find((confined) => confined.domain === entry.domain);
+  return declaredUsages(entry).every((usage) => {
+    if (usage.kind !== 'free') return own === undefined;
+    if (own !== undefined) return sameSurfaces(usage.surfaces, [own.surface]);
+    return CONFINED_SURFACES.every((confined) => !usage.surfaces.includes(confined.surface));
+  });
 };
 
 /**
@@ -83,6 +115,8 @@ export const PackIndexEntrySchema = z
     downloadBytes: z.object({ story: z.int().check(z.minimum(0)), square: z.nullable(z.int().check(z.minimum(0))) }),
     names: z.partialRecord(z.enum(PACK_LANGUAGES), nameSchema),
     usage: z.optional(FrameUsageSchema),
+    /** Le prix en Meeshes (#10632) : absent = gratuit, jamais 0 ; jamais sur un pack intégré. */
+    price: z.optional(z.int().check(z.minimum(1), z.maximum(PACK_PRICE_MAX))),
     collections: z.optional(z.array(collectionSchema)),
     atmosphere: z.optional(z.enum(GLORY_ATMOSPHERES)),
   })
@@ -91,6 +125,7 @@ export const PackIndexEntrySchema = z
     z.refine(usageFitsDomain),
     z.refine((entry) => entry.atmosphere === undefined || entry.domain === 'glory-frame'),
     z.refine((entry) => entry.removable || entry.installedByDefault),
+    z.refine((entry) => entry.price === undefined || entry.origin !== 'builtin'),
     z.refine((entry) => entry.names.fr !== undefined),
   );
 

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSS
 import { saveButtonVisible, type CaptureZone, type FrameChoice } from '@meeshy/shared/utils/capture/capture-save';
 
 import { GameBird, useChoreography } from '@/components/game';
+import { authorPlateOf, type PhotoAuthor } from '@/lib/game-photo/author-plate';
 import type { CameraFailure, CameraSession } from '@/lib/game-photo/camera';
 import type { PhotoSource } from '@/lib/game-photo/compose';
 import type { PhotoEnv } from '@/lib/game-photo/env';
@@ -14,10 +15,12 @@ import type { PhotoFiles } from '@/lib/game-photo/render';
 import type { ShareOutcome } from '@/lib/game-photo/share';
 import { dateLabelOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
+import { usePhotoAuthor } from '@/lib/game-photo/use-photo-author';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
 import { gameText } from '@/lib/view/game-copy';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
+import { GameAuthorCard } from './game-author-card';
 import { GamePhotoFrame } from './game-photo-frame';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-surface';
 
@@ -56,6 +59,8 @@ type Props = {
   readonly onClose: (result: PhotoFlowResult) => void;
   /** Les jours de la Flamme (#7742) : le bandeau de la carte les porte à côté du lien de parrainage. */
   readonly flameDays?: number | null;
+  /** L'auteur dont la plaque grave le pseudo (#10816) ; absent : le lecteur ; `null` : aucune plaque. */
+  readonly author?: PhotoAuthor | null;
 };
 
 const BUTTON = { minHeight: 44 } as const;
@@ -99,7 +104,10 @@ function Button({ attr, primary = false, onClick, children, disabled = false }: 
   );
 }
 
-export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props) {
+export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: givenAuthor }: Props) {
+  const viewerAuthor = usePhotoAuthor();
+  const author = givenAuthor === undefined ? viewerAuthor : givenAuthor;
+  const plate = useMemo(() => authorPlateOf(moment.emblem, author), [moment.emblem, author]);
   const [state, dispatch] = useReducer(flowReducer, { step: 'offer' } as FlowState);
   const panel = useRef<HTMLDivElement>(null);
   const close = useCallback(() => dispatch({ type: 'close' }), []);
@@ -533,15 +541,19 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
 
         {state.step === 'offer' ? (
           <div className="flex flex-col gap-3">
+            {plate === null ? null : <GameAuthorCard moment={moment} plate={plate} dateLabel={dateLabel} />}
             <div className="flex items-end gap-2">
               <GameBird bird="meeGuide" size={72} />
               <div className="min-w-0 flex-1 pb-1">
                 <p className="text-title font-bold" style={{ color: GAME_INK }}>
                   {gameText('game.photo.offer.title')}
                 </p>
-                <p className="text-body" style={{ color: GAME_INK_2 }}>
-                  {moment.title}
-                </p>
+                {/* La carte posée dit déjà le moment : le titre ne se répète pas sous elle. */}
+                {plate !== null ? null : (
+                  <p className="text-body" style={{ color: GAME_INK_2 }}>
+                    {moment.title}
+                  </p>
+                )}
               </div>
               <GameBird bird="meoGuide" size={72} flip />
             </div>
@@ -576,7 +588,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
               <img data-photo-still="" src={stillUrl} alt="" className="absolute inset-0 size-full object-cover" style={{ transform: 'scaleX(-1)' }} />
             ) : null}
             {stageMode === 'gallery' && galleryUrl !== null ? <img src={galleryUrl} alt="" className="absolute inset-0 size-full object-cover" /> : null}
-            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={referral} />
+            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" author={author} referral={referral} />
           </div>
         ) : null}
 
@@ -595,7 +607,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
               style={{ width: 72, aspectRatio: '9 / 16', backgroundColor: 'var(--ios-indigo-950)', boxShadow: `0 0 0 3px ${GAME_BRAND}` }}
             >
               <video ref={tileVideo} playsInline muted autoPlay className="absolute inset-0 size-full object-cover" style={{ transform: 'scaleX(-1)' }} />
-              <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={null} />
+              <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" author={author} referral={null} />
             </span>
             <span data-photo-take-label="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
               {moment.title}
@@ -614,6 +626,11 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
               <p role="alert" className="text-body" style={{ color: GAME_ERROR }}>
                 {cameraMessage(state.camera)}
               </p>
+            ) : null}
+            {state.camera === 'denied' && env.openSettings ? (
+              <Button attr={{ 'data-photo-camera-settings': '' }} onClick={env.openSettings}>
+                {gameText('game.photo.camera.settings')}
+              </Button>
             ) : null}
             {galleryError ? (
               <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
@@ -693,7 +710,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null }: Props)
 
         {state.step === 'result' && composedReferral?.placeholder === true ? (
           <div ref={artFrame} hidden data-photo-art-frame="" className="relative" style={{ aspectRatio: '9 / 16' }}>
-            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" referral={composedReferral} />
+            <GamePhotoFrame moment={moment} dateLabel={dateLabel} format="story" author={author} referral={composedReferral} />
           </div>
         ) : null}
 

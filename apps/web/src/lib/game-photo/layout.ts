@@ -52,6 +52,8 @@ export type PhotoLayout = {
   readonly mee: Rect;
   readonly meo: Rect;
   readonly signature: Rect;
+  /** La plaque d'auteur (#10816) : sous la date en 9:16, entre Mee et Meo en 1:1 ; à la proportion du cartouche. */
+  readonly author: Rect;
 };
 
 type Proportions = {
@@ -80,6 +82,11 @@ const MARGIN = 0.05;
 const BANNER_HEIGHT = 0.2;
 const BANNER_GAP = 0.02;
 const QR_SIDE = 0.84;
+
+/** Le cartouche de la plaque d'auteur (360 × 100, `author-plate.tsx`). */
+export const AUTHOR_PLATE_RATIO = 3.6;
+/** Sa largeur, en fraction de la largeur : en 1:1 elle tient ENTRE les oiseaux. */
+const AUTHOR_WIDTH: Readonly<Record<PhotoFormat, number>> = { story: 0.7, square: 0.44 };
 
 const flipRect = (rect: Rect, width: number): Rect => ({ ...rect, x: width - rect.x - rect.w });
 const flipLine = (line: TextLine, width: number): TextLine => ({ ...line, x: width - line.x });
@@ -131,6 +138,11 @@ export function photoLayout(format: PhotoFormat, options: { readonly banner?: bo
   const ltr = withBanner ? bannerOf(width, height) : undefined;
   const banner = ltr !== undefined && options.rtl === true ? mirrored(ltr, width) : ltr;
   const birdTop = (banner === undefined ? height - margin : banner.frame.y - width * BANNER_GAP) - bird;
+  const plateW = width * AUTHOR_WIDTH[format];
+  const plateH = plateW / AUTHOR_PLATE_RATIO;
+  /* En 1:1 sans bandeau, la Signature est au pied, au centre : la plaque se pose juste au-dessus d'elle. */
+  const squarePlateY = banner === undefined ? height - margin - signature - width * 0.01 - plateH : birdTop + (bird - plateH) / 2;
+  const plateY = format === 'story' ? height * p.dateY + width * 0.05 : squarePlateY;
   return {
     ...(banner === undefined ? {} : { banner }),
     width,
@@ -142,6 +154,7 @@ export function photoLayout(format: PhotoFormat, options: { readonly banner?: bo
     mee: { x: margin, y: birdTop, w: bird, h: bird },
     meo: { x: width - margin - bird, y: birdTop, w: bird, h: bird },
     signature: banner === undefined ? { x: (width - signature) / 2, y: height - margin - signature, w: signature, h: signature } : banner.signature,
+    author: { x: (width - plateW) / 2, y: plateY, w: plateW, h: plateH },
   };
 }
 

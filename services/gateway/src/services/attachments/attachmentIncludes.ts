@@ -324,6 +324,7 @@ export const attachmentTranslateSelect = Prisma.validator<Prisma.MessageAttachme
   messageId: true,
   mimeType: true,
   uploadedBy: true,
+  isViewOnce: true,
   isForwarded: true,
   forwardedFromAttachmentId: true,
   duration: true,

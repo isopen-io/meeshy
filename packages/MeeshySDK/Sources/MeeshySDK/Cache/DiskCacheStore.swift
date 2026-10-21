@@ -12,7 +12,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     nonisolated(unsafe) let memoryCache: NSCache<NSString, CacheBox>
     private let baseDirectory: URL
     let fileManager = FileManager.default
-    let logger = Logger(subsystem: "com.meeshy.sdk", category: "disk-cache")
+    let logger = MeeshyLog.logger(.diskCache, subsystem: .legacySDK)
     var inFlightTasks: [String: InFlightDownload] = [:]
     var fileTimestamps: [String: Date] = [:]
     private let urlSession: URLSession
@@ -509,10 +509,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     func evict(_ key: String) async {
         await invalidate(for: key)
         let fileKey = Self.fileKey(for: key)
-        Self._imageCache.removeObject(forKey: fileKey as NSString)
-        for bucket in Self.pixelSizeBuckets {
-            Self._imageCache.removeObject(forKey: Self.imageCacheKey(fileKey: fileKey, bucket: bucket))
-        }
+        DecodedBitmapStore.removeVariants(fileKey: fileKey)
     }
 
     public func remove(for key: String) async {
@@ -677,21 +674,14 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     // MARK: - UIImage Cache
 
-    nonisolated(unsafe) private static let _imageCache: NSCache<NSString, UIImage> = {
-        let cache = NSCache<NSString, UIImage>()
-        cache.countLimit = 150
-        cache.totalCostLimit = 80 * 1024 * 1024
-        return cache
-    }()
-
     @MainActor
     public static func clearImageCache() {
-        _imageCache.removeAllObjects()
+        DecodedBitmapStore.removeAll()
     }
 
     nonisolated public static func cachedImage(for urlString: String) -> UIImage? {
         let key = fileKey(for: urlString) as NSString
-        return _imageCache.object(forKey: key)
+        return DecodedBitmapStore.image(forKey: key)
     }
 
     /// Cold-start synchronous warm : retourne l'image immediatement si elle
@@ -718,7 +708,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         // fil principal). Le plafond couvre la hauteur d'un écran : un poster
         // plein écran (#3871) reste net, une photo d'appareil ne l'est plus en trop.
         guard let fileURL = cachedFileURL(for: urlString),
-              let image = Self.downsampledImage(fileURL: fileURL, maxPixelSize: Self.warmedPixelCap) else {
+              let image = DecodedBitmapStore.downsampledImage(fileURL: fileURL, maxPixelSize: Self.warmedPixelCap) else {
             return nil
         }
         // #3897 — `cacheIfWithinBudget`, pas une insertion `setObject`
@@ -733,50 +723,13 @@ public actor DiskCacheStore: ReadableCacheStore {
         // autres chemins d'insertion (`cacheImageForPreview`, `image(for:
         // maxPixelSize:)`), dont le doc-comment de `cacheIfWithinBudget`
         // affirmait à tort que `warmedImage` le partageait déjà.
-        Self.cacheIfWithinBudget(image, key: Self.fileKey(for: urlString))
+        DecodedBitmapStore.insertWithinBudget(image, key: Self.fileKey(for: urlString))
         return image
     }
 
-    /// Hard cap for the decoded bitmap we will keep resident in the NSCache
-    /// (in bytes). A malicious or accidentally-huge image (e.g. 20K×20K JPEG
-    /// that decodes to >1 GB of pixel data) would otherwise blow the NSCache
-    /// budget and trigger a memory warning, evicting everything else. We
-    /// decode to check dimensions, then refuse to cache anything above the
-    /// threshold — the `UIImage` still returns so the caller can display it
-    /// once, but we won't hold onto it.
-    private static let maxCacheableDecodedBytes: Int = 50 * 1024 * 1024 // 50 MB
-
-    /// **Décode à la taille d'affichage, jamais l'image pleine** (#9685) :
-    /// `CGImageSourceCreateThumbnailAtIndex` borne le plus grand côté à
-    /// `maxPixelSize` (taille affichée × échelle, quantifiée par `pixelBucket`),
-    /// et `kCGImageSourceShouldCacheImmediately` force le décodage ICI — hors du
-    /// fil principal sur le chemin asynchrone de l'acteur —, au lieu de le laisser
-    /// au premier dessin.
+    /// Décodage réduit (#9685) : voir `DecodedBitmapStore.downsampledImage(data:maxPixelSize:)`.
     static func downsampledImage(data: Data, maxPixelSize: CGFloat = 1200) -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(maxPixelSize))
-        else { return UIImage(data: data) }
-        return UIImage(cgImage: cgImage)
-    }
-
-    /// Même réduction, lue directement depuis le fichier du cache (aucune copie
-    /// des octets en mémoire).
-    static func downsampledImage(fileURL: URL, maxPixelSize: CGFloat) -> UIImage? {
-        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, sourceOptions),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(maxPixelSize))
-        else { return nil }
-        return UIImage(cgImage: cgImage)
-    }
-
-    private static func thumbnailOptions(_ maxPixelSize: CGFloat) -> CFDictionary {
-        [
-            kCGImageSourceShouldCache: false,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-        ] as CFDictionary
+        DecodedBitmapStore.downsampledImage(data: data, maxPixelSize: maxPixelSize)
     }
 
     public func image(for urlString: String) async -> UIImage? {
@@ -794,62 +747,30 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// `warmedImage(for:)` have always used.
     public static let fullFormatPixelCap: CGFloat = 1200
 
-    /// Quantized decode ceilings for below-full-format requests. Decoding at
-    /// the bucket ceiling (never the exact requested size) bounds the number
-    /// of resident variants per URL while never serving an under-resolved
-    /// bitmap: the bucket is always >= the request.
-    private static let pixelSizeBuckets: [CGFloat] = [128, 256, 512, 768, 1024]
-
-    /// Bucket ceiling for a requested pixel size — `nil` when the request
-    /// belongs to the canonical full-format slot.
-    private static func pixelBucket(for maxPixelSize: CGFloat) -> CGFloat? {
-        pixelSizeBuckets.first { $0 >= maxPixelSize }
-    }
-
-    /// NSCache key of a decoded variant. Sized variants are suffixed so a
-    /// 128 px avatar decode can never occupy — nor be served from — the slot
-    /// a full-screen surface reads. The bare key remains reserved for the
-    /// full-format decode.
-    private static func imageCacheKey(fileKey: String, bucket: CGFloat?) -> NSString {
-        guard let bucket else { return fileKey as NSString }
-        return "\(fileKey)#px\(Int(bucket))" as NSString
-    }
-
-    /// Sized-slot probe mirroring `cachedImage(for:)` — same bucketing as
-    /// `image(for:maxPixelSize:)`, so a view that loads with a `targetSize`
-    /// can find its own variant synchronously at init.
     nonisolated public static func cachedImage(for urlString: String, maxPixelSize: CGFloat) -> UIImage? {
-        let key = imageCacheKey(fileKey: fileKey(for: urlString), bucket: pixelBucket(for: maxPixelSize))
-        return _imageCache.object(forKey: key)
+        DecodedBitmapStore.image(forKey: DecodedBitmapStore.cacheKey(fileKey: fileKey(for: urlString), bucket: DecodedBitmapStore.bucket(for: maxPixelSize)))
     }
 
-    /// « Une variante décodée, n'importe laquelle, est-elle résidente ? » —
-    /// probe de résidence (badge de téléchargement, gates) qui ne doit pas
-    /// dépendre du bucket sous lequel la surface d'affichage a décodé.
     nonisolated public static func hasAnyCachedImageVariant(for urlString: String) -> Bool {
-        let fileKey = fileKey(for: urlString)
-        if _imageCache.object(forKey: fileKey as NSString) != nil { return true }
-        return pixelSizeBuckets.contains { bucket in
-            _imageCache.object(forKey: imageCacheKey(fileKey: fileKey, bucket: bucket)) != nil
-        }
+        DecodedBitmapStore.hasAnyVariant(fileKey: fileKey(for: urlString))
     }
 
     public func image(for urlString: String, maxPixelSize: CGFloat) async -> UIImage? {
         let fileKey = Self.fileKey(for: urlString)
-        let bucket = Self.pixelBucket(for: maxPixelSize)
-        let cacheKey = Self.imageCacheKey(fileKey: fileKey, bucket: bucket)
+        let bucket = DecodedBitmapStore.bucket(for: maxPixelSize)
+        let cacheKey = DecodedBitmapStore.cacheKey(fileKey: fileKey, bucket: bucket)
         // Hors bucket (> 1024) : décoder à la taille DEMANDÉE, comme avant —
         // une bannière iPad full-bleed peut requérir 2048 px ; la rabattre au
         // cap 1200 la rendrait visiblement plus douce qu'avant ce changement.
         let decodePixelSize = bucket ?? maxPixelSize
 
-        if let cached = Self._imageCache.object(forKey: cacheKey) {
+        if let cached = DecodedBitmapStore.image(forKey: cacheKey) {
             return cached
         }
 
         let result = await load(for: urlString)
-        if let data = result.snapshot()?.first, let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
-            Self.cacheIfWithinBudget(image, key: cacheKey as String)
+        if let data = result.snapshot()?.first, let image = DecodedBitmapStore.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
+            DecodedBitmapStore.insertWithinBudget(image, key: cacheKey as String)
             return image
         }
 
@@ -859,8 +780,8 @@ public actor DiskCacheStore: ReadableCacheStore {
         if url.scheme == "file" {
             do {
                 let data = try Data(contentsOf: url)
-                if let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
-                    Self.cacheIfWithinBudget(image, key: cacheKey as String)
+                if let image = DecodedBitmapStore.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
+                    DecodedBitmapStore.insertWithinBudget(image, key: cacheKey as String)
                     return image
                 }
             } catch {
@@ -875,31 +796,14 @@ public actor DiskCacheStore: ReadableCacheStore {
             // the same key (prefetcher, CachedAsyncImage, another cell) and
             // persists to disk inside the task.
             let data = try await networkData(for: urlString, url: url)
-            guard let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) else { return nil }
+            guard let image = DecodedBitmapStore.downsampledImage(data: data, maxPixelSize: decodePixelSize) else { return nil }
             if !transientKeys.contains(fileKey) {
-                Self.cacheIfWithinBudget(image, key: cacheKey as String)
+                DecodedBitmapStore.insertWithinBudget(image, key: cacheKey as String)
             }
             return image
         } catch {
             return nil
         }
-    }
-
-    /// Centralised NSCache insertion with a size guard so a single oversized
-    /// image never evicts the rest of the in-memory cache. We compute the
-    /// decoded cost once and skip caching when it blows past
-    /// `maxCacheableDecodedBytes` — the caller still gets the `UIImage`, it
-    /// just won't be kept around for the next scroll.
-    private nonisolated static func cacheIfWithinBudget(_ image: UIImage, key: String) {
-        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-        guard cost > 0, cost <= maxCacheableDecodedBytes else { return }
-        // Insert synchronously. `NSCache` mutations are thread-safe, so the
-        // previous `Task { @MainActor … }` deferral bought nothing and created a
-        // race: the image wasn't resident yet when `image(for:)` returned, so a
-        // synchronous `cachedImage(for:)` immediately after still missed (and
-        // the UI showed a thumbHash flash for one extra frame). Matches the
-        // direct insertion already used by `warmedImage(for:)`.
-        Self._imageCache.setObject(image, forKey: key as NSString, cost: cost)
     }
 
     /// Configure the in-memory UIImage cache limits at app startup.
@@ -910,7 +814,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     ///   resident. Default at init-time is 80 MB; recommended app-level value
     ///   is 60 MB to leave headroom for UIKit/Metal allocations.
     public nonisolated static func configureImageCache(memoryCostLimitBytes: Int) {
-        _imageCache.totalCostLimit = memoryCostLimitBytes
+        DecodedBitmapStore.configure(memoryCostLimitBytes: memoryCostLimitBytes)
     }
 
     /// Pre-cache an image in the static UIImage NSCache for immediate display
@@ -924,7 +828,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// read on the optimistic-send path, plus skipped the oversized-bitmap
     /// budget guard entirely.
     public nonisolated static func cacheImageForPreview(_ image: UIImage, key: String) {
-        Self.cacheIfWithinBudget(image, key: Self.fileKey(for: key))
+        DecodedBitmapStore.insertWithinBudget(image, key: Self.fileKey(for: key))
     }
 
     // MARK: - File Key

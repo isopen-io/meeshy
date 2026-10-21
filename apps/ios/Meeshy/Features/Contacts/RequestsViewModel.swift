@@ -40,7 +40,7 @@ final class RequestsViewModel: ObservableObject {
     private let receivedKey = FriendshipCache.PersistenceKeys.receivedRequests
     private let sentKey = FriendshipCache.PersistenceKeys.sentRequests
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "requests")
+    private static let logger = MeeshyLog.logger(.requests)
 
     init(
         friendService: FriendServiceProviding = FriendService.shared,
@@ -202,7 +202,7 @@ final class RequestsViewModel: ObservableObject {
     // done — the OutboxFlusher cleans up the wire side in the background.
 
     func accept(requestId: String) async {
-        let snapshot = receivedRequests
+        let removal = RequestRemoval(requestId, in: receivedRequests)
         let cmid = ClientMutationId.generate()
         // Capture the senderId AND the full FriendRequestUser BEFORE we
         // remove the row — we need senderId to flip the FriendshipCache and
@@ -232,7 +232,7 @@ final class RequestsViewModel: ObservableObject {
         observeOutcome(
             cmid: cmid,
             rollback: { [weak self] in
-                self?.receivedRequests = snapshot
+                self?.restoreReceived(removal)
                 if let senderId {
                     FriendshipCache.shared.rollbackAccept(senderId: senderId, requestId: requestId)
                 }
@@ -248,7 +248,7 @@ final class RequestsViewModel: ObservableObject {
             try await offlineQueue.enqueue(.respondFriendRequest, payload: payload, conversationId: nil)
             FeedbackToastManager.shared.showSuccess(String(localized: "contacts.requests.accept.success", defaultValue: "Connexion acceptée", bundle: .main))
         } catch {
-            receivedRequests = snapshot
+            restoreReceived(removal)
             if let senderId {
                 FriendshipCache.shared.rollbackAccept(senderId: senderId, requestId: requestId)
             }
@@ -258,7 +258,7 @@ final class RequestsViewModel: ObservableObject {
     }
 
     func reject(requestId: String) async {
-        let snapshot = receivedRequests
+        let removal = RequestRemoval(requestId, in: receivedRequests)
         let cmid = ClientMutationId.generate()
         let rejected = receivedRequests.first(where: { $0.id == requestId })
         let senderId = rejected?.senderId
@@ -272,7 +272,7 @@ final class RequestsViewModel: ObservableObject {
         observeOutcome(
             cmid: cmid,
             rollback: { [weak self] in
-                self?.receivedRequests = snapshot
+                self?.restoreReceived(removal)
                 if let senderId {
                     FriendshipCache.shared.rollbackReject(senderId: senderId, requestId: requestId)
                 }
@@ -288,7 +288,7 @@ final class RequestsViewModel: ObservableObject {
             try await offlineQueue.enqueue(.respondFriendRequest, payload: payload, conversationId: nil)
             FeedbackToastManager.shared.showSuccess(String(localized: "contacts.requests.reject.success", defaultValue: "Demande refusée", bundle: .main))
         } catch {
-            receivedRequests = snapshot
+            restoreReceived(removal)
             if let senderId {
                 FriendshipCache.shared.rollbackReject(senderId: senderId, requestId: requestId)
             }
@@ -324,7 +324,7 @@ final class RequestsViewModel: ObservableObject {
     // MARK: - Cancel
 
     func cancel(requestId: String) async {
-        let snapshot = sentRequests
+        let removal = RequestRemoval(requestId, in: sentRequests)
         // Capture receiverId before removing so we can flip cache state and
         // roll back on failure.
         let receiverId = sentRequests.first(where: { $0.id == requestId })?.receiverId
@@ -340,13 +340,37 @@ final class RequestsViewModel: ObservableObject {
             if receiverId != nil { sentOffset = max(0, sentOffset - 1) }
             FeedbackToastManager.shared.showSuccess(String(localized: "contacts.requests.cancel.success", defaultValue: "Demande annulée", bundle: .main))
         } catch {
-            sentRequests = snapshot
+            if let removal { sentRequests = OptimisticRollback.restoring(removal.request, at: removal.index, into: sentRequests) }
             if let receiverId {
                 FriendshipCache.shared.didSendRequest(to: receiverId, requestId: requestId)
             }
             HapticFeedback.error()
             FeedbackToastManager.shared.showError(String(localized: "contacts.requests.cancel.error", defaultValue: "Impossible d'annuler", bundle: .main))
         }
+    }
+
+    // MARK: - Rollback d'UNE ligne
+
+    /// La demande retirée et sa place, pour la remettre SEULE si la file la
+    /// refuse. L'instantané de toute la liste ramenait aussi les demandes
+    /// traitées entre-temps (accepter A puis B, A refusée → B revenait) et
+    /// effaçait les pages chargées depuis.
+    struct RequestRemoval {
+        let request: FriendRequest
+        let index: Int
+
+        init?(_ requestId: String, in requests: [FriendRequest]) {
+            guard let index = requests.firstIndex(where: { $0.id == requestId }) else { return nil }
+            self.request = requests[index]
+            self.index = index
+        }
+    }
+
+    private func restoreReceived(_ removal: RequestRemoval?) {
+        guard let removal else { return }
+        let before = receivedRequests.count
+        receivedRequests = OptimisticRollback.restoring(removal.request, at: removal.index, into: receivedRequests)
+        if receivedRequests.count > before { receivedOffset += 1 }
     }
 
     // MARK: - Optimistic Friend Persistence

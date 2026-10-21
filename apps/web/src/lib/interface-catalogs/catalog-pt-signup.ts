@@ -59,6 +59,9 @@ const ptSignup = {
   'signup.legal.privacy': 'Política de privacidade',
   'signup.haveAccount': 'Já tem uma conta?',
   'signup.signIn': 'Entrar',
+  'signup.country.title': 'País',
+  'signup.country.search': 'Buscar um país',
+  'signup.country.none': 'Nenhum país corresponde a “{query}”.',
 };
 
 export default ptSignup;

@@ -27,7 +27,15 @@ export const DIGITAL_CONSENT_AGE = 15;
  * C'est la passerelle qui fait foi pour ACCORDER ; le client fait foi pour
  * REFUSER — la règle la plus restrictive s'applique toujours. Un refus ne
  * laisse que la MESURE d'audience du comptage (#10483 : compteurs de vues et
- * d'impressions, ligne `PostImpression` dépouillée de ses colonnes de mesure).
+ * d'impressions).
+ *
+ * Les lignes de COMPTAGE (`PostImpression`, `PostEngagement`) gardent le
+ * COMPTE quel que soit le statut (#10785, décision du porteur) : « qui a vu »
+ * est une fonctionnalité de la plateforme, sa base est l'exécution du service.
+ * Le statut n'y gouverne que la MESURE rangée à côté : hors `granted`, ni
+ * session d'application d'une impression, ni micro-actions ni échantillons de
+ * lecture d'une session ; sous refus, ni visibilité ni plateforme d'une
+ * impression.
  */
 
 export type AnalyticsStanding = 'granted' | 'not_granted' | 'denied' | 'anonymous';

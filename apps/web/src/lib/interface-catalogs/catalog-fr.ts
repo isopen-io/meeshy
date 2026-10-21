@@ -12,6 +12,7 @@
 import frGallery from './catalog-fr-gallery';
 import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
+import frShellLabels from './catalog-fr-shell-labels';
 import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
 import frWriteRestriction from './catalog-fr-write-restriction';
@@ -50,7 +51,9 @@ import frDownload from './catalog-fr-download';
 import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
 import frContentRefused from './catalog-fr-content-refused';
+import frContentRemoval from './catalog-fr-content-removal';
 import frPublicEntry from './catalog-fr-public-entry';
+import frThreadSearch from './catalog-fr-thread-search';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -295,6 +298,7 @@ const fr = {
   'notFound.title': "Cette adresse n'existe pas.",
 
   'pending.back': 'Revenir aux conversations',
+  'pending.screen': 'L’écran arrive',
 
   /* LES LIENS REÇUS (#6714, #6715) — les pages que visent les liens suivis
      `/l/:token` et les e-mails de compte (suppression, changement d'adresse,
@@ -314,8 +318,6 @@ const fr = {
   'trackingLink.opening': 'Ouverture du lien…',
   'trackingLink.dead.title': 'Ce lien n’est plus disponible',
   'trackingLink.dead.body': 'Il a expiré, a été désactivé ou n’a jamais existé.',
-  'accountDeletion.incomplete.title': 'Lien incomplet',
-  'accountDeletion.incomplete.body': 'Ce lien ne porte pas les informations nécessaires. Connectez-vous pour demander la suppression de votre compte.',
   'accountDeletion.confirm.title': 'Confirmer la suppression de votre compte',
   'accountDeletion.confirm.body':
     'Votre compte sera désactivé au terme d’une période de grâce de 30 jours. D’ici là, le lien « Annuler » de l’e-mail vous permet de revenir en arrière.',
@@ -1043,6 +1045,7 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frShellLabels,
   ...frStudioChrome,
   ...frEphemeral,
   ...frWriteRestriction,
@@ -1090,7 +1093,9 @@ const fr = {
   ...frContactDiscovery,
   ...frUserProfile,
   ...frContentRefused,
+  ...frContentRemoval,
   ...frPublicEntry,
+  ...frThreadSearch,
 } as const;
 
 export default fr;

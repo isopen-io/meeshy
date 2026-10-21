@@ -17,7 +17,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { commentDrafts, type CommentDraft } from '@/lib/comments/comment-draft';
 import { browserCommentUploadFor, forgetUploadedCommentMedia, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { unsentComments, unsentOf } from '@/lib/comments/unsent-comments';
-import { composingPostOf, postCommentImageable } from '@/lib/export/composed-comment-card';
+import { composingPostOf, postCommentImagingOf } from '@/lib/export/composed-comment-card';
 import { commentInteractionOf, commentNegativeOf, interactionOf } from '@/lib/telemetry/card-context';
 import { commentTapOf } from '@/lib/telemetry/content-taps';
 import { readingTelemetry } from '@/lib/view/reading-telemetry';
@@ -29,8 +29,10 @@ import type { PendingAttachment } from '@/lib/send/attachments';
 import type { CommentsComposerPresence } from '@/lib/view/comments-zone';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { CommentReplyTarget } from '@/lib/view/comment-reply-target';
+import { moderatesPlatformContent } from '@/lib/view/content-removal';
 import { useMentionSource } from '@/lib/view/mention-source';
 import { useMinute } from '@/lib/view/use-minute';
+import { useServedGlobalRole } from '@/lib/view/use-admin-access';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useViewer } from '@/lib/view/use-viewer';
 import type { CommentImageRequest } from '@/routes/comment-image-sheet';
@@ -192,11 +194,16 @@ export function CommentThread({
       setImaging((current) => (current === request ? { ...request, composition: { ...composition, thread: [root, ...replies] } } : current)),
     );
   };
+  /* `composed` : la carte composée ; `alone` : le fil n'est pas chargé, la carte du commentaire seul (`null` côté menu : sa propre règle). */
+  const postImagingOf = (post: FeedPost, comment: PostComment, servedText: string) => {
+    const root = rootOf(comment);
+    return postCommentImagingOf({ post, target: comment, targetText: servedText, thread: root === undefined ? [] : [root], readerLanguages: reader.languages, viewer: viewerOfCard });
+  };
   const postImageableOf = (comment: PostComment, servedText: string): boolean | null => {
     const post = composingPost;
     if (post === null) return null;
-    const root = rootOf(comment);
-    return postCommentImageable({ post, target: comment, targetText: servedText, thread: root === undefined ? [] : [root], readerLanguages: reader.languages, viewer: viewerOfCard });
+    const imaging = postImagingOf(post, comment, servedText);
+    return imaging === 'alone' ? null : imaging === 'composed';
   };
   /**
    * « IMAGER AVEC LES RÉPONSES » (#8734) — l'atelier s'ouvre TOUT DE SUITE sur
@@ -358,6 +365,7 @@ export function CommentThread({
   /* UN VISITEUR ANONYME N'A AUCUN GESTE — les trois routes exigent un
      `registeredUser` (`comments.ts`), exactement comme le composeur. */
   const canWrite = viewer.id !== null && !viewer.isAnonymous;
+  const moderates = moderatesPlatformContent(useServedGlobalRole());
   const viewerId = viewer.id ?? '';
   const [composerFolded, setComposerFolded] = useState(false);
   const presence: CommentsComposerPresence = !canWrite ? 'absent' : composerFolded ? 'folded' : 'open';
@@ -376,6 +384,12 @@ export function CommentThread({
               void runGesture({ kind: 'like', postId, commentId, on, ...(parentId === undefined ? {} : { parentId }) }),
             onDelete: (commentId, parentId) =>
               void runGesture({ kind: 'delete', postId, commentId, ...(parentId === undefined ? {} : { parentId }) }),
+            ...(moderates
+              ? {
+                  onRemove: (commentId: string, reason: string, parentId?: string) =>
+                    void runGesture({ kind: 'delete', postId, commentId, reason, ...(parentId === undefined ? {} : { parentId }) }),
+                }
+              : {}),
             onEdit: (commentId, content, parentId) =>
               void runGesture({
                 kind: 'edit',
@@ -389,7 +403,7 @@ export function CommentThread({
             onImage: (comment, servedText, options) => {
               const post = composingPost;
               const showsOriginal = options.showsOriginal === true;
-              if (post !== null) imageComposed(post, comment, servedText, showsOriginal);
+              if (post !== null && postImagingOf(post, comment, servedText) === 'composed') imageComposed(post, comment, servedText, showsOriginal);
               else if (options.withReplies) imageWithReplies(comment, servedText, showsOriginal);
               else setImaging(imageRequestOf(comment, servedText, showsOriginal));
             },
@@ -412,7 +426,7 @@ export function CommentThread({
           }
         : undefined,
     /* `comments` et le prisme du lecteur : « Imager » cite la racine et lit ses réponses dans CE texte-là, jamais celui d’un rendu passé. */
-    [canWrite, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages, viewer.displayName, composingPost, waiting, replay],
+    [canWrite, moderates, viewerId, postId, language, runGesture, failures, busy, mentionSource, comments, reader.languages, viewer.displayName, composingPost, waiting, replay],
   );
 
   const renderReplies = useCallback(
@@ -424,12 +438,12 @@ export function CommentThread({
         onToggle={() => toggleReplies(comment.id)}
         language={language}
         preferredLanguages={reader.languages}
-        locale={reader.locale}
+        locale={language}
         now={now}
         {...(gestures === undefined ? {} : { gestures })}
       />
     ),
-    [postId, expanded, toggleReplies, language, reader.languages, reader.locale, now, gestures],
+    [postId, expanded, toggleReplies, language, reader.languages, now, gestures],
   );
 
   /* LES TAPS D'IDENTITÉ DES RANGÉES (#10502) — un écouteur pour tout le fil. */
@@ -467,7 +481,7 @@ export function CommentThread({
           }}
           language={language}
           preferredLanguages={reader.languages}
-          locale={reader.locale}
+          locale={language}
           now={now}
           onRetry={() => void query.refetch()}
           onMore={() => void query.fetchNextPage()}

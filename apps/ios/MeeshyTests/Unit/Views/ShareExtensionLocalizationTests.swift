@@ -1,18 +1,18 @@
 import XCTest
 
-/// `MeeshyShareExtension` shipped without any string catalogue of its own. An app
-/// extension resolves `String(localized:)` against its **own** bundle (`Bundle.main`
-/// is the `.appex`), so every one of its strings fell back to the English
-/// `defaultValue` in all seven locales the app advertises — and three strings were
-/// bare literals with no key at all.
+/// **The share extension speaks the APP's vocabulary** (#10947).
 ///
-/// This suite pins the contract: every key the extension asks for exists in its own
-/// catalogue, translated in every locale, and the extension's `Info.plist` advertises
-/// exactly the locales the app does.
+/// Since the single share screen, the extension mounts the same SwiftUI view as
+/// the app (`Meeshy/Features/Main/Share/`), and every word of it resolves against
+/// the app catalog through `Bundle.meeshyShare` — the `.appex` climbs two levels to
+/// the app that contains it. The extension's own `Localizable.xcstrings` is gone:
+/// a second copy of the keys could only drift.
+///
+/// What stays the extension's own: its `InfoPlist.xcstrings` (the name iOS shows in
+/// the system share sheet) and the locales its `Info.plist` advertises.
 ///
 /// The extension is an `app-extension` target, so its symbols are not reachable from
-/// this bundle — the assertions read its sources and resources from disk, the same
-/// way `NavigationContainerMigrationTests` sweeps them.
+/// this bundle — the assertions read its sources and resources from disk.
 @MainActor
 final class ShareExtensionLocalizationTests: XCTestCase {
 
@@ -28,11 +28,11 @@ final class ShareExtensionLocalizationTests: XCTestCase {
     /// The locales the app advertises in its own `Info.plist`.
     private let supportedLocales: Set<String> = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]
 
-    private func extensionSource() throws -> String {
-        try String(
-            contentsOf: iosRoot.appendingPathComponent("MeeshyShareExtension/ShareViewController.swift"),
-            encoding: .utf8
-        )
+    private func extensionSources() throws -> [(name: String, code: String)] {
+        let directory = iosRoot.appendingPathComponent("MeeshyShareExtension", isDirectory: true)
+        return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+            .map { (name: $0.lastPathComponent, code: try String(contentsOf: $0, encoding: .utf8)) }
     }
 
     private func catalogStrings(_ relativePath: String) throws -> [String: Any] {
@@ -47,37 +47,36 @@ final class ShareExtensionLocalizationTests: XCTestCase {
         return Set(localizations.keys)
     }
 
-    /// Every `String(localized: "…")` key the extension asks for, in source order.
-    private func requestedKeys(in source: String) -> [String] {
-        source.components(separatedBy: "String(localized: \"").dropFirst().compactMap { fragment in
-            fragment.components(separatedBy: "\"").first
+    // MARK: - One vocabulary: the app catalog
+
+    func test_extensionSources_askNoStringOfTheirOwn() throws {
+        for file in try extensionSources() {
+            XCTAssertFalse(
+                ShareSourceCommentStripping.strippingComments(file.code).contains("String(localized:"),
+                "\(file.name) asks a string of its own: the extension's words come from the app "
+                + "catalog, through `ShareSheetCopy` and `Bundle.meeshyShare`."
+            )
         }
     }
 
-    // MARK: - Every requested key is in the extension's own catalogue
-
-    func test_everyRequestedKeyExistsInExtensionCatalog() throws {
-        let requested = Set(requestedKeys(in: try extensionSource()))
-        XCTAssertFalse(requested.isEmpty, "The extension must localize its user-facing strings.")
-
-        let strings = try catalogStrings("MeeshyShareExtension/Localizable.xcstrings")
-        let missing = requested.subtracting(strings.keys)
-        XCTAssertTrue(
-            missing.isEmpty,
-            "The extension resolves String(localized:) against its own bundle, so keys absent from " +
-            "MeeshyShareExtension/Localizable.xcstrings silently fall back to their English " +
-            "defaultValue in every locale. Missing: \(missing.sorted())"
+    func test_extensionShipsNoSecondCopyOfTheKeys() {
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: iosRoot.appendingPathComponent("MeeshyShareExtension/Localizable.xcstrings").path),
+            "A Localizable catalog inside the extension would be a second copy of the share screen's words."
         )
     }
 
-    func test_everyExtensionStringIsTranslatedInEveryLocale() throws {
-        let strings = try catalogStrings("MeeshyShareExtension/Localizable.xcstrings")
-        for key in strings.keys.sorted() {
-            XCTAssertEqual(
-                localizations(of: key, in: strings), supportedLocales,
-                "\(key) must ship in every locale the app advertises."
-            )
-        }
+    func test_theShareScreenWords_resolveAgainstTheContainingApp() throws {
+        let source = try String(
+            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Share/ShareStringsBundle.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(source.contains("pathExtension == \"appex\""), "Bundle.meeshyShare must climb out of the .appex.")
+        let copy = try String(
+            contentsOf: iosRoot.appendingPathComponent("Meeshy/Features/Main/Share/ShareSheetCopy.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(copy.contains("bundle: .main"), "In the extension, .main is the .appex: its catalog has none of these keys.")
     }
 
     func test_shareSheetDisplayNameIsLocalized() throws {
@@ -145,65 +144,6 @@ final class ShareExtensionLocalizationTests: XCTestCase {
             attributes?["NSExtensionActivationRule"],
             "The activation rule must live inside NSExtensionAttributes, or the share sheet "
             + "never offers Meeshy for any content type."
-        )
-    }
-
-    // MARK: - No user-facing literal is left unkeyed
-
-    func test_actionButtonsAndTitleAreLocalized() throws {
-        let source = try extensionSource()
-        for literal in ["Button(\"Cancel\")", "Button(\"Send\")", ".navigationTitle(\"Share to Meeshy\")"] {
-            XCTAssertFalse(
-                source.contains(literal),
-                "\(literal) is a bare literal: it renders in English whatever the device language."
-            )
-        }
-        for key in ["share.cancel", "share.send", "share.title"] {
-            XCTAssertTrue(source.contains(key), "\(key) must back the corresponding control.")
-        }
-    }
-
-    // MARK: - Conversation rows are reachable by VoiceOver
-
-    func test_conversationRow_exposesButtonAndSelectionTraits() throws {
-        // Sans élément explicite, la rangée atteint VoiceOver comme du texte
-        // épars, et son état sélectionné ne tient qu'à une coche et une teinte.
-        let source = try extensionSource()
-        XCTAssertTrue(
-            source.contains(".accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : [.isButton])"),
-            "The contact row must expose both the button trait (it is tappable) and the selected " +
-            "trait (its state must not be conveyed by colour alone)."
-        )
-        // Deux mécanismes SwiftUI replient la rangée en un seul élément, et la
-        // garde doit accepter les deux — sinon elle fige une implémentation au
-        // lieu de protéger un comportement.
-        //
-        // `.combine` concatène automatiquement les fragments enfants : nom,
-        // statut ET coche décorative partent dans une seule chaîne.
-        // `.ignore` + `.accessibilityLabel`/`.accessibilityValue` explicites
-        // donnent un couple nom/valeur propre — VoiceOver annonce « Alice »
-        // puis « en ligne » au lieu d'une bouillie. C'est la forme retenue par
-        // 214i+215i, strictement supérieure.
-        //
-        // Cette garde exigeait `.combine` seul et son commentaire décrivait une
-        // sélection par `.onTapGesture` — révolue depuis que la rangée est un
-        // vrai Button. Elle contredisait frontalement
-        // `ShareExtensionAccessibilityTests`, qui exige `.ignore` : les deux
-        // itérations ont atterri sur `main` et se sont mutuellement bloquées.
-        //
-        // 2026-07-29 : la rangée liste désormais des CONVERSATIONS réelles
-        // (`ShareTargetRow`, nom `target.displayName`) et non plus des contacts
-        // fabriqués — l'ancien `contact.name` n'existe plus. La garantie, elle,
-        // est identique.
-        let collapsesIntoOneElement =
-            source.contains(".accessibilityElement(children: .combine)")
-            || (source.contains(".accessibilityElement(children: .ignore)")
-                && source.contains(".accessibilityLabel(target.displayName)"))
-        XCTAssertTrue(
-            collapsesIntoOneElement,
-            "The conversation row must be a single accessibility element so its name and state " +
-            "are announced together rather than as separate stops — either via .combine, or via " +
-            ".ignore paired with an explicit .accessibilityLabel(target.displayName)."
         )
     }
 }

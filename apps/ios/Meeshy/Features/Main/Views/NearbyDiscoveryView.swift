@@ -429,7 +429,8 @@ struct NearbyDiscoveryView: View {
                     name: post.author,
                     context: .custom(40),
                     accentColor: post.authorColor,
-                    avatarURL: post.authorAvatarURL
+                    avatarURL: post.authorAvatarURL,
+                    ring: post.authorRing
                 )
                 .accessibilityHidden(true)
 
@@ -665,7 +666,8 @@ struct NearbyPostRow: View {
                     name: post.author,
                     context: .custom(40),
                     accentColor: post.authorColor,
-                    avatarURL: post.authorAvatarURL
+                    avatarURL: post.authorAvatarURL,
+                    ring: post.authorRing
                 )
                 .accessibilityHidden(true)
 

@@ -4,6 +4,7 @@
  */
 
 import type { PostReference, ReferenceAccess } from './post-reference.js';
+import type { PersonProfileDecor } from './profile-decor.js';
 import type { ReachBreakdown } from './content-reach.js';
 
 // =====================================================
@@ -96,6 +97,8 @@ export interface PostAuthor {
    */
   readonly isOnline?: boolean;
   readonly lastActiveAt?: Date | string | null;
+  /** Le contour d'avatar équipé (#10945) ; absent sans contour. */
+  readonly profileDecor?: PersonProfileDecor;
 }
 
 export interface PostMedia {

@@ -124,4 +124,13 @@ final class ConversationArmedProtectionTests: XCTestCase {
 
         XCTAssertFalse(sut.pendingEffects.hasAnyEffect)
     }
+
+    /// Les protections armées sont rangées par conversation, sans compte : un
+    /// second compte membre de la même conversation recevait celles du premier.
+    func test_store_purgeAll_forgetsEveryArmedProtection() {
+        let store = isolatedStore()
+        store.save(ConversationProtectionPreference(ephemeralChoice: .duration(.oneMinute), isBlurred: true, isViewOnce: false), for: "c1")
+        store.purgeAll()
+        XCTAssertEqual(store.preference(for: "c1"), .none)
+    }
 }

@@ -121,11 +121,76 @@ final class ConversationSyncEngineAccountSwitchTests: XCTestCase {
 
         let first = Task { await engine.fullSync() }
         await gate.waitUntilEntered()
-        _ = await engine.fullSync()
+        let second = Task { await engine.fullSync() }
         await gate.release()
         _ = await first.value
+        _ = await second.value
 
         XCTAssertEqual(service.listCallCount, 1, "deux appels du MÊME compte ne doublent pas la synchronisation")
+    }
+
+    /// #10927 — sur un cache VIDE, le second appel rendait `true` sans rien
+    /// lire : la liste se déclarait chargée et vide pendant que la première
+    /// synchronisation était encore en vol. Il la REJOINT et rend son issue.
+    func test_fullSync_onAColdCache_joinsTheSyncInFlight_andReturnsOnlyOnceTheListIsThere() async throws {
+        let cache = try makeCache()
+        let session = AccountSwitchSession(userId: "user-A")
+        let gate = AccountSwitchGate()
+        let service = MockConversationService()
+        service.listResponder = { _ in
+            await gate.enterAndWait()
+            return Self.page(["conv-of-A"])
+        }
+        let engine = makeEngine(cache: cache, service: service, session: session)
+
+        let first = Task { await engine.fullSync() }
+        await gate.waitUntilEntered()
+        let second = Task { () -> (Bool, [String]) in
+            let ok = await engine.fullSync()
+            return (ok, await cache.conversations.load(for: "list").snapshot()?.map(\.id) ?? [])
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        await gate.release()
+        _ = await first.value
+        let (ok, seenOnReturn) = await second.value
+
+        XCTAssertTrue(ok)
+        XCTAssertEqual(seenOnReturn, ["conv-of-A"], "le second appel ne rend la main qu'avec la liste servie")
+        XCTAssertEqual(service.listCallCount, 1)
+    }
+
+    /// #10927 — la synchronisation rejointe a ÉCHOUÉ et le cache est toujours
+    /// vide : le second appel ne recopie pas un succès qu'il n'a pas, il tente
+    /// la sienne.
+    func test_fullSync_onAColdCache_whenTheJoinedSyncFails_runsItsOwn() async throws {
+        let cache = try makeCache()
+        let session = AccountSwitchSession(userId: "user-A")
+        let gate = AccountSwitchGate()
+        let calls = AccountSwitchCounter()
+        let service = MockConversationService()
+        service.listResponder = { _ in
+            guard calls.next() > 3 else {
+                await gate.enterAndWait()
+                throw MeeshyError.network(.timeout)
+            }
+            return Self.page(["conv-of-A"])
+        }
+        let engine = makeEngine(cache: cache, service: service, session: session)
+
+        let first = Task { await engine.fullSync() }
+        await gate.waitUntilEntered()
+        let second = Task { () -> (Bool, [String]) in
+            let ok = await engine.fullSync()
+            return (ok, await cache.conversations.load(for: "list").snapshot()?.map(\.id) ?? [])
+        }
+        try await Task.sleep(nanoseconds: 50_000_000)
+        await gate.release()
+        let firstOk = await first.value
+        let (ok, seenOnReturn) = await second.value
+
+        XCTAssertFalse(firstOk)
+        XCTAssertTrue(ok)
+        XCTAssertEqual(seenOnReturn, ["conv-of-A"])
     }
 }
 
@@ -137,6 +202,12 @@ private final class AccountSwitchSession: @unchecked Sendable {
         get { lock.withLock { _userId } }
         set { lock.withLock { _userId = newValue } }
     }
+}
+
+private final class AccountSwitchCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func next() -> Int { lock.withLock { count += 1; return count } }
 }
 
 private actor AccountSwitchGate {

@@ -159,7 +159,9 @@ const demander = (harness: Harness) =>
 
 const jetonDuLien = (harness: Harness): string => {
   const envoi = harness.email.sendPasswordResetEmail.mock.calls.at(-1)?.[0];
-  return new URL(String(envoi?.resetLink), 'https://meeshy.test').searchParams.get('token') ?? '';
+  // #10859 — le jeton voyage dans le FRAGMENT du lien, jamais dans sa requête.
+  const lien = new URL(String(envoi?.resetLink), 'https://meeshy.test');
+  return new URLSearchParams(lien.hash.slice(1)).get('token') ?? '';
 };
 
 const jetonDuParcoursSms = async (harness: Harness): Promise<string> => {
@@ -341,7 +343,7 @@ describe('un jeton de réinitialisation ne sert qu’une fois, même présenté 
 
     const resultat = await definir(harness, jetonDuLien(harness));
 
-    expect(resultat).toEqual({ success: false, error: 'Invalid or expired reset token' });
+    expect(resultat).toEqual({ success: false, error: 'Invalid or expired reset token', code: 'RESET_TOKEN_INVALID' });
     expect(harness.email.sendPasswordChangedEmail).not.toHaveBeenCalled();
   });
 });

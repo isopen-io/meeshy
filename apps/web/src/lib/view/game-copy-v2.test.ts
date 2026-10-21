@@ -117,18 +117,18 @@ describe('les trophées', () => {
 
   test('une coupe de ligue : la matière de la coupe, le titre, la plaque', () => {
     const view = trophyView('trophy.league-cup.2026-10-26.jade.silver', 'fr');
-    expect(view).toEqual({ kind: 'league', material: 'silver', title: 'Coupe d’argent — ligue Jade, semaine du 26 octobre', plate: 'JADE · S44' });
+    expect(view).toEqual({ kind: 'league', material: 'silver', title: 'Coupe d’argent — joute Jade, semaine du 26 octobre', plate: 'JADE · S44' });
   });
 
   test('une coupe de ligue vue par un visiteur porte le MOIS : titre et plaque sans semaine', () => {
     const view = trophyView('trophy.league-cup.2026-10.jade.silver', 'fr');
-    expect(view).toEqual({ kind: 'league', material: 'silver', title: 'Coupe d’argent — ligue Jade, octobre 2026', plate: 'JADE · OCT. 2026' });
-    expect(trophyView('trophy.league-cup.2026-10.jade.silver', 'en')?.title).toBe('Silver cup — Jade league, October 2026');
+    expect(view).toEqual({ kind: 'league', material: 'silver', title: 'Coupe d’argent — joute Jade, octobre 2026', plate: 'JADE · OCT. 2026' });
+    expect(trophyView('trophy.league-cup.2026-10.jade.silver', 'en')?.title).toBe('Silver cup — Jade joust, October 2026');
   });
 
   test('la coupe de saison, de Prestige, de Flamme', () => {
-    expect(trophyView('trophy.season-cup.1', 'fr')).toMatchObject({ kind: 'season', title: 'Coupe de la saison 1', plate: 'SAISON 1' });
-    expect(trophyView('trophy.prestige.2', 'fr')).toMatchObject({ kind: 'prestige', title: 'Trophée de Prestige 2', plate: 'PRESTIGE 2' });
+    expect(trophyView('trophy.season-cup.1', 'fr')).toMatchObject({ kind: 'season', title: 'Coupe du voyage 1', plate: 'VOYAGE 1' });
+    expect(trophyView('trophy.prestige.2', 'fr')).toMatchObject({ kind: 'prestige', title: 'Trophée de Renaissance 2', plate: 'RENAISSANCE 2' });
     expect(trophyView('trophy.flame.100', 'fr')).toMatchObject({ kind: 'flame', title: 'Trophée de Flamme, 100 jours', plate: '100 JOURS' });
   });
 
@@ -153,7 +153,7 @@ describe('les jours', () => {
 
 describe('l’anneau de niveau, lu', () => {
   test('sans Prestige : le libellé d’avant ; avec : les étoiles se disent aussi', () => {
-    expect(levelRingLabelWithPrestige(34, 'eclat', 0, 'fr')).toBe('Niveau 34, palier Éclat, quatrième palier');
-    expect(levelRingLabelWithPrestige(34, 'eclat', 2, 'fr')).toBe('Niveau 34, palier Éclat, quatrième palier, Étoiles : 2 sur 5');
+    expect(levelRingLabelWithPrestige(34, 'eclat', 0, 'fr')).toBe('Niveau 34, ta lumière en Éclat, quatrième état');
+    expect(levelRingLabelWithPrestige(34, 'eclat', 2, 'fr')).toBe('Niveau 34, ta lumière en Éclat, quatrième état, Renaissances : 2 sur 5');
   });
 });

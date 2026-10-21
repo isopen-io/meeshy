@@ -1,15 +1,18 @@
 import { memo, useMemo, type ReactNode } from 'react';
 
 import { Avatar, MoodPeekTarget } from '@/components/avatar';
+import { AvatarRing, ringBoxSize } from '@/components/avatar-ring';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import {   SECTION_CARD_STYLE } from '@/components/grouped-section';
 import { DISCOVER_GLYPHS } from '@/components/glyphs-discover';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
+import { bannerPaint, ProfileBannerDesign, ProfileBannerFrame, useScheme } from '@/components/profile-banner-design';
 import { ProfileImageButton, useProfileImageViewer } from '@/components/profile-image-viewer';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { PublicProfile } from '@/lib/api/public-profile';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useDecorDesigns } from '@/lib/profile-decor/use-decor-designs';
 import type { ProfilePresenceLine } from '@/lib/profile/presence-line';
 import type { ProfileActionKind, ProfileRelation } from '@/lib/profile/relation';
 import { initialsOf } from '@/lib/view/conversation';
@@ -67,6 +70,10 @@ export const ProfileHero = memo(function ProfileHero({
 }) {
   const images = useMemo(() => ({ avatar: profile.avatar, banner: profile.banner }), [profile.avatar, profile.banner]);
   const { open, viewer } = useProfileImageViewer({ ownerId: profile.id, images });
+  /* LE DÉCOR D'UN AUTRE (#10632) — servi avec son profil ; absent (ancien serveur) = le rendu d'avant, à l'octet. */
+  const designs = useDecorDesigns(profile.decor);
+  const scheme = useScheme();
+  const ringExtra = designs.ring === null ? 0 : (ringBoxSize(90) - 90) / 2;
   const avatar = (
     <Avatar
       initials={initialsOf(name)}
@@ -78,10 +85,13 @@ export const ProfileHero = memo(function ProfileHero({
       {...(mood === undefined ? {} : { mood })}
     />
   );
+  const paint = bannerPaint({ image: profile.banner, design: designs.banner });
   return (
     <section data-user-hero aria-label={name} className="grid justify-items-center">
       <div data-user-banner className="relative w-full overflow-hidden rounded-card" style={{ height: 120 }}>
-        {profile.banner === null ? (
+        {paint.kind === 'design' ? (
+          <ProfileBannerDesign design={paint.design} accent={accent} scheme={scheme} />
+        ) : paint.kind === 'plain' ? (
           <span
             aria-hidden="true"
             className="block size-full"
@@ -89,23 +99,26 @@ export const ProfileHero = memo(function ProfileHero({
           />
         ) : (
           <ProfileImageButton kind="banner" onOpen={open} className="size-full">
-            <img src={attachmentSrc(profile.banner)} alt="" className="block size-full object-cover" />
+            <img src={attachmentSrc(paint.image)} alt="" className="block size-full object-cover" />
           </ProfileImageButton>
         )}
+        <ProfileBannerFrame frame={designs.bannerFrame} />
         {game}
       </div>
-      <span className="relative block rounded-chip" style={{ marginTop: -45, padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
-        {profile.avatar === null ? (
-          avatar
-        ) : (
-          <ProfileImageButton kind="avatar" onOpen={open} className="rounded-chip">
-            {avatar}
-          </ProfileImageButton>
-        )}
+      <span className="relative block rounded-chip" style={{ marginTop: -45 - ringExtra, padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
+        <AvatarRing ring={designs.ring} size={90}>
+          {profile.avatar === null ? (
+            avatar
+          ) : (
+            <ProfileImageButton kind="avatar" onOpen={open} className="rounded-chip">
+              {avatar}
+            </ProfileImageButton>
+          )}
+        </AvatarRing>
         {/* L'HUMEUR SE TOUCHE (#10528) — sa cible est posée ICI, à côté du
             bouton de la photo : un bouton dans un bouton n'est pas du HTML
             valide. `inset` = le liseré de 4 px qui entoure l'avatar. */}
-        {mood === undefined || mood === '' ? null : <MoodPeekTarget authorId={profile.id} emoji={mood} name={name} size={90} inset={4} />}
+        {mood === undefined || mood === '' ? null : <MoodPeekTarget authorId={profile.id} emoji={mood} name={name} size={90} inset={4 + ringExtra} />}
       </span>
       <div className="grid max-w-full justify-items-center gap-0.5 pt-2 text-center">
         <p className="max-w-full break-words text-screen font-bold" style={{ color: INK }}>

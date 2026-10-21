@@ -2231,11 +2231,11 @@ final class ConversationViewModelTests: XCTestCase {
         // change. We assert the row remains in GRDB (count == 1).
         sut.removeFailedMessage(messageId: "sent-msg")
 
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        let row = try await MessageStoreObservationHelper.fetchRecord(
+        let row = await MessageStoreObservationHelper.awaitRecord(
             localId: "sent-msg", from: pool
-        )
+        ) { $0.deletedAt != nil }
         XCTAssertNotNil(row, "Row must still exist (markDeleted is a soft delete)")
+        XCTAssertNotNil(row?.deletedAt, "the soft delete must land")
     }
 
     // MARK: - reportMessage Tests
@@ -3223,6 +3223,21 @@ final class ConversationViewModelTests: XCTestCase {
         await fulfillment(of: [neverCalled], timeout: 0.5)
         XCTAssertTrue(spy.rejoinCalls.isEmpty)
         XCTAssertEqual(spy.broughtUIForwardCount, 0)
+    }
+
+    // MARK: - Drapeau de scroll programmatique
+
+    func test_markProgrammaticScroll_twoCloseScrolls_keepTheFlagUntilTheSecondDeadline() async {
+        let sut = makeSUT()
+
+        sut.markProgrammaticScroll()
+        _ = await cancellableSleep(for: .milliseconds(300))
+        sut.markProgrammaticScroll()
+        _ = await cancellableSleep(for: .milliseconds(300))
+        XCTAssertTrue(sut.isProgrammaticScroll, "le premier délai ne lève pas le drapeau du second scroll")
+
+        _ = await cancellableSleep(for: .milliseconds(400))
+        XCTAssertFalse(sut.isProgrammaticScroll, "le drapeau retombe 500 ms après le DERNIER scroll")
     }
 
     // MARK: - Helpers

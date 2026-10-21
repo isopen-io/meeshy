@@ -50,7 +50,7 @@ public actor LinkPreviewFetcher {
     private static let userAgent = "Meeshy/1.0 (Link preview; +https://meeshy.me)"
 
     private var inFlight: [String: Task<LinkMetadata?, Never>] = [:]
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "link-preview")
+    private let logger = MeeshyLog.logger(.linkPreview, subsystem: .legacySDK)
     private let session: URLSession
 
     private init(session: URLSession? = nil) {
@@ -271,27 +271,29 @@ extension String {
         // Numeric entities: &#1234; and &#x00AE; — decode to actual Unicode characters.
         // Group 1 = hex digits (&#x…;), group 2 = decimal digits (&#…;).
         if let regex = try? NSRegularExpression(pattern: #"&#(?:x([0-9a-fA-F]+)|([0-9]+));"#, options: .caseInsensitive) {
-            let nsValue = value as NSString
-            let matches = regex.matches(in: value, range: NSRange(location: 0, length: nsValue.length))
+            // Remplacé en UTF-16, dans l'unité même des `NSRange` du motif : les
+            // plages, prises une fois sur le texte d'origine, se convertissaient
+            // en `Range` d'un texte DÉJÀ modifié, où un caractère combinant
+            // décodé (`&#x301;`) pouvait souder la frontière et rendre la
+            // conversion impossible — l'entité restait affichée telle quelle.
+            let source = value as NSString
+            let decodedText = NSMutableString(string: source)
+            let matches = regex.matches(in: value, range: NSRange(location: 0, length: source.length))
             for match in matches.reversed() {
-                let decoded: Character?
-                if match.range(at: 1).location != NSNotFound,
-                   let r = Range(match.range(at: 1), in: value),
-                   let cp = UInt32(value[r], radix: 16),
-                   let scalar = Unicode.Scalar(cp) {
-                    decoded = Character(scalar)
-                } else if match.range(at: 2).location != NSNotFound,
-                          let r = Range(match.range(at: 2), in: value),
-                          let cp = UInt32(value[r]),
-                          let scalar = Unicode.Scalar(cp) {
-                    decoded = Character(scalar)
+                let hex = match.range(at: 1)
+                let decimal = match.range(at: 2)
+                let codePoint: UInt32?
+                if hex.location != NSNotFound {
+                    codePoint = UInt32(source.substring(with: hex), radix: 16)
+                } else if decimal.location != NSNotFound {
+                    codePoint = UInt32(source.substring(with: decimal))
                 } else {
-                    decoded = nil
+                    codePoint = nil
                 }
-                if let ch = decoded, let fullRange = Range(match.range, in: value) {
-                    value.replaceSubrange(fullRange, with: String(ch))
-                }
+                guard let codePoint, let scalar = Unicode.Scalar(codePoint) else { continue }
+                decodedText.replaceCharacters(in: match.range, with: String(Character(scalar)))
             }
+            value = decodedText as String
         }
         return value.trimmingCharacters(in: .whitespacesAndNewlines)
     }

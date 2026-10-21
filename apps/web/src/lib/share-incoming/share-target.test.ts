@@ -24,8 +24,8 @@ describe('le share_target du manifeste', () => {
     expect(ROUTES.share.pattern).toBe(SHARE_PATH);
   });
 
-  test('accepte images et vidéos — ce que la feuille d’envoi sait envoyer', () => {
-    expect(SHARE_TARGET.params.files).toEqual([{ name: 'media', accept: ['image/*', 'video/*'] }]);
+  test('accepte tout fichier (D9) — ce que l’écran de partage sait envoyer', () => {
+    expect(SHARE_TARGET.params.files).toEqual([{ name: 'media', accept: ['*/*'] }]);
   });
 
   test('l’adresse est celle que le worker intercepte', () => {

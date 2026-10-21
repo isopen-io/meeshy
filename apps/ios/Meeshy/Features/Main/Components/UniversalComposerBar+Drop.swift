@@ -29,19 +29,34 @@ struct ComposerDropTargetModifier: ViewModifier {
     /// Couleur d'accent (hex) de la barre — teinte le contour d'affordance.
     let accentColor: String
 
+    let isEnabled: Bool
+
     /// Rappel `onIngest` de la barre, transmis tel quel.
     let onIngest: (([ComposerIngest]) -> Void)?
 
     @State private var isDropTargeted = false
 
-    /// Types acceptés, `.item` en dernier (voir doc du modificateur).
-    private static let acceptedTypes: [UTType] = [
+    init(accentColor: String, isEnabled: Bool = true, onIngest: (([ComposerIngest]) -> Void)?) {
+        self.accentColor = accentColor
+        self.isEnabled = isEnabled
+        self.onIngest = onIngest
+    }
+
+    private static let allTypes: [UTType] = [
         .image, .movie, .audio, .pdf, .text, .url, .fileURL, .item
     ]
 
+    static func acceptedTypes(isEnabled: Bool) -> [UTType] {
+        isEnabled ? allTypes : []
+    }
+
+    static func acceptsDrops(isSelecting: Bool, isBlockedDirect: Bool, isClosed: Bool, isWriteRestricted: Bool, isPreview: Bool) -> Bool {
+        !(isSelecting || isBlockedDirect || isClosed || isWriteRestricted || isPreview)
+    }
+
     func body(content: Content) -> some View {
         content
-            .onDrop(of: Self.acceptedTypes, isTargeted: $isDropTargeted) { providers in
+            .onDrop(of: Self.acceptedTypes(isEnabled: isEnabled), isTargeted: $isDropTargeted) { providers in
                 handleDrop(providers)
             }
             .overlay {
@@ -97,9 +112,15 @@ struct ComposerDropTargetModifier: ViewModifier {
     /// rappelle hors du main ; ici `await` ne fait que suspendre.
     ///
     /// Renvoie `true` si au moins un provider est réclamable.
+    /// Un glisser de rangée de conversation n'est jamais un contenu à poser dans le message (iPad : la liste est à côté).
+    static func carriesAConversationRow(_ providers: [NSItemProvider]) -> Bool {
+        providers.contains { $0.hasItemConformingToTypeIdentifier(ConversationDragItemProvider.markerType) }
+    }
+
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard !Self.carriesAConversationRow(providers) else { return false }
         let claimable = providers.contains { provider in
-            Self.acceptedTypes.contains { provider.hasItemConformingToTypeIdentifier($0.identifier) }
+            Self.allTypes.contains { provider.hasItemConformingToTypeIdentifier($0.identifier) }
         }
         guard claimable else { return false }
 
@@ -213,7 +234,7 @@ enum ComposerIngestFeedback {
 /// implicite (SE-0466) qui double-libérerait sur iOS < 26.
 nonisolated enum PastedFileCopier {
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "composer-drop")
+    private static let logger = MeeshyLog.logger(.ui)
 
     /// Copie l'URL vers `temporaryDirectory/paste_<uuid>_<nom>` si elle est
     /// lisible telle quelle. Refuse un dossier et un fichier de 0 octet.

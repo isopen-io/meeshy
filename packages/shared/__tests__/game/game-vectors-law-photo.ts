@@ -203,6 +203,8 @@ export function buildGameVectorsPhoto() {
         ['rank:voix:3', 'tier:eclat', 'prestige:2', 'meesh:20', 'treasury:coffret', 'flame:30', 'achievement:first_message'],
       ],
       ['des valeurs négatives', standing({ levelRecord: -3, prestige: -1, minted: -5, flameRecord: -2 }), []],
+      ['un palier refait après un Prestige (#10911)', standing({ levelRecord: 34, prestige: 1 }), ['start', 'tier:lueur', 'tier:lumiere', 'tier:eclat']],
+      ['au-delà de 100, le record des cycles clos (#10911)', standing({ levelRecord: 120, prestige: 2, pastCycleRecords: [150, 100] }), []],
     ] as const
   ).map(([label, s, kept]) => vector(`rattrapage — ${label}`, { law: 'photo-catch-up', standing: s, kept }));
 
@@ -231,6 +233,7 @@ export function buildGameVectorsPhoto() {
       ['la série en cours dépasse le record', buildGameBlock(facts({ flameRecord: 4, streak: 9 }))],
       ['aucune Meesh frappée, Prestige 2', buildGameBlock(facts({ mintedLifetime: 0, prestige: 2 }))],
       ['le Mythe', buildGameBlock(facts({ glory: 400_000, mythic: true, balance: 5_000 }))],
+      ['le record des cycles clos (#10911)', buildGameBlock(facts({ prestige: 2, pastCycleRecords: [150, 100] }))],
     ] as const
   ).map(([label, game]) => vector(`situation — ${label}`, { law: 'photo-standing', game: source(game) }));
 

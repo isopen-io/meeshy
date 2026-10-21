@@ -3,6 +3,7 @@ import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 import type { CameraEffectsPort } from '@/lib/calls/camera-effects';
 import { createCaptions } from '@/lib/calls/call-captions-controller';
 import { createCallNoticeStore, createCallReactionStore } from '@/lib/calls/call-control-state';
+import { mediaFailureOf } from '@/lib/calls/call-media';
 import { createCallStore, type CallStoreApi } from '@/lib/calls/call-store';
 import { bindCallTransport, resetCallTransportForTests, type CallTransport } from '@/lib/calls/call-transport';
 import type { QualityTick } from '@/lib/calls/call-quality-loop';
@@ -41,7 +42,7 @@ export const stream = (tracks: readonly FakeTrack[]): MediaStream => {
 
 export type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[]; sent: unknown[] };
 
-export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera']; readonly acquireCameraDevice?: CallEngineDeps['acquireCameraDevice'] } = {}) {
+export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly videoRefused?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera']; readonly acquireCameraDevice?: CallEngineDeps['acquireCameraDevice'] } = {}) {
   resetCallTransportForTests();
   const store: CallStoreApi = createCallStore();
   const emitted: Array<readonly [string, unknown]> = [];
@@ -74,8 +75,12 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
     transport: () => transport,
     viewerId: () => ME,
     fetchActiveCallId: async () => options.activeCallId ?? null,
-    acquireMedia: async ({ video }) => {
+    acquireMedia: async ({ video, onCameraFailed }) => {
       if (options.mediaError !== undefined) throw options.mediaError;
+      if (video && options.videoRefused !== undefined) {
+        onCameraFailed?.(mediaFailureOf(options.videoRefused));
+        return stream([track('audio')]);
+      }
       return stream(video ? [track('audio'), track('video')] : [track('audio')]);
     },
     acquireCamera:

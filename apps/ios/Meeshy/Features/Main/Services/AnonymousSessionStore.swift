@@ -1,6 +1,7 @@
 import Foundation
 import os
 import Security
+import MeeshySDK
 
 /// Keychain-backed store for guest (link-based) session context.
 ///
@@ -11,7 +12,7 @@ import Security
 enum AnonymousSessionStore {
 
     private static let service = "me.meeshy.app.anonymous-session"
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "keychain")
+    private static let logger = MeeshyLog.logger(.keychain)
 
     /// Accessibility class for the Keychain entries owned by this store.
     /// Exposed so tests can pin the invariant without performing live
@@ -63,5 +64,5 @@ enum AnonymousSessionStore {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let anonSession = Logger(subsystem: "me.meeshy.app", category: "anon-session")
+    nonisolated static let anonSession = MeeshyLog.logger(.anonSession)
 }

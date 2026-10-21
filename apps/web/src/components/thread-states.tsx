@@ -1,4 +1,6 @@
 import { Glyph } from '@/components/glyph';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useGuestFocus } from '@/lib/view/guest-focus';
 import { Link } from '@/routes/route-table';
 
@@ -50,7 +52,7 @@ function MinimalHeader({ preview }: PreviewProp) {
             to="list"
             className="grid size-11 shrink-0 place-items-center rounded-chip"
             style={{ color: 'var(--color-ios-ink)' }}
-            aria-label="Retour"
+            aria-label={translate(currentInterfaceLanguage(), 'common.back')}
           >
             <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
           </Link>
@@ -72,10 +74,10 @@ export function ThreadRefused({ preview }: PreviewProp = {}) {
           <Glyph name="lock" size={28} />
         </span>
         <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          Cette conversation n’est pas accessible
+          {translate(currentInterfaceLanguage(), 'thread.state.refused.title')}
         </p>
         <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          Elle n’existe pas, ou vous n’en êtes pas membre.
+          {translate(currentInterfaceLanguage(), 'thread.state.refused.body')}
         </p>
         {preview === true || focus ? null : (
           <Link
@@ -83,7 +85,7 @@ export function ThreadRefused({ preview }: PreviewProp = {}) {
             className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
             style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
           >
-            Retour aux conversations
+            {translate(currentInterfaceLanguage(), 'thread.state.backToList')}
           </Link>
         )}
       </div>
@@ -102,7 +104,7 @@ export function ThreadError({ onRetry, preview }: { readonly onRetry: () => void
           <Glyph name="warningCircle" size={28} />
         </span>
         <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          Impossible de charger le fil
+          {translate(currentInterfaceLanguage(), 'thread.state.error.title')}
         </p>
         <button
           type="button"
@@ -110,7 +112,7 @@ export function ThreadError({ onRetry, preview }: { readonly onRetry: () => void
           className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
           style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
         >
-          Réessayer
+          {translate(currentInterfaceLanguage(), 'common.retry')}
         </button>
       </div>
     </div>
@@ -127,7 +129,7 @@ export function ThreadSkeleton({ preview }: PreviewProp = {}) {
   return (
     <div className={rootClass(preview)}>
       <MinimalHeader preview={preview} />
-      <div className="thread-column flex flex-1 flex-col gap-2 overflow-hidden px-3.5 pt-2" aria-busy="true" aria-label="Chargement du fil">
+      <div className="thread-column flex flex-1 flex-col gap-2 overflow-hidden px-3.5 pt-2" aria-busy="true" aria-label={translate(currentInterfaceLanguage(), 'thread.state.loading')}>
         {SKELETON_ROWS.map((i) => (
           <div key={i} className="flex items-end gap-2" style={{ height: SKELETON_ROW_HEIGHT, flexShrink: 0 }}>
             <div className="shrink-0 rounded-full" style={{ width: 28, height: 28, backgroundColor: 'var(--color-ios-card)' }} />

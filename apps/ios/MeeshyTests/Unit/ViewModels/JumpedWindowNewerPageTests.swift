@@ -552,7 +552,8 @@ final class JumpedWindowNewerPageTests: XCTestCase {
     }
 
     func test_conversationView_nearingBottom_handsTheSignalToTheModel() throws {
-        XCTAssertTrue(try viewSource("ConversationView.swift").contains("viewModel.noteNearBottom(nearBottom)"),
+        // Le pont de la liste (`onNearBottomChanged`) vit dans sa couche, extraite de l'hôte.
+        XCTAssertTrue(try viewSource("ConversationView+MessageListLayer.swift").contains("viewModel.noteNearBottom(nearBottom)"),
                       "L'état « en bas » va au modèle, qui enchaîne les pages plus récentes")
     }
 
@@ -589,5 +590,77 @@ private final class PageGate {
         isHolding = false
         held?.resume()
         held = nil
+    }
+}
+
+// MARK: - Le plafond de la fenêtre jamais remontée
+
+/// Un fil laissé ouvert gagnait chaque message reçu et ne rendait rien : la fusion protectrice préservait tout ce
+/// qui sortait des dernières lignes relues. Sans ancre — l'historique jamais remonté — la fenêtre s'arrête au
+/// plafond, par le haut.
+@MainActor
+final class MessageStoreUnanchoredWindowCapTests: XCTestCase {
+
+    private let conversationId = "000000000000000000000001"
+
+    private func record(_ index: Int) -> MessageRecord {
+        let id = String(format: "m%06d", index)
+        let at = Date(timeIntervalSince1970: 1_700_000_000 + TimeInterval(index))
+        return MessageRecord(
+            localId: id, serverId: nil,
+            conversationId: conversationId, senderId: "000000000000000000000002",
+            content: "m", originalLanguage: "fr",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: at, sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: at,
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0,
+            ephemeralDuration: nil
+        )
+    }
+
+    private func makeStore() throws -> MessageStore {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        return MessageStore(conversationId: conversationId, persistence: MessagePersistenceActor(dbWriter: pool))
+    }
+
+    func test_unanchoredWindow_dropsTheOldestRowsBeyondTheCap() throws {
+        let store = try makeStore()
+        let cap = MessageStore.unanchoredWindowCap
+        store.apply(records: (0..<cap).map(record))
+        XCTAssertEqual(store.messages.count, cap)
+
+        // Cinquante messages arrivent : la relecture ne rend que les plus récents, la fusion préserve le reste.
+        store.apply(records: (cap - 150..<cap + 50).map(record))
+
+        XCTAssertEqual(store.messages.count, cap, "la fenêtre s'arrête au plafond")
+        XCTAssertEqual(store.messages.first?.localId, record(50).localId, "ce sont les plus anciennes qui partent")
+        XCTAssertEqual(store.messages.last?.localId, record(cap + 49).localId, "le présent reste entier")
+    }
+
+    func test_windowUnderTheCap_keepsEveryPreservedRow() throws {
+        let store = try makeStore()
+        store.apply(records: (0..<300).map(record))
+        store.apply(records: (200..<320).map(record))
+        XCTAssertEqual(store.messages.count, 320, "sous le plafond, rien ne quitte l'écran")
     }
 }

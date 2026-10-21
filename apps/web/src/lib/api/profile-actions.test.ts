@@ -667,3 +667,46 @@ describe('changer sa photo — recompressée avant de partir', () => {
     expect(gateway.seen).toHaveLength(0);
   });
 });
+
+/**
+ * #10632 — LE DÉCOR SURVIT AUX GESTES DU PROFIL. `PATCH /users/me` et
+ * `/users/me/{avatar,banner}` ne servent pas `profileDecor` (seuls `GET /me`
+ * et le profil public le composent). Écrire leur réponse telle quelle effaçait
+ * le décor du cache : le contour et la bannière disparaissaient, les entrées
+ * « Bannière » / « Contour » avec, et une photo de bannière téléversée ne
+ * retirait plus le design (l'équipement voyait un « ancien serveur »).
+ */
+describe('le décor de profil survit à une modification du profil (#10632)', () => {
+  const decor = {
+    avatarRing: { pack: 'contours-essentiels', item: 'laurier', origin: 'builtin', contract: null },
+    banner: { pack: 'bannieres-essentielles', item: 'aurore', origin: 'builtin', contract: null },
+  } as const satisfies NonNullable<MyProfile['profileDecor']>;
+
+  test('une réponse sans profileDecor garde le décor déjà en cache', async () => {
+    const gateway = heldGateway();
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profileOf({ profileDecor: decor }));
+
+    const outcome = performProfileEdit({ patch: { displayName: 'Ada Lovelace' }, deps: depsOf({ transport: gateway.transport, session: signedIn(), queryClient }) });
+    await gateway.arrival();
+    gateway.release({ status: 200, body: { success: true, data: { user: wireUser({ displayName: 'Ada Lovelace' }) } } });
+
+    expect(await outcome).toEqual({ status: 'saved' });
+    const cached = queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY);
+    expect(cached?.displayName).toBe('Ada Lovelace');
+    expect(cached?.profileDecor).toEqual(decor);
+  });
+
+  test('une réponse qui SERT profileDecor fait foi', async () => {
+    const gateway = heldGateway();
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profileOf({ profileDecor: decor }));
+
+    const outcome = performProfileEdit({ patch: { displayName: 'Ada Lovelace' }, deps: depsOf({ transport: gateway.transport, session: signedIn(), queryClient }) });
+    await gateway.arrival();
+    gateway.release({ status: 200, body: { success: true, data: { user: wireUser({ displayName: 'Ada Lovelace', profileDecor: { avatarRing: null, banner: null } }) } } });
+
+    await outcome;
+    expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.profileDecor).toEqual({ avatarRing: null, banner: null, bannerFrame: null });
+  });
+});

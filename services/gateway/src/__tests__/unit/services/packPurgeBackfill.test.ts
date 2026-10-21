@@ -37,6 +37,10 @@ function seed() {
       { id: 'p2', submitterId: PARTI_2, status: 'approved', author: 'Paul' },
     ],
     stickerPackItem: [{ id: 'i1', packId: 'p1', filePath: 'sticker-packs/p1/x.webp' }],
+    userPackOwnership: [
+      { id: 'o1', userId: PARTI, packKey: 'wallpaper.echantillon', priceMeeshes: 40, requestId: 'achat-0001', acquiredAt: new Date() },
+      { id: 'o2', userId: VIVANT, packKey: 'wallpaper.echantillon', priceMeeshes: 40, requestId: 'achat-0002', acquiredAt: new Date() },
+    ],
   });
   const files = fakeFileStore([`stickers/${PARTI}/a.webp`, `stickers/${VIVANT}/b.webp`, 'sticker-packs/p1/x.webp']);
   return { db, files };
@@ -52,7 +56,7 @@ describe('backfillPackPurge — les comptes déjà purgés (#10151)', () => {
     expect(report).toEqual({
       accountsScanned: 2,
       accountsWithData: 2,
-      totals: { choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 1, publishedAnonymized: 1, filesDeleted: 2 },
+      totals: { choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 1, publishedAnonymized: 1, filesDeleted: 2, ownershipsDeleted: 1 },
     });
     expect(JSON.stringify(db.tables)).toBe(before);
     expect(db.writes).toEqual([]);
@@ -64,7 +68,8 @@ describe('backfillPackPurge — les comptes déjà purgés (#10151)', () => {
 
     const report = await backfillPackPurge(db as never, { files: files.store, dryRun: false, batchSize: 1 });
 
-    expect(report.totals).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 1, publishedAnonymized: 1, filesDeleted: 2 });
+    expect(report.totals).toEqual({ choicesDeleted: 1, libraryDeleted: 1, submissionsDeleted: 1, publishedAnonymized: 1, filesDeleted: 2, ownershipsDeleted: 1 });
+    expect(db.tables.userPackOwnership.rows.map((row) => row.id)).toEqual(['o2']);
     expect(db.tables.userStickerPack.rows.map((row) => row.id)).toEqual(['c2']);
     expect(db.tables.userSticker.rows.map((row) => row.id)).toEqual(['s2']);
     expect([...files.files]).toEqual([`stickers/${VIVANT}/b.webp`]);
@@ -80,7 +85,7 @@ describe('backfillPackPurge — les comptes déjà purgés (#10151)', () => {
     expect(again).toEqual({
       accountsScanned: 2,
       accountsWithData: 0,
-      totals: { choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0 },
+      totals: { choicesDeleted: 0, libraryDeleted: 0, submissionsDeleted: 0, publishedAnonymized: 0, filesDeleted: 0, ownershipsDeleted: 0 },
     });
   });
 

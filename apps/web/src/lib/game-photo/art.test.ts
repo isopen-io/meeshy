@@ -109,3 +109,37 @@ describe('la Flamme du bandeau, dessin facultatif', () => {
     expect(art?.flame).toBeUndefined();
   });
 });
+
+/**
+ * LA PLAQUE D'AUTEUR (#10816) — un dessin FACULTATIF de plus : un invité n'en a
+ * pas, un moment sans plaque non plus. Présente, elle part dans l'image ; son
+ * échec ne défait jamais la carte.
+ */
+describe('la plaque d’auteur, dessin facultatif', () => {
+  const image = (id: string) => ({ id }) as unknown as HTMLImageElement;
+
+  test('lue quand le cadre la porte, absente sinon', () => {
+    expect(Object.keys(collectArtMarkup(frame([...ALL, 'author'])) ?? {})).toContain('author');
+    expect(Object.keys(collectArtMarkup(frame(ALL)) ?? {})).not.toContain('author');
+  });
+
+  test('rasterisée à la largeur du cartouche, et remise à la composition', async () => {
+    const sizes: string[] = [];
+    const art = await loadArt({
+      root: frame([...ALL, 'author']),
+      read: () => '',
+      raster: async (markup) => {
+        if (markup.includes('data-slot="author"')) sizes.push(/width="(\d+)"/.exec(markup)?.[1] ?? '');
+        return image(markup.includes('data-slot="author"') ? 'author' : 'x');
+      },
+    });
+    expect((art?.author as unknown as { id: string } | undefined)?.id).toBe('author');
+    expect(Number(sizes[0])).toBeGreaterThanOrEqual(1024);
+  });
+
+  test('une plaque qui ne se rasterise pas ne fait pas échouer la carte', async () => {
+    const art = await loadArt({ root: frame([...ALL, 'author']), read: () => '', raster: async (markup) => (markup.includes('data-slot="author"') ? null : image('x')) });
+    expect(art).not.toBeNull();
+    expect(art?.author).toBeUndefined();
+  });
+});

@@ -87,6 +87,44 @@ struct MediaStageFramingTests {
         #expect(r.letterboxes, "un cadre plus haut que son média laisse deux bandes à habiller")
     }
 
+    /// **Sans plancher, le cadre d'une vidéo EST son média.** Le plancher de 330 pt
+    /// fabriquait deux bandes autour d'une 16:9 (206 pt d'image dans 330 pt de
+    /// cadre). L'hôte le retire pour une vidéo en passant 0 : la loi n'a pas à
+    /// changer, seul son entrée.
+    @Test("Une 16:9 sans plancher : le cadre épouse le média, aucune bande")
+    func carded_wideVideo_withoutFloors_frameHugsTheMedia() {
+        let r = MediaStageFraming.resolve(
+            Self.input(ratio: 16.0 / 9.0, presentation: .carded,
+                       minimumFrameHeight: 0, minimumFrameWidth: 0))
+
+        #expect(Self.close(r.frame.height, 205.875))
+        #expect(Self.close(r.frame.width, r.media.width))
+        #expect(Self.close(r.frame.height, r.media.height))
+        #expect(r.letterboxes == false, "un cadre qui épouse le ratio n'a rien à habiller")
+    }
+
+    @Test("Sans plancher, une vidéo verticale garde sa taille ajustée (aspectFit, pas de crop)")
+    func carded_portraitVideo_withoutFloors_isUnchanged() {
+        let withFloors = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .carded))
+        let without = MediaStageFraming.resolve(
+            Self.input(ratio: 0.5625, presentation: .carded,
+                       minimumFrameHeight: 0, minimumFrameWidth: 0))
+
+        #expect(without.media == withFloors.media)
+        #expect(without.frame == withFloors.frame)
+    }
+
+    @Test("En plein cadre, le cadre est le viewport entier, le média reste ajusté")
+    func full_video_frameIsTheWholeViewport_mediaStaysFitted() {
+        let r = MediaStageFraming.resolve(
+            Self.input(ratio: 16.0 / 9.0, presentation: .full,
+                       minimumFrameHeight: 0, minimumFrameWidth: 0))
+
+        #expect(r.frame == Self.viewport)
+        #expect(Self.close(r.media.width, Self.viewport.width))
+        #expect(Self.close(r.media.height, Self.viewport.width * 9.0 / 16.0))
+    }
+
     @Test("Le plancher est un minimum, jamais un maximum")
     func carded_floorNeverShrinksATallFrame() {
         let r = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .carded))

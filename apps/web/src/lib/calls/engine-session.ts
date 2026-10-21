@@ -66,6 +66,7 @@ export function baseCall(request: StartCallRequest, direction: ActiveCall['direc
     isGroup: request.isGroup,
     title: request.title,
     avatar: request.avatar,
+    peerKey: request.isGroup ? null : (request.peerKey ?? null),
     callerName: null,
     initiatorId: null,
     invitedBy: null,

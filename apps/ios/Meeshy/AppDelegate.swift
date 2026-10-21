@@ -6,7 +6,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
+private let logger = MeeshyLog.logger(.push)
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -14,6 +14,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
+
+    /// Un réveil en arrière-plan (push silencieux, app tuée) ne passe jamais par
+    /// `checkExistingSession` : `APIClient` n'a pas de jeton alors que le
+    /// Keychain en tient un valide. Le jeton de la session restaurée l'amorce ;
+    /// un jeton déjà posé n'est pas remplacé par un nil.
+    @MainActor
+    static func primeAPITokenFromSession() {
+        guard let token = AuthManager.shared.authToken else { return }
+        APIClient.shared.authToken = token
+    }
 
     // MARK: - Application Lifecycle
 
@@ -31,6 +41,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // (those don't trigger the live signal handlers since they're
         // delivered at next launch from the OS).
         let crashReporter = Self.bootCrashReporting()
+
+        // Les copies brutes que le composeur, la bande récente et les retouches posent dans `tmp` ne sont
+        // retirées par personne quand la publication n'aboutit pas : une semaine plus tard, elles partent.
+        Task.detached(priority: .background) { TemporaryMediaSweeper.sweep() }
 
         // Install the crash & hang observer first so any crash that happens
         // during the rest of `didFinishLaunching` (or at any later point in
@@ -210,7 +224,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 // reste nil malgré un jeton Keychain valide — et
                 // `applyServerRevocation` en a besoin pour son GET
                 // `/notifications/unread-count`.
-                APIClient.shared.authToken = AuthManager.shared.authToken
+                Self.primeAPITokenFromSession()
                 await NotificationActionHandler.shared.revokeDeliveredBanners(notificationIds: revocation.notificationIds)
                 await NotificationToastManager.shared.applyServerRevocation(notificationIds: revocation.notificationIds)
                 completionHandler(.noData)
@@ -246,6 +260,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 Task { @MainActor in state.expire() }
             }
             state.attach(taskId: taskId)
+            // Lancement à froid en arrière-plan : aucun `checkExistingSession`,
+            // `APIClient` sans jeton — synchro, accusé et préchargement
+            // partaient en 401. Même amorce que la branche révocation.
+            Self.primeAPITokenFromSession()
 
             if let unreadTotal {
                 NotificationCoordinator.shared.setInAppNotificationUnread(unreadTotal)
@@ -713,7 +731,11 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
             rawType: userInfo["type"] as? String,
             conversationType: userInfo["conversationType"] as? String,
             conversationId: conversationId,
-            activeConversationId: MessageSocketManager.shared.activeConversationId
+            // iPad multi-fenêtre : une conversation affichée dans N'IMPORTE
+            // QUELLE fenêtre tait sa bannière, pas seulement la plus récente.
+            activeConversationId: conversationId.flatMap {
+                NotificationToastManager.shared.isConversationOpen($0) ? $0 : nil
+            } ?? MessageSocketManager.shared.activeConversationId
         )
 
         // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT
@@ -765,3 +787,33 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 }
 
 
+
+/// Le ménage de `tmp` au lancement : les copies d'ingestion du composeur, de la bande des médias récents et des
+/// retouches, plus vieilles qu'une semaine. Aucun composeur n'est ouvert au lancement, et la file de publication
+/// des stories ne retient pas une copie une semaine — au-delà, le brouillon durable vit ailleurs (autosave,
+/// outbox), et une copie de `tmp` n'est plus que du poids.
+nonisolated enum TemporaryMediaSweeper {
+    static let prefixes = ["composer_camera_", "composer_file_", "composer_photo_", "composer_sound_",
+                           "recent_", "retouche-", "video_look_", "meeshy-imagine-"]
+    static let maximumAge: TimeInterval = 7 * 24 * 3600
+
+    /// Les noms à retirer parmi `entries` (nom, date de modification) à l'instant `now`.
+    static func expired(_ entries: [(name: String, modified: Date)], now: Date) -> [String] {
+        entries.filter { entry in
+            prefixes.contains { entry.name.hasPrefix($0) } && now.timeIntervalSince(entry.modified) > maximumAge
+        }.map(\.name)
+    }
+
+    static func sweep(in directory: URL = FileManager.default.temporaryDirectory, now: Date = Date()) {
+        let fm = FileManager.default
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        guard let urls = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys) else { return }
+        let entries = urls.map { url in
+            (name: url.lastPathComponent,
+             modified: (try? url.resourceValues(forKeys: Set(keys)).contentModificationDate) ?? now)
+        }
+        for name in expired(entries, now: now) {
+            fm.removeItemLogging(at: directory.appendingPathComponent(name), context: "tmp media sweep")
+        }
+    }
+}

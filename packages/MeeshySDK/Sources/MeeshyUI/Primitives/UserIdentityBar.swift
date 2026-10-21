@@ -64,6 +64,8 @@ public struct AvatarConfig {
     public let moodEmoji: String?
     public let presenceState: PresenceState?
     public let storyRingState: StoryRingState
+    /// Le contour équipé de la personne, la référence servie (#10946).
+    public let ring: ServedProfileDecorItem?
     public let onTap: (() -> Void)?
     public let onViewProfile: (() -> Void)?
     public let onViewStory: (() -> Void)?
@@ -76,6 +78,7 @@ public struct AvatarConfig {
         moodEmoji: String? = nil,
         presenceState: PresenceState? = nil,
         storyRingState: StoryRingState = .none,
+        ring: ServedProfileDecorItem? = nil,
         onTap: (() -> Void)? = nil,
         onViewProfile: (() -> Void)? = nil,
         onViewStory: (() -> Void)? = nil,
@@ -87,6 +90,7 @@ public struct AvatarConfig {
         self.moodEmoji = moodEmoji
         self.presenceState = presenceState
         self.storyRingState = storyRingState
+        self.ring = ring
         self.onTap = onTap
         self.onViewProfile = onViewProfile
         self.onViewStory = onViewStory
@@ -141,6 +145,7 @@ public struct UserIdentityBar: View {
                     storyState: avatar.storyRingState,
                     moodEmoji: avatar.moodEmoji,
                     presenceState: avatar.presenceState,
+                    ring: avatar.ring,
                     enablePulse: false,
                     onTap: avatar.onTap,
                     onViewProfile: avatar.onViewProfile,

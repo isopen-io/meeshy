@@ -17,7 +17,8 @@ import QuartzCore
 final class StoryBackdropCaptureCIImageReadbackTests: XCTestCase {
 
     private func makeFilledTexture(width: Int, height: Int) throws -> MTLTexture {
-        let device = StoryRenderingContext.shared.metalDevice
+        let gpu = try XCTUnwrap(StoryRenderingContext.shared.gpu, "Metal unavailable")
+        let device = gpu.device
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm,
             width: width,
@@ -54,8 +55,9 @@ final class StoryBackdropCaptureCIImageReadbackTests: XCTestCase {
         let source = try makeFilledTexture(width: 1080, height: 1920)
 
         // Step 2 : blit-copy a 200×100 region (mimicking StoryBackdropCapture.cropRegion)
-        let device = StoryRenderingContext.shared.metalDevice
-        let queue = StoryRenderingContext.shared.commandQueue
+        let gpu = try XCTUnwrap(StoryRenderingContext.shared.gpu, "Metal unavailable")
+        let device = gpu.device
+        let queue = gpu.commandQueue
         let destDescriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: source.pixelFormat,
             width: 200, height: 100, mipmapped: false
@@ -95,8 +97,9 @@ final class StoryBackdropCaptureCIImageReadbackTests: XCTestCase {
         // sequence, exercised on a synthetic backdrop.
         let source = try makeFilledTexture(width: 1080, height: 1920)
 
-        let device = StoryRenderingContext.shared.metalDevice
-        let queue = StoryRenderingContext.shared.commandQueue
+        let gpu = try XCTUnwrap(StoryRenderingContext.shared.gpu, "Metal unavailable")
+        let device = gpu.device
+        let queue = gpu.commandQueue
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: source.pixelFormat,
             width: 280, height: 120, mipmapped: false

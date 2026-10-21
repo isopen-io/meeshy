@@ -30,8 +30,7 @@ const EVENTS: Readonly<Record<GuideMomentKey, GuideEvent>> = {
   'new-tier': { kind: 'new-tier', tier: 'lueur', nextTierLevel: 20 },
   'missions-unlocked': { kind: 'missions-unlocked' },
   'first-mint-possible': { kind: 'first-mint-possible', price: 1221, levelsLost: 5, gloryGain: 100 },
-  'first-mint': { kind: 'first-mint', levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14 },
-  'badge-extinguished': { kind: 'badge-extinguished', missingActions: 37 },
+  'first-mint': { kind: 'first-mint' },
   'price-rises': { kind: 'price-rises', nextPrice: 1294 },
   'new-rank': { kind: 'new-rank', rank: 'voix', division: 2, glory: 1700, gloryMissing: 300 },
   'treasury-tier': { kind: 'treasury-tier', tier: 'escarcelle', nextTierMissing: 40 },
@@ -65,33 +64,27 @@ describe('chaque moment du catalogue a ses quatre parties', () => {
 
 describe('les chiffres du moment se disent', () => {
   test('premier niveau : ce qu’il manque pour le suivant', () => {
-    expect(copyOf('first-level').next).toContain('50 points');
+    expect(copyOf('first-level').next).toContain('50 étincelles');
     expect(copyOf('first-level').next).toContain('niveau 3');
   });
-  test('première frappe possible : le prix, les niveaux perdus, la Gloire', () => {
+  test('première frappe possible : le prix, la baisse du niveau, la Gloire (#10892)', () => {
     const copy = copyOf('first-mint-possible');
-    expect(copy.means).toContain('1 221 points');
-    expect(copy.means).toContain('5 niveaux');
-    expect(copy.means).toContain('+100 de Gloire');
+    expect(copy.means).toContain('1 221 étincelles');
+    expect(copy.means).toContain('ton niveau baisse d’autant');
+    expect(copy.means).toContain('+100 de gloire');
   });
-  test('un seul niveau perdu s’accorde au singulier', () => {
+  test('la phrase ne promet plus que le niveau tient : la frappe le fait baisser', () => {
     const moment = guideMoment({ kind: 'first-mint-possible', price: 1221, levelsLost: 1, gloryGain: 100 }, []);
-    expect(momentCopy(moment, 'fr').means).toContain('1 niveau,');
+    expect(momentCopy(moment, 'fr').means).not.toContain('sans baisser ton niveau');
   });
-  test('première frappe : 14 → 9 et le Vent arrière', () => {
+  test('première frappe : la poche paie, le niveau baisse d’autant, le rang non, plus de Vent arrière', () => {
     const copy = copyOf('first-mint');
-    expect(copy.means).toContain('de 14 à 9');
-    expect(copy.means).toContain('Vent arrière');
-    expect(copy.next).toContain('niveau 14');
-  });
-  test('un badge éteint : la distance pour le rallumer', () => {
-    expect(copyOf('badge-extinguished').next).toContain('37 actions');
-  });
-  test('un seul pas pour rallumer', () => {
-    expect(momentCopy(guideMoment({ kind: 'badge-extinguished', missingActions: 1 }, []), 'fr').next).toContain('1 action ');
+    expect(copy.means).toContain('ton niveau a baissé d’autant, ton rang jamais');
+    expect(copy.means).not.toContain('Vent arrière');
+    expect(copy.means).not.toContain('de 14 à 9');
   });
   test('le prix monte : la prochaine', () => {
-    expect(copyOf('price-rises').next).toContain('1 294 points');
+    expect(copyOf('price-rises').next).toContain('1 294 étincelles');
   });
   test('nouveau rang : le nom, la division', () => {
     expect(copyOf('new-rank').what).toContain('Voix II');
@@ -108,7 +101,7 @@ describe('les chiffres du moment se disent', () => {
     expect(copyOf('return-after-absence').means).toContain('9 jours');
   });
   test('niveau 100 : Prestige ou sommet', () => {
-    expect(copyOf('level-100').next).toContain('Prestige');
+    expect(copyOf('level-100').next).toContain('Renais');
   });
 });
 
@@ -153,13 +146,13 @@ describe('l’étape qui attend son geste nomme le geste', () => {
   };
 
   test('missions et Flamme remplacent « l’étape d’après » par le geste attendu', () => {
-    expect(stepCopy(stepOf('missions'), { awaiting: true, language: 'fr' }).next).toContain('mission la plus facile');
+    expect(stepCopy(stepOf('missions'), { awaiting: true, language: 'fr' }).next).toContain('premier acte du rêve');
     expect(stepCopy(stepOf('flame'), { awaiting: true, language: 'fr' }).next).toContain('Reviens demain');
     expect(stepCopy(stepOf('missions'), { language: 'fr' }).next).toBe('Une Flamme grandit tant que tu reviens.');
   });
 
   test('le bouton suit l’action qu’on lui donne', () => {
-    expect(stepCopy(stepOf('missions'), { awaiting: true, action: 'see-missions', language: 'fr' }).action).toBe('Voir les missions');
+    expect(stepCopy(stepOf('missions'), { awaiting: true, action: 'see-missions', language: 'fr' }).action).toBe('Voir mon rêve');
   });
 });
 

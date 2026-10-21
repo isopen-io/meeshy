@@ -1,20 +1,38 @@
 # Cadres de gloire — sources de design
 
+> **Voix de l'épopée (2026-10-20, jalon #194, #11172).** Ce que VOIT le joueur — les noms, la voix, les moments et ce qu'ils racontent —
+> suit [la conception de l'épopée](../../superpowers/specs/2026-10-20-epopee-du-jeu-design.md) et son [glossaire français](../epopee/glossaire/fr.md).
+> Ce dossier garde ses règles de dessin, ses nombres et ses noms techniques (`rank`, `division`, `option`, collections, champs d'export) tels quels.
+
 Sources versionnées des cadres décoratifs des photos de gloire de Meeshy (issue #9963, parente #9382, milestone « Le jeu se comprend et se joue chaque jour »). Proposition **validée par le porteur le 2026-10-10** (« Tout est terminé »), le Néon gardé tel quel.
 
 Ce dossier est la **source de vérité du design** des cadres. La planche publiée (rendu éphémère, pour voir) : https://claude.ai/artifact/QUWf5znxXcX1qGLEmGQGV2 — page « Sept atmosphères », avec le prototype interactif « choisir son atmosphère à Ambassadeur, puis sa décoration à Orateur ». En cas d'écart, ce dossier a raison.
 
 Le développement dans l'app se fait avec le prompt [`PROMPT-developpement.md`](PROMPT-developpement.md).
 
+## Dans l'épopée
+
+Un cadre de gloire est un **signe des aïeux** : à chaque évolution du héros, ses aïeux se manifestent, et Mee et Meo, les deux colibris
+messagers entre les deux mondes, l'immortalisent avec lui dans une photo qui rejoint sa **Chronique**.
+
+- **Le rang** est le nom que le monde donne au héros, de Murmure à Légende, puis le Mythe (cent élus). Chaque rang a cinq **marches**,
+  de V (la première) à I (la plus haute) : le champ `division` (5 → 1) les porte, et le texte affiché dit « marche ».
+- **À Ambassadeur, les aïeux se révèlent** : le héros reconnaît leur **terre** parmi sept — les sept atmosphères ci-dessous. Aux rangs
+  suivants, Meeshy propose d'abord les décorations de cette terre.
+- **Les autres signes** : chaque nouvel état de **ta lumière** (Lueur, Aurore, Galaxie, Nébuleuse, Supernova, Singularité), chaque forme
+  de la **Flamme** (7, 30, 100, 365 jours), chaque Meesh qui entre dans l'**Héritage** (n° 1, 10, 100, 1000), chaque contenant de
+  l'Héritage (Bourse, Escarcelle, Coffret, Coffre, Trésor, Réserve) et le **rêve** réalisé.
+- Le sur-titre de la plaque reste « Nouveau rang · <Atmosphère> » : l'atmosphère y est la terre des aïeux.
+
 ## La montée
 
 | Rangs | Thème | Décorations |
 |---|---|---|
 | Murmure → Polyglotte | une mythologie du monde par rang | première proposition `generateur/v1/frames.py` (planche `planches/v1-premiere-proposition.jpg`), à porter au niveau des autres |
-| Ambassadeur (le rang du CHOIX) → Orateur | l'Afrique d'abord, par ses constructions ; chaque autre atmosphère y glisse l'Afrique dans un ou deux cadres | Ambassadeur : une par division V→I et par collection ; Orateur : A, B, C |
-| Oracle → Mythe | le cosmos, vers l'infiniment grand et l'infiniment petit (« du quark au quasar » au Mythe) | Oracle : A, B, C ; Légende : une par division V→I ; Mythe : A, B, C |
+| Ambassadeur (le rang où les aïeux se révèlent) → Orateur | l'Afrique d'abord, par ses constructions ; chaque autre atmosphère y glisse l'Afrique dans un ou deux cadres | Ambassadeur : une par marche V→I et par collection ; Orateur : A, B, C |
+| Oracle → Mythe | le cosmos, vers l'infiniment grand et l'infiniment petit (« du quark au quasar » au Mythe) | Oracle : A, B, C ; Légende : une par marche V→I ; Mythe : A, B, C |
 
-À Ambassadeur, l'utilisateur choisit son **atmosphère** parmi sept : Afrique éternelle (deux collections, Savane et Royaumes), Égypte solaire, Olympe, Empire céleste, Aurores du Nord, Abysses, Néon. Aux rangs suivants, Meeshy propose d'abord les décorations de cette atmosphère, et il peut toujours en choisir une d'une autre.
+À Ambassadeur, les aïeux se révèlent : le héros reconnaît leur terre, son **atmosphère**, parmi sept : Afrique éternelle (deux collections, Savane et Royaumes), Égypte solaire, Olympe, Empire céleste, Aurores du Nord, Abysses, Néon. Aux rangs suivants, Meeshy propose d'abord les décorations de cette terre, et il peut toujours en choisir une d'une autre.
 
 ## Le catalogue
 
@@ -28,14 +46,14 @@ Le développement dans l'app se fait avec le prompt [`PROMPT-developpement.md`](
 | `nord` | Aurores du Nord | 19 | 12 | 12 → 0 |
 | `abysses` | Abysses | 19 | 13 | 12 → 0 |
 | `neon` | Néon | 19 | 13 | 18 → 0 |
-| `moments` | Autres moments | 16 | 10 | 10 → 0 |
-| `tresor` | Trésor | 14 | 6 | 7 → 0 |
+| `moments` | Autres signes des aïeux | 16 | 10 | 10 → 0 |
+| `tresor` | L'Héritage | 14 | 6 | 7 → 0 |
 | `poses` | Poses et messages | 9 | 5 | 6 → 0 |
 
-Chaque manifeste (`manifests/<collection>.json`) liste, par cadre : `file`, `rank`, `division` (5→1, ou null), `option` (V…I, A/B/C, ou le palier), `name` et `story` (le nom et la courte histoire du cadre, en français), `layout` (la pose de Mee et Meo), `message` (exemple de message de l'auteur, ou null). Les planches-contacts sont dans `planches/`.
+Chaque manifeste (`manifests/<collection>.json`) liste, par cadre : `file`, `rank`, `division` (la marche, 5→1, ou null), `option` (V…I, A/B/C, ou le palier), `name` et `story` (le nom et la courte histoire du cadre, en français), `layout` (la pose de Mee et Meo), `message` (exemple de message de l'auteur, ou null). Les planches-contacts sont dans `planches/`.
 
-- `moments` : paliers de niveau (Lueur 10, Aurore 50, Galaxie 90, Nébuleuse 101, Supernova 400, Singularité 1000), Flamme (7, 30, 100, 365 jours), Meesh frappée (n° 1, 10, 100, 1000), réalisation du jour (A, B).
-- `tresor` : Bourse (a, b), Escarcelle (a, b), Coffret (a, b), Coffre (a, b, c — chambre forte moderne), Trésor (a, b), Réserve (a, b, c — bâtiment de banque).
+- `moments` : états de ta lumière (Lueur 10, Aurore 50, Galaxie 90, Nébuleuse 101, Supernova 400, Singularité 1000), formes de la Flamme (7, 30, 100, 365 jours), Meesh frappée (n° 1, 10, 100, 1000), rêve réalisé (A, B).
+- `tresor` : les contenants de l'Héritage — Bourse (a, b), Escarcelle (a, b), Coffret (a, b), Coffre (a, b, c — chambre forte moderne), Trésor (a, b), Réserve (a, b, c — bâtiment de banque).
 - `poses` : un même cadre (Ambassadeur I · Olympe) décliné en cinq poses de Mee et Meo et trois supports de message (cartouche, ruban, parchemin), plus une photo à trois.
 
 ## Anatomie d'un cadre
@@ -44,7 +62,7 @@ Chaque manifeste (`manifests/<collection>.json`) liste, par cadre : `file`, `ran
 
 1. la photo (placeholder : deux silhouettes) ;
 2. la décoration, avec la **fenêtre photo propre à chaque cadre** (arche, ovale, rectangle, forme libre) ;
-3. le blason du rang, la division en gemmes ;
+3. le blason du rang, la marche en gemmes ;
 4. Mee et Meo (poses PNG de `generateur/mee/`, dérivées des stickers `packages/MeeshySDK/Sources/MeeshyUI/Resources/MeeStickers`) ;
 5. la plaque : sur-titre « Nouveau rang · <Atmosphère> », titre, date, message optionnel (Caveat).
 

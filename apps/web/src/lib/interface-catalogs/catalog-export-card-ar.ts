@@ -134,7 +134,6 @@ const ar = {
   'export.card.compose.chosenReplies': 'اختيار الردود',
   'export.card.compose.post': 'المنشور في الأعلى',
   'export.card.compose.replies': 'الردود على البطاقة',
-  'export.card.compose.thread': 'سلسلة التعليقات',
   'export.card.compose.folded': '+{count} ردود',
 } satisfies ExportCardCatalog;
 

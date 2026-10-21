@@ -1,15 +1,19 @@
 
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
+import { useStore } from 'zustand';
 
 import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/message-card-subject';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { MessageMenu } from '@/components/message-menu';
+import { MessageReactionQuickBar } from '@/components/reaction-quick-bar';
 import { reactionEntries } from '@/components/message-blocks';
 import type { Attachment, Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
-import { imageableOf, messageDetailExposureOf, messageMenuContextOf, translationChoices } from '@/lib/view/message-actions';
+import { loadMessagePiecesCatalog, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
+import { closeReactorsSheet, reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
+import { imageableOf, messageDetailExposureOf, translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import type { MessageMenuController } from '@/lib/view/use-message-menu';
 
@@ -27,6 +31,17 @@ const ReactionSheet = lazy(() =>
   import('@/components/reaction-sheet').then((m) => m.prepareEmojiPickerSheet().then(() => ({ default: m.ReactionSheet }))),
 );
 
+/** « QUI A RÉAGI » se charge au geste (#10583), avec le catalogue du fil qui
+ * porte son état vide — la feuille ne se rend jamais avant lui. */
+const MessageReactorsSheet = lazy(() =>
+  Promise.all([import('@/components/message-reactors'), loadMessagePiecesCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.MessageReactorsSheet,
+  })),
+);
+
+/** « SIGNALER » (#7558) — la feuille des motifs, celle des comptes et des publications, chargée au geste. */
+const ReportSheet = lazy(() => import('@/components/report-sheet').then((m) => ({ default: m.ReportSheet })));
+const MessageDeleteDialog = lazy(() => import('@/components/message-delete-dialog').then((m) => ({ default: m.MessageDeleteDialog })));
 const MessageDetailSheet = lazy(() => import('@/components/message-detail-sheet').then((m) => ({ default: m.MessageDetailSheet })));
 
 /** LA PART du contrôleur de `useMessageMenu` que les feuilles LISENT — un
@@ -36,6 +51,8 @@ export type ThreadSheetsMenu = Pick<
   MessageMenuController,
   | 'menuTarget'
   | 'menuData'
+  | 'quickReactionFor'
+  | 'onCloseQuickReaction'
   | 'onCloseMenu'
   | 'onMenuReact'
   | 'onMenuAction'
@@ -50,6 +67,17 @@ export type ThreadSheetsMenu = Pick<
   | 'setExportFor'
   | 'servedOf'
   | 'starOf'
+  | 'editOf'
+  | 'deleteOf'
+  | 'deleteRequest'
+  | 'onDismissDelete'
+  | 'onConfirmDelete'
+  | 'pinOf'
+  | 'reportOf'
+  | 'reportFor'
+  | 'onPickReportReason'
+  | 'onDismissReport'
+  | 'menuContextOf'
 >;
 
 /**
@@ -74,7 +102,6 @@ export function ThreadMessageSheets({
   messageMenu,
   messages,
   readerLanguages,
-  readerLocale,
   conversationId,
   viewerId,
   viewerName,
@@ -85,7 +112,6 @@ export function ThreadMessageSheets({
   readonly messageMenu: ThreadSheetsMenu;
   readonly messages: readonly Message[];
   readonly readerLanguages: readonly string[];
-  readonly readerLocale: string;
   readonly conversationId: string;
   readonly viewerId: string;
   /** Le nom de qui exporte : il nomme ses propres messages sur la carte. */
@@ -96,8 +122,36 @@ export function ThreadMessageSheets({
   readonly conversationTitle: string | null;
   readonly announce: (message: string) => void;
 }) {
+  /* « QUI A RÉAGI » (#10583) — la demande d'une pilule maintenue. Elle ne
+     survit pas au fil qui l'a posée. */
+  const reactorsFor = useStore(reactorsSheetStore, (state) => state.messageId);
+  useEffect(() => closeReactorsSheet, []);
+  const reactorsMessage = reactorsFor === null ? undefined : messages.find((m) => m.id === reactorsFor);
   return (
     <>
+      {reactorsMessage === undefined ? null : (
+        <Suspense fallback={null}>
+          <MessageReactorsSheet
+            messageId={reactorsMessage.id}
+            reactions={reactionEntries(reactorsMessage.reactionSummary)}
+            onClose={closeReactorsSheet}
+          />
+        </Suspense>
+      )}
+      {/* LA BARRE DE RÉACTION RAPIDE DU DOUBLE TOUCHER (#10599) — montée tant
+          que sa cible est posée ET que le message est encore dans le fil ;
+          un choix vise la pièce touchée quand la cible en porte une. */}
+      {((quick) =>
+        quick === null || !messages.some((m) => m.id === quick.messageId) ? null : (
+          <MessageReactionQuickBar
+            key={`${quick.messageId}:${quick.pieceId ?? ''}`}
+            anchor={quick.anchor}
+            x={quick.x}
+            onReact={(emoji) => messageMenu.onMenuReact(quick.messageId, emoji, quick.pieceId)}
+            onExpand={() => messageMenu.setReactionSheetFor(quick.messageId)}
+            onClose={messageMenu.onCloseQuickReaction}
+          />
+        ))(messageMenu.quickReactionFor)}
       {/* LE MENU DU MESSAGE (#5814) — portail conditionnel : monté SEULEMENT
           quand `useLongPress`/le clic droit/`ContextMenu` ont ciblé un
           message ET que ce message existe encore dans le fil. */}
@@ -113,6 +167,7 @@ export function ThreadMessageSheets({
             choices={data.choices}
             forwardItems={data.forwardItems}
             subjectLabel={data.subjectLabel}
+            canReact={data.canReact}
             onClose={messageMenu.onCloseMenu}
             /* LA PIÈCE VISÉE (#9907, #9908) — l'aperçu la montre seule, le
                défilement change la cible, le rail réagit sur elle. */
@@ -159,7 +214,8 @@ export function ThreadMessageSheets({
         const servedDetail = messageMenu.servedOf(detailFor);
         /* Un message protégé (#7580, #8008) : ni langues ni pièces — rien de son contenu. */
         const exposed = messageDetailExposureOf(detailMessage, { now: Date.now() });
-        const menuContext = messageMenuContextOf(detailMessage, { now: Date.now() });
+        /* Le contexte du MENU, pour CE lecteur (#11372) : « Plus… » ne retient pas moins que le menu. */
+        const menuContext = messageMenu.menuContextOf(detailMessage);
         const imageable = imageableOf(menuContext);
         const composable = menuContext.composableIndex === null || menuContext.composableIndex === undefined ? null : (detailMessage.attachments ?? [])[menuContext.composableIndex];
         return (
@@ -173,11 +229,17 @@ export function ThreadMessageSheets({
               reactions={reactionEntries(detailMessage.reactionSummary)}
               sentAt={new Date(detailMessage.createdAt)}
               delivery={isMineOf(detailMessage, viewerId) ? deliveryStatusOf(detailMessage) : null}
-              locale={readerLocale}
+              locale={currentInterfaceLanguage()}
               conversationId={conversationId}
               messageId={detailMessage.id}
               attachments={exposed ? (detailMessage.attachments ?? []) : []}
               star={messageMenu.starOf(detailFor)}
+              act={{
+                onEdit: messageMenu.editOf(detailFor),
+                onDelete: messageMenu.deleteOf(detailFor),
+                pin: messageMenu.pinOf(detailFor),
+                onReport: messageMenu.reportOf(detailFor),
+              }}
               create={{
                 onCompose: composable === undefined || composable === null ? null : () => void composeWithAttachment(composable, announce),
                 onImage: imageable ? () => messageMenu.setExportFor({ messageId: detailFor, quick: false }) : null,
@@ -191,6 +253,36 @@ export function ThreadMessageSheets({
           </Suspense>
         );
       })(messageMenu.detailFor)}
+      {/* LE DIALOGUE DE SUPPRESSION (#10582) — ouvert par « Plus… » pour un
+          message, par la corbeille de la barre pour la sélection. */}
+      {((request) =>
+        request === null ? null : (
+          <Suspense fallback={null}>
+            <MessageDeleteDialog
+              count={request.messageIds.length}
+              offer={request.offer}
+              onConfirm={messageMenu.onConfirmDelete}
+              onDismiss={messageMenu.onDismissDelete}
+            />
+          </Suspense>
+        ))(messageMenu.deleteRequest)}
+      {/* LA FEUILLE DES MOTIFS (#7558) — ouverte par « Signaler » de « Plus… » ;
+          jamais sur un message qui a quitté le fil. */}
+      {((reportFor) => {
+        const reported = reportFor === null ? undefined : messages.find((m) => m.id === reportFor);
+        if (reported === undefined) return null;
+        return (
+          <Suspense fallback={null}>
+            <ReportSheet
+              name={reported.sender?.displayName ?? ''}
+              title={translateMessagePieces(currentInterfaceLanguage(), 'message.report.title')}
+              busy={false}
+              onPick={messageMenu.onPickReportReason}
+              onClose={messageMenu.onDismissReport}
+            />
+          </Suspense>
+        );
+      })(messageMenu.reportFor)}
       {((request) => {
         if (request === null) return null;
         const exportFor = request.messageId;

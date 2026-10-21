@@ -253,7 +253,7 @@ extension MeeshyComposerHost {
         .buttonStyle(.plain)
         .accessibilityLabel(Text("composer.socle.audience", bundle: .main))
         .accessibilityValue(Text(composerVisibility.label))
-        .sheet(item: $audiencePickerMode) { mode in
+        .anchoredPicker(item: $audiencePickerMode) { mode in
             AudienceUserPickerView(mode: mode, initialSelection: composerVisibilityUserIds) { ids in
                 composerVisibilityUserIds = ids
             }

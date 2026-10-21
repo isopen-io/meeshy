@@ -142,14 +142,20 @@ struct TopChromeBand: ViewModifier {
     let audio: ActiveAudioContext?
     /// L'aplat de la bannière du joueur À L'ÉCRAN, ou `nil` (#9494).
     var banner: Color?
+    /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
+
+    /// Lue PARESSEUSEMENT, dans la seule branche qui peint : la lire en tête de `body`, à chaque rendu et même
+    /// sans bande, demandait la marge à UIKit dès le montage — le rendu se figeait (mesuré, TopChromeBandRenderTests).
+    private var topInset: CGFloat { WindowInsets(published: sceneSafeAreaInsets).top }
 
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .top) {
                 if let tint = TopChromeTint.resolve(callIsActive: callIsActive, audio: audio, banner: banner) {
                     tint.bandColor
-                        .frame(height: DeviceLayout.safeAreaTop)
-                        .offset(y: -DeviceLayout.safeAreaTop)
+                        .frame(height: topInset)
+                        .offset(y: -topInset)
                         .allowsHitTesting(false)
                         .transition(.move(edge: .top))
                 }

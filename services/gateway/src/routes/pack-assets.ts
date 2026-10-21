@@ -25,6 +25,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { CommunityAppearancePacks } from '../services/packs/CommunityAppearancePacks';
 import { resolvePackAssetsDir, startupPackIndex, type PackIndex } from '../services/packs/PackIndex';
 import { ifNoneMatchMatches } from '../utils/etag';
 import { enhancedLogger } from '../utils/logger-enhanced';
@@ -46,9 +47,14 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
 
 const NOT_FOUND_CODE = 'PACK_ASSET_NOT_FOUND';
 
+/** Les contrats tiers sont des `<sha16>.json` en minuscules : toute autre forme ne touche jamais la base. */
+const COMMUNITY_CONTRACT = /^[0-9a-f]{16}\.json$/;
+
 export type PackAssetsRoutesOptions = {
   readonly index?: PackIndex;
   readonly assetsDir?: string;
+  /** Les contrats des packs de vendeurs tiers PUBLIÉS (#10709) : la seule lecture de base de cette route, réservée à une empreinte `.json` hors liste blanche. */
+  readonly community?: Pick<CommunityAppearancePacks, 'approvedContract'>;
 };
 
 type FileRequest = FastifyRequest<{ Params: { file: string } }>;
@@ -66,6 +72,7 @@ const fingerprintOf = (file: string): string => file.slice(0, file.indexOf('.'))
 export async function packAssetsRoutes(fastify: FastifyInstance, options: PackAssetsRoutesOptions = {}) {
   const index = options.index ?? startupPackIndex();
   const assetsDir = options.assetsDir ?? resolvePackAssetsDir();
+  const community = options.community ?? new CommunityAppearancePacks({ prisma: fastify.prisma, index });
 
   fastify.get(
     '/:file',
@@ -102,7 +109,16 @@ export async function packAssetsRoutes(fastify: FastifyInstance, options: PackAs
     },
     async (request: FileRequest, reply: FastifyReply) => {
       const { file } = request.params;
-      if (!index.isServedAsset(file)) return sendNotFound(reply, 'Pack asset not found', { code: NOT_FOUND_CODE });
+      if (!index.isServedAsset(file)) {
+        const contract = COMMUNITY_CONTRACT.test(file) ? await community.approvedContract(file) : null;
+        if (contract === null) return sendNotFound(reply, 'Pack asset not found', { code: NOT_FOUND_CODE });
+        const communityEtag = `"${fingerprintOf(file)}"`;
+        reply.header('ETag', communityEtag);
+        reply.header('Cache-Control', PACK_ASSETS_CACHE_CONTROL);
+        reply.header('X-Content-Type-Options', 'nosniff');
+        if (ifNoneMatchMatches(request.headers['if-none-match'], communityEtag)) return reply.code(304).send();
+        return reply.type(CONTENT_TYPES.json).send(contract);
+      }
       const etag = `"${fingerprintOf(file)}"`;
       reply.header('ETag', etag);
       reply.header('Cache-Control', PACK_ASSETS_CACHE_CONTROL);

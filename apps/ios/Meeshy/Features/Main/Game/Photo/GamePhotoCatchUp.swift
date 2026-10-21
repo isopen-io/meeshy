@@ -60,7 +60,7 @@ enum GamePhotoCatchUp {
         switch emblem {
         case .start: GamePhotoMoments.start()
         case .rank(let rank, let division): GamePhotoMoments.rank(rank, division: division)
-        case .tier(let tier, let level): GamePhotoMoments.tier(tier, level: level)
+        case .tier(let tier, let level, let prestige, let times): GamePhotoMoments.tier(tier, level: level, prestige: prestige, times: times)
         case .levelHundred: GamePhotoMoments.levelHundred(prestige: 0)
         case .prestige(let number): GamePhotoMoments.ofEmblemV2(.prestige(number: number))
         case .meesh(let number, let edition): GamePhotoMoments.meesh(number: number, edition: edition)

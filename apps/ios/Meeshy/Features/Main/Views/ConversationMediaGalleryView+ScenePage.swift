@@ -411,7 +411,7 @@ extension ConversationMediaGalleryView {
             stage: sceneStage(),
             reference: GallerySceneStage.reference(viewport: stageViewport),
             clock: sceneClock,
-            presentation: stagePresentation,
+            presentation: stageGeometryPresentation,
             accentColor: accentColor,
             preferredContentLanguages: sceneContext?.playerLanguages ?? [],
             isActive: distance == 0,
@@ -429,7 +429,7 @@ extension ConversationMediaGalleryView {
     /// pager, jamais par la page : une page vit dans le pager, et un sol qui
     /// vivrait avec elle glisserait horizontalement avec elle au lieu de fondre.
     var sceneFloorLayer: some View {
-        GallerySceneFloor(scene: currentScene, presentation: stagePresentation)
+        GallerySceneFloor(scene: currentScene, presentation: stageGeometryPresentation)
             .equatable()
     }
 

@@ -23,7 +23,7 @@
 import type { GameBlock } from '../../types/game.js';
 import { flameForm, type FlameFormKey } from './flame.js';
 import { GLORY_RANKS, type GloryDivision5, type GloryRankOrMythic } from './glory.js';
-import { LEVEL_TIER_KEYS, levelTierIndex, levelTierStart, type LevelTierKey } from './levels.js';
+import { GAME_PRESTIGE_LEVEL, LEVEL_TIER_KEYS, levelTierIndex, levelTierStart, type LevelTierKey } from './levels.js';
 import { meeshEdition, type MeeshEdition } from './mint.js';
 import { TREASURY_TIERS, type TreasuryTierKey } from './treasury.js';
 import { PHOTO_ALERT_POLICY, type PhotoAlertPolicy } from './photo-alert-policy.js';
@@ -48,6 +48,11 @@ export type PhotoCatchUpStanding = {
   readonly treasuryTier: TreasuryTierKey | null;
   /** La plus longue Flamme (`ladder.steps.flameRecord`, à défaut les jours en cours). */
   readonly flameRecord: number;
+  /**
+   * Le record de chaque cycle clos par un Prestige (`ladder.pastCycleRecords`, #10911) — absent devant un serveur
+   * antérieur. Il dit combien de fois un palier a été atteint (`levelReachCount`).
+   */
+  readonly pastCycleRecords?: readonly number[];
 };
 
 /** Les cinq blocs du bloc `game` que la situation lit — le job serveur les sert sans le reste. */
@@ -68,13 +73,15 @@ export function catchUpStandingOf(game: PhotoStandingSource): PhotoCatchUpStandi
     minted: Math.max(0, game.mint.number - 1),
     treasuryTier: game.treasury.tier,
     flameRecord: Math.max(ladder?.steps?.flameRecord ?? 0, game.flame.days),
+    ...(ladder?.pastCycleRecords === undefined ? {} : { pastCycleRecords: ladder.pastCycleRecords }),
   };
 }
 
 export type PhotoStepEmblem =
   | { readonly kind: 'start' }
   | { readonly kind: 'rank'; readonly rank: GloryRankOrMythic; readonly division: GloryDivision5 | null }
-  | { readonly kind: 'tier'; readonly tier: LevelTierKey; readonly level: number }
+  /** `prestige` : le cycle où le palier est atteint ; `times` : combien de cycles l'ont atteint, celui-ci compris (#10911). */
+  | { readonly kind: 'tier'; readonly tier: LevelTierKey; readonly level: number; readonly prestige: number; readonly times: number }
   | { readonly kind: 'level-hundred'; readonly prestige: 0 }
   | { readonly kind: 'prestige'; readonly number: number }
   | { readonly kind: 'meesh'; readonly number: number; readonly edition: MeeshEdition }
@@ -111,11 +118,37 @@ const rankSteps = (standing: PhotoCatchUpStanding): PhotoStep[] => {
   return reached < 0 ? [] : ladder.slice(1, reached + 1);
 };
 
+/**
+ * L'identité d'une étape de PALIER (#10911) : celle d'hier au premier cycle (`tier:<palier>`), une par cycle ensuite
+ * (`tier:<palier>:<Prestige>`) — un palier atteint de nouveau après un Prestige redevient un moment de photo. Les
+ * autres pistes gardent une identité unique : un rang, une Meesh, un palier du trésor ou une Flamme ne se refont pas.
+ */
+export const photoTierStepId = (tier: LevelTierKey, prestige: number): string =>
+  count(prestige) === 0 ? `tier:${tier}` : `tier:${tier}:${count(prestige)}`;
+
+/**
+ * Combien de cycles ont atteint ce niveau, le cycle en cours compris (#10911) : les records des cycles clos
+ * (`pastCycleRecords`), et pour un cycle clos dont le record n'a pas été gardé, le niveau du Prestige (100) que le
+ * passage exigeait — jamais plus, rien ne s'invente.
+ */
+export function levelReachCount(standing: PhotoCatchUpStanding, level: number): number {
+  const prestige = count(standing.prestige);
+  const kept = (standing.pastCycleRecords ?? []).slice(0, prestige).map(count);
+  const closed = [...kept, ...Array.from({ length: prestige - kept.length }, () => GAME_PRESTIGE_LEVEL)];
+  return closed.filter((record) => record >= level).length + (count(standing.levelRecord) >= level ? 1 : 0);
+}
+
 const tierSteps = (standing: PhotoCatchUpStanding): PhotoStep[] =>
   LEVEL_TIER_KEYS.slice(1, levelTierIndex(count(standing.levelRecord)) + 1).map((tier) => ({
     track: 'tier',
-    id: `tier:${tier}`,
-    emblem: { kind: 'tier', tier, level: levelTierStart(tier) },
+    id: photoTierStepId(tier, standing.prestige),
+    emblem: {
+      kind: 'tier',
+      tier,
+      level: levelTierStart(tier),
+      prestige: count(standing.prestige),
+      times: levelReachCount(standing, levelTierStart(tier)),
+    },
   }));
 
 const summitSteps = (standing: PhotoCatchUpStanding): PhotoStep[] => {

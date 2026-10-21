@@ -47,6 +47,7 @@ import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { servedLinkMetadata } from '../../services/messaging/linkTrackingAuthor';
+import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
 import type {
   AttachmentAudioTranslationEntry,
   CurrentUserConsumption,
@@ -309,9 +310,8 @@ export function buildMessageListSelect(options: {
             // formulaire d'entrée vit dans le profil de session. Jamais servi
             // brut (email/birthday) — résolu puis détruit au formatage.
             anonymousSession: { select: { profile: true } },
-            user: {
-              select: messageSenderUserSelect
-            }
+            // #10713 — le contour équipé, résolu en `profileDecor` au formatage.
+            user: { select: { ...messageSenderUserSelect, equippedAvatarRing: true } }
           }
         },
         // #5125, unifié #7070 — `attachmentSocketSelect` (jamais `attachmentMediaSelect`
@@ -722,6 +722,7 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
                 avatar: resolveParticipantAvatar(sender),
                 isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
                 lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
+                ...authorProfileDecor(sender.user),
               },
               sender.userId ? senderPresenceVis.get(sender.userId) : undefined,
               { onMissingEntry: listMissingEntry },

@@ -106,7 +106,11 @@ struct CommentComposerFoldModifier: ViewModifier {
             content
                 .environment(\.composerFoldControl, foldControl(isFolded: isFolded))
                 .frame(height: isFolded ? 0 : nil, alignment: .top)
-                .clipped()
+                // AUCUNE découpe (#10802) : un `.clipped()` ici range le champ
+                // dans un conteneur UIKit que SwiftUI recrée pendant la montée
+                // du clavier sur iPad, et le champ, déplacé hors fenêtre, perd
+                // le clavier ~0,5 s après le toucher. Replié, l'opacité nulle
+                // suffit à cacher ce qui dépasse de la hauteur nulle.
                 .opacity(isFolded ? 0 : 1)
                 .allowsHitTesting(!isFolded)
                 .accessibilityHidden(isFolded)

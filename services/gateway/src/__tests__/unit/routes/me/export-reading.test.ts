@@ -8,6 +8,7 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 import { exportReadingActivity } from '../../../../routes/me/export-reading';
+import { accountReaderKeyOf } from '../../../../services/posts/readerKey';
 
 const USER = '507f1f77bcf86cd799439011';
 const at = new Date('2026-10-13T10:00:00.000Z');
@@ -31,7 +32,12 @@ describe('exportReadingActivity', () => {
     expect(section.engagements[0]).toMatchObject({ dwellMs: 4000, startedAt: at.toISOString() });
     expect(section.views[0]).toMatchObject({ provenance: 'listing', viewedAt: at.toISOString() });
     expect(section.contentEvents[0]).toMatchObject({ type: 'screen_capture', derivedAt: at.toISOString() });
-    for (const model of ['postImpression', 'postEngagement', 'postView', 'contentEvent'] as const) {
+    // Une impression ou une session rangée sans consentement porte l'empreinte du compte, pas son id (#10771, #10773).
+    const ofAccount = { OR: [{ userId: USER }, { readerKey: accountReaderKeyOf(USER) }] };
+    for (const model of ['postImpression', 'postEngagement'] as const) {
+      expect(prisma[model].findMany).toHaveBeenCalledWith(expect.objectContaining({ where: ofAccount, take: 11, skip: 0 }));
+    }
+    for (const model of ['postView', 'contentEvent'] as const) {
       expect(prisma[model].findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: USER }, take: 11, skip: 0 }));
     }
   });

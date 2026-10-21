@@ -268,7 +268,7 @@ extension GamePhotoMoments {
         case .prestige(let number):
             return PhotoMoment(
                 id: emblem.id, emblem: .prestige(number: number), kicker: GameText.photoKickerPrestige,
-                title: String(localized: "game.photo.title.prestige", defaultValue: "Prestige \(GameCopy.formatCount(number))", bundle: .main))
+                title: String(localized: "game.photo.title.prestige", defaultValue: "Renaissance \(GameCopy.formatCount(number))", bundle: .main))
         }
     }
 

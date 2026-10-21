@@ -58,6 +58,8 @@ extension FeedPostCard {
                 avatarURL: post.authorAvatarURL,
                 storyState: authorStoryRing,
                 moodEmoji: authorMoodEmoji,
+                presenceState: PresenceManager.shared.knownPresenceState(for: post.authorId),
+                ring: post.authorRing,
                 onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                 onViewStory: onViewAuthorStory,
                 onMoodTap: onAuthorMoodTap,
@@ -240,15 +242,7 @@ extension FeedPostCard {
                         Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                     }
                 }
-                if onDelete != nil {
-                    Divider()
-                    Button(role: .destructive) {
-                        onDelete?(post.id)
-                        HapticFeedback.medium()
-                    } label: {
-                        Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                    }
-                }
+                PublicationDestructiveMenuItems(postId: post.id, onDelete: onDelete, onRemove: onRemove)
                 if onReport != nil {
                     Divider()
                     Button(role: .destructive) {

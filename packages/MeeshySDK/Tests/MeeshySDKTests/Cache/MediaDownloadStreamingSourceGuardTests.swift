@@ -61,12 +61,16 @@ final class MediaDownloadStreamingSourceGuardTests: XCTestCase {
 
     /// Les seuls `URLSession.shared.data(` restants rapatrient un média BORNÉ :
     /// la pochette d'écran verrouillé (une image) et la première image d'une
-    /// vidéo distante (plage `Range` de 1 Mo). Tout nouveau site justifie sa
-    /// place ici, ou passe par le funnel en flux du cache.
+    /// vidéo distante (plage `Range` de 1 Mo). L'extension de partage n'y
+    /// rapatrie aucun média : ses deux appels sont des requêtes JSON vers l'API
+    /// (destinataires, envoi — #10947). Tout nouveau site justifie sa place ici,
+    /// ou passe par le funnel en flux du cache.
     func test_sharedSessionDataDownloads_areConfinedToBoundedMedia() throws {
         let found = Set(try productionSources().filter { $0.code.contains("URLSession.shared.data(") }.map(\.name))
         XCTAssertEqual(found, [
             "ConversationAudioCoordinator+NowPlaying.swift",
+            "ExtensionShareDirectory.swift",
+            "ExtensionShareDispatcher.swift",
             "MeeshyVideoThumbnail.swift",
         ])
     }

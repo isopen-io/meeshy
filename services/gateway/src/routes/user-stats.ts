@@ -80,6 +80,26 @@ type UserContentCounts = Pick<UserStats, 'postsCount' | 'reelsCount' | 'storiesC
  * n'en garder qu'un champ. La projection paresseuse se fait donc à la LECTURE,
  * pas après elle : ce qui n'est pas servi n'est pas lu.
  *
+ * **JAMAIS PAR RELATION, TOUJOURS PAR `senderId`** (profil lent, coque
+ * Android). Un message ne connaît pas son `User` : il porte `senderId`, l'id
+ * d'un `Participant`. Le filtre `sender: { userId }` que ce calcul employait,
+ * Prisma le traduit sur MongoDB en un `$lookup` exécuté pour CHAQUE document
+ * de la collection `Message` — trois fois ici (compte, traductions, langues),
+ * en parallèle, et sur la collection la plus grosse de la base. C'est la
+ * mesure déjà consignée dans `GlobalAchievements.ts` : 1 265 ms par compte
+ * relationnel sur staging, 9 ms par `senderId: { in }`. Ce calcul est servi
+ * par `?expand=stats` de `GET /directory/people/:handle` : la fiche d'un
+ * autre (`/u/:username`) restait sur son squelette tant qu'il tournait (plus
+ * de 9 s observées en production), et `/me` peignait des cartes vides.
+ *
+ * Les identités du compte (`Participant.id`, une par conversation rejointe,
+ * index `[userId]`) se lisent donc UNE fois, et les trois agrégations filtrent
+ * sur `senderId` — indexé (`@@index([senderId])`). Le résultat est le même
+ * ensemble de messages : `sender: { userId }` ne retenait que les messages
+ * dont le Participant porte ce `userId`, c'est-à-dire exactement ceux dont le
+ * `senderId` est dans cette liste. Toutes les identités, actives ou non : un
+ * message écrit avant d'avoir quitté une conversation reste un message écrit.
+ *
  * Toutes comptent EN BASE. Le `groupBy` sur `originalLanguage` rend une ligne
  * par LANGUE distincte (au plus quelques dizaines), jamais une par message —
  * c'est une agrégation MongoDB, pas un rapatriement. Il reste sans borne
@@ -91,6 +111,9 @@ export async function computeUserAchievementStats(
   prisma: PrismaClient,
   userId: string
 ): Promise<UserAchievementStats> {
+  const identites = await prisma.participant.findMany({ where: { userId }, select: { id: true } });
+  const ecritPar = { senderId: { in: identites.map((identite) => identite.id) } };
+
   const [
     totalMessages,
     totalConversations,
@@ -100,7 +123,7 @@ export async function computeUserAchievementStats(
     user,
   ] = await Promise.all([
     prisma.message.count({
-      where: { sender: { userId }, deletedAt: null },
+      where: { ...ecritPar, deletedAt: null },
     }),
     // Only conversations the user is CURRENTLY in. Leaving, being banned, or
     // "delete for me" soft-deactivates the Participant row (isActive: false,
@@ -113,7 +136,7 @@ export async function computeUserAchievementStats(
     }),
     prisma.message.count({
       where: {
-        sender: { userId },
+        ...ecritPar,
         deletedAt: null,
         // Json?+Mongo : seule la forme not:{equals:null} passe le moteur Prisma
         // (null brut, Prisma.JsonNull et isSet sont tous rejetés à l'exécution
@@ -127,7 +150,7 @@ export async function computeUserAchievementStats(
     prisma.message.groupBy({
       by: ['originalLanguage'],
       where: {
-        sender: { userId },
+        ...ecritPar,
         deletedAt: null,
       },
     }),

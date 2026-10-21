@@ -246,6 +246,25 @@ final class ActiveSessionsViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isRevoking)
     }
 
+    /// Cycle 4 — l'échec défait LES retraits, pas l'écran d'avant l'attente :
+    /// une relecture arrivée pendant l'aller-retour n'est pas écrasée.
+    func test_revokeAllOtherSessions_failure_keepsWhatARevalidationBroughtMeanwhile() async {
+        let (sut, mock) = makeSUT()
+        mock.listSessionsResult = .success([Self.makeSession(id: "s1", isCurrent: true), Self.makeSession(id: "s2")])
+        await sut.loadSessions()
+        mock.revokeAllOtherSessionsResult = .failure(URLError(.timedOut))
+        mock.duringRevokeAllOtherSessions = { [weak sut, weak mock] in
+            mock?.listSessionsResult = .success([Self.makeSession(id: "s1", isCurrent: true), Self.makeSession(id: "s3")])
+            await sut?.loadSessions()
+        }
+
+        await sut.revokeAllOtherSessions()
+
+        XCTAssertTrue(sut.sessions.contains { $0.id == "s3" }, "la session apparue pendant l'attente reste")
+        XCTAssertTrue(sut.sessions.contains { $0.id == "s2" }, "la session retirée revient")
+        XCTAssertEqual(Set(sut.sessions.map(\.id)).count, sut.sessions.count, "aucun doublon")
+    }
+
     func test_requestRevokeAll_withoutOtherSessions_asksNothing() async {
         let (sut, mock) = makeSUT()
         mock.listSessionsResult = .success([Self.makeSession(id: "s1", isCurrent: true)])

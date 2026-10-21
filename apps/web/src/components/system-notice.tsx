@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 
 import { callActions } from '@/lib/calls/call-actions';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { callIdentityOf, type CallNoticeTarget } from '@/lib/calls/call-notice';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -46,7 +47,7 @@ export function SystemNotice({
   readonly language?: InterfaceLanguage;
 }) {
   const label = systemRowLabel(row, language);
-  const action = row.kind === 'call' && callTarget !== null ? <CallNoticeAction target={callTarget} languages={languages} /> : null;
+  const action = row.kind === 'call' && callTarget !== null && callsAvailable() ? <CallNoticeAction target={callTarget} languages={languages} /> : null;
   const content = <SystemNoticeContent row={row} language={language} />;
   /* LA TEINTE (revue-correction #5936, défaut majeur 5) — `--color-ios-ink-2`
      à `META_TEXT_OPACITY` (0,55), le cran MÉTA déjà dérivé et déjà tenu pour

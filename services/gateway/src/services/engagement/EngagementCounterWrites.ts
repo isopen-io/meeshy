@@ -18,8 +18,12 @@
  * lignes sont des `content.text_message`, l'axe le plus fréquent.
  *
  * Les trois écritures ci-dessous traitent `null` ET l'absence comme zéro par
- * `$ifNull`, en UNE commande atomique chacune. L'invariant qu'elles tiennent
- * avec le score : `User.engagementScore == Σ(EngagementCounter.points)`.
+ * `$ifNull`, en UNE commande atomique chacune. Un crédit écrit le MÊME montant
+ * au compteur et à la poche ; une reprise retire à la poche ce que les
+ * compteurs ont rendu. Mais la frappe débite la poche sans toucher aucun
+ * compteur (#10846) : `User.engagementScore == Σ(EngagementCounter.points)`
+ * n'est PAS un invariant depuis les étincelles. Celui de la poche (#10892) :
+ * `sparksEarnedLifetime − engagementScore + sparksDebt == Σ(prix des frappes au registre) + Σ(poches vidées au Prestige)`.
  *
  * ## Ce qui a été mesuré, et sur quoi
  *
@@ -240,8 +244,8 @@ export type EngagementTakeBack = {
  *
  * ## Ce que l'appelant fait du résultat
  *
- * `taken` est la somme RÉELLEMENT reprise, à retirer du score : c'est ce qui
- * tient `engagementScore == Σ(points)`. Un compte qui n'a plus rien nulle part
+ * `taken` est la somme RÉELLEMENT reprise, à retirer de la poche (ce qu'elle
+ * ne peut rendre devient une dette). Un compte qui n'a plus rien nulle part
  * rend ce qui existe, jamais plus.
  *
  * **Pas de transaction.** Chaque compteur est débité par sa propre commande
@@ -269,4 +273,45 @@ export async function takeBackAcrossEngagementCounters(
     }
   }
   return { taken };
+}
+
+/**
+ * RELÈVE `count` de `from` à `to` — le rattrapage des badges d'axe (#10845), JAMAIS un incrément.
+ *
+ * L'écriture est GARDÉE par la valeur lue : la colonne doit valoir encore `from` (un zéro lu couvre aussi `null` et
+ * l'absence, que Prisma relit `0`, #6428), sinon rien n'est écrit et `false` revient — un geste concurrent s'est
+ * glissé, et le rattrapage, idempotent, se relance. `from: null` : la ligne n'existe pas, elle est créée (si un
+ * crédit la crée entre-temps, l'index unique `(userId, axisKey)` refuse et `false` revient).
+ *
+ * Écrite par commande brute et sans `updatedAt` : l'élan (#5749) lit `updatedAt` comme la date du dernier geste sur
+ * l'axe, et un rattrapage ne doit pas faire croire à une activité d'aujourd'hui. `points` n'est jamais touché.
+ */
+export async function raiseEngagementCounterCount(
+  db: EngagementCounterDb,
+  raise: EngagementCounterKey & { readonly from: number | null; readonly to: number },
+): Promise<boolean> {
+  if (raise.from !== null && !(raise.to > raise.from)) return false;
+  const guard =
+    raise.from === null
+      ? { count: { $exists: false } }
+      : raise.from === 0
+        ? { $or: [{ count: { $in: [0, null] } }, { count: { $exists: false } }] }
+        : { count: raise.from };
+  try {
+    const result = await db.$runCommandRaw({
+      findAndModify: COUNTER_COLLECTION,
+      query: { ...rowQuery(raise), ...guard },
+      update: [{ $set: { count: raise.to } }],
+      upsert: raise.from === null,
+      new: true,
+      fields: { count: 1 },
+    });
+    return stateOf(result) !== null;
+  } catch (err) {
+    // Une ligne créée entre la lecture et l'écriture : l'index unique a tranché, le rattrapage se relance.
+    if (raise.from === null && typeof err === 'object' && err !== null && /E11000|duplicate key/i.test(String((err as { message?: unknown }).message))) {
+      return false;
+    }
+    throw err;
+  }
 }

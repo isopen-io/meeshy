@@ -11,7 +11,7 @@ public struct EmojiCategory: Identifiable, Sendable {
     }
 
     public static let all: [EmojiCategory] = [
-        EmojiCategory(name: String(localized: "emoji.category.reactions", defaultValue: "Reactions", bundle: .module), icon: "🔥", emojis: [
+        EmojiCategory(name: String(localized: "emoji.category.reactions", defaultValue: "Réactions", bundle: .module), icon: "🔥", emojis: [
             "❤️", "😂", "🔥", "👏", "😮", "😢", "🥰", "😍",
             "💯", "🙏", "🤣", "😭", "✨", "🎉", "💪", "👍",
             "😊", "💕", "🤩", "😘", "❤️‍🔥", "🥺", "😎", "👀",
@@ -23,7 +23,7 @@ public struct EmojiCategory: Identifiable, Sendable {
             "🥲", "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗",
             "🤭", "🫢", "🫣", "🤫", "🤔", "🫡", "🤐", "🤨",
             "😐", "😑", "😶", "🫥", "😏", "😒", "🙄", "😬",
-            "😮‍💨", "🤥", "🫨", "😌", "😔", "😪", "🤤", "😴",
+            "😮‍💨", "🤥", "🫨", "😞", "😔", "😪", "🤤", "😴",
             "😷", "🤒", "🤕", "🤢", "🤮", "🥵", "🥶", "🥴",
             "😵", "🤯", "🤠", "🥳", "🥸", "😎", "🤓", "🧐",
         ]),
@@ -181,6 +181,7 @@ public struct EmojiReactionPicker: View {
         .onPreferenceChange(ScrubTileFramesKey.self) { frames in
             onTileFrames?(frames)
         }
+        .settling($reactedEmoji, to: nil, after: .milliseconds(300), animation: .default)
     }
 
     /// Les tuiles sont construites ICI, sur le fil principal : la barre est
@@ -295,9 +296,6 @@ public struct EmojiReactionPicker: View {
     private func reactToEmoji(_ emoji: String) {
         HapticFeedback.light()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { reactedEmoji = emoji }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation { reactedEmoji = nil }
-        }
         onReact?(emoji)
     }
 
@@ -481,6 +479,7 @@ public struct EmojiFullPickerSheet: View {
             }
         }
         .ignoresSafeArea()
+        .settling($reactedEmoji, to: nil, after: .milliseconds(300), animation: .default)
     }
 
     private var dragHandle: some View {
@@ -488,7 +487,7 @@ public struct EmojiFullPickerSheet: View {
             Capsule()
                 .fill(style == .dark ? Color.white.opacity(MeeshyOpacity.medium) : Color.gray.opacity(MeeshyOpacity.medium))
                 .frame(width: 36, height: 4).padding(.top, MeeshySpacing.smPlus)
-            Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
+            Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
                 .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
                 .padding(.bottom, MeeshySpacing.xs)
@@ -571,7 +570,6 @@ public struct EmojiFullPickerSheet: View {
     private func selectEmoji(_ emoji: String) {
         HapticFeedback.light()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { reactedEmoji = emoji }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { reactedEmoji = nil } }
         onReact?(emoji)
     }
 
@@ -603,7 +601,7 @@ public struct CategorizedEmojiPickerSheet: View {
     public var body: some View {
         VStack(spacing: MeeshySpacing.smPlus) {
             // Titre seul — pas de bouton Close (dismiss via drag/detent) ni recherche.
-            Text(String(localized: "emoji.picker.title", defaultValue: "Reactions", bundle: .module))
+            Text(String(localized: "emoji.picker.title", defaultValue: "Réactions", bundle: .module))
                 .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
                 .foregroundColor(style == .dark ? .white.opacity(MeeshyOpacity.intense) : .primary)
                 .padding(.top, MeeshySpacing.lg)
@@ -616,6 +614,7 @@ public struct CategorizedEmojiPickerSheet: View {
         // (`adaptiveSheetGlassBackground`) laisse le verre échantillonner le fond.
         .adaptiveGlass(in: Rectangle())
         .adaptiveSheetGlassBackground()
+        .settling($reactedEmoji, to: nil, after: .milliseconds(300), animation: .default)
     }
 
     private var categoryTabs: some View {
@@ -664,7 +663,6 @@ public struct CategorizedEmojiPickerSheet: View {
     private func selectEmoji(_ emoji: String) {
         HapticFeedback.light()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { reactedEmoji = emoji }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation { reactedEmoji = nil } }
         onReact?(emoji)
     }
 }
@@ -715,7 +713,6 @@ public struct EmojiKeyboardPanel: View {
                         Button {
                             HapticFeedback.light()
                             withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) { tappedEmoji = emoji }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { withAnimation { tappedEmoji = nil } }
                             onSelect?(emoji)
                         } label: {
                             Text(emoji).font(.system(size: MeeshyFont.displaySize)).frame(maxWidth: .infinity)
@@ -733,5 +730,6 @@ public struct EmojiKeyboardPanel: View {
                 Rectangle().fill(.regularMaterial)
             }
         })
+        .settling($tappedEmoji, to: nil, after: .milliseconds(150), animation: .default)
     }
 }

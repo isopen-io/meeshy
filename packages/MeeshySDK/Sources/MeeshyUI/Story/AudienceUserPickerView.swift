@@ -231,8 +231,7 @@ public struct AudienceUserPickerView: View {
         .adaptiveOnChange(of: vm.query) { _, _ in
             searchTask?.cancel()
             searchTask = Task {
-                try? await Task.sleep(for: .milliseconds(350))
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .milliseconds(350)) else { return }
                 await vm.performSearch()
             }
         }
@@ -275,7 +274,7 @@ public struct AudienceUserPickerView: View {
 
     private func row(_ user: UserSearchResult) -> some View {
         HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem)
+            MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem, avatarURL: user.avatar, presenceState: user.servedPresence, ring: user.avatarRing)
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayName ?? user.username)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))

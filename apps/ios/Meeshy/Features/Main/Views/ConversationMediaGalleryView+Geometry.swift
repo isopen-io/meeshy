@@ -85,6 +85,19 @@ enum MediaGalleryStage {
         (gutter + MediaStageActionColumn.width + gutter) / MediaStageSeek.lateralFraction
     }
 
+    /// **Une vidéo n'a pas de plancher : son cadre épouse son ratio.**
+    ///
+    /// Les deux planchers protègent ce qui se pose SUR le cadre. Le chrome, lui,
+    /// s'aligne sur le plateau (#6760) et flotte par-dessus ; et sur une vidéo,
+    /// un cadre plus haut que l'image n'est pas un hors-champ habillé, ce sont
+    /// des bandes autour de l'image qu'on est venu regarder (une 16:9 tenait dans
+    /// 206 pt et recevait 330 pt de cadre). Le média n'est ni rogné ni agrandi :
+    /// seul le cadre cesse de dépasser l'image. Les autres natures gardent leurs
+    /// planchers.
+    static func minimumFrame(for kind: AttachmentKind) -> (height: CGFloat, width: CGFloat) {
+        kind == .video ? (0, 0) : (minimumFrameHeight, minimumFrameWidth)
+    }
+
     /// **La bande de progression, elle non plus, n'est pas un nombre** (#6162).
     ///
     /// Elle vaut ce que la barre du SDK occupe réellement
@@ -122,11 +135,17 @@ enum MediaGalleryStage {
     static func corridors(safeTop: CGFloat,
                           safeBottom: CGFloat,
                           attachments: [MessageAttachment]) -> MediaStageFraming.Corridors {
+        corridors(safeTop: safeTop, safeBottom: safeBottom, lot: GalleryLotShape(attachments))
+    }
+
+    static func corridors(safeTop: CGFloat,
+                          safeBottom: CGFloat,
+                          lot: GalleryLotShape) -> MediaStageFraming.Corridors {
         MediaStageFraming.Corridors(
             safeTop: safeTop,
             top: topCorridorHeight,
-            rail: attachments.count > 1 ? FilmstripMetrics.reservedHeight : 0,
-            transport: carriesDuration(attachments) ? transportBandHeight : 0,
+            rail: lot.isSeries ? FilmstripMetrics.reservedHeight : 0,
+            transport: lot.carriesDuration ? transportBandHeight : 0,
             safeBottom: safeBottom,
             gutter: gutter
         )
@@ -200,8 +219,10 @@ enum MediaGalleryStage {
     static func resolve(viewport: CGSize,
                         mediaRatio: CGFloat?,
                         presentation: MediaStageFraming.Presentation,
-                        corridors: MediaStageFraming.Corridors) -> MediaStageFraming.Result {
-        MediaStageFraming.resolve(
+                        corridors: MediaStageFraming.Corridors,
+                        kind: AttachmentKind = .image) -> MediaStageFraming.Result {
+        let floors = minimumFrame(for: kind)
+        return MediaStageFraming.resolve(
             MediaStageFraming.Input(
                 viewport: viewport,
                 mediaRatio: mediaRatio ?? freeRegionRatio(viewport: viewport,
@@ -210,8 +231,8 @@ enum MediaGalleryStage {
                 corridors: corridors,
                 presentation: presentation,
                 cardedCornerRadius: cornerRadius,
-                minimumFrameHeight: minimumFrameHeight,
-                minimumFrameWidth: minimumFrameWidth
+                minimumFrameHeight: floors.height,
+                minimumFrameWidth: floors.width
             )
         )
     }
@@ -391,9 +412,9 @@ extension ConversationMediaGalleryView {
     /// dimensionné contre le second poserait le rail hors cadre.
     var stageCorridors: MediaStageFraming.Corridors {
         MediaGalleryStage.corridors(
-            safeTop: DeviceLayout.safeAreaTop,
-            safeBottom: DeviceLayout.safeAreaBottom,
-            attachments: allAttachments
+            safeTop: galleryInsets.top,
+            safeBottom: galleryInsets.bottom,
+            lot: lotShape
         )
     }
 
@@ -446,7 +467,8 @@ extension ConversationMediaGalleryView {
                                                      scenes: sceneContext?.scenes ?? [:],
                                                      presentation: stageGeometryPresentation),
             presentation: stageGeometryPresentation.framing,
-            corridors: stageCorridors
+            corridors: stageCorridors,
+            kind: sceneContext?.scenes[attachment.id] == nil ? attachment.kind : .image
         )
     }
 
@@ -681,11 +703,14 @@ extension ConversationMediaGalleryView {
     /// plus rien ne peut la lui reprendre.
     @ViewBuilder
     var railCorridor: some View {
-        if allAttachments.count > 1 {
+        // La bande naît avec la largeur MESURÉE de la galerie (sa colonne, son plein écran) : montée avant la
+        // mesure, elle se calait sur la fenêtre puis gardait cet ancrage (vignette décalée d'un pas, cycle 8).
+        if allAttachments.count > 1, measuredViewport.width > 0 {
             ConversationMediaFilmstrip(
                 attachments: allAttachments,
                 currentPageID: $currentPageID,
-                accentColor: accentColor
+                accentColor: accentColor,
+                containerWidth: measuredViewport.width
             )
         }
     }

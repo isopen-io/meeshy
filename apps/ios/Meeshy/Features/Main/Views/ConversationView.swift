@@ -13,76 +13,6 @@ import MeeshyUI
 // hub de progression en ont besoin aussi (#5843), et une jumelle recopiée
 // aurait perdu la politique `allowsEdgeSwipe` dont la Rivière dépend.
 
-struct ConversationScrollState {
-    var isNearBottom: Bool = true
-    var unreadBadgeCount: Int = 0
-    /// True while the message list is actively being dragged/decelerated.
-    /// Efface les BOUTONS D'ACTION du header (appel, recherche) le temps du
-    /// mouvement — loi commune `ScrollMotion`. Le header lui-même reste
-    /// lisible, et la pill de jour garde sa bande à part
-    /// (`MessageDayStickyPlacement.topOffset`).
-    var isScrollingActiveList: Bool = false
-    var scrollToBottomTrigger: Int = 0
-    /// Incrémenté quand le lecteur déclare regarder le bas — ouverture, bouton
-    /// « dernier message », départ en arrière-plan. Le pont `MessageListView`
-    /// compare l'ancien et le nouveau pour vider l'accumulateur de lecture sans
-    /// attendre le seuil de présence.
-    var flushSeenTrigger: Int = 0
-    var scrollToMessageId: String? = nil
-    /// Counter incremented each time a scroll-to-message is requested via the
-    /// server-loaded path (jumpToQuotedMessage). The MessageListView bridge
-    /// compares old vs. new to fire the VC's scrollToMessage.
-    var scrollToMessageTrigger: Int = 0
-    var swipedMessageId: String? = nil
-    var swipeOffset: CGFloat = 0
-    var galleryStartAttachment: MessageAttachment? = nil
-    /// Les vues uniques OUVERTES dont la consommation attend la fermeture du
-    /// plein écran (#7499). État de VUE — il décrit ce qui est à l'écran, pas
-    /// une donnée du fil — donc il vit ici et non dans le ViewModel.
-    var pendingViewOnceConsumption = ViewOnceConsumption.Pending()
-    var imageToPreview: UIImage? = nil
-    var videoToPreview: URL? = nil
-
-    // Media editor queues
-    var photosToEdit: [UIImage] = []
-    var videosToPreview: [URL] = []
-    /// « Éditer » sur une pièce en attente : toutes les pièces en scènes (#9126).
-    var retouchSeries: ConversationRetouchSeries? = nil
-    var audioToEdit: PendingAudioEdit? = nil
-    // "Éditer" from the recent-media strip — edited BEFORE staging (the edited
-    // output goes through the camera-capture pipeline, never the original).
-    var recentImageToEdit: UIImage? = nil
-    var recentVideoToEdit: URL? = nil
-}
-
-/// Lot 3.2 — enveloppe `Identifiable` d'une URL de fichier pour la
-/// `ShareSheet` de la rangée plate (même patron que `BubbleFullscreenPlace`).
-struct FocalShareFileItem: Identifiable {
-    let url: URL
-    var id: String { url.absoluteString }
-}
-
-struct PreviewMedia: Identifiable {
-    let id = UUID()
-    let url: URL
-    let type: String?
-}
-
-/// A pending audio attachment opened for editing — carries the attachment id
-/// so the editor can replace that exact tray chip on confirm (never append).
-/// La vidéo en attente ouverte dans l'éditeur, avec l'id de SA pièce jointe
-/// (#8443) : sans lui, le résultat ne savait pas quel chip remplacer.
-struct PendingVideoEdit: Identifiable, Equatable {
-    let id: String
-    let url: URL
-}
-
-struct PendingAudioEdit: Identifiable, Equatable {
-    /// The id of the `MessageAttachment` being edited.
-    let id: String
-    let url: URL
-}
-
 struct ConversationView: View {
     let conversation: Conversation?
     var replyContext: ReplyContext? = nil
@@ -103,16 +33,11 @@ struct ConversationView: View {
     /// couvre déjà le flux authentifié normal, dupliquer la bannière ici
     /// l'afficherait deux fois.
     var showsOwnConnectionBanner: Bool = false
-    /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant : item « Focal (bêta) » du
-    /// menu d'appui long de la liste (retiré avec Focal iOS le 2026-08-18).
-    /// `nil` (défaut) ⇒
-    /// `init` bit-à-bit identique à avant ce lot — SEUL le site d'appel qui
-    /// lit `router.pendingForcedReadingMode` (RootView/iPadRootView) passe une
-    /// valeur non-`nil`. Transmis tel quel à
-    /// `ReadingModeController.init(forcedMode:)` : court-circuite la décision
-    /// D'OUVERTURE sans dupliquer ni relâcher la loi gelée
-    /// `ReadingModeOrchestrator.resolveOrchestratorDecision` — voir la
-    /// docstring de `ReadingModeController.forcedMode`.
+    /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant (item « Focal (bêta) »,
+    /// retiré avec Focal iOS le 2026-08-18) : `nil` ⇒ `init` bit-à-bit identique ;
+    /// SEUL le site d'appel qui lit `router.pendingForcedReadingMode`
+    /// (RootView/iPadRootView) passe une valeur. Transmis tel quel à
+    /// `ReadingModeController.init(forcedMode:)` — voir sa docstring.
     var forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil
 
     /// Conversation CONFIRMÉE par le serveur après un enregistrement dans
@@ -125,31 +50,29 @@ struct ConversationView: View {
     /// ses champs internes changent. L'override est la seule source vivante.
     @State private var conversationOverride: Conversation?
 
-    /// La conversation à AFFICHER : l'override s'il existe, sinon la valeur
-    /// figée. `internal` (pas `private`) : lue par l'extension
-    /// `ConversationView+Header`, qui vit dans un autre fichier — `private` est
-    /// à portée de fichier.
-    var liveConversation: Conversation? { conversationOverride ?? conversation }
+    /// La conversation à AFFICHER : l'override s'il existe, sinon la valeur figée (lue par `+Header`).
+    var liveConversation: Conversation? { _ = repaintRevision; return conversationOverride ?? conversation }
+    /// `==` ne compare que l'`id` : une copie repeinte écrite dans `@State` est ÉGALE et n'invalide
+    /// rien. Cette révision, lue par `liveConversation`, porte le redessin (#10751).
+    @State private var repaintRevision = 0
 
     /// Le pair d'un direct OUVERT renommé ou repeint à `user:updated` (#9359) :
     /// l'annonce s'applique à la conversation AFFICHÉE et le résultat devient
     /// l'override — l'override garde la priorité, la valeur figée reste le
     /// repli, et un enregistrement des réglages repart du pair repeint. Une
     /// annonce qui ne change rien n'écrit rien : l'écran ne se redessine pas.
-    func admitPeerUpdate(_ event: UserUpdatedEvent) {
-        guard let repainted = DirectPeerRepaint.repainted(liveConversation, by: event) else { return }
-        conversationOverride = repainted
-    }
+    func admitPeerUpdate(_ event: UserUpdatedEvent) { admitRepainted(DirectPeerRepaint.repainted(liveConversation, by: event)) }
+    /// Écrivain UNIQUE de l'override : pair (#9359), accent relayé (#10631), réglages enregistrés.
+    func admitRepainted(_ repainted: Conversation?) { guard let repainted else { return }; conversationOverride = repainted; repaintRevision &+= 1 }
 
-    // NOTE: Properties below are internal (not private) for cross-file extension access.
-    // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
+    // NOTE: Properties below are internal (not private) for cross-file extension access (+MessageRow, +Header, …).
+    @Environment(\.sceneWindowSize) var sceneWindowSize // la fenêtre qui porte la conversation (Stage Manager)
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets // ses marges, mesurées hors de `body`
+    var windowInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
     var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) var colorScheme
-    /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
-    @Environment(\.zoomTransitionNamespace) private var zoomNamespace
     @Environment(\.isStoryViewerPresenting) private var isStoryViewerPresenting
     /// Bascule Reduce Motion IN-APP (§4.9) — la source SYSTÈME
     /// (`UIAccessibility.isReduceMotionEnabled`) est lue directement par
@@ -166,38 +89,25 @@ struct ConversationView: View {
     @Environment(\.meeshyConversationList) var conversationListViewModel
     @StateObject var viewModel: ConversationViewModel
     /// WS-7 (F-086, contrat §WS-7/A6) — décision de l'orchestrateur des modes
-    /// de lecture, prise UNE SEULE FOIS dans `init` (écart #4 du contrat :
-    /// `viewModel.start()` marque déjà lu avant la première frame,
-    /// `unreadCount` y vaudrait 0 si la décision attendait `onAppear`).
-    /// Enveloppe la loi GELÉE `ReadingModeOrchestrator.resolveOrchestratorDecision`
-    /// (`Focal/Core/`, M-042) + le stockage local scopé (`ReadingModePreferenceStore`,
-    /// F-080). Préférence collante PRIME sur la décision auto ; `auto` rend
-    /// la main à l'orchestrateur (seuils ≤25 / >25 / absence>24h∧≥10) —
-    /// `ReadingModeController` (F-080, GELÉ) porte cette résolution, non
-    /// dupliquée ici.
+    /// de lecture, prise UNE SEULE FOIS dans `init` (écart #4 : `viewModel.start()`
+    /// marque déjà lu avant la première frame, `unreadCount` y vaudrait 0 si la
+    /// décision attendait `onAppear`). `ReadingModeController` (F-080, GELÉ) porte
+    /// la résolution (loi gelée + préférence collante), non dupliquée ici.
     @StateObject var readingModeController: ReadingModeController
     /// Capacités résolues UNE SEULE FOIS dans `init`, aux côtés de
-    /// `readingModeController` — même `capabilities` locale, aucune seconde
-    /// résolution. Alimente `ReadingModeLensCatalog.rows` (§WS-7 travail 5,
-    /// arbitrage F-086bis) : Rivière TOUJOURS présente au catalogue, grisée
-    /// avec sa VRAIE raison et ses VRAIS seuils quand indisponible — jamais
-    /// retirée de la liste (critère §7 « un mode indisponible n'est jamais
-    /// un écran vide »).
+    /// `readingModeController` (aucune seconde résolution). Alimente
+    /// `ReadingModeLensCatalog.rows` : la Rivière est TOUJOURS au catalogue,
+    /// grisée avec sa VRAIE raison quand indisponible (§7).
     let readingModeCapabilities: ReadingModeOrchestrator.ReadingModeCapabilities
     /// Lot 3.2 — carte lieu de la rangée plate : plein écran (même patron
     /// que `BubbleFullscreenPlace` côté bulle).
     @State private var focalFullscreenPlace: FocalFullscreenPlace?
     /// Lot 3.2 — fichier à partager depuis la rangée plate (ShareSheet).
     @State private var focalShareFileItem: FocalShareFileItem?
-    // `typingObserver` a été RETIRÉ (#5961). Il était capturé à l'`init` depuis
-    // le `vm` LOCAL — une instance neuve à chaque évaluation du parent, que
-    // `@StateObject` jette — si bien qu'il observait le store d'un ViewModel
-    // mort, qu'aucun `typing:start` n'alimente. Il ne faisait donc pas ce que
-    // son commentaire promettait : il ne rendait RIEN vivant.
-    //
-    // Ce qui a besoin du roster le reçoit désormais par
-    // `ConversationTypingRosterHost`, alimenté par `viewModel.stateStore` — le
-    // survivant — au moment du rendu, jamais capturé à l'`init`.
+    // `typingObserver` a été RETIRÉ (#5961) : capturé à l'`init` depuis le `vm`
+    // LOCAL (une instance que `@StateObject` jette), il observait le store d'un
+    // ViewModel mort. Le roster arrive par `ConversationTypingRosterHost`,
+    // alimenté par `viewModel.stateStore` — le survivant — au rendu.
     /// Observe le blocage pour réafficher la zone composer « débloquer » dès
     /// qu'un block/unblock change. Événement rare (action explicite), hors hot
     /// path — safe (même pattern que ConversationListView). Seuls les blocages
@@ -239,6 +149,7 @@ struct ConversationView: View {
     /// looks up the target message's frame here at gesture fire time and
     /// passes it to `MessageOverlayMenu` as the source frame.
     @State var frameTracker = MessageFrameBox()
+    @State var searchDebounce = SearchDebounceBox()
 
     /// Publisher stable (référence identique à chaque body eval) : l'inline
     /// dans scrollToBottomButton reconstruisait l'abonnement au coordinator à
@@ -262,101 +173,34 @@ struct ConversationView: View {
     /// réserve basse, au lieu de s'y téléporter (#4949).
     @State var keyboardTransition: KeyboardTransition?
 
-
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
 
-    // MARK: - Composer Height Measurement
+    // MARK: - Composer Height Measurement & Draft
 
-    /// Persist the whole compose state (text, inline reply, selected language,
-    /// effects, blur, ephemeral duration) so the user never loses context when
-    /// the app is killed mid-sentence. Empty drafts are purged from
-    /// `UserDefaults` by `DraftStore.save(_:for:)`.
-    private func persistDraft(text: String, attachmentRefs: [DraftAttachmentRef]? = nil) {
-        let ref = composerState.pendingReplyReference
-        // Les refs de pièces jointes sont l'autorité du handler background
-        // (copie durable) : une frappe intermédiaire les PRÉSERVE au lieu de
-        // les écraser — sinon chaque lettre tapée perdrait les pièces du
-        // brouillon persisté.
-        let refs = attachmentRefs
-            ?? DraftStore.shared.load(for: viewModel.conversationId)?.attachments
-        let draft = MessageDraft.composing(
-            text: text,
-            reply: ref,
-            selectedLanguage: composerState.selectedLanguage,
-            effectFlags: viewModel.pendingEffects.flags.rawValue,
-            isBlurEnabled: viewModel.isBlurEnabled,
-            ephemeralDurationRawValue: viewModel.ephemeralChoice?.storageValue,
-            attachments: (refs?.isEmpty ?? true) ? nil : refs
-        )
-        DraftStore.shared.save(draft, for: viewModel.conversationId)
+    /// Le brouillon (sauvegarde et reprise) vit dans `ConversationDraftCoordinator` ;
+    /// la vue lui remet son état à chaque appel, elle n'en garde aucune copie.
+    private var draftCoordinator: ConversationDraftCoordinator {
+        ConversationDraftCoordinator(viewModel: viewModel, isDirect: isDirect, participantUserId: conversation?.participantUserId)
     }
 
-    /// Copie durable des pièces jointes du tray au passage en background,
-    /// puis re-save du brouillon avec leurs références. Rebuild complet à
-    /// chaque background : une pièce retirée du tray ne ressuscite jamais.
+    private func persistDraft(text: String) {
+        draftCoordinator.persist(text: text, composerState: composerState)
+    }
+
     private func persistDraftAttachmentsForBackground() {
-        guard let userId = AuthManager.shared.currentUser?.id else { return }
-        let refs = MessageDraftMediaStore.persist(
-            attachments: composerState.pendingAttachments, files: composerState.pendingMediaFiles,
-            assetLinks: composerState.libraryAssetLinks,
-            userId: userId,
-            conversationId: viewModel.conversationId
-        )
-        persistDraft(text: composerText.text, attachmentRefs: refs)
-    }
-
-    /// Hauteur cible du composer, ou `nil` quand il ne faut PAS toucher à
-    /// `composerHeight`.
-    ///
-    /// La safe area n'est ajoutée que si le clavier est absent : quand le clavier
-    /// est visible la safe area bottom passe à 0 et le `GeometryReader` fire à
-    /// chaque frame d'animation, ce qui bouclerait la hauteur sur elle-même.
-    ///
-    /// `static` + inset injecté : la règle est vérifiable sans instancier la View
-    /// ni une fenêtre (doctrine `StoryViewerView.entryStory(of:now:)`).
-    static func resolvedComposerHeight(
-        contentHeight: CGFloat,
-        keyboardHeight: CGFloat,
-        safeAreaBottom: CGFloat
-    ) -> CGFloat? {
-        guard keyboardHeight == 0 else { return nil }
-        return contentHeight + safeAreaBottom
-    }
-
-    /// Ancrage vertical du bouton « redescendre en bas ».
-    ///
-    /// Le bouton était posé sur `composerHeight`, qui grandit d'une ligne à
-    /// chaque retour à la ligne du champ de saisie : écrire un message faisait
-    /// donc REMONTER le bouton sous le doigt, et ce déplacement se lisait comme
-    /// un retour au bas de la conversation alors que l'utilisateur était en
-    /// train de relire son historique.
-    ///
-    /// Pendant la rédaction, l'ancrage reste donc celui d'avant la première
-    /// frappe. Il se réaligne dès que le champ redevient vide — à l'envoi, ou
-    /// quand l'utilisateur efface — c'est-à-dire aux seuls moments où plus
-    /// aucune position de lecture n'est en jeu. Les autres causes de
-    /// redimensionnement du composer (ouverture des options, barre de réponse)
-    /// continuent de le déplacer : elles ne sont pas « écrire ».
-    static func resolvedScrollButtonAnchor(
-        current: CGFloat,
-        composerHeight: CGFloat,
-        isComposing: Bool
-    ) -> CGFloat {
-        isComposing ? current : composerHeight
+        draftCoordinator.persistAttachmentsForBackground(text: composerText.text, composerState: composerState)
     }
 
     private func updateComposerHeight(_ contentHeight: CGFloat) {
-        // `DeviceLayout.safeAreaBottom` et non un parcours de `connectedScenes` :
-        // ce dernier est un `Set` NON ORDONNÉ, donc `.first` peut renvoyer une
-        // scène d'arrière-plan. En Split View / Stage Manager le composer était
-        // alors dimensionné contre l'inset d'une AUTRE fenêtre.
-        guard let height = Self.resolvedComposerHeight(
+        // La marge basse de la fenêtre qui PORTE la conversation : en Split View / Stage Manager,
+        // celle d'une AUTRE fenêtre (scène d'arrière-plan, puis fenêtre clé) dimensionnait le composer.
+        guard let height = ConversationViewRules.resolvedComposerHeight(
             contentHeight: contentHeight,
             keyboardHeight: keyboardHeight,
-            safeAreaBottom: DeviceLayout.safeAreaBottom
+            safeAreaBottom: windowInsets.bottom
         ) else { return }
         composerHeight = height
-        composerScrollButtonAnchor = Self.resolvedScrollButtonAnchor(
+        composerScrollButtonAnchor = ConversationViewRules.resolvedScrollButtonAnchor(
             current: composerScrollButtonAnchor,
             composerHeight: height,
             isComposing: !composerText.text.isEmpty
@@ -372,11 +216,11 @@ struct ConversationView: View {
     }
 
     var accentColor: String {
-        conversation?.accentColor ?? DynamicColorGenerator.colorForName(conversation?.name ?? "Unknown")
+        liveConversation?.displayPalette(isDark: isDark).primary ?? DynamicColorGenerator.colorForName(conversation?.name ?? "Unknown")
     }
 
     var secondaryColor: String {
-        conversation?.colorPalette.secondary ?? MeeshyColors.indigo300Hex
+        liveConversation?.displayPalette(isDark: isDark).secondary ?? MeeshyColors.indigo300Hex
     }
 
     var isDirect: Bool {
@@ -409,17 +253,7 @@ struct ConversationView: View {
 
     var conversationSection: ConversationSection? {
         guard let sectionId = conversation?.userState.sectionId else { return nil }
-        // ConversationSection.allSections should be accessed via a fast dictionary in production apps,
-        // but since we only have the Array here, we can lazily build a static dictionary.
-        return Self.sectionLookup[sectionId]
-    }
-
-    private static var _sectionLookup: [String: ConversationSection]?
-    private static var sectionLookup: [String: ConversationSection] {
-        if let cached = _sectionLookup { return cached }
-        let dict = Dictionary(uniqueKeysWithValues: ConversationSection.allSections.map { ($0.id, $0) })
-        _sectionLookup = dict
-        return dict
+        return ConversationViewRules.section(withId: sectionId)
     }
 
     var topActiveMembers: [ConversationActiveMember] {
@@ -431,6 +265,15 @@ struct ConversationView: View {
         let platformRole = AuthManager.shared.currentUser?.role?.uppercased() ?? ""
         let modRoles: Set<String> = ["ADMIN", "MODERATOR", "BIGBOSS"]
         return modRoles.contains(convRole) || modRoles.contains(platformRole)
+    }
+
+    /// « Retirer » le message d'un AUTRE (#11151) — créateur compris, jamais en direct.
+    func canRemoveMessage(_ message: Message) -> Bool {
+        guard let conversation else { return false }
+        return ContentRemovalPolicy.mayRemoveMessage(
+            authoredByViewer: message.isMe, conversationType: conversation.type,
+            conversationRole: conversation.currentUserRole, platformRole: AuthManager.shared.currentUser?.role
+        )
     }
 
     // MARK: - Init
@@ -474,12 +317,10 @@ struct ConversationView: View {
         let capabilities = ReadingModeOrchestrator.resolveCapabilities(.init(
             identity: identity.readingModeIdentity,
             isFlagEnabled: isFlagEnabled,
-            // Chantier Rivière iOS, lot 1 (2026-08-21) : le drapeau `riviere_mode`
-            // rend `.river` réellement sélectionnable à l'ouverture du fil —
-            // et `RiverConversationHost` est monté dans ce même fichier (la
-            // sélection n'est plus une promesse rompue).
+            // Rivière iOS, lot 1 (2026-08-21) : le drapeau `riviere_mode` rend
+            // `.river` sélectionnable à l'ouverture du fil (`ConversationRiverLayer`).
             isRiverFlagEnabled: LentilleFeatureFlag.isRiviereModeEnabled,
-            conversationType: Self.readingModeConversationType(for: conversation?.type),
+            conversationType: ConversationViewRules.readingModeConversationType(for: conversation?.type),
             activeParticipantCount: conversation?.memberCount ?? 0
         ))
         _readingModeController = StateObject(wrappedValue: ReadingModeController(
@@ -495,20 +336,13 @@ struct ConversationView: View {
         // Lentille lit `readingModeCapabilities`, jamais un recalcul.
         self.readingModeCapabilities = capabilities
 
-        // Écart #4 (accepté par l'arbitrage F-086bis, documenté dans le
-        // rapport WS-7/F-086bis) : ce chemin drapeau-ON de `init` ne peut pas
-        // être prouvé par construction directe de `ConversationView` en test
-        // — `ConversationViewModel.init` déclenche de vrais GRDB/réseau
-        // (`ConversationDependencies.live`), sans point d'injection. Couvert
-        // indirectement par `ConversationViewReadingModeInitTests` (les 9 cas
-        // purs de `readingModeConversationType`) et
-        // `ConversationViewReadingModeSourceGuardTests` (preuves par lecture
-        // de source : une seule construction de `ReadingModeController`,
-        // `capabilities` résolue une fois, réutilisée par `readingModeCapabilities`).
-        // Risque documenté, accepté tel quel — non re-testé ici.
+        // Écart #4 (accepté, arbitrage F-086bis) : ce chemin drapeau-ON de `init`
+        // ne se prouve pas par construction directe en test (`ConversationViewModel.init`
+        // ouvre de vrais GRDB/réseau, sans point d'injection) — il est couvert par
+        // `ConversationViewReadingModeInitTests` (cas purs de `readingModeConversationType`)
+        // et `ConversationViewReadingModeSourceGuardTests` (preuves par lecture de source).
     }
 
-    /// SDK `MeeshyConversation.ConversationType` (8 cas) → miroir GELÉ de la
     /// Hauteur de la bande de boutons de l'en-tête flottant, sous la safe
     /// area : une rangée à la cible tactile HIG (`meeshyTapTarget`, 44) plus
     /// le retrait haut que `expandedHeaderBand` s'applique. C'est la seule
@@ -516,1438 +350,320 @@ struct ConversationView: View {
     /// que ses propres tokens (`RiverMetrics`).
     static let riverHeaderClearance: CGFloat = 44 + MeeshySpacing.sm
 
-    /// loi de lecture (`ReadingModeOrchestrator.ConversationType`, 5 cas —
-    /// RE-PREUVE : `community`/`channel`/`bot` n'y existent pas). Les trois
-    /// cas absents sont des conversations multi-parties comme `.group` —
-    /// jamais `.direct`, la seule distinction qui compte pour
-    /// `resolveCapabilities` (éligibilité Rivière : « jamais en direct »).
-    /// `nil` (aucune conversation) ⇒ `.group`, cohérent avec `isDirect`
-    /// (calculée plus haut), qui traite déjà un `conversation` nil comme
-    /// « pas direct ».
-    /// `internal` (pas `private`) : lu directement par
-    /// `ConversationViewReadingModeInitTests` (`@testable import Meeshy`).
-    static func readingModeConversationType(
-        for sdkType: MeeshyConversation.ConversationType?
-    ) -> ReadingModeOrchestrator.ConversationType {
-        switch sdkType {
-        case .direct: return .direct
-        case .group, .community, .channel, .bot, nil: return .group
-        case .public: return .public
-        case .global: return .global
-        case .broadcast: return .broadcast
-        }
-    }
-
     // MARK: - Body
 
     var body: some View {
-        bodyWithSheets
-    }
-
-    private var bodyWithSheets: AnyView {
-        AnyView(
-        bodyWithCovers
-            .conversationCover(isPresented: $headerState.showStoryViewerFromHeader) {
-                StoryViewerContainer(
-                    viewModel: storyViewModel,
-                    userId: headerState.storyUserIdForHeader,
-                    isPresented: $headerState.showStoryViewerFromHeader,
-                    onReplyToStory: { replyContext in
-                        headerState.showStoryViewerFromHeader = false
-                        router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
-                    },
-                    singleGroup: true,
-                    startAtFirstUnviewed: true,
-                    presentationSource: "ConversationView.header"
-                )
-                // Re-inject env objects required by StoryViewerView for its
-                // internal SharePickerView sheet. fullScreenCover does NOT
-                // inherit EnvironmentObjects automatically.
-                .environmentObject(router)
-                .environmentObject(statusViewModel)
-                .conversationListObject(conversationListViewModel)
-                // U1 inc.2 — zoom depuis la bulle si elle est enregistrée
-                // (tray in-chat), fallback cover standard sinon (avatar header).
-                .zoomTransitionDestination(sourceID: headerState.storyUserIdForHeader ?? "", in: zoomNamespace)
-            }
-            .conversationCover(isPresented: $overlayState.showStoryViewer) {
-                StoryViewerContainer(
-                    viewModel: storyViewModel,
-                    userId: overlayState.storyViewerUserId,
-                    isPresented: $overlayState.showStoryViewer,
-                    onReplyToStory: { replyContext in
-                        overlayState.showStoryViewer = false
-                        router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
-                    },
-                    singleGroup: true,
-                    initialStoryIndex: overlayState.storyViewerSlideIndex,
-                    startAtFirstUnviewed: overlayState.storyViewerStartAtFirstUnviewed,
-                    presentationSource: "ConversationView.overlay"
-                )
-                // Re-inject env objects required by StoryViewerView for its
-                // internal SharePickerView sheet. fullScreenCover does NOT
-                // inherit EnvironmentObjects automatically.
-                .environmentObject(router)
-                .environmentObject(statusViewModel)
-                .conversationListObject(conversationListViewModel)
-                .zoomTransitionDestination(sourceID: overlayState.storyViewerUserId ?? "", in: zoomNamespace)
-            }
-            .modifier(ConversationInfoSheetLayer(
-                isPresented: $composerState.showConversationInfo, scrollState: $scrollState,
-                conversation: liveConversation, accentColor: accentColor, messages: viewModel.messages,
-                router: router, onConversationUpdated: { conversationOverride = $0 }))
-            .alert(String(localized: "conversation.view.action_selected", bundle: .main), isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
-                Button(String(localized: "common.ok", bundle: .main)) { composerState.actionAlert = nil }
-            } message: { Text(composerState.actionAlert ?? "") }
-            // Popup consentement vocal (2026-07-08) : envoi d'un audio sans
-            // consentement validé → proposer la traduction automatique. La
-            // validation accorde le consentement de définition du profil
-            // vocal ET la traduction utilisant ce profil, puis relance
-            // l'envoi ; « Plus tard » envoie tel quel (le composer n'a pas
-            // encore été vidé quand ce popup interrompt le send).
-            .alert(
-                String(localized: "conversation.voiceConsent.title",
-                       defaultValue: "Traduction automatique des vocaux", bundle: .main),
-                isPresented: $composerState.showVoiceAutoTranslateConsent
-            ) {
-                Button(String(localized: "conversation.voiceConsent.accept",
-                              defaultValue: "Activer", bundle: .main)) {
+        bodyStage
+            .modifier(ConversationBodyLifecycle(
+                allowsEdgeSwipe: readingModeController.mode != .river,
+                accessRevoked: viewModel.accessRevoked,
+                keyboardTransition: $keyboardTransition,
+                actions: lifecycleActions))
+            .modifier(ConversationRouterWatch(
+                signals: ConversationRouterSignals(
+                    pendingOpenSearch: router.pendingOpenSearch,
+                    pendingHighlightMessageId: router.pendingHighlightMessageId,
+                    replyContextVersion: router.replyContextVersion),
+                openSearch: { await consumePendingOpenSearch() },
+                consumeHighlight: { await consumePendingHighlightMessage() },
+                applyReplyContext: { applyPendingReplyContext() }))
+            .modifier(ConversationDraftPersistenceWatch(
+                keys: draftKeys,
+                isNearBottom: scrollState.isNearBottom,
+                isTyping: isTyping,
+                persist: { persistDraft(text: composerText.text) },
+                closeEmojiPanel: { closeComposerEmojiPanel() }))
+            .modifier(ConversationBodyCovers(
+                viewModel: viewModel, composerState: $composerState, scrollState: $scrollState,
+                overlayState: $overlayState, conversation: conversation, accentColor: accentColor,
+                isDark: isDark, isGuest: anonymousSession != nil, isAdminOrMod: isCurrentUserAdminOrMod,
+                mediaSaveCoordinator: mediaSaveCoordinator, onReply: { triggerReply(for: $0) },
+                actions: messageActions))
+            .modifier(ConversationBodySheets(
+                headerState: $headerState, overlayState: $overlayState, composerState: $composerState,
+                scrollState: $scrollState, conversation: liveConversation, accentColor: accentColor,
+                messages: viewModel.messages, router: router,
+                onConversationUpdated: { admitRepainted($0) },
+                onVoiceConsentAccept: {
                     viewModel.grantVoiceAutoTranslationConsent()
                     sendMessageWithAttachments()
-                }
-                Button(String(localized: "conversation.voiceConsent.later",
-                              defaultValue: "Plus tard", bundle: .main), role: .cancel) {
-                    sendMessageWithAttachments()
-                }
-            } message: {
-                Text(String(localized: "conversation.voiceConsent.message",
-                            defaultValue: "Autorisez la définition de votre profil vocal pour que vos messages vocaux soient transcrits et traduits automatiquement dans la langue de chaque destinataire — y compris avec votre voix.",
-                            bundle: .main))
-            }
-            .confirmationDialog(
-                String(localized: "conversation.view.delete_message.title", bundle: .main),
-                isPresented: Binding(
-                    get: { overlayState.deleteConfirmMessageId != nil },
-                    set: { if !$0 { overlayState.deleteConfirmMessageId = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: overlayState.deleteConfirmMessageId
-            ) { msgId in
-                // "Delete for everyone" only if the user authored the
-                // message AND the 2-hour window hasn't elapsed — matches
-                // WhatsApp's "Delete for everyone" gating.
-                if let idx = viewModel.messageIndex(for: msgId),
-                   viewModel.canDeleteForEveryone(viewModel.messages[idx]) {
-                    Button(String(localized: "conversation.view.delete_for_everyone", bundle: .main), role: .destructive) {
-                        Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }
-                        overlayState.deleteConfirmMessageId = nil
-                    }
-                }
-                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
-                    Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }
-                    overlayState.deleteConfirmMessageId = nil
-                }
-                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { overlayState.deleteConfirmMessageId = nil }
-            } message: { _ in
-                Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
-            }
-            // #4024 — même contrat que la confirmation ci-dessus, sur la
-            // SÉLECTION entière plutôt qu'un seul message : "pour tous"
-            // n'apparaît que si `selectionAllowsDeleteForAll` (TOUS les
-            // messages sélectionnés sont miens ET encore dans la fenêtre).
-            .confirmationDialog(
-                String(localized: "conversation.view.delete_message.title", bundle: .main),
-                isPresented: $overlayState.deleteConfirmSelectionActive,
-                titleVisibility: .visible
-            ) {
-                if selectionAllowsDeleteForAll {
-                    Button(String(localized: "conversation.view.delete_for_everyone", bundle: .main), role: .destructive) {
-                        deleteSelectedMessages(mode: .everyone)
-                    }
-                }
-                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
-                    deleteSelectedMessages(mode: .local)
-                }
-                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
-            } message: {
-                Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
-            }
-            .sheet(item: $overlayState.shareMessage) { msg in
-                ShareSheet(activityItems: [viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content])
-                    .presentationDetents([.medium, .large])
-            }
-            .sheet(item: $composerState.forwardMessage, onDismiss: {
-                // #4005 — le transfert groupé se referme AVEC le simple.
-                composerState.forwardAdditionalMessages = []
-                // La feuille est DÉMONTÉE : le plein écran peut prendre sa
-                // place. Promouvoir plus tôt présenterait deux modaux à la fois.
-                guard let attendue = composerState.pendingComposeTarget else { return }
-                composerState.pendingComposeTarget = nil
-                composerState.composeMediaTarget = attendue
-            }) { msgToForward in
-                forwardPicker(for: msgToForward)
-            }
-            // Flou du fond quand l'overlay d'appui-long est ouvert — appliqué
-            // AVANT `.overlay` pour ne flouter que la conversation, jamais le
-            // menu (bulle liftée + barres) qui se pose au-dessus, net.
-            .blur(radius: overlayState.showOverlayMenu ? 12 : 0)
-            .animation(.easeOut(duration: 0.28), value: overlayState.showOverlayMenu)
-            .overlay { overlayMenuContent }
-            // #4004 — restitue le clavier/panneau d'options désactivés par
-            // `presentLongPressMenu` à l'ouverture, quand le menu se referme
-            // (tap ailleurs, swipe, action choisie).
-            .adaptiveOnChange(of: overlayState.showOverlayMenu) { _, isShowing in
-                if !isShowing { restoreStateAfterLongPressIfNeeded() }
-            }
-            .onPreferenceChange(MessageFramePreferenceKey.self) { frames in
-                frameTracker.update(frames)
-            }
-            .sheet(isPresented: $overlayState.showReplyThread) {
-                if let parentId = overlayState.replyThreadParentId,
-                   let parent = viewModel.messages.first(where: { $0.id == parentId }) {
-                    ThreadView(parentMessage: parent, conversationId: viewModel.conversationId)
-                        .environmentObject(statusViewModel)
-                }
-            }
-            // Feuille Lentille (§WS-7 travail 5, arbitrage F-086bis) —
-            // catalogue construit depuis `readingModeCapabilities`, résolue
-            // UNE SEULE FOIS dans `init` (aucune seconde résolution).
-            // Sélection ET retour-auto passent PAR `readingModeController`
-            // (préférence collante F-080 GELÉE) — jamais un état local dupliqué.
-            // Lot 3.2 — plein écran du lieu depuis la rangée plate : mêmes
-            // primitives que la bulle (`BubbleStandardLayout`,
-            // `.fullScreenCover(item: $fullscreenPlace)`), présentées ICI
-            // parce que la rangée vit dans une cellule de collection.
-            .conversationCover(item: $focalFullscreenPlace) { focalPlaceFullscreen($0) }
-            .sheet(item: $focalShareFileItem) { item in
-                ShareSheet(activityItems: [item.url])
-            }
+                },
+                onVoiceConsentLater: { sendMessageWithAttachments() },
+                deleteAnchor: { messageDeleteConfirmationAnchor },
+                forwardPicker: { forwardPicker(for: $0) }))
+            .modifier(ConversationBodyOverlayMenu(
+                overlayState: $overlayState, focalFullscreenPlace: $focalFullscreenPlace,
+                focalShareFileItem: $focalShareFileItem, viewModel: viewModel, frameTracker: frameTracker,
+                accentColor: accentColor, isDirect: isDirect, isAdminOrMod: isCurrentUserAdminOrMod,
+                mediaSaveCoordinator: mediaSaveCoordinator, actions: messageActions,
+                threadLanguage: { overlayThreadLanguage(for: $0) },
+                pieceOverlay: { pieceOverlayContent(for: $0) },
+                onMenuClosed: { restoreStateAfterLongPressIfNeeded() },
+                placeCover: { focalPlaceFullscreen($0) }))
+    }
+
+    // MARK: - Lifecycle
+
+    private var lifecycleActions: ConversationLifecycleActions {
+        ConversationLifecycleActions(
+            startup: { await runConversationStartup() },
+            didAppear: { conversationDidAppear() },
+            didDisappear: { conversationDidDisappear() },
+            willResignActive: { composerText.flushPendingChange() },
+            didEnterBackground: { conversationDidEnterBackground() },
+            accessRevoked: { conversationAccessWasRevoked() }
         )
     }
 
-    private var bodyWithCovers: AnyView {
-        AnyView(
-        bodyWithLifecycle
-            // La PORTE du média reçu (lot 5, O13). Un plein écran, pas une
-            // feuille : c'est un atelier, et il occupe l'écran comme celui de
-            // la création. Elle vit dans la couche des COVERS et non dans celle
-            // des feuilles, où le débordement de pile par profondeur de type a
-            // déjà coûté dix-huit rapports device.
-            //
-            // Le montage du MEUBLE, lui, reste dans la porte : le poser ici
-            // recopierait son envoi, sa reprise hors-ligne et sa sortie — et
-            // ce lot livre justement un SECOND déclencheur du même chemin.
-            .conversationCover(item: $composerState.composeMediaTarget) { cible in
-                MediaComposerDoor(
-                    // L'INTENTION naît dans la porte, pas ici : un second site
-                    // qui la construirait serait un second contrat à tenir
-                    // d'accord, et ce lot a DEUX déclencheurs pour une seule
-                    // présentation. L'hôte ne remet que la cible.
-                    target: cible,
-                    storyViewModel: storyViewModel,
-                    preview: MediaComposerPreviewHosts(router: router, conversationList: conversationListViewModel, statusViewModel: statusViewModel),
-                    onDismiss: { composerState.composeMediaTarget = nil }
-                )
-            }
-            .modifier(ConversationMediaGalleryLayer(
-                viewModel: viewModel, scrollState: $scrollState,
-                composerState: $composerState, accentColor: accentColor,
-                onReply: { triggerReply(for: $0) }))
-            .conversationCover(item: $composerState.previewMedia) { media in
-                switch media.type {
-                case "video":
-                    VideoFullscreenPlayer(urlString: media.url.absoluteString, speed: .x1_0)
-                case "audio":
-                    VideoFullscreenPlayer(urlString: media.url.absoluteString, speed: .x1_0)
-                default:
-                    ImageFullscreen(imageUrl: media.url, accentColor: accentColor).contentExitGate(ComposerPreviewExit.gate)
-                }
-            }
-            .mediaSaveFlow(mediaSaveCoordinator)
-            .sheet(item: $overlayState.detailSheetMessage) { msg in
-                let ctx = MessageMenuContext(
-                    isMine: msg.isMe,
-                    canEdit: msg.isMe || isCurrentUserAdminOrMod,
-                    canDelete: msg.isMe || isCurrentUserAdminOrMod,
-                    hasText: !msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                    hasMedia: !msg.attachments.isEmpty,
-                    hasTimebasedMedia: msg.attachments.contains { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack },
-                    isPinned: msg.pinnedAt != nil,
-                    isStarred: viewModel.isStarred(messageId: msg.id),
-                    isEdited: msg.isEdited,
-                    hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty,
-                    // **La décoration du message, et son état d'épinglage**
-                    // (2026-09-05). `nil` ⇒ ce n'est pas un sticker, et
-                    // l'entrée n'existe pas — la loi 4 tenue par la RÈGLE, pas
-                    // par un grisé.
-                    stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
-                    showReadReceipts: GuestViewerAccess.offersWhoSaw(prefersReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts, isGuest: anonymousSession != nil),
-                    exits: msg.exitOffer, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: msg).isEmpty
-                )
-                MessageMoreSheet(
-                    message: msg,
-                    contactColor: conversation?.accentColor ?? MeeshyColors.brandPrimaryHex,
-                    conversationId: viewModel.conversationId,
-                    sections: MessageActionResolver.moreSections(ctx),
-                    initialItem: overlayState.moreSheetInitialItem,
-                    textTranslations: viewModel.messageTranslations[msg.id] ?? [],
-                    transcription: viewModel.messageTranscriptions[msg.id],
-                    translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
-                    editRevisions: viewModel.editRevisions(for: msg.id),
-                    onReply: { triggerReply(for: msg) },
-                    // #4021 — transférer ARME la sélection multiple au lieu
-                    // d'ouvrir directement le picker pour ce seul message :
-                    // l'utilisateur peut revenir cocher d'autres messages, ou
-                    // transférer juste celui-ci via le bouton de la barre de
-                    // sélection (qui, lui, ouvre réellement le picker).
-                    onForward: { beginSelectionMode(seedingWith: msg.id) },
-                    onThread: {
-                        overlayState.replyThreadParentId = msg.id
-                        overlayState.showReplyThread = true
-                    },
-                    onSaveMedia: {
-                        if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() }
-                    },
-                    onDeleteMedia: { deleteMedia(targeted: nil, of: msg) },
-                    onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
-                    onToggleStar: {
-                        _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
-                    },
-                    onToggleStickerFavorite: {
-                        MessageStickerFavorite.toggle(for: msg.sticker)
-                        HapticFeedback.light()
-                    },
-                    onDeleteMessage: { requestDeleteMessage(msg.id) },
-                    onEdit: { beginEdit(msg) },
-                    onCopy: {
-                        guard MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg) else { return }
-                        HapticFeedback.success()
-                    },
-                    onShare: { if MessageExitTransport.mayShare(msg) { overlayState.shareMessage = msg } }, onImagine: { beginMessageExport(msg, quick: false) },
-                    onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
-                    onSelectTranslation: { translation in
-                        viewModel.setActiveTranslation(for: msg.id, translation: translation)
-                    },
-                    onSelectAudioLanguage: { langCode in
-                        viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
-                    },
-                    onReport: { type, reason in
-                        Task {
-                            let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
-                            if success { HapticFeedback.success() }
-                            else { HapticFeedback.error() }
-                        }
-                    },
-                    translatingTextLanguages: viewModel.translatingTextLanguages[msg.id] ?? [],
-                    translatingAudioLanguages: viewModel.translatingAudioLanguages[msg.id] ?? [],
-                    translationRequestFailedPublisher: viewModel.translationRequestFailed.eraseToAnyPublisher(),
-                    onRequestTextTranslation: { targetLang, sourceLang in
-                        Task {
-                            await viewModel.requestTextTranslation(
-                                messageId: msg.id, content: msg.content,
-                                sourceLanguage: sourceLang, targetLanguage: targetLang
-                            )
-                        }
-                    },
-                    onRequestAudioTranslation: { targetLang, attachmentId in
-                        Task {
-                            await viewModel.requestAudioTranslation(
-                                messageId: msg.id, attachmentId: attachmentId,
-                                sourceLanguage: msg.originalLanguage, targetLanguage: targetLang
-                            )
-                        }
-                    }
-                )
-            }
-            .sheet(item: $overlayState.callDetailMessage) { msg in
-                if let summary = msg.callSummary {
-                    CallSummaryDetailSheet(
-                        summary: summary,
-                        isOutgoing: summary.initiatorId == viewModel.currentUserIdForView,
-                        accentHex: accentColor,
-                        timestamp: msg.createdAt,
-                        onCallBack: { s in viewModel.callBack(for: s) }
-                    )
-                }
-            }
-            .sheet(item: $overlayState.fullReactionPickerMessage) { msg in
-                // Picker CATÉGORISÉ (Reactions/Visages/Gestes/Cœurs/Animaux/Objets),
-                // titre « Reactions », SANS Close ni recherche, chrome Liquid Glass —
-                // le « + » de la barre de réactions ouvre ce picker, pas le clavier
-                // emoji standard.
-                CategorizedEmojiPickerSheet(
-                    style: isDark ? .dark : .light,
-                    onReact: { emoji in
-                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
-                        overlayState.fullReactionPickerMessage = nil
-                    }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
+    private var draftKeys: ConversationDraftKeys {
+        ConversationDraftKeys(
+            replyMessageId: composerState.pendingReplyReference?.messageId,
+            language: composerState.selectedLanguage,
+            effectsRaw: viewModel.pendingEffects.flags.rawValue,
+            blur: viewModel.isBlurEnabled,
+            ephemeral: viewModel.ephemeralChoice?.storageValue
         )
     }
 
-    /// Consomme `router.pendingHighlightMessageId` : scroll + flash sur le
-    /// message cible (fetch de la fenêtre autour si hors page chargée).
-    /// Scopé par conversation : un highlight posé pour une AUTRE conversation
-    /// n'est ni consommé ni « brûlé » ici — il reste disponible pour la bonne.
+    /// Surlignage demandé par le routeur (`ConversationHighlightConsumer`).
     private func consumePendingHighlightMessage() async {
-        guard let messageId = router.pendingHighlightMessageId, !messageId.isEmpty else { return }
-        if let scopedId = router.pendingHighlightConversationId,
-           let currentId = conversation?.id,
-           scopedId != currentId {
-            return
+        await ConversationHighlightConsumer(
+            router: router, conversationId: conversation?.id, viewModel: viewModel,
+            scrollTo: { scrollState.scrollToMessageId = $0; scrollState.scrollToMessageTrigger += 1 }
+        ).consume()
+    }
+
+    /// Réponse à un mood affiché dans la barre directe courante : la vue est
+    /// déjà à l'écran, `onAppear` ne se redéclenche pas. Un contexte refusé ici
+    /// (autre conversation) reste en attente pour SON DM.
+    private func applyPendingReplyContext() {
+        guard let ctx = router.pendingReplyContext,
+              applyReplyContext(ctx, openingConversation: false) else { return }
+        router.pendingReplyContext = nil
+    }
+
+    /// Active le ViewModel VIVANT (retenu par `@StateObject`) exactement une
+    /// fois. Les effets lourds (observation GRDB, chargement initial, abonnements
+    /// Combine, porte du moteur de synchro) sont différés ici hors de `init` : les
+    /// ViewModels jetables que SwiftUI alloue à chaque reconstruction restent
+    /// gratuits — voir `ConversationViewModel.start()`.
+    private func runConversationStartup() async {
+        restoreHeaderMemory()
+        viewModel.start()
+        viewModel.observeSync()
+        await viewModel.loadMessages()
+        // Ouvrir une conversation, c'est en regarder le bas. Le signal near-bottom
+        // ne se déclenche pas ici (l'état naît déjà « au bas », donc sans
+        // transition) — d'où cette demande explicite, reprise au réveil suivant
+        // si les cellules n'ont pas encore paru.
+        scrollState.flushSeenTrigger += 1
+        MessageSocketManager.shared.connect()
+        await consumePendingHighlightMessage()
+        await consumePendingOpenSearch()
+    }
+
+    private func conversationDidAppear() {
+        if let context = replyContext { applyReplyContext(context, openingConversation: true) }
+        if let lang = ConversationViewRules.defaultComposeLanguage(
+            preferredContentLanguage: AuthManager.shared.currentUser?.preferredContentLanguages.first,
+            keyboardPrimaryLanguage: UITextInputMode.activeInputModes.first?.primaryLanguage,
+            supportedCodes: Set(LanguageOption.defaults.map(\.code))
+        ) { composerState.selectedLanguage = lang }
+        // Persistance du brouillon (immédiate à chaque fin de mot / champ vidé,
+        // débouncée 400 ms en milieu de mot) : elle vit sur le modèle isolé, la
+        // racine ne se ré-évalue plus à la frappe. La closure capture une copie
+        // de la vue mais lit les @State via leur stockage LIVE.
+        composerText.onPersistNeeded = { text in
+            persistDraft(text: text)
         }
-        router.pendingHighlightMessageId = nil
-        router.pendingHighlightConversationId = nil
-        try? await Task.sleep(for: .milliseconds(300))
-        guard !Task.isCancelled else { return }
-        if viewModel.messages.contains(where: { $0.id == messageId }) {
-            scrollState.scrollToMessageId = messageId
-            scrollState.scrollToMessageTrigger += 1
-        } else {
-            await viewModel.loadMessagesAround(messageId: messageId)
-            if Task.isCancelled { return }
-            try? await Task.sleep(for: .milliseconds(100))
-            guard !Task.isCancelled else { return }
-            scrollState.scrollToMessageId = messageId
-            scrollState.scrollToMessageTrigger += 1
+        if let restoration = draftCoordinator.restore(from: composerState, composerText: composerText) {
+            composerState = restoration.composerState
+            if let media = restoration.media {
+                Task { await restoreDraftThumbnails(attachments: media.attachments, files: media.files) }
+            }
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { overlayState.longPressEnabled = true }
     }
 
-    private var bodyWithLifecycle: AnyView {
-        AnyView(
-        bodyContent
-            .background(InteractivePopEnabler(allowsEdgeSwipe: readingModeController.mode != .river))
-            .task {
-                // Activate the live (StateObject-retained) VM exactly once.
-                // Heavy side-effects (GRDB observation, initial load, Combine
-                // subscriptions, sync-engine gate) are deferred here out of
-                // `init` so the throwaway VMs SwiftUI allocates on every
-                // reconstruction stay free — see ConversationViewModel.start().
-                restoreHeaderMemory()
-                viewModel.start()
-                viewModel.observeSync()
-                await viewModel.loadMessages()
-                // Ouvrir une conversation, c'est en regarder le bas. Le signal
-                // near-bottom ne se déclenche pas ici (l'état naît déjà « au
-                // bas », donc sans transition) — d'où cette demande explicite,
-                // reprise au réveil suivant si les cellules n'ont pas encore paru.
-                scrollState.flushSeenTrigger += 1
-                MessageSocketManager.shared.connect()
-
-                await consumePendingHighlightMessage()
-
-                // Ouverture depuis le bouton Recherche de l'aperçu long-press :
-                // active directement la barre de recherche in-conversation.
-                if router.pendingOpenSearch {
-                    router.pendingOpenSearch = false
-                    try? await Task.sleep(for: .milliseconds(250))
-                    guard !Task.isCancelled else { return }
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        headerState.showSearch = true
-                    }
-                }
-            }
-            // Tap de notification pour la conversation DÉJÀ à l'écran : `path`
-            // reçoit le même id, la vue n'est pas recréée et `.task` ne rejoue
-            // pas — consommer le highlight à chaud.
-            .adaptiveOnChange(of: router.pendingHighlightMessageId) { _, newValue in
-                guard let newValue, !newValue.isEmpty else { return }
-                Task { await consumePendingHighlightMessage() }
-            }
-            .onAppear {
-                if let context = replyContext { applyReplyContext(context, openingConversation: true) }
-                // Language priority (Prisme Linguistique): the user's primary
-                // configured content language is the source of truth and wins
-                // the compose default. The active keyboard layout is only a
-                // FALLBACK — used for anonymous users or unsupported content
-                // languages. It must NEVER override the in-app preference, the
-                // same way `deviceLocale` ranks last in language resolution.
-                //
-                // Locale.current is likewise NOT consulted: it reflects the
-                // device's UI language, decoupled from the chosen content
-                // language. A French-speaker on an English keyboard / English
-                // iPhone composes in French; live detection corrects in-flight
-                // if they actually type another language.
-                if let userLang = AuthManager.shared.currentUser?
-                        .preferredContentLanguages.first,
-                   LanguageOption.defaults.contains(where: { $0.code == userLang }) {
-                    composerState.selectedLanguage = userLang
-                } else if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
-                    let code = String(kbd.prefix(2))
-                    if LanguageOption.defaults.contains(where: { $0.code == code }) {
-                        composerState.selectedLanguage = code
-                    }
-                }
-                // Brancher la persistance du brouillon (immédiate à chaque
-                // fin de mot / champ vidé, débouncée 400 ms en milieu de mot
-                // — cf. ConversationComposerTextModel). Vit sur le modèle
-                // isolé : la racine ne se ré-évalue plus à la frappe, donc un
-                // `onChange` ici ne fonctionnerait plus. La closure capture
-                // une copie de la vue mais lit les @State/@StateObject via
-                // leur stockage LIVE.
-                composerText.onPersistNeeded = { text in
-                    persistDraft(text: text)
-                }
-                if composerText.text.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
-                    composerText.text = draft.text
-                    // La citation du brouillon revient telle qu'on l'a laissée —
-                    // sans écraser une réponse à une story qui vient d'ouvrir la
-                    // conversation, et jamais une story hors du DM de son auteur (#7883).
-                    if composerState.pendingReplyReference == nil {
-                        composerState.pendingReplyReference = draft.restoredReply(conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId)
-                    }
-                    if let lang = draft.selectedLanguage {
-                        composerState.selectedLanguage = lang
-                    }
-                    if draft.effectFlags != 0 {
-                        viewModel.pendingEffects.flags = MessageEffectFlags(rawValue: draft.effectFlags)
-                    }
-                    if draft.isBlurEnabled {
-                        viewModel.isBlurEnabled = true
-                    }
-                    if let raw = draft.ephemeralDurationRawValue,
-                       let choice = EphemeralChoice(storageValue: raw) {
-                        viewModel.ephemeralChoice = choice
-                    }
-                    // Pièces jointes du brouillon (copiées en durable au
-                    // background) : restaure les survivantes dans le tray —
-                    // un fichier purgé est sauté silencieusement, le texte
-                    // reste intact. Vignettes régénérées HORS du MainActor (#7006).
-                    if let refs = draft.attachments, !refs.isEmpty,
-                       composerState.pendingAttachments.isEmpty,
-                       let userId = AuthManager.shared.currentUser?.id {
-                        let restored = MessageDraftMediaStore.restore(
-                            refs: refs,
-                            userId: userId,
-                            conversationId: viewModel.conversationId
-                        )
-                        composerState.adoptRestoredDraft(attachments: restored.attachments, files: restored.files,
-                                                         assetLinks: MessageDraftMediaStore.assetLinks(of: refs, restored: restored.attachments.map(\.id)))
-                        Task { await restoreDraftThumbnails(attachments: restored.attachments, files: restored.files) }
-                    }
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { overlayState.longPressEnabled = true }
-            }
-            .adaptiveOnChange(of: router.replyContextVersion) { _, _ in
-                // Réponse à un mood affiché dans la barre directe courante : la vue
-                // est déjà à l'écran, `onAppear` ne se redéclenche pas. Un contexte
-                // refusé ici (autre conversation) reste en attente pour SON DM.
-                guard let ctx = router.pendingReplyContext,
-                      applyReplyContext(ctx, openingConversation: false) else { return }
-                router.pendingReplyContext = nil
-            }
-            .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: composerText.text) }
-            .adaptiveOnChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: composerText.text) }
-            .adaptiveOnChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: composerText.text) }
-            .adaptiveOnChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: composerText.text) }
-            .adaptiveOnChange(of: viewModel.ephemeralChoice?.storageValue) { _, _ in persistDraft(text: composerText.text) }
-            .adaptiveOnChange(of: scrollState.isNearBottom) { _, _ in
-                if composerState.showTextEmojiPicker {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
-                }
-            }
-            .adaptiveOnChange(of: isTyping) { _, focused in
-                if focused && composerState.showTextEmojiPicker {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
-                }
-            }
-            .adaptiveOnChange(of: scenePhase) { _, phase in
-                // Read-receipt precision: messages that arrived while the app was
-                // backgrounded were deliberately NOT auto-marked read (the user
-                // wasn't looking). On return to the foreground, if the user is at
-                // the bottom they now see the latest message — re-emit the read so
-                // the deferred receipt completes. If scrolled up, the message is
-                // still off-screen and stays unread until they scroll down. The
-                // gateway-level dedup makes a redundant call harmless.
-                // Revenir au premier plan ne marque plus la conversation lue :
-                // l'observateur de visibilité reprend et signalera ce qui est
-                // effectivement à l'écran.
-                // Pièces jointes du brouillon : copie durable au passage en
-                // background (les fichiers du tray vivent dans tmp/, purgeable
-                // par iOS) — miroir du D1 story. Rebuild complet : la vérité
-                // est l'état courant du tray.
-                if phase == .background {
-                    // Ce qui était à l'écran a bien été lu : le signaler AVANT
-                    // que l'app ne s'endorme, sinon l'accusé attend le retour
-                    // en avant-plan — ou le démontage de la vue.
-                    scrollState.flushSeenTrigger += 1
-                    persistDraftAttachmentsForBackground()
-                    // #7500 — « quitter, c'est quitter » : l'arrière-plan et le
-                    // verrouillage sont des sorties au même titre que le
-                    // retour. Les deux portes appellent le MÊME geste, qui est
-                    // idempotent — la seconde ne trouve plus rien.
-                    consumeOpenedViewOnceOnExit()
-                }
-            }
-            .adaptiveOnChange(of: viewModel.accessRevoked) { _, revoked in
-                // Server signalled the user no longer has access to this
-                // conversation (kicked, group deleted, blocked, etc.). The
-                // ViewModel has already wiped per-conversation cache and
-                // local message state. We dismiss the screen here and
-                // surface a toast so the user knows why.
-                guard revoked else { return }
-                FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", bundle: .main))
-                dismiss()
-            }
-            .observingKeyboardTransition($keyboardTransition)
-            .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
-                // Le debounce de 400 ms a remplacé la persistance par frappe :
-                // sans ce flush, backgrounder l'app (ou la tuer depuis
-                // l'app-switcher) dans la fenêtre de debounce perdrait la fin
-                // de la saisie — onDisappear ne couvre que la navigation.
-                composerText.flushPendingChange()
-            }
-            .onDisappear {
-                composerText.flushPendingChange()
-                // #7500 — la sortie par NAVIGATION. Jumelle de celle du passage
-                // en arrière-plan ci-dessus : une vue unique lue ici ne
-                // survivra pas au retour.
-                consumeOpenedViewOnceOnExit()
-                // Rompt le cycle de rétention : `onPersistNeeded` capture une
-                // copie de cette struct, dont le wrapper State retient (via sa
-                // box de stockage) le modèle vivant — soit modèle → closure →
-                // copie de la vue → State box → modèle. Sans ce nil, le modèle
-                // ET le ConversationViewModel (retenu transitivement par le
-                // wrapper @StateObject de la copie) fuiteraient à chaque
-                // teardown. onAppear réinstalle le callback si la vue revient
-                // (retour d'un fullScreenCover/sheet) — aucune frappe n'est
-                // possible pendant qu'elle est couverte.
-                composerText.onPersistNeeded = nil
-                // Arrêt déterministe du player local (preview d'audio en attente) :
-                // sans lui, l'audio continuait jusqu'au dealloc du @StateObject et
-                // la session restait acquise (refcount) le temps de la libération.
-                // Idempotent.
-                pendingAudioPlayer.stop()
-                if audioRecorder.isRecording {
-                    audioRecorder.cancelRecording()
-                }
-            }
-        )
+    /// Le debounce de 400 ms a remplacé la persistance par frappe : `onDisappear`
+    /// ne couvre que la navigation, d'où le flush de `willResignActive`.
+    private func conversationDidDisappear() {
+        composerText.flushPendingChange()
+        if audioRecorder.isRecording { _ = stopRecordingToAttachment() } // iPad : panneau, fenêtre redimensionnée — le vocal rejoint le plateau, il n'est plus jeté
+        persistDraftAttachmentsForBackground() // iPad : un panneau REMPLACE la vue, le plateau n'y survivait pas
+        // #7500 — la sortie par NAVIGATION, jumelle de celle du passage en arrière-plan.
+        leaveConversationByNavigation()
+        // Rompt le cycle de rétention modèle → closure → copie de la vue → State
+        // box → modèle ; `onAppear` réinstalle le callback si la vue revient.
+        composerText.onPersistNeeded = nil
+        // Arrêt déterministe du player local (aperçu d'audio en attente). Idempotent.
+        pendingAudioPlayer.stop()
     }
 
-    // MARK: - Skeleton Overlay
-
-    /// Vertical stack of skeleton bubbles used as the cold-start
-    /// placeholder. The bubble indices alternate left/right inside
-    /// `SkeletonMessageBubble` so the column reads like a real
-    /// conversation thread while the first network/cache pass runs.
-    private var messageSkeletonOverlay: some View {
-        VStack(spacing: MeeshySpacing.md) {
-            ForEach(0..<6, id: \.self) { index in
-                SkeletonMessageBubble(index: index)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, MeeshySpacing.md + 2)
-        .padding(.top, 96) // Precise alignment with background gradient transition
-        .padding(.bottom, composerHeight + MeeshySpacing.xxl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(String(localized: "conversation.view.loading_messages", bundle: .main)))
+    private func conversationDidEnterBackground() {
+        scrollState.flushSeenTrigger += 1
+        persistDraftAttachmentsForBackground()
+        consumeOpenedViewOnceOnExit()
     }
 
-    // MARK: - Body Content (extracted to help type-checker)
-
-    /// **La couche de la liste de messages, SORTIE du cadre de `bodyContent`** (#6213 bis).
-    ///
-    /// Mesuré sur appareil (`CrashStackDumper`, palmarès des cadres apparié
-    /// PAR ADRESSE de retour) : `bodyContent` occupait **552 Ko** d'un seul
-    /// cadre, sur une pile principale de 1008 Ko — et le tronc entier
-    /// (`body → bodyWithSheets → bodyWithCovers → bodyWithLifecycle →
-    /// bodyContent`) en occupait **847**. L'adresse fautive tombait 88 octets
-    /// sous le plancher de pile : page de garde, débordement franc.
-    ///
-    /// ## Pourquoi les six `AnyView` posés ici depuis 2026-08-17 n'ont rien changé
-    ///
-    /// Ils étaient posés EN LIGNE, sur la branche : `AnyView(uneBranche)`.
-    /// L'érasure a lieu APRÈS que le cadre a réservé la place du type
-    /// concret — elle borne ce qui SORT de l'expression, jamais ce qui a été
-    /// réservé pour la construire. En `-Onone`, un `ZStack` de quatorze
-    /// branches réserve la place de TOUTES, y compris celles qu'il
-    /// n'exécutera pas.
-    ///
-    /// Déplacer la branche dans SA propriété change le mécanisme, pas le
-    /// style : la construction se fait dans un cadre à elle, entré puis
-    /// quitté, et `bodyContent` ne voit plus passer que seize octets. Les
-    /// branches se SUCCÈDENT au lieu de s'ADDITIONNER.
-    ///
-    /// Cette branche-ci est la plus lourde du lot : ~340 lignes d'arguments
-    /// et de closures pour un représentable UIKit.
-    private var messageListLayer: AnyView {
-        AnyView(
-            // UIKit bridge powered by GRDB store (always available after eager init)
-            MessageListView(
-                store: viewModel.messageStore,
-                conversationViewModel: viewModel,
-                currentUserId: viewModel.currentUserIdForView,
-                accentColor: accentColor,
-                isDirect: isDirect,
-                // Le représentable court désormais jusqu'au bord BAS physique
-                // (`ignoresSafeArea` bas, cf. plus bas) : la bande safe area
-                // qu'il traverse s'ajoute à la réserve du composeur pour que
-                // le repos du fil ne bouge pas d'un point.
-                bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
-                bottomInsetTransition: listInsetTransition,
-                // 0 en preview : `.sheet` à détentes, déjà sous la status bar. La
-                // bande est réservée partout — l'aperçu porte l'en-tête (#8822).
-                topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
-                headerBandHeight: headerState.bandHeight,
-                scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
-                scrollToMessageId: scrollState.scrollToMessageId,
-                scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
-                flushSeenTrigger: scrollState.flushSeenTrigger,
-                isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
-                // Header déplié = la pill de jour se retire. Les deux vivent
-                // dans la même bande haute ; le déplié étant un geste
-                // explicite vers les détails de la conversation, c'est lui qui
-                // gagne (retour user 2026-08-13).
-                isHeaderExpanded: composerState.showOptions,
-                // WS-7 (F-086) — décision de l'orchestrateur (§WS-6 travail
-                // 10 : props posées AVANT les closures on…, contrainte
-                // d'ordre de l'init memberwise). `readingModeController.mode`
-                // et `MessageListView.readingMode` sont le MÊME type
-                // (`ConversationReadingMode`, typealias sur
-                // `ReadingModeOrchestrator.ConversationReadingMode`,
-                // F-080) — aucune conversion.
-                readingMode: readingModeController.mode,
-                onNewMessagesBadge: { count in
-                    scrollState.unreadBadgeCount = count
-                },
-                onScrollToMessage: { targetId in
-                    // Tap on a reply chip inside a bubble: jump to the cited
-                    // message. Uses the new jumpToQuotedMessage flow which:
-                    // 1. Checks if the message is already local → instant scroll
-                    // 2. If not, shows a pulsing indicator on the scroll button
-                    //    while fetching from the server
-                    // 3. After loading, triggers the visual scroll + highlight
-                    Task {
-                        let result = await viewModel.jumpToQuotedMessage(messageId: targetId)
-                        switch result {
-                        case .foundLocally:
-                            // The VC's scrollToMessage already handled the
-                            // visual scroll for the local case.
-                            break
-                        case .loadedFromServer:
-                            // The store snapshot was reloaded around the target.
-                            // Trigger the VC to scroll to it now.
-                            scrollState.scrollToMessageId = targetId
-                            scrollState.scrollToMessageTrigger += 1
-                        case .notFound:
-                            HapticFeedback.error()
-                            FeedbackToastManager.shared.show(String(localized: "conversation.messageNotFound", bundle: .main), type: .info)
-                        }
-                    }
-                },
-                onLoadOlder: {
-                    // Infinite scroll: VM owns the cache + network sequence
-                    // (syncEngine.fetchOlderMessages → store.loadOlder).
-                    // Going through the store directly stalls once the local
-                    // GRDB window is exhausted, leaving older messages
-                    // unreachable.
-                    await viewModel.loadOlderMessages()
-                },
-                onNearBottomChanged: { nearBottom in
-                    if scrollState.isNearBottom != nearBottom {
-                        scrollState.isNearBottom = nearBottom
-                    }
-                    // Revenir au bas ne marque rien (`onMessagesSeen` le fait) ;
-                    // au bas d'une fenêtre sautée, les pages plus récentes (#9339).
-                    viewModel.noteNearBottom(nearBottom)
-                },
-                onScrollingActiveChanged: { isActive in
-                    withAnimation(.easeInOut(duration: 0.22)) {
-                        scrollState.isScrollingActiveList = isActive
-                    }
-                },
-                onMessagesSeen: { seenIds, visibleIds in
-                    // Seule source de vérité de la lecture : ces identifiants
-                    // ont été RÉELLEMENT affichés assez longtemps.
-                    // @see docs/superpowers/specs/2026-07-24-read-exactness-design.md
-                    viewModel.markAsRead(messageIds: seenIds, visibleIds: visibleIds)
-                },
-                onStoryReplyTap: { storyId in
-                    // Open the story viewer at the slide that originated the
-                    // quoted reply. Resolves the story id to a (group, slide)
-                    // pair via StoryViewModel — preserves the legacy behaviour
-                    // from ConversationView+MessageRow (now dead code).
-                    guard let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) else {
-                        // Vue `3h` (#4098) — la citation SUBSISTE à l'expiration
-                        // de la story, mais son lien, lui, ne survit pas. Cette
-                        // branche n'existait pas : story expirée, purgée ou
-                        // jamais chargée, le tap ne faisait RIEN. Pas d'erreur,
-                        // pas d'explication — l'utilisateur touchait la carte
-                        // trois fois avant de conclure que l'app était figée.
-                        //
-                        // Loi 4 du dépôt : un contrôle existe s'il a un effet.
-                        // Le chemin voisin — un MESSAGE cité introuvable — fait
-                        // déjà exactement ceci douze lignes plus haut
-                        // (`conversation.messageNotFound`) ; la story n'avait
-                        // simplement jamais reçu son pendant.
-                        //
-                        // C'est ici, et NULLE PART ailleurs, que l'échec se
-                        // constate : le client ne PEUT pas préjuger de
-                        // l'expiration. Le droit d'ouvrir une story passé son
-                        // heure est DÉCLARÉ par le serveur
-                        // (`StoryItem.referenceAccess`, « never recomputed from
-                        // `expiresAt` here ») — une personne nommée dans la
-                        // story y accède encore. Une carte qui s'annoncerait
-                        // « expirée » d'après sa seule date mentirait sur une
-                        // story que ce tap aurait ouverte.
-                        FeedbackToastManager.shared.show(
-                            String(localized: "conversation.storyUnavailable", bundle: .main),
-                            type: .info
-                        )
-                        return
-                    }
-                    let group = storyViewModel.storyGroups[groupIdx]
-                    let slideIdx = group.stories.firstIndex { $0.id == storyId } ?? 0
-                    overlayState.storyViewerUserId = group.id
-                    overlayState.storyViewerGroupIndex = groupIdx
-                    overlayState.storyViewerSlideIndex = slideIdx
-                    overlayState.storyViewerStartAtFirstUnviewed = false
-                    overlayState.showStoryViewer = true
-                },
-                onViewSenderStory: { userId in
-                    // Anneau story d'un avatar de bulle (conversations de
-                    // groupe) → story de CET expéditeur, première non-vue.
-                    overlayState.storyViewerUserId = userId
-                    overlayState.storyViewerSlideIndex = 0
-                    overlayState.storyViewerStartAtFirstUnviewed = true
-                    overlayState.showStoryViewer = true
-                },
-                onSwipeReply: { messageId in
-                    // Restore swipe-to-reply: BubbleSwipeContainer commits when
-                    // the bubble crosses the reply threshold. We resolve the
-                    // message and reuse triggerReply() so the composer mirrors
-                    // the legacy long-press / context menu reply path.
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    triggerReply(for: msg)
-                },
-                onSwipeForward: { messageId in
-                    // #4021 — swipe-to-forward ARME la sélection multiple,
-                    // même contrat que le "Transférer" du menu long-press
-                    // ci-dessus. HapticFeedback already fires inside the
-                    // swipe container — we only seed the selection here.
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }),
-                          msg.isForwardable else { return }
-                    beginSelectionMode(seedingWith: msg.id)
-                },
-                onLongPress: { messageId, cellFrame in
-                    guard overlayState.longPressEnabled else { return }
-                    // Exclusivité mutuelle : si la barre de quick-reaction est
-                    // déjà ouverte, l'appui-long ne fait rien (une seule feature
-                    // active à la fois).
-                    guard overlayState.quickReactionMessageId == nil else { return }
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    // L'appui long ouvre les options habituelles — pour TOUT
-                    // message, avis système compris (directive 2026-08-24).
-                    //
-                    // Il aiguillait auparavant par type : un résumé d'appel
-                    // ouvrait sa feuille de détail, et tout autre message
-                    // système ne faisait RIEN. Ce no-op était le vrai défaut :
-                    // un avis d'arrivée reste un message du fil — épinglable,
-                    // favorisable, signalable, supprimable — et le geste qui
-                    // ouvre ces options est le même partout.
-                    //
-                    // La feuille de détail d'un appel n'est pas perdue pour
-                    // autant : elle est devenue une ACTION du menu
-                    // (`PrimaryAction.callDetail`, cf. `onShowCallDetail`).
-                    //
-                    // Le clavier + le repositionnement vers le centre (#4004)
-                    // passent tous les deux par `presentLongPressMenu`. Le
-                    // menu NATIF iOS 26+ est présenté par le système, sans
-                    // point d'interception avant ouverture — ce site est le
-                    // SEUL point d'entrée (menu custom, < iOS 26).
-                    presentLongPressMenu(for: msg, cellFrame: cellFrame)
-                },
-                // #9907 — l'appui long d'une TUILE : mêmes gardes, CETTE pièce visée.
-                onLongPressPiece: { messageId, pieceId, cellFrame in
-                    guard overlayState.longPressEnabled, overlayState.quickReactionMessageId == nil,
-                          let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    presentLongPressMenu(for: msg, cellFrame: cellFrame, pieceId: pieceId)
-                },
-                // iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) des
-                // bulles — mêmes actions que l'overlay custom (SSOT). `nil`
-                // renvoyé pour les messages système / résumés d'appel (pas de
-                // menu). Le builder est appelé une fois par config de cellule.
-                overlaidMessageId: overlayState.showOverlayMenu ? overlayState.overlayMessage?.id : nil,
-                onCallDetailRequest: { messageId in
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.callDetailMessage = msg
-                },
-                isSelectionModeActive: overlayState.isSelectionModeActive,
-                selectedMessageIds: overlayState.selectedMessageIds,
-                onToggleSelection: { messageId in toggleMessageSelection(messageId) },
-                // **Les rappels du menu SYSTÈME** (#6117, double tap).
-                // Chacun réutilise EXACTEMENT ce que le menu Meeshy appelle
-                // déjà : deux entrées du même nom, dans deux menus du même
-                // message, doivent faire la même chose.
-                onEditMessage: { messageId in
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    beginEdit(msg)
-                },
-                onSelectMessage: { messageId in beginSelectionMode(seedingWith: messageId) },
-                onComposeFromMessage: { messageId in
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    composerState.composeMediaTarget = ComposerSeedTarget(message: msg)
-                },
-                onImagineFromMessage: { messageId in if let msg = viewModel.messages.first(where: { $0.id == messageId }) { beginMessageExport(msg, quick: false) } },
-                // « Plus… » ouvre le GRAND menu — `MessageMoreSheet`, présentée
-                // par `overlayState.detailSheetMessage` — et non l'overlay
-                // d'appui long. Directive porteur : « le plus doit ouvrir le
-                // grand menu et non le menu longpress ».
-                onOpenMoreSheet: { messageId in
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.detailSheetMessage = msg
-                },
-                // La règle d'éditabilité est REMISE, pas recopiée : même expression que les trois autres sites de ce fichier.
-                canEditMessage: { messageId in
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return false }
-                    return msg.isMe || isCurrentUserAdminOrMod
-                },
-                onAddReaction: { messageId, bubbleFrame in
-                    // Exclusivité mutuelle : ouvrir la barre de quick-reaction
-                    // ferme d'abord l'overlay d'appui-long s'il est visible.
-                    if overlayState.showOverlayMenu {
-                        overlayState.showOverlayMenu = false
-                        overlayState.overlayMessage = nil
-                    }
-                    // Spring-open the emoji bar anchored to the tapped bubble
-                    // (appears below it, flips above near the composer).
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        overlayState.emojiOnlyMode = true
-                        overlayState.quickReactionAnchorFrame = bubbleFrame
-                        overlayState.quickReactionMessageId = messageId
-                    }
-                    HapticFeedback.light()
-                },
-                onToggleReaction: { messageId, emoji in
-                    viewModel.toggleReaction(messageId: messageId, emoji: emoji)
-                },
-                onReactToAttachment: { attachmentId, messageId, emoji in
-                    viewModel.toggleAttachmentReaction(attachmentId: attachmentId, messageId: messageId, emoji: emoji)
-                },
-                onOpenReactPicker: { messageId in
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.fullReactionPickerMessage = msg
-                },
-                onShowMessageInfo: { messageId in
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.moreSheetInitialItem = .views
-                    overlayState.detailSheetMessage = msg
-                },
-                onShowReadStatus: { messageId in
-                    // Tap sur les coches (✓ / ✓✓ / ✓✓ bleu) d'un message envoyé.
-                    // Ouvre la sheet detail sur l'onglet "Vues" pour consulter
-                    // qui a reçu / qui a lu — sans passer par le long-press.
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.moreSheetInitialItem = .views
-                    overlayState.detailSheetMessage = msg
-                },
-                onRetry: { messageId in
-                    // Tap on the orange retry band of a FAILED outgoing message.
-                    // `retryMessage` deletes the failed row and re-sends with the
-                    // SAME clientMessageId (gateway dedup) AND kicks the outbox
-                    // flusher — so the resend actually fires (the old local
-                    // OfflineQueue reset never flushed on a foregrounded device).
-                    Task { await viewModel.retryMessage(messageId: messageId) }
-                },
-                onShowReactions: { messageId in
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.moreSheetInitialItem = .reactions
-                    overlayState.detailSheetMessage = msg
-                },
-                onShowTranslationDetail: { messageId in
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.moreSheetInitialItem = .language
-                    overlayState.detailSheetMessage = msg
-                },
-                onFocalTapLocation: { place, messageId in
-                    focalFullscreenPlace = makeFocalFullscreenPlace(place, messageId: messageId)
-                },
-                onFocalShareFile: { url in
-                    focalShareFileItem = FocalShareFileItem(url: url)
-                },
-                onMediaTap: openMediaFullscreen,
-                onConsumeViewOnce: { messageId, completion in
-                    // #7618 — la puce d'une vue unique OUVRE : plein écran pour
-                    // un média, lecture sur place pour un texte. On arme, on ne
-                    // détruit pas (#7500) : `openViewOnce` en tient la règle.
-                    completion(openViewOnce(messageId: messageId))
-                },
-                onRequestTranslation: { messageId, targetLang in
-                    MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
-                }
-            ).equatable()
-            // Le flux traverse la zone status bar / Dynamic Island jusqu'au bord
-            // haut de l'écran (retour user 2026-08-12) : sans ça, SwiftUI pose le
-            // représentable DANS la safe area, la liste s'arrête sous l'îlot et
-            // cette bande ne montre plus que le dégradé de fond — lu comme une
-            // « couleur unie » derrière l'îlot, là où les autres écrans laissent
-            // leur contenu défiler sous le header jusqu'au bord. Le repos du flux
-            // est inchangé : le contrôleur réserve la hauteur de la bande en
-            // inset (`applyTopInset`), le contenu ne fait qu'y transiter au
-            // défilement. Le header flottant, lui, reste dans la safe area
-            // (zIndex 100, au-dessus).
-            //
-            // MÊME règle au bord BAS (retour user 2026-08-16, capture device) :
-            // borné à la safe area basse, le représentable coupait les
-            // messages ~34 pt AVANT le bord physique — visible dès que le
-            // chrome s'escamote au défilement (Focal) : le fil doit sortir de
-            // l'écran par le bord, exactement comme en haut. La réserve du
-            // composeur est portée par `bottomInset` (le contrôleur la
-            // compose dans `contentInset.top`), compensée de
-            // `safeAreaBottom` au site d'appel — le repos est inchangé.
-            .ignoresSafeArea(.container, edges: [.top, .bottom])
-        )
+    private func conversationAccessWasRevoked() {
+        FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", bundle: .main))
+        if anonymousSession != nil { dismiss() } else { router.pop() } // iPad : `dismiss()` y est un no-op
     }
 
-    private var bodyContent: AnyView {
-        AnyView(
-        ZStack {
-            conversationBackground
+    // MARK: - La scène
 
-            // Cold-start skeleton: shown ONLY while the initial fetch is
-            // in flight AND no cached messages exist yet. Renders above
-            // the (empty) MessageListView so the layout stays stable
-            // when the first batch lands and the placeholder fades out.
-            if viewModel.paginationPhase.isBlockingSpinnerNeeded && viewModel.messages.isEmpty {
-                // AnyView : `bodyContent` — même débordement de pile Swift au
-                // décodage de mangled name que la chaîne header (commentaires
-                // sur `floatingHeaderSection` plus haut), cette fois porté par
-                // le nombre de branches conditionnelles du ZStack top-level
-                // (2026-08-17). Chaque branche erasée réduit le type composite
-                // que `bodyContent` doit résoudre au 1er rendu.
-                AnyView(
-                    messageSkeletonOverlay
-                        .transition(.opacity)
-                        .zIndex(1)
-                )
-            }
-
-            // WS-9 (F-088) — le mode `.summary` route vers un HÔTE DÉDIÉ
-            // (contrat §WS-9 : « le mode résumé a peut-être besoin d'un hôte
-            // dédié »), ADDITIF à ce ZStack — aucun site F-085/086bis
-            // (`MessageListView` et ses closures ci-dessous) n'est touché.
-            // `LivingSummaryHost` construit son propre `@StateObject` — ce
-            // site d'appel ne passe que des primitives, zéro `@State` neuf
-            // ici. `zIndex(80)` : au-dessus du fil/composer/scroll-to-bottom
-            // (≤ 60) et de `previewMode` (49), en-dessous du header flottant
-            // (100, toujours joignable) et de la barre d'erreur/quick-reaction
-            // (97/99, sans objet en mode résumé).
-            // Chantier Rivière iOS, lot 1 (2026-08-21) — le mode `.river` route
-            // vers un HÔTE DÉDIÉ, comme `.summary` : la géométrie vient de la
-            // loi partagée (`RiverLaneResolver`), le texte du Prisme (traduction
-            // préférée ou original), et un avis système n'est la voix de
-            // personne (`RiverConversationMapping`).
-            if readingModeController.mode == .river {
-                // `Color.clear.overlay { … }` plutôt que l'hôte nu : la Rivière
-                // est LARGE par nature (jusqu'à sept couloirs de 300 pt) et un
-                // `ScrollView` rend la taille IDÉALE de son contenu quand on ne
-                // lui propose rien — ce ZStack s'élargissait alors à ~2100 pt et
-                // CENTRAIT tous ses autres enfants dessus, en-tête compris
-                // (mesuré au simulateur : bouton « Retour » à x = −683, hors
-                // écran, malgré son `zIndex(100)`). Un `overlay` reçoit la
-                // taille de son hôte et ne la fait JAMAIS grandir : le
-                // débordement s'arrête ici.
-                AnyView(Color.clear.overlay(RiverConversationHost(
-                    messages: viewModel.messages,
-                    viewerId: viewModel.currentUserIdForView,
-                    // Îlot dynamique + bande de boutons de l'en-tête flottant
-                    // (`floatingHeaderSection`, zIndex 100) : la Rivière PINGLE
-                    // sa bande de couloirs en haut de son pane, elle doit donc
-                    // commencer SOUS l'en-tête — contrairement au fil, dont les
-                    // bulles ont le droit de défiler dessous.
-                    topInset: previewMode ? 0 : DeviceLayout.safeAreaTop + Self.riverHeaderClearance,
-                    // R-7 : la même réserve basse que le fil — le composeur
-                    // n'est jamais une zone où une bulle reste prise.
-                    bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
-                    // L2b/2b-7 : la frappe atteint le lecteur quel que soit
-                    // son mode — le pane Rivière est OPAQUE et couvrait la
-                    // cellule de frappe du Fil. Même source que le Fil
-                    // (`typingParticipants`, avec leur visage), même vue (`TypingIndicatorBubble`).
-                    //
-                    // ⚠️ Cette lecture n'est PAS vivante (#5961, suivi #5962).
-                    // Elle s'appuyait sur `typingObserver`, dont on a mesuré
-                    // qu'il observait le store d'un ViewModel jeté : le corps ne
-                    // repasse pas sur `typing:start`/`stop`, donc la Rivière
-                    // affiche le roster figé de son dernier rendu. Le correctif
-                    // est le même que pour la pastille de retour en bas —
-                    // `ConversationTypingRosterHost` — mais il se pose ici DANS
-                    // un `AnyView` imbriqué d'un corps déjà lourd, et se livre
-                    // à part pour ne pas mêler un risque de profondeur de type
-                    // à un correctif mesuré.
-                    typingParticipants: viewModel.typingParticipants,
-                    // R-5 : identité vivante — les MÊMES sources que le Fil
-                    // (`MessageListViewController` : présence par expéditeur,
-                    // anneau de story sauf pour soi, fiche par le routeur).
-                    presence: { message in PresenceManager.shared.presenceState(for: message.senderId) },
-                    storyRing: { message in
-                        message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId)
-                    },
-                    onOpenProfile: { user in
-                        router.openProfile(user, inConversation: conversation?.id)
-                    },
-                    onViewStory: { userId in
-                        overlayState.storyViewerUserId = userId
-                        overlayState.storyViewerSlideIndex = 0
-                        overlayState.storyViewerStartAtFirstUnviewed = true
-                        overlayState.showStoryViewer = true
-                    },
-                    // Lot 3 : mêmes retours au Fil que le Résumé — Script, puis atterrissage
-                    // sur le message (et le composeur en mode réponse pour « Répondre »).
-                    onOpenInThread: { messageId in
-                        readingModeController.select(.script)
-                        scrollState.scrollToMessageId = messageId
-                        scrollState.scrollToMessageTrigger += 1
-                    },
-                    onReply: { messageId in
-                        readingModeController.select(.script)
-                        guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                        triggerReply(for: msg)
-                        scrollState.scrollToMessageId = messageId
-                        scrollState.scrollToMessageTrigger += 1
-                    },
-                    // #7618 — MÊME canal que le Fil : la puce OUVRE, la
-                    // sortie consomme. La Rivière consommait au toucher.
-                    onConsumeViewOnce: { messageId, completion in
-                        completion(openViewOnce(messageId: messageId))
-                    },
-                    onMediaTap: openMediaFullscreen,
-                    onPlayQuotedAudio: { viewModel.toggleQuotedAudio($0) },
-                    // #3901 — la Rivière ne rend jamais bulle par bulle
-                    // (`MessageListViewController.rendersThread`), donc ne
-                    // peut jamais faire avancer le curseur de lecture par le
-                    // chemin habituel (`seenIds`). Le curseur avance ici,
-                    // SANS jamais geler de `readAt` individuel, quand le
-                    // lecteur atteint le présent.
-                    onReachPresent: {
-                        viewModel.markCaughtUpFromSummaryOrRiver()
-                    },
-                    text: { message in
-                        viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
-                    }
-                )))
-                // Le pane monte JUSQU'AU bord physique haut : `topInset` porte
-                // déjà la safe area, et sans cela le fil (rendu dessous)
-                // réapparaissait dans la bande de la barre d'état — une
-                // deuxième conversation par-dessus la première.
-                .ignoresSafeArea(edges: .top)
-                .zIndex(80)
-                .transition(.opacity)
-            }
-
-            if readingModeController.mode == .summary {
-                // AnyView : même coupe que ci-dessus (contribue au débordement
-                // de pile de `bodyContent`, 2026-08-17).
-                AnyView(LivingSummaryHost(
-                    messages: viewModel.messages,
-                    viewerId: viewModel.currentUserIdForView,
-                    viewerUsername: AuthManager.shared.currentUser?.username,
-                    windowCoversUnread: !viewModel.hasOlderMessages,
-                    analysisProvider: isAnonymous ? nil : ConversationAnalysisService.shared,
-                    conversationId: viewModel.conversationId,
-                    isDark: isDark,
-                    // #7452 — les messages protégés encore vivants, recomposés
-                    // à chaque passe de ce corps (ils dérivent de
-                    // `viewModel.messages`). Le digest, lui, ne se recompose
-                    // jamais : c'est pourquoi il ne contient PLUS leur texte.
-                    protections: LivingSummaryProtections.entries(messages: viewModel.messages),
-                    onReplyToPerson: { entry in
-                        readingModeController.select(.script)
-                        guard let targetId = entry.evidenceMessageIds.first,
-                              let msg = viewModel.messages.first(where: { $0.id == targetId }) else { return }
-                        triggerReply(for: msg)
-                        scrollState.scrollToMessageId = targetId
-                        scrollState.scrollToMessageTrigger += 1
-                    },
-                    onOpenEpisode: { episode in
-                        readingModeController.select(.script)
-                        guard let targetId = episode.messageIds.first else { return }
-                        scrollState.scrollToMessageId = targetId
-                        scrollState.scrollToMessageTrigger += 1
-                    },
-                    onResumeThread: {
-                        readingModeController.select(.script)
-                        // La VRAIE frontière (#7222), pas « le premier message
-                        // d'autrui » : `firstUnreadMessageId` est posé par
-                        // `FirstUnreadBoundary.resolve` sur le curseur de
-                        // lecture, pas sur l'auteur.
-                        if let firstUnread = viewModel.firstUnreadMessageId {
-                            scrollState.scrollToMessageId = firstUnread
-                            scrollState.scrollToMessageTrigger += 1
-                        }
-                    }
-                ))
-                // 2b-2 — le Résumé Vivant naissait VIDE quand il était le mode
-                // d'OUVERTURE. `LivingSummaryHost` construit son ViewModel dans
-                // l'autoclosure d'un `@StateObject` : elle n'est évaluée qu'à la
-                // CRÉATION de l'identité de vue, et le VM ne recompose jamais
-                // son digest. Or le fil s'ouvre souvent AVANT ses messages
-                // (cache puis réseau) — même moment d'ouverture que la Rivière,
-                // qui le traite par son empreinte.
-                //
-                // L'identité bascule EXACTEMENT une fois, au passage vide →
-                // peuplé : l'autoclosure se réévalue avec les messages, et rien
-                // d'autre ne bouge. En pratique une conversation ne redevient
-                // pas vide ; rien dans `viewModel.messages`
-                // (`@Published var messages: [Message] = []`) ne l'interdit
-                // formellement (F12, revue adversariale 2026-08-25) — si le
-                // fil redevenait vide (purge, rechargement raté, réouverture
-                // sur une fenêtre froide), l'hôte serait simplement RECONSTRUIT :
-                // coût borné, jamais un digest périmé affiché. Coût assumé
-                // par ailleurs : le `.task` d'enrichissement agent se rejoue
-                // une fois (no-op pour un invité).
-                //
-                // Ce n'est PAS `showsSkeleton` qui peut garder ce basculement :
-                // il tombe à `false` dès que la réponse agent arrive, donc avant
-                // la première population sur base froide.
-                .id(viewModel.messages.isEmpty)
-                .zIndex(80)
-                .transition(.opacity)
-            }
-
-            // UIKit bridge powered by GRDB store (always available after eager init)
-            // Sortie du cadre de `bodyContent` (#6213 bis) — voir son doc-comment.
-            messageListLayer
-
-            // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
-            // cellule du flux de messages, rendue en dernier par
-            // `MessageListViewController` (voir `MessageListItem.typingIndicator`).
-
-            floatingHeaderSection
-
-            // Quick reaction bar — a floating overlay anchored to the bubble
-            // whose smiley "+" the user tapped. `quickReactionBarOverlay`
-            // places the bar just below that bubble (using the cell frame
-            // captured at tap time) and flips it above when the message
-            // hugs the composer. See `QuickReactionBarPlacement`.
-            if let pickerMessageId = overlayState.quickReactionMessageId {
-                quickReactionBarOverlay(for: pickerMessageId)
-                    .zIndex(99)
-            }
-
-            // Connection status banner — UNIQUEMENT pour les hôtes sans point
-            // de montage racine (flux invité). Le flux authentifié normal
-            // est couvert par le point de montage unique de RootView/
-            // iPadRootView (cf. showsOwnConnectionBanner ci-dessus).
-            if showsOwnConnectionBanner {
+    private var bodyStage: some View {
+        ConversationBodyStage(
+            showsSkeleton: viewModel.paginationPhase.isBlockingSpinnerNeeded && viewModel.messages.isEmpty,
+            skeletonBottomInset: composerHeight + MeeshySpacing.xxl,
+            readingMode: readingModeController.mode,
+            quickReactionMessageId: overlayState.quickReactionMessageId,
+            showsOwnConnectionBanner: showsOwnConnectionBanner,
+            error: viewModel.error,
+            showOptions: composerState.showOptions,
+            hidesComposerChrome: hidesComposerChromeForScroll,
+            showTextEmojiPicker: composerState.showTextEmojiPicker,
+            hasMentionQuery: viewModel.activeMentionQuery != nil,
+            onDismissError: { viewModel.error = nil },
+            onLeaveSummary: { viewModel.markCaughtUpFromSummaryOrRiver() },
+            background: { conversationBackground },
+            reader: { readerModeBranch },
+            list: { messageListLayer },
+            header: { floatingHeaderSection },
+            quickReaction: { quickReactionBarOverlay(for: $0) },
+            connectionBanner: {
                 ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting, activeConversationId: { viewModel.conversationId })
-                    .inSyncPillBand()
-                    .zIndex(98)
-                    .allowsHitTesting(false)
-            }
+            },
+            scrollToBottom: { scrollToBottomBranch },
+            dock: { composerDock },
+            searchOverlay: { searchResultsBlurOverlay }
+        )
+        .modifier(ComposerDropTargetModifier(
+            accentColor: accentColor,
+            isEnabled: ComposerDropTargetModifier.acceptsDrops(
+                isSelecting: overlayState.isSelectionModeActive,
+                isBlockedDirect: blockedDirectParticipantId != nil,
+                isClosed: viewModel.isConversationClosed,
+                isWriteRestricted: viewModel.writeRestriction(served: liveConversation?.viewerWriteRestriction) != nil, isPreview: previewMode
+            ),
+            onIngest: { ingestRespectingGuestAllowance($0) }
+        ))
+    }
 
-            // Error banner
-            Group {
-                if let error = viewModel.error {
-                    VStack {
-                        Color.clear.frame(height: composerState.showOptions ? 72 : 56)
-                        HStack {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(MeeshyColors.warning)
-                                .accessibilityHidden(true)
-                            Text(error)
-                                .font(.caption)
-                                .lineLimit(2)
-                            Spacer()
-                            Button {
-                                viewModel.error = nil
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                        }
-                .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, MeeshySpacing.sm)
-                        .background(.ultraThinMaterial)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        Spacer()
-                    }
-                }
-            }
-            .zIndex(97)
-            .animation(.easeInOut, value: viewModel.error)
-
-            if Self.showsScrollToBottomButton(isNearBottom: scrollState.isNearBottom, isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage, isInJumpedState: viewModel.isInJumpedState) {
-                // Bulle « retour en bas » : elle NE suit PAS le repli du
-                // défilement (#8002, directive porteur 2026-09-26) — c'est
-                // pendant qu'on remonte qu'on la cherche. Seules ses propres
-                // entrées/sorties (proximité du bas) la font glisser.
-                ConversationTypingRosterHost(store: viewModel.stateStore) { typing in
-                    VStack { Spacer(); HStack { Spacer(); scrollToBottomButton(typing: typing).padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerScrollButtonAnchor + MeeshySpacing.sm) } }
-                }
-                    .zIndex(60)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isInJumpedState)
-            }
-
-            VStack {
-                Spacer()
-                VStack(spacing: 0) {
-                    MentionSuggestionOverlay(controller: viewModel.mentionController,
-                                             accentColor: accentColor) { candidate in
-                        composerText.text = viewModel.insertMention(candidate, into: composerText.text)
-                    }
-                    if overlayState.isSelectionModeActive {
-                        // #4005 — remplace le composer, jamais un
-                        // troisième bandeau au-dessus : composer un
-                        // nouveau message et sélectionner des anciens
-                        // messages sont deux intentions qui ne
-                        // coexistent pas.
-                        selectionToolbar
-                    } else if let blockedId = blockedDirectParticipantId {
-                        blockedComposerZone(userId: blockedId)
-                    } else {
-                        composerOrReadOnlyZone
-                    }
-                    // Panneau emoji inline — glisse vers le haut À LA PLACE DU
-                    // CLAVIER, donc EN DESSOUS de la barre de composition (jamais
-                    // au-dessus). Même placement que le carrousel de pièces
-                    // jointes et que le composer story, pour une bascule
-                    // clavier ⇄ emoji sans saut visuel.
-                    if composerState.showTextEmojiPicker {
-                        EmojiKeyboardPanel(
-                            style: isDark ? .dark : .light,
-                            onSelect: { emoji in
-                                composerState.emojiToInject = emoji
-                            }
-                        )
-                        .frame(height: 260)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                // Composer transparent, sans fond (#3920, directive porteur
-                // 2026-08-26) : le seul état qui dépendait de ce matériau
-                // PARTAGÉ était le composer nu — `MentionSuggestionOverlay`,
-                // `EmojiKeyboardPanel`, `closedConversationBanner` et
-                // `blockedComposerZone` se dotent CHACUN de leur propre fond
-                // (`.ultraThinMaterial`/`.regularMaterial`), donc aucun n'en
-                // dépend plus ici.
-                .ignoresSafeArea(.container, edges: .bottom)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { updateComposerHeight(geo.size.height) }
-                            .adaptiveOnChange(of: geo.size.height) { _, h in updateComposerHeight(h) }
-                    }
-                )
-            }
-            // R-7 (2026-08-22) : en Rivière, le composeur passe AU-DESSUS du
-            // pane (80) — le pane lui réserve sa hauteur (`bottomInset`) et
-            // c'est lui qui est recouvert sinon (mesuré au simulateur :
-            // champ « Message… » présent à y = 797, invisible).
-            .zIndex(readingModeController.mode == .river ? 85 : 50)
-            // Chrome escamoté pendant le défilement Focal : glissement vers le
-            // bord BAS + fondu (`EdgeHiddenChrome`) — le composeur garde sa
-            // hauteur mesurée (aucun inset ne bouge, donc aucun re-scaling du
-            // fil). Les touches passent au fil pendant l'escamotage.
-            .hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: composerState.showTextEmojiPicker)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.activeMentionQuery != nil)
-
-            searchResultsBlurOverlay
-        }
-        // #3901 — le Résumé Vivant ne rend jamais bulle par bulle
-        // (`MessageListViewController.rendersThread`), donc ne peut jamais
-        // faire avancer le curseur de lecture par le chemin habituel
-        // (`seenIds`). Posé sur le ZStack ENGLOBANT (jamais sur la branche
-        // `.summary` elle-même) : cette branche disparaît du même geste qui
-        // fait sortir `mode` de `.summary`, et un `onChange` attaché à une
-        // vue qui se démonte avec la valeur surveillée ne se déclenche
-        // jamais. « Quitté le Résumé après l'avoir affiché » couvre les DEUX
-        // sorties possibles — bouton « Reprendre le fil » (`onResumeThread`)
-        // ET sélecteur de mode de l'en-tête (`readingModeController.select`
-        // depuis `ReadingModeLensCatalog`), qui contourne ce bouton.
-        .adaptiveOnChange(of: readingModeController.mode) { old, new in
-            guard old == .summary, new != .summary else { return }
-            viewModel.markCaughtUpFromSummaryOrRiver()
-        }
+    private var readerModeBranch: ConversationReaderModeBranch {
+        ConversationReaderModeBranch(
+            mode: readingModeController.mode,
+            viewModel: viewModel,
+            conversationId: conversation?.id,
+            topInset: previewMode ? 0 : windowInsets.top + Self.riverHeaderClearance,
+            bottomInset: composerHeight + 16 + (previewMode ? 0 : windowInsets.bottom),
+            isDark: isDark,
+            isAnonymous: isAnonymous,
+            scrollState: $scrollState,
+            overlayState: $overlayState,
+            showScript: { readingModeController.select(.script) },
+            reply: { triggerReply(for: $0) },
+            openViewOnce: { openViewOnce(messageId: $0) },
+            openMedia: openMediaFullscreen
         )
     }
 
+    private var scrollToBottomBranch: some View {
+        ConversationScrollToBottomBranch(
+            isShown: Self.showsScrollToBottomButton(
+                isNearBottom: scrollState.isNearBottom,
+                isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
+                isInJumpedState: viewModel.isInJumpedState),
+            stateStore: viewModel.stateStore,
+            bottomAnchor: composerScrollButtonAnchor,
+            isNearBottom: scrollState.isNearBottom,
+            isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
+            isInJumpedState: viewModel.isInJumpedState
+        ) { typing in
+            scrollToBottomButton(typing: typing)
+        }
+    }
 
-    // MARK: - Floating Header Section (extracted to help type-checker)
+    private var composerDock: some View {
+        ConversationComposerDock(
+            viewModel: viewModel, composerText: composerText, composerState: $composerState,
+            accentColor: accentColor, isDark: isDark, onHeightChange: updateComposerHeight
+        ) {
+            if overlayState.isSelectionModeActive {
+                selectionToolbar
+            } else if let blockedId = blockedDirectParticipantId {
+                blockedComposerZone(userId: blockedId)
+            } else {
+                composerOrReadOnlyZone
+            }
+        }
+    }
+
+    /// **La couche de la liste de messages, SORTIE du cadre de la scène** (#6213 bis) :
+    /// `ConversationMessageListLayer` porte le pont UIKit et ses rappels ; l'hôte
+    /// ne lui remet que ses marges, ses états liés et ses gestes.
+    private var messageListLayer: ConversationMessageListLayer {
+        ConversationMessageListLayer(
+            viewModel: viewModel,
+            scrollState: $scrollState,
+            overlayState: $overlayState,
+            focalFullscreenPlace: $focalFullscreenPlace,
+            focalShareFileItem: $focalShareFileItem,
+            accentColor: accentColor,
+            isDirect: isDirect,
+            // Le représentable court jusqu'au bord BAS physique : la safe area
+            // qu'il traverse s'ajoute à la réserve du composeur (repos du fil
+            // inchangé). 0 en preview (`.sheet` déjà sous la status bar, #8822).
+            insets: ConversationListInsets(
+                bottom: composerHeight + 16 + (previewMode ? 0 : windowInsets.bottom),
+                bottomTransition: listInsetTransition,
+                top: previewMode ? 0 : windowInsets.top,
+                headerBand: headerState.bandHeight
+            ),
+            isHeaderExpanded: composerState.showOptions,
+            readingMode: readingModeController.mode,
+            isAdminOrMod: isCurrentUserAdminOrMod,
+            messageActions: messageActions,
+            actions: ConversationMessageListActions(
+                toggleSelection: { toggleMessageSelection($0) },
+                presentMenu: { presentLongPressMenu(for: $0, cellFrame: $1, pieceId: $2) },
+                openMedia: openMediaFullscreen,
+                openViewOnce: { openViewOnce(messageId: $0) },
+                focalPlace: { makeFocalFullscreenPlace($0, messageId: $1) }
+            )
+        )
+    }
+
+    /// Les gestes d'un message que les menus, les feuilles et la liste rendent
+    /// à l'hôte : la citation, l'édition, la sélection, l'export se composent ICI.
+    private var messageActions: ConversationMessageActions {
+        ConversationMessageActions(
+            reply: { triggerReply(for: $0) },
+            beginSelection: { beginSelectionMode(seedingWith: $0) },
+            deleteMedia: { deleteMedia(targeted: nil, of: $0) },
+            requestDelete: { requestDeleteMessage($0) },
+            edit: { beginEdit($0) },
+            export: { beginMessageExport($0, quick: $1) },
+            compose: { composerState.composeMediaTarget = ComposerSeedTarget(message: $0) },
+            canRemove: { canRemoveMessage($0) }
+        )
+    }
+
+    // MARK: - Floating Header Section
 
     private var isAnonymous: Bool { anonymousSession != nil }
 
-    /// Loi commune (`ScrollMotion`) : une vue en mouvement ne montre pas ses
-    /// boutons d'action. Pendant le défilement de la liste, les boutons
-    /// d'appel et de recherche s'effacent ; le header lui-même — retour,
-    /// avatar, titre — reste lisible, et la pill de jour vit dans sa propre
-    /// bande sous lui (`MessageDayStickyPlacement.topOffset`).
-    ///
-    /// Une recherche ouverte échappe à la règle : sa barre est un champ de
-    /// SAISIE, pas un bouton, et doit rester joignable pendant qu'on fait
-    /// défiler les résultats.
-    static func hidesHeaderActions(isScrollingList: Bool, isSearchOpen: Bool) -> Bool {
-        isScrollingList && !isSearchOpen
-    }
-
-    /// **En rangée plate (Script), c'est le header ENTIER qui s'efface** —
-    /// retour, avatar, titre, recherche, appel et bascule de vue compris —
-    /// là où le mode bulles n'efface que sa grappe de boutons d'action.
-    ///
-    /// La raison est le mode lui-même : la lecture plate met le fil au
-    /// centre ; garder au-dessus une barre d'outils concurrente pendant
-    /// qu'on lit contredit l'intention.
-    ///
-    /// **Toujours une porte de sortie** : le header revient dès l'ARRÊT du
-    /// défilement (ce n'est pas un masquage permanent), et le geste de retour
-    /// natif iOS reste actif en toutes circonstances. Une recherche ouverte
-    /// échappe à la règle, comme pour les boutons d'action — sa barre est un
-    /// champ de saisie qui doit rester joignable pendant qu'on fait défiler
-    /// les résultats.
-    static func hidesEntireHeader(
-        usesFlatRow: Bool,
-        isScrollingList: Bool,
-        isSearchOpen: Bool
-    ) -> Bool {
-        usesFlatRow && hidesHeaderActions(isScrollingList: isScrollingList, isSearchOpen: isSearchOpen)
-    }
-
     private var hidesEntireHeaderForScroll: Bool {
-        Self.hidesEntireHeader(
+        ConversationViewRules.hidesEntireHeader(
             usesFlatRow: readingModeController.mode.usesFlatRow,
             isScrollingList: scrollState.isScrollingActiveList,
             isSearchOpen: headerState.showSearch
         )
     }
 
-    /// **En rangée plate (Script), le défilement escamote TOUT le chrome** —
-    /// composeur et bouton de retour au bas compris, en plus du header
-    /// (`hidesEntireHeader`) et de la pilule de jour (côté hôte,
-    /// `MessageDayStickyState.isSuppressed`). Le fil occupe l'écran entier le
-    /// temps du mouvement ; tout revient dès la pose.
-    ///
-    /// Une saisie ACTIVE échappe à la règle : panneau emoji ouvert ou
-    /// suggestions de mention affichées, le composeur est l'outil en main —
-    /// on ne retire pas l'outil en main. Pur `opacity` : aucun inset ne
-    /// bouge, donc aucune re-mise à l'échelle du fil.
-    static func hidesComposerChrome(
-        usesFlatRow: Bool,
-        isScrollingList: Bool,
-        isSearchOpen: Bool,
-        isEmojiPanelOpen: Bool,
-        hasMentionSuggestions: Bool
-    ) -> Bool {
-        hidesEntireHeader(
-            usesFlatRow: usesFlatRow,
-            isScrollingList: isScrollingList,
-            isSearchOpen: isSearchOpen
-        )
-            && !isEmojiPanelOpen
-            && !hasMentionSuggestions
-    }
-
     private var hidesComposerChromeForScroll: Bool {
-        Self.hidesComposerChrome(
+        ConversationViewRules.hidesComposerChrome(
             usesFlatRow: readingModeController.mode.usesFlatRow,
             isScrollingList: scrollState.isScrollingActiveList,
             isSearchOpen: headerState.showSearch,
@@ -1957,83 +673,33 @@ struct ConversationView: View {
     }
 
     private var hidesHeaderActionsForScroll: Bool {
-        Self.hidesHeaderActions(
+        ConversationViewRules.hidesHeaderActions(
             isScrollingList: scrollState.isScrollingActiveList,
             isSearchOpen: headerState.showSearch
         )
     }
 
-    // Enfants en AnyView : le type structurel du tuple (branches anonymous /
-    // typing / bande + searchBar) gonflait le mangled name de
-    // `floatingHeaderSection` ET celui de `bodyContent` au point que leur
-    // décodage récursif au 1er rendu SUR DEVICE débordait la pile du main
-    // thread (dump segv du 2026-07-30 21:12, `__swift_instantiate…` dans la
-    // closure du VStack). Même famille que expandedHeaderMidContent — couper
-    // au niveau des ENFANTS du type décodé (leçon 5cdde93c4).
-    // AnyView à la déclaration (2026-08-17) : la coupe aux ENFANTS
-    // (`AnyView` sur chaque branche, commentaire ci-dessus) ne suffisait
-    // toujours pas — `floatingHeaderSection` elle-même reste un maillon
-    // `some View` dans le type composite de `bodyContent`, qui doit la
-    // résoudre en entier. Dernière coupe de la chaîne
-    // bodyContent→floatingHeaderSection→expandedHeaderBand→…→
-    // readingModeAffordanceCluster.
-    private var floatingHeaderSection: AnyView {
-        AnyView(floatingHeaderSectionBody)
-    }
-
-    /// Remplacé par la frontière NOMINALE `ConversationFloatingHeaderSection`
-    /// (#6213 bis) — ce cadre pesait **565 712 octets**, 55 % de la pile
-    /// principale, parce qu'en `-Onone` un appelant réserve la place du type
-    /// concret de CHAQUE branche `some View`, y compris celles qu'il
-    /// n'exécutera pas. Les quatre branches passent désormais en closures
-    /// `() -> AnyView` : elles se succèdent au lieu de s'additionner.
-    /// Mesure et raisonnement complets dans le doc-comment de la struct.
-    private var floatingHeaderSectionBody: some View {
+    /// Frontière NOMINALE `ConversationFloatingHeaderSection` (#6213 bis) : les
+    /// quatre branches se succèdent dans le cadre de leur closure au lieu de
+    /// s'additionner dans celui de l'hôte (565 712 octets mesurés).
+    private var floatingHeaderSection: some View {
         ConversationFloatingHeaderSection(
             isAnonymous: isAnonymous,
             isTyping: isTyping && headerLayout.yieldsToTypingBar,
             showSearch: headerState.showSearch,
             showOptions: composerState.showOptions,
             hidesHeaderActions: hidesHeaderActionsForScroll,
+            hidesBandForScroll: hidesEntireHeaderForScroll,
             measuresBandHeight: headerLayout.measuresBandHeight,
-            anonymousBar: { AnyView(anonymousHeaderBar) },
-            typingBar: { AnyView(typingHeaderBar) },
-            // Focal/Script + défilement : le header entier glisse vers le bord
-            // HAUT en fondant et en revient (loi `hidesEntireHeader`, rendu
-            // `EdgeHiddenChrome`) — plus de démontage ; les touches passent au
-            // fil pendant l'escamotage (`allowsHitTesting`). Conservé DANS la
-            // closure : c'est la branche qu'il habille, pas la section.
-            expandedBand: { AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top)) },
-            searchBar: { AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity))) },
+            anonymousBar: { anonymousHeaderBar },
+            typingBar: { typingHeaderBar },
+            expandedBand: { expandedHeaderBand },
+            searchBar: { searchBar },
             onBandHeightChange: { headerState.bandHeight = $0 }
         )
-        // Cette animation-ci reste à l'HÔTE : sa valeur (`hidesEntireHeaderForScroll`)
-        // ne gouverne aucune branche de la section — elle accompagne
-        // l'escamotage déjà posé dans la closure `expandedBand`.
-        .animation(.easeOut(duration: FocalMetrics.HiddenChrome.easeOut), value: hidesEntireHeaderForScroll)
     }
 
-    private var typingHeaderBar: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
-            Spacer()
-            ThemedAvatarButton(
-                name: liveConversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
-                isExpanded: false, storyState: headerStoryRingState,
-                avatarURL: liveConversation?.type == .direct ? liveConversation?.participantAvatarURL : liveConversation?.avatar,
-                presenceState: headerPresenceState,
-                moodEmoji: headerMoodEmoji
-            ) {
-                isTyping = false
-                setHeaderExpanded(true)
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.sm)
-        .transition(.opacity)
-    }
-
-    private var anonymousHeaderBar: some View {
+    private var anonymousHeaderBar: ConversationGuestHeaderBar {
         ConversationGuestHeaderBar(
             title: liveConversation?.displayName ?? "Conversation",
             favoriteEmoji: conversation?.userState.reaction,
@@ -2043,348 +709,69 @@ struct ConversationView: View {
         ) { dismiss() }
     }
 
-    /// Type-erased to break the deep opaque-type chain that crashes the
-    /// SwiftUI runtime metadata resolver on first render. The chain
-    /// `body → bodyWithSheets → bodyWithCovers → bodyWithLifecycle →
-    /// bodyContent → floatingHeaderSection → expandedHeaderBand` produced a
-    /// mangled name long enough that `swift_getTypeByMangledName` recursed
-    /// past the demangler's depth limit (60+ frames of `decodeMangledType`)
-    /// and crashed in `swift::SubstGenericParametersFromMetadata::buildDescriptorPath`.
-    /// AnyView is a known escape hatch for this class of bug — its mangled
-    /// name is a single fixed token, capping the chain depth.
-    /// **Frontière NOMINALE** — `ConversationExpandedHeaderBand` (#6194).
-    ///
-    /// Ce maillon était une propriété calculée (`expandedHeaderBandBody`) que
-    /// six `AnyView` successifs n'ont pas suffi à borner : c'est précisément
-    /// ici que la pile débordait, en résolvant le type de
-    /// `expandedHeaderMidContent`. Une struct `View` obtient son propre nœud
-    /// dans l'AttributeGraph, et le graphe déroule la pile avant d'évaluer son
-    /// `body` — une propriété calculée, jamais. Voir le doc-comment de la
-    /// struct pour la trace et le raisonnement complet.
-    private var expandedHeaderBand: AnyView {
-        AnyView(ConversationExpandedHeaderBand(
+    /// **Frontière NOMINALE** — `ConversationExpandedHeaderBand` (#6194) : une
+    /// struct `View` obtient son propre nœud dans l'AttributeGraph, une propriété
+    /// calculée jamais. Chaque fente rend une struct nominale.
+    private var expandedHeaderBand: some View {
+        ConversationExpandedHeaderBand(
             layout: headerLayout,
             backButton: {
-                AnyView(ThemedBackButton(
+                ThemedBackButton(
                     color: accentColor,
                     compactMode: composerState.showOptions,
                     unreadCount: viewModel.otherConversationsUnread
-                ) { HapticFeedback.light(); router.pop() })
+                ) { HapticFeedback.light(); router.pop() }
             },
             midContent: { expandedHeaderMidContent },
             avatar: { headerAvatarView },
             background: { expandedHeaderBackground },
-            share: { AnyView(ConversationShareLinkSlot(conversation: liveConversation, guestLinkId: anonymousSession?.linkId, accentColor: accentColor, secondaryColor: secondaryColor)) }
-        ))
+            share: { ConversationShareLinkSlot(conversation: liveConversation, guestLinkId: anonymousSession?.linkId, accentColor: accentColor, secondaryColor: secondaryColor) }
+        )
     }
 
     /// Call + search buttons, grouped with zero extra spacing between them
-    /// (user-requested 2026-07-11: "les boutons n'ont pas besoin d'être si
-    /// loin l'un de l'autre"). Each button already carries its own ~8pt of
-    /// invisible padding via `.meeshyTapTarget()`'s 44×44 HIG minimum around
-    /// a visually 28×28 glass circle — stacking the HStack's own spacing ON
-    /// TOP of that built-in padding is what pushed them apart. `spacing: 0`
-    /// still leaves that built-in padding as the visible gap (no tap-target
-    /// overlap between the two 44×44 hit areas).
-    ///
-    /// Grappe d'ACTIONS : elle s'efface tant que la liste défile et revient à
-    /// l'arrêt (loi commune `ScrollMotion`, publiée par
-    /// `floatingHeaderSection`). Le retour, l'avatar et le titre ne la
-    /// suivent pas — on doit pouvoir quitter la conversation et savoir où on
-    /// est, même en plein défilement.
-    // Frontière NOMINALE — `ConversationHeaderActionsCluster` (#6194).
-    //
-    // Le commentaire d'origine (2026-08-17) tenait le bon raisonnement : « érasé
-    // un cran plus bas ne suffisait pas — l'APPELANT doit quand même résoudre le
-    // type opaque COMPOSITE, TOUS ses enfants combinés ». Il en tirait le remède
-    // le plus proche, une érasure de plus. C'est exactement ce qu'un type
-    // NOMINAL supprime : son nom se substitue au sous-arbre entier dans le
-    // mangled name, donc le démangleur n'a plus à le parcourir.
-    // L'aperçu (#9031) : « agrandir » prend la place de la loupe.
-    var headerButtonsCluster: AnyView {
-        AnyView(ConversationHeaderActionsCluster(
+    /// (user-requested 2026-07-11) : chaque bouton porte déjà ~8 pt de marge
+    /// invisible par son `.meeshyTapTarget()` 44×44. Grappe d'ACTIONS : elle
+    /// s'efface tant que la liste défile (loi commune `ScrollMotion`). L'aperçu
+    /// (#9031) : « agrandir » prend la place de la loupe.
+    var headerButtonsCluster: some View {
+        ConversationHeaderActionsCluster(
             callButtons: { headerCallButtons },
-            searchButton: { previewMode ? openFullConversationButton : expandedHeaderSearchButton },
+            searchButton: { headerSearchSlot },
             readingModeCluster: { readingModeAffordanceCluster }
-        ))
-    }
-
-    /// Chip de mode + bouton Aa (§WS-7 travaux 3-4, arbitrage F-086bis) —
-    /// insérée APRÈS `expandedHeaderSearchButton`, JAMAIS avant
-    /// `headerCallButtons.layoutPriority(1)` (interdiction absolue du
-    /// contrat). Sous drapeau uniquement : `ReadingModeController` résout
-    /// TOUJOURS `.bubbles` drapeau OFF (§WS-1), donc ce bloc disparaît
-    /// intégralement — bit-à-bit identique à avant ce lot.
-    ///
-    /// AnyView à la DÉCLARATION (pas seulement au site d'appel) : la coupe
-    /// posée sur `headerButtonsCluster` seul ne suffisait pas — l'appelant
-    /// devait quand même résoudre CE type composite (deux branches
-    /// conditionnelles, `ReadingModeChip` + `ReadingModeDensityButton`)
-    /// avant de pouvoir le boxer, et le décodage de mangled name débordait
-    /// toujours la pile au 1er rendu (2026-08-17).
-    private var readingModeAffordanceCluster: AnyView {
-        // Drapeau OFF ⇒ la loi ne rend que `.bubbles` : pas de chip. Drapeau
-        // ON ⇒ chip TOUJOURS, y compris en Bulles (c'est depuis lui qu'on en
-        // sort — 2026-08-21, Bulles est l'un des trois rendus du fil).
-        guard readingModeCapabilities.availableModes.contains(where: { $0 != .bubbles }) else {
-            return AnyView(EmptyView())
-        }
-        // P2 (spec Magnificence 17/08) : UN SEUL chip — tap = CYCLE des modes
-        // disponibles (loi pure ReadingModeCycle), appui long = menu natif
-        // listant tous les modes. Le bouton Aa a disparu avec sa bascule de
-        // densité : le cycle parcourt TOUS les modes ouverts par les
-        // capacités, et le menu remplace la feuille Lentille.
-        return AnyView(
-            ReadingModeChip(
-                model: readingModeChipModel,
-                menuRows: ReadingModeLensCatalog.rows(
-                    capabilities: readingModeCapabilities,
-                    currentMode: readingModeController.mode
-                ),
-                onCycle: {
-                    HapticFeedback.light()
-                    guard let next = ReadingModeCycle.next(
-                        after: readingModeController.mode,
-                        availableInOrder: ReadingModeLensCatalog.cycleOrder.filter {
-                            $0 == .bubbles || readingModeCapabilities.availableModes.contains($0)
-                        }
-                    ) else { return }
-                    readingModeController.select(next)
-                },
-                onSelect: { readingModeController.select($0) },
-                onAuto: { readingModeController.resetToAuto() }
-            )
         )
     }
 
-    /// Modèle pur du chip — `isAuto` distingue une décision de
-    /// l'orchestrateur (§WS-1 `OrchestratorDecisionReason` ∉ {`.sticky`,
-    /// `.flagDisabled`}) d'un choix manuel figé (préférence collante).
-    private var readingModeChipModel: ReadingModeChipModel {
-        ReadingModeChipModel(
-            label: ReadingModeLensCatalog.title(for: readingModeController.mode),
-            accentHex: accentColor,
-            isAuto: readingModeController.decision.reason != .sticky
-                && readingModeController.decision.reason != .flagDisabled
+    private var readingModeAffordanceCluster: ConversationReadingModeAffordance {
+        ConversationReadingModeAffordance(
+            controller: readingModeController,
+            capabilities: readingModeCapabilities,
+            accentColor: accentColor
         )
     }
 
-    /// Title + tags column shown when the composer-options drawer is open.
-    ///
-    /// Arbitrage user 2026-08-18 : la bande DÉPLIÉE ne porte AUCUN bouton
-    /// d'action (ni mode d'affichage, ni recherche, ni appel — ils vivent
-    /// dans l'état plié) : titre + tags/catégorie seulement, l'avatar-view
-    /// montrant déjà les membres les plus actifs d'un groupe. Le tap du
-    /// titre ouvre les détails ; en conversation DIRECTE, l'appui long
-    /// propose détails OU profil de l'utilisateur.
-    @ViewBuilder
+    /// Title + tags column shown when the composer-options drawer is open
+    /// (`ConversationHeaderTitleBlock`) : la bande DÉPLIÉE ne porte AUCUN bouton
+    /// d'action — titre + tags/catégorie seulement (arbitrage user 2026-08-18).
     var expandedHeaderTitleAndTags: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
-            HStack(alignment: .top, spacing: MeeshySpacing.xs) {
-                expandedHeaderTitleButton
-                Spacer(minLength: 4)
-            }
-
-            // Tags row: aligned with title, scrolls under the search icon
-            headerTagsRow
-                .mask(
-                    HStack(spacing: 0) {
-                        Color.black
-                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
-                            .frame(width: 24)
-                    }
-                )
-                .transition(.move(edge: .top).combined(with: .opacity))
-        }
-        .transition(.move(edge: .trailing).combined(with: .opacity))
-    }
-
-    /// Le bouton-titre de la bande dépliée — tap = détails de la
-    /// conversation ; en DIRECT, appui long = choix détails / profil
-    /// (arbitrage user 2026-08-18).
-    @ViewBuilder
-    private var expandedHeaderTitleButton: some View {
-        let titleButton = Button { composerState.showConversationInfo = true } label: {
-            expandedHeaderTitleLabel
-                .meeshyTapTarget()
-        }
-        // F11 (revue adversariale 2026-08-25) : `liveConversation` — visible
-        // sur la même surface que `headerTagsRow` juste en dessous (déjà
-        // basculée). Le TITRE rendu par ce même bouton
-        // (`expandedHeaderTitleLabel`) la lit aussi depuis #9359 : un pair
-        // renommé ou un enregistrement des réglages s'y voit sans quitter le
-        // fil, et le libellé d'accessibilité dit le même nom que l'œil lit.
-        // Une seule source pour les deux.
-        .accessibilityLabel(liveConversation?.name ?? "Conversation")
-        .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
-
-        if conversation?.type == .direct {
-            titleButton.contextMenu {
-                Button {
-                    composerState.showConversationInfo = true
-                } label: {
-                    Label(String(localized: "conversation.view.details", defaultValue: "Détails de la conversation", bundle: .main), systemImage: "info.circle.fill")
-                }
-                Button {
-                    if let conv = conversation, let profileUser = ProfileSheetUser.from(conversation: conv) {
-                        router.deepLinkProfileUser = profileUser
-                    }
-                } label: {
-                    Label(String(localized: "conversation.view.view_profile", defaultValue: "Voir le profil", bundle: .main), systemImage: "person.circle.fill")
+        ConversationHeaderTitleBlock(
+            title: liveConversation?.displayName ?? "Conversation",
+            accessibilityName: liveConversation?.name ?? "Conversation",
+            favoriteEmoji: conversation?.userState.reaction,
+            isDark: isDark,
+            isDirect: conversation?.type == .direct,
+            isRevalidating: viewModel.isRevalidating,
+            tags: { headerTagsRow },
+            onOpenInfo: { composerState.showConversationInfo = true },
+            onOpenProfile: {
+                if let conv = conversation, let profileUser = ProfileSheetUser.from(conversation: conv) {
+                    router.deepLinkProfileUser = profileUser
                 }
             }
-        } else {
-            titleButton
-        }
-    }
-
-    /// Title text + optional revalidation sparkle. Splitting this off keeps
-    /// the conditional `Image` inside its own opaque type and prevents
-    /// SwiftUI from baking it into the parent's already-complex type tree.
-    @ViewBuilder
-    private var expandedHeaderTitleLabel: some View {
-        HStack(spacing: MeeshySpacing.xs + 2) {
-            ConversationTitleLabel(
-                name: liveConversation?.displayName ?? "Conversation",
-                favoriteEmoji: conversation?.userState.reaction,
-                font: MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded),
-                color: isDark ? .white : MeeshyColors.indigo950, // blanc sur le verre clair était illisible (#8822)
-                lineLimit: 2
-            )
-            // Subtle "revalidating" sparkle: shown while we serve stale cache
-            // and silently refresh from the server. Disappears as soon as the
-            // REST response lands — no blocking spinner.
-            if viewModel.isRevalidating {
-                Image(systemName: "sparkles")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
-                    .adaptiveSymbolPulse()
-                    .accessibilityLabel(String(localized: "conversation.view.refreshing_background", bundle: .main))
-            }
-        }
-    }
-
-    // AnyView + label extrait en struct NOMINALE : casse la récursion de type
-    // du bouton lui-même (crash stack-overflow du décodeur de métadonnées Swift
-    // au 1er rendu SUR DEVICE, .ips du 2026-07-30 dans
-    // `expandedHeaderSearchButton.getter`). Leçon 5cdde93c4 : couper au niveau
-    // du type qui est décodé — le type structurel (opaques
-    // `adaptiveGlass`/`meeshyTapTarget`, 2 branches #available chacun) reste
-    // scopé au body de `HeaderSearchGlyph`, le Button devient trivial.
-    private var expandedHeaderSearchButton: AnyView {
-        AnyView(Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { headerState.showSearch = true }
-            isSearchFocused = true
-        } label: {
-            HeaderSearchGlyph(accentColor: accentColor, secondaryColor: secondaryColor)
-        }
-        .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", bundle: .main))
-        .accessibilityHint(String(localized: "accessibility.search.hint", bundle: .main))
-        .accessibilityIdentifier("conversation.header.search"))
-    }
-
-    private var expandedHeaderBackground: AnyView {
-        AnyView(ConversationHeaderGlass(shape: headerLayout.glassShape, accentColor: accentColor, secondaryColor: secondaryColor))
-    }
-
-    // MARK: - Overlay Menu Content (extracted to help type-checker)
-
-    // Retourne AnyView pour ÉRADIQUER le type massif de `MessageOverlayMenu` du
-    // type mangled de `ConversationView.body`. Ce type profond (aggravé par les
-    // ajouts .equatable()/a11y de l'overlay) faisait déborder la pile du
-    // décodeur de métadonnées Swift (`swift_getTypeByMangledName`) au 1er rendu
-    // SUR DEVICE → EXC_BAD_ACCESS dans l'en-tête (`expandedHeaderBandBody`).
-    // L'overlay est modal (zIndex 999) → AnyView sans coût de liste.
-    private var overlayMenuContent: AnyView {
-        guard overlayState.showOverlayMenu, let msg = overlayState.overlayMessage else {
-            return AnyView(EmptyView())
-        }
-        if let pieceOverlay = pieceOverlayContent(for: msg) { return pieceOverlay }
-        return AnyView(
-            MessageOverlayMenu(
-                message: msg,
-                contactColor: accentColor,
-                // Le frame-tracker ne suit que les BULLES : en Focal/Script il
-                // rend `nil`, donc `.zero`, et l'overlay présente son aperçu
-                // centré, à sa taille naturelle. C'est exactement ce que
-                // demande la directive du 2026-08-23 — « le mode focal, en
-                // long-press, doit afficher le message normal » — là où la
-                // capture de la cellule Focal en tranchait l'identité et la
-                // barre de méta, toutes deux à cheval sur son cadre.
-                messageBubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
-                isPresented: $overlayState.showOverlayMenu,
-                canDelete: msg.isMe || isCurrentUserAdminOrMod,
-                canEdit: msg.isMe || isCurrentUserAdminOrMod,
-                onCopy: {
-                    // Prisme: copy what's DISPLAYED (the preferred translation when
-                    // one is showing), never the original — like the quick bar's Copier.
-                    guard MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg) else { return }
-                    HapticFeedback.success()
-                },
-                onEdit: { beginEdit(msg) },
-                isStarred: viewModel.isStarred(messageId: msg.id),
-                textTranslations: viewModel.messageTranslations[msg.id] ?? [],
-                transcription: viewModel.messageTranscriptions[msg.id],
-                translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
-                threadLanguage: overlayThreadLanguage(for: msg),
-                onReact: { emoji in
-                    viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
-                },
-                onSaveMedia: {
-                    // Composant unifié « Enregistrer » — l'action n'apparaît
-                    // que pour un message à exactement UN attachment.
-                    if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() }
-                },
-                onCompose: {
-                    // L'overlay ne monte rien : il rend la main. Le même état
-                    // que le second déclencheur, un seul chemin de présentation.
-                    composerState.composeMediaTarget = ComposerSeedTarget(message: msg)
-                },
-                onSelect: { beginSelectionMode(seedingWith: msg.id) },
-                isDirect: isDirect,
-                preferredTranslation: viewModel.preferredTranslation(for: msg.id),
-                mentionDisplayNames: viewModel.mentionDisplayNames,
-                currentUserId: AuthManager.shared.currentUser?.id ?? "",
-                userRegionalLanguage: AuthManager.shared.currentUser?.regionalLanguage,
-                userCustomDestinationLanguage: AuthManager.shared.currentUser?.customDestinationLanguage,
-                onShowTranslate: {
-                    overlayState.moreSheetInitialItem = .language
-                    overlayState.detailSheetMessage = msg
-                },
-                onShowMore: {
-                    overlayState.moreSheetInitialItem = nil
-                    overlayState.detailSheetMessage = msg
-                },
-                onShowCallDetail: {
-                    overlayState.callDetailMessage = msg
-                },
-                onExportImage: { quick in beginMessageExport(msg, quick: quick) },
-                onExpandFullPicker: {
-                    overlayState.fullReactionPickerMessage = msg
-                }
-            )
-            .transition(.opacity).zIndex(999)
         )
     }
-}
 
-// MARK: - Header Search Glyph (extracted struct to keep the Button's type trivial)
-
-/// Struct NOMINALE : le type structurel du glyphe (opaques `adaptiveGlass` +
-/// `meeshyTapTarget`, chacun portant ses 2 branches #available) reste scopé à
-/// ce body au lieu de gonfler le mangled name du Button parent — dont le
-/// décodage récursif débordait la pile du main thread au 1er rendu SUR DEVICE
-/// (.ips 2026-07-30, `expandedHeaderSearchButton.getter`).
-private struct HeaderSearchGlyph: View {
-    let accentColor: String
-    let secondaryColor: String
-
-    var body: some View {
-        Image(systemName: "magnifyingglass")
-            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-            .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
-            .meeshyTapTarget()
+    private var expandedHeaderBackground: ConversationHeaderGlass {
+        ConversationHeaderGlass(shape: headerLayout.glassShape, accentColor: accentColor, secondaryColor: secondaryColor)
     }
 }

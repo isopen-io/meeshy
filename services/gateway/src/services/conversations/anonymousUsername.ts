@@ -1,31 +1,35 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { suffixAnonymousUsername } from '@meeshy/shared/utils/anonymous-username';
 
 /**
- * Premier pseudo libre de la série `ano_bob`, `ano_bob2`, `ano_bob3`… dans
- * CETTE conversation — la seule portée où deux pseudos identiques se voient.
+ * Premier pseudo libre DANS CETTE conversation — la seule portée où deux
+ * pseudos identiques se voient — parmi des candidats tirés par `draw`.
  *
- * Extrait de `routes/anonymous.ts` par #4167 pour que `POST /links/:key/members`
- * (`routes/conversations/link-admission.ts`) partage la MÊME règle plutôt que
- * de la retaper : une seconde copie aurait été exactement la dérive que #4167
- * ferme ailleurs.
+ * Depuis #10602, tout pseudo anonyme se termine par un nombre de 2 à 5
+ * chiffres (`numberedAnonymousUsername`) : une collision se résout en tirant
+ * un autre nombre, plus en refusant la personne ni en lui imposant un rang
+ * (`ano_bob2`). Un candidat déjà essayé n'est pas réinterrogé.
  *
- * Rend `null` quand la série est épuisée. La borne n'est pas un détail de
- * confort : les deux boucles qu'elle remplaçait à l'origine étaient des
- * `while (true)` que seule la part aléatoire de `generateNickname` faisait
- * terminer — un pseudo demandé explicitement et durablement pris les faisait
- * tourner jusqu'à l'OOM du process, un déni de service à un POST non
- * authentifié.
+ * Partagé par toutes les portes de jonction d'un invité, qui passent par
+ * `joinAsGuest` (`routes/conversations/link-admission.ts`, #4167).
+ *
+ * Rend `null` quand les tirages sont épuisés. La borne n'est pas un détail de
+ * confort : les boucles qu'elle remplaçait à l'origine étaient des
+ * `while (true)` qu'un pseudo durablement pris faisait tourner jusqu'à l'OOM
+ * du process, un déni de service à un POST non authentifié.
  */
-export const MAX_USERNAME_RANKS = 25;
+export const MAX_USERNAME_DRAWS = 25;
 
 export async function findFreeAnonymousUsername(
   prisma: Pick<PrismaClient, 'participant'>,
-  desired: string,
+  draw: () => string,
   conversationId: string
 ): Promise<string | null> {
-  for (let rank = 1; rank <= MAX_USERNAME_RANKS; rank++) {
-    const candidate = rank === 1 ? desired : suffixAnonymousUsername(desired, rank);
+  const tried = new Set<string>();
+
+  for (let attempt = 0; attempt < MAX_USERNAME_DRAWS; attempt++) {
+    const candidate = draw();
+    if (tried.has(candidate)) continue;
+    tried.add(candidate);
 
     const taken = await prisma.participant.findFirst({
       where: {

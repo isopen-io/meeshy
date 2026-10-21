@@ -154,9 +154,10 @@ describe('installCount — un compteur ATOMIQUE', () => {
 describe('pack:installation-updated — diffusée sur la room personnelle', () => {
   it('nomme l’événement et sa charge, sur user:<id>, après l’écriture', async () => {
     const { app, emitted, db } = await stickerApp();
-    await app.inject({ method: 'DELETE', url: '/meo/install' });
-    expect(emitted).toEqual([{ room: `user:${ALICE}`, event: 'pack:installation-updated', payload: { domain: 'sticker', slug: 'meo', installed: false, at: AT.toISOString() } }]);
-    expect(db.choices.map((c) => [c.packSlug, c.installedAt])).toEqual([['meo', null]]);
+    // Un pack INCLUS (Mee, Meo) ne se retire plus (#10738) : le retrait se joue sur un pack communautaire.
+    await app.inject({ method: 'DELETE', url: '/chats-de-paris/install' });
+    expect(emitted).toEqual([{ room: `user:${ALICE}`, event: 'pack:installation-updated', payload: { domain: 'sticker', slug: 'chats-de-paris', installed: false, at: AT.toISOString() } }]);
+    expect(db.choices.map((c) => [c.packSlug, c.installedAt])).toEqual([['chats-de-paris', null]]);
     await app.close();
   });
 
@@ -308,15 +309,15 @@ describe('isolation des domaines', () => {
     await base.app.ready();
 
     await base.app.inject({ method: 'PUT', url: '/packs/glory-frame/mee/install' });
-    await base.app.inject({ method: 'DELETE', url: '/sticker-packs/mee/install' });
+    const refused = await base.app.inject({ method: 'DELETE', url: '/sticker-packs/mee/install' });
     const stickers = (await base.app.inject({ method: 'GET', url: '/sticker-packs/installed' })).json().data;
     const frames = (await base.app.inject({ method: 'GET', url: '/packs/glory-frame/installed' })).json().data;
-    expect(stickers.map((p: { slug: string }) => p.slug)).toEqual(['meo', 'mee-et-meo']);
+    // Le sticker Mee est INCLUS (#10738) : son retrait est refusé, et le cadre
+    // homonyme installé n'y change rien — ni d'un côté ni de l'autre.
+    expect(refused.statusCode).toBe(409);
+    expect(stickers.map((p: { slug: string }) => p.slug)).toEqual(['mee', 'meo', 'mee-et-meo']);
     expect(frames.map((p: { slug: string }) => p.slug)).toEqual(['mee']);
-    expect(db.choices.map((c) => [c.packSlug, c.installedAt === null])).toEqual([
-      ['glory-frame.mee', false],
-      ['mee', true],
-    ]);
+    expect(db.choices.map((c) => [c.packSlug, c.installedAt === null])).toEqual([['glory-frame.mee', false]]);
     await base.app.close();
   });
 });

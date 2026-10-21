@@ -18,14 +18,14 @@ describe('payloadOfIncomingShare — des fichiers, sinon un texte, sinon rien', 
   test('des fichiers partent tels quels, dans l’ordre reçu', () => {
     const photo = file('a.jpg', 'image/jpeg');
     const clip = file('b.mp4', 'video/mp4');
-    expect(payloadOfIncomingShare(share({ files: [photo, clip], text: 'ignoré' }))).toEqual({ kind: 'files', files: [photo, clip] });
+    expect(payloadOfIncomingShare(share({ files: [photo, clip], text: 'légende' }))).toEqual({ kind: 'files', files: [photo, clip] });
   });
 
-  test('seules les images et les vidéos passent : un autre type venu d’un tiers est écarté, jamais envoyé', () => {
-    const photo = file('a.jpg', 'image/jpeg');
-    expect(payloadOfIncomingShare(share({ files: [file('x.exe', 'application/x-msdownload'), photo] }))).toEqual({ kind: 'files', files: [photo] });
-    expect(payloadOfIncomingShare(share({ files: [file('x.html', 'text/html')], text: 'Salut' }))).toEqual({ kind: 'text', text: 'Salut' });
-    expect(payloadOfIncomingShare(share({ files: [file('x.pdf', 'application/pdf')] }))).toBeNull();
+  test('un son et tout autre fichier passent aussi (D9) ; un fichier vide, non', () => {
+    const voice = file('a.m4a', 'audio/mp4');
+    const pdf = file('b.pdf', 'application/pdf');
+    expect(payloadOfIncomingShare(share({ files: [voice, pdf] }))).toEqual({ kind: 'files', files: [voice, pdf] });
+    expect(payloadOfIncomingShare(share({ files: [new File([], 'vide.txt', { type: 'text/plain' })], text: 'Salut' }))).toEqual({ kind: 'text', text: 'Salut' });
   });
 
   test('un texte simple reste un texte, sans adresse', () => {
@@ -93,6 +93,16 @@ describe('requestOfIncomingShare — la demande faite à la feuille', () => {
   test('des fichiers n’ont pas d’adresse à offrir', () => {
     const photo = new File(['x'], 'a.jpg', { type: 'image/jpeg' });
     expect(requestOfIncomingShare(share({ files: [photo] }))).toEqual({ intent: 'share', payload: { kind: 'files', files: [photo] } });
+  });
+
+  test('le texte joint à des fichiers devient leur légende (D9), adresse comprise', () => {
+    const photo = new File(['x'], 'a.jpg', { type: 'image/jpeg' });
+    expect(requestOfIncomingShare(share({ files: [photo], text: 'Vue depuis Fourvière', url: 'https://x.org' }))).toEqual({
+      intent: 'share',
+      payload: { kind: 'files', files: [photo] },
+      caption: 'Vue depuis Fourvière\nhttps://x.org',
+    });
+    expect(requestOfIncomingShare(share({ files: [photo], title: 'Titre seul' }))?.caption).toBe('Titre seul');
   });
 
   test('un partage vide ne demande rien', () => {

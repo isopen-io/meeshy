@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { ModelPostMenu, type PostMenuHost } from '@/components/feed-post-menu';
 import { GlyphSvg, Glyph } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
@@ -12,6 +13,7 @@ import { cachedCardSeed } from '@/lib/api/card-caches';
 import { apiDeps } from '@/lib/api/deps';
 import { feedQuery } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
+import type { PostToggleKind } from '@/lib/feed/interactions';
 import { postQueryOptions } from '@/lib/api/publication-detail';
 import { reelsQuery } from '@/lib/api/reels';
 import { resolveFeedCardModel, type FeedCardModel } from '@/lib/feed/card-model';
@@ -23,7 +25,7 @@ import { createReelMediaUnlocker } from '@/lib/reels/media-unlock';
 import { reelPrimeSourceOf } from '@/lib/reels/scene';
 import { createPagerSettle } from '@/lib/reels/settle';
 import { useReelPreload } from '@/lib/reels/use-reel-preload';
-import { activeIndexOf, composeReelThread, entryReelIds, holdReelThread, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels } from '@/lib/reels/thread';
+import { activeIndexOf, composeReelThread, entryReelIds, holdReelThread, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels, withoutHiddenReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
 import { chromeYields } from '@/lib/view/chrome-yields';
 import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
@@ -122,19 +124,45 @@ export function ReelsBackButton({
   language,
   onBack,
   hidden = false,
+  trailing,
 }: {
   readonly language: InterfaceLanguage;
   readonly onBack: () => void;
   /** La feuille de commentaires est ouverte (`chromeYields`, #8601). */
   readonly hidden?: boolean;
+  /** Le menu « … » du réel regardé, au bord de FIN (#11156). */
+  readonly trailing?: React.ReactNode;
 }) {
   return (
     <ViewerTopBar
       placement="overlay"
       hidden={hidden}
+      {...(trailing === undefined ? {} : { trailing })}
       exit={{ kind: 'back', label: translate(language, 'reels.back'), onExit: onBack, probe: { 'data-reels-back': '' } }}
     />
   );
+}
+
+/**
+ * **LE MENU « … » DU RÉEL REGARDÉ** (#11156) — miroir `ReelMoreOptionsMenu`
+ * (`ReelsPlayerView+ActionRail.swift`), monté par la barre haute au bord de
+ * FIN : les MÊMES entrées que la carte du fil (`postMenuEntries`, via
+ * `ModelPostMenu`) — Ouvrir, Copier, Partager, Enregistrer, puis Épingler ·
+ * Modifier · Supprimer pour l'auteur, Retirer (modération) · Signaler pour
+ * les autres.
+ */
+export function ReelsMoreMenu({
+  model,
+  menu,
+  onShare,
+  onGesture,
+}: {
+  readonly model: FeedCardModel;
+  readonly menu: PostMenuHost;
+  readonly onShare: (postId: string) => void;
+  readonly onGesture: (postId: string, kind: PostToggleKind) => void;
+}) {
+  return <ModelPostMenu model={model} isDetail={false} tone="overlay" menu={menu} onShare={onShare} onGesture={onGesture} />;
 }
 
 /** Le démarrage à froid SEUL — jamais sur un rafraîchissement de fond. */
@@ -204,7 +232,15 @@ export default function ReelsScreen() {
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
-  const { announcement, onGesture, onShare, onRepost, repostConfirm } = usePostGesture();
+  /* LE RÉEL RETIRÉ QUITTE LA PILE AVANT LA RÉPONSE (#11156), et y revient
+     si la passerelle refuse — le registre des caisses le rend aussi
+     (`snapshotCardPost`), mais la graine se relit pendant le vol. */
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => new Set());
+  const onDeleting = useCallback((postId: string) => {
+    setHiddenIds((ids) => new Set([...ids, postId]));
+    return () => setHiddenIds((ids) => new Set([...ids].filter((id) => id !== postId)));
+  }, []);
+  const { announcement, onGesture, onShare, onRepost, repostConfirm, menu } = usePostGesture({ onDeleting });
   const [soundOn, setSoundOn] = useState(hasUserActivation);
   const toggleSound = useCallback(() => setSoundOn((on) => !on), []);
   const soundBlocked = useCallback(() => setSoundOn(false), []);
@@ -254,13 +290,16 @@ export default function ReelsScreen() {
   const held = useRef<{ readonly ids: readonly string[]; readonly activeId: string }>({ ids: [], activeId: '' });
   const thread = useMemo(
     () =>
-      holdReelThread({
-        heldIds: held.current.ids,
-        activeId: held.current.activeId,
-        composed: composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }),
-        ...(seed !== undefined ? { entryId: seed } : {}),
-      }),
-    [entryIds, known, reels.data, seed],
+      withoutHiddenReels(
+        holdReelThread({
+          heldIds: held.current.ids,
+          activeId: held.current.activeId,
+          composed: composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }),
+          ...(seed !== undefined ? { entryId: seed } : {}),
+        }),
+        hiddenIds,
+      ),
+    [entryIds, known, reels.data, seed, hiddenIds],
   );
   /* UN MODÈLE PAR PUBLICATION, GARDÉ tant que la publication, la langue et la
      minute ne changent pas (#9277) : une page de réels de plus ne recompose
@@ -403,6 +442,12 @@ export default function ReelsScreen() {
     };
   }, [pagerShown, unlocker]);
 
+  const activeModel = pagerShown ? models[active] : undefined;
+  const reelMenu =
+    activeModel === undefined ? undefined : (
+      <ReelsMoreMenu key={activeModel.id} model={activeModel} menu={menu} onShare={visitor ? ask : onShare} onGesture={visitor ? ask : onGesture} />
+    );
+
   const body = loading ? (
     <ReelsSkeleton language={language} />
   ) : failed || coldOffline ? (
@@ -456,7 +501,7 @@ export default function ReelsScreen() {
   );
 
   return (
-    <ReelsFrame language={language} onBack={close} announcement={announcement} chromeHidden={chromeYielded}>
+    <ReelsFrame language={language} onBack={close} announcement={announcement} chromeHidden={chromeYielded} trailing={reelMenu}>
       {body}
       {repostConfirm}
       {invitation.dialog}
@@ -470,12 +515,14 @@ export function ReelsFrame({
   announcement,
   children,
   chromeHidden = false,
+  trailing,
 }: {
   readonly language: InterfaceLanguage;
   readonly onBack: () => void;
   readonly announcement: string;
   readonly children: React.ReactNode;
   readonly chromeHidden?: boolean;
+  readonly trailing?: React.ReactNode;
 }) {
   return (
     <div data-reels className="h-dvh overflow-hidden bg-media-backdrop text-on-media">
@@ -493,7 +540,7 @@ export function ReelsFrame({
         {/* « Retour » EN TÊTE du document (#6498) : sa place à l'écran est
             absolue, mais le clavier et le lecteur d'écran suivent l'ordre du
             document — après le fil, il fallait traverser chaque réel monté. */}
-        <ReelsBackButton language={language} onBack={onBack} hidden={chromeHidden} />
+        <ReelsBackButton language={language} onBack={onBack} hidden={chromeHidden} {...(trailing === undefined ? {} : { trailing })} />
         {children}
       </div>
       <p role="status" aria-live="polite" className="sr-only">

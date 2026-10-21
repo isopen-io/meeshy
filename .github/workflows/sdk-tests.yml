@@ -25,6 +25,7 @@ on:
       # et une régénération qui ne toucherait que lui doit rejouer le miroir Swift.
       - 'packages/shared/fixtures/shared-translation/**'
       - 'packages/shared/design/packs/frame-usage-vectors.json'
+      - 'packages/shared/design/packs/frame-usage-avatar-vectors.json'
       - 'packages/shared/design/packs/frame-offer-vectors.json'
       - 'packages/shared/design/glory-frames/packs.json'
       - 'packages/shared/fixtures/reading-modes/game.vectors.json'
@@ -35,6 +36,22 @@ on:
       # Le délai d'adoption d'une preuve par lien (#10518) : ProvenAdoptionWindowTests
       # LIT ce contrat — un changement qui ne toucherait que lui doit rejouer le miroir Swift.
       - 'packages/shared/utils/proven-session-adoption.ts'
+      # La loi des actions (#11209) : MessageActionPolicyVectorTests et
+      # ConversationActionPolicyVectorTests rejouent ses vecteurs, PlatformRoleTests
+      # lit role-types.ts — une PR TypeScript seule qui les change (une loi
+      # régénérée, une hiérarchie renumérotée) doit rejouer le miroir Swift. Les
+      # contrats TS que d'autres tests du SDK relisent suivent la même règle :
+      # packages/shared/__tests__/ci/sdk-tests-shared-inputs.test.ts exige que
+      # tout fichier partagé lu par un test du SDK figure ici.
+      - 'packages/shared/fixtures/action-policy/**'
+      - 'packages/shared/utils/message-action-policy.ts'
+      - 'packages/shared/utils/conversation-action-policy.ts'
+      - 'packages/shared/utils/message-content-kind.ts'
+      - 'packages/shared/types/role-types.ts'
+      - 'packages/shared/fixtures/conversation-preview-cases.json'
+      - 'packages/shared/types/call-rules.ts'
+      - 'packages/shared/types/consents.ts'
+      - 'packages/shared/types/preferences/application.ts'
   pull_request:
     branches:
       - dev
@@ -43,6 +60,7 @@ on:
       - 'packages/MeeshySDK/**'
       - 'packages/shared/fixtures/shared-translation/**'
       - 'packages/shared/design/packs/frame-usage-vectors.json'
+      - 'packages/shared/design/packs/frame-usage-avatar-vectors.json'
       - 'packages/shared/design/packs/frame-offer-vectors.json'
       - 'packages/shared/design/glory-frames/packs.json'
       - 'packages/shared/fixtures/reading-modes/game.vectors.json'
@@ -51,6 +69,15 @@ on:
       - 'packages/shared/fixtures/capture-save/capture-save.vectors.json'
       - 'packages/shared/utils/capture/capture-save.ts'
       - 'packages/shared/utils/proven-session-adoption.ts'
+      - 'packages/shared/fixtures/action-policy/**'
+      - 'packages/shared/utils/message-action-policy.ts'
+      - 'packages/shared/utils/conversation-action-policy.ts'
+      - 'packages/shared/utils/message-content-kind.ts'
+      - 'packages/shared/types/role-types.ts'
+      - 'packages/shared/fixtures/conversation-preview-cases.json'
+      - 'packages/shared/types/call-rules.ts'
+      - 'packages/shared/types/consents.ts'
+      - 'packages/shared/types/preferences/application.ts'
   # Intentionally NOT triggered by changes to this workflow file itself: an
   # app-only PR that merely touches CI config must not be gated by the SDK suite.
   # Use workflow_dispatch (Actions tab) to exercise CI changes on demand.

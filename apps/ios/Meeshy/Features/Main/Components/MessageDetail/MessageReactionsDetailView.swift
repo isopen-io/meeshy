@@ -38,6 +38,12 @@ struct MessageReactionsDetailView: View {
                     },
                     onExpandFullPicker: { showFullEmojiPicker = true }
                 )
+                .anchoredPicker(isPresented: $showFullEmojiPicker) {
+                    EmojiFullPickerSheet(
+                        style: isDark ? .dark : .light,
+                        onReact: { emoji in onReact(emoji); showFullEmojiPicker = false }
+                    )
+                }
                 .frame(maxWidth: .infinity)
                 Divider().opacity(0.4)
             }
@@ -82,30 +88,32 @@ struct MessageReactionsDetailView: View {
             }
         }
         .onAppear { Task { await loadReactionDetails() } }
-        .sheet(isPresented: $showFullEmojiPicker) {
-            EmojiFullPickerSheet(
-                style: isDark ? .dark : .light,
-                onReact: { emoji in onReact?(emoji); showFullEmojiPicker = false }
-            )
-        }
     }
 
     private var filteredReactionUsers: [ReactionUserItem] {
+        Self.reactionUserRows(from: reactionGroups, filter: reactionFilter)
+    }
+
+    /// Rangées de la liste, les plus récentes d'abord, une par couple
+    /// (personne, emoji) : l'identité de rangée doit rester unique dans le
+    /// `LazyVStack` même quand le serveur ou le seed répètent une réaction.
+    nonisolated static func reactionUserRows(from groups: [ReactionGroup], filter: String) -> [ReactionUserItem] {
         var items: [ReactionUserItem] = []
-        for group in reactionGroups {
-            if reactionFilter == "all" || reactionFilter == group.emoji {
-                for user in group.users {
-                    items.append(ReactionUserItem(
-                        userId: user.userId,
-                        username: user.username,
-                        avatar: user.avatar,
-                        emoji: group.emoji,
-                        createdAt: user.createdAt
-                    ))
-                }
+        for group in groups where filter == "all" || filter == group.emoji {
+            for user in group.users {
+                items.append(ReactionUserItem(
+                    userId: user.userId,
+                    username: user.username,
+                    avatar: user.avatar,
+                    emoji: group.emoji,
+                    createdAt: user.createdAt
+                ))
             }
         }
-        return items.sorted { $0.createdAt > $1.createdAt }
+        var seen = Set<String>()
+        return items
+            .sorted { $0.createdAt > $1.createdAt }
+            .filter { seen.insert($0.id).inserted }
     }
 
     private func reactionFilterCapsule(label: String, count: Int, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -149,7 +157,8 @@ struct MessageReactionsDetailView: View {
                 name: item.username,
                 context: .userListItem,
                 accentColor: contactColor,
-                avatarURL: item.avatar
+                avatarURL: item.avatar,
+                presenceState: PresenceManager.shared.presenceState(for: item.userId)
             )
             // Avatar duplicates the username text below — hide it so the
             // combined row reads once (name, emoji, when) instead of twice.
@@ -278,7 +287,7 @@ struct MessageReactionsDetailView: View {
 
 // MARK: - Reaction User Item
 
-private struct ReactionUserItem: Identifiable {
+nonisolated struct ReactionUserItem: Identifiable, Sendable {
     let userId: String
     let username: String
     let avatar: String?

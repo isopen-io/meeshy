@@ -133,6 +133,30 @@ final class ArrivalCelebrationControllerTests: XCTestCase {
 
         XCTAssertEqual(prefetcher.startCount, 2)
     }
+
+    /// Déconnexion : les caches sont vidés, donc le préchargement d'arrivée doit
+    /// pouvoir repartir pour le même compte ; et celui en vol ne doit pas écrire
+    /// le fil du compte sortant dans le cache du suivant.
+    func test_resetForLogout_cancelsThePrefetch_andAllowsANewOne() async {
+        let (sut, prefetcher, hold) = makeSUT()
+        sut.begin(userId: "u1")
+        await Task.yield()
+
+        sut.resetForLogout()
+        XCTAssertFalse(sut.isShowing)
+        XCTAssertTrue(sut.isPrefetchCancelled)
+
+        sut.prepare(userId: "u1")
+        await Task.yield()
+        XCTAssertEqual(prefetcher.startCount, 2)
+        hold.open()
+        prefetcher.latch.open()
+    }
+
+    func test_logoutTeardown_resetsTheArrival() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Core/DependencyContainer.swift")
+        XCTAssertTrue(source.contains("ArrivalCelebrationController.shared.resetForLogout()"))
+    }
 }
 
 /// Reduce Motion : aucune particule, un fondu sobre.

@@ -2,37 +2,53 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - « Transférer » : la feuille et ses portes (extrait de ConversationView, #9039)
+// MARK: - « Transférer » : l'écran de partage unique et ses portes (#9039, #10947)
 
 extension ConversationView {
 
-    /// La feuille de transfert, montée par `.sheet(item: $composerState.forwardMessage)`.
+    /// Ce que l'écran de partage reçoit de cette conversation : la pièce choisie
+    /// (menu d'une pièce, V2), ou le message et ceux de la sélection multiple
+    /// (barre rapide, « Plus… », « Sélectionner », D1).
+    func forwardSubject(for message: Message) -> ShareSubject {
+        let source = conversation?.id
+        let encrypted = conversation?.encryptionMode != nil
+        if let pieceId = composerState.forwardPieceId, message.attachments.contains(where: { $0.id == pieceId }) {
+            return .piece(message, attachmentId: pieceId, sourceConversationId: source, conversationIsEncrypted: encrypted)
+        }
+        return .messages([message] + composerState.forwardAdditionalMessages, sourceConversationId: source, conversationIsEncrypted: encrypted)
+    }
+
+    /// L'écran de partage, monté par `.sheet(item: $composerState.forwardMessage)`.
     func forwardPicker(for msgToForward: Message) -> some View {
-        ForwardPickerSheet(
-            message: msgToForward,
-            additionalMessages: composerState.forwardAdditionalMessages,
-            sourceConversationId: conversation?.id ?? "",
+        let pieceId = composerState.forwardPieceId
+        return ShareSheetView(
+            subject: forwardSubject(for: msgToForward),
             accentColor: accentColor,
-            onOpenConversation: { router.navigateToConversation($0) },
-            // Loi 6 — SECOND point d'entrée du MÊME chemin, jamais une
-            // dixième porte : la feuille se referme et rend la main,
-            // l'hôte pose le même état que l'appui long. Elle ne monte
-            // pas le meuble, ce qui en ferait un second contrat d'envoi.
-            onCompose: { composerState.pendingComposeTarget = ComposerSeedTarget(message: msgToForward) },
-            // « Imager la discussion » n'est pas rendu quand la discussion
-            // qu'elle peindrait n'a rien à peindre — ou contient une réponse
-            // qui cite un contenu protégé (#9573, décision porteur 2026-10-08).
-            onImageDiscussion: MessageCardDiscussion.offers(messages: viewModel.messages, endingAt: msgToForward.id)
-                ? { beginDiscussionExport(endingAt: msgToForward) } : nil,
-            onDismiss: { composerState.forwardMessage = nil }
+            actions: ShareSheetHostActions(
+                onOpenConversation: { router.navigateToConversation($0) },
+                // Loi 6 — SECOND point d'entrée du MÊME chemin : l'écran se
+                // referme et rend la main, l'hôte pose le même état que l'appui long.
+                onCompose: ComposableAttachment.offers(message: msgToForward)
+                    ? { composerState.pendingComposeTarget = ComposerSeedTarget(message: msgToForward) } : nil,
+                // « Imager la discussion » n'est pas rendu quand la discussion n'a
+                // rien à peindre — ou cite un contenu protégé (#9573).
+                onImageDiscussion: MessageCardDiscussion.offers(messages: viewModel.messages, endingAt: msgToForward.id)
+                    ? { beginDiscussionExport(endingAt: msgToForward) } : nil,
+                onSave: msgToForward.exitOffer.offers(.save) ? { saveForwarded(msgToForward, piece: pieceId) } : nil
+            ),
+            onDismiss: {
+                composerState.forwardMessage = nil
+                composerState.forwardPieceId = nil
+            }
         )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            // ForwardPickerSheet reads `@EnvironmentObject StatusViewModel`
-            // internally — .sheet does not reliably inherit the parent's
-            // environment across this boundary (documented crash pattern,
-            // see docs/lessons on @EnvironmentObject-across-sheet).
-            .environmentObject(statusViewModel)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// « Enregistrer » depuis l'écran de partage — la pièce choisie, ou le
+    /// message, par la loi de sortie (`MessageExitTransport`).
+    private func saveForwarded(_ message: Message, piece pieceId: String?) {
+        if MessageExitTransport.save(message, piece: pieceId, through: mediaSaveCoordinator) { HapticFeedback.light() }
     }
 
     /// **« Imager la discussion »** (#9039) : la discussion chargée jusqu'au

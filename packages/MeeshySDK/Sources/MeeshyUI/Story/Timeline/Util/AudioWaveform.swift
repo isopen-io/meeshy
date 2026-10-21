@@ -15,7 +15,16 @@ import ImageIO
 /// Cache à deux niveaux, mémoire puis disque, keyé URL+count.
 public enum AudioWaveform {
 
-    private nonisolated(unsafe) static let cache = NSCache<NSString, NSArray>()
+    private nonisolated(unsafe) static let cache: NSCache<NSString, NSArray> = {
+        let cache = NSCache<NSString, NSArray>()
+        // Une entrée par piste × palier (jusqu'à 2048 RMS en `NSNumber`) : sans borne, une longue séance de montage
+        // gardait toutes les pistes ouvertes depuis le lancement. Le disque reste le second niveau.
+        cache.countLimit = memoryCountLimit
+        return cache
+    }()
+
+    nonisolated static let memoryCountLimit = 48
+    nonisolated static var memoryCacheCountLimit: Int { cache.countLimit }
 
     /// Paliers de résolution.
     ///
@@ -162,7 +171,7 @@ public enum AudioWaveform {
 
 /// Vignette FIXE (image) pour les lanes — pendant du filmstrip vidéo.
 /// `CGImageSourceCreateThumbnailAtIndex` décode à la taille cible (jamais le
-/// bitmap plein format en mémoire), cache keyé URL+hauteur.
+/// bitmap plein format en mémoire), cache keyé URL+hauteur+échelle.
 enum ImageStill {
 
     private nonisolated(unsafe) static let cache: NSCache<NSString, UIImage> = {
@@ -173,10 +182,9 @@ enum ImageStill {
         return cache
     }()
 
-    static func thumbnail(url: URL, maxHeight: CGFloat) async -> UIImage? {
-        let key = "\(url.absoluteString)|\(Int(maxHeight))" as NSString
+    static func thumbnail(url: URL, maxHeight: CGFloat, scale: CGFloat) async -> UIImage? {
+        let key = "\(url.absoluteString)|\(Int(maxHeight))|\(scale)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
-        let scale = UIScreen.main.scale
         let image: UIImage? = await Task.detached(priority: .utility) {
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
             let options: [CFString: Any] = [

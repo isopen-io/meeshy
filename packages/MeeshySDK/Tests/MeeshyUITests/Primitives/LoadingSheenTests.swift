@@ -65,10 +65,16 @@ final class LoadingSheenSourceGuardTests: XCTestCase {
     /// fichier en porte. Le découpage par déclaration évite de compter les
     /// effets voisins (`PulseEffect`, `BreathingGlow`) d'un fichier qui
     /// déclare aussi `.shimmer()`.
+    /// Les reflets qui ORNENT un objet affiché, sans rien dire d'un chargement.
+    /// `FrameMotionLayers` fait glisser le reflet d'un cadre de profil (#10935) :
+    /// il joue pendant que l'image est là, jamais à sa place.
+    private static let decorativeSheens: Set<String> = ["FrameMotionLayers.swift"]
+
     func test_meeshyUI_hasExactlyOneAnimatedSheen() throws {
         let found = try Self.allMeeshyUISources()
             .filter { Self.isAnimatedSheen($0.code) }
             .map { ($0.path as NSString).lastPathComponent }
+            .filter { !Self.decorativeSheens.contains($0) }
 
         XCTAssertEqual(
             Set(found), ["LoadingSheen.swift"],

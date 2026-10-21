@@ -108,6 +108,7 @@ struct QuickReactionDoubleTap: ViewModifier {
 
 struct ThemedMessageBubble: View {
     @Environment(\.announcesCapture) private var announcesCapture // #9617 — la surface annonce-t-elle sa capture ?
+    @Environment(\.bubbleSkin) private var skin
     // MARK: - Public init API (preserved unchanged for all call sites)
 
     let message: Message
@@ -173,7 +174,7 @@ struct ThemedMessageBubble: View {
     var messageAudioItems: [ConversationViewModel.AudioItem] = []
     /// Cold-open (F1) : nom de conversation / file "à suivre" — forwardés
     /// jusqu'à `AudioMediaView` (`BubbleStandardLayout` -> `AudioMediaView`/
-    /// `AudioCarouselView`) pour que le plein écran audio ouvert SANS
+    /// `AudioStackView`) pour que le plein écran audio ouvert SANS
     /// lecture déjà active porte la même carte Now Playing / avance auto que
     /// `ConversationViewModel.playAudio(attachmentId:)`. `nil`-default garde
     /// les surfaces sans conversation (previews) inchangées.
@@ -444,10 +445,11 @@ struct ThemedMessageBubble: View {
     private func stickerLayout(content: BubbleContent, sticker: BubbleContent.Sticker) -> some View {
         BubbleSticker(
             sticker: sticker,
+            senderName: content.senderName,
             messageId: content.messageId,
             isMe: content.isMe,
             isDark: isDark,
-            accentHex: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+            accentHex: skin.accentHex(isMe: content.isMe, received: otherBubbleColor),
             timeString: content.meta.timeString,
             // #7365 — statut RÉSOLU (tout-ou-rien pour un groupe), déjà posé
             // par `BubbleContentBuilder` sur `content.meta` ; le brut

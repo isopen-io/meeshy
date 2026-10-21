@@ -604,6 +604,19 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
     expect(recorded.order).toEqual(['adopt', 'interface fr', 'go /c/c-deploiement replace', 'joined']);
   });
 
+  test('la session adopte le pseudo FINAL servi par la passerelle, pas celui saisi (#10602)', async () => {
+    const { deps, recorded } = depsWith({
+      joinGuest: async () => ({ ...GUEST_JOINED, data: { ...GUEST_JOINED.data, nickname: 'ano_Awa4821' } }),
+    });
+    const el = await mount(deps);
+    typeInto(nicknameField(el), 'Awa');
+    await settle();
+
+    await submitGuest(el);
+
+    expect(recorded.adopted.map(([, guest]) => guest.nickname)).toEqual(['ano_Awa4821']);
+  });
+
   /**
    * #9710 — recette du 2026-10-08 : l'invitée choisit « English », rejoint, et
    * le fil s'ouvre sous une pastille « FR » et des libellés français. La

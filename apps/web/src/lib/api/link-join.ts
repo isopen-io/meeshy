@@ -470,6 +470,10 @@ export type LinkGuestJoined = {
    * d'avant le champ. Une famille inconnue est écartée : une liste qui n'en
    * porte que d'inconnues n'ouvre rien. */
   readonly attachmentKinds?: readonly GuestAttachmentKind[] | null;
+  /** `entry.username` (#10602) — le pseudo FINAL que la passerelle a donné à
+   * l'invité, nombre compris (`ano_awa4821`) : c'est lui qu'on affiche, jamais
+   * celui qu'il a saisi. ABSENT d'un serveur d'avant le champ. */
+  readonly nickname?: string;
 };
 
 const WireGuestJoined = z.object({
@@ -482,10 +486,16 @@ const WireGuestJoined = z.object({
         canViewHistory: optionalFlag,
         rights: z.optional(z.nullable(z.object({ canSendMessages: optionalFlag }))),
         allowedAttachmentKinds: z.optional(z.nullable(z.array(z.string()))),
+        username: optionalText,
       }),
     ),
   ),
 });
+
+function servedNickname(served: string | null | undefined): { readonly nickname?: string } {
+  const nickname = textOrNull(served);
+  return nickname === null ? {} : { nickname };
+}
 
 function servedAttachmentKinds(served: readonly string[] | null | undefined): { readonly attachmentKinds?: readonly GuestAttachmentKind[] | null } {
   if (served === undefined) return {};
@@ -546,6 +556,7 @@ export async function joinLinkAsGuest(
       readsHistory: wire.entry?.canViewHistory === true,
       mayWrite: wire.entry?.rights?.canSendMessages === true,
       ...servedAttachmentKinds(wire.entry?.allowedAttachmentKinds),
+      ...servedNickname(wire.entry?.username),
     },
   };
 }

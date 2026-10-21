@@ -1,7 +1,7 @@
 import type { ParsedSocialEventsContext } from '../../routes/social/eventsV2Schemas';
 import type { SocialEvent } from '../../routes/social/eventsSchemas';
+import { rawReadingRetentionMs } from '../../config/raw-reading-retention';
 import {
-  POST_IMPRESSION_RETENTION_MS,
   compact,
   ejsonDate,
   ejsonObjectId,
@@ -22,6 +22,12 @@ import { storedListingOf, type AnalyticsStanding } from './eventPrivacy';
  * visibilité sont de la MESURE (rangées sauf refus) ; l'identifiant de page
  * de fil et la session d'application RELIENT des événements entre eux et ne
  * sont rangés que si l'analyse est consentie.
+ *
+ * La ligne porte le COMPTE quel que soit le statut (#10785, décision du
+ * porteur) : « qui a vu » est une fonctionnalité de la plateforme, sa base est
+ * l'exécution du service, pas le consentement d'analyse. Les lignes réduites
+ * écrites entre #10773 et #10785 (`readerKey`, sans `userId`) ne sont plus
+ * produites ; elles restent lues jusqu'à leur expiration (8 jours).
  */
 
 export type ImpressionEvent = Extract<SocialEvent, { type: 'impression' }>;
@@ -62,7 +68,7 @@ export function impressionRowOf(params: {
     source: event.source,
     surface: event.surface,
     createdAt: params.derivedAt,
-    expiresAt: new Date((params.derivedAt ?? params.receivedAt).getTime() + POST_IMPRESSION_RETENTION_MS),
+    expiresAt: new Date((params.derivedAt ?? params.receivedAt).getTime() + rawReadingRetentionMs()),
     eventKey: event.eventId ? eventKeyOf(event.eventId) : undefined,
     position: listing?.position,
     rankingSource: listing?.rankingSource,

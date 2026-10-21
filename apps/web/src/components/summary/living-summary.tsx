@@ -4,6 +4,8 @@ import { SummarySkeleton } from './summary-skeleton';
 import type { ConversationAnalysisSummary } from '@/lib/api/conversation-analysis';
 import type { LivingSummaryModel } from '@/lib/summary/assembly';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LE RÉSUMÉ VIVANT — miroir `LivingSummaryView.swift` (#5695, étape 8) :
@@ -38,13 +40,18 @@ export function LivingSummary({
         <>
           <header className="flex flex-col gap-1">
             <h2 className="font-black" style={{ fontSize: 'var(--text-summary-title)', color: 'var(--color-ios-ink)' }}>
-              Résumé Vivant
+              {translate(currentInterfaceLanguage(), 'summary.title')}
             </h2>
             <p
               style={{ fontSize: 'var(--text-summary-counts)', color: 'var(--color-ios-ink)', opacity: 0.7, fontWeight: 600 }}
             >
-              {model.digest.messageCount} message{model.digest.messageCount === 1 ? '' : 's'} · {model.digest.participantCount}{' '}
-              personne{model.digest.participantCount === 1 ? '' : 's'}
+              {translate(currentInterfaceLanguage(), model.digest.messageCount === 1 ? 'summary.counts.messages.one' : 'summary.counts.messages.other', {
+                count: String(model.digest.messageCount),
+              })}
+              {' · '}
+              {translate(currentInterfaceLanguage(), model.digest.participantCount === 1 ? 'summary.counts.people.one' : 'summary.counts.people.other', {
+                count: String(model.digest.participantCount),
+              })}
             </p>
             {isComplete ? null : (
               /*
@@ -63,7 +70,7 @@ export function LivingSummary({
                 data-partial-window
                 style={{ fontSize: 'var(--text-summary-partial)', color: 'var(--color-day-ink)', fontWeight: 500 }}
               >
-                Sur les {model.digest.messageCount} derniers messages
+                {translate(currentInterfaceLanguage(), 'summary.partial', { count: String(model.digest.messageCount) })}
               </p>
             )}
           </header>
@@ -74,12 +81,12 @@ export function LivingSummary({
 
           {agentSummary !== null ? (
             <section
-              aria-label="Vue d'ensemble de l'agent"
+              aria-label={translate(currentInterfaceLanguage(), 'summary.agent')}
               className="rounded-row-ios p-3"
               style={{ border: '1.5px dashed var(--color-ios-brand)' }}
             >
               <p className="text-[12px] font-black" style={{ color: 'var(--color-ios-brand)' }}>
-                ✦ Vue d&rsquo;ensemble de l&rsquo;agent
+                ✦ {translate(currentInterfaceLanguage(), 'summary.agent')}
               </p>
               <p className="text-title" style={{ color: 'var(--color-ios-ink)', opacity: 0.85 }}>
                 {agentSummary.text}
@@ -92,7 +99,7 @@ export function LivingSummary({
       <button
         type="button"
         onClick={onResumeThread}
-        aria-label="Reprendre le fil, retourner à la conversation"
+        aria-label={translate(currentInterfaceLanguage(), 'summary.resume.label')}
         /*
           `mt-auto` AVANT `sticky` (revue #5695) — iOS pose ce bouton dans un
           `VStack { Spacer(); … }` HORS du ScrollView : il est TOUJOURS en
@@ -105,7 +112,7 @@ export function LivingSummary({
         className="sticky bottom-0 mt-auto min-h-11 w-full rounded-chip px-4 py-3 text-bubble font-bold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)' }}
       >
-        Reprendre le fil
+        {translate(currentInterfaceLanguage(), 'summary.resume')}
       </button>
     </div>
   );

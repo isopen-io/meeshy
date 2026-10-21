@@ -7,6 +7,7 @@ import { browserFileDeliveryHost, hasFileDeliveryDoor } from '@/lib/media/file-d
 import { participantAvatarOf } from '@/lib/view/conversation';
 import type { MediaCarrier } from '@/lib/view/media';
 import { mediaHubViewerOf, type MediaHubItem } from '@/lib/view/media-hub';
+import { transcriptionOffered } from '@/lib/view/audio-on-demand';
 import { attachmentSendRequest, mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/viewer-page-offers';
 import { isMineOf } from '@/lib/view/message';
 
@@ -112,7 +113,8 @@ export function MediaHubViewerHost({
             messageId: message.id,
             conversationId: message.conversationId,
             offers,
-            ...(offers.share ? { share: attachmentSendRequest({ attachment, message, mine: isMineOf(message, viewerId), now }) } : {}),
+            transcribe: transcriptionOffered({ attachment, message }),
+            ...(offers.share ? { share: attachmentSendRequest({ attachment, message, now }) } : {}),
           };
         }}
         {...(deps === undefined ? {} : { deps })}

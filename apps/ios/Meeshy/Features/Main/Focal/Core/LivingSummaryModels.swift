@@ -108,13 +108,17 @@ nonisolated public struct DigestParticipant: Equatable, Sendable, Identifiable {
     public let avatarURL: String?
     public let colorHex: String
     public let presence: PresenceState
+    /// Son contour équipé, la référence servie avec ses messages (#10946).
+    public let ring: ServedProfileDecorItem?
 
-    public init(id: String, displayName: String, avatarURL: String?, colorHex: String, presence: PresenceState) {
+    public init(id: String, displayName: String, avatarURL: String?, colorHex: String, presence: PresenceState,
+                ring: ServedProfileDecorItem? = nil) {
         self.id = id
         self.displayName = displayName
         self.avatarURL = avatarURL
         self.colorHex = colorHex
         self.presence = presence
+        self.ring = ring
     }
 }
 
@@ -273,6 +277,8 @@ nonisolated public struct FaceRampEntry: Equatable, Sendable, Identifiable {
     /// Ce qui SERT AU TRI. Jamais affiché.
     public let needScore: Double
     public let evidenceMessageIds: [String]
+    /// Le contour équipé de la personne (#10946).
+    public let ring: ServedProfileDecorItem?
 
     public init(
         id: String,
@@ -282,7 +288,8 @@ nonisolated public struct FaceRampEntry: Equatable, Sendable, Identifiable {
         presence: PresenceState,
         awaitingCount: Int,
         needScore: Double,
-        evidenceMessageIds: [String]
+        evidenceMessageIds: [String],
+        ring: ServedProfileDecorItem? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -292,6 +299,7 @@ nonisolated public struct FaceRampEntry: Equatable, Sendable, Identifiable {
         self.awaitingCount = awaitingCount
         self.needScore = needScore
         self.evidenceMessageIds = evidenceMessageIds
+        self.ring = ring
     }
 }
 
@@ -313,6 +321,8 @@ nonisolated public struct FaceRampRankingInput: Equatable, Sendable {
     /// Horodatage le plus RÉCENT parmi toutes les preuves ci-dessus — `nil`
     /// si aucune (score de récence nul).
     public let mostRecentEvidenceAt: Date?
+    /// Le contour équipé de la personne (#10946).
+    public let ring: ServedProfileDecorItem?
 
     public init(
         id: String,
@@ -323,7 +333,8 @@ nonisolated public struct FaceRampRankingInput: Equatable, Sendable {
         mentionEvidence: [String],
         directReplyEvidence: [String],
         unansweredQuestionEvidence: [String],
-        mostRecentEvidenceAt: Date?
+        mostRecentEvidenceAt: Date?,
+        ring: ServedProfileDecorItem? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -334,5 +345,6 @@ nonisolated public struct FaceRampRankingInput: Equatable, Sendable {
         self.directReplyEvidence = directReplyEvidence
         self.unansweredQuestionEvidence = unansweredQuestionEvidence
         self.mostRecentEvidenceAt = mostRecentEvidenceAt
+        self.ring = ring
     }
 }

@@ -6,10 +6,10 @@ import MeeshyUI
 /// l'aperçu bavard ET le bloc « Comment frapper » du héro de niveau, qui disaient deux fois la même chose.
 ///
 /// Conception, partie VII : « la frappe garde son aperçu » — mais court. Le prix est LE chiffre ; les deux
-/// conséquences qu'on ne peut pas ignorer tiennent en pastilles (le niveau avant → après, la Gloire gagnée et le rang
-/// qui change), plus les badges qui redescendent QUAND il y en a. La frappe fait redescendre, c'est la règle, et une règle
-/// qu'on découvre après coup est un piège. Le reste — le trésor, le Vent arrière, les chances — est au carnet des
-/// règles (la porte « ? »). Miroir de `apps/web/src/components/game-mint-preview.tsx`.
+/// conséquences qu'on ne peut pas ignorer tiennent en pastilles (le niveau avant → après QUAND la frappe en coûte — la
+/// poche fait le niveau, #10892 —, la Gloire gagnée et le rang qui change). La frappe fait baisser le niveau, c'est la
+/// règle, et une règle qu'on découvre après coup est un piège. Le reste — le trésor, le Vent arrière, les chances — est
+/// au carnet des règles (la porte « ? »). Miroir de `apps/web/src/components/game-mint-preview.tsx`.
 ///
 /// Quand la frappe n'est pas possible : aucun bouton grisé (directive du porteur,
 /// `EngagementMeeshProgress.canMint`), seulement ce qui manque et le prix de la
@@ -18,8 +18,7 @@ import MeeshyUI
 ///
 /// La scène (`MintStrikeScene`) montre la pièce au repos, face avers ; la frappe
 /// confirmée par la passerelle la joue (1,2 s) et la laisse sur son revers
-/// numéroté. `badgesLost` est ABSENT quand le serveur ne sert pas de quoi le
-/// calculer (`GameMintBadgeImpact`) : « inconnu » ne se dit pas « aucun ».
+/// numéroté. Depuis les étincelles (#10845), la frappe n'éteint plus aucun badge : aucune pastille ne le prédit.
 ///
 /// AVANT le geste, la rangée de dépense (#9705) dit les points en poche, les points À CONVERTIR, le prix et ce qui
 /// restera — ou, frappe impossible, les points à convertir qui manquent, dits avec leur cible (« pour la Meesh
@@ -30,8 +29,6 @@ struct GameMintPreviewView: View {
     /// Les points À CONVERTIR servis par le porte-monnaie (#10540). Absents : une frappe impossible les dit (le prix
     /// moins le manque) ; possible, ils restent tus plutôt que devinés depuis le score.
     var convertible: Int?
-    /// Les badges que la frappe éteindrait ; `nil` quand le serveur ne sert pas de quoi le calculer.
-    var badgesLost: Int?
     let online: Bool
     let minting: Bool
     let error: String?
@@ -51,7 +48,7 @@ struct GameMintPreviewView: View {
     /// Ce que la frappe dépense, lu sur la loi (`GameSpend`) : la part qui paie est celle que le serveur a jugée.
     var spend: SpendPreview {
         GameSpend.preview(
-            held: game.level.score, cost: mint.price,
+            held: game.level.sparkFacts.pocket, cost: mint.price,
             spendable: mint.canMint ? mint.price : mint.price - mint.missingPoints
         )
     }
@@ -86,6 +83,11 @@ struct GameMintPreviewView: View {
                 .accessibilityIdentifier("game.mint.celebration")
             }
             GameFactChipRow(concept: .meesh, items: spendItems, identifier: "game.mint.spend")
+            // La dette, puis la réserve fermée par le rang (#10848) : la frappe ne se tente pas, l'écran dit pourquoi.
+            if let blocker = GameMintCostCopy.blockerMessage(mint) {
+                GameNote(text: blocker)
+                    .accessibilityIdentifier("game.mint.blocked")
+            }
             if mint.canMint {
                 consequences
                 GameActionButton(
@@ -124,7 +126,7 @@ struct GameMintPreviewView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(
                     localized: "game.mint.next_title",
-                    defaultValue: "Prochaine Meesh · n° \(GameCopy.formatCount(mint.number))",
+                    defaultValue: "La Meesh n° \(GameCopy.formatCount(mint.number))",
                     bundle: .main
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -135,6 +137,14 @@ struct GameMintPreviewView: View {
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .accessibilityIdentifier("game.mint.price")
+                // Le coût EFFECTIF (#10847) : d'où vient le prix quand le niveau l'a réduit.
+                if let costLine = GameMintCostCopy.costLine(mint) {
+                    Text(costLine)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("game.mint.cost")
+                }
             }
             Spacer(minLength: 0)
             if let onOpenRule {
@@ -156,15 +166,17 @@ struct GameMintPreviewView: View {
 
     // MARK: - Ce que le geste coûte, en pastilles
 
-    /// Le niveau avant → après, la Gloire gagnée (et le rang qui change), les badges qui redescendent — jamais un tableau.
+    /// Le niveau que la frappe fait perdre (la poche fait le niveau, #10892), la Gloire gagnée et le rang qui change —
+    /// jamais un tableau.
     private var consequences: some View {
         FlowLayout(spacing: MeeshySpacing.xs) {
+            if let passage = GameMintCostCopy.levelPassage(mint) {
+                GameChip(text: passage.text, tint: MeeshyColors.brandPrimary)
+                    .accessibilityLabel(passage.accessibilityLabel)
+                    .accessibilityIdentifier("game.mint.level")
+            }
             GameChip(
-                text: String(localized: "game.mint.chip.level", defaultValue: "Niveau \(levelValue)", bundle: .main),
-                tint: MeeshyColors.brandPrimary
-            )
-            GameChip(
-                text: String(localized: "game.mint.chip.glory", defaultValue: "+\(GameCopy.formatCount(mint.gloryGained)) Gloire", bundle: .main),
+                text: String(localized: "game.mint.chip.glory", defaultValue: "+\(GameCopy.formatCount(mint.gloryGained)) de gloire", bundle: .main),
                 tint: MeeshyColors.success
             )
             if rankChanges {
@@ -173,25 +185,8 @@ struct GameMintPreviewView: View {
                     tint: MeeshyColors.success
                 )
             }
-            if let badgesLost, badgesLost > 0 {
-                GameChip(text: badgesLine(badgesLost), tint: MeeshyColors.warning)
-            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("game.mint.consequences")
-    }
-
-    private func badgesLine(_ lost: Int) -> String {
-        let number = GameCopy.formatCount(lost)
-        return GameCopy.isSingular(lost)
-            ? String(localized: "game.mint.badges.one", defaultValue: "\(number) badge redescend", bundle: .main)
-            : String(localized: "game.mint.badges.other", defaultValue: "\(number) badges redescendent", bundle: .main)
-    }
-
-    /// Les niveaux de la frappe lus sur la VÉRITÉ (`shownLevels`, #9688) : au-delà de 100, les champs d'hier mentiraient.
-    private var levelValue: String {
-        let levels = mint.shownLevels
-        let base = "\(GameCopy.formatCount(levels.levelBefore)) → \(GameCopy.formatCount(levels.levelAfter))"
-        return levels.levelsLost > 0 ? base + " (−\(GameCopy.formatCount(levels.levelsLost)))" : base
     }
 }

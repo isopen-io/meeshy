@@ -30,7 +30,7 @@ import os
 /// celui-ci a déjà divergé une fois (#7160).
 public enum DatabaseSuspension {
 
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb-suspension")
+    private static let logger = MeeshyLog.logger(.grdbSuspension, subsystem: .legacySDK)
 
     /// L'état de suspension est celui du PROCESSUS, pas d'une base : il est
     /// donc tenu ici, à l'unique endroit qui poste les notifications.

@@ -72,9 +72,9 @@
     "body": "{\"success\":false,\"error\":\"Sticker pack not found\",\"message\":\"Sticker pack not found\",\"code\":\"STICKER_PACK_NOT_FOUND\"}"
   },
   "DELETE /:slug/install — intégré": {
-    "status": 200,
+    "status": 409,
     "contentType": "application/json; charset=utf-8",
     "cacheControl": null,
-    "body": "{\"success\":true,\"data\":{\"slug\":\"mee-et-meo\",\"name\":\"Mee & Meo\",\"description\":\"Les deux ensemble : câlins, chamailleries et fêtes à deux.\",\"author\":\"Meeshy\",\"builtin\":true,\"status\":\"approved\",\"itemCount\":0,\"kinds\":[\"static\",\"cinematic\"],\"coverUrl\":null,\"installed\":false,\"installCount\":0}}"
+    "body": "{\"success\":false,\"error\":\"This pack is included and cannot be removed\",\"message\":\"This pack is included and cannot be removed\",\"code\":\"PACK_NOT_REMOVABLE\"}"
   }
 }

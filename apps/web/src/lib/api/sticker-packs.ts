@@ -76,6 +76,8 @@ const WireSummary = z.object({
   coverUrl: z.optional(z.nullable(z.string())),
   installed: z.boolean(),
   installCount: z.number(),
+  price: z.optional(z.nullable(z.number())),
+  owned: z.optional(z.boolean()),
 });
 
 const WireDetail = z.extend(WireSummary, {
@@ -83,19 +85,28 @@ const WireDetail = z.extend(WireSummary, {
   reviewNote: z.optional(z.nullable(z.string())),
 });
 
+type WireSummaryData = z.infer<typeof WireSummary>;
+
+/** `price` et `owned` sont additifs : absents du fil, ils restent absents du résumé (jamais `undefined` posé). */
+const summaryOf = ({ price, owned, coverUrl, ...rest }: WireSummaryData): StickerPackSummary => ({
+  ...rest,
+  coverUrl: coverUrl ?? null,
+  ...(price === undefined ? {} : { price }),
+  ...(owned === undefined ? {} : { owned }),
+});
+
 export function decodePackSummary(raw: unknown): StickerPackSummary | null {
   const parsed = WireSummary.safeParse(raw);
-  return parsed.success ? { ...parsed.data, coverUrl: parsed.data.coverUrl ?? null } : null;
+  return parsed.success ? summaryOf(parsed.data) : null;
 }
 
 /** Un pack malformé tombe SEUL ; un sticker malformé aussi, le pack reste. */
 export function decodePackDetail(raw: unknown): StickerPackDetail | null {
   const parsed = WireDetail.safeParse(raw);
   if (!parsed.success) return null;
-  const { reviewNote, items, ...summary } = parsed.data;
+  const { reviewNote, items, ...wire } = parsed.data;
   return {
-    ...summary,
-    coverUrl: summary.coverUrl ?? null,
+    ...summaryOf(wire),
     items: (items ?? []).map((item) => ({ ...item, zones: item.zones ?? [] })),
     ...(reviewNote !== undefined ? { reviewNote } : {}),
   };

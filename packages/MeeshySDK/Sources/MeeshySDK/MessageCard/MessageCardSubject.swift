@@ -78,13 +78,18 @@ public struct MessageCardSubject: Equatable, Sendable {
     /// L'heure du message cité, quand l'appelant la connaît.
     public let quotedAt: Date?
     public let media: [MessageCardSubjectMedia]
+    /// Le média du SUPPORT posé en HERO au sommet de la carte (#10915) — `nil` : pas de hero.
+    /// C'est l'identifiant d'un des `media` ; `MessageCardInput.of` le passe à la disposition.
+    public let heroID: String?
 
-    public init(quoted: MessageCardPart?, reply: MessageCardPart, sentAt: Date, quotedAt: Date? = nil, media: [MessageCardSubjectMedia] = []) {
+    public init(quoted: MessageCardPart?, reply: MessageCardPart, sentAt: Date, quotedAt: Date? = nil,
+                media: [MessageCardSubjectMedia] = [], heroID: String? = nil) {
         self.quoted = quoted
         self.reply = reply
         self.sentAt = sentAt
         self.quotedAt = quotedAt
         self.media = media
+        self.heroID = heroID.flatMap { id in media.contains { $0.media.id == id && $0.media.kind.isVisual } ? id : nil }
     }
 
     public struct Viewer: Equatable, Sendable {
@@ -128,10 +133,13 @@ public struct MessageCardSubject: Equatable, Sendable {
     /// - Parameter audioLanguages: la langue de la piste SERVIE de chaque son, par
     ///   identifiant de pièce — absente : l'original.
     public static func paintableMedia(of message: MeeshyMessage, audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
-        paintableMedia(of: message.attachments, audioLanguages: audioLanguages)
+        paintableMedia(of: message.attachments, audioLanguages: audioLanguages, stickerMessage: message.sticker != nil)
     }
 
-    static func paintableMedia(of attachments: [MeeshyMessageAttachment], audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
+    /// - Parameter stickerMessage: le message porte un `MessageSticker` — ses images
+    ///   transparentes SONT le sticker, quelle que soit leur taille (#10915).
+    static func paintableMedia(of attachments: [MeeshyMessageAttachment], audioLanguages: [String: String] = [:],
+                               stickerMessage: Bool = false) -> [MessageCardSubjectMedia] {
         attachments.compactMap { attachment in
             guard !attachment.isEncrypted, !attachment.isBlurred, !attachment.isViewOnce else { return nil }
             let kind: MessageCardMediaKind
@@ -143,19 +151,24 @@ public struct MessageCardSubject: Equatable, Sendable {
             }
             let file = MessageCardText.nonBlank(attachment.fileUrl) ?? MessageCardText.nonBlank(attachment.thumbnailUrl)
             guard let file else { return nil }
-            let aspect = aspect(width: attachment.width, height: attachment.height)
+            let declared = MessageCardSticker.declaredAspect(width: attachment.width, height: attachment.height)
+            let sticker = kind == .image && MessageCardSticker.isSticker(
+                mimeType: attachment.mimeType, fileName: attachment.originalName, width: attachment.width, height: attachment.height, flagged: stickerMessage
+            )
             let served = kind == .audio ? servedTrack(of: attachment, in: audioLanguages[attachment.id]) : nil
             return MessageCardSubjectMedia(
                 media: MessageCardMedia(
                     id: attachment.id.isEmpty ? file : attachment.id,
                     kind: kind,
-                    aspect: aspect,
+                    aspect: declared ?? 1,
                     duration: (served.map(\.durationMs) ?? attachment.duration).map { Double($0) / 1000 },
                     name: kind == .audio ? (attachment.title ?? attachment.originalName) : nil,
-                    transcript: kind == .audio ? (served.map(MessageCardTranscript.init) ?? MessageCardTranscript(attachment.transcription)) : nil
+                    transcript: kind == .audio ? (served.map(MessageCardTranscript.init) ?? MessageCardTranscript(attachment.transcription)) : nil,
+                    isSticker: sticker,
+                    aspectKnown: declared != nil
                 ),
                 fileURL: served.flatMap { MessageCardText.nonBlank($0.url) } ?? file,
-                posterURL: kind == .video ? attachment.thumbnailUrl : nil
+                posterURL: kind == .audio ? nil : attachment.thumbnailUrl
             )
         }
     }
@@ -164,11 +177,6 @@ public struct MessageCardSubject: Equatable, Sendable {
     private static func servedTrack(of attachment: MeeshyMessageAttachment, in language: String?) -> MeeshyMessageAttachment.EmbeddedAudioTranslation? {
         guard let language = language?.lowercased() else { return nil }
         return attachment.audioTranslations?.first { $0.key.lowercased() == language && MessageCardText.nonBlank($0.value.url) != nil }?.value
-    }
-
-    private static func aspect(width: Int?, height: Int?) -> Double {
-        guard let width, let height, width > 0, height > 0 else { return 1 }
-        return Double(width) / Double(height)
     }
 
     /// - Parameters:
@@ -314,6 +322,8 @@ public struct MessageCardSubject: Equatable, Sendable {
             case .document: return nil
             }
             guard let file = MessageCardText.nonBlank(item.url) ?? MessageCardText.nonBlank(item.thumbnailUrl) else { return nil }
+            let declared = MessageCardSticker.declaredAspect(width: item.width, height: item.height)
+            let sticker = kind == .image && MessageCardSticker.isSticker(mimeType: nil, fileName: file, width: item.width, height: item.height)
             let language = kind == .audio ? audioLanguages[item.id]?.lowercased() : nil
             let served = language.flatMap { language in
                 item.translatedAudios.first { $0.targetLanguage.lowercased() == language && MessageCardText.nonBlank($0.url) != nil }
@@ -321,13 +331,15 @@ public struct MessageCardSubject: Equatable, Sendable {
             return MessageCardSubjectMedia(
                 media: MessageCardMedia(
                     id: item.id, kind: kind,
-                    aspect: aspect(width: item.width, height: item.height),
+                    aspect: declared ?? 1,
                     duration: served.map { $0.durationMs > 0 ? Double($0.durationMs) / 1000 : nil } ?? item.duration.map { Double($0) },
                     name: kind == .audio ? item.fileName : nil,
-                    transcript: kind == .audio ? (served.map(MessageCardTranscript.init) ?? MessageCardTranscript(item.transcription)) : nil
+                    transcript: kind == .audio ? (served.map(MessageCardTranscript.init) ?? MessageCardTranscript(item.transcription)) : nil,
+                    isSticker: sticker,
+                    aspectKnown: declared != nil
                 ),
                 fileURL: served?.url ?? file,
-                posterURL: kind == .video ? item.thumbnailUrl : nil
+                posterURL: kind == .audio ? nil : item.thumbnailUrl
             )
         }
     }
@@ -389,10 +401,12 @@ public extension MessageCardInput {
     ) -> MessageCardInput {
         let named: (MessageCardPart) -> MessageCardPart = { part in
             guard format.useHandles, let handle = part.handle else { return part }
-            return MessageCardPart(author: "@\(handle)", text: part.text, handle: handle)
+            return MessageCardPart(author: "@\(handle)", text: part.text, handle: handle, thread: part.thread)
         }
         let quoted = subject.quoted.map { format.anonymizeQuoted ? MessageCardPart(author: anonymousLabel, text: $0.text) : named($0) }
-        let reply = format.anonymizeReply ? MessageCardPart(author: anonymousLabel, text: subject.reply.text) : named(subject.reply)
+        let reply = format.anonymizeReply ? MessageCardPart(author: anonymousLabel, text: subject.reply.text, thread: subject.reply.thread) : named(subject.reply)
+        var disposition = format.disposition
+        disposition.heroMediaID = subject.heroID
         // L'auteur d'un média se nomme comme les autres : anonyme avec son bloc, @pseudo au choix (#9235).
         let credit: (MessageCardMediaAuthor) -> String = { author in
             if author.isQuoted ? format.anonymizeQuoted : format.anonymizeReply { return anonymousLabel }
@@ -411,7 +425,7 @@ public extension MessageCardInput {
             date: format.showDate ? formatDate(subject.sentAt) : nil,
             showAuthors: format.showAuthors,
             media: (media ?? subject.media.map(\.media)).map { $0.with(credit: credits[$0.id]) },
-            disposition: format.disposition,
+            disposition: disposition,
             quotedTime: format.showTimes ? subject.quotedAt.map(formatTime) : nil,
             replyTime: format.showTimes ? formatTime(subject.sentAt) : nil
         )

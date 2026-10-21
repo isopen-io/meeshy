@@ -227,7 +227,7 @@ export function InstitutionalPage({ page, version }: { page: ContentPage; versio
 
       <SiteFooter language="fr" copy={COPY} onLanding={false} languageLinks={false}>
         <div className="ld-wrap ld-footer-signature">
-          <BrandSignature version={version} />
+          <BrandSignature version={version} language="fr" />
         </div>
       </SiteFooter>
     </div>

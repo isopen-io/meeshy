@@ -275,6 +275,35 @@ describe('une caméra refusée n’est pas une impasse', () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('Autorise');
   });
 
+  /* #10833 — dans la coque Android, deux refus et Android ne redemande plus :
+     seule la fiche de l'app rend la caméra, comme aux composeurs (#8882, #10824). */
+  test('dans la coque, la caméra refusée offre d’ouvrir les réglages de l’app', async () => {
+    const opened: string[] = [];
+    const { env: e, log } = env({ camera: { ok: false, reason: 'denied' }, openSettings: () => void opened.push('openApp') });
+    const host = await open(rank, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    const settings = by(host, 'data-photo-camera-settings');
+    expect(settings?.textContent).toBe('Ouvrir les réglages');
+    await click(settings);
+    expect(opened).toEqual(['openApp']);
+  });
+
+  test('sans porte vers les réglages (navigateur), ou pour une caméra absente, aucun bouton', async () => {
+    for (const { reason, openSettings } of [
+      { reason: 'denied', openSettings: null },
+      { reason: 'unsupported', openSettings: () => undefined },
+      { reason: 'unavailable', openSettings: () => undefined },
+    ] as const) {
+      const { env: e, log } = env({ camera: { ok: false, reason }, openSettings });
+      const host = await open(rank, e, log);
+      await click(choose(host, 'selfie'));
+      await settle();
+      expect(by(host, 'data-photo-camera-settings')).toBeNull();
+      unmountAll();
+    }
+  });
+
   test('la carte seule reste possible après un refus', async () => {
     const { env: e, log } = refused('denied');
     const host = await open(rank, e, log);
@@ -452,7 +481,7 @@ describe('le résultat : partager, enregistrer, garder', () => {
     expect(log.kept[0]?.photo.mode).toBe('card');
     expect((log.kept[0]?.photo.story as File).name).toBe('meeshy-story.png');
     expect(log.kept[0]?.photo.source ?? null).toBeNull();
-    expect(host.textContent).toContain('Gardée au carnet');
+    expect(host.textContent).toContain('Gardée dans ta Chronique');
   });
 
   test('un selfie gardé emporte sa SOURCE réduite et sa recette (miroir) (#10161)', async () => {
@@ -491,7 +520,7 @@ describe('le résultat : partager, enregistrer, garder', () => {
     await settle();
     const alert = host.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain('Plus de place sur cet appareil');
-    expect(host.textContent).not.toContain('Gardée au carnet');
+    expect(host.textContent).not.toContain('Gardée dans ta Chronique');
     expect((by(host, 'data-photo-keep') as HTMLButtonElement | null)?.disabled).toBe(false);
     await click(alert?.querySelector<HTMLElement>('[data-photo-no-space-save]') ?? null);
     await settle();
@@ -502,7 +531,7 @@ describe('le résultat : partager, enregistrer, garder', () => {
     const { host } = await toResult({ keepOk: false });
     await click(by(host, 'data-photo-keep'));
     await settle();
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain('carnet');
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Chronique');
     expect(by(host, 'data-photo-share')).not.toBeNull();
   });
 
@@ -1108,5 +1137,40 @@ describe('aucun jeton de parrainage ne se crée sans geste', () => {
     await settle();
     expect(creations).toBe(0);
     expect(made.log.texts).toEqual([`Rejoins-moi sur Meeshy : ${LINK}`]);
+  });
+});
+
+/**
+ * LA CARTE QUI NOMME SON AUTEUR (#10816) — la proposition montre la carte
+ * posée du moment, gravée au pseudo de l'auteur ; et la plaque part dans
+ * l'image (le cadre de la scène la porte, la composition la relit).
+ */
+describe('la carte d’auteur', () => {
+  const author = { handle: 'atabeth' };
+  const openWith = (moment: PhotoMoment, e: PhotoEnv, log: Log, who: { handle: string } | null) =>
+    mount(<GamePhotoFlow moment={moment} env={e} author={who} onClose={(result) => log.closed.push(result)} />);
+
+  test('la proposition pose la carte du moment, gravée au pseudo', async () => {
+    const { env: e, log } = env();
+    const host = await openWith(rank, e, log, author);
+    const card = by(host, 'data-author-card');
+    expect(card?.getAttribute('aria-label')).toContain('@atabeth');
+    expect(card?.textContent).toContain('@atabeth');
+    expect(choose(host, 'selfie')).not.toBeNull();
+  });
+
+  test('sans auteur (invité) : la proposition d’avant, sans carte', async () => {
+    const { env: e, log } = env();
+    const host = await openWith(rank, e, log, null);
+    expect(by(host, 'data-author-card')).toBeNull();
+    expect(host.textContent).toContain('On immortalise ?');
+  });
+
+  test('la carte seule : le cadre de la scène porte la plaque que la composition relira', async () => {
+    const { env: e, log } = env({ render: async () => new Promise<PhotoFiles | null>(() => undefined) });
+    const host = await openWith(rank, e, log, author);
+    await click(choose(host, 'card'));
+    await settle();
+    expect(host.querySelector('[data-photo-stage] [data-photo-art="author"] svg')).not.toBeNull();
   });
 });

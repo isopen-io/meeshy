@@ -1,0 +1,177 @@
+{
+  "packs": {
+    "essentiels": {
+      "name": "الأساسيات",
+      "description": "الأنماط والتدرجات الأساسية."
+    },
+    "heritages": {
+      "name": "الإرث",
+      "description": "أنماط من كل أنحاء العالم."
+    },
+    "nature-et-ciel": {
+      "name": "الطبيعة والسماء",
+      "description": "خرائط وأوراق ومشابك ونجوم."
+    },
+    "illustrations": {
+      "name": "رسوم",
+      "description": "مناظر مرسومة بخطوط."
+    },
+    "bannieres-essentielles": {
+      "name": "لافتات أساسية",
+      "description": "ست لافتات لملفك الشخصي."
+    },
+    "contours-essentiels": {
+      "name": "إطارات أساسية",
+      "description": "ست إطارات لصورتك الرمزية."
+    },
+    "animes": {
+      "name": "متحركة",
+      "description": "خلفيات تتنفس بهدوء."
+    },
+    "bannieres-animees": {
+      "name": "لافتات متحركة",
+      "description": "وميض خفيف يعبر اللافتة."
+    },
+    "contours-animes": {
+      "name": "إطارات متحركة",
+      "description": "قوس ذهبي يدور حول الصورة الرمزية."
+    },
+    "contours-haussmannien": {
+      "name": "إطار هوسماني",
+      "description": "الواجهة الباريسية: حجر منحوت وحديد مصبوب وحجر عقد."
+    },
+    "cadres-haussmannien": {
+      "name": "إطار لافتة هوسماني",
+      "description": "الواجهة الباريسية: حجر منحوت وحديد مصبوب وحجر عقد."
+    },
+    "contours-arabe": {
+      "name": "إطار عربي",
+      "description": "تشابيك الحمراء ونجوم ثمانية وقوس مفصّص."
+    },
+    "cadres-arabe": {
+      "name": "إطار لافتة عربي",
+      "description": "تشابيك الحمراء ونجوم ثمانية وقوس مفصّص."
+    },
+    "contours-grec": {
+      "name": "إطار إغريقي",
+      "description": "المتعرّج والسعيفات والحلزونات الأيونية."
+    },
+    "cadres-grec": {
+      "name": "إطار لافتة إغريقي",
+      "description": "المتعرّج والسعيفات والحلزونات الأيونية."
+    },
+    "contours-ancestral": {
+      "name": "إطار أفريقي عريق",
+      "description": "بوغولان مرسوم بالطين ورمز أدينكرا."
+    },
+    "cadres-ancestral": {
+      "name": "إطار لافتة أفريقي عريق",
+      "description": "بوغولان مرسوم بالطين ورمز أدينكرا."
+    },
+    "contours-technologique": {
+      "name": "إطار أفريقي تقني",
+      "description": "درجات نديبيلي بالنيون ومسارات دارة."
+    },
+    "cadres-technologique": {
+      "name": "إطار لافتة أفريقي تقني",
+      "description": "درجات نديبيلي بالنيون ومسارات دارة."
+    },
+    "contours-rituel": {
+      "name": "إطار أفريقي طقسي",
+      "description": "رافيا مهدّبة وودع وخرز وقناع خشبي."
+    },
+    "cadres-rituel": {
+      "name": "إطار لافتة أفريقي طقسي",
+      "description": "رافيا مهدّبة وودع وخرز وقناع خشبي."
+    },
+    "contours-celte": {
+      "name": "إطار سلتي",
+      "description": "ضفيرة لا تنتهي وتريسكيل حلزونية."
+    },
+    "cadres-celte": {
+      "name": "إطار لافتة سلتي",
+      "description": "ضفيرة لا تنتهي وتريسكيل حلزونية."
+    }
+  },
+  "designs": {
+    "monogramme": "أحرف متشابكة",
+    "chevrons": "شيفرون",
+    "aurore": "شفق",
+    "maille": "شبكة متدرجة",
+    "art-deco": "آرت ديكو",
+    "seigaiha": "سيغايها",
+    "zellige": "زليج",
+    "bogolan": "بوغولان",
+    "topographie": "طبوغرافيا",
+    "feuillage": "أوراق",
+    "treillis": "مشبك",
+    "constellation": "كوكبة",
+    "horizon": "أفق",
+    "baobab": "باوباب",
+    "brume-vivante": "ضباب حي",
+    "aurore-vive": "شفق نابض"
+  },
+  "rings": {
+    "filet": "خط رفيع",
+    "double-filet": "خطان رفيعان",
+    "perle": "لآلئ",
+    "aurore": "شفق",
+    "deco": "ديكو",
+    "laurier": "غار",
+    "halo-or": "هالة ذهبية",
+    "haussmannien": "هوسماني",
+    "haussmannien-anime": "هوسماني متحرك",
+    "arabe": "عربي",
+    "arabe-anime": "عربي متحرك",
+    "grec": "إغريقي",
+    "grec-anime": "إغريقي متحرك",
+    "ancestral": "أفريقي عريق",
+    "ancestral-anime": "أفريقي عريق متحرك",
+    "technologique": "أفريقي تقني",
+    "technologique-anime": "أفريقي تقني متحرك",
+    "rituel": "أفريقي طقسي",
+    "rituel-anime": "أفريقي طقسي متحرك",
+    "celte": "سلتي",
+    "celte-anime": "سلتي متحرك"
+  },
+  "gamut": {
+    "indigo": "نيلي ميشي",
+    "bleu-nuit": "أزرق ليلي",
+    "azur": "لازوردي",
+    "lagon": "بحيرة",
+    "emeraude": "زمردي",
+    "olive": "زيتوني",
+    "moutarde": "خردلي",
+    "sable": "رملي",
+    "terracotta": "قرميدي",
+    "corail": "مرجاني",
+    "rose-poudre": "وردي باهت",
+    "framboise": "توتي",
+    "prune": "برقوقي",
+    "lavande": "لافندر",
+    "ardoise": "أردوازي",
+    "graphite": "غرافيت"
+  },
+  "modes": {
+    "signature": "التوقيع",
+    "solid": "لون موحد",
+    "photo": "صورة المحادثة"
+  },
+  "avatarUsage": "إطار الملف الشخصي",
+  "frames": {
+    "haussmannien": "هوسماني",
+    "haussmannien-anime": "هوسماني متحرك",
+    "arabe": "عربي",
+    "arabe-anime": "عربي متحرك",
+    "grec": "إغريقي",
+    "grec-anime": "إغريقي متحرك",
+    "ancestral": "أفريقي عريق",
+    "ancestral-anime": "أفريقي عريق متحرك",
+    "technologique": "أفريقي تقني",
+    "technologique-anime": "أفريقي تقني متحرك",
+    "rituel": "أفريقي طقسي",
+    "rituel-anime": "أفريقي طقسي متحرك",
+    "celte": "سلتي",
+    "celte-anime": "سلتي متحرك"
+  }
+}

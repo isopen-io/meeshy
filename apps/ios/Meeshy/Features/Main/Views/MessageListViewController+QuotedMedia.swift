@@ -15,35 +15,34 @@ import MeeshyUI
 extension MessageListViewController {
 
     /// ZONE 1 de la LOI DES ZONES (2026-08-24) — tap sur l'AVATAR de l'auteur
-    /// cité (le NOM ne l'ouvre plus). Résout le message cité dans le store
-    /// local pour ouvrir le profil RÉEL (username/avatar) ; repli sur une
-    /// fiche nom-seul (la sheet profil résout par username) quand le cité
-    /// n'est plus dans la fenêtre locale.
-    ///
-    /// L'avatar de la RÉFÉRENCE est le dernier recours des deux branches : il
-    /// voyage avec la citation depuis le 2026-08-24, là où la relecture du
-    /// store dépend, elle, de la position de défilement. Sans lui, la fiche
-    /// ouverte depuis un message sorti de la fenêtre chargée s'affichait sans
-    /// visage — le geste ouvrait bien la porte, mais la pièce était vide.
+    /// cité (le NOM ne l'ouvre plus). L'identité vient du message cité quand le
+    /// store local le porte, sinon de la citation (`authorUserId`) ; sans
+    /// identifiant d'auteur, RIEN ne s'ouvre (`QuotedAuthorProfileTarget`).
+    /// La porte est `router.openProfile(_:inConversation:)`, comme celle de
+    /// l'avatar du pied : une visiteuse sans compte atteint sa fiche de
+    /// participation, jamais une feuille de compte vide.
     func openQuotedAuthorProfile(_ reference: ReplyReference) {
         let localId = resolveLocalId(reference.messageId)
-        if let quoted = store.domainMessage(for: localId, currentUserId: currentUserId) {
-            router.deepLinkProfileUser = ProfileSheetUser(
-                userId: quoted.senderId,
-                username: quoted.senderUsername ?? quoted.senderName ?? reference.authorName,
-                displayName: quoted.senderName ?? reference.authorName,
-                avatarURL: quoted.senderAvatarURL ?? reference.authorAvatarUrl,
-                accentColor: reference.authorColor
-            )
+        let quoted = store.domainMessage(for: localId, currentUserId: currentUserId)
+        let conversationId = quoted?.conversationId ?? conversationViewModel?.conversationId
+        let username = quoted?.senderUsername ?? quoted?.senderName ?? reference.authorName
+        let displayName = quoted?.senderName ?? reference.authorName
+        let avatarURL = quoted?.senderAvatarURL ?? reference.authorAvatarUrl
+        if let quoted, quoted.senderIsAnonymous {
+            router.openProfile(ProfileSheetUser(
+                username: username, displayName: displayName, avatarURL: avatarURL,
+                accentColor: reference.authorColor, participantId: quoted.senderId, isAnonymous: true
+            ), inConversation: conversationId)
             return
         }
-        router.deepLinkProfileUser = ProfileSheetUser(
-            userId: nil,
-            username: reference.authorName,
-            displayName: reference.authorName,
-            avatarURL: reference.authorAvatarUrl,
-            accentColor: reference.authorColor
-        )
+        guard let userId = QuotedAuthorProfileTarget.userId(
+            quotedSenderUserId: quoted?.senderUserId,
+            referenceAuthorUserId: reference.authorUserId
+        ) else { return }
+        router.openProfile(ProfileSheetUser(
+            userId: userId, username: username, displayName: displayName,
+            avatarURL: avatarURL, accentColor: reference.authorColor
+        ), inConversation: conversationId)
     }
 
     /// Tap sur la zone MÉDIA d'une citation. Image et vidéo s'ouvrent EN PLEIN

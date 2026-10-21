@@ -125,7 +125,7 @@ final class ComposerReturnMediaTests: XCTestCase {
         XCTAssertTrue(code.contains("ComposerViewfinder {"),
                       "La caméra de la barre ouvre le viseur plein écran.")
         let compact = code.components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(compact.contains("ComposerViewfinder{resultinstageCapture(result)}"),
+        XCTAssertTrue(compact.contains("ComposerViewfinder{resultinonCapture(result)}") && compact.contains("onCapture:{stageCapture($0)}"),
                       "La prise rejoint le message par le chemin de pose d'une capture (#9775).")
         XCTAssertTrue(compact.contains("funcstageCapture(_capture:CameraResult){switchComposerReturnedMedia(capture:capture)"),
                       "La prise se pose comme un média retouché, image ou vidéo.")
@@ -159,10 +159,12 @@ final class ComposerReturnMediaTests: XCTestCase {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
         XCTAssertFalse(code.contains("MeeshyVideoEditorView("),
                        "La vidéo en attente et la vidéo récente s'éditent dans la scène (#9124).")
-        XCTAssertEqual(code.components(separatedBy: "ConversationVideoSceneEditor(").count - 1, 1,
-                       "La vidéo RÉCENTE ouvre la scène.")
-        XCTAssertTrue(code.contains("ConversationRetouchSeriesEditor("),
-                      "La vidéo EN ATTENTE ouvre toutes les pièces du message en scènes (#9126).")
+        XCTAssertFalse(code.contains("ConversationVideoSceneEditor("),
+                       "La vidéo RÉCENTE ouvre la retouche de la caméra, plus la scène (#11133).")
+        XCTAssertFalse(code.contains("ConversationRetouchSeriesEditor("),
+                       "La série de scènes n'est plus une porte de la conversation (porteur 2026-10-20, #11133).")
+        XCTAssertTrue(code.contains("ConversationPieceRetouch("),
+                      "La pièce EN ATTENTE ouvre la retouche de la caméra (#11133).")
     }
 }
 

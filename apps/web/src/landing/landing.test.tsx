@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import * as worldEndpoints from '@meeshy/shared/api/endpoints/world';
 import { worldEntrySchema } from '@meeshy/shared/types/world';
-import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 import { formatMemberCount } from '@meeshy/shared/utils/member-visibility';
 
 import { SESSION_STORAGE_KEY } from '@/lib/api/session';
@@ -15,7 +14,7 @@ import { LANDING_COPY } from './landing-copy';
 import { minifyInlineScript } from '../../scripts/lib/minify-inline-script';
 import { landingBootScript, landingDocument, landingOgImagePath } from './landing-document';
 import { LANDING_LANGUAGES, landingPath, landingPaths, type LandingLanguage } from './landing-languages';
-import { WORLD_ENTRY_HANDOFF_KEY, WORLD_GUEST_ENTRY_TEMPLATE, WORLD_GUEST_THREAD_TEMPLATE } from './world-entry';
+import { WORLD_ENTRY_HANDOFF_KEY, WORLD_GUEST_THREAD_TEMPLATE } from './world-entry';
 
 /**
  * LA LANDING PRÉRENDUE (#10002) — le gate des balises, langue par langue, et le
@@ -36,11 +35,24 @@ const documentFor = (language: LandingLanguage): string =>
       worldPath: worldEndpoints.root,
       sessionKey: SESSION_KEY,
       languageKey: INTERFACE_LANGUAGE_KEY,
-      entryTemplate: WORLD_GUEST_ENTRY_TEMPLATE,
       threadTemplate: WORLD_GUEST_THREAD_TEMPLATE,
       appPath: href('list'),
     },
   });
+
+/** Le libellé de l'ancien bouton, dans les sept langues : il ne doit plus paraître nulle part (#10784). */
+const OLD_ENTER_WITHOUT_ACCOUNT: Readonly<Record<LandingLanguage, string>> = {
+  fr: 'Entrer sans compte',
+  en: 'Join without an account',
+  es: 'Entrar sin cuenta',
+  pt: 'Entrar sem conta',
+  de: 'Ohne Konto eintreten',
+  it: 'Entra senza account',
+  ar: 'الدخول دون حساب',
+};
+
+const escapeAttribute = (value: string): string =>
+  value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
 
 const head = (html: string): string => /<head>([\s\S]*)<\/head>/.exec(html)?.[1] ?? '';
 const metaContent = (html: string, attribute: 'name' | 'property', key: string): string | null =>
@@ -93,38 +105,58 @@ describe('le document prérendu, par langue (#10002)', () => {
         expect(html).not.toMatch(/<link[^>]+rel="stylesheet"/);
       });
 
-      test('le corps porte la planche « Main » : héros, nom, connexion, pied légal', () => {
-        const body = /<body>([\s\S]*)<\/body>/.exec(html)?.[1] ?? '';
+      const body = /<body>([\s\S]*)<\/body>/.exec(html)?.[1] ?? '';
+
+      test('le corps porte la planche « Main » : héros, connexion, pied légal', () => {
         expect(body).toContain(copy.headline);
-        expect(body).toContain('data-world-form');
-        expect(body).toContain('name="name"');
         for (const path of ['/login', '/chats', '/signup', '/help', '/faq', '/privacy', '/terms']) {
           expect(body).toContain(`href="${path}"`);
         }
         expect(body).toContain('src="/brand/logo.png"');
+        expect(body).toContain('data-world-return');
       });
 
-      test('un clic : la langue se choisit dans la PREMIÈRE étape, avant « Rejoindre », par la liste de l’en-tête, la langue du site par défaut (#10098)', () => {
-        const body = /<body>([\s\S]*)<\/body>/.exec(html)?.[1] ?? '';
-        const formHtml = /<form[^>]*data-world-form[\s\S]*?<\/form>/.exec(body)?.[0] ?? '';
-        expect(formHtml).not.toContain('data-world-step="language"');
-        expect(formHtml).not.toContain('data-world-back');
-        expect(formHtml).not.toContain('type="radio"');
-        const select = /<label class="ld-language[^"]*"[^>]*>[\s\S]*?<select[^>]*data-world-language[^>]*>[\s\S]*?<\/select><\/label>/.exec(formHtml)?.[0] ?? '';
-        expect(select).toContain('name="language"');
-        expect(select).toMatch(new RegExp(`<option[^>]*value="${language}"[^>]*selected=""`));
-        expect(select.match(/selected=""/g)?.length).toBe(1);
-        for (const code of LANDING_LANGUAGES) {
-          expect(select).toMatch(new RegExp(`<option[^>]*value="${code}"[^>]*>${getLanguageInfo(code).flag}`));
+      test('aucune entrée anonyme en un clic : ni formulaire, ni « Entrer sans compte », ni champ de nom (#10784)', () => {
+        expect(body).not.toContain('data-world-form');
+        expect(body).not.toContain('data-world-cta');
+        expect(body).not.toContain('<form');
+        expect(body).not.toContain('name="name"');
+        expect(body).not.toContain('#rejoindre');
+        for (const other of LANDING_LANGUAGES) {
+          expect(body).not.toContain(OLD_ENTER_WITHOUT_ACCOUNT[other]);
         }
-        expect(select).not.toContain('<svg');
-        const at = (needle: string): number => formHtml.indexOf(needle);
-        expect(at('name="name"')).toBeGreaterThan(-1);
-        expect(at('name="name"')).toBeLessThan(at('data-world-language'));
-        expect(at('data-world-language')).toBeLessThan(at(`>${copy.join}</button>`));
-        expect(body).toMatch(/role="alert"[^>]*data-world-error|data-world-error[^>]*role="alert"/);
-        expect(body).toContain(copy.entryFailed.replace(/'/g, '&#x27;'));
-        expect(body).toContain('data-world-return');
+      });
+
+      test('un QR code vers /world, légendé et décrit dans la langue de la page, dans le héros ET dans la section World Wide (#10784)', () => {
+        const figures = [...body.matchAll(/<figure[^>]*data-world-qr[^>]*>[\s\S]*?<\/figure>/g)].map((m) => m[0]);
+        expect(figures).toHaveLength(2);
+        for (const figure of figures) {
+          expect(figure).toContain('data-world-entry');
+          expect(figure).toMatch(/<img[^>]*src="\/world-qr\.svg"/);
+          expect(figure).toContain(`alt="${escapeAttribute(copy.worldQrAlt)}"`);
+          expect(figure).toContain(escapeAttribute(copy.worldQrCaption));
+          expect(figure).not.toMatch(/<a[^>]*>\s*<img/);
+        }
+        expect(body.indexOf('data-world-qr')).toBeLessThan(body.indexOf('id="world"'));
+        expect(body.lastIndexOf('data-world-qr')).toBeGreaterThan(body.indexOf('id="world"'));
+      });
+
+      test('sous chaque QR, le lien de partage en clair vers /world — un lien texte, jamais un bouton (#10811)', () => {
+        const figures = [...body.matchAll(/<figure[^>]*data-world-qr[^>]*>[\s\S]*?<\/figure>/g)].map((m) => m[0]);
+        for (const figure of figures) {
+          const link = /<a[^>]*data-world-link[^>]*>([\s\S]*?)<\/a>/.exec(figure);
+          expect(link?.[0]).toContain('href="/world"');
+          expect(link?.[0]).not.toContain('ld-btn');
+          expect(link?.[1]).toBe('meeshy.me/world');
+          expect(figure).toContain(escapeAttribute(copy.worldLinkLead));
+        }
+        if (language !== 'fr') expect(copy.worldLinkLead).not.toBe(LANDING_COPY.fr.worldLinkLead);
+      });
+
+      test('la légende et la description du QR sont propres à la langue', () => {
+        expect(copy.worldQrAlt).toContain('meeshy.me/world');
+        expect(copy.worldQrCaption).toContain('World Wide');
+        if (language !== 'fr') expect(copy.worldQrCaption).not.toBe(LANDING_COPY.fr.worldQrCaption);
       });
 
       test('la note ne promet plus d’étape « juste après » (#10098)', () => {
@@ -134,15 +166,8 @@ describe('le document prérendu, par langue (#10002)', () => {
   }
 });
 
-describe('le point d’accroche de l’entrée invité (#10003, #10100)', () => {
-  test('vise /world, que la table des routes sert, avec le nom ET la langue — jamais la jonction /chat/… (#10100)', () => {
-    expect(WORLD_GUEST_ENTRY_TEMPLATE.replace('{link}', 'L').replace('{name}', 'N').replace('{language}', 'ar')).toBe(
-      href('world', {}, { name: 'N', language: 'ar' }),
-    );
-    expect(WORLD_GUEST_ENTRY_TEMPLATE).not.toContain('/chat/');
-  });
-
-  test('le retour d’un invité vise /world, où son fil s’ouvre en focus (#10100)', () => {
+describe('le retour d’un invité (#10100)', () => {
+  test('vise /world, où son fil s’ouvre en focus', () => {
     expect(WORLD_GUEST_THREAD_TEMPLATE.replace('{conversation}', 'C')).toBe(href('world'));
   });
 });
@@ -150,9 +175,8 @@ describe('le point d’accroche de l’entrée invité (#10003, #10100)', () => 
 type Trace = {
   readonly assigned: string[];
   readonly replaced: string[];
-  readonly pushed: unknown[];
-  /** Le jeton de passage tel qu'il était posé à l'instant de CHAQUE navigation (#10094). */
-  readonly handoffAtAssign: Array<string | null>;
+  /** Ce que le script a écrit dans l'onglet — il n'y pose plus rien (#10784). */
+  readonly tab: Map<string, string>;
   fetches: number;
 };
 
@@ -170,45 +194,22 @@ const harness = (input: {
   readonly deviceLanguages?: readonly string[];
   /** Le script tel que le prérendu l'inline — minifié (`minifyInlineScript`). */
   readonly script?: (config: LandingBootConfig) => string;
-  /** `sessionStorage` refusé (navigation privée, quota) — chaque accès lève. */
-  readonly sessionRefused?: boolean;
 }): Harness => {
   const html = documentFor(input.language);
   document.documentElement.removeAttribute('data-session');
   document.body.innerHTML = /<body>([\s\S]*)<\/body>/.exec(html)?.[1] ?? '';
   const stored = new Map(Object.entries(input.stored ?? {}));
-  const trace: Trace = { assigned: [], replaced: [], pushed: [], handoffAtAssign: [], fetches: 0 };
   const tab = new Map<string, string>();
-  const refused = (): never => {
-    throw new DOMException('refusé', 'SecurityError');
-  };
+  const trace: Trace = { assigned: [], replaced: [], tab, fetches: 0 };
   const answers: readonly Answer[] = input.responses ?? [input.response ?? { status: 200, body: { success: true, data: world() } }];
   let pending: Promise<unknown> = Promise.resolve();
-  let historyState: unknown = null;
   const fake = {
     document,
     HTMLSelectElement: window.HTMLSelectElement,
-    HTMLFormElement: window.HTMLFormElement,
-    HTMLInputElement: window.HTMLInputElement,
     matchMedia: (query: string) => ({ matches: input.installed === 'display-mode' && query === '(display-mode: standalone)' }),
-    HTMLButtonElement: window.HTMLButtonElement,
-    HTMLAnchorElement: window.HTMLAnchorElement,
     navigator: {
       ...(input.installed === 'ios-standalone' ? { standalone: true } : {}),
       ...(input.deviceLanguages === undefined ? {} : { languages: input.deviceLanguages }),
-    },
-    history: {
-      get state() {
-        return historyState;
-      },
-      pushState: (state: unknown) => {
-        historyState = state;
-        trace.pushed.push(state);
-      },
-      back: () => {
-        historyState = null;
-        window.dispatchEvent(new window.PopStateEvent('popstate', { state: null }));
-      },
     },
     addEventListener: (type: string, listener: EventListener) => window.addEventListener(type, listener),
     localStorage: {
@@ -216,16 +217,13 @@ const harness = (input: {
       setItem: (key: string, value: string) => void stored.set(key, value),
     },
     sessionStorage: {
-      getItem: (key: string) => (input.sessionRefused === true ? refused() : (tab.get(key) ?? null)),
-      setItem: (key: string, value: string) => (input.sessionRefused === true ? refused() : void tab.set(key, value)),
+      getItem: (key: string) => tab.get(key) ?? null,
+      setItem: (key: string, value: string) => void tab.set(key, value),
     },
     location: {
       search: '',
       hash: '',
-      assign: (to: string) => {
-        trace.handoffAtAssign.push(tab.get(WORLD_ENTRY_HANDOFF_KEY) ?? null);
-        trace.assigned.push(to);
-      },
+      assign: (to: string) => void trace.assigned.push(to),
       replace: (to: string) => void trace.replaced.push(to),
     },
     fetch: () => {
@@ -254,9 +252,7 @@ const harness = (input: {
     worldPath: worldEndpoints.root,
     sessionKey: SESSION_KEY,
     languageKey: INTERFACE_LANGUAGE_KEY,
-    entryTemplate: WORLD_GUEST_ENTRY_TEMPLATE,
     threadTemplate: WORLD_GUEST_THREAD_TEMPLATE,
-    handoffKey: WORLD_ENTRY_HANDOFF_KEY,
     appPath: href('list'),
     presence: LANDING_COPY[input.language].presence,
   };
@@ -379,180 +375,48 @@ describe('le script de la landing — GET /world (#10000)', () => {
     });
   }
 
-  test('un serveur qui ne sert plus l’effectif laisse entrer d’un clic, sans pastille (#10205)', async () => {
+  test('un serveur qui ne sert plus l’effectif laisse le QR en place, sans pastille (#10205, #10784)', async () => {
     const { trace, settle } = harness({
       language: 'fr',
       response: { status: 200, body: { success: true, data: world({ memberCount: undefined }) } },
     });
     await settle();
     expect(visible('[data-world-presence]')).toBe(false);
-    expect(visible('[data-world-form]')).toBe(true);
-    typeName('Awa');
-    expect(trace.assigned).toEqual(['/world?name=Awa&language=fr']);
-    expect(trace.handoffAtAssign[0]).toContain('mshy_wx');
+    expect(qrShown()).toEqual([true, true]);
+    expect(trace.assigned).toEqual([]);
   });
 
-  test('404 WORLD_UNAVAILABLE ⇒ l’entrée disparaît et la page le dit', async () => {
+  test('404 WORLD_UNAVAILABLE ⇒ les QR disparaissent et la page le dit (#10784)', async () => {
     const { settle } = harness({
       language: 'fr',
       response: { status: 404, body: { success: false, error: 'x', code: 'WORLD_UNAVAILABLE', message: 'x' } },
     });
     await settle();
-    expect(visible('[data-world-form]')).toBe(false);
+    expect(qrShown()).toEqual([false, false]);
     expect(document.querySelectorAll('[data-world-entry]:not([hidden])').length).toBe(0);
     expect(visible('[data-world-unavailable]')).toBe(true);
   });
 
-  test('une panne réseau ou une 500 laisse l’entrée en place', async () => {
-    const { settle } = harness({ language: 'fr', response: { status: 500, body: null } });
-    await settle();
-    expect(visible('[data-world-form]')).toBe(true);
-    expect(visible('[data-world-unavailable]')).toBe(false);
-  });
-
-  test('une panne réseau (fetch rejeté) laisse aussi l’entrée en place', async () => {
-    const { settle } = harness({ language: 'fr', responses: ['network'] });
-    await settle();
-    expect(visible('[data-world-form]')).toBe(true);
-    expect(visible('[data-world-error]')).toBe(false);
-  });
-});
-
-const form = (): HTMLFormElement => document.querySelector('[data-world-form]') as HTMLFormElement;
-const nameField = (): HTMLInputElement => form().querySelector('input[name="name"]') as HTMLInputElement;
-const languageSelect = (): HTMLSelectElement => form().querySelector('select[data-world-language]') as HTMLSelectElement;
-const shownFlag = (): string | null =>
-  Array.from(languageSelect().options).find((option) => option.value === languageSelect().value)?.textContent?.split(' ')[0] ?? null;
-const submit = () => form().dispatchEvent(new window.Event('submit', { cancelable: true }));
-const fillName = (value: string) => {
-  nameField().value = value;
-};
-const typeName = (value: string) => {
-  fillName(value);
-  submit();
-};
-const pickLanguage = (code: string) => {
-  languageSelect().value = code;
-  languageSelect().dispatchEvent(new window.Event('change', { bubbles: true }));
-};
-
-describe('un clic : le nom, la langue montrée, World Wide (#10098, amende #10003)', () => {
-  test('« Rejoindre » entre d’un geste, avec le nom et la langue du SITE', async () => {
-    const { trace, win, settle } = harness({ language: 'fr' });
-    await settle();
-    typeName('  Amina & co ');
-    expect(trace.assigned).toEqual(['/world?name=Amina%20%26%20co&language=fr']);
-    expect(win.localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe('fr');
-    expect(trace.pushed).toEqual([]);
-  });
-
-  test('la langue proposée est celle de la page, jamais celle de l’appareil', async () => {
-    for (const language of LANDING_LANGUAGES) {
-      const { trace, settle } = harness({ language, deviceLanguages: ['ja-JP', language === 'pt' ? 'de-DE' : 'pt-BR'] });
-      await settle();
-      expect(languageSelect().value).toBe(language);
-      expect(shownFlag()).toBe(getLanguageInfo(language).flag);
-      typeName('Kenji');
-      expect(trace.assigned).toEqual([`/world?name=Kenji&language=${language}`]);
-    }
-  });
-
-  test('choisir une autre langue montre son drapeau, ne change pas la page, et c’est elle qui entre', async () => {
-    const { trace, win, settle } = harness({ language: 'en' });
-    await settle();
-    pickLanguage('ar');
-    expect(shownFlag()).toBe(getLanguageInfo('ar').flag);
-    expect(trace.assigned).toEqual([]);
-    expect(win.localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe(null);
-    typeName('Amina');
-    expect(trace.assigned).toEqual(['/world?name=Amina&language=ar']);
-    expect(win.localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe('ar');
-  });
-
-  test('un nom vide n’entre pas et rend le focus au champ', async () => {
-    const { trace, settle } = harness({ language: 'fr' });
-    await settle();
-    typeName('   ');
-    expect(trace.assigned).toEqual([]);
-    expect(document.activeElement).toBe(nameField());
-  });
-
-  test('la langue se dit dans son écriture, l’arabe de droite à gauche', () => {
-    harness({ language: 'fr' });
-    const arabic = languageSelect().querySelector('option[value="ar"]');
-    expect(arabic?.getAttribute('dir')).toBe('rtl');
-    expect(arabic?.getAttribute('lang')).toBe('ar');
-    expect(arabic?.textContent).toContain('العربية');
-  });
-
-  test('avant de naviguer, la landing pose dans l’ONGLET le jeton de passage : la clé servie, le nom rogné, la langue, l’instant (#10094)', async () => {
-    const { trace, settle } = harness({ language: 'fr' });
-    await settle();
-    const before = Date.now();
-    pickLanguage('ar');
-    typeName('  Amina & co ');
-    expect(trace.assigned.length).toBe(1);
-    const token: unknown = JSON.parse(trace.handoffAtAssign[0] ?? 'null');
-    expect(token).toMatchObject({ link: 'mshy_wx', name: 'Amina & co', language: 'ar' });
-    const at: unknown = typeof token === 'object' && token !== null ? Reflect.get(token, 'at') : null;
-    expect(typeof at === 'number' && at >= before && at <= Date.now()).toBe(true);
-  });
-
-  test('un onglet sans sessionStorage navigue quand même : sans jeton, la jonction demandera le geste (#10094)', async () => {
-    const { trace, settle } = harness({ language: 'fr', sessionRefused: true });
-    await settle();
-    pickLanguage('es');
-    typeName('Kenji');
-    expect(trace.assigned).toEqual(['/world?name=Kenji&language=es']);
-  });
-
-  test('un COMPTE qui entre en anonyme garde la langue de son interface', async () => {
-    const stored = { [SESSION_KEY]: JSON.stringify({ token: 't', sessionToken: 's', user: { id: 'u' }, expiresAt: Date.now() + 3_600_000 }) };
-    const { trace, win, settle } = harness({ language: 'en', stored });
-    await settle();
-    pickLanguage('es');
-    typeName('Ada');
-    expect(trace.assigned).toEqual(['/world?name=Ada&language=es']);
-    expect(win.localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe(null);
-  });
-
-  test('une entrée validée avant la réponse attend la clé, puis entre', async () => {
-    const { trace, settle } = harness({ language: 'fr' });
-    typeName('Kenji');
-    expect(trace.assigned).toEqual([]);
-    await settle();
-    expect(trace.assigned).toEqual(['/world?name=Kenji&language=fr']);
-  });
-});
-
-describe('jamais un bouton inerte quand GET /world échoue (#10067)', () => {
   for (const failure of [{ status: 500, body: null }, 'network'] as const) {
-    test(`${failure === 'network' ? 'réseau coupé' : '500'} : la soumission relance la lecture, puis DIT l’échec ; le geste suivant réessaie`, async () => {
-      const { trace, settle } = harness({ language: 'es', responses: [failure, failure, { status: 200, body: { success: true, data: world() } }] });
+    test(`${failure === 'network' ? 'une panne réseau' : 'une 500'} laisse les QR en place, sans relance`, async () => {
+      const { trace, settle } = harness({ language: 'fr', responses: [failure] });
       await settle();
+      expect(qrShown()).toEqual([true, true]);
+      expect(visible('[data-world-unavailable]')).toBe(false);
       expect(trace.fetches).toBe(1);
-      typeName('Kenji');
-      expect(trace.fetches).toBe(2);
-      await settle();
-      expect(trace.assigned).toEqual([]);
-      expect(visible('[data-world-error]')).toBe(true);
-      expect(document.querySelector('[data-world-error]')?.textContent).toBe(LANDING_COPY.es.entryFailed);
-
-      submit();
-      expect(trace.fetches).toBe(3);
-      await settle();
-      expect(visible('[data-world-error]')).toBe(false);
-      expect(trace.assigned).toEqual(['/world?name=Kenji&language=es']);
     });
   }
 
-  test('une lecture en cours n’est pas doublée par un second geste', async () => {
-    const { trace } = harness({ language: 'fr' });
-    typeName('Kenji');
-    submit();
-    expect(trace.fetches).toBe(1);
+  test('la landing ne pose plus aucun jeton de passage dans l’onglet, et ne navigue jamais seule (#10784)', async () => {
+    const { trace, settle } = harness({ language: 'fr' });
+    await settle();
+    expect(trace.tab.has(WORLD_ENTRY_HANDOFF_KEY)).toBe(false);
+    expect(trace.tab.size).toBe(0);
+    expect(trace.assigned).toEqual([]);
   });
 });
+
+const qrShown = (): readonly boolean[] => Array.from(document.querySelectorAll('[data-world-qr]')).map((node) => !node.hasAttribute('hidden'));
 
 describe('un invité revient dans World Wide (#10003)', () => {
   const guest = (link: string) => ({
@@ -586,21 +450,32 @@ describe('un invité revient dans World Wide (#10003)', () => {
 });
 
 describe('le script MINIFIÉ que le prérendu inline (#10003)', () => {
-  test('plus court que sa source, il se comporte comme elle : qui est là, langue du site, drapeau, entrée d’un clic', async () => {
+  test('plus court que sa source, il se comporte comme elle : qui est là, retour de l’invité, fermeture de World Wide', async () => {
     const configs: LandingBootConfig[] = [];
     harness({ language: 'ar', script: (config) => (configs.push(config), landingBootScript(config)) });
     const source = landingBootScript(configs[0] as LandingBootConfig);
     const minified = await minifyInlineScript(source);
     expect(minified.length).toBeLessThan(source.length);
 
-    const stored = { [SESSION_KEY]: JSON.stringify({ kind: 'guest', sessionToken: 's', expiresAt: Date.now() + 3_600_000 }) };
-    const { trace, settle } = harness({ language: 'ar', stored, deviceLanguages: ['es-MX'], script: () => minified });
+    const stored = {
+      [SESSION_KEY]: JSON.stringify({
+        kind: 'guest',
+        sessionToken: 's',
+        guest: { conversationId: 'c-world', link: 'mshy_wx' },
+        expiresAt: Date.now() + 3_600_000,
+      }),
+    };
+    const { settle } = harness({ language: 'ar', stored, script: () => minified });
     expect(document.documentElement.getAttribute('data-session')).toBe('guest');
     await settle();
-    expect(languageSelect().value).toBe('ar');
-    pickLanguage('es');
-    expect(shownFlag()).toBe(getLanguageInfo('es').flag);
-    typeName('Luiza');
-    expect(trace.assigned).toEqual(['/world?name=Luiza&language=es']);
+    expect(visible('[data-world-return]')).toBe(true);
+
+    const closed = harness({
+      language: 'ar',
+      response: { status: 404, body: { success: false, error: 'x', code: 'WORLD_UNAVAILABLE', message: 'x' } },
+      script: () => minified,
+    });
+    await closed.settle();
+    expect(qrShown()).toEqual([false, false]);
   });
 });

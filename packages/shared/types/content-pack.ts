@@ -19,7 +19,8 @@
  */
 import type { GloryAtmosphere } from './glory-atmospheres.js';
 
-export const PACK_DOMAINS = ['sticker', 'glory-frame', 'capture-frame'] as const;
+/** `banner` : le FOND de bannière (un dessin qui s'affiche sans photo) ; `banner-frame` : le CADRE posé sur la photo, centre transparent (#10932). */
+export const PACK_DOMAINS = ['sticker', 'glory-frame', 'capture-frame', 'wallpaper', 'avatar-ring', 'banner', 'banner-frame'] as const;
 export type PackDomain = (typeof PACK_DOMAINS)[number];
 
 /** `builtin` : dessiné ou embarqué par le client ; `official` : publié par Meeshy ; `community` : proposé par un tiers (stickers seuls). */
@@ -47,6 +48,9 @@ export const PACK_LIMITS = {
   maxReviewNoteLength: 280,
 } as const;
 
+/** Le prix maximal d'un pack, en Meeshes. */
+export const PACK_PRICE_MAX = 10_000;
+
 /** Les segments d'adresse de l'API des packs et les onglets fixes des boutiques, qu'aucun slug ne peut prendre. */
 export const PACK_ROUTE_SEGMENTS = ['submissions', 'pending', 'installed', 'mine', 'favorites', 'shop'] as const;
 
@@ -71,6 +75,20 @@ export function parsePackChoiceKey(key: string): { readonly domain: PackDomain; 
   if (!isPackDomain(domain) || domain === 'sticker' || !isPackSlug(slug)) return null;
   return { domain, slug };
 }
+
+// ── La possession (#10632) ──────────────────────────────────────────────
+
+/** Ce que la loi de possession lit d'un pack : son adresse et son prix (`null`/absent = gratuit). */
+export type PackOwnable = { readonly domain: PackDomain; readonly slug: string; readonly price?: number | null };
+
+/**
+ * LA règle de possession : un pack gratuit est possédé par tout compte
+ * inscrit ; un pack payant l'est si et seulement si une ligne
+ * `UserPackOwnership` existe pour `packChoiceKey(domaine, slug)`. Installer
+ * n'est pas posséder : le RENDU d'un choix exige la possession.
+ */
+export const isPackOwned = (pack: PackOwnable, ownedKeys: ReadonlySet<string>): boolean =>
+  pack.price === undefined || pack.price === null || ownedKeys.has(packChoiceKey(pack.domain, pack.slug));
 
 // ── Installé, réservé, retirable ────────────────────────────────────────
 
@@ -138,6 +156,10 @@ export type PackSummary = PackSummaryBase & {
   readonly downloadBytes: PackDownloadBytes | null;
   readonly removable: boolean;
   readonly names: PackNames;
+  /** Le prix en Meeshes ; `null` ou absent = gratuit (additif, ignoré par les anciens clients). */
+  readonly price?: number | null;
+  /** Gratuit ⇒ `true` ; payant ⇒ une ligne de possession existe (additif). */
+  readonly owned?: boolean;
   /** L'atlas des vignettes, pour montrer le pack sans l'installer. */
   readonly preview: PackAssetRef | null;
 };

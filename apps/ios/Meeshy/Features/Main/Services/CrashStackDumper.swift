@@ -1,6 +1,8 @@
 #if DEBUG
 import Foundation
 import Darwin
+import os
+import MeeshySDK
 
 /// DEV-ONLY — filet de diagnostic pour les crashs que le système ne documente
 /// plus : ReportCrash throttle les .ips d'un crash répété (après ~3, plus
@@ -197,7 +199,7 @@ enum CrashStackDumper {
         action.sa_flags = SA_SIGINFO | SA_ONSTACK
         sigaction(SIGSEGV, &action, nil)
         sigaction(SIGBUS, &action, nil)
-        NSLog("[CrashStackDumper] installed (Documents/segv_backtrace.txt)")
+        MeeshyLog.logger(.crash).debug("[CrashStackDumper] installed (Documents/segv_backtrace.txt)")
         /* LA TAILLE DES TYPES DE VALEUR DU FIL (#6213 bis) — un cadre de pile
            n'est grand que parce qu'un type l'est. `ConversationView` est
            CAPTURÉ PAR VALEUR par chaque closure de son `body` ; si son état
@@ -209,19 +211,12 @@ enum CrashStackDumper {
            d'allocation. Ce relevé est l'instrument qui a trouvé les 15 Ko de
            `ConversationView` ; il reste en place, en DEBUG, pour que la
            prochaine vue qui grossit se voie avant de déborder. */
-        NSLog("[sizes] ConversationView=%d RootView=%d iPadRootView=%d ConversationListView=%d StoryViewerView=%d",
-              MemoryLayout<ConversationView>.size,
-              MemoryLayout<RootView>.size,
-              MemoryLayout<iPadRootView>.size,
-              MemoryLayout<ConversationListView>.size,
-              MemoryLayout<StoryViewerView>.size)
-        NSLog("[sizes-etats] overlay=%d composer=%d scroll=%d header=%d Message=%d Conversation=%d",
-              MemoryLayout<ConversationOverlayState>.size,
-              MemoryLayout<ConversationComposerState>.size,
-              MemoryLayout<ConversationScrollState>.size,
-              MemoryLayout<ConversationHeaderState>.size,
-              MemoryLayout<Message>.size,
-              MemoryLayout<Conversation>.size)
+        MeeshyLog.logger(.crash).debug(
+            "[sizes] ConversationView=\(MemoryLayout<ConversationView>.size) RootView=\(MemoryLayout<RootView>.size) iPadRootView=\(MemoryLayout<iPadRootView>.size) ConversationListView=\(MemoryLayout<ConversationListView>.size) StoryViewerView=\(MemoryLayout<StoryViewerView>.size)"
+        )
+        MeeshyLog.logger(.crash).debug(
+            "[sizes-etats] overlay=\(MemoryLayout<ConversationOverlayState>.size) composer=\(MemoryLayout<ConversationComposerState>.size) scroll=\(MemoryLayout<ConversationScrollState>.size) header=\(MemoryLayout<ConversationHeaderState>.size) Message=\(MemoryLayout<Message>.size) Conversation=\(MemoryLayout<Conversation>.size)"
+        )
     }
 }
 #endif

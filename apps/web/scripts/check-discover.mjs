@@ -407,7 +407,10 @@ try {
       coldPage.setDefaultTimeout(10_000);
       const coldErrors = [];
       coldPage.on('pageerror', (error) => coldErrors.push(error.message));
-      await coldPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
+      /* Depuis le FLUX, jamais depuis `/chats` (#10593) : la liste lit
+         désormais le panier des bloqués (son menu dit « Bloquer » ou
+         « Débloquer »), et le cache n'y serait plus froid. */
+      await coldPage.goto(`${BASE}/feed`, { waitUntil: 'load' });
       await coldPage.waitForSelector('[data-floating-menu]');
       const setNetwork = (online) =>
         coldPage.evaluate((value) => {

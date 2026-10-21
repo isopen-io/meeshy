@@ -128,7 +128,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/ConversationLockSheet.swift",
         "Features/Main/Components/ConversationPreferencesTab.swift",
         "Features/Main/Components/EditPostSheet.swift",
-        "Features/Main/Components/ForwardPickerSheet.swift",
         "Features/Main/Components/InviteFriendsSheet.swift",
         "Features/Main/Components/LocationPickerView.swift",
         "Features/Main/Components/MemberManagementSection.swift",
@@ -143,7 +142,7 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
         "Features/Main/Components/MessageDetailSentimentTab.swift",
         "Features/Main/Components/MessageEffectModifiers.swift",
-        "Features/Main/Components/MessageOverlayMenu.swift",
+        "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
         // long (son glyphe « play » dans un disque fixe de 52 pt) a quitté
         // `MessageOverlayMenu.swift` pour son propre fichier. La POPULATION ne
@@ -198,11 +197,21 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/CallView+States.swift",
         "Features/Main/Views/ChangePasswordView.swift",
         "Features/Main/Views/CommunityLinkDetailView.swift",
+        // RELOCALISATION pure : le bandeau « en réponse à » quitte
+        // `FeedCommentsSheet.swift` avec son glyphe de croix en CADRE FIXE 24×24
+        // (doctrine 82i). La POPULATION ne bouge pas ; le fichier d'origine en
+        // garde un (la croix de l'en-tête) et reste dans la liste.
+        "Features/Main/Views/CommentSheetBanners.swift",
         "Features/Main/Views/CommunityLinksView.swift",
         "Features/Main/Views/ConversationAnimatedBackground.swift",
         "Features/Main/Views/ConversationBackgroundComponents.swift",
         "Features/Main/Views/ConversationHelperViews.swift",
-        "Features/Main/Views/ConversationListView+Overlays.swift",
+        // RELOCALISATION pure (colonne iPad étroite, 5681d91a66) : les actions
+        // de l'en-tête de la liste quittent `ConversationListView+Overlays`
+        // pour leur propre fichier, avec leurs glyphes en CADRE FIXE (icônes
+        // `MeeshyIconSize.lg`, chiffre de la pastille). Ni `totalCeiling` ni
+        // `textCeiling` — seul le NOM change.
+        "Features/Main/Views/ConversationListHeaderActions.swift",
         "Features/Main/Views/ConversationMediaFilmstrip.swift",
         // #4014 — RELOCALISATION pure, même forme qu'au #4102 : la galerie est
         // découpée (1259 lignes ⇒ racine / `+Rules` / `+Pages`), et quatre de
@@ -248,6 +257,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // inscrire sa DESTINATION dans le MÊME commit ». Inscrire la
         // destination ne suffit pas — la source VIDÉE doit sortir, sinon la
         // liste garde un nom sans site et cesse de dire la vérité (règle 4).
+        // Cohésion de `FeedComposerSheet` : la rangée des pièces en attente a
+        // quitté la feuille avec ses glyphes en CADRE FIXE (tuile de 72, pastille
+        // de 20). RELOCALISATION pure : ni `totalCeiling` ni `textCeiling` ne bougent.
+        "Features/Main/Views/FeedComposerAttachmentsRow.swift",
         "Features/Main/Views/FeedComposerSheet.swift",
         "Features/Main/Views/FeedPostCard+Media.swift",
         // #4096 — la vue `3f` remplace la mosaïque par un carrousel. Le fichier
@@ -291,7 +304,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // sort de la liste (règle 4) : sa croix monte `FullscreenTopBar`.
         "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
         "Features/Main/Views/ShareLinksView.swift",
-        "Features/Main/Views/SharePickerView.swift",
         "Features/Main/Views/StoryExportShareSheet.swift",
         "Features/Main/Views/StoryLanguageQuickBar.swift",
         "Features/Main/Views/StoryReactionFlightView.swift",
@@ -312,7 +324,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // monogramme de 13 pt d'un avatar fixe de 32×32, doctrine 82i. La
         // POPULATION ne bouge pas ; l'hôte en garde un autre et reste dans la liste.
         "Features/Main/Views/StoryCommentRowView.swift",
-        "Features/Main/Views/StoryViewerView+Content.swift",
+        // Cohésion de `StoryViewerView` — RELOCALISATION pure, même forme : la liste des
+        // commentaires de story (`StoryCommentsOverlayView`) a QUITTÉ
+        // `StoryViewerView+Content.swift` pour son propre fichier et emporte son site
+        // figé — le glyphe héros de l'état vide, masqué de VoiceOver. L'hôte n'en garde
+        // plus aucun et sort de la liste ; la POPULATION ne bouge pas.
+        "Features/Main/Views/StoryCommentsOverlayView.swift",
         // #8878 — `StoryViewerView+Header.swift` sort de la liste (règle 4) : la
         // croix et le menu ⋯ montent `FullscreenCloseButton` / `FullscreenMoreMenu`
         // (MeeshyUI), qui portent leur glyphe figé dans leur disque.
@@ -444,7 +461,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // transport et de traduction par leur CADRE (`resizable` + `frame`), plus
     // par une police figée — quatre glyphes, aucun texte. `AudioFullscreenView`
     // sort de `bearingFiles` (règle 4) ; sa page n'y entre pas.
-    private static let totalCeiling = 186
+    // 186 → 185 (#11208) : l'aperçu d'appui long rend la cellule du fil, et sa
+    // rangée de fichier reconstruite part avec son glyphe figé.
+    // `MessageOverlayMenu.swift` sort de `bearingFiles` (règle 4) ; le texte
+    // figé ne bouge pas.
+    private static let totalCeiling = 185
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
@@ -536,9 +557,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
     func test_laClassificationSepareBienLesDeuxPopulations() throws {
         let sites = try allSites().map { $0.1 }
         // #9125 — 148 : les glyphes figés de l'ancienne `CameraView` sont
-        // partis avec elle. La borne garde un classifieur VIVANT, pas un compte.
-        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 140,
-                             "les glyphes sont la population majoritaire (207 au 264i, 148 au #9125)")
+        // partis avec elle ; #10947 — 139 : ceux des deux anciens sélecteurs de
+        // partage aussi. La borne garde un classifieur VIVANT, pas un compte.
+        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 130,
+                             "les glyphes sont la population majoritaire (207 au 264i, 148 au #9125, 139 au #10947)")
         XCTAssertGreaterThan(sites.filter { $0.receiver == .text }.count, 20,
                              "le texte figé existe (36 au 264i) — un 0 ici signerait un classifieur mort")
     }

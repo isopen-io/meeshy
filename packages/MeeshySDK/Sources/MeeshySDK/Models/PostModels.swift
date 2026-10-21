@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - API Post Models
 
-public struct APIAuthor: Codable, Sendable {
+public struct APIAuthor: Codable, Sendable, ProfileDecorWearer {
     public let id: String
     public let username: String?
     public let displayName: String?
@@ -15,11 +15,15 @@ public struct APIAuthor: Codable, Sendable {
     /// viewers) et sur les caches antérieurs — décodage rétro-compatible.
     public let isOnline: Bool?
     public let lastActiveAt: Date?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
+    public let profileDecor: ServedProfileDecor?
 
     public var name: String { displayName ?? username ?? "Anonymous" }
 
     public init(id: String, username: String?, displayName: String?, avatar: String?,
-                isOnline: Bool? = nil, lastActiveAt: Date? = nil) {
+                isOnline: Bool? = nil, lastActiveAt: Date? = nil, profileDecor: ServedProfileDecor? = nil) {
+        self.profileDecor = profileDecor
         self.id = id
         self.username = username
         self.displayName = displayName
@@ -573,18 +577,24 @@ extension APIPost {
             if let username = c.author.username {
                 UserDisplayNameCache.shared.track(username: username, displayName: c.author.name)
             }
-            return FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
+            var comment = FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
                         authorUsername: c.author.username,
                         authorAvatarURL: c.author.avatar,
                         content: c.content,
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
+                        translations: c.translations?.mapValues { entry in
+                            PostTranslation(text: entry.text, translationModel: entry.translationModel,
+                                            confidenceScore: entry.confidenceScore)
+                        },
                         currentUserReactions: c.currentUserReactions,
                         media: (c.media ?? []).map { $0.toFeedMedia() },
                         location: c.location,
                         quotedMedia: c.quotedCitation,
                         trackedLinkMap: c.trackedLinkMap)
+            comment.authorRing = c.author.avatarRing
+            return comment
         }
 
         let repost: RepostContent? = repostOf?.toRepostContent()
@@ -643,6 +653,7 @@ extension APIPost {
         feedPost.visibility = visibility
         feedPost.visibilityUserIds = visibilityUserIds
         feedPost.viewerPoints = viewerPoints
+        feedPost.authorRing = author.avatarRing
         return feedPost
     }
 
@@ -691,7 +702,7 @@ extension APIRepostOf {
         let repostTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
             PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
         }
-        return RepostContent(id: id, author: author.name, authorId: author.id,
+        var repost = RepostContent(id: id, author: author.name, authorId: author.id,
                              authorUsername: author.username,
                              authorAvatarURL: author.avatar,
                              content: content ?? "",
@@ -709,5 +720,7 @@ extension APIRepostOf {
                              expiresAt: nil,
                              location: location,
                              mentions: mentions)
+        repost.authorRing = author.avatarRing
+        return repost
     }
 }

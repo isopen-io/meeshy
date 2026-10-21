@@ -143,7 +143,7 @@ function prismaDouble(bloquesParLeLecteur: readonly string[] = [], demandes: rea
       findUnique: jest.fn<any>(async () => ({ createdAt: new Date('2025-01-01T00:00:00Z') })),
     },
     message: { count: jest.fn<any>(async () => 69), groupBy: jest.fn<any>(async () => []) },
-    participant: { count: jest.fn<any>(async () => 12) },
+    participant: { findMany: jest.fn<any>(async () => [{ id: 'p1' }]), count: jest.fn<any>(async () => 12) },
     friendRequest: {
       count: jest.fn<any>(async () => 3),
       findFirst: jest.fn<any>(async (args?: any) => {
@@ -317,6 +317,17 @@ describe('Le cache conditionnel', () => {
     expect(cC).toContain('private');
     expect(cC).not.toContain('public');
     await anonyme.close();
+    await connecte.close();
+  });
+
+  it('un connecté revalide à chaque lecture : un blocage posé entre deux lectures n’est jamais resservi depuis le cache du navigateur (#10755)', async () => {
+    const connecte = await monter(TIERS);
+
+    const cC = (await lire(connecte)).headers['cache-control'] as string;
+
+    expect(cC).toContain('no-cache');
+    expect(cC).not.toMatch(/max-age=[1-9]/);
+    expect(cC).not.toContain('stale-while-revalidate');
     await connecte.close();
   });
 });

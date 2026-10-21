@@ -13,13 +13,15 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
         enum Scripte { case muet, inchange, delta(json: String, validateur: String?) }
         var scripte: Scripte = .muet
         private(set) var demandes: [SyncDeltaRequest] = []
+        private(set) var creances: [SyncDeltaCredential] = []
 
         func demandeLeDelta<Row: Decodable & Sendable>(
             _ demande: SyncDeltaRequest,
-            creance _: SyncDeltaCredential,
+            creance: SyncDeltaCredential,
             rangeant _: Row.Type
         ) async -> SyncDeltaOutcome<Row> {
             demandes.append(demande)
+            creances.append(creance)
             switch scripte {
             case .muet: return .muet
             case .inchange: return .inchange
@@ -225,6 +227,20 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
         XCTAssertEqual(mockAPI.lastRequest?.endpoint, "/conversations")
     }
 
+    /// #10927 — après 24 h d'absence le JWT est échu : `/sync` le présentait
+    /// tel quel, et le démarrage payait un 401 (ou 15 s de silence) avant le
+    /// repli REST, qui, lui, rafraîchit. La créance est le jeton RAFRAÎCHI.
+    func test_deltaViaSync_presenteLeJetonRafraichi_jamaisLeJetonEchu() async {
+        _ = await semeLeCache()
+        mockAPI.authToken = "jeton-echu"
+        mockAPI.freshAuthTokenStub = "jeton-rafraichi"
+        mockSync.scripte = .inchange
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertEqual(mockSync.creances, [.membre(jeton: "jeton-rafraichi")])
+    }
+
     // MARK: - L'escalade
 
     func test_hasGap_escaladeVersFullSync() async {
@@ -266,6 +282,26 @@ final class ConversationSyncEngineDeltaViaSyncTests: XCTestCase {
         }
         XCTAssertFalse(mockSync.demandes.isEmpty,
             "un trou de séquence doit déclencher la resynchronisation /sync — le socket ne rejouera rien")
+    }
+
+    // MARK: - La reconnexion n'est pas absorbée par l'anti-rafale
+
+    /// Le retour au premier plan lance un delta AVANT que le socket ait rejoint
+    /// ses salles ; la reconnexion, une seconde plus tard, tombait dans les 3 s
+    /// d'anti-rafale et rendait « fait » sans rien relire. Ce qui arrivait entre
+    /// les deux restait invisible jusqu'à la synchro suivante.
+    func test_reconnectWithinTheCooldown_stillRunsItsCatchUpDelta() async {
+        _ = await semeLeCache()
+        mockSync.scripte = .inchange
+
+        await engine.syncSinceLastCheckpoint()
+        await engine.syncSinceLastCheckpoint()
+        XCTAssertEqual(mockSync.demandes.count, 1, "deux signaux ordinaires dans la fenêtre : un seul delta")
+
+        engine.requestReconnectCatchUp()
+        await engine.syncSinceLastCheckpoint()
+        XCTAssertEqual(mockSync.demandes.count, 2, "la reconnexion relit, anti-rafale ou non")
+        XCTAssertFalse(engine.hasReconnectCatchUpPending)
     }
 
     // MARK: - La fusion, à l'unité

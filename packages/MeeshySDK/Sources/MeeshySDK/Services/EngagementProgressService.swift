@@ -23,6 +23,8 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
     public let gloryGained: Int?
     public let levelBefore: Int?
     public let levelAfter: Int?
+    /// Le marqueur d'ORDRE de l'état du jeu après la frappe (#10900) — `nil` devant une passerelle antérieure.
+    public let gameRevision: Int?
 
     public init(
         status: String,
@@ -33,7 +35,8 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
         price: Int? = nil,
         gloryGained: Int? = nil,
         levelBefore: Int? = nil,
-        levelAfter: Int? = nil
+        levelAfter: Int? = nil,
+        gameRevision: Int? = nil
     ) {
         self.status = status
         self.balance = balance
@@ -44,6 +47,7 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
         self.gloryGained = gloryGained
         self.levelBefore = levelBefore
         self.levelAfter = levelAfter
+        self.gameRevision = gameRevision
     }
 
     /// Une matière ajoutée par le serveur avant la mise à jour de l'app ne doit
@@ -60,10 +64,11 @@ public struct APIMeeshMintResult: Codable, Sendable, Equatable {
         gloryGained = try container.decodeIfPresent(Int.self, forKey: .gloryGained)
         levelBefore = try container.decodeIfPresent(Int.self, forKey: .levelBefore)
         levelAfter = try container.decodeIfPresent(Int.self, forKey: .levelAfter)
+        gameRevision = (try? container.decodeIfPresent(Int.self, forKey: .gameRevision)) ?? nil
     }
 
     private enum CodingKeys: String, CodingKey {
-        case status, balance, mintedLifetime, number, edition, price, gloryGained, levelBefore, levelAfter
+        case status, balance, mintedLifetime, number, edition, price, gloryGained, levelBefore, levelAfter, gameRevision
     }
 }
 
@@ -74,9 +79,20 @@ public protocol EngagementProgressProviding: Sendable {
     /// fois par INTENTION de frappe, jamais par requête — sinon un retry
     /// deviendrait une seconde frappe, ce que cet identifiant empêche.
     func mintMeesh(requestId: String) async throws -> APIMeeshMintResult
+
+    /// La frappe avec sa GARDE DE PRIX (#10903) : `maxPrice` est le prix que l'écran a montré. Au-delà, la passerelle
+    /// refuse en 409 `PRICE_CHANGED` sans rien débiter. `nil` : sans garde, comme hier.
+    func mintMeesh(requestId: String, maxPrice: Int?) async throws -> APIMeeshMintResult
 }
 
-public final class EngagementProgressService: EngagementProgressProviding, @unchecked Sendable {
+public extension EngagementProgressProviding {
+    /// Une source qui ne connaît pas la garde (aperçu, vitrine) frappe sans elle.
+    func mintMeesh(requestId: String, maxPrice: Int?) async throws -> APIMeeshMintResult {
+        try await mintMeesh(requestId: requestId)
+    }
+}
+
+public final class EngagementProgressService: EngagementProgressProviding, Sendable {
     public static let shared = EngagementProgressService()
     private let api: APIClientProviding
 
@@ -90,12 +106,16 @@ public final class EngagementProgressService: EngagementProgressProviding, @unch
     }
 
     public func mintMeesh(requestId: String) async throws -> APIMeeshMintResult {
+        try await mintMeesh(requestId: requestId, maxPrice: nil)
+    }
+
+    public func mintMeesh(requestId: String, maxPrice: Int?) async throws -> APIMeeshMintResult {
         // `post` encode le corps et pose la méthode : `request` prend une `Data`
         // déjà sérialisée, ce qui obligerait à refaire ici ce que le client sait
         // faire.
         let response: APIResponse<APIMeeshMintResult> = try await api.post(
             MeEndpoint.meeshMint,
-            body: MintRequest(requestId: requestId)
+            body: MintRequest(requestId: requestId, maxPrice: maxPrice.flatMap { $0 > 0 ? $0 : nil })
         )
         return response.data
     }
@@ -105,5 +125,7 @@ public final class EngagementProgressService: EngagementProgressProviding, @unch
     /// dériver sans qu'aucun compilateur ne le remarque.
     private struct MintRequest: Encodable {
         let requestId: String
+        /// Absent du corps quand `nil` (`encodeIfPresent` synthétisé) : une passerelle antérieure ne le connaît pas.
+        let maxPrice: Int?
     }
 }

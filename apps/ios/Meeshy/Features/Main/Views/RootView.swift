@@ -38,45 +38,28 @@ struct StoryViewerRequest: Identifiable, Equatable {
     /// Parent du commentaire ciblé (réponse en thread) — repli de scroll
     /// quand la réponse elle-même n'est pas (encore) dans la liste.
     var targetParentCommentId: String? = nil
-}
-
-/// Détient un `ConversationListViewModel` sans JAMAIS republier.
-///
-/// `RootView`/`iPadRootView` doivent POSSÉDER le VM (durée de vie + injection
-/// `.environmentObject` vers la liste) mais ne doivent PAS se ré-évaluer à chaque
-/// churn du VM — presence refresh, `reloadFromCache` (count=100) répété, unread
-/// counts. Or `RootView.body` ne lit AUCUN @Published du VM (seulement des
-/// `.environmentObject()` + des accès dans des closures) : l'observation venait
-/// uniquement du `@StateObject`, générant des re-render inutiles à l'idle (Instant
-/// App Principles : « Zero Unnecessary Re-render »). Ce owner n'a pas de
-/// @Published → son `objectWillChange` ne fire jamais → RootView ne re-render
-/// jamais à cause de lui. Les vues enfants observent le VM via `@EnvironmentObject`.
-@MainActor
-final class ConversationListVMOwner: ObservableObject {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    let viewModel = ConversationListViewModel()
+    /// Slide d'entrée quand le point d'appel la connaît (citation d'une
+    /// réponse à une story). Ignorée si `postId` la résout, ou si
+    /// `startAtFirstUnviewed` l'emporte.
+    var initialStoryIndex: Int = 0
 }
 
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
-    @StateObject private var storyViewModel = StoryViewModel()
-    @StateObject private var statusViewModel = StatusViewModel()
+    @ObservedObject private var storyViewModel: StoryViewModel
+    @ObservedObject private var statusViewModel: StatusViewModel
     // Possédé sans être observé (cf. ConversationListVMOwner) : évite que le churn
     // du VM (presence, reloadFromCache) ne re-render RootView à l'idle. Exposé via
     // la propriété calculée `conversationViewModel` ci-dessous — les 12 usages
     // (injections + closures) restent inchangés.
-    @StateObject private var conversationVMOwner = ConversationListVMOwner()
+    private let conversationVMOwner: ConversationListVMOwner
     private var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
     @StateObject private var router = Router()
     // CallManager n'est PLUS observé ici : sa présentation (cover + overlays) est
     // portée par `.modifier(CallPresentationLayer())`, qui isole le churn d'appel
     // (callDuration 1 Hz + stats qualité) hors de `RootView.body`. Cf. watchdog
     // 0x8BADF00D. RootView ne se ré-évalue donc plus à chaque tick d'appel.
-    @StateObject private var notifications = RootNotificationSource()  // #7010 — le compteur SEUL est observé ; cf. RootNotificationSource.
+    @ObservedObject private var notifications: RootNotificationSource  // #7010 — le compteur SEUL est observé ; cf. RootNotificationSource.
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnabled
     @State private var showFeed = false
@@ -157,7 +140,15 @@ struct RootView: View {
     /// C4b — rupture cliente. Deux entrées (le 426 vécu, le plancher lu au
     /// démarrage), une porte qui ne se referme pas. `iPadRootView` porte le
     /// jumeau : l'iPad a sa racine PROPRE et n'hérite rien d'ici.
-    @StateObject private var upgradeGate = UpgradeGateController()
+    @ObservedObject private var upgradeGate: UpgradeGateController
+
+    init(scope: RootScopeModels) {
+        _storyViewModel = ObservedObject(wrappedValue: scope.story)
+        _statusViewModel = ObservedObject(wrappedValue: scope.status)
+        conversationVMOwner = scope.conversations
+        _notifications = ObservedObject(wrappedValue: scope.notifications)
+        _upgradeGate = ObservedObject(wrappedValue: scope.upgradeGate)
+    }
 
     var body: some View {
         ZStack {
@@ -232,7 +223,7 @@ struct RootView: View {
                             ReelOpenFailureView(
                                 failure: failure,
                                 onRetry: {
-                                    await revealReelFromNotification(postId: postId, commentId: launch.commentId,
+                                    await notificationNavigator.revealReelFromNotification(postId: postId, commentId: launch.commentId,
                                                                      parentCommentId: launch.parentCommentId)
                                 },
                                 onClose: { closeReels() }
@@ -457,7 +448,7 @@ struct RootView: View {
         async let versionFloor: Void = upgradeGate.checkFloor()
         async let storiesLoad: Void = storyViewModel.loadStories()
         async let statusesLoad: Void = statusViewModel.loadStatuses()
-        async let conversationsLoad: Void = conversationViewModel.loadConversations()
+        async let conversationsLoad: Void = ConversationListVMOwner.loadAtLaunch(conversationViewModel)
         async let unreadRefresh: Void = notifications.manager.refreshUnreadCount()
         _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
     }
@@ -498,7 +489,7 @@ struct RootView: View {
             if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
                 storyViewerCoordinator.present(StoryViewerRequest(
                     id: storyViewModel.storyGroups[groupIdx].id,
-                    startAtFirstUnviewed: true
+                    postId: postId
                 ))
             } else {
                 router.push(.postDetail(postId))
@@ -555,8 +546,26 @@ struct RootView: View {
 
     private func handleDeepLink(_ deepLink: DeepLink?) {
         guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
+        // Story, réel, composer ou feuille en cours : refermés d'ABORD, comme
+        // pour un tap de notification (#10543). Seules les conversations le
+        // faisaient ; un lien vers un post, un tag, une communauté ou un profil
+        // s'ouvrait SOUS la couverture, et le tap semblait sans effet.
+        router.clearPresentedSurfaces { _ in showDeepLink(deepLink) }
+    }
 
+    private func showDeepLink(_ deepLink: DeepLink) {
         switch deepLink {
+        case .callRequest(let conversationId, let isVideo):
+            // Le lien d'appel ne compose pas : il DEMANDE (feuille de
+            // confirmation). Mise à jour forcée et barrière d'âge passent avant.
+            let upgradeGate = self.upgradeGate
+            let gatesOpen: @MainActor () -> Bool = {
+                !upgradeGate.isBlocked && !AgeGateController.shared.isShowing
+            }
+            Task { @MainActor in
+                await CallLinkConfirmationController.shared.request(
+                    conversationId: conversationId, isVideo: isVideo, gatesOpen: gatesOpen)
+            }
         case .trackedLink(let token):
             // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
             deepLinkRouter.resolveTrackedLink(token)
@@ -587,7 +596,7 @@ struct RootView: View {
 
         case .reel(let postId):
             // Un réel nommé : même porte que sa notification (#7805).
-            openReelFromNotification(postId: postId)
+            notificationNavigator.openReelFromNotification(postId: postId)
 
         case .storyDetail(let postId):
             // La porte partagée avec l'iPad et le lien tapé dans l'app : le
@@ -644,9 +653,9 @@ struct RootView: View {
             // « rejoint » rien.
             UIApplication.shared.open(url)
 
-        case .game(let link):
-            // Une saison ou une semaine de ligue (#9947) : la page du Jeu, posée sur Progression et la fiche.
+        case .game(let link): // Saison ou semaine de ligue (#9947) : la page du Jeu, posée sur Progression et la fiche.
             router.openGame(at: GameNavigationMap.entry(for: link))
+        case .packShop(let domain, let pack): router.openPackShop(domain: domain, pack: pack) // La vitrine filtrée (#10632).
 
         case .unresolvedTrackedLink:
             // Le serveur ne connaît pas ce token, ou on n'a pas pu le joindre.
@@ -729,11 +738,11 @@ struct RootView: View {
     // MARK: - Unified Notification Navigation
 
     private func handleNotificationTap(_ notification: APINotification) {
-        navigateFromNotification(NotificationNavContext(from: notification))
+        notificationNavigator.navigateFromNotification(NotificationNavContext(from: notification))
     }
 
     private func handleSocketNotificationTap(_ event: SocketNotificationEvent) {
-        navigateFromNotification(NotificationNavContext(from: event))
+        notificationNavigator.navigateFromNotification(NotificationNavContext(from: event))
     }
 
     /// Long-press / pull-down on a notification toast: open the conversation as
@@ -788,331 +797,25 @@ struct RootView: View {
     }
 
     func handlePushNotificationTap(_ payload: NotificationPayload) {
-        navigateFromNotification(NotificationNavContext(from: payload))
+        notificationNavigator.navigateFromNotification(NotificationNavContext(from: payload))
     }
 
-    // Routing decision for a social-content notification — delegated to the pure
-    // `NotificationContentRouter` (single source of truth, mirrors the web's
-    // `resolveContentRoute`). The metadata discriminant (`postType`, or
-    // `contentType` for the `friend_new_*` family) is the high-confidence
-    // signal; when the gateway omits it we fall back to the notification type
-    // and, last, to the local cache where any post carrying a non-nil
-    // `expiresAt` is ephemeral by definition.
-    //
-    // EVERY social branch below goes through this — including the comment
-    // fan-out types (`story_thread_reply`, `friend_story_comment`,
-    // `story_new_comment`), which the gateway emits for ANY commented content,
-    // reels included. Routing those on their name alone is what opened the
-    // story viewer on an unrelated story when the user tapped a comment
-    // notification for a réel.
-    private func socialSurface(_ ctx: NotificationNavContext, postId: String) -> NotificationContentSurface {
-        NotificationContentRouter.surface(
-            postType: ctx.postType,
-            contentType: ctx.contentType,
-            notificationType: ctx.type,
-            storyLifecycleHint: StoryService.shared.cachedPost(id: postId)?.expiresAt != nil
-        )
+    // MARK: - Portes de navigation
+
+    /// Collaborateurs sans état, reconstruits à la demande : ils ne portent que
+    /// le routeur et la LECTURE de la liste vivante (`RootConversationOpener`,
+    /// `RootNotificationNavigator`).
+    private var conversationOpener: RootConversationOpener {
+        let list = conversationViewModel
+        return RootConversationOpener(router: router, knownConversations: { list.conversations })
     }
 
-    /// Opens the entity a social notification points at, on the surface the
-    /// router resolved. Shared by the social branch and by the mention branch —
-    /// a mention lives either in a conversation OR in a post/comment, and the
-    /// latter used to dead-end because the mention branch only knew about
-    /// conversations.
-    private func openSocialContent(_ ctx: NotificationNavContext, postId: String) {
-        DetailOpenSources.shared.markOpenedFromNotification(postId)
-        switch socialSurface(ctx, postId: postId) {
-        case .reel:
-            // The user tapped a notification about a réel — it must land on the
-            // réel in the immersive viewer, never on the story target screen
-            // (which would resolve an unrelated story) nor on the flat detail.
-            openReelFromNotification(
-                postId: postId,
-                commentId: ctx.commentId,
-                parentCommentId: ctx.parentCommentId
-            )
-
-        case .story:
-            // Phase G — ephemeral entities route to the notification target
-            // screen, which redirects into the viewer (comments overlay /
-            // reactions sheet) or surfaces the expired empty state when the
-            // content is gone.
-            router.push(.storyNotificationTarget(
-                storyId: postId,
-                intent: ctx.storyIntent,
-                context: ctx.storyContext,
-                commentId: ctx.commentId,
-                parentCommentId: ctx.parentCommentId
-            ))
-
-        case .post:
-            router.push(.postDetail(
-                postId,
-                nil,
-                showComments: ctx.opensComments,
-                commentId: ctx.commentId,
-                parentCommentId: ctx.parentCommentId
-            ))
-        }
+    private var notificationNavigator: RootNotificationNavigator {
+        RootNotificationNavigator(router: router, conversationOpener: conversationOpener)
     }
 
-    private func navigateFromNotification(_ ctx: NotificationNavContext) {
-        switch ctx.type {
-        case .newMessage, .legacyNewMessage, .messageReply, .reply, .legacyStoryReply,
-             .messageReaction, .reaction, .legacyMessageReaction,
-             .userMentioned, .mention, .legacyMention,
-             .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
-             .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
-            guard let conversationId = ctx.conversationId, !conversationId.isEmpty else {
-                // A mention lives EITHER in a conversation OR in a post/comment
-                // (`createPostMentionNotificationsBatch` /
-                // `createCommentMentionNotificationsBatch` ship a `postId` and
-                // no `conversationId`). Without this fallback the tap was a
-                // dead end for every mention made outside a chat.
-                if let postId = ctx.postId, !postId.isEmpty {
-                    openSocialContent(ctx, postId: postId)
-                }
-                return
-            }
-            navigateToConversationById(conversationId, highlightMessageId: ctx.messageId)
-
-        case .friendRequest, .contactRequest, .legacyFriendRequest,
-             .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
-            if let senderId = ctx.senderId {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: senderId,
-                    username: ctx.senderUsername ?? senderId
-                )
-            }
-
-        case .communityInvite, .communityJoined, .communityLeft,
-             .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
-             .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
-             .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup, .removedFromConversation:
-            if let conversationId = ctx.conversationId, !conversationId.isEmpty {
-                navigateToConversationById(conversationId)
-            }
-
-        case .missedCall, .callDeclined, .legacyCallMissed,
-             .incomingCall, .callEnded, .legacyCallIncoming:
-            if let conversationId = ctx.conversationId, !conversationId.isEmpty {
-                navigateToConversationById(conversationId)
-            }
-
-        // Guideline 5 (MIIT) — China-region incoming-call push. This is the
-        // ONLY affordance a backgrounded/killed-app China user has to engage
-        // an incoming call (no CallKit, no PushKit VoIP registration — see
-        // VoIPPushManager.shouldRegisterVoIPPush). A plain conversation
-        // deep-link would neither negotiate WebRTC nor show an answer UI, so
-        // this drives the same call-answer flow the socket-delivered
-        // foreground path already uses.
-        case .incomingCallAlert:
-            guard let callId = ctx.callId, !callId.isEmpty else {
-                // Malformed/legacy payload without a callId — fall back to
-                // the conversation so the tap is never a dead end.
-                if let conversationId = ctx.conversationId, !conversationId.isEmpty {
-                    navigateToConversationById(conversationId)
-                }
-                return
-            }
-            CallManager.shared.handleIncomingCallNotification(
-                callId: callId,
-                fromUserId: ctx.callerUserId ?? "",
-                fromUsername: ctx.callerName ?? ctx.senderUsername ?? "",
-                isVideo: ctx.isVideoCall,
-                iceServers: VoIPPushManager.parseIceServers(ctx.iceServersJSON),
-                conversationId: ctx.conversationId
-            )
-
-        // ===== SOCIAL CONTENT =====
-        // One decision point for every social notification: the surface comes
-        // from `socialSurface` (metadata discriminant first), the story intent
-        // from the notification type. Never from the type alone.
-        case .postLike, .legacyPostLike, .postRepost, .friendNewPost,
-             .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
-             .storyReaction, .statusReaction,
-             .storyNewComment, .friendStoryComment, .storyThreadReply,
-             .friendNewStory, .friendNewMood:
-            guard let postId = ctx.postId, !postId.isEmpty else {
-                // No entity to open — some legacy social pushes only carry the
-                // conversation. Never a dead end.
-                if let conversationId = ctx.conversationId, !conversationId.isEmpty {
-                    navigateToConversationById(conversationId)
-                }
-                return
-            }
-
-            switch socialSurface(ctx, postId: postId) {
-            case .reel:
-                // The user tapped a notification about a réel — it must land on
-                // the réel in the immersive viewer, never on the story target
-                // screen (which would resolve an unrelated story) nor on the
-                // flat post detail.
-                openReelFromNotification(
-                    postId: postId,
-                    commentId: ctx.commentId,
-                    parentCommentId: ctx.parentCommentId
-                )
-
-            case .story:
-                // Phase G — ephemeral entities route to the notification target
-                // screen, which redirects into the viewer (comments overlay /
-                // reactions sheet) or surfaces the expired empty state when the
-                // content is gone.
-                router.push(.storyNotificationTarget(
-                    storyId: postId,
-                    intent: ctx.storyIntent,
-                    context: ctx.storyContext,
-                    commentId: ctx.commentId,
-                    parentCommentId: ctx.parentCommentId
-                ))
-
-            case .post:
-                router.push(.postDetail(
-                    postId,
-                    nil,
-                    showComments: ctx.opensComments,
-                    commentId: ctx.commentId,
-                    parentCommentId: ctx.parentCommentId
-                ))
-            }
-
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
-            // Un palier annoncé ouvre le tableau de bord qui le RESTITUE
-            // (#5698) — pas les statistiques, qui ne connaissent pas ces paliers.
-            //
-            // Et il se CÉLÈBRE d'abord (#5809) : `EngagementRevealHost` couvre
-            // le tableau de bord dès que ce palier est posé. `nil` quand la
-            // charge ne dit pas lequel — on n'en invente pas, et le tap se
-            // comporte alors exactement comme avant.
-            router.pendingEngagementReveal = ctx.reveal
-            // … puis ouvre la FICHE de son concept, au-dessus de la première page (#9564, carte de navigation).
-            router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
-
-        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
-            // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme (#9564) : le
-            // Classement pour un duo ou un résultat de ligue, la Saison pour une étape, la fiche des Missions à ses
-            // gestes — posé sur son chemin complet, le retour remonte la chaîne. Le type décide, jamais la métadonnée.
-            router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
-
-        case .legacyAffiliateSignup:
-            router.push(.affiliate)
-
-        case .securityAlert, .loginNewDevice, .legacySystemAlert,
-             .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
-             .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
-            // Pas d'entité cible : ouvrir la liste des notifications plutôt
-            // qu'un tap muet — l'utilisateur retrouve au moins la notification
-            // (et son détail) qu'il vient de toucher.
-            router.push(.notifications)
-        }
-    }
-
-    /// Opens the full-screen reel viewer for a reel-flavoured social
-    /// notification. The reels feed (`getReels(seedReelId:)`) deliberately
-    /// EXCLUDES the seed reel, so the target reel must be injected as the pager's
-    /// seed — otherwise the pager opens on the first affinity reel (the original
-    /// "wrong post" bug). Cache first, ONE request, and the reader's own failure
-    /// state when it fails: the decision is `ReelNotificationOpener` (#6508).
-    private func openReelFromNotification(postId: String, commentId: String? = nil, parentCommentId: String? = nil) {
-        Task { @MainActor in
-            await revealReelFromNotification(postId: postId, commentId: commentId, parentCommentId: parentCommentId)
-        }
-    }
-
-    private func revealReelFromNotification(postId: String, commentId: String?, parentCommentId: String?) async {
-        // La même porte que le lien `/reel/<id>` et que l'iPad (#7805, #7806).
-        // Trouvé mais NON réel (le pager filtre sur `isReel`) : la surface
-        // post universelle le rend, semée du post déjà chargé, en CONSERVANT
-        // la cible commentaire.
-        await ReelDoor.live.open(postId: postId, commentId: commentId, parentCommentId: parentCommentId) { post in
-            router.push(.postDetail(postId, post, showComments: commentId != nil,
-                                    commentId: commentId, parentCommentId: parentCommentId))
-        }
-    }
-
-    /// #6998 — `ensureUnread` a DISPARU, et ce n'est pas un allègement : ce
-    /// paramètre forçait `unreadCount = 1` hors de tout store, sur une copie
-    /// locale de la ligne, à la seule ouverture par notification. La
-    /// conversation s'ouvrait donc sur un non-lu FICTIF — séparateur
-    /// « nouveaux messages » sur un message déjà lu, pastille inventée dans
-    /// l'agrégat — et le deep link `/c/:id` du même écran ne le faisait pas,
-    /// si bien que deux chemins vers la MÊME conversation ne montraient pas la
-    /// même chose. Le compteur appartient au registre de lecture
-    /// (`ConversationReadLedger`) ; aucune vue ne le fabrique.
     private func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil) {
-        // 1. Fast path: in-memory list (post-load happy path)
-        if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
-            router.navigateToConversation(existing, highlightMessageId: highlightMessageId)
-            return
-        }
-
-        Task {
-            // 2. Cache-first: GRDB conversations list (cold-start deep link path).
-            // Avoids forcing a network round-trip when previous-session data is
-            // already on disk; the network fetch then runs silently in the
-            // background to refresh the cache.
-            let cachedList = await CacheCoordinator.shared.conversations.load(for: "list")
-            let cachedConversations: [MeeshyConversation]? = {
-                switch cachedList {
-                case .fresh(let list, _), .stale(let list, _): return list
-                case .expired, .empty: return nil
-                }
-            }()
-            if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
-                router.navigateToConversation(cached, highlightMessageId: highlightMessageId)
-                // Background refresh — keeps the displayed conversation in sync
-                // without blocking navigation. Failures are silent: the user
-                // already sees the cached version.
-                Task.detached(priority: .utility) {
-                    let currentUserId = await AuthManager.shared.currentUser?.id ?? ""
-                    if let apiConv = try? await ConversationService.shared.getById(conversationId) {
-                        let refreshed = apiConv.toConversation(currentUserId: currentUserId)
-                        var merged = cachedConversations ?? []
-                        if let i = merged.firstIndex(where: { $0.id == refreshed.id }) {
-                            merged[i] = refreshed
-                        } else {
-                            merged.insert(refreshed, at: 0)
-                        }
-                        try? await CacheCoordinator.shared.conversations.save(merged, for: "list")
-                        await SearchIndex.shared.indexConversations([refreshed])
-                    }
-                }
-                return
-            }
-
-            // 3. Network fallback: cache miss + offline-aware error UX.
-            //    A push notification for a freshly-created conversation can
-            //    race the gateway's commit transaction (rare but observed
-            //    in production) — the client sees the notification before
-            //    the conversation row is fully visible to the same user
-            //    via `findFirst`. Retry once after a short delay before
-            //    surfacing an error to the user. This eats one extra
-            //    round-trip in the worst case but turns "Impossible
-            //    d'ouvrir" into a working open in the common case.
-            let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-            var lastError: Error?
-            for attempt in 0..<2 {
-                do {
-                    let apiConv = try await ConversationService.shared.getById(conversationId)
-                    let conv = apiConv.toConversation(currentUserId: currentUserId)
-                    router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
-                    return
-                } catch {
-                    lastError = error
-                    Logger.messages.error("[RootView] navigateToConversationById attempt=\(attempt) id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-                    if attempt == 0 {
-                        try? await Task.sleep(nanoseconds: 600_000_000)
-                    }
-                }
-            }
-            let underlying = (lastError as? LocalizedError)?.errorDescription ?? lastError?.localizedDescription
-            let detail = underlying.map { " (\($0))" } ?? ""
-            FeedbackToastManager.shared.showError(
-                String(localized: "link.error.open-conversation", defaultValue: "Impossible d'ouvrir la conversation") + detail
-            )
-        }
+        conversationOpener.navigateToConversationById(conversationId, highlightMessageId: highlightMessageId)
     }
 
     // MARK: - Pending Settings Banner
@@ -1120,15 +823,7 @@ struct RootView: View {
     /// `SettingsActionQueue` (typed offline, replayed on reconnect). Self-
     /// hides when the queue drains. Shown only when the device is online so
     /// it does not stack with `OfflineBanner`.
-    private var pendingSettingsBannerOverlay: some View {
-        VStack(spacing: MeeshySpacing.xs + 2) {
-            PendingSettingsBannerInline()
-            PendingStoryBannerInline()
-            Spacer()
-        }
-        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.lg)
-        .zIndex(189)
-    }
+    private var pendingSettingsBannerOverlay: some View { RootPendingBanners() }
 
     // MARK: - Themed Background
 
@@ -1200,382 +895,16 @@ struct RootView: View {
     @ViewBuilder
     private var floatingChrome: some View {
         if !router.isDeepRoute && reelsPresenter.launch == nil && !onboardingPresence.isPresented {
-            ZStack {
-                draggableFloatingButtons
-
-                if showMenu {
-                    Color.clear
-                        .ignoresSafeArea()
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
-                        }
-                        .zIndex(99)
-                }
-
-                menuLadder
-            }
-        }
-    }
-
-    // MARK: - Draggable Floating Buttons (Free Position)
-    private var draggableFloatingButtons: some View {
-        FreeFloatingButtonsContainer(
-            leftPosition: $feedButtonPosition,
-            rightPosition: $menuButtonPosition,
-            leftA11yLabel: String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main),
-            rightA11yLabel: String(localized: "a11y.floating.menu", defaultValue: "Menu", bundle: .main),
-            onLeftTap: {
-                HapticFeedback.light()
-                // Le tap ouvre l'overlay Feed (sa vocation : l'icône est le Feed).
-                // L'ouverture des Reels n'est PLUS déclenchée ici — elle se fait
-                // désormais via le bouton Réels du header « Meeshy Feed ».
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showFeed.toggle()
-                }
-            },
-            onRightTap: {
-                HapticFeedback.light()
-                // Le bouton porte l'avatar de l'utilisateur. 1er tap = déplie le
-                // menu ; 2e tap (menu déjà ouvert) = ouvre la page profil dans les
-                // réglages et referme le menu, comme n'importe quel autre item.
-                if showMenu {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showMenu = false
-                    }
-                    router.push(.profile)
-                } else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showMenu.toggle()
-                    }
-                }
-            },
-            onLeftLongPress: {
-                HapticFeedback.medium()
-                // Long-press : les Réels, en plein écran, sans graine — le lecteur
-                // va chercher sa page. Le tap garde le Flux ; les deux gestes du
-                // même bouton mènent donc aux deux formes du même contenu.
-                //
-                // `presentFresh()` a été écrite POUR ce geste (sa documentation dit
-                // « long-press launch »), et l'ancrage du liquid reveal se calcule
-                // depuis la position de CE bouton — cf. `FeedButtonAnchor` et ses
-                // tests. Le rebranchement rend au geste l'infrastructure qui
-                // l'attendait.
-                //
-                // Le bouton Réels du header « Meeshy Feed » RESTE en place : un
-                // appui long n'est pas découvrable et ne peut pas être le seul
-                // accès à une section entière.
-                ReelsPresenter.shared.presentFresh()
-            },
-            onRightLongPress: {
-                // Long-press sur l'avatar = raccourci direct vers la page profil
-                // (sans passer par le menu). Les réglages restent accessibles via
-                // le dernier item du menu (roue dentée).
-                HapticFeedback.medium()
-                if showMenu {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showMenu = false
-                    }
-                }
-                router.push(.profile)
-            },
-            // L'appui long lance les Réels : un geste que rien ne signale à l'écran
-            // doit au moins être annoncé à VoiceOver, sinon il n'existe pas pour qui
-            // ne peut pas le découvrir par tâtonnement.
-            leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
-            rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
-            rightA11yValue: notifications.unreadCount > 0
-                ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notifications.unreadCount)
-                : nil,
-            rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
-            leftContent: {
-                // Feed button content
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [MeeshyColors.error, MeeshyColors.indigo300],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    if showFeed {
-                        // Animated logo when feed is open (with breathing effect)
-                        AnimatedLogoView(color: .white, lineWidth: 3, continuous: true)
-                            .frame(width: MeeshySpacing.xxl + MeeshySpacing.xs, height: MeeshySpacing.xxl + MeeshySpacing.xs)
-                    } else {
-                        Image(systemName: "square.stack.fill")
-                            .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-            },
-            rightContent: {
-                // Menu button content — porte l'avatar de l'utilisateur (ou ses
-                // initiales) à l'intérieur de l'anneau dégradé. L'anneau vire au
-                // rouge quand le menu est ouvert ; le badge de notifications reste.
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: showMenu ? [MeeshyColors.error, MeeshyColors.indigo300] : [MeeshyColors.indigo600, MeeshyColors.indigo300],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-
-                    MeeshyAvatar(
-                        name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-                        context: .custom(38),
-                        avatarURL: AuthManager.shared.currentUser?.avatar,
-                        thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
-                    )
-                    .allowsHitTesting(false)
-
-                    // Badge
-                    if !showMenu && notifications.unreadCount > 0 {
-                        NotificationBadge(count: notifications.unreadCount)
-                            .accessibilityLabel(UnreadCountLabel.notifications(notifications.unreadCount))
-                    }
-                }
-            }
-        )
-        .onPreferenceChange(FloatingButtonGeometryKey.self) { measured in
-            if let measured, measured.isMeasured { floatingGeometry = measured }
-        }
-        .zIndex(100)
-    }
-
-    // MARK: - Menu Ladder (positioned relative to menu button)
-    private var menuLadder: some View {
-        GeometryReader { proxy in
-            let frame = proxy.frame(in: .global)
-            let geometry = floatingGeometry
-                ?? FloatingButtonGeometry.measured(container: frame, safeRegion: frame, reported: proxy.safeAreaInsets)
-            let globalCenter = geometry.layout(feedStorage: feedButtonPosition, menuStorage: menuButtonPosition).menu
-            let menuCenter = CGPoint(x: globalCenter.x - frame.minX, y: globalCenter.y - frame.minY)
-            let halfButton = FloatingButtonGeometry.buttonSize / 2
-            let menuItemSize: CGFloat = 46
-            let menuSpacing: CGFloat = MeeshySpacing.md
-            let ladderExtent = CGFloat(RootMenuLadderEntry.allCases.count) * (menuItemSize + menuSpacing)
-            let expandDown = geometry.menuOpensDownward(from: globalCenter, ladderExtent: ladderExtent)
-            let menuX = menuCenter.x
-            let menuStartY = expandDown
-                ? menuCenter.y + halfButton + menuSpacing + menuItemSize / 2
-                : menuCenter.y - halfButton - menuSpacing - menuItemSize / 2
-
-            // Contenu de l'échelle : `RootMenuLadderEntry` (descripteurs purs).
-            ForEach(Array(RootMenuLadderEntry.allCases.enumerated()), id: \.offset) { index, entry in
-                let yOffset = expandDown
-                    ? CGFloat(index) * (menuItemSize + menuSpacing)
-                    : -CGFloat(index) * (menuItemSize + menuSpacing)
-
-                let itemY = menuStartY + yOffset
-
-                ThemedActionButton(
-                    icon: entry.icon,
-                    color: entry.colorHex,
-                    label: entry.label,
-                    hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
-                    badge: menuBadgeCount(entry.badge),
-                    // L'échelle est montée EN PERMANENCE (opacité 0, zIndex −1
-                    // menu fermé) pour que le ressort d'ouverture parte d'un
-                    // état existant : le glow/pulse ne doit vivre que menu
-                    // OUVERT — six ombres re-rasterisées par frame en continu
-                    // derrière la liste, sinon (audit chauffe 2026-08-26).
-                    isGlowEnabled: showMenu,
-                    action: { openMenuEntry(entry) }
-                )
-                .position(x: menuX, y: itemY)
-                .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
-            }
-        }
-        .ignoresSafeArea()
-        .zIndex(showMenu ? 151 : -1)
-        .allowsHitTesting(showMenu)
-    }
-
-    private func menuBadgeCount(_ badge: RootMenuBadge?) -> Int {
-        switch badge {
-        case .unreadNotifications: return notifications.unreadCount
-        case .pendingFriendRequests: return FriendshipCache.shared.pendingReceivedCount
-        case nil: return 0
-        }
-    }
-
-    private func openMenuEntry(_ entry: RootMenuLadderEntry) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }
-        router.push(entry.route)
-    }
-}
-
-// MARK: - Menu Animation Modifier
-extension View {
-    func menuAnimation(showMenu: Bool, delay: Double) -> some View {
-        self
-            .scaleEffect(showMenu ? 1 : 0.3)
-            .opacity(showMenu ? 1 : 0)
-            .rotationEffect(.degrees(showMenu ? 0 : -30))
-            .animation(
-                .spring(response: showMenu ? 0.4 : 0.25, dampingFraction: 0.65)
-                    .delay(showMenu ? delay : 0),
-                value: showMenu
+            RootFloatingChrome(
+                showFeed: $showFeed,
+                showMenu: $showMenu,
+                feedButtonPosition: $feedButtonPosition,
+                menuButtonPosition: $menuButtonPosition,
+                floatingGeometry: $floatingGeometry,
+                unreadCount: notifications.unreadCount,
+                onPush: { router.push($0) }
             )
-    }
-}
-
-// MARK: - Pending Settings Banner (inline)
-
-/// Inlined alongside `RootView` so the file remains self-contained without
-/// requiring a project.pbxproj entry for a separate component file.
-private struct PendingSettingsBannerInline: View {
-    @State private var pendingCount: Int = 0
-    @State private var subscription: AnyCancellable?
-
-    var body: some View {
-        Group {
-            if pendingCount > 0 {
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo950)
-
-                    Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo950)
-                        .lineLimit(1)
-                        .layoutPriority(1)
-
-                    Spacer(minLength: MeeshySpacing.sm)
-
-                    // cf. PendingStoryBannerInline : la version FR est plus longue —
-                    // shrink-avant-troncature pour rester lisible.
-                    Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
-                        .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .truncationMode(.tail)
-                }
-                .padding(.horizontal, MeeshySpacing.md + 2)
-                .padding(.vertical, MeeshySpacing.sm)
-                // Ambre `warning` cohérent avec PendingStoryBannerInline (état
-                // en attente / hors-ligne) ; texte foncé pour le contraste.
-                .background(
-                    LinearGradient(
-                        colors: [
-                            MeeshyColors.warning,
-                            MeeshyColors.amber500
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.warning.opacity(MeeshyOpacity.medium), radius: MeeshyShadow.medium.radius, y: 2)
-                .padding(.horizontal, MeeshySpacing.lg)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
         }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: pendingCount)
-        .task {
-            pendingCount = await SettingsActionQueue.shared.count
-            subscription = SettingsActionQueue.shared.pendingCountChanged.publisher
-                .receive(on: DispatchQueue.main)
-                .sink { count in
-                    pendingCount = count
-                }
-        }
-        .onDisappear {
-            subscription?.cancel()
-            subscription = nil
-        }
-    }
-}
-
-// MARK: - Pending Story Banner (inline)
-
-/// Surfaces the count of stories waiting in `StoryPublishQueue` (typically
-/// composed offline). Mirrors `PendingSettingsBannerInline`. Self-hides
-/// when the queue drains, OR when the user swipes it away (up/left/right —
-/// user request 2026-07-19: it had no gesture at all before). A manual
-/// dismiss only holds for the CURRENT `pendingCount` — it reappears the
-/// moment the count changes (a new story queued, or one resolves), so a
-/// swipe never permanently hides a genuinely new situation.
-private struct PendingStoryBannerInline: View {
-    @StateObject private var publishService = StoryPublishService.shared
-    @State private var dismissedAtCount: Int?
-
-    private var isVisible: Bool {
-        publishService.pendingCount > 0 && dismissedAtCount != publishService.pendingCount
-    }
-
-    var body: some View {
-        Group {
-            if isVisible {
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "photo.stack")
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo950)
-
-                    Text("\(String(localized: "root.pending_stories", defaultValue: "Stories en attente", bundle: .main)) (\(publishService.pendingCount))")
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo950)
-                        .lineLimit(1)
-                        .layoutPriority(1)
-
-                    Spacer(minLength: MeeshySpacing.sm)
-
-                    // Texte secondaire : la version FR ("Publication au retour en
-                    // ligne") est plus longue que l'anglaise — `minimumScaleFactor`
-                    // la réduit avant de tronquer, pour qu'elle reste lisible en
-                    // portrait étroit / Dynamic Type agrandi.
-                    Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
-                        .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                        .truncationMode(.tail)
-                }
-                .padding(.horizontal, MeeshySpacing.md + 2)
-                .padding(.vertical, MeeshySpacing.sm)
-                // Ambre `warning` (design system : "Attention / pending") au lieu
-                // de l'indigo de marque, pour signaler un état hors-ligne/en
-                // attente ; texte foncé (indigo950) pour un contraste lisible sur
-                // l'ambre clair.
-                .background(
-                    LinearGradient(
-                        colors: [
-                            MeeshyColors.warning,
-                            MeeshyColors.amber500
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.warning.opacity(MeeshyOpacity.medium), radius: MeeshyShadow.medium.radius, y: 2)
-                .padding(.horizontal, MeeshySpacing.lg)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .gesture(
-                    DragGesture(minimumDistance: 15)
-                        .onEnded { value in
-                            guard PendingBannerDismissResolver.shouldDismiss(translation: value.translation) else { return }
-                            dismiss()
-                        }
-                )
-                .accessibilityAction(named: Text(String(localized: "common.dismiss", defaultValue: "Masquer", bundle: .main))) {
-                    dismiss()
-                }
-            }
-        }
-        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: publishService.pendingCount)
-    }
-
-    private func dismiss() {
-        dismissedAtCount = publishService.pendingCount
-        HapticFeedback.light()
     }
 }
 

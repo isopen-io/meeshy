@@ -39,8 +39,6 @@ struct LoginView: View {
     @State private var showForgotPassword = false
     @State private var showMagicLink = false
     @State private var twoFactorCode = ""
-    /// #10006 — l'entrée World Wide servie par `GET /world`, ou rien.
-    @StateObject private var worldEntryCard = WorldEntryCardModel()
     /// Adresse inconnue à la connexion (#8035) : l'écran du code, avec le mot
     /// de passe tapé tenu en mémoire jusqu'à sa fermeture — jamais persisté.
     @State private var codeEntry: CodeEntryContext?
@@ -78,8 +76,6 @@ struct LoginView: View {
     private enum Field { case username, password, accountPassword, customHost, twoFactorCode }
 
     private var isDark: Bool { theme.mode.isDark }
-    /// La carte World Wide cède la place à la vérification en deux étapes.
-    private var worldEntryOffered: Bool { worldEntryCard.entry != nil && !authManager.requires2FA }
     private var showPicker: Bool { !authManager.savedAccounts.isEmpty && !showNormalLogin }
 
     // On simulator only: prefill test credentials
@@ -151,19 +147,8 @@ struct LoginView: View {
                         )
                     )
                     .shadow(color: MeeshyColors.purple700.opacity(isDark ? 0.5 : 0.25), radius: MeeshyShadow.strong.radius, x: 0, y: MeeshyShadow.medium.y)
-                    .padding(.bottom, worldEntryOffered ? MeeshySpacing.lg : MeeshySpacing.xxxl + MeeshySpacing.lg)
+                    .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.lg)
                     .accessibilityAddTraits(.isHeader)
-
-                // #10006 — World Wide en premier : sans compte, un nom et une
-                // langue suffisent. La carte n'existe que si l'entrée est ouverte.
-                if worldEntryOffered, let entry = worldEntryCard.entry {
-                    WorldEntryLoginCard(entry: entry, isDark: isDark) {
-                        DeepLinkRouter.shared.requestedWorldEntry = entry
-                    }
-                    .padding(.horizontal, MeeshySpacing.xxxl)
-                    .padding(.bottom, MeeshySpacing.lg)
-                    .opacity(showFields ? 1 : 0)
-                }
 
                 if authManager.requires2FA {
                     twoFactorSection
@@ -312,7 +297,6 @@ struct LoginView: View {
             }
         }
         .onTapGesture { focusedField = nil }
-        .task { await worldEntryCard.refresh() }
     }
 
     // MARK: - Adresse venue de l'inscription (#8216)
@@ -915,11 +899,7 @@ struct LoginView: View {
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
         .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                focusedField = .twoFactorCode
-            }
-        }
+        .onAppear(after: .milliseconds(350)) { focusedField = .twoFactorCode }
     }
 
     private func attempt2FALogin() {

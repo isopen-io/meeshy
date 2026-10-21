@@ -5,44 +5,6 @@ import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
-/// **Une cible tactile se pense autour d'un GLYPHE, jamais autour de sa
-/// police** (#4086, mesuré le 2026-09-02).
-///
-/// Relevé sur la rangée d'actions du détail :
-///
-/// ```
-/// 32 × 17   Je n'aime plus
-/// 22 × 19   Commentaires
-/// 25 × 17   Republier
-/// 17 × 20   Ajouter aux favoris
-/// ```
-///
-/// Soit environ le TIERS du minimum d'Apple (44 pt) dans chaque dimension.
-/// `EngagementGlyph` ne pose que `.font(MeeshyFont.relative(size))` — aucun
-/// cadre, aucune forme de contact — donc le bouton fait exactement la taille de
-/// ses caractères. Personne n'a « choisi » 17 pt : c'est la hauteur du glyphe.
-///
-/// > La règle des 44 pt s'applique là où elle est CONVOQUÉE — autour d'une
-/// > icône qu'on encadre. Un label qui se dimensionne tout seul, glyphe ou mot,
-/// > ne la convoque jamais : elle n'est pas violée, elle est absente.
-///
-/// L'agrandissement ne déplace RIEN : le retrait qui étend la zone est annulé
-/// par un retrait négatif de même valeur. Même patron que
-/// `captionAffordanceHitArea` (`MediaCaptionOverlay`), même raison.
-private extension View {
-    func engagementHitArea() -> some View {
-        // 14 et non 13 : le plus PETIT glyphe de la rangée fait 17 pt
-        // (`EngagementGlyph(size: 17)` par défaut), et 17 + 2 × 13 = 43 — un
-        // point sous le minimum. Mesuré à l'écran, pas calculé : deux des cinq
-        // cibles sortaient à 43 après le premier réglage.
-        self.padding(.vertical, MeeshySpacing.mdPlus)
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .contentShape(Rectangle())
-            .padding(.vertical, -14)
-            .padding(.horizontal, -14)
-    }
-}
-
 struct PostDetailView: View {
     let postId: String
     var initialPost: FeedPost?
@@ -83,14 +45,13 @@ struct PostDetailView: View {
         self.targetParentCommentId = targetParentCommentId
         _mentionController = StateObject(wrappedValue: MentionComposerController(context: .post(id: postId)))
     }
-    @EnvironmentObject private var statusViewModel: StatusViewModel
-    @EnvironmentObject private var storyViewModel: StoryViewModel
+    @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var router: Router
-    @State private var showTranslationSheet = false
-    @State private var selectedProfileUser: ProfileSheetUser?
+    @State var showTranslationSheet = false
+    @State var selectedProfileUser: ProfileSheetUser?
     @State private var likeScale: CGFloat = 1.0
-    @State private var secondaryLangCode: String? = nil
-    @State private var activeDisplayLangCode: String? = nil
+    @State var secondaryLangCode: String? = nil
+    @State var activeDisplayLangCode: String? = nil
     @State var fullscreenMediaId: String? = nil
     @State var showFullscreenGallery = false
     /// La scène par laquelle on ENTRE en plein écran depuis la mosaïque du
@@ -118,13 +79,13 @@ struct PostDetailView: View {
     /// (au curseur quand le champ a le focus, sinon à la fin).
     @State var composerIsFocused: Bool = false
     /// Section de commentaire actuellement surlignée (cible d'une notification).
-    @State private var highlightedCommentId: String? = nil
+    @State var highlightedCommentId: String? = nil
     /// Garde-fou : ne défile vers la cible qu'une seule fois (les commentaires
     /// peuvent arriver après le premier rendu via le chargement paginé).
-    @State private var didScrollToTargetComment: Bool = false
+    @State var didScrollToTargetComment: Bool = false
     /// Latch de la chasse paginée (cible hors des pages chargées) — une seule
     /// chasse par présentation.
-    @State private var isHuntingTargetComment: Bool = false
+    @State var isHuntingTargetComment: Bool = false
     /// Texte du composer, lié au `UniversalComposerBar`. Permet de préremplir une
     /// @mention quand on répond à une réponse (niveau 2) — l'auteur ciblé est
     /// notifié via `user_mentioned` même si la réponse est reparentée à la racine.
@@ -153,74 +114,26 @@ struct PostDetailView: View {
     /// Set once `PostService.share(... generateLink: true)` returns — the
     /// `.sheet(item:)` further down presents the system share UI as soon
     /// as this becomes non-nil and clears it on dismiss.
-    @State private var shareableLink: ShareableLink?
+    @State var shareableLink: ShareableLink?
 
-    /// Which post action the user just triggered from the `…` menu. Both
-    /// "Copier le lien" and "Partager" call the same gateway endpoint;
-    /// only the post-success behaviour differs (pasteboard vs share sheet).
-    private enum ShareLinkAction { case copyToPasteboard, presentShareSheet }
-
-    /// Calls `POST /posts/:id/share?generateLink=true`, then dispatches the
-    /// short URL to either the pasteboard or the system share sheet.
-    /// `medium=share` UTM is attached by the gateway so analytics can split
-    /// "share via copy-link" from "share via system sheet" later. If the
-    /// mint fails (offline, rate-limit, gateway error) the call still
-    /// surfaces the raw post URL so the user is never stuck with nothing to
-    /// share — only the attribution analytics are skipped.
-    private func mintShareLink(action: ShareLinkAction) async {
-        guard let post = viewModel.post else { return }
-        let trackingShortUrl: String? = await {
-            do {
-                let result = try await PostService.shared.share(
-                    postId: post.id,
-                    platform: action == .copyToPasteboard ? "copy" : "system",
-                    generateLink: true
-                )
-                return result.shortUrl
-            } catch {
-                return nil
-            }
-        }()
-
-        let fallbackUrlString = "\(ShareableLink.webBaseURL)/feeds/post/\(post.id)"
-        let resolvedString = trackingShortUrl ?? fallbackUrlString
-        guard let resolvedUrl = URL(string: resolvedString) else {
-            FeedbackToastManager.shared.showError(String(localized: "post.link.unavailable", defaultValue: "Lien indisponible", bundle: .main))
-            return
-        }
-
-        await MainActor.run {
-            switch action {
-            case .copyToPasteboard:
-                UIPasteboard.general.string = resolvedString
-                HapticFeedback.success()
-                FeedbackToastManager.shared.show(
-                    String(localized: "feed.post.detail.copy_link.success", defaultValue: "Lien copié", bundle: .main)
-                )
-            case .presentShareSheet:
-                shareableLink = ShareableLink(url: resolvedUrl, fileSource: .post(post))
-                HapticFeedback.light()
-            }
-        }
-    }
 
     // Post reaction state — socket-driven, hoisted to this view (single-post context).
     // PostDetailView joins the post:{postId} room on appear and leaves on disappear,
     // enabling real-time reaction updates from other users.
-    @State private var postLikedIds: Set<String> = []
-    @State private var postLikeDelta: [String: Int] = [:]
-    @State private var postHeartInFlightIds: Set<String> = []
+    @State var postLikedIds: Set<String> = []
+    @State var postLikeDelta: [String: Int] = [:]
+    @State var postHeartInFlightIds: Set<String> = []
 
     // Bookmark / repost optimistic state — same pattern as FeedView.
-    @State private var isPostBookmarked: Bool = false
-    @State private var isBookmarkInFlight: Bool = false
-    @State private var isPostReposted: Bool = false
-    @State private var isRepostInFlight: Bool = false
+    @State var isPostBookmarked: Bool = false
+    @State var isBookmarkInFlight: Bool = false
+    @State var isPostReposted: Bool = false
+    @State var isRepostInFlight: Bool = false
     @State private var showRepostOptions: Bool = false
-    @State private var isEditing: Bool = false
+    @State var isEditing: Bool = false
     /// Flux « Enregistrer en local » du menu « … » — déclenché uniquement
     /// quand le post a un média (sinon Enregistrer bascule le favori in-app).
-    @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator(exitGate: .open)
+    @StateObject var mediaSaveCoordinator = MediaSaveCoordinator(exitGate: .open)
 
     private var detailIsLiked: Bool { postLikedIds.contains(postId) }
     private var detailLikeCount: Int {
@@ -228,76 +141,13 @@ struct PostDetailView: View {
         return max(0, post.likes + (postLikeDelta[postId] ?? 0))
     }
 
-    // MARK: - Post Heart Toggle (socket-driven, post detail)
-
-    @MainActor
-    // `internal` : `sendDetailReaction` vit dans `PostDetailView+Reactions`
-    // et retombe sur le cœur quand l'émoji choisi EST le cœur. Un `private`
-    // de portée fichier le lui interdirait — même piège que `viewModel`,
-    // documenté dans `apps/ios/CLAUDE.md`.
-    func toggleDetailPostHeart() {
-        Task {
-            guard !postHeartInFlightIds.contains(postId) else { return }
-            postHeartInFlightIds.insert(postId)
-            defer {
-                Task { @MainActor in
-                    postHeartInFlightIds.remove(postId)
-                }
-            }
-            let wasLiked = postLikedIds.contains(postId)
-            // Optimistic update
-            if wasLiked {
-                postLikedIds.remove(postId)
-                postLikeDelta[postId, default: 0] -= 1
-            } else {
-                postLikedIds.insert(postId)
-                postLikeDelta[postId, default: 0] += 1
-            }
-            do {
-                if wasLiked {
-                    _ = try await SocialSocketManager.shared.removePostReaction(
-                        postId: postId, emoji: StoryViewerView.heartEmoji
-                    )
-                } else {
-                    _ = try await SocialSocketManager.shared.addPostReaction(
-                        postId: postId, emoji: StoryViewerView.heartEmoji
-                    )
-                }
-            } catch {
-                // REST fallback when socket fails (noSocket / timeout). Only
-                // rollback the optimistic flip when REST also fails — keeps
-                // the heart visible whenever the server actually persisted.
-                let restOK = await postLikeViaREST(like: !wasLiked)
-                if !restOK {
-                    if wasLiked {
-                        postLikedIds.insert(postId)
-                        postLikeDelta[postId, default: 0] += 1
-                    } else {
-                        postLikedIds.remove(postId)
-                        postLikeDelta[postId, default: 0] -= 1
-                    }
-                }
-            }
-        }
-    }
-
-    private struct LikeRESTPayload: Decodable { let liked: Bool? }
     private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
 
-    private func postLikeViaREST(like: Bool) async -> Bool {
-        do {
-            let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
-                PostsEndpoint.byPostIdLike(postId: postId),
-                method: like ? "POST" : "DELETE"
-            )
-            return true
-        } catch { DailyGestureLimitNotice.surface(error); return false }
-    }
 
     // MARK: - Bookmark / Repost / Share (post detail)
 
     @MainActor
-    private func toggleDetailBookmark() {
+    func toggleDetailBookmark() {
         guard !isBookmarkInFlight else { return }
         let wasBookmarked = isPostBookmarked
         isPostBookmarked.toggle()
@@ -326,12 +176,12 @@ struct PostDetailView: View {
 
     /// Déclenche le flux unifié « Enregistrer en local » sur le média principal
     /// du post, aiguillé par `PostSaveRoute` (#9681) — gardé par `canSaveMedia`.
-    private func requestSaveMedia() {
+    func requestSaveMedia() {
         guard let post = displayPost else { return }
         PostSaveAction.perform(post, coordinator: mediaSaveCoordinator)
     }
 
-    private var canSaveMedia: Bool {
+    var canSaveMedia: Bool {
         displayPost.map { PostSaveAction.route(for: $0, coordinator: mediaSaveCoordinator) != .unavailable } ?? false
     }
 
@@ -395,97 +245,11 @@ struct PostDetailView: View {
     /// True when the signed-in user authored this post — gates the private reach
     /// stats (vues + impressions) shown next to the @handle, mirroring the feed
     /// and reel cards where analytics are author-only.
-    private var isPostAuthor: Bool {
+    var isPostAuthor: Bool {
         guard let me = AuthManager.shared.currentUser?.id, let post = displayPost else { return false }
         return me == post.authorId
     }
 
-    // MARK: - Prisme Linguistique
-
-    private var currentDisplayLangCode: String {
-        guard let post = displayPost else { return "fr" }
-        return activeDisplayLangCode ?? PostDisplayLanguage.code(
-            originalLanguage: post.originalLanguage, translations: post.translations,
-            prism: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
-        ) ?? "fr"
-    }
-
-    private var effectiveContent: String {
-        guard let post = displayPost else { return "" }
-        let code = currentDisplayLangCode
-        if code == post.originalLanguage?.lowercased() { return post.content }
-        if let translation = post.translations?[code] ?? post.translations?.first(where: { $0.key.lowercased() == code })?.value {
-            return translation.text
-        }
-        return post.displayContent
-    }
-
-    /// Vidéo embeddable (YouTube) détectée dans le contenu affiché du post.
-    private var embeddedVideo: EmbeddedVideo? {
-        EmbeddableVideoResolver.resolve(in: effectiveContent)
-    }
-
-    /// `[rawURL: token]` outbound-link tracking map du post (nil si aucun lien
-    /// tracké → pas de réécriture dans le renderer).
-    private var postTrackedLinks: [String: String]? {
-        let map = displayPost?.trackedLinkMap ?? [:]
-        return map.isEmpty ? nil : map
-    }
-
-    /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
-    /// première URL du contenu via `trackedLinkMap`. `nil` → watchURL.
-    private var embedTrackedURL: URL? {
-        guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
-              let token = displayPost?.trackedLinkMap[raw] else { return nil }
-        return TrackedLink.redirectURL(token: token)
-    }
-
-    private var textTruncation: (text: String, isTruncated: Bool) {
-        let words = effectiveContent.split(separator: " ", omittingEmptySubsequences: true)
-        if words.count <= 60 { return (effectiveContent, false) }
-        let truncated = words.prefix(60).joined(separator: " ")
-        return (truncated, true)
-    }
-
-    private var secondaryContent: String? {
-        guard let post = displayPost, let code = secondaryLangCode else { return nil }
-        if code == post.originalLanguage?.lowercased() { return post.content }
-        return post.translations?.first(where: { $0.key.lowercased() == code })?.value.text
-    }
-
-    private func buildAvailableFlags() -> [String] {
-        guard let post = displayPost, let origLang = post.originalLanguage?.lowercased() else { return [] }
-        let activeLang = currentDisplayLangCode
-        let user = AuthManager.shared.currentUser
-        var all: [String] = [origLang]
-        var seen: Set<String> = [origLang]
-        for lang in user?.preferredContentLanguages ?? [] {
-            let l = lang.lowercased()
-            if !seen.contains(l), post.translations?.keys.contains(where: { $0.lowercased() == l }) == true {
-                all.append(l); seen.insert(l)
-            }
-        }
-        return all.filter { $0 != activeLang }
-    }
-
-    /// Le retour haptique appartient à `LanguageFlagChip` — seul appelant de
-    /// cette méthode — et non aux deux sorties de sa logique.
-    private func handleFlagTap(_ code: String) {
-        guard let post = displayPost else { return }
-        let isOriginal = code == post.originalLanguage?.lowercased()
-        let hasContent = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == code }) == true
-        if !hasContent { return }
-        if isOriginal {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                activeDisplayLangCode = code; secondaryLangCode = nil
-            }
-        } else {
-            let isShowing = secondaryLangCode == code
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                secondaryLangCode = isShowing ? nil : code
-            }
-        }
-    }
 
     // Scrollable post-detail content (text, media, repost, actions, comments).
     // Extracted from `body` into its own @ViewBuilder unit so the Swift
@@ -577,58 +341,13 @@ struct PostDetailView: View {
 
         // Comments (threaded)
         ForEach(viewModel.topLevelComments) { comment in
-            ThreadedCommentSection(
-                comment: comment,
-                replies: viewModel.repliesFor(comment.id),
-                isExpanded: viewModel.expandedThreads.contains(comment.id),
-                isLoadingReplies: viewModel.loadingReplies.contains(comment.id),
-                accentColor: accentColor, post: displayPost,
-                // Like de commentaire optimiste + réaction socket cœur, porté par le
-                // ViewModel (miroir de `CommentsSheetView`). L'état est semé depuis
-                // `currentUserReactions` au chargement, donc les commentaires déjà
-                // likés s'affichent cœur plein et le tap donne un retour instantané.
-                likedIds: viewModel.commentLikedIds,
-                likeDelta: viewModel.commentLikeDelta,
-                heartInFlightIds: viewModel.commentHeartInFlightIds,
-                onReply: { target in
-                    beginReply(to: target)
-                },
-                onToggleThread: {
-                    Task { await viewModel.toggleThread(comment.id, postId: postId) }
-                },
-                onLikeComment: { commentId in
-                    Task { await viewModel.toggleCommentLike(commentId, postId: postId) }
-                },
-                onDeleteComment: { target in
-                    Task { await viewModel.deleteComment(target) }
-                },
+            PostDetailCommentThread(
+                comment: comment, post: displayPost, postId: postId,
+                accentColor: accentColor, highlightedCommentId: highlightedCommentId,
+                onReply: { target in beginReply(to: target) },
                 onEditComment: { target in beginEditComment(target) },
-                onRequestTranslation: { target in
-                    let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
-                    Task {
-                        try? await PostService.shared.requestCommentTranslation(
-                            postId: postId, commentId: target.id, targetLanguage: lang)
-                    }
-                },
-                moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
-                storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
-                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
-                replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
-                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
-                hasMoreReplies: viewModel.expandedThreads.contains(comment.id)
-                    && (viewModel.repliesHasMore[comment.id] ?? false),
-                onLoadMoreReplies: { await viewModel.loadMoreReplies(comment.id, postId: postId) },
-                highlightedCommentId: highlightedCommentId
+                viewModel: viewModel
             )
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
-                    .padding(.horizontal, MeeshySpacing.sm)
-            )
-            .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
             // Anchor for notification-driven navigation: scroll/highlight targets
             // the top-level section. For a reply, the parent thread is expanded so
             // the reply becomes visible right below this anchor.
@@ -668,77 +387,11 @@ struct PostDetailView: View {
         }
     }
 
-    /// Notification → comment navigation. Scrolls to (and briefly highlights) the
-    /// targeted comment once it's loaded. For a reply, scrolls to the parent
-    /// section and expands its thread so the reply is revealed. Falls back to the
-    /// legacy "reveal comments + focus composer" behaviour when there's no target.
-    /// Runs once (guarded by `didScrollToTargetComment`); re-invoked as comments
-    /// page in until the target is present.
-    private func attemptScrollToTargetComment(using proxy: ScrollViewProxy) {
-        guard let target = targetCommentId, !target.isEmpty else {
-            if showComments && !didScrollToTargetComment {
-                didScrollToTargetComment = true
-                withAnimation { proxy.scrollTo("commentsSection", anchor: .top) }
-                composerFocusTrigger.toggle()
-            }
-            return
-        }
-        guard !didScrollToTargetComment else { return }
-
-        // Only top-level sections carry a scroll anchor. For a reply, that's the
-        // parent comment; otherwise the comment itself.
-        let sectionId = targetParentCommentId.flatMap { $0.isEmpty ? nil : $0 } ?? target
-        guard viewModel.topLevelComments.contains(where: { $0.id == sectionId }) else {
-            // Cible au-delà des pages chargées (20/page) : chasse paginée
-            // bornée. Chaque page qui arrive re-déclenche ce scroll via
-            // l'onChange sur topLevelComments.count ; si la chasse échoue
-            // (cap ou fin de liste), on désarme le ciblage.
-            if !isHuntingTargetComment {
-                isHuntingTargetComment = true
-                Task {
-                    let found = await viewModel.loadCommentsUntilPresent(sectionId, postId: postId)
-                    if !found { didScrollToTargetComment = true }
-                }
-            }
-            return
-        }
-        didScrollToTargetComment = true
-
-        if let parentId = targetParentCommentId, !parentId.isEmpty, target != sectionId {
-            // Cible = une RÉPONSE. Déplier le parent (awaité — ancrer avant
-            // l'expansion décale la section), CHASSER la page de réponses qui
-            // contient la cible (le fil est paginé à 20), puis scroller sur la
-            // rangée de la réponse elle-même. Repli : section + highlight du
-            // parent si la chasse échoue (cap / fin de fil / réseau).
-            Task {
-                if !viewModel.expandedThreads.contains(parentId) {
-                    await viewModel.toggleThread(parentId, postId: postId)
-                }
-                let found = await viewModel.loadRepliesUntilPresent(target, in: parentId, postId: postId)
-                if found {
-                    withAnimation { proxy.scrollTo("comment-\(target)", anchor: .center) }
-                    applyTargetHighlight(target)
-                } else {
-                    withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
-                    applyTargetHighlight(sectionId)
-                }
-            }
-        } else {
-            withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
-            applyTargetHighlight(sectionId)
-        }
-    }
-
-    /// Surligne `id` puis désarme après 2,6 s (si toujours actif).
-    private func applyTargetHighlight(_ id: String) {
-        highlightedCommentId = id
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
-            if highlightedCommentId == id { highlightedCommentId = nil }
-        }
-    }
-
-
     var body: some View {
+        detailPresentations(heartLiveSync(detailScreen))
+    }
+
+    private var detailScreen: some View {
         VStack(spacing: 0) {
             if let post = displayPost {
                 ZStack(alignment: .top) {
@@ -845,294 +498,15 @@ struct PostDetailView: View {
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .navigationBarHidden(true)
-        .task {
-            // Wire persistence layer on first appearance
-            if viewModel.feedPersistence == nil {
-                viewModel.setupPersistence(persistence: DependencyContainer.shared.feedPersistence)
-            }
-
-            if viewModel.post == nil {
-                await viewModel.loadPost(postId)
-            }
-            // Seed liked state from initial/cached post (post.isLiked is derived from
-            // APIPost.currentUserReactions / isLikedByMe by the SDK).
-            if let post = displayPost, post.isLiked {
-                postLikedIds.insert(postId)
-            }
-            // Seed bookmark + repost state. Primary source: the server-
-            // enriched fields on the loaded post (PostFeedService provides
-            // isBookmarkedByMe + isRepostedByMe on the feed and detail
-            // payloads). Defensive fallback: the local "bookmarks" cache.
-            if !isBookmarkInFlight {
-                if let p = displayPost, p.isBookmarkedByMe {
-                    isPostBookmarked = true
-                } else {
-                    let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
-                    let bookmarks: [FeedPost]
-                    switch cached {
-                    case .fresh(let v, _), .stale(let v, _): bookmarks = v
-                    case .expired, .empty: bookmarks = []
-                    }
-                    if bookmarks.contains(where: { $0.id == postId }) {
-                        isPostBookmarked = true
-                    }
-                }
-            }
-            if !isRepostInFlight, let p = displayPost, p.isRepostedByMe {
-                isPostReposted = true
-            }
-            await viewModel.loadComments(postId)
-            viewModel.subscribeToSocket(postId)
-            // Join the post room for real-time reaction events (single focused post).
-            SocialSocketManager.shared.joinPostRoom(postId: postId)
-            // Anti-spam banner: declare this post as "currently visible" so
-            // NotificationToastManager can drop in-app banners about it (the user
-            // already sees the content live). `onPostOpened` fait DAVANTAGE que
-            // l'ancienne affectation nue de `activePostId` : il marque aussi les
-            // notifications de ce post comme lues (cache local + serveur), le
-            // contenu étant consommé.
-            NotificationToastManager.shared.onPostOpened(postId)
-            // Une ouverture du détail = une impression ET une vue (#10483),
-            // une seule fois par instance : le `.task` se relance au retour
-            // d'un écran poussé sans que ce soit une nouvelle ouverture.
-            await viewModel.registerDetailOpen(postId)
-            // Reprend le brouillon de commentaire laissé sur ce post (cache-first).
-            if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: postId) {
-                composerText = draft
-            }
-        }
-        .onDisappear {
-            SocialSocketManager.shared.leavePostRoom(postId: postId)
-            NotificationToastManager.shared.onPostClosed(postId)
-        }
+        .task { await openDetail() }
+        .onDisappear { closeDetail() }
         .trackEngagement(postId: postId, contentType: .post, surface: .detail)
-        .adaptiveOnChange(of: viewModel.post) { _, updatedPost in
-            // Re-seed when post loads from network (stale → fresh). Preserve
-            // optimistic state: only update if no in-flight toggle is active.
-            guard let updatedPost, !postHeartInFlightIds.contains(postId) else { return }
-            if updatedPost.isLiked {
-                postLikedIds.insert(postId)
-            } else {
-                postLikedIds.remove(postId)
-            }
-        }
-        .onReceive(SocialSocketManager.shared.postReactionAdded.receive(on: DispatchQueue.main)) { event in
-            let heart = StoryViewerView.heartEmoji
-            guard event.emoji == heart, event.postId == postId else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                postLikedIds.insert(postId)
-            } else {
-                postLikeDelta[postId, default: 0] += 1
-            }
-        }
-        .onReceive(SocialSocketManager.shared.postReactionRemoved.receive(on: DispatchQueue.main)) { event in
-            let heart = StoryViewerView.heartEmoji
-            guard event.emoji == heart, event.postId == postId else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                postLikedIds.remove(postId)
-            } else {
-                postLikeDelta[postId, default: 0] -= 1
-            }
-        }
-        // Unification du like : le ❤️ arrive désormais comme `post:liked`/`post:unliked`
-        // (compteur ABSOLU). On pose la base autoritative sur le post chargé, on purge le
-        // delta optimiste et on confirme `isLiked` pour l'acteur — aligné avec le feed et
-        // le reel viewer. Le détail rejoint déjà `ROOMS.post`, donc reçoit l'événement.
-        .onReceive(SocialSocketManager.shared.postLiked.receive(on: DispatchQueue.main)) { event in
-            guard event.postId == postId else { return }
-            viewModel.post?.likes = event.likeCount
-            postLikeDelta[postId] = nil
-            if event.userId == AuthManager.shared.currentUser?.id {
-                postLikedIds.insert(postId)
-            }
-        }
-        .onReceive(SocialSocketManager.shared.postUnliked.receive(on: DispatchQueue.main)) { event in
-            guard event.postId == postId else { return }
-            viewModel.post?.likes = event.likeCount
-            postLikeDelta[postId] = nil
-            if event.userId == AuthManager.shared.currentUser?.id {
-                postLikedIds.remove(postId)
-            }
-        }
-        .sheet(isPresented: $showTranslationSheet) {
-            if let post = displayPost {
-                PostTranslationSheet(
-                    post: post,
-                    onSelectLanguage: { language in
-                        let langLower = language.lowercased()
-                        let isOriginal = langLower == post.originalLanguage?.lowercased()
-                        let hasTranslation = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == langLower }) == true
-                        if hasTranslation {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                activeDisplayLangCode = langLower
-                                secondaryLangCode = nil
-                            }
-                        }
-                    }
-                )
-            }
-        }
-        .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(
-                user: user,
-                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
-                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                postsContent: { uid in
-                    AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
-                        selectedProfileUser = nil
-                        router.push(.postDetail(post.id, post))
-                    }, onOpenReel: { reel, reels in
-                        ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
-                    }))
-                }
-            )
-            .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible)
-        }
-        .sheet(item: $shareableLink) { link in
-            // Same `meeshy.me/l/<token>` URL that "Copier le lien" copies —
-            // the gateway already recorded the share + minted the
-            // TrackingLink owned by the current user.
-            ShareSheet(activityItems: link.activityItems)
-        }
-        .postEditCover(post: displayPost, isPresented: $isEditing) {
-            if let post = displayPost {
-                EditPostSheet(
-                    originalContent: post.content,
-                    originalLanguage: post.originalLanguage,
-                    originalType: post.type,
-                    media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
-                    originalLocation: post.location,
-                    originalVisibility: post.visibility,
-                    originalVisibilityUserIds: post.visibilityUserIds ?? [],
-                    isRepost: post.repost != nil,
-                    onSave: { draft in
-                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
-                    },
-                    onDismiss: { isEditing = false }
-                )
-            }
-        }
-        .fullScreenCover(item: $detailFullscreenPlace) { item in
-            // Même surface plein écran que la bulle et la card feed :
-            // carte + « Ouvrir dans Plans » / « Itinéraire ».
-            LocationFullscreenView(
-                latitude: item.place.latitude,
-                longitude: item.place.longitude,
-                placeName: item.place.name,
-                address: item.place.address,
-                accentColor: accentColor,
-                senderName: displayPost?.author
-            )
-        }
-        // **Le plein écran du détail passe par son SITE UNIQUE** (#4927,
-        // raccordé le 2026-09-06).
-        //
-        // Cette vingtaine de lignes était le dernier des trois exemplaires que
-        // `socialMediaGallery` a été écrit pour remplacer — la carte du fil a
-        // été raccordée la veille, le détail ne l'était pas. Le brancher n'est
-        // pas qu'un nettoyage : c'est ce qui apporte au détail la branche
-        // SCÈNE, qui rejoue le canvas au lieu d'ouvrir son fond, et le
-        // transport de l'index de scène que la mosaïque vient de câbler.
-        //
-        // Aucune légende ne change au passage : `Self.captionServings` était
-        // déjà `SocialMediaCaption.serving(for:carrier:)`, mot pour mot, et le
-        // site unique appelle la même.
-        .socialMediaGallery(
-            post: displayPost,
-            isPresented: $showFullscreenGallery,
-            startMediaId: fullscreenMediaId,
-            startSceneIndex: detailSceneIndex,
-            accentColor: accentColor,
-            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        )
-        .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
-        .mediaSaveFlow(mediaSaveCoordinator)
     }
 
-    // MARK: - Floating Header (CollapsibleHeader)
-
-    /// Centered author chip revealed in the floating header as the inline
-    /// author block scrolls away. Tapping opens the profile sheet (mirrors the
-    /// inline name tap).
-    @ViewBuilder
-    private func authorRevealView(_ post: FeedPost) -> some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Button {
-                selectedProfileUser = .from(feedPost: post)
-            } label: {
-                HStack(spacing: MeeshySpacing.sm) {
-                    MeeshyAvatar(
-                        name: post.author,
-                        context: .custom(26),
-                        accentColor: post.authorColor,
-                        avatarURL: post.authorAvatarURL
-                    )
-                    .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(post.author)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(1)
-                        let reach = PostReachFormatter.components(
-                            username: post.authorUsername,
-                            isAuthor: isPostAuthor
-                        )
-                        if reach.pseudo != nil || reach.showsStats {
-                            HStack(spacing: MeeshySpacing.xs) {
-                                if let pseudo = reach.pseudo {
-                                    Text(pseudo)
-                                        .font(.caption2)
-                                        .foregroundColor(theme.textMuted)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                        .layoutPriority(0)
-                                }
-                                if reach.showsStats {
-                                    if reach.pseudo != nil {
-                                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
-                                    }
-                                    HStack(spacing: MeeshySpacing.xxs) {
-                                        ReachMetricLabel(
-                                            icon: "eye.fill",
-                                            count: post.viewCount,
-                                            label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
-                                            tint: theme.textMuted
-                                        )
-                                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
-                                        ReachMetricLabel(
-                                            icon: "chart.bar.fill",
-                                            count: post.impressionCount,
-                                            label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
-                                            tint: theme.textMuted
-                                        )
-                                    }
-                                    // Stats must always print in full (up to "2.3M") —
-                                    // they're the values the user cross-checks against the
-                                    // inline reach line. Pin their size + priority so the
-                                    // @pseudo yields/truncates first; never clip a number.
-                                    .lineLimit(1)
-                                    .fixedSize(horizontal: true, vertical: false)
-                                    .layoutPriority(1)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityElement(children: .ignore)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(String(format: String(localized: "a11y.post.author_profile", defaultValue: "Profil de %@", bundle: .main), post.author))
-            .accessibilityHint(String(localized: "a11y.post.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
-        }
-    }
+    // MARK: - Post Menu
 
     /// The `…` menu, lifted out of the old navBar into the header's trailing slot.
-    private var postMenu: some View {
+    var postMenu: some View {
         Menu {
             Button {
                 Task { await mintShareLink(action: .copyToPasteboard) }
@@ -1185,18 +559,15 @@ struct PostDetailView: View {
                 } label: {
                     Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                 }
-                Divider()
-                Button(role: .destructive) {
-                    HapticFeedback.medium()
-                    Task {
-                        if await viewModel.deletePost(postId) {
-                            router.pop()
-                        }
-                    }
-                } label: {
-                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                }
+                PublicationDestructiveMenuItems(postId: postId, onDelete: { _ in
+                    Task { if await viewModel.deletePost(postId) { router.pop() } }
+                }, onRemove: nil)
             } else {
+                if let post = displayPost {
+                    PublicationDestructiveMenuItems(postId: postId, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: post) { [viewModel, router] in
+                        if await viewModel.deletePost($0, reason: $1) { router.pop() }
+                    })
+                }
                 Divider()
                 Button(role: .destructive) {
                     HapticFeedback.light()
@@ -1214,24 +585,6 @@ struct PostDetailView: View {
         }
         .accessibilityLabel(String(localized: "a11y.post.more_options", defaultValue: "Plus d'options", bundle: .main))
         .accessibilityHint(String(localized: "a11y.post.more_options.hint", defaultValue: "Copier le lien, partager, signaler", bundle: .main))
-    }
-
-    private func postDetailHeader(_ post: FeedPost) -> some View {
-        // Seul ce reader se re-rend au fil du scroll — la racine écrit
-        // `headerScrollRelay.offset` sans s'y abonner (P1-1).
-        ScrollOffsetReader(relay: headerScrollRelay) { offset in
-            CollapsibleHeader(
-                title: "",
-                scrollOffset: offset,
-                showBackButton: true,
-                onBack: { HapticFeedback.light(); router.pop() },
-                titleColor: theme.textPrimary,
-                backArrowColor: theme.textPrimary,
-                backgroundColor: theme.backgroundPrimary,
-                centerReveal: { authorRevealView(post) },
-                trailing: { postMenu }
-            )
-        }
     }
 
     // MARK: - Author Reach Line
@@ -1288,6 +641,8 @@ struct PostDetailView: View {
                     accentColor: post.authorColor,
                     avatarURL: post.authorAvatarURL,
                     moodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
+                    presenceState: PresenceManager.shared.knownPresenceState(for: post.authorId),
+                    ring: post.authorRing,
                     onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                     onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
                     contextMenuItems: [
@@ -1379,39 +734,7 @@ struct PostDetailView: View {
 
             // Inline secondary translation panel
             if let content = secondaryContent, let code = secondaryLangCode {
-                let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
-                let display = LanguageDisplay.from(code: code)
-                VStack(spacing: 0) {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
-                        Circle().fill(langColor).frame(width: 4, height: 4)
-                        Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
-                    }
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                        if let display {
-                            HStack(spacing: MeeshySpacing.xs) {
-                                Text(display.flag).font(.caption)
-                                Text(display.name)
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundColor(langColor)
-                            }
-                        }
-                        Text(content)
-                            .font(.subheadline)
-                            .foregroundColor(theme.textPrimary.opacity(0.8))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.vertical, MeeshySpacing.sm)
-                    .padding(.horizontal, MeeshySpacing.smPlus)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(langColor.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                }
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.top, MeeshySpacing.xsPlus)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(String(format: String(localized: "a11y.post.secondary_translation", defaultValue: "Traduction en %1$@ : %2$@", bundle: .main), display?.name ?? code, content))
+                PostDetailSecondaryTranslationPanel(content: content, code: code)
             }
 
             // Embed vidéo (YouTube) détecté dans le contenu du post.
@@ -1650,99 +973,6 @@ EngagementGlyph(
         .accessibilityAddTraits(.isHeader)
         .accessibilityLabel(String(localized: "a11y.comment.section_header", defaultValue: "Commentaires", bundle: .main))
         .accessibilityValue(LocalizedNumber.exact(displayPost?.commentCount ?? 0))
-    }
-
-    // MARK: - Composer
-
-    var replyBannerView: AnyView? {
-        // Mode ÉDITION : bandeau dédié (prioritaire sur la réponse).
-        if let editing = viewModel.editingComment {
-            return AnyView(
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "pencil")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(Color(hex: accentColor))
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                        Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(theme.textSecondary)
-                        Text(editing.displayContent)
-                            .font(.caption)
-                            .foregroundColor(theme.textMuted)
-                            .lineLimit(1)
-                    }
-                    Spacer()
-                    Button {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            cancelEditComment()
-                        }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.caption2.bold())
-                            .foregroundColor(theme.textMuted)
-                            .frame(width: 24, height: 24)
-                            .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
-                    }
-                    .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                    .meeshyTapTarget(MeeshyControlSize.tapTarget)
-                }
-                .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, MeeshySpacing.sm)
-                .background(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .fill(theme.surfaceGradient(tint: accentColor))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                                .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
-                        )
-                )
-            )
-        }
-        guard let reply = viewModel.replyingTo else { return nil }
-        return AnyView(
-            HStack(spacing: MeeshySpacing.sm) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color(hex: reply.authorColor))
-                    .frame(width: 3, height: 36)
-
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(reply.author)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(Color(hex: reply.authorColor))
-
-                    Text(reply.displayContent)
-                        .font(.caption)
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                Button {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                        viewModel.clearReply()
-                    }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption2.bold())
-                        .foregroundColor(theme.textMuted)
-                        .frame(width: 24, height: 24)
-                        .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
-                }
-                .accessibilityLabel(String(localized: "a11y.comment.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
-                .meeshyTapTarget(MeeshyControlSize.tapTarget)
-            }
-            .padding(.horizontal, MeeshySpacing.md)
-            .padding(.vertical, MeeshySpacing.sm)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(theme.surfaceGradient(tint: accentColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
-                    )
-            )
-        )
     }
 
 }

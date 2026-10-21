@@ -1,7 +1,10 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { PersonSummary } from '@/lib/api/friend-requests';
+import { presenceStore } from '@/lib/api/presence-store';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { CallDetail } from '@/lib/calls/call-detail';
 
 import { CallDetailCard, CallDetailHeader, CallDetailSkeleton, CallDetailState } from './call-detail-parts';
@@ -33,7 +36,22 @@ const detail = (overrides: Partial<CallDetail> = {}): CallDetail => ({
   reactions: [],
   participants: [],
   live: false,
+  peerKey: 'u-amina',
   ...overrides,
+});
+
+const online = (userId: string) => act(() => presenceStore.getState().put(userId, { isOnline: true, lastActiveAt: new Date().toISOString() }));
+afterEach(() => act(() => presenceStore.getState().clear()));
+/* Les écritures dans la carte vivante passent par `act` : un abonné laissé par
+   un autre fichier y est rendu sur-le-champ, jamais après le démontage du DOM. */
+const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
+beforeAll(() => {
+  ensureHappyDomRegistered();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
 });
 
 describe('le pavé', () => {
@@ -80,9 +98,17 @@ describe('le pavé', () => {
     expect(html).toContain('size-11');
   });
 
-  test('un résultat ne peint aucune présence', () => {
-    const html = renderToStaticMarkup(<KeypadResult language="fr" person={amina} onCall={noop} />);
-    expect(html).not.toContain('data-presence');
+  /* D-60 LEVÉE (#10955, #10956) : la présence d'un résultat est celle que la
+     carte VIVANTE sert à ce lecteur, jamais celle d'une charge persistée. */
+  test('un résultat peint la présence que la carte vivante sert, et rien sans elle', () => {
+    expect(renderToStaticMarkup(<KeypadResult language="fr" person={amina} onCall={noop} />)).not.toContain('data-presence');
+    online('u-amina');
+    expect(renderToStaticMarkup(<KeypadResult language="fr" person={amina} onCall={noop} />)).toContain('data-presence="online"');
+  });
+
+  test('un résultat porte le contour équipé de la personne (#10946)', () => {
+    const ringed: PersonSummary = { ...amina, ring: { pack: 'contours-essentiels', item: 'filet', origin: 'builtin', contract: null } };
+    expect(renderToStaticMarkup(<KeypadResult language="fr" person={ringed} onCall={noop} />)).toContain('data-avatar-ring="filet"');
   });
 
   test('un appel qui n’a pas démarré se dit', () => {
@@ -154,6 +180,12 @@ describe('la fiche d’un appel', () => {
     expect(html.indexOf('data-call-detail-network')).toBeGreaterThan(html.indexOf('data-call-detail-row="type"'));
     expect(html.indexOf('data-call-detail-network')).toBeLessThan(html.indexOf('data-call-detail-transcript'));
     expect(renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} />)).not.toContain('data-call-detail-network');
+  });
+
+  test('la fiche d’un appel direct peint la présence servie du pair (#10956) ; un groupe, aucune', () => {
+    online('u-amina');
+    expect(renderToStaticMarkup(<CallDetailCard language="fr" detail={detail()} now={NOW} onCall={noop} />)).toContain('data-presence="online"');
+    expect(renderToStaticMarkup(<CallDetailCard language="fr" detail={detail({ isGroup: true, peerKey: null })} now={NOW} onCall={noop} />)).not.toContain('data-presence');
   });
 
   test('un appel manqué se lit sans la couleur', () => {

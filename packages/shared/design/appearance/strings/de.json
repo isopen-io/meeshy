@@ -1,0 +1,177 @@
+{
+  "packs": {
+    "essentiels": {
+      "name": "Essentials",
+      "description": "Die Grundmuster und Verläufe."
+    },
+    "heritages": {
+      "name": "Erbe",
+      "description": "Muster aus aller Welt."
+    },
+    "nature-et-ciel": {
+      "name": "Natur und Himmel",
+      "description": "Karten, Blätter, Gitter und Sterne."
+    },
+    "illustrations": {
+      "name": "Illustrationen",
+      "description": "Landschaften in Linien gezeichnet."
+    },
+    "bannieres-essentielles": {
+      "name": "Basis-Banner",
+      "description": "Sechs Banner für dein Profil."
+    },
+    "contours-essentiels": {
+      "name": "Basis-Rahmen",
+      "description": "Sechs Rahmen für deinen Avatar."
+    },
+    "animes": {
+      "name": "Animiert",
+      "description": "Hintergründe, die sanft atmen."
+    },
+    "bannieres-animees": {
+      "name": "Animierte Banner",
+      "description": "Ein dezenter Glanz zieht über das Banner."
+    },
+    "contours-animes": {
+      "name": "Animierte Konturen",
+      "description": "Ein goldener Bogen umkreist den Avatar."
+    },
+    "contours-haussmannien": {
+      "name": "Rahmen Haussmann",
+      "description": "Die Pariser Fassade: Quaderstein, Gusseisen und Schlussstein."
+    },
+    "cadres-haussmannien": {
+      "name": "Bannerrahmen Haussmann",
+      "description": "Die Pariser Fassade: Quaderstein, Gusseisen und Schlussstein."
+    },
+    "contours-arabe": {
+      "name": "Rahmen Arabisch",
+      "description": "Flechtwerk der Alhambra, achtzackige Sterne und Vielpassbogen."
+    },
+    "cadres-arabe": {
+      "name": "Bannerrahmen Arabisch",
+      "description": "Flechtwerk der Alhambra, achtzackige Sterne und Vielpassbogen."
+    },
+    "contours-grec": {
+      "name": "Rahmen Griechisch",
+      "description": "Mäander, Palmetten und ionische Voluten."
+    },
+    "cadres-grec": {
+      "name": "Bannerrahmen Griechisch",
+      "description": "Mäander, Palmetten und ionische Voluten."
+    },
+    "contours-ancestral": {
+      "name": "Rahmen Afrikanisch, Ahnen",
+      "description": "Mit Erde bemalter Bogolan und ein Adinkra-Zeichen."
+    },
+    "cadres-ancestral": {
+      "name": "Bannerrahmen Afrikanisch, Ahnen",
+      "description": "Mit Erde bemalter Bogolan und ein Adinkra-Zeichen."
+    },
+    "contours-technologique": {
+      "name": "Rahmen Afrikanisch, Technik",
+      "description": "Ndebele-Stufen in Neon und Leiterbahnen."
+    },
+    "cadres-technologique": {
+      "name": "Bannerrahmen Afrikanisch, Technik",
+      "description": "Ndebele-Stufen in Neon und Leiterbahnen."
+    },
+    "contours-rituel": {
+      "name": "Rahmen Afrikanisch, Ritual",
+      "description": "Gefranster Bast, Kaurimuscheln, Perlen und Holzmaske."
+    },
+    "cadres-rituel": {
+      "name": "Bannerrahmen Afrikanisch, Ritual",
+      "description": "Gefranster Bast, Kaurimuscheln, Perlen und Holzmaske."
+    },
+    "contours-celte": {
+      "name": "Rahmen Keltisch",
+      "description": "Endloses Flechtband und Triskelen."
+    },
+    "cadres-celte": {
+      "name": "Bannerrahmen Keltisch",
+      "description": "Endloses Flechtband und Triskelen."
+    }
+  },
+  "designs": {
+    "monogramme": "Monogramm",
+    "chevrons": "Chevrons",
+    "aurore": "Polarlicht",
+    "maille": "Mesh",
+    "art-deco": "Art déco",
+    "seigaiha": "Seigaiha",
+    "zellige": "Zellige",
+    "bogolan": "Bogolan",
+    "topographie": "Topografie",
+    "feuillage": "Blattwerk",
+    "treillis": "Gitter",
+    "constellation": "Sternbild",
+    "horizon": "Horizont",
+    "baobab": "Baobab",
+    "brume-vivante": "Lebendiger Nebel",
+    "aurore-vive": "Lebhafte Aurora"
+  },
+  "rings": {
+    "filet": "Haarlinie",
+    "double-filet": "Doppelte Haarlinie",
+    "perle": "Perlen",
+    "aurore": "Polarlicht",
+    "deco": "Deco",
+    "laurier": "Lorbeer",
+    "halo-or": "Goldener Halo",
+    "haussmannien": "Haussmann",
+    "haussmannien-anime": "Haussmann, animiert",
+    "arabe": "Arabisch",
+    "arabe-anime": "Arabisch, animiert",
+    "grec": "Griechisch",
+    "grec-anime": "Griechisch, animiert",
+    "ancestral": "Afrikanisch, Ahnen",
+    "ancestral-anime": "Afrikanisch, Ahnen, animiert",
+    "technologique": "Afrikanisch, Technik",
+    "technologique-anime": "Afrikanisch, Technik, animiert",
+    "rituel": "Afrikanisch, Ritual",
+    "rituel-anime": "Afrikanisch, Ritual, animiert",
+    "celte": "Keltisch",
+    "celte-anime": "Keltisch, animiert"
+  },
+  "gamut": {
+    "indigo": "Meeshy-Indigo",
+    "bleu-nuit": "Nachtblau",
+    "azur": "Azur",
+    "lagon": "Lagune",
+    "emeraude": "Smaragd",
+    "olive": "Oliv",
+    "moutarde": "Senf",
+    "sable": "Sand",
+    "terracotta": "Terrakotta",
+    "corail": "Koralle",
+    "rose-poudre": "Altrosa",
+    "framboise": "Himbeere",
+    "prune": "Pflaume",
+    "lavande": "Lavendel",
+    "ardoise": "Schiefer",
+    "graphite": "Graphit"
+  },
+  "modes": {
+    "signature": "Signatur",
+    "solid": "Einfarbig",
+    "photo": "Foto der Unterhaltung"
+  },
+  "avatarUsage": "Profilrahmen",
+  "frames": {
+    "haussmannien": "Haussmann",
+    "haussmannien-anime": "Haussmann, animiert",
+    "arabe": "Arabisch",
+    "arabe-anime": "Arabisch, animiert",
+    "grec": "Griechisch",
+    "grec-anime": "Griechisch, animiert",
+    "ancestral": "Afrikanisch, Ahnen",
+    "ancestral-anime": "Afrikanisch, Ahnen, animiert",
+    "technologique": "Afrikanisch, Technik",
+    "technologique-anime": "Afrikanisch, Technik, animiert",
+    "rituel": "Afrikanisch, Ritual",
+    "rituel-anime": "Afrikanisch, Ritual, animiert",
+    "celte": "Keltisch",
+    "celte-anime": "Keltisch, animiert"
+  }
+}

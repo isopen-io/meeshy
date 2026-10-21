@@ -31,6 +31,8 @@ public struct StoryAudioPlayerView: View {
     @State private var playerObserver: Any?
     @State private var observedPlayer: AVPlayer?
     @State private var endObserver: NSObjectProtocol?
+    /// Une prise au plus sur `MediaSessionCoordinator`, rendue au démontage.
+    @State private var holdsPlaybackSession = false
     #endif
 
     public init(audioObject: Binding<StoryAudioPlayerObject>,
@@ -194,6 +196,10 @@ public struct StoryAudioPlayerView: View {
             }
             internalPlayer = nil
         }
+        if holdsPlaybackSession {
+            holdsPlaybackSession = false
+            Task { await MediaSessionCoordinator.shared.release() }
+        }
         isPlaying = false
         playbackProgress = 0
         #endif
@@ -320,7 +326,10 @@ public struct StoryAudioPlayerView: View {
                 StoryMediaCoordinator.shared.activate {
                     NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
                 }
-                Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
+                if !holdsPlaybackSession {
+                    holdsPlaybackSession = true
+                    Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
+                }
                 internalPlayer?.play()
             } else {
                 internalPlayer?.pause()
@@ -328,8 +337,7 @@ public struct StoryAudioPlayerView: View {
         } else {
             // Mode viewer : mute/unmute uniquement — s'applique au player actif
             // (externe fourni par ReaderState, ou interne en fallback).
-            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-            impactFeedback.impactOccurred()
+            HapticFeedback.light()
             isMuted.toggle()
             activePlayer?.isMuted = isMuted
         }

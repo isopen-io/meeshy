@@ -29,7 +29,7 @@ extension UserProfileSheet {
         VStack(spacing: 0) {
             bannerSection
                 .frame(height: bannerHeight)
-                .overlay(alignment: .top) {
+                .overlay(alignment: .bottom) {
                     bannerGameBadge
                         .opacity(1 - Double(progress))
                 }
@@ -49,7 +49,13 @@ extension UserProfileSheet {
 
     var bannerSection: some View {
         ZStack(alignment: .bottom) {
-            if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty {
+            switch shownBannerPaint {
+            case .design(let design):
+                // #10632, #10933 — la bannière de design ne se peint qu'en l'absence de photo ; décorative, rien ne s'ouvre.
+                BannerDesignView(design: design, isDark: theme.mode.isDark, accentHex: profileAccent)
+                    .frame(height: ProfileHeaderMetrics.expandedBanner)
+                    .accessibilityHidden(true)
+            case .photo(let bannerURL):
                 // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
                 // la bannière n'est téléchargée qu'une fois par installation, et le
                 // resolver interne accepte aussi les chemins relatifs du gateway.
@@ -73,25 +79,44 @@ extension UserProfileSheet {
                 .accessibilityAction {
                     openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
                 }
-            } else {
+            case .plain:
                 defaultBannerGradient
+            }
+        }
+        .overlay {
+            // #10935 — le cadre équipé se pose PAR-DESSUS la photo ou le fond, centre transparent ; il ne reçoit pas le doigt.
+            if let frame = shownBannerFrame {
+                BannerFrameView(design: frame)
+                    .equatable()
             }
         }
     }
 
-    /// #10093, #10231 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) : ce
-    /// que SA visibilité autorise, rien sinon. L'app occupe toute la largeur — le niveau et ses points au début (après
-    /// le bouton Fermer), le rang à la fin. Le doigt le traverse — toucher la bannière l'ouvre toujours en plein écran.
+    /// #10093, #10231, #10601 — le niveau et le rang du membre, posés sur sa bannière par l'app (`profileGameSection`) :
+    /// ce que SA visibilité autorise, rien sinon. L'app occupe toute la bannière — le niveau à l'angle bas du début, le
+    /// rang à l'angle bas de la fin, leurs cadres posés sur le bord bas, loin du bouton Fermer. Le doigt le traverse —
+    /// toucher la bannière l'ouvre toujours en plein écran.
     @ViewBuilder
     var bannerGameBadge: some View {
         if !isBlocked, !isBlockedByTarget, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
             gameSection.build(userId, displayUser.displayName ?? displayUser.username)
                 .allowsHitTesting(false)
-                .padding(.top, MeeshySpacing.mdPlus)
-                // Le bouton Fermer tient le coin de DÉBUT (`closeButton`) : le niveau commence après lui.
-                .padding(.leading, MeeshySpacing.lg + MeeshyControlSize.regular + MeeshySpacing.sm)
-                .padding(.trailing, MeeshySpacing.lg)
         }
+    }
+
+    /// Ce que la bannière peint (#10933) : la photo gagne toujours, le design équipé ne vient qu'à son défaut.
+    var shownBannerPaint: ProfileBannerPaint {
+        ProfileDecorResolver.bannerPaint(photo: displayUser.bannerURL, decor: isBlockedByTarget ? nil : displayUser.profileDecor?.banner)
+    }
+
+    /// Le cadre de bannière équipé (#10935) ; `nil` ⇒ la bannière d'avant. Masqué comme le reste du décor.
+    var shownBannerFrame: BannerFrameDesign? {
+        isBlockedByTarget ? nil : ProfileDecorResolver.bannerFrame(displayUser.profileDecor?.bannerFrame)
+    }
+
+    /// Le contour d'avatar équipé ; `nil` ⇒ avatar nu, comme avant.
+    var shownAvatarRing: AvatarRingDesign? {
+        isBlockedByTarget ? nil : ProfileDecorResolver.ring(displayUser.profileDecor?.avatarRing)
     }
 
     var defaultBannerGradient: some View {
@@ -178,13 +203,18 @@ extension UserProfileSheet {
         MeeshyAvatar(
             name: avatarName,
             context: .profileSheet,
-            accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : resolvedAccent,
+            accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : profileAccent,
             avatarURL: displayUser.avatarURL,
             storyState: ringState,
             moodEmoji: shownMoodEmoji,
             presenceState: isBlockedByTarget ? nil : resolvedPresence,
             onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
+        )
+        .avatarRing(
+            shownAvatarRing,
+            avatarSize: AvatarContext.profileSheet.size,
+            storyRingSize: ringState == .none ? nil : AvatarContext.profileSheet.ringSize
         )
     }
 
@@ -320,7 +350,7 @@ extension UserProfileSheet {
             MeeshyAvatar(
                 name: displayUser.resolvedDisplayName,
                 context: .custom(32),
-                accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : resolvedAccent,
+                accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : profileAccent,
                 avatarURL: displayUser.avatarURL,
                 storyState: .none,
                 moodEmoji: shownMoodEmoji,

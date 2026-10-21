@@ -5,14 +5,13 @@ import { PROGRESSION_CONCEPTS, progressionConcepts, type ProgressionConcept } fr
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { ALL_LEVEL_STEPS, GAME_EXTRAS_TODAY, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { interfaceDirection, SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { conceptView } from './progression-concepts';
-import { conceptState } from './progression-state';
+import { conceptState, conceptStateOf } from './progression-state';
 
 /**
  * LA PHRASE D'ÉTAT D'UN CONCEPT (#10540) — retour du porteur : « j'ai 77 099 points, il te manque 1 839
@@ -32,7 +31,6 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-const NOW = new Date(`${GAME_EXTRAS_TODAY}T10:00:00.000Z`);
 const before = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
 const playing: EngagementWithGame = { ...before, game: gameBlockWithExtrasFixture(), mintBadgeLoss: 2 };
 
@@ -61,23 +59,23 @@ const inLanguage = (language: InterfaceLanguage): void => {
 
 describe('le compte du porteur : trois chiffres, trois phrases', () => {
   test('le niveau dit ce qui est fait dans CE niveau, et ce qu’il reste pour le suivant', () => {
-    expect(state('level')).toBe('Niveau 27 : tu as fait 4 199 points sur les 5 500 de ce niveau. Il en reste 1 301 pour le niveau 28.');
+    expect(state('level')).toBe('Ta lumière brille au niveau 27 : 4 199 étincelles sur les 5 500 de ce niveau, 1 301 jusqu’au niveau 28.');
   });
 
-  test('les points nomment leurs deux soldes, et « il manque » vise la Meesh, pas le niveau', () => {
+  test('les étincelles n’ont plus qu’une poche, et « il manque » vise la Meesh, pas le niveau', () => {
     expect(state('points')).toBe(
-      'Tu as 77 099 points en poche et 5 823 points à convertir. La Meesh n° 79 coûte 7 662 points : il manque 1 839 points à convertir.',
+      'Ta lumière compte 77 099 étincelles. La Meesh n° 79 en figera 7 662 étincelles : il manque 1 839 étincelles.',
     );
   });
 
   test('les Meeshes disent le solde gardé, les frappes faites et ce que la prochaine demande', () => {
-    expect(state('meesh')).toBe('Tu gardes 3 Meeshes. Depuis le début, tu en as frappé 78. La Meesh n° 79 coûte 7 662 points : il te manque 1 839 points à convertir.');
+    expect(state('meesh')).toBe('Ton héritage garde 3 Meeshes. Depuis toujours, tu en as frappé 78. La Meesh n° 79 figera 7 662 étincelles de ta lumière : il manque 1 839 étincelles.');
   });
 
   test('1 301 et 1 839 ne se confondent plus : chacun porte sa cible', () => {
-    expect(state('level')).toContain('1 301 pour le niveau 28');
+    expect(state('level')).toContain('1 301 jusqu’au niveau 28');
     expect(state('level')).not.toContain('1 839');
-    expect(state('points')).toContain('1 839 points à convertir');
+    expect(state('points')).toContain('1 839 étincelles');
     expect(state('points')).not.toContain('1 301');
   });
 });
@@ -92,19 +90,21 @@ describe('le niveau', () => {
   test('devant un ancien serveur, le reste garde sa cible', () => {
     const { level } = before;
     if (level.nextThreshold === null) throw new Error('la fixture d’avant n’est pas au sommet');
-    expect(state('level', before)).toContain(`pour le niveau ${level.level + 1}`);
+    expect(state('level', before)).toContain(`jusqu’au niveau ${level.level + 1}`);
   });
 });
 
 describe('les points', () => {
   test('assez pour frapper : la phrase le dit, sans « il manque »', () => {
     const rich: EngagementWithGame = { ...playing, meesh: { ...wallet, debitablePoints: 1_244 } };
-    expect(state('points', rich)).toBe('Tu as 12 440 points en poche et 1 244 points à convertir : assez pour la Meesh n° 4, qui coûte 1 221 points.');
+    expect(state('points', rich)).toBe('Ta lumière compte 12 440 étincelles : assez pour frapper la Meesh n° 4, qui en figera 1 221 étincelles.');
   });
 
-  test('sans porte-monnaie servi, le solde à convertir se déduit du prix et du manque, jamais du score', () => {
+  test('sans porte-monnaie servi, plus aucun solde « à convertir » : une seule poche, le manque vise la Meesh', () => {
     const { meesh: _meesh, ...bare } = jcnm;
-    expect(state('points', bare)).toContain('5 823 points à convertir');
+    expect(state('points', bare)).toContain('il manque 1 839 étincelles');
+    expect(state('points', bare)).not.toContain('à convertir');
+    expect(state('points', bare)).not.toContain('5 823');
   });
 });
 
@@ -112,22 +112,22 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
   test('une Flamme en danger dit quoi faire, et avant quand', () => {
     const risky = withFacts({ streak: 6, lastActiveDay: '2026-10-04' });
     expect(risky.game?.flame.status).toBe('at-risk');
-    expect(state('flame', risky)).toBe('Ta Flamme de 6 jours est en danger : fais un geste avant minuit pour la garder.');
+    expect(state('flame', risky)).toBe('Ta Flamme de 6 jours vacille : fais un geste avant minuit pour la garder.');
   });
 
   test('une Flamme allumée dit depuis quand, et ce qu’elle rapporte', () => {
     expect(playing.game?.flame.status).toBe('lit');
-    expect(state('flame', playing)).toContain('Ta Flamme tient depuis 6 jours');
+    expect(state('flame', playing)).toContain('Ta Flamme brûle depuis 6 jours');
     expect(state('flame', playing)).toContain('12 % de plus');
   });
 
   test('les missions disent combien sont faites et ce qu’il reste pour le coffre', () => {
-    expect(state('missions', playing)).toBe('Missions faites : 1 sur 3. Il en reste 2 pour ouvrir le coffre.');
+    expect(state('missions', playing)).toBe('Le rêve de cette nuit : 1 sur 3 actes, et 2 à réaliser pour voir l’Offrande.');
   });
 
   test('avant le niveau 5, les missions disent où elles s’ouvrent et où tu en es', () => {
     const early = withFacts({ score: 400, levelRecord: 2 });
-    expect(state('missions', early)).toContain('Les missions s’ouvrent au niveau 5');
+    expect(state('missions', early)).toContain('Au niveau 5, tes aïeux t’envoient chaque nuit un rêve');
     expect(state('missions', early)).toContain('Tu es au niveau 2');
   });
 
@@ -135,8 +135,8 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
     const current = playing.game?.league?.current;
     if (current === null || current === undefined) throw new Error('la fixture est placée en ligue');
     const line = state('league', playing);
-    expect(line).toContain(`rang ${current.rank} sur ${current.groupSize}`);
-    expect(line).toContain('410 points cette semaine');
+    expect(line).toContain(`place ${current.rank} sur ${current.groupSize}`);
+    expect(line).toContain('410 étincelles cette semaine');
     expect(line).toMatch(/zone de montée/);
   });
 
@@ -144,13 +144,13 @@ describe('la Flamme, les missions, la ligue, la saison : l’étape où l’on e
     const season = playing.game?.season;
     if (season === null || season === undefined) throw new Error('la fixture sert une saison');
     const line = state('season', playing);
-    expect(line).toContain(`Saison ${season.number}, semaine ${season.week} sur 8`);
-    expect(line).toContain(`étape ${season.steps} sur ${season.stepsTotal}`);
-    expect(line).toMatch(/Il manque \d+ étoiles? pour l’étape suivante/);
+    expect(line).toContain(`Voyage ${season.number}, semaine ${season.week} sur 8`);
+    expect(line).toContain(`halte ${season.steps} sur ${season.stepsTotal}`);
+    expect(line).toMatch(/\d+ pas jusqu’à la suivante/);
   });
 
   test('le Prestige dit où il s’ouvre et où tu en es', () => {
-    expect(state('prestige', playing)).toBe('Le Prestige s’ouvre au niveau 100. Tu es au niveau 11.');
+    expect(state('prestige', playing)).toBe('La Renaissance s’ouvre au niveau 100. Tu es au niveau 11.');
   });
 });
 
@@ -186,8 +186,14 @@ describe('chaque concept servi a sa phrase d’état, dans les sept langues', ()
   });
 });
 
-describe('la vue du concept porte la phrase : la carte et la fiche lisent la même', () => {
-  test('conceptView rend la phrase d’état de conceptState', () => {
-    for (const concept of PROGRESSION_CONCEPTS) expect(conceptView(concept, jcnm, NOW).state).toBe(conceptState(concept, jcnm));
+describe('chaque phrase dit les faits qu’elle porte (#11178)', () => {
+  test('une phrase qui enchâsse un chiffre déclare au moins une identité', () => {
+    for (const view of [jcnm, before]) {
+      for (const concept of PROGRESSION_CONCEPTS) {
+        const said = conceptStateOf(concept, view);
+        expect({ concept, text: said?.text ?? null }).toEqual({ concept, text: conceptState(concept, view) });
+        if (said !== null && /\d/.test(said.text)) expect({ concept, declared: said.facts.length > 0 }).toEqual({ concept, declared: true });
+      }
+    }
   });
 });

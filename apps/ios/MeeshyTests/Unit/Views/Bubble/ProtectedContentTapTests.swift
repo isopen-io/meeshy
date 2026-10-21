@@ -146,12 +146,12 @@ final class ProtectedContentTapTests: XCTestCase {
                      "Meeshy/Features/Main/Focal/Row/FocalProtectedContent.swift",
                      "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
                      "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift"] {
-            let source = try String(contentsOf: Self.iosRoot.appendingPathComponent(path), encoding: .utf8)
+            let source = try AppSourceGuard.text(at: Self.iosRoot.appendingPathComponent(path))
             XCTAssertFalse(source.contains("ProtectedGridCellTapLayer"), "\(path) : la couche qui ouvrait chaque case sous le voile est retirée")
             XCTAssertFalse(source.contains("protectedGridCellBounds"), path)
         }
-        let reveal = try body(of: "private func revealBlurredContent()",
-                              in: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift")
+        let reveal = try body(of: "func revealBlurredContent()",
+                              in: "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Reveal.swift")
         XCTAssertFalse(reveal.contains("openProtectedMedia"), "le voile de la bulle lève le flou, il n'ouvre rien : \(reveal)")
         XCTAssertTrue(reveal.contains("blurController.requestReveal"), reveal)
     }
@@ -182,7 +182,7 @@ final class ProtectedContentTapTests: XCTestCase {
 
     func test_wiring_riverVeil_opensTheMediaOnlyAfterReveal() throws {
         let url = Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
+        let source = try AppSourceGuard.text(at: url)
         XCTAssertTrue(source.contains("tapAfterReveal: content.tapAfterReveal, onMediaTap: onMediaTap"),
                       "la Rivière ouvre le média au toucher SUIVANT la révélation")
     }
@@ -194,7 +194,7 @@ final class ProtectedContentTapTests: XCTestCase {
     }
 
     private func body(of anchor: String, in relativePath: String) throws -> String {
-        let source = try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8)
+        let source = try AppSourceGuard.text(at: Self.iosRoot.appendingPathComponent(relativePath))
         let start = try XCTUnwrap(source.range(of: anchor), "ancre absente : \(anchor)")
         let open = try XCTUnwrap(source[start.upperBound...].firstIndex(of: "{"))
         var depth = 0
@@ -361,7 +361,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         .appendingPathComponent("Meeshy/Features/Main")
 
     private func code(_ relative: String) throws -> String {
-        let text = try String(contentsOf: Self.mainRoot.appendingPathComponent(relative), encoding: .utf8)
+        let text = try AppSourceGuard.text(at: Self.mainRoot.appendingPathComponent(relative))
         XCTAssertGreaterThan(text.count, 200, "\(relative) introuvable — ce témoin ne mesurerait rien")
         return AppSourceGuard.stripComments(text).components(separatedBy: .whitespacesAndNewlines).joined()
     }
@@ -383,7 +383,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         ("Components/MessageMoreSheet.swift", ".captureShield(message.exitOffer.capture.shieldsCapture())"),
         ("Components/ConversationInfoSheet+Pinned.swift", ".captureShield(msg.exitOffer.capture.shieldsCapture())"),
         ("Views/ThreadView.swift", ".captureShield(parentMessage.exitOffer.capture.shieldsCapture())"),
-        ("Components/ForwardPickerSheet.swift", "message.exitOffer.capture.shieldsCapture()"),
+        ("Share/ShareContentZone.swift", "message.contentExitLaw.capture.shieldsCapture()"),
         ("Views/ConversationView+ComposerBanners.swift", ".captureShield(reply.quotedCapture(quotedMessage:quoted).shieldsCapture())"),
         ("Views/MediaReplyComposerBar.swift", "citationBanner.captureShield(citation.quotedCapture(quotedMessage:nil).shieldsCapture())"),
         ("Views/ConversationPreviewLine.swift", ".captureShield(preview.icon==.ephemeral)"),
@@ -406,8 +406,10 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         XCTAssertTrue(try code("Views/MessageListViewController.swift")
             .contains("focalActions.onTapLocation={placeintapLocationHandler?(place,messageId)}"),
                       "la rangée Focal relaie le message du lieu touché")
+        XCTAssertTrue(try code("Views/ConversationView+MessageListLayer.swift")
+            .contains("focalFullscreenPlace=actions.focalPlace(place,messageId)"))
         XCTAssertTrue(try code("Views/ConversationView.swift")
-            .contains("focalFullscreenPlace=makeFocalFullscreenPlace(place,messageId:messageId)"))
+            .contains("focalPlace:{makeFocalFullscreenPlace($0,messageId:$1)}"))
     }
 
     func test_theProjections_readTheExitOfferOnce() throws {
@@ -438,7 +440,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         var shields = 0
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
-            let text = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            let text = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
                 .components(separatedBy: .whitespacesAndNewlines).joined()
             for chunk in text.components(separatedBy: "captureShield(").dropFirst() {
                 let argument = Self.balancedArgument(chunk)
@@ -456,6 +458,9 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
     /// auprès du détecteur — sinon sa flamme serait en clair ET muette.
     private static let announcingSurfaces: [(file: String, registrationFile: String, registration: String)] = [
         ("Views/MessageListViewController.swift", "Views/MessageListView.swift", "ContentCaptureReporter.shared.register(vc)"),
+        // Extension du MÊME contrôleur (la construction des rangées en est sortie au découpage de budget,
+        // 54d5b6871e) : même surface, même enregistrement.
+        ("Views/MessageListViewController+Rows.swift", "Views/MessageListView.swift", "ContentCaptureReporter.shared.register(vc)"),
         ("Views/ConversationView+MediaGallery.swift", "Views/ConversationView+MediaGallery.swift", "ContentCaptureReporter.shared.register(surface)"),
     ]
 
@@ -464,7 +469,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         var announcing: Set<String> = []
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
-            let text = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            let text = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
                 .components(separatedBy: .whitespacesAndNewlines).joined()
                 .replacingOccurrences(of: "funcannouncesCaptures()", with: "")
             if text.contains(".announcesCaptures()") || text.contains("surfaceAnnounces:true") {
@@ -500,7 +505,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         ("Components/MessageMoreSheet.swift", "Feuille « Plus »"),
         ("Components/ConversationInfoSheet+Pinned.swift", "Épinglés"),
         ("Views/ThreadView.swift", "Fil de discussion"),
-        ("Components/ForwardPickerSheet.swift", "Aperçu de transfert"),
+        ("Share/ShareContentZone.swift", "Aperçu de transfert"),
         ("Views/ConversationView+ComposerBanners.swift", "Réponse en cours"),
         ("Views/MediaReplyComposerBar.swift", "Réponse en cours"),
         ("Components/MediaHub/ConversationMediaHubView.swift", "Hub de médias"),
@@ -520,7 +525,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         var shielding: Set<String> = []
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
-            let text = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            let text = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
                 .components(separatedBy: .whitespacesAndNewlines).joined()
             let poses = text.replacingOccurrences(of: "funccaptureShield(", with: "")
                 .replacingOccurrences(of: "funccaptureShieldScope(", with: "")
@@ -545,7 +550,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
 
     /// **La décision est écrite, surface par surface** : le critère de #9632.
     func test_eachBlackSurface_isNamedByTheDecision() throws {
-        let decision = try String(contentsOf: Self.decisionFile, encoding: .utf8)
+        let decision = try AppSourceGuard.text(at: Self.decisionFile)
         let section = try XCTUnwrap(decision.range(of: "## #9632").map { String(decision[$0.lowerBound...]) },
                                     "la décision iOS doit porter la section #9632")
         for surface in Self.blackSurfaces {
@@ -581,6 +586,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
     /// les enveloppe quand ils ne le font pas eux-mêmes.
     private static let wrappedBy: [String: String] = [
         "Views/Bubble/BubbleStandardLayout.swift": "Views/ThemedMessageBubble.swift",
+        "Views/Bubble/BubbleStandardLayout+TextBubble.swift": "Views/ThemedMessageBubble.swift",
         "Components/MessageDetail/MessageLanguageDetailView.swift": "Components/MessageMoreSheet.swift",
     ]
 
@@ -590,7 +596,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         var offenders: [String] = []
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
-            let text = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            let text = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
             guard pattern.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil else { continue }
             if text.contains("captureShield(") { continue }
             if let host = Self.wrappedBy[relative], try code(host).contains("captureShield(") { continue }

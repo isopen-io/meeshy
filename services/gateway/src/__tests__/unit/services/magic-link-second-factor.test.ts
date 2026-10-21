@@ -108,7 +108,7 @@ const makeToken = (userOverrides: Record<string, unknown> = {}, tokenOverrides: 
   ...tokenOverrides
 });
 
-const validation: MagicLinkValidation = { token: 'raw-token', requestContext };
+const validation: MagicLinkValidation = { token: 'raw-token', requestContext, confirmed: true };
 
 const sha256 = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 

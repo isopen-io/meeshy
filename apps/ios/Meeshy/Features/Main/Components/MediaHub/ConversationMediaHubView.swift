@@ -59,6 +59,7 @@ struct ConversationMediaHubView: View {
                 fallback: model.visualAttachments,
                 accentColor: accentColor
             )
+            .closesForConversationOpening(.mediaGallery)
         }
     }
 

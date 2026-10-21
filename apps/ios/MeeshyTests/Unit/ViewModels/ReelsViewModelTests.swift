@@ -250,6 +250,38 @@ final class ReelsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.currentId, "r1")
     }
 
+    // MARK: - Retrait par la modération (#11151)
+
+    func test_deletePost_withReason_removesOptimisticallyAndSendsTheReason() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r1")
+
+        await sut.deletePost("r1", reason: "Contenu violent")
+
+        XCTAssertEqual(service.lastDeletePostId, "r1")
+        XCTAssertEqual(service.lastDeleteReason, "Contenu violent")
+        XCTAssertEqual(sut.reels.map(\.id), ["r2"])
+    }
+
+    func test_deletePost_withReason_whenRefused_restoresTheReel() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+        service.deleteResult = .failure(APIError.serverError(403, "forbidden"))
+
+        await sut.deletePost("r1", reason: "Contenu violent")
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1"])
+    }
+
+    func test_deletePost_byTheAuthor_sendsNoReason() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1")], startId: "r1")
+
+        await sut.deletePost("r1")
+
+        XCTAssertNil(service.lastDeleteReason)
+    }
+
     // MARK: - pinPost()
 
     func test_pinPost_callsPostService() async {

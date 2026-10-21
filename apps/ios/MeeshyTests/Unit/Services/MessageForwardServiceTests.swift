@@ -47,9 +47,9 @@ final class MessageForwardServiceTests: XCTestCase {
         MeeshyConversation(id: id, identifier: id, type: .direct)
     }
 
-    private func makeContactTarget(userId: String = "u1", title: String = "Alice") -> ForwardTarget {
-        ForwardTarget(id: "user:\(userId)", kind: .contact, conversationId: nil, userId: userId,
-                      title: title, subtitle: nil, avatarURL: nil)
+    private func makeContactTarget(userId: String = "u1", title: String = "Alice") -> ShareRecipient {
+        ShareRecipient(id: "user:\(userId)", kind: .person, conversationId: nil, userId: userId,
+                       title: title, detail: .friendWithoutConversation, avatarURL: nil)
     }
 
     private func stubSendSuccess(_ api: MockAPIClientForApp, target: String) {
@@ -92,6 +92,42 @@ final class MessageForwardServiceTests: XCTestCase {
         XCTAssertEqual(body["content"] as? String, "hello")
         XCTAssertNil(body["attachmentIds"],
                      "un transfert ne ré-attache jamais côté client — le serveur copie les attachments de la source")
+    }
+
+    /// **Un sticker transféré reste un sticker** (#10630) : la passerelle ne recopie que les
+    /// pièces jointes, donc sans `sticker` dans le corps la copie arrive en image nue.
+    func test_forward_aSticker_carriesItsStickerToTheCopy() async throws {
+        let (sut, api, _, _) = makeSUT()
+        stubSendSuccess(api, target: target)
+        var message = makeMessage(content: "")
+        message.sticker = MessageSticker(emoji: "🎉", stickerId: "6a0ad86a6e21a483b4443d12")
+
+        _ = await sut.forward(message: message, sourceConversationId: sourceConvId, to: target)
+
+        let body = try postedBody(api)
+        let sticker = try XCTUnwrap(body["sticker"] as? [String: Any])
+        XCTAssertEqual(sticker["emoji"] as? String, "🎉")
+        XCTAssertEqual(sticker["stickerId"] as? String, "6a0ad86a6e21a483b4443d12")
+    }
+
+    func test_forward_aPlainMessage_sendsNoStickerKey() async throws {
+        let (sut, api, _, _) = makeSUT()
+        stubSendSuccess(api, target: target)
+
+        _ = await sut.forward(message: makeMessage(content: "hello"), sourceConversationId: sourceConvId, to: target)
+
+        XCTAssertNil(try postedBody(api)["sticker"])
+    }
+
+    func test_forward_aStickerOffline_queuesItWithItsSticker() async throws {
+        let (sut, _, queue, _) = makeSUT(online: false)
+        var message = makeMessage(content: "")
+        message.sticker = MessageSticker(emoji: "🎉")
+
+        _ = await sut.forward(message: message, sourceConversationId: sourceConvId, to: target)
+
+        let queued = await queue.enqueuedItems
+        XCTAssertEqual(queued.first?.sticker?.emoji, "🎉")
     }
 
     func test_forward_mediaOnly_omitsContent() async throws {
@@ -271,7 +307,45 @@ final class MessageForwardServiceTests: XCTestCase {
         )
         XCTAssertEqual(ForwardRefusalReason.local(for: makeMessage(effects: MessageEffects(flags: .ephemeral))), .afterRead,
                        "un éphémère sans durée lisible est jugé après lecture")
-        XCTAssertEqual(ForwardRefusalReason.local(for: makeMessage(effects: MessageEffects(flags: .blurred))), .blurred)
+        XCTAssertNil(ForwardRefusalReason.local(for: makeMessage(effects: MessageEffects(flags: .blurred))),
+                     "D8 : un flouté se transfère, son flou hérité par la copie")
+    }
+
+    func test_forward_blurredMessage_leaves_andTheServerImposesTheBlur() async throws {
+        let (sut, api, _, _) = makeSUT()
+        stubSendSuccess(api, target: target)
+
+        let outcome = await sut.forward(message: makeMessage(content: "x", effects: MessageEffects(flags: .blurred)),
+                                        sourceConversationId: nil, to: target)
+
+        XCTAssertEqual(outcome, .sent(conversationId: target))
+    }
+
+    func test_forward_aChosenPiece_postsOnlyThatPiece() async throws {
+        let (sut, api, _, _) = makeSUT()
+        stubSendSuccess(api, target: target)
+
+        _ = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target,
+                              chosenDurationSeconds: nil, forwardedAttachmentIds: ["a3"])
+
+        XCTAssertEqual(try postedBody(api)["forwardedAttachmentIds"] as? [String], ["a3"])
+    }
+
+    func test_forward_aChosenPiece_offline_keepsThePieceInTheQueue() async throws {
+        let (sut, _, queue, _) = makeSUT(online: false)
+
+        _ = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target,
+                              chosenDurationSeconds: nil, forwardedAttachmentIds: ["a3"])
+
+        let queued = await queue.enqueuedItems
+        XCTAssertEqual(queued.first?.forwardedAttachmentIds, ["a3"])
+    }
+
+    func test_serverRefusal_readsTheEncryptedSourcePhrase() {
+        XCTAssertEqual(
+            ForwardRefusalReason.server(message: "Un message chiffré se transfère depuis l’appareil : la passerelle n’en copie rien"),
+            .encryptedSource
+        )
     }
 
     func test_forward_ordinaryMessage_sendsNoEphemeralDuration() async throws {
@@ -333,7 +407,6 @@ final class MessageForwardServiceTests: XCTestCase {
             (makeMessage(content: "x", effects: MessageEffects(flags: .viewOnce)), .viewOnce),
             (makeMessage(content: "x", effects: MessageEffects(flags: [.ephemeral, .ephemeralAfterRead])), .afterRead),
             (makeMessage(content: "x", effects: MessageEffects(flags: [.ephemeral, .ephemeralAfterRead], ephemeralDuration: 30)), .afterRead),
-            (makeMessage(content: "x", effects: MessageEffects(flags: .blurred)), .blurred),
         ]
         for online in [true, false] {
             for (message, reason) in refused {
@@ -374,8 +447,8 @@ final class MessageForwardServiceTests: XCTestCase {
     func test_forward_toExistingConversationTarget_skipsCreationAndSends() async throws {
         let (sut, api, _, creator) = makeSUT()
         stubSendSuccess(api, target: target)
-        let existing = ForwardTarget(id: "conv:\(target)", kind: .conversation, conversationId: target,
-                                      userId: nil, title: "Équipe", subtitle: nil, avatarURL: nil)
+        let existing = ShareRecipient(id: "conv:\(target)", kind: .conversation, conversationId: target,
+                                      userId: nil, title: "Équipe", detail: .group(members: 3), avatarURL: nil)
 
         let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: existing)
 
@@ -448,13 +521,27 @@ final class MessageForwardServiceTests: XCTestCase {
     /// plutôt que de forcer un unwrap.
     func test_forward_targetWithNeitherConversationNorUser_failsWithoutCreatingOrSending() async {
         let (sut, api, _, creator) = makeSUT()
-        let emptyTarget = ForwardTarget(id: "user:orphan", kind: .contact, conversationId: nil,
-                                         userId: nil, title: "?", subtitle: nil, avatarURL: nil)
+        let emptyTarget = ShareRecipient(id: "user:orphan", kind: .person, conversationId: nil,
+                                         userId: nil, title: "?", detail: .friendWithoutConversation, avatarURL: nil)
 
         let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: emptyTarget)
 
         guard case .failed = outcome else { return XCTFail("expected .failed, got \(outcome)") }
         XCTAssertEqual(creator.createCallCount, 0)
         XCTAssertEqual(api.postCount, 0)
+    }
+
+    /// La table de dédoublonnage des transferts est BORNÉE : un transfert mis en file hors ligne, ou en échec
+    /// réseau jamais rejoué, gardait sa clé toute la session.
+    func test_laTableDeDedoublonnageEstBornee() throws {
+        XCTAssertEqual(MessageForwardService.dedupCapacity, 256)
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Services/MessageForwardService.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(code.contains("BoundedFIFOMap<String, String>(capacity: MessageForwardService.dedupCapacity)"))
     }
 }

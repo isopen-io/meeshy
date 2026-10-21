@@ -1233,6 +1233,53 @@
         }
       }
     },
+    "audio.editor.a11y.playhead": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "موضع التشغيل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiedergabeposition"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Playback position"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posición de reproducción"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position de lecture"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posizione di riproduzione"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posição de reprodução"
+          }
+        }
+      }
+    },
     "audio.editor.apply": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -3301,6 +3348,100 @@
         }
       }
     },
+    "audio.split.handle.end": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نهاية القص"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende des Schnitts"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cut end"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Final del corte"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fin de la coupe"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fine del taglio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fim do corte"
+          }
+        }
+      }
+    },
+    "audio.split.handle.start": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بداية القص"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beginn des Schnitts"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cut start"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicio del corte"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Début de la coupe"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inizio del taglio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Início do corte"
+          }
+        }
+      }
+    },
     "audio.trim.handle.end": {
       "extractionState": "manual",
       "localizations": {
@@ -3660,7 +3801,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Bresil"
+            "value": "Brésil"
           }
         },
         "it": {
@@ -3801,7 +3942,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cote d'Ivoire"
+            "value": "Côte d'Ivoire"
           }
         },
         "it": {
@@ -3989,7 +4130,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Algerie"
+            "value": "Algérie"
           }
         },
         "it": {
@@ -4318,7 +4459,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Coree du Sud"
+            "value": "Corée du Sud"
           }
         },
         "it": {
@@ -4553,7 +4694,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Senegal"
+            "value": "Sénégal"
           }
         },
         "it": {
@@ -4694,7 +4835,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Etats-Unis"
+            "value": "États-Unis"
           }
         },
         "it": {
@@ -4788,7 +4929,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Numero de telephone"
+            "value": "Numéro de téléphone"
           }
         },
         "it": {
@@ -6356,6 +6497,664 @@
         }
       }
     },
+    "auth.forgotPassword.code": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمز التحقق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bestätigungscode"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verification code"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Código de verificación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code de vérification"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codice di verifica"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Código de verificação"
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.code.lead": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib den 6-stelligen Code aus deiner Authenticator-App ein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the 6-digit code from your authenticator app."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce el código de 6 dígitos de tu aplicación de autenticación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saisissez le code à 6 chiffres de votre application d’authentification."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisci il codice a 6 cifre della tua app di autenticazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digite o código de 6 dígitos do seu aplicativo de autenticação."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.error.codeRequired": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الحساب محمي: أدخل رمز التحقق من تطبيق المصادقة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Konto ist geschützt: Gib den Bestätigungscode aus deiner Authenticator-App ein."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This account is protected: enter the verification code from your authenticator app."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta cuenta está protegida: introduce el código de verificación de tu aplicación de autenticación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce compte est protégé : saisissez le code de vérification de votre application d’authentification."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo account è protetto: inserisci il codice di verifica della tua app di autenticazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conta está protegida: digite o código de verificação do seu aplicativo de autenticação."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.error.codeInvalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رمز التحقق غير صحيح."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falscher Bestätigungscode."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incorrect verification code."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Código de verificación incorrecto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code de vérification incorrect."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codice di verifica errato."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Código de verificação incorreto."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.error.weak": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كلمة المرور هذه سهلة التخمين. اختر كلمة أطول أو أقل قابلية للتوقع."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Passwort ist zu leicht zu erraten. Wähle ein längeres oder weniger vorhersehbares."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This password is too easy to guess. Choose a longer or less predictable one."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta contraseña es demasiado fácil de adivinar. Elige una más larga o menos previsible."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce mot de passe est trop facile à deviner. Choisissez-en un plus long ou moins prévisible."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa password è troppo facile da indovinare. Scegline una più lunga o meno prevedibile."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta senha é fácil demais de adivinhar. Escolha uma mais longa ou menos previsível."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.error.reused": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "استخدمت كلمة المرور هذه مؤخرًا. اختر كلمة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast dieses Passwort kürzlich verwendet. Wähle ein anderes."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You used this password recently. Choose a different one."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya usaste esta contraseña recientemente. Elige otra."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous avez déjà utilisé ce mot de passe récemment. Choisissez-en un autre."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hai usato questa password di recente. Scegline un’altra."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você usou esta senha recentemente. Escolha outra."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.error.rateLimited": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "محاولات كثيرة جدًا. انتظر بضع دقائق قبل إعادة المحاولة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu viele Versuche. Warte ein paar Minuten, bevor du es erneut versuchst."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many attempts. Wait a few minutes before trying again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiados intentos. Espera unos minutos antes de volver a intentarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop de tentatives. Patientez quelques minutes avant de réessayer."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Troppi tentativi. Attendi qualche minuto prima di riprovare."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tentativas demais. Aguarde alguns minutos antes de tentar novamente."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.error.locked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "هذا الحساب مقفل مؤقتًا. تواصل مع الدعم."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Konto ist vorübergehend gesperrt. Wende dich an den Support."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This account is temporarily locked. Contact support."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta cuenta está bloqueada temporalmente. Contacta con el soporte."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce compte est temporairement verrouillé. Contactez le support."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questo account è temporaneamente bloccato. Contatta l’assistenza."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta conta está temporariamente bloqueada. Entre em contato com o suporte."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.error.offline": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد اتصال. تحقق من شبكتك وأعد المحاولة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Verbindung. Prüfe dein Netzwerk und versuche es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No connection. Check your network and try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión. Comprueba tu red y vuelve a intentarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pas de connexion. Vérifiez votre réseau et réessayez."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nessuna connessione. Controlla la rete e riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sem conexão. Verifique sua rede e tente novamente."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.exhausted.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رموز غير صحيحة كثيرة جدًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu viele falsche Codes"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many incorrect codes"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demasiados códigos incorrectos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trop de codes incorrects"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Troppi codici errati"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Códigos incorretos demais"
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.exhausted.text": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حفاظًا على أمانك، تم تعطيل هذا الرابط. اطلب رابطًا جديدًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu deiner Sicherheit wurde dieser Link deaktiviert. Fordere einen neuen an."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For your security, this link has been disabled. Request a new one."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por seguridad, este enlace se ha desactivado. Solicita uno nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Par sécurité, ce lien a été désactivé. Demandez-en un nouveau."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per sicurezza, questo link è stato disattivato. Richiedine uno nuovo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por segurança, este link foi desativado. Peça um novo."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.invalidLink.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رابط غير صالح أو منتهي الصلاحية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ungültiger oder abgelaufener Link"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid or expired link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enlace no válido o caducado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lien invalide ou expiré"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link non valido o scaduto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link inválido ou expirado"
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.invalidLink.text": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "اطلب رابطًا جديدًا لاختيار كلمة المرور."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fordere einen neuen Link an, um dein Passwort festzulegen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request a new link to choose your password."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solicita un nuevo enlace para elegir tu contraseña."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demandez un nouveau lien pour choisir votre mot de passe."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Richiedi un nuovo link per scegliere la tua password."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peça um novo link para escolher sua senha."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.invalidLink.action": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طلب رابط جديد"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neuen Link anfordern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request a new link"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solicitar un nuevo enlace"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demander un nouveau lien"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Richiedi un nuovo link"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pedir um novo link"
+          }
+        }
+      }
+    },
     "auth.languageSelector.placeholder": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -6715,7 +7514,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cet email est deja utilise!"
+            "value": "Cet email est déjà utilisé!"
           }
         },
         "it": {
@@ -7177,7 +7976,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Ce numero semble invalide"
+            "value": "Ce numéro semble invalide"
           }
         },
         "it": {
@@ -7224,7 +8023,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Ce numero est deja utilise!"
+            "value": "Ce numéro est déjà utilisé!"
           }
         },
         "it": {
@@ -7733,7 +8532,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Ce pseudo est deja pris!"
+            "value": "Ce pseudo est déjà pris!"
           }
         },
         "it": {
@@ -7780,7 +8579,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Verification non effectuee"
+            "value": "Vérification non effectuée"
           }
         },
         "it": {
@@ -9003,7 +9802,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creez d'abord une conversation pour l'ajouter ici."
+            "value": "Créez d'abord une conversation pour l'ajouter ici."
           }
         },
         "it": {
@@ -9097,7 +9896,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucun resultat"
+            "value": "Aucun résultat"
           }
         },
         "it": {
@@ -9144,7 +9943,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Deplacer"
+            "value": "Déplacer"
           }
         },
         "it": {
@@ -9191,7 +9990,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cette conversation appartient deja a une autre communaute. Elle sera deplacee vers celle-ci."
+            "value": "Cette conversation appartient déjà à une autre communauté. Elle sera déplacée vers celle-ci."
           }
         },
         "it": {
@@ -9238,7 +10037,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Deplacer cette conversation ?"
+            "value": "Déplacer cette conversation ?"
           }
         },
         "it": {
@@ -9285,7 +10084,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Autre communaute"
+            "value": "Autre communauté"
           }
         },
         "it": {
@@ -9426,7 +10225,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creer la communaute"
+            "value": "Créer la communauté"
           }
         },
         "it": {
@@ -9614,7 +10413,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "De quoi parle cette communaute ?"
+            "value": "De quoi parle cette communauté ?"
           }
         },
         "it": {
@@ -9849,7 +10648,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Nom de la communaute"
+            "value": "Nom de la communauté"
           }
         },
         "it": {
@@ -9990,7 +10789,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Ma communaute"
+            "value": "Ma communauté"
           }
         },
         "it": {
@@ -10037,7 +10836,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Seuls les membres invites peuvent rejoindre"
+            "value": "Seuls les membres invités peuvent rejoindre"
           }
         },
         "it": {
@@ -10084,7 +10883,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Tout le monde peut decouvrir et rejoindre"
+            "value": "Tout le monde peut découvrir et rejoindre"
           }
         },
         "it": {
@@ -10131,7 +10930,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Communaute privee"
+            "value": "Communauté privée"
           }
         },
         "it": {
@@ -10178,7 +10977,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Nouvelle communaute"
+            "value": "Nouvelle communauté"
           }
         },
         "it": {
@@ -10413,7 +11212,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reglages"
+            "value": "Réglages"
           }
         },
         "it": {
@@ -10695,7 +11494,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vous ne pourrez plus acceder aux channels de cette communaute."
+            "value": "Vous ne pourrez plus accéder aux channels de cette communauté."
           }
         },
         "it": {
@@ -10742,7 +11541,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Quitter la communaute ?"
+            "value": "Quitter la communauté ?"
           }
         },
         "it": {
@@ -10789,7 +11588,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Quitter la communaute"
+            "value": "Quitter la communauté"
           }
         },
         "it": {
@@ -10883,7 +11682,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reglages"
+            "value": "Réglages"
           }
         },
         "it": {
@@ -11541,7 +12340,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creer une communaute"
+            "value": "Créer une communauté"
           }
         },
         "it": {
@@ -11588,7 +12387,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creer une communaute"
+            "value": "Créer une communauté"
           }
         },
         "it": {
@@ -11635,7 +12434,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Rejoins ou cree une communaute pour collaborer"
+            "value": "Rejoins ou crée une communauté pour collaborer"
           }
         },
         "it": {
@@ -11682,7 +12481,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucune communaute"
+            "value": "Aucune communauté"
           }
         },
         "it": {
@@ -11776,7 +12575,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Communautes"
+            "value": "Communautés"
           }
         },
         "it": {
@@ -11981,6 +12780,194 @@
         }
       }
     },
+    "community.members.section.admin": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admins"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admins"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admins"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admins"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admins"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Admin"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المسؤولون"
+          }
+        }
+      }
+    },
+    "community.members.section.creator": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créateurs"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creators"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersteller"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creadores"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criadores"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creatori"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المنشئون"
+          }
+        }
+      }
+    },
+    "community.members.section.member": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Membres"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Members"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitglieder"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Miembros"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Membros"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Membri"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الأعضاء"
+          }
+        }
+      }
+    },
+    "community.members.section.moderator": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modérateurs"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moderators"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moderatoren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moderadores"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moderadores"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moderatori"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المشرفون"
+          }
+        }
+      }
+    },
     "community.members.title": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -12105,7 +13092,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Privee"
+            "value": "Privée"
           }
         },
         "it": {
@@ -13515,7 +14502,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echec du telechargement de l'avatar"
+            "value": "Échec du téléchargement de l'avatar"
           }
         },
         "it": {
@@ -13562,7 +14549,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Avatar televerse"
+            "value": "Avatar téléversé"
           }
         },
         "it": {
@@ -13609,7 +14596,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echec du telechargement de la banniere"
+            "value": "Échec du téléchargement de la bannière"
           }
         },
         "it": {
@@ -13656,7 +14643,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Banniere televersee"
+            "value": "Bannière téléversée"
           }
         },
         "it": {
@@ -13703,7 +14690,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Communaute mise a jour"
+            "value": "Communauté mise à jour"
           }
         },
         "it": {
@@ -14643,7 +15630,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Createur"
+            "value": "Créateur"
           }
         },
         "it": {
@@ -15066,7 +16053,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire."
+            "value": "Cette conversation sera fermée pour tous les membres. Plus personne ne pourra écrire."
           }
         },
         "it": {
@@ -15207,7 +16194,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes."
+            "value": "Cette conversation disparaîtra définitivement de votre liste. Les autres membres ne seront pas affectés."
           }
         },
         "it": {
@@ -15818,7 +16805,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Retrograder Membre"
+            "value": "Rétrograder Membre"
           }
         },
         "it": {
@@ -15959,7 +16946,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Promouvoir Moderateur"
+            "value": "Promouvoir Modérateur"
           }
         },
         "it": {
@@ -16053,7 +17040,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucun membre trouve"
+            "value": "Aucun membre trouvé"
           }
         },
         "it": {
@@ -16194,7 +17181,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Seuls les admins peuvent ecrire"
+            "value": "Seuls les admins peuvent écrire"
           }
         },
         "it": {
@@ -16382,7 +17369,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Desactive"
+            "value": "Désactivé"
           }
         },
         "it": {
@@ -16429,7 +17416,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Qui peut ecrire"
+            "value": "Qui peut écrire"
           }
         },
         "it": {
@@ -16617,7 +17604,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Moderateurs"
+            "value": "Modérateurs"
           }
         },
         "it": {
@@ -16993,7 +17980,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reglages"
+            "value": "Réglages"
           }
         },
         "it": {
@@ -17040,7 +18027,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echec du telechargement de l'avatar"
+            "value": "Échec du téléchargement de l'avatar"
           }
         },
         "it": {
@@ -17087,7 +18074,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Avatar televerse"
+            "value": "Avatar téléversé"
           }
         },
         "it": {
@@ -17134,7 +18121,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echec du telechargement de la banniere"
+            "value": "Échec du téléchargement de la bannière"
           }
         },
         "it": {
@@ -17181,7 +18168,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Banniere televersee"
+            "value": "Bannière téléversée"
           }
         },
         "it": {
@@ -17369,7 +18356,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Role mis a jour"
+            "value": "Rôle mis à jour"
           }
         },
         "it": {
@@ -17416,7 +18403,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Conversation mise a jour"
+            "value": "Conversation mise à jour"
           }
         },
         "it": {
@@ -17745,7 +18732,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reactions"
+            "value": "Réactions"
           }
         },
         "it": {
@@ -17792,7 +18779,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reactions"
+            "value": "Réactions"
           }
         },
         "it": {
@@ -17805,6 +18792,53 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Reações"
+          }
+        }
+      }
+    },
+    "error.banner.dismiss.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يغلق رسالة الخطأ هذه."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließt diese Fehlermeldung."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dismisses this error message."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cierra este mensaje de error."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ferme ce message d'erreur."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiude questo messaggio di errore."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fecha esta mensagem de erro."
           }
         }
       }
@@ -20095,7 +21129,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reessayer"
+            "value": "Réessayer"
           }
         },
         "it": {
@@ -20518,7 +21552,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Prenom"
+            "value": "Prénom"
           }
         },
         "it": {
@@ -21176,7 +22210,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Communaute"
+            "value": "Communauté"
           }
         },
         "it": {
@@ -21223,7 +22257,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Conversation privee"
+            "value": "Conversation privée"
           }
         },
         "it": {
@@ -21377,6 +22411,100 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Público"
+          }
+        }
+      }
+    },
+    "joinFlow.success.conversationFallback": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "la conversation"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "the conversation"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "der Unterhaltung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "la conversación"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a conversa"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "la conversazione"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المحادثة"
+          }
+        }
+      }
+    },
+    "joinFlow.success.joined": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous avez rejoint %1$@ en tant que %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You joined %1$@ as %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du bist %1$@ als %2$@ beigetreten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te uniste a %1$@ como %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você entrou em %1$@ como %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hai aderito a %1$@ come %2$@"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "انضممت إلى %1$@ باسم %2$@"
           }
         }
       }
@@ -21693,7 +22821,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Itineraire"
+            "value": "Itinéraire"
           }
         },
         "it": {
@@ -21834,7 +22962,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Position partagee"
+            "value": "Position partagée"
           }
         },
         "it": {
@@ -21881,7 +23009,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Duree du partage"
+            "value": "Durée du partage"
           }
         },
         "it": {
@@ -21975,7 +23103,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Arreter"
+            "value": "Arrêter"
           }
         },
         "it": {
@@ -23026,6 +24154,711 @@
         }
       }
     },
+    "media.crop.a11y.handle.bottom": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحافة السفلية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untere Kante"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bottom edge"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borde inferior"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bord inférieur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bordo inferiore"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borda inferior"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.handle.bottomLeft": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الزاوية السفلية اليسرى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untere linke Ecke"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bottom left corner"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esquina inferior izquierda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coin inférieur gauche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angolo in basso a sinistra"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canto inferior esquerdo"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.handle.bottomRight": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الزاوية السفلية اليمنى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untere rechte Ecke"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bottom right corner"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esquina inferior derecha"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coin inférieur droit"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angolo in basso a destra"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canto inferior direito"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.handle.frame": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إطار القص"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuschneiderahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crop frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marco de recorte"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadre de recadrage"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riquadro di ritaglio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moldura de corte"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.handle.left": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحافة اليسرى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linke Kante"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left edge"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borde izquierdo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bord gauche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bordo sinistro"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borda esquerda"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.handle.right": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحافة اليمنى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechte Kante"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Right edge"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borde derecho"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bord droit"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bordo destro"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borda direita"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.handle.top": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الحافة العلوية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obere Kante"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top edge"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borde superior"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bord supérieur"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bordo superiore"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borda superior"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.handle.topLeft": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الزاوية العلوية اليسرى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obere linke Ecke"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top left corner"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esquina superior izquierda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coin supérieur gauche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angolo in alto a sinistra"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canto superior esquerdo"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.handle.topRight": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الزاوية العلوية اليمنى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Obere rechte Ecke"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top right corner"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esquina superior derecha"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coin supérieur droit"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angolo in alto a destra"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canto superior direito"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.move.down": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحريك للأسفل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach unten bewegen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move down"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover hacia abajo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer vers le bas"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sposta in basso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover para baixo"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.move.left": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحريك لليسار"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach links bewegen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move left"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover a la izquierda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer vers la gauche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sposta a sinistra"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover para a esquerda"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.move.right": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحريك لليمين"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach rechts bewegen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move right"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover a la derecha"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer vers la droite"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sposta a destra"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover para a direita"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.move.up": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحريك للأعلى"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach oben bewegen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move up"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover hacia arriba"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer vers le haut"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sposta in alto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover para cima"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.position": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الموضع الأفقي %1$@، العمودي %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal %1$@, vertikal %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal %1$@, vertical %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal %1$@, vertical %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal %1$@, vertical %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Orizzontale %1$@, verticale %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal %1$@, vertical %2$@"
+          }
+        }
+      }
+    },
+    "media.crop.a11y.size": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "العرض %1$@، الارتفاع %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Breite %1$@, Höhe %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Width %1$@, height %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ancho %1$@, alto %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Largeur %1$@, hauteur %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Larghezza %1$@, altezza %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Largura %1$@, altura %2$@"
+          }
+        }
+      }
+    },
     "media.document.defaultName": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -23338,7 +25171,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Luminosite"
+            "value": "Luminosité"
           }
         },
         "it": {
@@ -24184,7 +26017,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Nettete"
+            "value": "Netteté"
           }
         },
         "it": {
@@ -25547,7 +27380,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Telecharger la video"
+            "value": "Télécharger la vidéo"
           }
         },
         "it": {
@@ -25594,7 +27427,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Telechargez pour lire la video"
+            "value": "Téléchargez pour lire la vidéo"
           }
         },
         "it": {
@@ -25641,7 +27474,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Telechargement en cours"
+            "value": "Téléchargement en cours"
           }
         },
         "it": {
@@ -25688,7 +27521,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "La lecture demarrera apres le telechargement"
+            "value": "La lecture démarrera après le téléchargement"
           }
         },
         "it": {
@@ -26628,7 +28461,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Video indisponible. Reessayer."
+            "value": "Vidéo indisponible. Réessayer."
           }
         },
         "it": {
@@ -27429,7 +29262,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Reactions"
+            "value": "Réactions"
           }
         },
         "it": {
@@ -27523,7 +29356,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Systeme"
+            "value": "Système"
           }
         },
         "it": {
@@ -27758,7 +29591,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucun appel manque"
+            "value": "Aucun appel manqué"
           }
         },
         "it": {
@@ -28134,7 +29967,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos notifications apparaitront ici"
+            "value": "Vos notifications apparaîtront ici"
           }
         },
         "it": {
@@ -28181,7 +30014,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucune notification systeme"
+            "value": "Aucune notification système"
           }
         },
         "it": {
@@ -28946,6 +30779,161 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Notificações"
+          }
+        }
+      }
+    },
+    "notifications.unreadCount": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld non lue"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld non lues"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld unread"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld unread"
+                }
+              }
+            }
+          }
+        },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld ungelesen"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld ungelesen"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld sin leer"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld sin leer"
+                }
+              }
+            }
+          }
+        },
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld não lida"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld não lidas"
+                }
+              }
+            }
+          }
+        },
+        "it": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld non letta"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld non lette"
+                }
+              }
+            }
+          }
+        },
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld غير مقروء"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld غير مقروء"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld غير مقروء"
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld غير مقروء"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld غير مقروء"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld غير مقروء"
+                }
+              }
+            }
           }
         }
       }
@@ -30671,7 +32659,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Debloquer l'utilisateur"
+            "value": "Débloquer l'utilisateur"
           }
         },
         "it": {
@@ -30812,7 +32800,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vous avez bloque cet utilisateur"
+            "value": "Vous avez bloqué cet utilisateur"
           }
         },
         "it": {
@@ -30859,7 +32847,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Debloquer"
+            "value": "Débloquer"
           }
         },
         "it": {
@@ -31047,7 +33035,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Interactions desactivees"
+            "value": "Interactions désactivées"
           }
         },
         "it": {
@@ -32410,7 +34398,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Connexion acceptee"
+            "value": "Connexion acceptée"
           }
         },
         "it": {
@@ -32598,7 +34586,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Demande annulee"
+            "value": "Demande annulée"
           }
         },
         "it": {
@@ -32645,7 +34633,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Demande refusee"
+            "value": "Demande refusée"
           }
         },
         "it": {
@@ -32739,7 +34727,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Demande envoyee"
+            "value": "Demande envoyée"
           }
         },
         "it": {
@@ -32786,7 +34774,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Impossible de debloquer"
+            "value": "Impossible de débloquer"
           }
         },
         "it": {
@@ -32833,7 +34821,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Utilisateur bloque"
+            "value": "Utilisateur bloqué"
           }
         },
         "it": {
@@ -32880,7 +34868,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Utilisateur debloque"
+            "value": "Utilisateur débloqué"
           }
         },
         "it": {
@@ -49923,6 +51911,100 @@
         }
       }
     },
+    "story.audio.track.mute": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "كتم صوت هذا المسار"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Spur stummschalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mute this track"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Silenciar esta pista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couper le son de cette piste"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disattiva l'audio di questa traccia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Silenciar esta faixa"
+          }
+        }
+      }
+    },
+    "story.audio.track.unmute": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تشغيل صوت هذا المسار"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ton dieser Spur einschalten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unmute this track"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar el sonido de esta pista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activer le son de cette piste"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attiva l'audio di questa traccia"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ativar o som desta faixa"
+          }
+        }
+      }
+    },
     "story.audio.volume": {
       "extractionState": "manual",
       "localizations": {
@@ -52209,7 +54291,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Photo/Video"
+            "value": "Photo/Vidéo"
           }
         },
         "it": {
@@ -52444,7 +54526,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Arriere-plan"
+            "value": "Arrière-plan"
           }
         },
         "it": {
@@ -53713,7 +55795,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Bibliotheque"
+            "value": "Bibliothèque"
           }
         },
         "it": {
@@ -53807,7 +55889,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Chargement de la video..."
+            "value": "Chargement de la vidéo..."
           }
         },
         "it": {
@@ -54606,7 +56688,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Prive"
+            "value": "Privé"
           }
         },
         "it": {
@@ -55922,7 +58004,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vous avez un brouillon non publie."
+            "value": "Vous avez un brouillon non publié."
           }
         },
         "it": {
@@ -56063,7 +58145,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Video"
+            "value": "Vidéo"
           }
         },
         "it": {
@@ -56110,7 +58192,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Visibilite"
+            "value": "Visibilité"
           }
         },
         "it": {
@@ -57802,7 +59884,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Intensite"
+            "value": "Intensité"
           }
         },
         "it": {
@@ -61522,6 +63604,147 @@
           "stringUnit": {
             "state": "translated",
             "value": "Figurinha da sua biblioteca"
+          }
+        }
+      }
+    },
+    "story.sticker.library.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الصق صورة لبدء مكتبتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge ein Bild ein, um deine Bibliothek zu beginnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste an image to start your library"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pega una imagen para empezar tu biblioteca"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collez une image pour commencer votre bibliothèque"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incolla un'immagine per iniziare la tua libreria"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cole uma imagem para começar sua biblioteca"
+          }
+        }
+      }
+    },
+    "story.sticker.library.lift": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قصّ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Freistellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cut out"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recortar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détourer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scontorna"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recortar"
+          }
+        }
+      }
+    },
+    "story.sticker.library.lift.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قصّ العنصر الرئيسي من صورة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Motiv eines Fotos freistellen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cut out the subject of a photo"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recortar el sujeto de una foto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détourer le sujet d'une photo"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scontorna il soggetto di una foto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recortar o objeto de uma foto"
           }
         }
       }
@@ -65504,7 +67727,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Duree"
+            "value": "Durée"
           }
         },
         "it": {
@@ -65739,7 +67962,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Debut"
+            "value": "Début"
           }
         },
         "it": {
@@ -65893,6 +68116,335 @@
           "stringUnit": {
             "state": "translated",
             "value": "Texto"
+          }
+        }
+      }
+    },
+    "story.timeline.a11y.action.endEarlier": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تقديم النهاية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende nach vorn schieben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End earlier"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adelantar el final"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avancer la fin"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anticipa la fine"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adiantar o fim"
+          }
+        }
+      }
+    },
+    "story.timeline.a11y.action.endLater": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تأخير النهاية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende nach hinten schieben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End later"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retrasar el final"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retarder la fin"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ritarda la fine"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atrasar o fim"
+          }
+        }
+      }
+    },
+    "story.timeline.a11y.action.inspect": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "فتح التفاصيل"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open details"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir los detalles"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir la fiche"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apri la scheda"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir os detalhes"
+          }
+        }
+      }
+    },
+    "story.timeline.a11y.action.moveDown": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خفض المسار"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spur nach unten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move track down"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bajar la pista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descendre la piste"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sposta la traccia in basso"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descer a faixa"
+          }
+        }
+      }
+    },
+    "story.timeline.a11y.action.moveUp": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "رفع المسار"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spur nach oben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move track up"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subir la pista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monter la piste"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sposta la traccia in alto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subir a faixa"
+          }
+        }
+      }
+    },
+    "story.timeline.a11y.action.startEarlier": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تقديم البداية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beginn nach vorn schieben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start earlier"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adelantar el inicio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avancer le début"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anticipa l'inizio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adiantar o início"
+          }
+        }
+      }
+    },
+    "story.timeline.a11y.action.startLater": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تأخير البداية"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beginn nach hinten schieben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start later"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retrasar el inicio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retarder le début"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ritarda l'inizio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atrasar o início"
           }
         }
       }
@@ -66353,6 +68905,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keyframe em %@"
+          }
+        }
+      }
+    },
+    "story.timeline.a11y.keyframe.edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعديل الإطار الرئيسي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyframe bearbeiten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit keyframe"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar el fotograma clave"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier l'image clé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifica il fotogramma chiave"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar o quadro-chave"
           }
         }
       }
@@ -66900,7 +69499,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Video BG"
+            "value": "Vidéo BG"
           }
         },
         "it": {
@@ -71157,7 +73756,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Media non disponible"
+            "value": "Média non disponible"
           }
         },
         "it": {
@@ -73594,6 +76193,100 @@
         }
       }
     },
+    "story.timeline.trim.handle.end": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "نهاية المقطع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende des Clips"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clip end"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Final del clip"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fin du clip"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fine della clip"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fim do clipe"
+          }
+        }
+      }
+    },
+    "story.timeline.trim.handle.start": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "بداية المقطع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beginn des Clips"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clip start"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicio del clip"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Début du clip"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inizio della clip"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Início do clipe"
+          }
+        }
+      }
+    },
     "story.timeline.video": {
       "extractionState": "stale",
       "localizations": {
@@ -73624,7 +76317,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Video"
+            "value": "Vidéo"
           }
         },
         "it": {
@@ -74282,7 +76975,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Medias"
+            "value": "Médias"
           }
         },
         "it": {
@@ -75222,7 +77915,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Le clonage vocal est reserve aux personnes de 18 ans et plus."
+            "value": "Le clonage vocal est réservé aux personnes de 18 ans et plus."
           }
         },
         "it": {
@@ -75269,7 +77962,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Verification d'age"
+            "value": "Vérification d'âge"
           }
         },
         "it": {
@@ -75363,7 +78056,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Verifier"
+            "value": "Vérifier"
           }
         },
         "it": {
@@ -75410,7 +78103,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos traductions audio utiliseront desormais votre voix clonee."
+            "value": "Vos traductions audio utiliseront désormais votre voix clonée."
           }
         },
         "it": {
@@ -75504,7 +78197,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Profil vocal cree !"
+            "value": "Profil vocal créé !"
           }
         },
         "it": {
@@ -75645,7 +78338,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Enregistrez quelques echantillons de votre voix"
+            "value": "Enregistrez quelques échantillons de votre voix"
           }
         },
         "it": {
@@ -75692,7 +78385,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Un modele vocal unique est cree a partir de vos echantillons"
+            "value": "Un modèle vocal unique est créé à partir de vos échantillons"
           }
         },
         "it": {
@@ -75739,7 +78432,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos traductions audio utiliseront votre voix clonee"
+            "value": "Vos traductions audio utiliseront votre voix clonée"
           }
         },
         "it": {
@@ -75786,7 +78479,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vous pouvez supprimer vos donnees vocales a tout moment (RGPD)"
+            "value": "Vous pouvez supprimer vos données vocales à tout moment (RGPD)"
           }
         },
         "it": {
@@ -75833,7 +78526,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos echantillons sont chiffres et ne sont jamais partages"
+            "value": "Vos échantillons sont chiffrés et ne sont jamais partagés"
           }
         },
         "it": {
@@ -75927,7 +78620,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "J'accepte que mes echantillons vocaux soient utilises pour creer un profil vocal"
+            "value": "J'accepte que mes échantillons vocaux soient utilisés pour créer un profil vocal"
           }
         },
         "it": {
@@ -76209,7 +78902,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Supprimer toutes les donnees vocales"
+            "value": "Supprimer toutes les données vocales"
           }
         },
         "it": {
@@ -76256,7 +78949,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Cette action supprimera definitivement votre profil vocal, tous vos echantillons et revoquera votre consentement. Cette action est irreversible (RGPD)."
+            "value": "Cette action supprimera définitivement votre profil vocal, tous vos échantillons et révoquera votre consentement. Cette action est irreversible (RGPD)."
           }
         },
         "it": {
@@ -76350,7 +79043,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Conforme au RGPD - Vos donnees vocales seront definitivement supprimees de nos serveurs."
+            "value": "Conforme au RGPD - Vos données vocales seront définitivement supprimées de nos serveurs."
           }
         },
         "it": {
@@ -76397,7 +79090,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Aucun echantillon enregistre"
+            "value": "Aucun échantillon enregistré"
           }
         },
         "it": {
@@ -76444,7 +79137,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Qualite"
+            "value": "Qualité"
           }
         },
         "it": {
@@ -76491,7 +79184,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echantillon"
+            "value": "Échantillon"
           }
         },
         "it": {
@@ -76538,7 +79231,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Echantillons"
+            "value": "Échantillons"
           }
         },
         "it": {
@@ -76679,7 +79372,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Duree totale"
+            "value": "Durée totale"
           }
         },
         "it": {
@@ -76726,7 +79419,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos echantillons sont en cours de traitement. Cela peut prendre quelques minutes."
+            "value": "Vos échantillons sont en cours de traitement. Cela peut prendre quelques minutes."
           }
         },
         "it": {
@@ -76773,7 +79466,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creation du profil vocal..."
+            "value": "Création du profil vocal..."
           }
         },
         "it": {
@@ -76820,7 +79513,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creer le profil vocal"
+            "value": "Créer le profil vocal"
           }
         },
         "it": {
@@ -76867,7 +79560,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Lisez le texte ci-dessous a voix haute. Enregistrez au moins 3 echantillons de 10 secondes chacun."
+            "value": "Lisez le texte ci-dessous à voix haute. Enregistrez au moins 3 échantillons de 10 secondes chacun."
           }
         },
         "it": {
@@ -77008,7 +79701,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Lisez ce texte a voix haute"
+            "value": "Lisez ce texte à voix haute"
           }
         },
         "it": {
@@ -77196,7 +79889,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Expire"
+            "value": "Expiré"
           }
         },
         "it": {
@@ -77431,7 +80124,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Votre voix est utilisee pour les traductions audio"
+            "value": "Votre voix est utilisée pour les traductions audio"
           }
         },
         "it": {
@@ -77478,7 +80171,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Enregistrez de nouveaux echantillons"
+            "value": "Enregistrez de nouveaux échantillons"
           }
         },
         "it": {
@@ -77525,7 +80218,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Le traitement a echoue, reessayez"
+            "value": "Le traitement a échoué, réessayez"
           }
         },
         "it": {
@@ -77572,7 +80265,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Creez un profil vocal pour activer le clonage"
+            "value": "Créez un profil vocal pour activer le clonage"
           }
         },
         "it": {
@@ -77666,7 +80359,7 @@
         "fr": {
           "stringUnit": {
             "state": "new",
-            "value": "Vos echantillons sont en cours de traitement"
+            "value": "Vos échantillons sont en cours de traitement"
           }
         },
         "it": {
@@ -79335,6 +82028,100 @@
         }
       }
     },
+    "frame.usage.avatarOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إطار الملف الشخصي فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Profilrahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profile ring only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo contorno de perfil"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contour de profil uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo contorno del profilo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente contorno de perfil"
+          }
+        }
+      }
+    },
+    "frame.usage.bannerFrameOnly": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إطار اللافتة فقط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur Bannerrahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Banner frame only"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo marco de banner"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadre de bannière uniquement"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo cornice del banner"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Somente moldura de banner"
+          }
+        }
+      }
+    },
     "frame.usage.callAndCapture": {
       "extractionState": "manual",
       "localizations": {
@@ -79801,6 +82588,617 @@
           "stringUnit": {
             "state": "translated",
             "value": "Somente momento “%@”"
+          }
+        }
+      }
+    },
+    "shop.buy.a11y": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شراء %1$@ مقابل %2$lld Meeshes"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ für %2$lld Meeshes kaufen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buy %1$@ for %2$lld Meeshes"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprar %1$@ por %2$lld Meeshes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acheter %1$@ pour %2$lld Meeshes"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acquista %1$@ per %2$lld Meeshes"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprar %1$@ por %2$lld Meeshes"
+          }
+        }
+      }
+    },
+    "shop.buy.price": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "شراء · %lld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kaufen · %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buy · %lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprar · %lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acheter · %lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acquista · %lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprar · %lld"
+          }
+        }
+      }
+    },
+    "shop.owned": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مملوك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Besitz"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Owned"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adquirido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Possédé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posseduto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adquirido"
+          }
+        }
+      }
+    },
+    "shop.balance": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshes: %lld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshes: %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshes: %lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshes: %lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshes : %lld"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshes: %lld"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeshes: %lld"
+          }
+        }
+      }
+    },
+    "shop.error.insufficient": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تحتاج إلى مزيد من Meeshes لهذه الحزمة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dir fehlen Meeshes für dieses Paket."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You need more Meeshes for this pack."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Te faltan Meeshes para este pack."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Il te manque des Meeshes pour ce pack."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ti servono più Meeshes per questo pack."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faltam Meeshes para este pack."
+          }
+        }
+      }
+    },
+    "shop.error.load": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل المتجر. حاول مرة أخرى."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Shop konnte nicht geladen werden. Versuche es erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The shop could not load. Try again."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo cargar la tienda. Inténtalo de nuevo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La boutique n’a pas pu se charger. Réessaie."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare il negozio. Riprova."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível carregar a loja. Tente novamente."
+          }
+        }
+      }
+    },
+    "shop.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا شيء لاكتشافه هنا حتى الآن."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hier gibt es noch nichts zu entdecken."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to discover here yet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay nada que descubrir aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rien à découvrir ici pour l’instant."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per ora non c’è nulla da scoprire qui."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ainda não há nada para descobrir aqui."
+          }
+        }
+      }
+    },
+    "shop.domain.sticker": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملصقات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sticker"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stickers"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stickers"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stickers"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sticker"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stickers"
+          }
+        }
+      }
+    },
+    "shop.domain.glory_frame": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إطارات اللعبة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spielrahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game frames"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marcos del juego"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadres du jeu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cornici del gioco"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Molduras do jogo"
+          }
+        }
+      }
+    },
+    "shop.domain.wallpaper": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "خلفيات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hintergründe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backgrounds"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fondos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonds"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sfondi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Planos de fundo"
+          }
+        }
+      }
+    },
+    "shop.domain.avatar_ring": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "حلقات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ringe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contornos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contorni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contornos"
+          }
+        }
+      }
+    },
+    "shop.domain.banner": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لافتات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Banner"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Banners"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Banners"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bannières"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Banner"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Banners"
+          }
+        }
+      }
+    },
+    "shop.domain.banner_frame": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إطارات اللافتات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bannerrahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Banner frames"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Marcos de banner"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cadres de bannière"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cornici del banner"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Molduras de banner"
           }
         }
       }

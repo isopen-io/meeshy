@@ -72,11 +72,11 @@ final class TransportBarKeyboardTests: XCTestCase {
         // the two structural wiring points instead: the Space shortcut on the
         // bar's own body, AND the always-present hidden overlay Button that
         // makes it reliably reachable even when the row itself isn't focused.
+        // La barre d'espace n'est PLUS posée sur la rangée : `.keyboardShortcut` sur un conteneur s'applique à chacun de
+        // ses boutons, et l'action dépendait de l'ordre de résolution de SwiftUI. Le bouton invisible la porte seul.
         guard let mainBody = body(from: "public var body: some View {", to: "private func trailingCluster") else { return }
-        XCTAssertTrue(
-            mainBody.contains(".keyboardShortcut(\" \", modifiers: [])"),
-            "TransportBar's body must wire the Space bar to play/pause."
-        )
+        XCTAssertFalse(mainBody.contains(".keyboardShortcut(\" \", modifiers: [])"), "plus de raccourci posé sur la rangée")
+        XCTAssertTrue(mainBody.contains(".background(keyboardShortcutOverlay)"))
         guard let overlay = body(
             from: "private var keyboardShortcutOverlay: some View {",
             to: "public static let hasKeyboardShortcuts"
@@ -84,7 +84,7 @@ final class TransportBarKeyboardTests: XCTestCase {
         XCTAssertTrue(
             overlay.contains("Button(action: onPlayToggle)") && overlay.contains(".keyboardShortcut(.space, modifiers: [])"),
             "keyboardShortcutOverlay must attach the Space shortcut to a hidden, always-present " +
-            "Button wired to onPlayToggle — the row-level shortcut alone can be swallowed by focus state."
+            "Button wired to onPlayToggle — the only Space binding of the bar."
         )
     }
 

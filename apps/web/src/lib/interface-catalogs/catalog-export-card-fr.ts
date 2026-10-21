@@ -140,7 +140,6 @@ const fr = {
   'export.card.compose.chosenReplies': 'Choisir les réponses',
   'export.card.compose.post': 'Post en tête',
   'export.card.compose.replies': 'Réponses sur la carte',
-  'export.card.compose.thread': 'Fil de commentaires',
   'export.card.compose.folded': '+{count} réponses',
 } as const;
 

@@ -87,6 +87,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       groupBy: jest.fn<any>().mockResolvedValue([]),
     },
     participant: {
+      findMany: jest.fn<any>().mockResolvedValue([{ id: "p1" }]),
       count: jest.fn<any>().mockResolvedValue(0),
     },
     friendRequest: {
@@ -357,6 +358,8 @@ describe("GET /users/search — l'ORDRE obéit à la loi de la présence", () =>
     expect(select).toEqual({
       id: true, username: true, firstName: true, lastName: true, displayName: true,
       isOnline: true, lastActiveAt: true, systemLanguage: true,
+      // #10945 — le contour équipé, servi résolu en `profileDecor`, jamais brut.
+      equippedAvatarRing: true,
     });
   });
 });

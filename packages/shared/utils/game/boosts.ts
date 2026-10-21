@@ -5,11 +5,27 @@
 
 import { seededRng } from './day-prng.js';
 
-/** +25 % sur les points tant que le niveau est sous le niveau record. */
+/** Le Vent arrière : ×1,25 sur les étincelles des gestes. */
 export const TAILWIND_FACTOR = 1.25;
 
+/**
+ * La loi d'AVANT les étincelles (#9377) : le Vent arrière soufflait dès que le niveau passait sous le record. Gardée pour
+ * le bloc d'un compte sans étincelles et pour les clients publiés (vecteurs `tailwind`) ; retirée avec eux.
+ */
 export const tailwindFactor = (params: { readonly level: number; readonly levelRecord: number }): number =>
   params.level < params.levelRecord ? TAILWIND_FACTOR : 1;
+
+/** L'écart au record de niveau à partir duquel le Vent arrière souffle (porteur 2026-10-17, #10896). RÉGLABLE. */
+export const TAILWIND_LEVEL_GAP = 7;
+
+/**
+ * LE VENT ARRIÈRE DES ÉTINCELLES (porteur 2026-10-17, #10896). Le niveau se lit sur la poche (#10892), qu'une frappe
+ * débite : le Vent arrière aide à remonter une GROSSE perte. Il souffle tant que le niveau est `TAILWIND_LEVEL_GAP`
+ * niveaux ou plus sous le record de niveau du cycle, et s'arrête dès que l'écart retombe en dessous — sans état. Le
+ * record du cycle repart à 1 au Prestige : un Prestige ne l'allume pas.
+ */
+export const sparksTailwindFactor = (params: { readonly level: number; readonly levelRecord: number }): number =>
+  params.levelRecord - params.level >= TAILWIND_LEVEL_GAP ? TAILWIND_FACTOR : 1;
 
 /**
  * La réponse reçue (+3 points à l'auteur répondu) se récompense au plus 20 fois

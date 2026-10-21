@@ -79,7 +79,7 @@ public struct ErrorBannerView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(currentError.errorDescription ?? "")
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint(String(localized: "Double-tap to dismiss this error message.", defaultValue: "Double-tap to dismiss this error message."))
+        .accessibilityHint(ErrorBannerView.dismissHint(in: .module))
         .accessibilityAction {
             dismiss()
         }
@@ -92,8 +92,7 @@ public struct ErrorBannerView: View {
         }
         HapticFeedback.error()
         dismissTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(4))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(4)) else { return }
             dismiss()
         }
     }
@@ -106,5 +105,11 @@ public struct ErrorBannerView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             error = nil
         }
+    }
+}
+
+extension ErrorBannerView {
+    static func dismissHint(in bundle: Bundle) -> String {
+        String(localized: "error.banner.dismiss.hint", defaultValue: "Ferme ce message d'erreur.", bundle: bundle)
     }
 }

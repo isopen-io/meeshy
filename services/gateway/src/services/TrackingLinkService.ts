@@ -1,6 +1,7 @@
 import { randomInt } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
+import { TrackingTargetCarriesEmailSecretError, isServableTrackingTarget, servedTrackingLinkTarget } from './tracking-link-target';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { EngagementService } from './engagement/EngagementService';
 import type { LinkVisitor, LinkVisitRecorder } from '../routes/links/utils/link-visitor';
@@ -206,6 +207,10 @@ export class TrackingLinkService {
      */
     creditCreator?: boolean;
   }): Promise<TrackingLink> {
+    if (!isServableTrackingTarget(params.originalUrl)) {
+      throw new TrackingTargetCarriesEmailSecretError();
+    }
+
     let token: string;
 
     if (params.customToken) {
@@ -276,13 +281,14 @@ export class TrackingLinkService {
   async resolveTarget(token: string): Promise<ResolvedLinkTarget | null> {
     const link = await this.prisma.trackingLink.findUnique({ where: { token } });
     if (link) {
+      const servable = isServableTrackingTarget(link.originalUrl);
       return {
         kind: 'tracking',
         targetType: link.targetType,
         targetId: link.targetId ?? null,
-        originalUrl: link.originalUrl ?? null,
+        originalUrl: servedTrackingLinkTarget(link.originalUrl),
         sharerId: link.createdBy ?? null,
-        isActive: this.isLinkActive(link.isActive, link.expiresAt ?? null),
+        isActive: servable && this.isLinkActive(link.isActive, link.expiresAt ?? null),
         expiresAt: link.expiresAt ?? null,
       };
     }
@@ -372,7 +378,7 @@ export class TrackingLinkService {
       throw new Error('Tracking link not found');
     }
 
-    if (!trackingLink.isActive) {
+    if (!trackingLink.isActive || !isServableTrackingTarget(trackingLink.originalUrl)) {
       throw new Error('Tracking link is inactive');
     }
 
@@ -743,6 +749,11 @@ export class TrackingLinkService {
       const fullMatch = match[0];
       const url = match[1];
 
+      if (!isServableTrackingTarget(url)) {
+        processedContent = processedContent.replace(fullMatch, () => url);
+        continue;
+      }
+
       try {
         let token: string;
 
@@ -814,7 +825,9 @@ export class TrackingLinkService {
     // Support n'importe quel domaine avec /l/<token> (flexible pour dev, staging, production)
     const trackingLinkRegex = /https?:\/\/[^\/]+\/l\/([a-zA-Z0-9_-]{2,50})/i;
 
-    const occurrences = linkOccurrences(content).filter(({ url }) => !trackingLinkRegex.test(url));
+    const occurrences = linkOccurrences(content).filter(
+      ({ url }) => !trackingLinkRegex.test(url) && isServableTrackingTarget(url)
+    );
     if (occurrences.length === 0) {
       return { processedContent: content, trackingLinks: [] };
     }
@@ -928,6 +941,10 @@ export class TrackingLinkService {
 
     if (!trackingLink) {
       throw new Error('Tracking link not found');
+    }
+
+    if (params.originalUrl !== undefined && !isServableTrackingTarget(params.originalUrl)) {
+      throw new TrackingTargetCarriesEmailSecretError();
     }
 
     // Si un nouveau token est fourni, vérifier qu'il n'existe pas déjà

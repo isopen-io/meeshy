@@ -102,7 +102,7 @@ const createMockPrisma = () => {
       // race path are unaffected.
       updateMany: jest.fn().mockResolvedValue({ count: 1 }) as MockFn
     },
-    participant: { findFirst: jest.fn() as MockFn, findMany: jest.fn().mockResolvedValue([]) as MockFn },
+    participant: { findFirst: jest.fn() as MockFn, findMany: jest.fn(async (a: any) => (Object.keys(a?.where ?? {}).join() === 'userId' && a?.select?.id ? [{ id: 'participant-123' }] : [])) as MockFn },
     callSession: {
       create: jest.fn() as MockFn,
       findUnique: jest.fn() as MockFn,
@@ -356,7 +356,7 @@ describe('CallService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-            participant: { userId: 'user-123' }
+            participantId: { in: ['participant-123'] }
           })
         })
       );

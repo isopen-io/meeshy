@@ -32,6 +32,10 @@ enum DeepLinkDestination: Equatable {
     /// `/auth/verify-email?token=…&email=…` — le lien de l'e-mail « code +
     /// lien » (#8035) : il vérifie l'adresse et ouvre la session.
     case emailVerificationLink(token: String, email: String)
+    /// `/reset-password?via=email#token=…` — le lien de « Mot de passe
+    /// oublié » (#10868). Pas un lieu de l'app : il présente « Nouveau mot de
+    /// passe », connecté ou non, et rien n'attend la connexion.
+    case passwordResetLink(token: String)
     case share(text: String?, url: String?)
     case userLinks
     case postDetail(postId: String)
@@ -53,6 +57,9 @@ enum DeepLinkDestination: Equatable {
     case call(conversationId: String, isVideo: Bool)
     /// Une saison ou une semaine de ligue (#9947) — `/me/progression/saison/{n}`, `/me/progression/ligue/{lundi}`.
     case game(GameLink)
+    /// `meeshy://settings/packs?domaine=<domaine>` : la vitrine unique, filtrée (#10632).
+    /// `pack=<slug>` met CE pack en avant dans la vitrine (#10703) — même paramètre que le web.
+    case packShop(domain: PackDomain?, pack: String? = nil)
     case external(URL)
 }
 
@@ -126,6 +133,20 @@ enum DeepLinkParser {
         return (trimmed?.isEmpty == false) ? trimmed : nil
     }
 
+    /// #10859 — un lien d'e-mail porte son secret dans le FRAGMENT
+    /// (`…?via=email#token=…&email=…`) : le navigateur ne l'envoie jamais au
+    /// serveur, aucun journal d'accès ne le garde. Le fragment prime ; la
+    /// requête reste lue pour les e-mails partis avant, jusqu'à leur expiration.
+    static func linkSecret(_ name: String, in url: URL) -> String? {
+        let raw = url.fragment.flatMap { fragment -> String? in
+            var carrier = URLComponents()
+            carrier.percentEncodedQuery = fragment
+            return carrier.queryItems?.first(where: { $0.name == name })?.value
+        }
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed?.isEmpty == false) ? trimmed : queryValue(name, in: url)
+    }
+
     /// Parse any URL into a deep link destination.
     ///
     /// Universal Links (https://meeshy.me/...):
@@ -137,7 +158,7 @@ enum DeepLinkParser {
     /// - `/post/{id}` or `/p/{id}`               -> post detail (short)
     /// - `/story/{id}`, `/stories/{id}`, `/s/{id}` -> story detail
     /// - `/share?text=...&url=...`               -> share content
-    /// - `/auth/magic-link?token=...`            -> passwordless auth
+    /// - `/auth/magic-link?token=...`            -> passwordless auth (https ONLY, #10870)
     ///
     /// Custom scheme (meeshy://...):
     /// - `meeshy://me`, `meeshy://links`
@@ -150,7 +171,10 @@ enum DeepLinkParser {
     /// - `meeshy://feeds/post/{id}`, `meeshy://feeds/p/{id}`
     /// - `meeshy://story/{id}`, `meeshy://stories/{id}`, `meeshy://s/{id}`
     /// - `meeshy://share?text=...&url=...`
-    /// - `meeshy://auth/magic-link?token=...`
+    ///
+    /// Never under `meeshy://` (#10868, #10870): a link that CONNECTS
+    /// (magic-link, verify-email) or resets a password. Any page or app opens
+    /// that scheme, and would hand the app a third party's token.
     ///
     /// Everything else -> `.external` (caller opens in Safari).
     static func parse(_ url: URL, environmentWebOrigin: String = MeeshyConfig.shared.webOrigin) -> DeepLinkDestination {
@@ -200,9 +224,14 @@ enum DeepLinkParser {
         return destination(for: components, url: url, customScheme: true) ?? .external(url)
     }
 
-    // Un chemin meeshy.me inconnu (ex. /settings) part dans Safari.
+    // Un chemin meeshy.me inconnu (ex. /settings) part dans Safari. Un chemin
+    // de lien à jeton d'e-mail ne se lit QUE sur sa forme exacte (#10875) :
+    // toute variante part, elle aussi, dans Safari.
     private static func parseMeeshyWeb(_ url: URL) -> DeepLinkDestination {
-        destination(for: segments(of: url), url: url, customScheme: false) ?? .external(url)
+        if EmailLinkSecret.carriesSecret(url) {
+            return emailLink(url) ?? .external(url)
+        }
+        return destination(for: segments(of: url), url: url, customScheme: false) ?? .external(url)
     }
 
     /// Segments de chemin sans vide ni `/` : `//join/X` et `/./join/X` ont la
@@ -221,17 +250,26 @@ enum DeepLinkParser {
     }
 
     /// `/auth/magic-link?token=…` ou `/auth/magic-link/<token>` ;
-    /// `/auth/verify-email?token=…&email=…` (#8035). Un jeton ou une adresse
-    /// vide n'ouvre rien : la validation échouerait, après avoir déconnecté.
-    private static func authLink(id: String?, components: [String], url: URL) -> DeepLinkDestination? {
-        switch id {
-        case "magic-link":
-            return (identifier(components, 2) ?? queryValue("token", in: url)).map { .magicLink(token: $0) }
-        case "verify-email":
-            guard let token = queryValue("token", in: url),
-                  let email = queryValue("email", in: url) else { return nil }
+    /// `/auth/verify-email?token=…&email=…` (#8035) ; `/reset-password` et
+    /// `/auth/reset-password` ; les alias `/auth/email-link/…` (#10859, #10868)
+    /// — et, depuis #10859, le secret dans le fragment (`?via=email#token=…`).
+    /// La forme se juge par `EmailLinkSecret.exactForm` (#10875) ; un jeton ou
+    /// une adresse vide n'ouvre rien.
+    ///
+    /// Jamais par `meeshy://` (#10870) : n'importe quelle page ou app ouvre ce
+    /// schéma, et y présenterait le jeton d'un TIERS. Seul le lien universel
+    /// https, que l'AASA réserve à notre domaine, porte un lien d'e-mail.
+    private static func emailLink(_ url: URL) -> DeepLinkDestination? {
+        switch EmailLinkSecret.exactForm(url) {
+        case .magicLink(let pathToken)?:
+            return (pathToken ?? linkSecret("token", in: url)).map { .magicLink(token: $0) }
+        case .verifyEmail?:
+            guard let token = linkSecret("token", in: url),
+                  let email = linkSecret("email", in: url) else { return nil }
             return .emailVerificationLink(token: token, email: email)
-        default:
+        case .resetPassword?:
+            return linkSecret("token", in: url).map { .passwordResetLink(token: $0) }
+        case nil:
             return nil
         }
     }
@@ -249,7 +287,7 @@ enum DeepLinkParser {
         case "me": return GameLinkParser.link(from: components).map { .game($0) } ?? .ownProfile
         case "links": return .userLinks
         case "share": return parseShareQuery(url)
-        case "auth": return authLink(id: id, components: components, url: url)
+        // Les liens d'e-mail ne passent pas par cette table (`emailLink`, #10875).
         case "signup": return referralCode(components: components, url: url).map { .referral(code: $0) }
         case "hashtag": return id.map { .hashtag(tag: $0) }
         // Invitation de conversation — `/join/<id>` (canonique).
@@ -285,6 +323,10 @@ enum DeepLinkParser {
             return queryValue("contactId", in: url).map { .conversation(id: $0, draftText: queryValue("message", in: url)) }
         // Widgets « Non lus » / « Récentes » et App Shortcut (#7811).
         case "conversations" where customScheme: return id.flatMap(conversationListEntry)
+        // La vitrine unique, filtrée par domaine (#10632, spec 2026-10-14 § 4.4).
+        case "settings" where customScheme && components.count == 2 && components[1] == "packs":
+            return .packShop(domain: PackDomain(queryValue: queryValue("domaine", in: url)),
+                             pack: PackFocusSlug.normalized(queryValue("pack", in: url)))
         case "call" where customScheme && components.count == 1:
             return queryValue("contactId", in: url).map { .call(conversationId: $0, isVideo: queryValue("type", in: url) == "video") }
         default: break
@@ -371,6 +413,8 @@ enum DeepLink: Equatable {
     case hashtag(tag: String)
     /// Une saison ou une semaine de ligue (#9947), ouverte par `Router.openGame(at:)`.
     case game(GameLink)
+    /// La vitrine unique des packs, filtrée par domaine (#10632).
+    case packShop(domain: PackDomain?, pack: String? = nil)
     /// `/l/<token>` dont la cible vit sur le web : lien EXTERNAL, ou type de
     /// cible que ce client ne connaît pas encore. Le consommateur l'OUVRE
     /// (Safari) — il ne la rejoint pas.
@@ -386,6 +430,9 @@ enum DeepLink: Equatable {
     /// désactivé, et chaque story de plus de 24 h (son expiration désactive ses
     /// liens de suivi, cf. `deactivatePostTrackingLinks` côté gateway).
     case unresolvedTrackedLink(token: String)
+    /// `meeshy://call?contactId=…&type=…` : une DEMANDE d'appel, que la racine
+    /// présente en confirmation. Le lien ne compose jamais lui-même.
+    case callRequest(conversationId: String, isVideo: Bool)
 
     /// **Reçu sans compte, ce lien attend-il la connexion ?** (#7811)
     ///
@@ -396,10 +443,10 @@ enum DeepLink: Equatable {
     /// lien non résolu n'a rien à promettre.
     var opensAfterSignIn: Bool {
         switch self {
-        case .joinLink, .chatLink, .magicLink, .emailVerificationLink, .externalLink, .unresolvedTrackedLink:
+        case .joinLink, .chatLink, .magicLink, .emailVerificationLink, .externalLink, .unresolvedTrackedLink, .callRequest:
             return false
         case .trackedLink, .conversation, .postDetail, .storyDetail, .reel, .community,
-             .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag, .game:
+             .recentConversation, .unreadConversations, .userProfile, .ownProfile, .userLinks, .hashtag, .game, .packShop:
             return true
         }
     }
@@ -489,27 +536,26 @@ final class DeepLinkRouter: ObservableObject {
     private let referrals: PendingReferralStoreProviding
     private let isAuthenticated: @MainActor () -> Bool
     private let hasResolvedSession: @MainActor () -> Bool
-    private let dialConversationCall: @MainActor (String, Bool) -> Void
     /// #10483 — la porte qui amène un contenu en détail le MARQUE de son
     /// entrée : lien de suivi, lien `?via=`, lien venu d'ailleurs, ou rien.
     private let entries: DetailOpenSourceProviding
+    /// #10868 — « Nouveau mot de passe », présenté à la racine de l'app.
+    private let passwordReset: PasswordResetLinkPresenter
 
     init(
         drafts: DraftStore = .shared,
         referrals: PendingReferralStoreProviding = PendingReferralStore.shared,
         isAuthenticated: @escaping @MainActor () -> Bool = { AuthManager.shared.isAuthenticated },
         hasResolvedSession: @escaping @MainActor () -> Bool = { AuthManager.shared.hasResolvedStoredSession },
-        dialConversationCall: @escaping @MainActor (String, Bool) -> Void = { conversationId, isVideo in
-            Task { await CallBackDialer.shared.dialConversation(id: conversationId, isVideo: isVideo) }
-        },
-        entries: DetailOpenSourceProviding = DetailOpenSources.shared
+        entries: DetailOpenSourceProviding = DetailOpenSources.shared,
+        passwordReset: PasswordResetLinkPresenter = .shared
     ) {
         self.entries = entries
+        self.passwordReset = passwordReset
         self.drafts = drafts
         self.referrals = referrals
         self.isAuthenticated = isAuthenticated
         self.hasResolvedSession = hasResolvedSession
-        self.dialConversationCall = dialConversationCall
     }
 
     // MARK: - Tracked link (`/l/<token>`) async resolution
@@ -609,8 +655,13 @@ final class DeepLinkRouter: ObservableObject {
     /// Reparse l'`originalUrl` d'un lien de suivi avec le MÊME analyseur que les
     /// Universal Links, pour qu'une URL Meeshy atterrisse in-app plutôt que dans
     /// Safari. `nil` quand l'URL n'ouvre rien (schéma non web, forme vide).
+    ///
+    /// Jamais un lien qui CONNECTE ou réinitialise (#10870) : la cible d'un lien
+    /// suivi est choisie par son créateur, qui y mettrait son propre jeton.
     static func destination(forOriginalURL url: URL) -> DeepLink? {
         switch DeepLinkParser.parse(url) {
+        case .magicLink, .emailVerificationLink, .passwordResetLink:
+            return nil
         case .external(let target):
             // Seul le web s'ouvre. Un `javascript:` ou un schéma inconnu remonté
             // par un lien de suivi ne doit jamais être passé à `UIApplication`.
@@ -641,11 +692,12 @@ final class DeepLinkRouter: ObservableObject {
         case .userLinks:                  return .userLinks
         case .hashtag(let tag):           return .hashtag(tag: tag)
         case .game(let link):             return .game(link)
+        case .packShop(let domain, let pack): return .packShop(domain: domain, pack: pack)
         case .joinLink(let identifier):   return .joinLink(identifier: identifier)
         case .chatLink(let identifier):   return .chatLink(identifier: identifier)
         case .magicLink(let token):       return .magicLink(token: token)
         case .emailVerificationLink(let token, let email): return .emailVerificationLink(token: token, email: email)
-        case .trackedLink, .share, .referral, .call, .external: return nil
+        case .trackedLink, .share, .referral, .call, .passwordResetLink, .external: return nil
         }
     }
 
@@ -671,11 +723,18 @@ final class DeepLinkRouter: ObservableObject {
         case .referral(let code):
             return captureReferral(code)
         case .call(let conversationId, let isVideo):
-            guard CallDialReadinessSnapshot.mayQueueDial(
+            // Le lien ne compose JAMAIS : il dépose une demande que la racine
+            // (fenêtre principale, session ouverte) présente en confirmation.
+            // Sans session, il ouvre l'app sur la connexion et ne garde rien.
+            if CallDialReadinessSnapshot.mayQueueDial(
                 sessionResolved: hasResolvedSession(),
                 authenticated: isAuthenticated()
-            ) else { return false }
-            dialConversationCall(conversationId, isVideo)
+            ) {
+                pendingDeepLink = .callRequest(conversationId: conversationId, isVideo: isVideo)
+            }
+            return true
+        case .passwordResetLink(let token):
+            passwordReset.present(token: token)
             return true
         case .share, .external:
             return false
@@ -732,6 +791,12 @@ final class DeepLinkRouter: ObservableObject {
     // MARK: - Consume
 
     @discardableResult
+    /// L'écran de connexion est affiché : une demande d'appel en attente est
+    /// oubliée — se connecter ne relance rien.
+    func discardPendingCallRequest() {
+        if case .callRequest = pendingDeepLink { pendingDeepLink = nil }
+    }
+
     func consumePendingDeepLink() -> DeepLink? {
         let link = pendingDeepLink
         pendingDeepLink = nil

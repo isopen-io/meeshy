@@ -80,7 +80,9 @@ struct ComposerCaptureMount<Content: View>: View {
                                     aspect: proportions,
                                     in: ComposerEditScene.area(container: proxy.size, top: marges.safeAreaInsets.top,
                                                                bottom: marges.safeAreaInsets.bottom,
-                                                               panels: session.editPanels))
+                                                               panels: session.editPanels,
+                                                               framed: session.editFramesScene,
+                                                               playback: session.offersEditPlayback))
                             } ?? rect(card: proxy[ancre], in: proxy.size, taille), taille)
                             // En plein écran, l'écran ne blanchit qu'à la prise.
                             if aspect == nil,
@@ -93,6 +95,7 @@ struct ComposerCaptureMount<Content: View>: View {
                     .animation(Self.growth, value: taille)
                     .animation(Self.growth, value: session.editAspect)
                     .animation(Self.growth, value: session.editPanels)
+                    .animation(Self.growth, value: session.editFramesScene)
                 }
             }
             .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in

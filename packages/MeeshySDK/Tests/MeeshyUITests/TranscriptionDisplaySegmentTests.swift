@@ -52,7 +52,11 @@ final class TranscriptionDisplaySegmentTests: XCTestCase {
         for file in ["MediaTranscriptionView.swift", "AudioPlayerView+Transcription.swift"] {
             let source = try String(contentsOf: media.appendingPathComponent(file), encoding: .utf8)
             XCTAssertFalse(source.contains("id: \\.element.id"), "\(file) indexe ses mots par une identité refaite à chaque passe")
-            XCTAssertTrue(source.contains("ForEach(Array(segments.enumerated()), id: \\.offset)"), file)
+            XCTAssertTrue(
+                source.contains("ForEach(Array(segments.enumerated()), id: \\.offset)")
+                    || source.contains("AsyncRenderRow(id: index, content: segmentSpan(segment, index: index)"),
+                file
+            )
         }
     }
 

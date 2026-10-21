@@ -39,4 +39,11 @@ nonisolated enum ComposerCaptureTapRule {
         guard let endedAt else { return false }
         return now.timeIntervalSince(endedAt) < holdReleaseWindow
     }
+
+    /// **Le toucher qui ferme une alerte n'est pas un toucher sur la prise**
+    /// (recette iPhone 2026-10-20 : « Abandonner » touché, les outils se
+    /// cachaient derrière). Pendant l'alerte, et le temps d'une levée après.
+    static func belongsToAnAlert(presented: Bool, closedAt: Date?, now: Date) -> Bool {
+        presented || followsAHold(closedAt, now: now)
+    }
 }

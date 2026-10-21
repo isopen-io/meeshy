@@ -355,7 +355,44 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // 457 -> 458 (2026-10-13) : UserProfileSheet pose la pastille « Réessayer » sur
 // resolvedAccent, l'accent du PROFIL (déjà lu ainsi l. 494 du même fichier) —
 // une fiche de profil n'a pas de conversation, donc pas d'accentColor à reprendre.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 458;
+// 458 -> 459 (2026-10-14, #10601, #10608) : `ConversationListView.swift` surligne
+// la CATÉGORIE d'origine d'une conversation glissée avec
+// `Color(hex: MeeshyColors.brandPrimaryHex)` — une catégorie n'a pas d'accentColor
+// propre (il appartient à une conversation), même nature que l'entrée #10220
+// (`PacksSettingsView.swift`) : couleur SÉMANTIQUE hors du contexte conversation
+// que vise CLAUDE.md § Conversation Accent Color.
+// 459 -> 467 (2026-10-15, #10631, #10632) : le rendu d'APPARENCE peint les
+// palettes du CATALOGUE que l'utilisateur choisit — fond de conversation
+// (`ConversationBackgroundView`, `ConversationAppearanceSheet` : surface et
+// accent de chaque nuance, accent effectif de l'aperçu) et modèles de design
+// (`AppearanceDesignView`, `AppearancePaint`, `AppearanceTileRenderer` :
+// `palette.base`, rôles de la palette). La couleur y est la DONNÉE choisie,
+// pas une teinte d'interface : remplacer par accentColor trahirait le choix.
+// 467 -> 471 (2026-10-15, #10632) : `AvatarRingView.swift` (4) peint le CONTOUR d'avatar équipé depuis
+// `stroke.colors` du catalogue — première et seconde couleur du trait, l'arc du dégradé cyclique et la
+// couleur d'un trait d'ornement. Un contour se voit des AUTRES et garde des couleurs FIXES, identiques
+// pour tous (spec § 5.2) : la couleur est la DONNÉE du contour, l'accent de conversation la trahirait.
+// La feuille de décor (`ProfileDecorSheet.swift`) prend `MeeshyColors.indigo500`, sans `Color(hex:)`.
+// 471 -> 477 (2026-10-16, peau des bulles et page de l'humeur) : `BubbleSkin` (3) DÉRIVE ses teintes de l'accent de
+// la conversation (`receivedFillHex(accentHex:)`, `sentFillHex`, l'encre lisible d'un fond) — c'est l'accent, calculé ;
+// la bulle reçue d'un contact peint SA couleur (`contactColor`) ; la page de l'humeur (`MoodSpotlight`, 2) éclaire
+// l'avatar de l'auteur de sa couleur d'identité (`entry.avatarColor`), et la carte retombe sur la couleur de repli de
+// l'auteur (`fallbackHex`). Couleurs d'IDENTITÉ ou dérivées de l'accent : les remplacer par accentColor les trahirait.
+// Valeur MESURÉE le 2026-10-16 en local.
+// 477 -> 478 (2026-10-16, 61e92078cb, l'arc-en-ciel du mode Script) : `RainbowLetters.swift` (1) colore chaque LETTRE
+// d'un message arc-en-ciel d'une teinte tirée d'une palette FIXE de six, choisie pour la lecture (4,5:1 contre le fond
+// de chaque thème, `RainbowLettersTests`). C'est le CONTENU de l'effet que l'auteur a choisi pour son message, pas une
+// couleur d'interface : l'accent de conversation n'a qu'une teinte, il effacerait l'effet. Le thème n'a pas ces six
+// nuances (et `Color(red:green:blue:)` relèverait le cliquet RVB des littéraux de design) : la palette reste en hexa.
+// Valeur MESURÉE le 2026-10-16 en local.
+// 478 -> 483 (2026-10-19, #10935 / #10936, les cadres rendus par le GPU) : `AvatarRingView.swift` (2), `BannerFrameRenderer.swift`
+// (1) et `FrameMotionLayers.swift` (1) peignent un contour ou un cadre de bannière dans les couleurs que SON dessin déclare
+// (`design.stroke.colors`, `design.palette`, servis par le catalogue des cadres) — le CONTENU de la pièce achetée, pas une
+// couleur d'interface, même règle que `RainbowLetters.swift` ci-dessus ; l'accent de conversation l'effacerait.
+// `ProfileDecorSheet.swift` (1) teinte l'aperçu de la bannière par l'accent du PROFIL (`accentHex`, déjà remis à
+// `MeeshyAvatar(accentColor:)`), hors de tout contexte de conversation. Masqué en CI derrière le gate de poids web (#10974) ;
+// valeur MESURÉE le 2026-10-19 en CI (run 39192153480) et en local, commit par commit (c61aac2d11 : +4, c242265209 : +1).
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 478;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -373,7 +410,10 @@ const SEARCH_ROOTS = [
 
 const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests', 'Theme']);
 
-const HARDCODED_COLOR_RE = /Color\(hex:/g;
+// `HexColor(hex:)` (SDK cœur, #10988) est le PARSEUR que les couleurs de texte de
+// story délèguent, pas une couleur posée dans une vue : le compter ferait d'une
+// consolidation une régression. `(?<!Hex)` l'écarte, et lui seul.
+const HARDCODED_COLOR_RE = /(?<!Hex)Color\(hex:/g;
 
 // Les deux points d'accès que CLAUDE.md § Conversation Accent Color documente
 // ( `conversation.accentColor`, `conversation.colorPalette` avec

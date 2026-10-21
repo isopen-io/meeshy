@@ -30,11 +30,19 @@ public struct PackRow: Identifiable, Hashable, Sendable {
     public let cover: PackCover
     /// « Rang Ambassadeur uniquement » — la loi d'usage, déjà traduite.
     public let usageText: String?
+    /// En Meeshes ; `nil` = gratuit (#10632).
+    public let price: Int?
+    /// Un pack payant non possédé s'ACHÈTE ; les autres s'installent.
+    public let owned: Bool
 
     public var id: String { slug }
 
+    /// Le geste du bouton : acheter d'abord, installer ensuite.
+    public var needsPurchase: Bool { price != nil && !owned }
+
     public init(slug: String, name: String, author: String = "", description: String = "",
-                installed: Bool, removable: Bool = true, cover: PackCover = .none, usageText: String? = nil) {
+                installed: Bool, removable: Bool = true, cover: PackCover = .none, usageText: String? = nil,
+                price: Int? = nil, owned: Bool = true) {
         self.slug = slug
         self.name = name
         self.author = author
@@ -43,6 +51,8 @@ public struct PackRow: Identifiable, Hashable, Sendable {
         self.removable = removable
         self.cover = cover
         self.usageText = usageText
+        self.price = price
+        self.owned = owned
     }
 }
 
@@ -59,22 +69,46 @@ public struct PackShopView: View {
     /// Le dernier geste a été refusé et annulé : la Boutique le DIT, sans
     /// quoi le bouton revenu en arrière aurait l'air d'un tap perdu.
     let showsFailure: Bool
+    /// Le message d'un refus précis (solde insuffisant…) ; à défaut, le message générique.
+    let failureText: String?
     let onToggle: (String) -> Void
+    /// Le pack à mettre en avant (lien profond depuis la fiche d'un sticker, #10703) :
+    /// sa rangée est centrée une fois les rangées lues et marquée d'un contour.
+    let focusedSlug: String?
 
-    public init(rows: [PackRow]?, pending: Set<String>, showsFailure: Bool,
-                onToggle: @escaping (String) -> Void) {
+    public init(rows: [PackRow]?, pending: Set<String>, showsFailure: Bool, failureText: String? = nil,
+                focusedSlug: String? = nil, onToggle: @escaping (String) -> Void) {
+        self.focusedSlug = focusedSlug
         self.rows = rows
         self.pending = pending
         self.showsFailure = showsFailure
+        self.failureText = failureText
         self.onToggle = onToggle
     }
 
     static let coverSide: CGFloat = 56
 
+    /// Le pack mis en avant n'existe que s'il figure parmi les rangées lues : un slug
+    /// inconnu ne marque ni ne fait défiler rien.
+    static func focusTarget(_ focusedSlug: String?, in rows: [PackRow]?) -> String? {
+        guard let focusedSlug, rows?.contains(where: { $0.slug == focusedSlug }) == true else { return nil }
+        return focusedSlug
+    }
+
     public var body: some View {
+        ScrollViewReader { proxy in
+            shelf
+                .task(id: Self.focusTarget(focusedSlug, in: rows)) {
+                    guard let target = Self.focusTarget(focusedSlug, in: rows) else { return }
+                    proxy.scrollTo(target, anchor: .center)
+                }
+        }
+    }
+
+    private var shelf: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             if showsFailure {
-                Text(String(localized: "sticker.shop.failed",
+                Text(failureText ?? String(localized: "sticker.shop.failed",
                             defaultValue: "Le pack n’a pas pu changer d’état. Réessaie.", bundle: .module))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(MeeshyColors.error)
@@ -115,6 +149,13 @@ public struct PackShopView: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(MeeshyColors.indigo500)
                 }
+                if Self.showsOwned(row) {
+                    Label(String(localized: "shop.owned", defaultValue: "Possédé", bundle: .module),
+                          systemImage: "checkmark.seal.fill")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("shop.owned.\(row.slug)")
+                }
                 if !row.description.isEmpty {
                     Text(row.description)
                         .font(.system(size: 12))
@@ -127,14 +168,44 @@ public struct PackShopView: View {
                 toggleButton(row)
             }
         }
+        .padding(row.slug == focusedSlug ? 6 : 0)
+        .overlay {
+            if row.slug == focusedSlug {
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .stroke(MeeshyColors.indigo500, lineWidth: 2)
+                    .accessibilityHidden(true)
+            }
+        }
+        .id(row.slug)
         .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(row.slug == focusedSlug ? .isSelected : [])
+    }
+
+    /// Un pack PAYANT que je possède le dit (« Possédé ») ; un pack gratuit n'a rien à déclarer.
+    static func showsOwned(_ row: PackRow) -> Bool {
+        row.price != nil && row.owned
+    }
+
+    /// Le titre du bouton d'une rangée : acheter d'abord, installer ensuite.
+    static func buttonTitle(for row: PackRow) -> String {
+        if let price = row.price, row.needsPurchase {
+            return String(format: String(localized: "shop.buy.price", defaultValue: "Acheter · %lld", bundle: .module), price)
+        }
+        return row.installed
+            ? String(localized: "sticker.shop.remove", defaultValue: "Retirer", bundle: .module)
+            : String(localized: "sticker.shop.install", defaultValue: "Installer", bundle: .module)
+    }
+
+    /// Ce que VoiceOver lit : le geste, le pack et, pour un achat, son prix EN MEESHES.
+    static func voiceOverLabel(for row: PackRow) -> String {
+        guard let price = row.price, row.needsPurchase else { return "\(buttonTitle(for: row)) \(row.name)" }
+        return String(format: String(localized: "shop.buy.a11y", defaultValue: "Acheter %1$@ pour %2$lld Meeshes",
+                                     bundle: .module), row.name, price)
     }
 
     private func toggleButton(_ row: PackRow) -> some View {
         let busy = pending.contains(row.slug)
-        let label = row.installed
-            ? String(localized: "sticker.shop.remove", defaultValue: "Retirer", bundle: .module)
-            : String(localized: "sticker.shop.install", defaultValue: "Installer", bundle: .module)
+        let label = Self.buttonTitle(for: row)
         return Button {
             HapticFeedback.light()
             onToggle(row.slug)
@@ -157,7 +228,7 @@ public struct PackShopView: View {
         .buttonStyle(.plain)
         .disabled(busy)
         .opacity(busy ? 0.6 : 1)
-        .accessibilityLabel("\(label) \(row.name)")
+        .accessibilityLabel(Self.voiceOverLabel(for: row))
     }
 }
 

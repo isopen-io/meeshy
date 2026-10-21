@@ -234,17 +234,17 @@ export const REVEAL_FADE_DURATION_MS = 280;
  * dans `BubbleSticker.swift:38,44` (bulle — HORS `FocalMetrics`, une
  * SECONDE source que `check-curve.mjs` PARTIE 9 lit séparément).
  */
-export const STICKER_SIDE = 112;
-export const BUBBLE_STICKER_SIDE = 160;
-export const STICKER_EMOJI_BOX = 60;
+export const STICKER_SIDE = 140;
+export const BUBBLE_STICKER_SIDE = 200;
+export const STICKER_EMOJI_BOX = 80;
 
 /**
- * LE WEB REND LE STICKER DEUX FOIS PLUS GRAND (#9319, porteur 2026-10-04) —
- * dans les fils comme dans les commentaires. Les cotes ci-dessus restent
- * celles d'iOS (que `check-curve.mjs` compare) ; ce facteur s'applique au
- * RENDU, et le carré se borne à la largeur de sa colonne.
+ * UNE SEULE COTE DE STICKER SUR LES DEUX CLIENTS (#10705, décision porteur
+ * 2026-10-15) : le web peint à la cote d'iOS — `BUBBLE_STICKER_SIDE` (~200) en
+ * bulle, `STICKER_SIDE` (proportionnelle, 140) en Focal, en rangée plate et en
+ * commentaire. Elle remplace les cotes propres du web (224 / 320, #9319), que
+ * la décision contredit ; `check-curve.mjs` garde les deux côtés ensemble.
  */
-export const STICKER_RENDER_SCALE = 2;
 
 /** `FocalScrollPerspective.FocalMagnificationLaw.sustainedScrollMs` / `.highVelocityThreshold`. */
 export const SUSTAINED_SCROLL_MS = 4000;

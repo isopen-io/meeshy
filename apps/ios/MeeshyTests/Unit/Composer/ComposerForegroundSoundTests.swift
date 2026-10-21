@@ -9,6 +9,7 @@ import MeeshySDK
 /// > mettre juste après la zone texte le composant de lecture du contenu audio
 /// > avec la transcription défilant, et la possibilité de toucher pour éditer
 /// > le son via la vue de création audio. »
+@MainActor
 final class ComposerForegroundSoundTests: XCTestCase {
 
     private func media(_ nom: String, mime: String, ms: Int? = 12_000) -> ComposerDocumentMedia {

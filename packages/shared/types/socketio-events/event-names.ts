@@ -147,6 +147,12 @@ export const SERVER_EVENTS = {
    * jamais dans la room du post ni à son audience.
    */
   ENGAGEMENT_POST_UPDATED: 'engagement:post-updated',
+  /**
+   * L'état du JEU de l'utilisateur a bougé (#10900) — frappe, gain, reprise, prestige, dépense de Meesh.
+   * `GameUpdatedEventData` (`types/game-sync.ts`) : le bloc `game` servi et son marqueur d'ordre `gameRevision`,
+   * émis dans la room `user:<id>` du seul compte concerné, jamais ailleurs.
+   */
+  GAME_UPDATED: 'game:updated',
   USER_STATUS: 'user:status',
   /**
    * Snapshot émis à l'authentification socket : liste des userIds actuellement
@@ -561,6 +567,9 @@ export const SERVER_EVENTS = {
 
   // --- Packs (#10148) : l'installation d'un pack, synchronisée entre les appareils du compte ---
   PACK_INSTALLATION_UPDATED: 'pack:installation-updated',
+
+  // --- Décor de profil (#10632) : contour d'avatar et bannière équipés, synchronisés entre mes appareils ---
+  PROFILE_DECOR_UPDATED: 'profile:decor-updated',
 
   // --- User Profile (realtime propagation to conversation partners) ---
   USER_UPDATED: 'user:updated',

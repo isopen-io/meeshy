@@ -2,7 +2,7 @@ import { segmentText, type TextSegment } from '@meeshy/shared/utils/text-segment
 
 import type { Attachment, Message } from '@/lib/api/types';
 
-import { placeOf, type SharedPlace } from './message-body';
+import { placeOf, stickerOf, type SharedPlace } from './message-body';
 import { linkRenderingOf } from './sender-links';
 
 /**
@@ -98,7 +98,8 @@ function urlsOf(segments: readonly TextSegment[]): readonly string[] {
   });
 }
 
-const isHidden = (message: Message): boolean => message.isViewOnce === true;
+/** Un STICKER n'est ni une photo ni un média à feuilleter : son image jointe ne sert qu'aux anciens clients. */
+const isHidden = (message: Message): boolean => message.isViewOnce === true || stickerOf(message) !== null;
 
 function attachmentItems(message: Message, kind: AttachmentKind): readonly MediaHubItem[] {
   return (message.attachments ?? [])

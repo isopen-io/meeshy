@@ -169,6 +169,9 @@ export const preferencesPrivacy = '/api/v1/me/preferences/privacy';
 /** GET · PUT · PATCH · DELETE /api/v1/me/preferences/video */
 export const preferencesVideo = '/api/v1/me/preferences/video';
 
+/** PUT /api/v1/me/profile-decor */
+export const profileDecor = '/api/v1/me/profile-decor';
+
 /** GET /api/v1/me */
 export const root = '/api/v1/me';
 

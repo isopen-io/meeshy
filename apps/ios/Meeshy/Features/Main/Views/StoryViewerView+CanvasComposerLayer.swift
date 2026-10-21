@@ -65,6 +65,20 @@ extension StoryCardView {
         showTextEmojiPicker && composerFoldPresentation != .folded ? emojiPanelHeight(geometry) : 0
     }
 
+    /// **Le sol de la pastille de synchronisation dans le lecteur** (#10840) :
+    /// le haut de la plaque, mesuré au-dessus du bord bas que SwiftUI soulève
+    /// avec le clavier. Le lecteur ignore toute la zone sûre et pose sa plaque
+    /// lui-même (20 pt au-dessus de la zone sûre au repos), d'où la mesure par
+    /// la position de son haut. Plaque absente ou chrome caché : aucun sol.
+    private func syncPillDockHeight(_ geometry: GeometryProxy) -> CGFloat? {
+        guard chromeVisible, !isOwnStory || replyingToStoryComment != nil,
+              let block = composerBlockHeight else { return nil }
+        return SyncPillPlacement.dockedHeight(
+            chromeTopFromScreenBottom: composerBottomPadding(geometry) + block,
+            safeAreaBottom: windowBottomInset,
+            keyboardHeight: keyboard.isVisible ? keyboard.height : 0)
+    }
+
     /// Le panneau d'émojis prend la place du clavier, à sa dernière hauteur.
     private func emojiPanelHeight(_ geometry: GeometryProxy) -> CGFloat {
         max(keyboard.lastKnownHeight - geometry.safeAreaInsets.bottom, 260)
@@ -91,12 +105,7 @@ extension StoryCardView {
             // fermeture de la banner (spec user 2026-06-25).
             if !isOwnStory || replyingToStoryComment != nil {
                 composerBlock(geometry: geometry)
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(key: StoryComposerBlockHeightKey.self,
-                                                   value: proxy.size.height)
-                        }
-                    )
+                    .modifier(StoryComposerBlockMeasure())
             }
         }
         // **CRITIQUE (hauteur)** : `maxHeight: .infinity, alignment: .bottom`
@@ -132,6 +141,8 @@ extension StoryCardView {
         .offset(y: chromeVisible ? 0 : 240)
         .opacity(chromeVisible ? 1 : 0)
         .allowsHitTesting(chromeVisible)
+        // La plaque est le sol de la pastille de synchronisation (#10840).
+        .docksSyncPill(height: syncPillDockHeight(geometry))
         .onPreferenceChange(StoryComposerBlockHeightKey.self) { height in
             // La première mesure est sèche ; les suivantes (repli, bannière de
             // réponse, plaque qui grandit) déplacent la liste sans saut.

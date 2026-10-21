@@ -490,7 +490,7 @@ describe('AuthHandler', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-            participant: { id: 'anon-123' }
+            participantId: 'anon-123'
           })
         })
       );

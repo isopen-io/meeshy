@@ -36,6 +36,6 @@ public struct StickerPackShopView: View {
             ? .mee(slug: pack.slug)
             : .remote(pack.coverUrl ?? pack.items.first?.fileUrl)
         return PackRow(slug: pack.slug, name: pack.name, author: pack.author, description: pack.description,
-                       installed: pack.installed, removable: true, cover: cover)
+                       installed: pack.installed, removable: pack.removable, cover: cover)
     }
 }

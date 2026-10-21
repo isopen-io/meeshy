@@ -60,3 +60,20 @@ export function readerKeyOf(identity: ReaderIdentity, secret: string = readerKey
 
 /** Une valeur déjà hachée — ce que la migration ne retouche pas. */
 export const isReaderKey = (value: string): boolean => READER_KEY.test(value);
+
+/**
+ * L'EMPREINTE d'un compte sur une ligne de lecture RÉDUITE, écrite entre
+ * #10771 et #10785 : la même clé secrète, un domaine à part (`account:`).
+ * Depuis #10785 (décision du porteur), plus aucune ligne n'est écrite sous
+ * cette forme ; l'empreinte ne sert qu'à RELIRE ces lignes jusqu'à leur
+ * expiration (8 jours) — déduplication, export, effacement. Rien d'autre ne
+ * la recalcule.
+ * C'est une PSEUDONYMISATION (RGPD art. 4(5)) : la ligne reste une donnée
+ * personnelle, couverte par l'export et l'effacement.
+ */
+export const accountReaderKeyOf = (userId: string, secret: string = readerKeySecret()): string =>
+  createHmac('sha256', secret).update(`account:${userId}`).digest('hex');
+
+/** L'empreinte d'une clé de session d'une ligne réduite (#10771) — relue seulement depuis #10785. */
+export const engagementSessionKeyOf = (sessionId: string, secret: string = readerKeySecret()): string =>
+  createHmac('sha256', secret).update(`engagement-session:${sessionId}`).digest('hex');

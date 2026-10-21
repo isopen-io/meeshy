@@ -117,7 +117,7 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             // a quitté `ReelsPlayerView.swift` pour `ReelPageChrome.swift`.
             "Features/Main/Views/ReelPageChrome.swift",
             "Features/Main/Components/ConversationDashboardView.swift",
-            "Features/Main/Components/MessageOverlayMenu.swift",
+            "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         ]
         for host in hosts {
             let url = appRoot.appendingPathComponent(host)
@@ -242,10 +242,11 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             // `MessageOverlayMenu.swift` (hôte hors budget) pour son propre
             // fichier. La liste SUIT l'hôte, comme au 248i.
             "Features/Main/Components/OverlayAudioPlayer.swift",
-            "Features/Main/Components/RecentMediaStrip.swift",
+            // La durée de la vidéo récente a suivi la cellule hors de `RecentMediaStrip`.
+            "Features/Main/Components/RecentMediaCell.swift",
             "Features/Main/Components/UniversalComposerBar+Recording.swift",
             "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
-            "Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",
+            "Features/Main/Components/MessageDetail/MessageViewsConsumptionCard.swift",
             // La durée d'appel a quitté `CallManager.swift` avec son découpage
             // (2026-10-02) : la liste suit l'hôte.
             "Features/Main/Services/CallManager+Duration.swift",

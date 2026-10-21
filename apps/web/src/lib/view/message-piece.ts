@@ -1,9 +1,11 @@
+import type { MessageActionVerdicts } from '@meeshy/shared/utils/message-action-policy';
+
 import type { Attachment, Message } from '@/lib/api/types';
 import type { MessagePiecesCatalogKey } from '@/lib/i18n-message-pieces-catalog';
 
 import { contentExitOf, exitOffers, pieceIsOpen, type ExitMessage } from './content-exit';
 import { partitionAttachments } from './media-grid-layout';
-import type { MediaPageOffers } from './viewer-page-offers';
+import { mediaPageOffers, type MediaPageOffers, type ProtectableMessage } from './viewer-page-offers';
 
 /**
  * CHAQUE PIÈCE D'UN MESSAGE SE VISE SEULE (#9907, #9908, directive porteur du
@@ -73,6 +75,25 @@ export function targetedPieceOf(
   return index === -1 ? null : { pieces, index };
 }
 
+/**
+ * « ENREGISTRER » AU MENU DU MESSAGE (#10599) — la pièce qu'il enregistre, ou
+ * `null`. Miroir de `MessageActionResolver.primaryActions` (iOS,
+ * `saveableAttachmentCount == 1`) : EXACTEMENT une pièce — un lot s'enregistre
+ * pièce par pièce, depuis le menu de la tuile (`pieceSave`) ou la visionneuse.
+ * La loi est celle de la visionneuse (`mediaPageOffers`), jamais une seconde :
+ * ni vue unique, ni flou (même révélé — la pièce ORIGINALE fait foi), ni
+ * chiffré, ni contenu qui disparaît, ni envoi encore local, ni pièce sans
+ * fichier ; la protection se lit sur le message ET sur la pièce.
+ */
+const SAVE_ONLY: MediaPageOffers = { save: true, react: false, reply: false, compose: false, share: false };
+
+export function soleSaveablePieceOf(message: ProtectableMessage & Pick<Message, 'attachments'>, now: number): Attachment | null {
+  const pieces = (message.attachments ?? []).filter((piece): piece is Attachment => piece !== null && piece !== undefined);
+  const sole = pieces.length === 1 ? pieces[0] : undefined;
+  if (sole === undefined) return null;
+  return mediaPageOffers({ attachment: sole, message, capabilities: SAVE_ONLY, now }).save ? sole : null;
+}
+
 export type PieceActionId = 'pieceReply' | 'pieceSave' | 'pieceForward' | 'pieceDelete' | 'wholeMessage';
 
 export type PieceMenuGlyph = 'arrowUUpLeft' | 'downloadSimple' | 'arrowBendUpRight' | 'trash' | 'chatText';
@@ -101,8 +122,8 @@ const item = (id: PieceActionId, glyph: PieceMenuGlyph): PieceMenuItem => ({ id,
  * Les offres sont celles de la visionneuse (`mediaPageOffers`) : une pièce
  * protégée n'offre ni enregistrement ni transfert, et le bouton n'existe pas
  * plutôt que de refuser après le geste (loi 4). La suppression n'est offerte
- * qu'à l'auteur (`pieceDeletable`), seule personne que la passerelle autorise
- * hors administration.
+ * qu'à l'auteur (`pieceDeletable`, sur le verdict de la loi partagée), seule
+ * personne que la passerelle autorise hors administration.
  */
 export function pieceMenuItems(input: { readonly offers: MediaPageOffers; readonly deletable: boolean }): readonly PieceMenuItem[] {
   const { offers, deletable } = input;
@@ -116,21 +137,21 @@ export function pieceMenuItems(input: { readonly offers: MediaPageOffers; readon
 }
 
 /**
- * QUI PEUT SUPPRIMER UNE PIÈCE APRÈS L'ENVOI (#9906) — l'auteur du message,
- * sur un message que la passerelle connaît (jamais un envoi encore local,
- * `cid_…`) et qui n'est pas déjà supprimé. La passerelle juge sur
- * `uploadedBy` (ou un rôle d'administration) : le client reste en deçà,
- * fail-closed, et ne propose rien qu'elle refuserait à l'auteur.
+ * QUI PEUT SUPPRIMER UNE PIÈCE APRÈS L'ENVOI (#9906, #11210) — l'auteur, tel
+ * que la loi partagée le juge (`verdicts.deleteForEveryone` de
+ * `messageActionsFor` : un inscrit, un message vivant que la passerelle
+ * connaît), ET celui qui a déposé la pièce : la passerelle juge sur
+ * `uploadedBy` (ou un rôle d'administration de plateforme, que le client
+ * n'offre pas — en deçà, fail-closed). Ni un modérateur de la conversation ni
+ * un retrait : la route d'une pièce ne les admet pas.
  */
 export function pieceDeletable(params: {
-  readonly message: Pick<Message, 'id' | 'senderId' | 'deletedAt'>;
+  readonly verdicts: Pick<MessageActionVerdicts, 'deleteForEveryone'>;
   readonly piece: Pick<Attachment, 'uploadedBy'>;
   readonly viewerId: string;
 }): boolean {
-  const { message, piece, viewerId } = params;
-  if (viewerId === '' || message.id.startsWith('cid_')) return false;
-  if (message.deletedAt !== undefined && message.deletedAt !== null) return false;
-  return message.senderId === viewerId && piece.uploadedBy === viewerId;
+  const { verdicts, piece, viewerId } = params;
+  return verdicts.deleteForEveryone && viewerId !== '' && piece.uploadedBy === viewerId;
 }
 
 /** Le message SANS la pièce — la mise à jour optimiste de la suppression. */

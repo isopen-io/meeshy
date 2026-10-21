@@ -15,6 +15,8 @@ import MeeshySDK
 /// agent analysis arriving…). Audit G014/TA-01.
 nonisolated struct ConversationDashboardClientStats: Sendable {
     nonisolated struct ParticipantStat: Sendable {
+        /// L'expéditeur — jamais son nom affiché : deux membres homonymes (ou plusieurs sans nom) restent deux lignes.
+        let id: String
         let name: String
         let messageCount: Int
         let wordCount: Int
@@ -55,19 +57,19 @@ nonisolated struct ConversationDashboardClientStats: Sendable {
         }
     }
 
-    private static func computeParticipantStats(from messages: [Message]) -> [ParticipantStat] {
-        var byName: [String: (messages: Int, words: Int)] = [:]
+    static func computeParticipantStats(from messages: [Message]) -> [ParticipantStat] {
+        var bySender: [String: (name: String, messages: Int, words: Int)] = [:]
 
         for msg in messages {
-            let name = msg.senderName ?? "?"
             let words = msg.content.split(whereSeparator: \.isWhitespace).count
-            let current = byName[name, default: (0, 0)]
-            byName[name] = (current.messages + 1, current.words + words)
+            let current = bySender[msg.senderId, default: (msg.senderName ?? "?", 0, 0)]
+            // Le nom le plus récent l'emporte : un membre renommé reste UNE ligne, sous son nom actuel.
+            bySender[msg.senderId] = (msg.senderName ?? current.name, current.messages + 1, current.words + words)
         }
 
-        return byName
-            .map { ParticipantStat(name: $0.key, messageCount: $0.value.messages, wordCount: $0.value.words) }
-            .sorted { $0.messageCount > $1.messageCount }
+        return bySender
+            .map { ParticipantStat(id: $0.key, name: $0.value.name, messageCount: $0.value.messages, wordCount: $0.value.words) }
+            .sorted { ($0.messageCount, $1.id) > ($1.messageCount, $0.id) }
     }
 
     private static func computeSentiment(of messages: [Message]) -> Sentiment {

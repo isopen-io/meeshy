@@ -87,8 +87,9 @@ final class ConversationReplyComposerFocusTests: XCTestCase {
     /// est légitimement déclarée.
     func test_unBrouillonRestaureNeLevePasLeClavier() throws {
         let code = try source("ConversationView.swift")
+        // La restauration vit dans `ConversationDraftCoordinator.restore(from:composerText:)`.
         let restauration = try XCTUnwrap(body(
-            of: "if composerText.text.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId)",
+            of: "func restore(from current: ConversationComposerState",
             in: code
         ))
         XCTAssertTrue(restauration.contains("composerState.pendingReplyReference = draft.restoredReply("))

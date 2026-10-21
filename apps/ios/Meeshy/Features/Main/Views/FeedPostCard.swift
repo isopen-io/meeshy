@@ -59,6 +59,8 @@ struct FeedPostCard: View {
     /// inline expansion happens regardless; this is an additional side-effect.
     var onSeeMore: (() -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
+    /// #11151 — « Retirer » la publication d'un autre (modération) : l'hôte présente le motif.
+    var onRemove: ((String) -> Void)? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
     var onEdit: ((FeedPost) -> Void)? = nil
@@ -90,7 +92,6 @@ struct FeedPostCard: View {
     @State var showTranslationSheet = false
     /// La feuille « Vues » de l'auteur — qui a vu, et ce que chacun a fait (#9727).
     @State var showViewersSheet = false
-    @State private var showRepostOptions = false
     @State var selectedProfileUser: ProfileSheetUser?
     @State var audioFullscreen: AudioFullscreenSource?
     @State var secondaryLangCode: String? = nil
@@ -686,7 +687,37 @@ struct FeedPostCard: View {
                 }
 
                 // Actions bar (not inside the tap target)
-                actionsBar
+                FeedPostActionsBar(
+                    postId: post.id,
+                    accentColor: accentColor,
+                    isDark: theme.mode.isDark,
+                    isLikedByMe: isLiked ?? post.isLiked,
+                    likeCount: max(0, displayLikeCount ?? post.likes),
+                    isHeartInFlight: isHeartInFlight,
+                    commentCount: post.commentCount,
+                    isCommentsSheetPresented: showCommentsSheet,
+                    repostCount: displayRepostCount ?? post.repostCount,
+                    isReposted: isReposted,
+                    isRepostInFlight: isRepostInFlight,
+                    bookmarkCount: displayBookmarkCount ?? post.bookmarkCount,
+                    isBookmarked: isBookmarked,
+                    isBookmarkInFlight: isBookmarkInFlight,
+                    shareCount: displayShareCount ?? post.shareCount,
+                    isShareInFlight: isShareInFlight,
+                    onLike: onLike,
+                    onOpenCommentsTap: {
+                        if let onOpenComments {
+                            onOpenComments()
+                        } else {
+                            showCommentsSheet = true
+                        }
+                    },
+                    onRepost: onRepost,
+                    onQuote: onQuote,
+                    onBookmark: onBookmark,
+                    onShare: onShare
+                )
+                .equatable()
             }
             .padding(MeeshySpacing.lg)
 
@@ -763,7 +794,7 @@ struct FeedPostCard: View {
                 address: item.place.address,
                 accentColor: accentColor,
                 senderName: post.author
-            )
+            ).closesForConversationOpening(.place)
         }
         // **Le plein écran d'un post passe par son SITE UNIQUE** (#4927).
         //
@@ -815,7 +846,9 @@ struct FeedPostCard: View {
                         name: repost.author,
                         context: .postComment,
                         accentColor: repost.authorColor,
-                        avatarURL: repost.authorAvatarURL
+                        avatarURL: repost.authorAvatarURL,
+                        presenceState: PresenceManager.shared.knownPresenceState(for: repost.authorId),
+                        ring: repost.authorRing
                     )
 
                     Text(repost.author)
@@ -895,238 +928,6 @@ struct FeedPostCard: View {
     // MARK: - Media Preview
     // See FeedPostCard+Media.swift
 
-    // MARK: - Actions Bar
-    @State private var likeAnimating = false
-
-    /// Effective liked state: socket-driven override when available, else post.isLiked.
-    private var effectiveIsLiked: Bool { isLiked ?? post.isLiked }
-    /// Effective display count: socket-driven override when available, else post.likes.
-    private var effectiveLikeCount: Int { max(0, displayLikeCount ?? post.likes) }
-
-    private var actionsBar: some View {
-        HStack(spacing: 0) {
-            // Like with heart burst animation (socket-driven — see FeedView.postLikedIds)
-            Button {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
-                    likeAnimating = true
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    likeAnimating = false
-                }
-                onLike?(post.id)
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    ZStack {
-                        // Burst ring behind heart
-                        if effectiveIsLiked {
-                            Circle()
-                                .stroke(MeeshyColors.error.opacity(likeAnimating ? 0.6 : 0), lineWidth: likeAnimating ? 2 : 0)
-                                .frame(width: likeAnimating ? 32 : 18, height: likeAnimating ? 32 : 18)
-                                .animation(.easeOut(duration: 0.4), value: likeAnimating)
-                        }
-
-                        let heartColor: Color = effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
-                        Image(systemName: effectiveIsLiked || effectiveLikeCount > 0 ? "heart.fill" : "heart")
-                            .font(MeeshyFont.relative(MeeshyIconSize.lg))
-                            .foregroundColor(heartColor)
-                            .scaleEffect(likeAnimating ? 1.3 : (effectiveIsLiked ? 1.1 : 1.0))
-                            .rotationEffect(.degrees(likeAnimating ? -15 : 0))
-                            .opacity(isHeartInFlight ? 0.5 : 1.0)
-                        // Accent BORDER on the glyph when the current user liked.
-                        if effectiveIsLiked {
-                            Image(systemName: "heart")
-                                .font(MeeshyFont.relative(MeeshyIconSize.lg))
-                                .foregroundColor(Color(hex: accentColor))
-                                .scaleEffect(likeAnimating ? 1.3 : 1.1)
-                                .rotationEffect(.degrees(likeAnimating ? -15 : 0))
-                        }
-                    }
-
-                    Text("\(effectiveLikeCount)")
-                        .font(.footnote.weight(.medium))
-                        .foregroundColor(effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary))
-                        .contentTransition(.numericText())
-                }
-            }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .disabled(isHeartInFlight)
-            .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
-            .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
-            .accessibilityValue(PostStatAccessibility.likesLabel(effectiveLikeCount))
-            .accessibilityAddTraits(effectiveIsLiked ? .isSelected : [])
-
-            Spacer()
-
-            // Comment
-            Button {
-                if let onOpenComments {
-                    onOpenComments()
-                } else {
-                    showCommentsSheet = true
-                }
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    Image(systemName: "bubble.right")
-                        .font(MeeshyFont.relative(17))
-
-                    if post.commentCount > 0 {
-                        Text("\(post.commentCount)")
-                            .font(.footnote.weight(.medium))
-                    }
-                }
-                .foregroundColor(showCommentsSheet ? theme.accentText(accentColor) : theme.textSecondary)
-            }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .accessibilityLabel(String(localized: "feed.post.comments_count", defaultValue: "\(post.commentCount) commentaires", bundle: .main))
-            .accessibilityHint(String(localized: "feed.post.comments.hint", defaultValue: "Ouvre les commentaires", bundle: .main))
-
-            Spacer()
-
-            // Repost
-            Button {
-                showRepostOptions = true
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    // Les flèches nues dans les deux états, comme le réel : la famille `.circle` du repost n'existe pas
-                    // au catalogue SF Symbols et l'état reposté se peignait vide (#8939). Le reposté se lit à sa teinte
-                    // et au contour d'accent qu'EngagementGlyph superpose.
-                    EngagementGlyph(
-                        outline: "arrow.2.squarepath",
-                        filled: "arrow.2.squarepath",
-                        participated: isReposted,
-                        accentHex: accentColor,
-                        activeTint: MeeshyColors.success,
-                        inactiveTint: theme.textSecondary
-                    )
-                    .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
-                    let count = displayRepostCount ?? post.repostCount
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.footnote.weight(.medium))
-                            .contentTransition(.numericText())
-                    }
-                }
-                .foregroundColor(isReposted ? MeeshyColors.success : theme.textSecondary)
-                .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
-            }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .disabled(isRepostInFlight)
-            .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), displayRepostCount ?? post.repostCount))
-            .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
-            .accessibilityAddTraits(isReposted ? .isSelected : [])
-            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
-                Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
-                Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(post.id) }
-                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
-            }
-
-            Spacer()
-
-            // Bookmark
-            Button {
-                onBookmark?(post.id)
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    ZStack {
-                        Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                            .font(MeeshyFont.relative(17))
-                            .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
-                        // Accent BORDER on the glyph when the current user bookmarked.
-                        if isBookmarked {
-                            Image(systemName: "bookmark")
-                                .font(MeeshyFont.relative(17))
-                                .foregroundColor(Color(hex: accentColor))
-                        }
-                    }
-                    let count = displayBookmarkCount ?? post.bookmarkCount
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.footnote.weight(.medium))
-                            .contentTransition(.numericText())
-                    }
-                }
-                .foregroundColor(isBookmarked ? MeeshyColors.warning : theme.textSecondary)
-                .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
-            }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .disabled(isBookmarkInFlight)
-            .accessibilityLabel(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.save.value", defaultValue: "%d enregistrements", bundle: .main), displayBookmarkCount ?? post.bookmarkCount))
-            .accessibilityHint(String(localized: "a11y.feed.post.save.hint", defaultValue: "Enregistre la publication dans vos favoris", bundle: .main))
-            .accessibilityAddTraits(isBookmarked ? .isSelected : [])
-
-            Spacer()
-
-            // Share
-            Button {
-                onShare?(post.id)
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    ZStack {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(MeeshyFont.relative(17))
-                            .opacity(isShareInFlight ? 0 : 1)
-                        if isShareInFlight {
-                            ProgressView()
-                                .scaleEffect(0.6)
-                                .progressViewStyle(.circular)
-                        }
-                    }
-                    let count = displayShareCount ?? post.shareCount
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.footnote.weight(.medium))
-                            .contentTransition(.numericText())
-                    }
-                }
-                .foregroundColor(theme.textSecondary)
-                .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
-            }
-            // Cible tactile 44x44 (HIG) : les glyphes font 17-18 pt, la zone
-            // de hit se limitait au tracé — le marque-page (icone fine, sans
-            // compteur) ratait un tap sur deux a l'usage.
-            .frame(minWidth: 44, minHeight: 44)
-            .contentShape(Rectangle())
-            .disabled(isShareInFlight)
-            .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), displayShareCount ?? post.shareCount))
-            .accessibilityHint(String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main))
-
-            // Pas de bouton muet ici en E2 (correctif revue DoD, constat
-            // majeur #2) : la carte n'embarque encore AUCUN lecteur local
-            // capable de jouer le fond (l'embed story-repost fige
-            // `mute: true` dans `StoryRepostEmbedCell`, hors périmètre E2 ;
-            // la scène jouée dans la carte arrive avec E3,
-            // `MeeshyScenePlayer(.card)`). Le badge d'ANNONCE ci-dessus
-            // (`backgroundSoundAnnouncement`, rangée auteur, E1) reste seul
-            // — un bouton sans lecteur à piloter serait décoratif.
-        }
-        .padding(.top, MeeshySpacing.xs)
-    }
 }
 
 // MARK: - Equatable (enables .equatable() in ForEach to prevent unnecessary re-renders)
@@ -1156,5 +957,6 @@ extension FeedPostCard: Equatable {
             && Self.translatableSignature(of: lhs.post) == Self.translatableSignature(of: rhs.post)
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
             && lhs.authorStoryRing == rhs.authorStoryRing
+            && lhs.post.authorRing == rhs.post.authorRing
     }
 }

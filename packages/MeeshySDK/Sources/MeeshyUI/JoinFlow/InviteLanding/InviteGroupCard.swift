@@ -190,7 +190,7 @@ struct InviteGroupCard: View {
         UIAccessibility.post(notification: .announcement, argument: InviteLandingCopy.linkCopiedAnnouncement)
         withAnimation(.easeOut(duration: 0.2)) { copied = true }
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
+            _ = await cancellableSleep(for: .seconds(2))
             withAnimation(.easeOut(duration: 0.2)) { copied = false }
         }
     }

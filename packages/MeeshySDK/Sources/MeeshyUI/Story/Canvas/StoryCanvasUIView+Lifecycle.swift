@@ -56,7 +56,12 @@ extension StoryCanvasUIView {
         super.traitCollectionDidChange(previousTraitCollection)
         // Stage Manager / Split View on iPad can change horizontal/vertical
         // size classes without bounds changing; force a rebuild defensively.
-        rebuildLayers()
+        // La reconstruction part à la passe de MISE EN PAGE (`layoutSubviews`),
+        // jamais ici : UIKit notifie les traits PENDANT la mise à jour SwiftUI
+        // qui insère le canvas, et `rebuildLayers` y relayait
+        // `onContentProgress` — l'hôte écrivait son `@State` en pleine mise à
+        // jour, puis plantait au passage d'un auteur à l'autre (#10803).
+        setNeedsLayout()
     }
 
     // MARK: - App lifecycle (UIScene-aware)

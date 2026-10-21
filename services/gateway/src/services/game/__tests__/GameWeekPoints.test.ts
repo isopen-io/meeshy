@@ -140,3 +140,34 @@ describe('totalOfDays — la granularité du jour', () => {
     expect(totalOfDays(undefined)).toBe(0);
   });
 });
+
+describe('GameWeekPointsRecorder.takeBack — la reprise d\'un gain (#10895)', () => {
+  const pointsOf = (db: ReturnType<typeof fakeGameDb>) =>
+    Object.fromEntries(db.gameWeekPoints.rows.map((r) => [`${r.weekKey}/${r.dayKey}`, r.points]));
+
+  it('rend les points à la semaine DU CRÉDIT, jour du crédit d\'abord, jamais à la semaine courante', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { timezone: 'UTC' });
+    const recorder = new GameWeekPointsRecorder(db.prisma);
+    await recorder.record(USER, 10, new Date('2026-10-13T12:00:00Z'));
+    await recorder.record(USER, 4, new Date('2026-10-14T12:00:00Z'));
+    await recorder.record(USER, 6, new Date('2026-10-20T12:00:00Z'));
+
+    const taken = await recorder.takeBack(USER, 12, new Date('2026-10-13T12:00:00Z'));
+
+    expect(taken).toBe(12);
+    expect(pointsOf(db)).toEqual({ '2026-10-12/2026-10-13': 0, '2026-10-12/2026-10-14': 2, '2026-10-19/2026-10-20': 6 });
+  });
+
+  it('ne passe jamais sous zéro : une semaine qui n\'a plus de quoi rendre rend ce qu\'elle a', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { timezone: 'UTC' });
+    const recorder = new GameWeekPointsRecorder(db.prisma);
+    await recorder.record(USER, 3, new Date('2026-10-13T12:00:00Z'));
+
+    const taken = await recorder.takeBack(USER, 10, new Date('2026-10-13T12:00:00Z'));
+
+    expect(taken).toBe(3);
+    expect(pointsOf(db)).toEqual({ '2026-10-12/2026-10-13': 0 });
+  });
+});

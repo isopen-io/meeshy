@@ -6,6 +6,9 @@ import MeeshySDK
 // MARK: - Image Viewer View
 
 public struct ImageViewerView: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize).height }
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
     public var accentColor: String = MeeshyColors.brandPrimaryHex
@@ -51,7 +54,7 @@ public struct ImageViewerView: View {
         case .messageBubble: return 200
         case .composerAttachment: return 80
         case .feedPost: return 350
-        case .storyOverlay, .fullscreen: return WindowMetrics.windowSize.height
+        case .storyOverlay, .fullscreen: return hostHeight
         }
     }
 
@@ -207,11 +210,12 @@ public struct ImageFullscreen: View {
     @Environment(\.contentExitGate) private var exitGate
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
-    @State private var showControls = true
+    // #10930 : on entre sans chrome ; tout toucher le pose par-dessus l'image.
+    @State private var showControls = false
     @State private var saveState: SaveState = .idle
     @State private var viewStartTime: Date?
 
-    private enum SaveState {
+    private nonisolated enum SaveState: Equatable, Sendable {
         case idle, saving, saved, failed
     }
 
@@ -224,21 +228,20 @@ public struct ImageFullscreen: View {
         self.onSaveRequested = onSaveRequested
     }
 
+    private func toggleControls() {
+        withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+    }
+
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showControls.toggle()
-                    }
-                }
+                .onTapGesture { toggleControls() }
 
             if let url = imageUrl {
-                // autoLoad: true — a manual tap to open fullscreen is
-                // explicit user intent and must override the ambient network
-                // policy gate (contract §14.1). Without this, Low Data Mode /
-                // Wi-Fi-only leaves the viewer on an infinite spinner even
-                // though the user just asked to see the image.
+                // autoLoad: true — l'ouverture en plein écran est une intention
+                // explicite qui prime sur la politique réseau ambiante (contrat
+                // §14.1) : sans cela, Low Data Mode / Wi-Fi seul laisse un
+                // spinner infini alors que l'utilisateur a demandé l'image.
                 CachedAsyncImage(url: url.absoluteString, autoLoad: true) {
                     ProgressView().tint(.white)
                 }
@@ -281,6 +284,7 @@ public struct ImageFullscreen: View {
                         offset = .zero
                     }
                 }
+                .onTapGesture { toggleControls() }
             }
 
             if showControls {
@@ -315,6 +319,7 @@ public struct ImageFullscreen: View {
         .statusBar(hidden: true)
         .onAppear { viewStartTime = Date() }
         .onDisappear { reportImageViewed() }
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })
     }
 
     @ViewBuilder
@@ -385,9 +390,6 @@ public struct ImageFullscreen: View {
                     saveState = saved ? .saved : .failed
                 }
                 if saved { HapticFeedback.success() } else { HapticFeedback.error() }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    withAnimation { saveState = .idle }
-                }
             }
         }
     }

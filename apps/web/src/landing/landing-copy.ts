@@ -20,17 +20,19 @@ export type LandingCopy = {
   readonly navFaq: string;
   readonly languageLabel: string;
   readonly signIn: string;
-  readonly enterWithoutAccount: string;
   readonly myConversations: string;
   readonly presence: string;
   readonly headline: string;
   readonly headlineAccent: string;
   readonly lede: string;
-  readonly formLabel: string;
-  readonly nameLabel: string;
-  readonly namePlaceholder: string;
   readonly join: string;
   readonly joinNote: string;
+  /** La légende du QR vers /world (#10784) — le seul chemin d'entrée sans compte depuis meeshy.me. */
+  readonly worldQrCaption: string;
+  /** Le texte de remplacement du QR : ce qu'il contient et ce qu'on en fait. */
+  readonly worldQrAlt: string;
+  /** Ce qui précède l'adresse en clair sous le QR (#10811) : le lien qu'on se partage, pour qui lit meeshy.me sur son téléphone. */
+  readonly worldLinkLead: string;
   readonly previewLabel: string;
   readonly previewSubtitle: string;
   readonly previewKenji: string;
@@ -54,8 +56,6 @@ export type LandingCopy = {
   readonly contact: string;
   readonly partners: string;
   readonly unavailable: string;
-  readonly languageTitle: string;
-  readonly entryFailed: string;
   readonly returnToWorld: string;
 };
 
@@ -70,17 +70,16 @@ const fr: LandingCopy = {
   navFaq: 'FAQ',
   languageLabel: "Langue de l'interface",
   signIn: 'Se connecter',
-  enterWithoutAccount: 'Entrer sans compte',
   myConversations: 'Mes conversations',
   presence: '{count} personnes dans World Wide',
   headline: 'Parlez au monde entier.',
   headlineAccent: 'Chacun lit dans sa langue.',
   lede: 'Écrivez en français, on vous lit en japonais, en arabe ou en portugais. Meeshy traduit chaque message, chaque vocal, en direct.',
-  formLabel: 'Entrer dans World Wide',
-  nameLabel: 'Votre prénom ou pseudo',
-  namePlaceholder: 'Ex. Awa',
   join: 'Rejoindre World Wide',
   joinNote: 'Sans compte, sans e-mail. Tout ce que vous lirez y arrivera dans la langue choisie.',
+  worldQrCaption: 'Flashez pour entrer dans World Wide',
+  worldQrAlt: "Code QR vers meeshy.me/world : flashez-le avec l'appareil photo de votre téléphone pour entrer dans World Wide",
+  worldLinkLead: 'Le lien de partage :',
   previewLabel: 'Aperçu de World Wide',
   previewSubtitle: 'Traduit pour vous',
   previewKenji: "Bonjour à tous ! Quelqu'un ici apprend le japonais ?",
@@ -114,8 +113,6 @@ const fr: LandingCopy = {
   contact: 'Contact',
   partners: 'Partenaires',
   unavailable: 'World Wide est momentanément fermée. Connectez-vous pour retrouver vos conversations.',
-  languageTitle: 'Votre langue',
-  entryFailed: "L'entrée de World Wide n'a pas pu s'ouvrir. Vérifiez votre connexion, puis réessayez.",
   returnToWorld: 'Revenir dans World Wide',
 };
 
@@ -130,17 +127,16 @@ const en: LandingCopy = {
   navFaq: 'FAQ',
   languageLabel: 'Interface language',
   signIn: 'Sign in',
-  enterWithoutAccount: 'Join without an account',
   myConversations: 'My conversations',
   presence: '{count} people in World Wide',
   headline: 'Talk to the whole world.',
   headlineAccent: 'Everyone reads in their language.',
   lede: 'Write in English, get read in Japanese, Arabic or Portuguese. Meeshy translates every message and every voice note, live.',
-  formLabel: 'Join World Wide',
-  nameLabel: 'Your first name or nickname',
-  namePlaceholder: 'e.g. Awa',
   join: 'Join World Wide',
   joinNote: 'No account, no e-mail. Everything you read there will arrive in the language you pick.',
+  worldQrCaption: 'Scan to enter World Wide',
+  worldQrAlt: 'QR code to meeshy.me/world: scan it with your phone camera to enter World Wide',
+  worldLinkLead: 'The share link:',
   previewLabel: 'World Wide preview',
   previewSubtitle: 'Translated for you',
   previewKenji: 'Hello everyone! Is anyone here learning Japanese?',
@@ -174,8 +170,6 @@ const en: LandingCopy = {
   contact: 'Contact',
   partners: 'Partners',
   unavailable: 'World Wide is closed for now. Sign in to find your conversations.',
-  languageTitle: 'Your language',
-  entryFailed: 'World Wide could not be opened. Check your connection, then try again.',
   returnToWorld: 'Back to World Wide',
 };
 
@@ -190,17 +184,16 @@ const es: LandingCopy = {
   navFaq: 'Preguntas frecuentes',
   languageLabel: 'Idioma de la interfaz',
   signIn: 'Iniciar sesión',
-  enterWithoutAccount: 'Entrar sin cuenta',
   myConversations: 'Mis conversaciones',
   presence: '{count} personas en World Wide',
   headline: 'Habla con el mundo entero.',
   headlineAccent: 'Cada uno lee en su idioma.',
   lede: 'Escribe en español y te leen en japonés, árabe o portugués. Meeshy traduce cada mensaje y cada nota de voz, en directo.',
-  formLabel: 'Entrar en World Wide',
-  nameLabel: 'Tu nombre o apodo',
-  namePlaceholder: 'Ej. Awa',
   join: 'Unirme a World Wide',
   joinNote: 'Sin cuenta, sin correo. Todo lo que leas llegará en el idioma que elijas.',
+  worldQrCaption: 'Escanea para entrar en World Wide',
+  worldQrAlt: 'Código QR hacia meeshy.me/world: escanéalo con la cámara de tu teléfono para entrar en World Wide',
+  worldLinkLead: 'El enlace para compartir:',
   previewLabel: 'Vista previa de World Wide',
   previewSubtitle: 'Traducido para ti',
   previewKenji: '¡Hola a todos! ¿Alguien aquí aprende japonés?',
@@ -234,8 +227,6 @@ const es: LandingCopy = {
   contact: 'Contacto',
   partners: 'Socios',
   unavailable: 'World Wide está cerrada por ahora. Inicia sesión para encontrar tus conversaciones.',
-  languageTitle: 'Tu idioma',
-  entryFailed: 'No se pudo abrir la entrada de World Wide. Comprueba tu conexión y vuelve a intentarlo.',
   returnToWorld: 'Volver a World Wide',
 };
 
@@ -250,17 +241,16 @@ const pt: LandingCopy = {
   navFaq: 'Perguntas frequentes',
   languageLabel: 'Idioma da interface',
   signIn: 'Entrar',
-  enterWithoutAccount: 'Entrar sem conta',
   myConversations: 'Minhas conversas',
   presence: '{count} pessoas no World Wide',
   headline: 'Fale com o mundo inteiro.',
   headlineAccent: 'Cada um lê na sua língua.',
   lede: 'Escreva em português e seja lido em japonês, árabe ou francês. O Meeshy traduz cada mensagem e cada áudio, ao vivo.',
-  formLabel: 'Entrar no World Wide',
-  nameLabel: 'Seu nome ou apelido',
-  namePlaceholder: 'Ex. Awa',
   join: 'Entrar no World Wide',
   joinNote: 'Sem conta, sem e-mail. Tudo o que você ler chegará no idioma escolhido.',
+  worldQrCaption: 'Escaneie para entrar no World Wide',
+  worldQrAlt: 'Código QR para meeshy.me/world: escaneie com a câmera do celular para entrar no World Wide',
+  worldLinkLead: 'O link de compartilhamento:',
   previewLabel: 'Prévia do World Wide',
   previewSubtitle: 'Traduzido para você',
   previewKenji: 'Olá a todos! Alguém aqui está aprendendo japonês?',
@@ -294,8 +284,6 @@ const pt: LandingCopy = {
   contact: 'Contato',
   partners: 'Parceiros',
   unavailable: 'O World Wide está fechado no momento. Entre para encontrar suas conversas.',
-  languageTitle: 'Seu idioma',
-  entryFailed: 'Não foi possível abrir a entrada do World Wide. Verifique sua conexão e tente de novo.',
   returnToWorld: 'Voltar ao World Wide',
 };
 
@@ -310,17 +298,16 @@ const de: LandingCopy = {
   navFaq: 'FAQ',
   languageLabel: 'Sprache der Oberfläche',
   signIn: 'Anmelden',
-  enterWithoutAccount: 'Ohne Konto eintreten',
   myConversations: 'Meine Unterhaltungen',
   presence: '{count} Personen in World Wide',
   headline: 'Sprich mit der ganzen Welt.',
   headlineAccent: 'Jeder liest in seiner Sprache.',
   lede: 'Schreib auf Deutsch, gelesen wirst du auf Japanisch, Arabisch oder Portugiesisch. Meeshy übersetzt jede Nachricht und jede Sprachnachricht, live.',
-  formLabel: 'World Wide betreten',
-  nameLabel: 'Dein Vorname oder Spitzname',
-  namePlaceholder: 'z. B. Awa',
   join: 'World Wide beitreten',
   joinNote: 'Ohne Konto, ohne E-Mail. Alles, was du dort liest, kommt in der gewählten Sprache an.',
+  worldQrCaption: 'Scannen, um World Wide zu betreten',
+  worldQrAlt: 'QR-Code zu meeshy.me/world: Scanne ihn mit der Handykamera, um World Wide zu betreten',
+  worldLinkLead: 'Der Link zum Teilen:',
   previewLabel: 'Vorschau von World Wide',
   previewSubtitle: 'Für dich übersetzt',
   previewKenji: 'Hallo zusammen! Lernt hier jemand Japanisch?',
@@ -354,8 +341,6 @@ const de: LandingCopy = {
   contact: 'Kontakt',
   partners: 'Partner',
   unavailable: 'World Wide ist gerade geschlossen. Melde dich an, um deine Unterhaltungen zu finden.',
-  languageTitle: 'Deine Sprache',
-  entryFailed: 'Der Eingang zu World Wide konnte nicht geöffnet werden. Prüfe deine Verbindung und versuche es erneut.',
   returnToWorld: 'Zurück zu World Wide',
 };
 
@@ -370,17 +355,16 @@ const it: LandingCopy = {
   navFaq: 'FAQ',
   languageLabel: "Lingua dell'interfaccia",
   signIn: 'Accedi',
-  enterWithoutAccount: 'Entra senza account',
   myConversations: 'Le mie conversazioni',
   presence: '{count} persone in World Wide',
   headline: 'Parla con il mondo intero.',
   headlineAccent: 'Ognuno legge nella sua lingua.',
   lede: 'Scrivi in italiano, ti leggono in giapponese, arabo o portoghese. Meeshy traduce ogni messaggio e ogni vocale, in diretta.',
-  formLabel: 'Entra in World Wide',
-  nameLabel: 'Il tuo nome o soprannome',
-  namePlaceholder: 'Es. Awa',
   join: 'Unisciti a World Wide',
   joinNote: 'Senza account, senza e-mail. Tutto ciò che leggerai arriverà nella lingua scelta.',
+  worldQrCaption: 'Inquadra per entrare in World Wide',
+  worldQrAlt: 'Codice QR verso meeshy.me/world: inquadralo con la fotocamera del telefono per entrare in World Wide',
+  worldLinkLead: 'Il link da condividere:',
   previewLabel: 'Anteprima di World Wide',
   previewSubtitle: 'Tradotto per te',
   previewKenji: 'Ciao a tutti! Qualcuno qui studia il giapponese?',
@@ -414,8 +398,6 @@ const it: LandingCopy = {
   contact: 'Contatti',
   partners: 'Partner',
   unavailable: 'World Wide è chiusa per ora. Accedi per ritrovare le tue conversazioni.',
-  languageTitle: 'La tua lingua',
-  entryFailed: "Non è stato possibile aprire l'ingresso di World Wide. Controlla la connessione e riprova.",
   returnToWorld: 'Torna in World Wide',
 };
 
@@ -430,17 +412,16 @@ const ar: LandingCopy = {
   navFaq: 'الأسئلة الشائعة',
   languageLabel: 'لغة الواجهة',
   signIn: 'تسجيل الدخول',
-  enterWithoutAccount: 'الدخول دون حساب',
   myConversations: 'محادثاتي',
   presence: '{count} شخصًا في World Wide',
   headline: 'تحدّث إلى العالم كله.',
   headlineAccent: 'كلٌّ يقرأ بلغته.',
   lede: 'اكتب بالعربية، ويقرؤك الآخرون باليابانية أو الفرنسية أو البرتغالية. يترجم Meeshy كل رسالة وكل رسالة صوتية مباشرةً.',
-  formLabel: 'الدخول إلى World Wide',
-  nameLabel: 'اسمك أو لقبك',
-  namePlaceholder: 'مثلًا: آوا',
   join: 'انضم إلى World Wide',
   joinNote: 'دون حساب ودون بريد إلكتروني. كل ما تقرؤه هناك سيصلك باللغة التي تختارها.',
+  worldQrCaption: 'امسح الرمز للدخول إلى World Wide',
+  worldQrAlt: 'رمز QR إلى meeshy.me/world: امسحه بكاميرا هاتفك للدخول إلى World Wide',
+  worldLinkLead: 'رابط المشاركة:',
   previewLabel: 'معاينة World Wide',
   previewSubtitle: 'مترجم لك',
   previewKenji: 'مرحبًا بالجميع! هل يتعلم أحد هنا اليابانية؟',
@@ -474,8 +455,6 @@ const ar: LandingCopy = {
   contact: 'اتصل بنا',
   partners: 'الشركاء',
   unavailable: 'World Wide مغلقة حاليًا. سجّل الدخول للعثور على محادثاتك.',
-  languageTitle: 'لغتك',
-  entryFailed: 'تعذّر فتح مدخل World Wide. تحقّق من اتصالك ثم أعد المحاولة.',
   returnToWorld: 'العودة إلى World Wide',
 };
 

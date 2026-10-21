@@ -8,6 +8,8 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects';
+import { noticeAdminRemoval } from '../../services/moderation/adminRemovalNotices';
+import { removedPostContentType } from '../../services/moderation/contentRemoval';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWithdrawal';
 import { requirePermission } from '../../middleware/authorize';
@@ -817,6 +819,14 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       // ont été rattrapés ici un par un, à des cycles d'intervalle, parce que
       // rien ne nommait la liste : il n'y a plus qu'un endroit à tenir.
       await applyPostRemovalEffects(fastify.prisma, post, { id: user.id, reason, viaAdministration: true });
+      noticeAdminRemoval({ prisma: fastify.prisma }, {
+        actorUserId: user.id,
+        authorUserId: post.authorId,
+        contentType: removedPostContentType(post.type),
+        contentId: postId,
+        postId,
+        reason,
+      });
 
       fastify.log.info({
         action: 'admin_post_delete',

@@ -1,0 +1,42 @@
+import type { RowMenuCatalog } from '../i18n-row-menu-catalog';
+
+/** LE MENU D'UNE LIGNE ET LES PUCES DE LA LISTE, ALLEMAND (#10593). */
+const de = {
+  'rowMenu.details': 'Details',
+  'rowMenu.rename': 'Umbenennen',
+  'rowMenu.favorite': 'Favorit',
+  'rowMenu.favorite.remove': 'Aus Favoriten entfernen',
+  'rowMenu.moveTo': 'Verschieben nach…',
+  'rowMenu.moveTo.mine': 'Meine Unterhaltungen',
+  'rowMenu.block': 'Blockieren',
+  'rowMenu.unblock': 'Blockierung aufheben',
+  'rowMenu.invite': 'Einladen',
+  'rowMenu.manageMembers': 'Mitglieder verwalten',
+  'rowMenu.adminOpen': 'In der Verwaltung öffnen',
+  'rowMenu.leave': 'Verlassen',
+  'rowMenu.peek': 'Vorschau der Unterhaltung',
+  'rowMenu.peek.open': 'Unterhaltung öffnen',
+  'rowMenu.peek.e2ee': 'Ende-zu-Ende-verschlüsselt',
+  'rowMenu.peek.empty': 'Noch keine Nachrichten',
+  'rowMenu.back': 'Zurück',
+  'rowMenu.block.title': 'Diesen Benutzer blockieren?',
+  'rowMenu.block.message': 'Diese Person kann Ihnen keine Nachrichten mehr senden. Die Unterhaltung wandert in Ihr Archiv.',
+  'rowMenu.rename.title': 'Unterhaltung umbenennen',
+  'rowMenu.rename.label': 'Name',
+  'rowMenu.rename.hint': 'Leer lassen, um den ursprünglichen Namen wiederherzustellen.',
+  'rowMenu.rename.save': 'Speichern',
+  'listFilter.nav': 'Filter',
+  'listFilter.all': 'Alle',
+  'listFilter.unread': 'Ungelesen',
+  'listFilter.favorites': 'Favoriten',
+  'listFilter.personal': 'Persönlich',
+  'listFilter.private': 'Privat',
+  'listFilter.open': 'Offen',
+  'listFilter.global': 'Global',
+  'listFilter.channels': 'Kanäle',
+  'listFilter.pinned': 'Angeheftet',
+  'listFilter.archived': 'Archiviert',
+  'listRow.muted': 'Stummgeschaltet',
+} as const satisfies RowMenuCatalog;
+
+export default de;

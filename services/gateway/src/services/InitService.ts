@@ -1,5 +1,5 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ensureSocialEventIndexes, rawCommandIndexStore } from './social/socialEventIndexes';
+import { ensureSocialEventIndexesByCommand } from './social/socialEventIndexes';
 import { AuthService } from './AuthService';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
@@ -399,9 +399,11 @@ export class InitService {
    */
   async ensureSocialEventIndexes(): Promise<void> {
     try {
-      const outcomes = await ensureSocialEventIndexes(rawCommandIndexStore(this.prisma));
-      const changed = Object.entries(outcomes).filter(([, outcome]) => outcome !== 'present');
-      if (changed.length > 0) logger.info(`[INIT] index de télémétrie v2 : ${changed.map(([name, outcome]) => `${name}=${outcome}`).join(', ')}`);
+      const outcomes = Object.entries(await ensureSocialEventIndexesByCommand(this.prisma));
+      const created = outcomes.filter(([, probe]) => probe.outcome === 'created').map(([name]) => name);
+      const conflicts = outcomes.flatMap(([name, probe]) => probe.outcome === 'conflict' ? [`${name} (${probe.reason})`] : []);
+      logger.info(`[INIT] index de télémétrie v2 posés : ${outcomes.length - conflicts.length}/${outcomes.length}${created.length > 0 ? ` — créés : ${created.join(', ')}` : ''}`);
+      if (conflicts.length > 0) logger.error(`[INIT] ❌ Index de télémétrie v2 en conflit, laissés en place : ${conflicts.join(', ')}`);
     } catch (error) {
       logger.error('[INIT] ❌ Index de télémétrie v2 non posés', error);
     }

@@ -27,11 +27,15 @@ const GUEST: ReachGuest = { id: '507f1f77bcf86cd7994390ee', sessionTokens: ['gue
 
 type Harness = ReturnType<typeof makeReachPrisma> & { app: FastifyInstance };
 
-async function harness(posts: readonly ReachPost[], guests: readonly ReachGuest[] = [GUEST]): Promise<Harness> {
+async function harness(
+  posts: readonly ReachPost[],
+  guests: readonly ReachGuest[] = [GUEST],
+  world?: Parameters<typeof makeReachPrisma>[2],
+): Promise<Harness> {
   // Le registre des ouvertures (`viewOpenLedger`) vit dans le CacheStore : un
   // banc neuf repart d'un registre vide.
   resetCacheStore();
-  const fake = makeReachPrisma(posts, guests);
+  const fake = makeReachPrisma(posts, guests, world);
   const app = Fastify({ logger: false });
   app.decorate('prisma', fake.prisma as never);
 
@@ -278,11 +282,15 @@ describe('G8 — le champ surface', () => {
     await h.app.close();
   });
 
-  it('la surface d’un compte est persistée dans PostImpression', async () => {
+  it('la surface d’un compte est persistée dans PostImpression, qu’il consente à l’analyse ou non (#10785)', async () => {
     const h = await harness([{ id: POST }]);
     await send(h.app, [impression(POST, { surface: 'reels' }), view(POST)], { authorization: `Bearer ${READER}` });
-
-    expect(h.impressions).toEqual([expect.objectContaining({ postId: POST, surface: 'reels' })]);
+    expect(h.impressions).toEqual([expect.objectContaining({ postId: POST, source: 'feed', surface: 'reels' })]);
     await h.app.close();
+
+    const consenting = await harness([{ id: POST }], [GUEST], { consentedUserIds: [READER] });
+    await send(consenting.app, [impression(POST, { surface: 'reels' }), view(POST)], { authorization: `Bearer ${READER}` });
+    expect(consenting.impressions).toEqual([expect.objectContaining({ postId: POST, surface: 'reels' })]);
+    await consenting.app.close();
   });
 });

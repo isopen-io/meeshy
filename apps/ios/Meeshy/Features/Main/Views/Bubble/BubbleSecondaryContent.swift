@@ -21,12 +21,13 @@ struct BubbleSecondaryContent: View, Equatable {
     var trackedLinks: [String: String] = [:]
     /// L'auteur n'a pas de compte (#10286) : ses adresses restent du texte brut.
     var linksAreInert: Bool = false
+    @Environment(\.bubbleSkin) private var skin
 
     var body: some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for: langCode))
         let display = LanguageDisplay.from(code: langCode)
         let secondaryTextColor: Color = isMe
-            ? .white.opacity(MeeshyOpacity.intense)
+            ? skin.ink(MeeshyOpacity.intense)
             : textPrimary.opacity(MeeshyOpacity.intense)
 
         VStack(spacing: 0) {

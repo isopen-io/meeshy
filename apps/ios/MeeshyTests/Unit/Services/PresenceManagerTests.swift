@@ -19,6 +19,157 @@ final class PresenceManagerTests: XCTestCase {
         sut = nil
     }
 
+    // MARK: - Déconnexion
+
+    /// La carte de présence (et son fichier `meeshy_cache/presence_map.json`,
+    /// sans compte dans son nom) survivait à la déconnexion : le compte suivant
+    /// voyait la présence des amis du compte sortant — que la loi de visibilité
+    /// ne lui sert jamais.
+    func test_resetForLogout_forgetsEveryPresence() {
+        sut.presenceMap["friend-of-A"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+        sut.resetForLogout()
+        XCTAssertTrue(sut.presenceMap.isEmpty)
+        XCTAssertEqual(sut.conversationViewers, ConversationViewers())
+    }
+
+    func test_logoutTeardown_resetsPresence() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Core/DependencyContainer.swift")
+        XCTAssertTrue(source.contains("PresenceManager.shared.resetForLogout()"),
+                      "la purge de déconnexion doit vider la présence du compte sortant")
+    }
+
+    // MARK: - La présence de l'auteur d'un message (#10944)
+
+    /// `senderId` est l'identifiant de PARTICIPATION ; la carte est tenue par
+    /// COMPTE. Lue par `senderId`, la pastille d'un ami en ligne restait éteinte
+    /// dans les bulles, la pile de l'en-tête, la Rivière et le résumé.
+    func test_presenceStateForSenderOf_registeredSender_readsTheAccountPresence() {
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+        let message = Message(conversationId: "conv-1", senderId: "participant-1", content: "salut", senderUserId: "user-1")
+        XCTAssertEqual(sut.presenceState(forSenderOf: message), .online)
+    }
+
+    func test_presenceStateForSenderOf_anonymousSender_withoutServedPresence_isOffline() {
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+        let message = Message(conversationId: "conv-1", senderId: "participant-9", content: "salut", senderUserId: "user-1", senderIsAnonymous: true)
+        XCTAssertEqual(sut.presenceState(forSenderOf: message), .offline)
+    }
+
+    /// Le plateau d'histoires sert la présence de l'auteur : sans elle, une
+    /// story d'ami ne portait de point qu'après un `user:status`.
+    func test_presenceStateServed_withoutLiveEntry_rendersTheServedPresence() {
+        XCTAssertEqual(sut.presenceState(for: "user-2", served: AppUserPresence(isOnline: true)), .online)
+        XCTAssertEqual(sut.presenceState(for: "user-2", served: nil), .offline)
+    }
+
+    func test_presenceStateServed_liveEntryWins() {
+        sut.presenceMap["user-2"] = AppUserPresence(isOnline: false, lastActiveAt: Date().addingTimeInterval(-120))
+        XCTAssertEqual(sut.presenceState(for: "user-2", served: AppUserPresence(isOnline: true)), .away)
+    }
+
+    /// Aucun site ne relit la carte par un identifiant de PARTICIPATION.
+    func test_noAvatarSite_readsPresenceByParticipationId() throws {
+        let sites = [
+            "Meeshy/Features/Main/Views/ConversationView+Header.swift",
+            "Meeshy/Features/Main/Views/ConversationView.swift",
+            "Meeshy/Features/Main/Views/MessageListViewController+Rows.swift",
+            "Meeshy/Features/Main/Focal/Summary/LivingSummaryAssembly.swift",
+            "Meeshy/Features/Main/Components/ConversationInfoSheet.swift",
+            "Meeshy/Features/Main/Views/ParticipantsView.swift",
+        ]
+        let forbidden = try NSRegularExpression(pattern: #"presenceState\(for: (message\.senderId|senderId|member\.id|participant\.id)\)"#)
+        for site in sites {
+            let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(site))
+            let hits = forbidden.numberOfMatches(in: source, range: NSRange(source.startIndex..., in: source))
+            XCTAssertEqual(hits, 0, "\(site) lit la présence par un identifiant de participation")
+        }
+    }
+
+    // MARK: - Un avatar de pair porte la présence servie (#10944)
+
+    /// Chaque `MeeshyAvatar(` de l'app et de MeeshyUI passe `presenceState:` —
+    /// la présence SERVIE, absente ⇒ aucun point. Un fichier qui en monte un
+    /// sans elle doit être NOMMÉ ici, avec sa raison : un nouvel avatar de pair
+    /// sans présence rougit.
+    private static let avatarsWithoutPresence: [String: String] = [
+        "Auth/LinkSignInConfirmationSheet.swift": "soi — l'avatar du compte connecté",
+        "Auth/Signup/SignupView+Card.swift": "soi — l'avatar du compte connecté",
+        "Main/Composer/ComposerDocumentSurface.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/AccountSwitcherSheet.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/FeedView+Composer.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/LoginView.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/ProfileDecorSheet.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/ProfileOwnAvatar.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/RootFloatingChrome.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/FeedComposerSheet.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/GlobalSearchView.swift": "entité — groupe, communauté, conversation, message sans compte",
+        "MeeshyUI/Profile/UserProfileSheet+ConversationsTab.swift": "entité — groupe, communauté, conversation, message sans compte",
+        "Main/Components/ContactCard/ContactCardDetailSheet.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
+        "Main/Views/StoryAuthorIdentityCard.swift": "contexte qui ne peint aucun point (showsOnlineDot == false) ou carte de présence séparée",
+        "Contacts/BlockedTab.swift": "bloqué — aucune présence ne se montre",
+        "Main/Views/BlockedUsersView.swift": "bloqué — aucune présence ne se montre",
+        "Main/Game/Photo/GameAuthorPlateView.swift": "décor, illustration ou son — aucune personne",
+        "Main/Views/WidgetPreviewView.swift": "décor, illustration ou son — aucune personne",
+        "Onboarding/OnboardingCards.swift": "décor, illustration ou son — aucune personne",
+        "Onboarding/OnboardingIllustrations.swift": "décor, illustration ou son — aucune personne",
+        "MeeshyUI/Profile/FullscreenImageView.swift": "décor, illustration ou son — aucune personne",
+        "MeeshyUI/Story/Controls/SoundDetailView.swift": "décor, illustration ou son — aucune personne",
+        "MeeshyUI/Story/Controls/SoundLibraryPicker.swift": "décor, illustration ou son — aucune personne",
+        "Contacts/CallDetailSheet.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Contacts/CallLinkConfirmation.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Contacts/RequestsTab.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Main/Views/FriendRequestListView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Main/Components/ContactCardView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Main/Components/ConversationCard/ConversationLinkCardBody.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Main/Views/ShareLinkArrivalsSection.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Main/Views/VisitorContentView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "MeeshyUI/JoinFlow/InviteLanding/InviteInviterHeader.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Stories/Notifications/StoryExpiredContent.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Main/Views/NearbyDiscoveryView.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Main/Views/AudioFullscreenPage.swift": "la passerelle ne sert aucune présence à cette charge (non-amis, visiteur, auteur de publication)",
+        "Main/Components/ForwardPickerSheet.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
+        "Main/Views/SharePickerView.swift": "remplacés par l'écran de partage unique (#10947/#10948)",
+        "Main/Share/ShareSheetView.swift": "écran de partage unique en cours (#10947/#10948) — sa présence est l'affaire de son lot",
+    ]
+
+    func test_everyPeerAvatar_passesTheServedPresence_orIsNamedWithItsReason() throws {
+        let repo = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let roots = [("apps/ios/Meeshy/Features/", "apps/ios/Meeshy"), ("packages/MeeshySDK/Sources/", "packages/MeeshySDK/Sources/MeeshyUI")]
+        var offenders: [String] = []
+        for (prefix, root) in roots {
+            let enumerator = FileManager.default.enumerator(at: repo.appendingPathComponent(root), includingPropertiesForKeys: nil)
+            while let url = enumerator?.nextObject() as? URL {
+                guard url.pathExtension == "swift" else { continue }
+                let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+                guard Self.avatarCalls(in: source).contains(where: { !$0.contains("presenceState:") && !$0.contains("kind: .entity") }) else { continue }
+                let relative = String(url.path.dropFirst(repo.path.count + 1))
+                let key = relative.hasPrefix(prefix) ? String(relative.dropFirst(prefix.count)) : relative
+                if Self.avatarsWithoutPresence[key] == nil { offenders.append(key) }
+            }
+        }
+        XCTAssertEqual(offenders.sorted(), [], "avatar sans présence servie ni raison nommée")
+    }
+
+    private static func avatarCalls(in source: String) -> [Substring] {
+        var calls: [Substring] = []
+        var rest = source[...]
+        while let open = rest.range(of: "MeeshyAvatar(") {
+            var depth = 1
+            var index = open.upperBound
+            while depth > 0, index < rest.endIndex {
+                if rest[index] == "(" { depth += 1 } else if rest[index] == ")" { depth -= 1 }
+                index = rest.index(after: index)
+            }
+            calls.append(rest[open.lowerBound..<index])
+            rest = rest[index...]
+        }
+        return calls
+    }
+
     // MARK: - UserPresence.state computed property
 
     func test_state_whenOffline_returnsOffline() {

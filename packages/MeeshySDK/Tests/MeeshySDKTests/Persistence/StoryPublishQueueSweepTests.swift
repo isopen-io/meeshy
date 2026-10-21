@@ -102,6 +102,32 @@ final class StoryPublishQueueSweepTests: XCTestCase {
 
     // MARK: - Balayage : `continue` borné
 
+    /// Sans exécuteur (le `StoryViewModel` racine démonté — fenêtre principale d'iPad fermée, fenêtre détachée
+    /// ouverte), la publication n'est pas TENTÉE : elle ne consomme aucun budget et arrête la passe. Avant, chaque
+    /// reprise du socket brûlait un essai, et la story finissait « échec définitif » sans jamais être partie.
+    func test_processNext_deferredPublication_neverChargesTheRetryBudget() async {
+        let a = makeItem()
+        let b = makeItem()
+        let attempts = PublishedLog()
+        await queue.setPublishHandler { item in
+            await attempts.append(item.id)
+            throw StoryPublishDeferredError()
+        }
+        await queue.enqueue(a)
+        await queue.enqueue(b)
+
+        // Plus de passes que le budget de retry (5) : sept reprises du socket.
+        for _ in 0..<7 { await queue.processNext() }
+
+        let pending = await queue.pendingItems
+        XCTAssertEqual(pending.count, 2, "rien n'est parti, rien n'est perdu")
+        XCTAssertEqual(pending.map(\.retryCount), [0, 0], "un report n'est pas un essai")
+        let failed = await queue.failedPendingItems
+        XCTAssertTrue(failed.isEmpty)
+        let tried = await attempts.ids
+        XCTAssertEqual(Set(tried), [a.id], "la passe s'arrête au premier report : sans exécuteur, rien d'autre ne partira")
+    }
+
     func test_processNext_firstItemFailsRetryably_secondItemIsStillAttempted() async {
         let a = makeItem()
         let b = makeItem()

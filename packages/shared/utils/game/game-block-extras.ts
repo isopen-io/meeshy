@@ -58,8 +58,11 @@ export type GameBlockExtrasFacts = {
   readonly today: string;
   readonly minuteOfDay: number;
   /** Le score en poche, le niveau record et les étoiles de Prestige. */
+  /** Avec les étincelles, la POCHE — la base du niveau (#10892, `levelSparksOf`). */
   readonly score: number;
   readonly levelRecord: number | null;
+  /** Le niveau max à vie (#10846), qui survit au prestige : il ouvre les ligues et le duo. Absent : le record du cycle. */
+  readonly levelMaxLifetime?: number | null;
   readonly prestige: number;
   readonly flameDays: number;
   readonly balance: number;
@@ -125,7 +128,13 @@ export type GameBlockExtras = {
   readonly photo?: GamePhotoBlock;
 };
 
-const recordOf = (levelRecord: number | null, score: number): number => Math.max(levelRecord ?? 1, levelForUnlocks({ score, levelRecord }));
+/** Les étapes faites ne se défont pas : le plus haut des deux records les prouve (#9706, #10846). */
+const stepProof = (facts: Pick<GameBlockExtrasFacts, 'levelRecord' | 'levelMaxLifetime'>): number | null =>
+  Math.max(facts.levelRecord ?? 0, facts.levelMaxLifetime ?? 0) || null;
+
+/** Le niveau qui OUVRE les accès : le plus haut du niveau lu, du record du cycle et du max à vie. */
+const recordOf = (facts: GameBlockExtrasFacts): number =>
+  Math.max(facts.levelRecord ?? 1, facts.levelMaxLifetime ?? 1, levelForUnlocks({ score: facts.score, levelRecord: stepProof(facts) }));
 
 function leagueBlock(facts: GameBlockExtrasFacts, record: number): GameLeagueBlock {
   const moment = { dayKey: facts.today, minuteOfDay: facts.minuteOfDay };
@@ -198,7 +207,7 @@ function duoBlock(facts: GameBlockExtrasFacts, record: number): GameDuoBlock {
     reward:
       progress === null
         ? null
-        : duoReward({ level: levelForUnlocks({ score: facts.score, levelRecord: facts.levelRecord }), flameDays: facts.flameDays, mineDone: progress.mineDone, partnerDone: progress.partnerDone }),
+        : duoReward({ level: levelForUnlocks({ score: facts.score, levelRecord: stepProof(facts) }), flameDays: facts.flameDays, mineDone: progress.mineDone, partnerDone: progress.partnerDone }),
   };
 }
 
@@ -249,7 +258,7 @@ function upcomingSeasonBlock(facts: GameBlockExtrasFacts): GameUpcomingSeasonBlo
 }
 
 export function buildGameBlockExtras(facts: GameBlockExtrasFacts): GameBlockExtras {
-  const record = recordOf(facts.levelRecord, facts.score);
+  const record = recordOf(facts);
   const summary = atlasSummary(facts.atlas);
   return {
     league: leagueBlock(facts, record),
@@ -264,7 +273,7 @@ export function buildGameBlockExtras(facts: GameBlockExtrasFacts): GameBlockExtr
     prestige: {
       stars: Math.min(GAME_PRESTIGE_MAX, Math.max(0, Math.trunc(facts.prestige))),
       max: GAME_PRESTIGE_MAX,
-      canPrestige: canPrestige({ level: levelForUnlocks({ score: facts.score, levelRecord: facts.levelRecord }), prestige: facts.prestige }),
+      canPrestige: canPrestige({ level: levelForUnlocks({ score: facts.score, levelRecord: stepProof(facts) }), prestige: facts.prestige }),
       gloryOnPass: GLORY_POINTS.prestige,
     },
     visibility: { ...facts.visibility },

@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 import os
 
-private let dbMaintenanceLog = Logger(subsystem: "com.meeshy.sdk", category: "db-maintenance")
+private let dbMaintenanceLog = MeeshyLog.logger(.dbMaintenance, subsystem: .legacySDK)
 
 /// Tunes SQLite for the Meeshy access pattern (read-heavy with bursty writes
 /// from socket events) and exposes maintenance hooks for periodic compaction.

@@ -9,6 +9,7 @@ import {
 } from '@/lib/reading-mode/metrics';
 import { dayLabelsFor } from '@/lib/grouping';
 import { focusStampLabel } from '@/lib/reading-mode/stamp';
+import type { UserPresenceStatus } from '@/lib/api/types';
 import type { Delivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -70,8 +71,14 @@ export function FocusIdentity({
   username,
   storyRing,
   participantId,
+  presence,
+  authorId,
   continuation = false,
 }: {
+  /** LA PRÉSENCE ET LE « ICI » DE LA RANGÉE QU'ELLE RECOUVRE (#10944) — ceux
+   * que l'avatar de tête porte déjà : la puce le cache, elle ne l'éteint pas. */
+  readonly presence?: UserPresenceStatus;
+  readonly authorId?: string | undefined;
   /** Le participant de la rangée élue (`message.senderId`) : quand le fil ouvre
    * les fiches de World Wide à l'équipe (#10102), la puce les ouvre aussi —
    * elle recouvre l'identité de tête, le doigt la touche, elle. */
@@ -115,6 +122,8 @@ export function FocusIdentity({
         {...(typeof username === 'string' && username !== '' ? { profileUsername: username, name } : {})}
         {...(storyRing === undefined ? {} : { storyRing, name })}
         {...(participantId === undefined ? {} : { participant: { id: participantId, name } })}
+        {...(authorId === undefined ? {} : { authorId })}
+        {...(presence === undefined ? {} : { presence })}
         redundant
       />
       {/* `IDENTITY_NAME_SIZE` (13,5) est une cote GÉOMÉTRIQUE dérivée de
@@ -146,6 +155,7 @@ export function FocusStrip({
   reactions,
   myReactions,
   onToggleReaction,
+  reactorsFor,
 }: {
   readonly servedLanguage: string;
   readonly originalLanguage: string;
@@ -171,6 +181,8 @@ export function FocusStrip({
    * Absente (hôte en lecture seule), la capsule reste inerte.
    */
   readonly onToggleReaction?: (emoji: string) => void;
+  /** Le message dont une capsule maintenue ouvre « qui a réagi » (#10583). */
+  readonly reactorsFor?: string;
 }) {
   /* `PrismPastille` rend `null` quand la langue servie EST la langue
      d'origine (rien à basculer) : sans cette garde, sa capsule restait
@@ -205,7 +217,7 @@ export function FocusStrip({
             glyph={glyph}
             count={count}
             mine={myReactions?.includes(glyph) ?? false}
-            {...(onToggleReaction === undefined ? {} : { onToggle: () => onToggleReaction(glyph) })}
+            {...(onToggleReaction === undefined ? {} : { onToggle: () => onToggleReaction(glyph), ...(reactorsFor === undefined ? {} : { reactorsFor }) })}
           />
         </span>
       ))}

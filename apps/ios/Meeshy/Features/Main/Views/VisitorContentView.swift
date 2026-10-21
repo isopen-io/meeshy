@@ -316,7 +316,7 @@ struct VisitorPostReader: View {
 
     private var author: some View {
         HStack(spacing: MeeshySpacing.sm) {
-            MeeshyAvatar(name: post.author, context: .postAuthor, avatarURL: post.authorAvatarURL)
+            MeeshyAvatar(name: post.author, context: .postAuthor, avatarURL: post.authorAvatarURL, ring: post.authorRing)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(post.author)

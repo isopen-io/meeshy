@@ -32,8 +32,8 @@ function storedKeys(): readonly string[] {
 
 /**
  * CE QU'UN COMPTE LAISSE SUR L'APPAREIL, EFFACÉ (#8286, #8674) — brouillons,
- * modes de lecture, dernières ouvertures, cache de requêtes rangé et seaux du
- * service worker. Appelé par la déconnexion et par « retirer ce compte » ;
+ * modes de lecture, dernières ouvertures, cache de requêtes rangé, seaux du
+ * service worker et envois en attente de la file de partage (#10948). Appelé par la déconnexion et par « retirer ce compte » ;
  * jamais par un changement de compte.
  */
 function forgetAccountLocally(userId: string): void {
@@ -42,6 +42,8 @@ function forgetAccountLocally(userId: string): void {
   unsentComments.getState().forgetScope(`u_${userId}`);
   purgeAccountLocalData({ storage: safeLocalStorage(), userId, keys: storedKeys() });
   forgetAccountCaches({ userId });
+  /* Ses envois en attente (contenu et fichiers dans IndexedDB) partent avec lui ; chargé au geste. */
+  void import('../send/send-queue-instance').then(({ sendQueue }) => sendQueue.forget(userId)).catch(() => undefined);
 }
 
 /**

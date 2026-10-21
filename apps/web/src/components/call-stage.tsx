@@ -248,7 +248,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
       ) : (
         <div className="absolute inset-0 grid place-items-center">
           <div className="flex flex-col items-center gap-3">
-            <Portrait name={swapped ? you : call.title} avatar={swapped ? null : call.avatar} size={96} pulse={false} />
+            <Portrait name={swapped ? you : call.title} avatar={swapped ? null : call.avatar} size={96} pulse={false} presenceKey={swapped ? undefined : (call.peerKey ?? undefined)} />
             <span className="text-body" style={{ color: INK_2 }}>
               {translate(language, swapped ? 'call.camera.off' : remoteStream === null ? 'call.video.connecting' : 'call.camera.peerOff')}
             </span>
@@ -291,7 +291,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
             data-call-corner=""
             data-call-self-tile={swapped ? undefined : String(scale)}
           >
-            {cornerVideo ? <StreamVideo stream={cornerStream} mirrored={!swapped && selfMirrored} className="size-full" member={swapped ? firstPeer?.userId : undefined} self={!swapped} /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
+            {cornerVideo ? <StreamVideo stream={cornerStream} mirrored={!swapped && selfMirrored} className="size-full" member={swapped ? firstPeer?.userId : undefined} self={!swapped} /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} presenceKey={call.peerKey ?? undefined} />}
             {peerMuted && swapped ? <PeerMuted where="corner" /> : null}
           </button>
           {rows?.camera ? (

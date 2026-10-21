@@ -4,9 +4,7 @@ import type frPublicEntry from './catalog-fr-public-entry';
 const esPublicEntry = {
   'publicHeader.home': 'Inicio de Meeshy',
   'publicHeader.language': 'Idioma',
-  'login.world.title': 'Entrar en {title}',
-  'login.world.subtitle': 'Sin cuenta · tu nombre y tu idioma',
-  'login.world.or': 'o con tu cuenta',
+  'brand.credit.hint': 'abre la plataforma services.ceo en una pestaña nueva',
   'login.offline': 'Sin conexión: no es posible iniciar sesión por ahora.',
   'login.twoFactor.title': 'Autenticación en dos pasos',
   'login.twoFactor.lead': 'Introduce el código de tu aplicación de autenticación.',
@@ -35,6 +33,17 @@ const esPublicEntry = {
   'magicLink.offline': 'Sin conexión. Comprueba tu red y vuelve a intentarlo.',
   'magicLink.submit': 'Recibir el enlace',
   'magicLink.submit.busy': 'Enviando…',
+  'magicLink.flowTitle': 'Iniciar sesión con correo',
+  'magicLink.validating': 'Verificando el enlace…',
+  'magicLink.invalid.title': 'Enlace no válido o caducado',
+  'magicLink.invalid.body': 'Un enlace de acceso caduca a los 10 minutos y solo sirve una vez.',
+  'magicLink.requestNew': 'Solicitar un enlace nuevo',
+  'magicLink.backToLogin': 'Volver al inicio de sesión',
+  'magicLink.retry': 'Reintentar',
+  'magicLink.resend': 'Reenviar',
+  'magicLink.resend.label': 'Reenviar el enlace',
+  'magicLink.cancel': 'Cancelar',
+  'magicLink.linkExpired': 'Enlace caducado, solicita uno nuevo',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default esPublicEntry;

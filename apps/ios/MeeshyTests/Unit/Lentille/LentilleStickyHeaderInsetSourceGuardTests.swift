@@ -31,14 +31,10 @@ final class LentilleStickyHeaderInsetSourceGuardTests: XCTestCase {
 
     // MARK: - Localisation de la source
 
+    /// L'UNITÉ de la liste : le modificateur vit dans `+StickyHeaderInset`, son site d'appel dans
+    /// `+ScrollChrome` — le balayage « exactement une occurrence » doit couvrir les deux.
     private func viewSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Lentille
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationListView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
     }
 
     private func occurrences(of needle: String, in haystack: String) -> Int {

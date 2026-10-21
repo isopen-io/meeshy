@@ -67,8 +67,10 @@ final class ComposerCaptureDuringSwitchTests: XCTestCase {
     }
 
     func test_cameraModel_smoothsTheWholeTake() throws {
-        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
-        XCTAssertTrue(camera.contains("ComposerCaptureFocus.continuous(Self.focusCapabilities(of: device), smooth: isRecordingVideo)"),
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift") + Self.code("Meeshy/Features/Main/Components/CameraFocusControl.swift")
+        XCTAssertTrue(camera.contains("CameraFocusControl.resumeContinuous(on: device, smooth: isRecordingVideo)"),
+                      "le retour au continu garde le lissage d'une prise")
+        XCTAssertTrue(camera.contains("ComposerCaptureFocus.continuous(focusCapabilities(of: device), smooth: smooth)"),
                       "le retour au continu garde le lissage d'une prise")
         XCTAssertTrue(camera.contains("setSmoothFocus(true)"), "la prise (et chaque segment) pose le lissage")
         XCTAssertTrue(camera.contains("setSmoothFocus(false)"), "la fin de la prise le retire")

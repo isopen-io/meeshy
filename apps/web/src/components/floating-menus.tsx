@@ -12,6 +12,7 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { useNotificationCounts } from '@/lib/view/use-notification-counts';
 import { usePendingFriendRequestCount } from '@/lib/view/use-pending-friend-requests';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { PROFILE_DESTINATION, feedDiscDestination, menuLadderFor, type FloatingDestination } from '@/lib/view/floating-menu';
 import { isContextMenuKey } from '@/lib/view/long-press';
 import { belowScreenTop } from '@/lib/view/safe-area';
@@ -32,6 +33,7 @@ import {
 } from '@/lib/view/floating-pose';
 import { useAdminAccess } from '@/lib/view/use-admin-access';
 import { useFloatingDrag } from '@/lib/view/use-floating-drag';
+import { useMyRing } from '@/lib/profile-decor/my-ring';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { Link, href, navigate } from '@/routes/route-table';
@@ -169,7 +171,7 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
 
   /* L'ÉCHELLE DE CE LECTEUR (#6458) : le barreau d'administration n'existe que
      sur une matrice SERVIE portant le droit — jamais monté puis masqué. */
-  const ladder = menuLadderFor({ canAccessAdmin: useAdminAccess() });
+  const ladder = menuLadderFor({ canAccessAdmin: useAdminAccess(), calls: callsAvailable() });
   const [rooms, setRooms] = useState<LadderRooms | null>(null);
 
   const roving = useRovingMenu({
@@ -197,6 +199,8 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
    * `<img src="">` (qui recharge la page courante).
    */
   const maPhoto = session.status === 'authenticated' ? participantAvatarOf(session.user) : undefined;
+  /* MON CONTOUR SUR LE DISQUE (#10946) — le même que sur mon profil. */
+  const monContour = useMyRing();
 
   /**
    * **Le second tap ouvre le profil** — la règle d'iOS
@@ -403,6 +407,7 @@ export function FloatingMenus({ routeKey, contained = false }: { readonly routeK
               color="var(--color-ios-brand)"
               size={38}
               {...(maPhoto === undefined ? {} : { src: maPhoto })}
+              {...(monContour === null ? {} : { ring: monContour })}
             />
           )}
         </button>

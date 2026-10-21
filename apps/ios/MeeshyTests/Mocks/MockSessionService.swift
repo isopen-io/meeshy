@@ -39,8 +39,12 @@ final class MockSessionService: SessionServiceProviding, @unchecked Sendable {
         try revokeSessionResult.get()
     }
 
+    /// Ce qui se passe PENDANT l'aller-retour (une relecture qui arrive).
+    var duringRevokeAllOtherSessions: (@MainActor () async -> Void)?
+
     func revokeAllOtherSessions() async throws {
         revokeAllOtherSessionsCallCount += 1
+        await duringRevokeAllOtherSessions?()
         try revokeAllOtherSessionsResult.get()
     }
 }

@@ -1,5 +1,6 @@
 import { bridgeCallEvents } from '@/lib/calls/call-socket-bridge';
 import { setCallEngineWake } from '@/lib/calls/call-transport';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { conversationStore } from '@/lib/conversation-store';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
 import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
@@ -13,6 +14,9 @@ import { apiConfig } from './config';
 import { bindConversationViewing, viewingStore } from './conversation-viewing';
 import { bindConversationEngagement, engagementStore } from './conversation-engagement';
 import { bindPostEngagement } from './publication-engagement';
+import { bindProfileDecorSync } from '../profile-decor/equip';
+import { bindGameStateSync } from './game-state-live';
+import { bindAppearanceLiveLazily } from './appearance-live';
 import { bindPresenceLive } from './presence-live';
 import { presenceStore } from './presence-store';
 import { apiDeps } from './deps';
@@ -102,7 +106,7 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unbridgeCalls = null;
     return;
   }
-  const unbridge = bridgeCallEvents(next.socket);
+  const unbridge = callsAvailable() ? bridgeCallEvents(next.socket) : () => undefined;
   /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible.
      Un onglet réveillé d'un long sommeil rouvre sa connexion et relit la liste (#10573). */
   const unwatch =
@@ -115,6 +119,12 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const unengage = bindConversationEngagement({ socket: next.socket, store: engagementStore });
   /* « · +99 » (#9570) : ce qu'un post a rapporté au lecteur crédité, posé sur chaque caisse qui montre sa carte. */
   const unengagePosts = bindPostEngagement({ socket: next.socket, queryClient: appQueryClient });
+  /* `profile:decor-updated` (#10632) : le contour et la bannière équipés sur un autre de mes appareils. */
+  const undecor = bindProfileDecorSync({ socket: next.socket, queryClient: appQueryClient });
+  /* `game:updated` (#10900) : une frappe ou un gain faits ailleurs mettent le Jeu à jour, jamais avec un état plus ancien. */
+  const ungame = bindGameStateSync({ socket: next.socket, queryClient: appQueryClient });
+  /* `user:preferences-updated` (#10663) : le fond et l'accent changés ailleurs repeignent la liste sans fil ouvert. */
+  const unappearance = bindAppearanceLiveLazily({ socket: next.socket, queryClient: appQueryClient });
   /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
   const unpresence = bindPresenceLive({ socket: next.socket, store: presenceStore, viewerId: currentViewerId });
   /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
@@ -125,6 +135,9 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unview();
     unengage();
     unengagePosts();
+    undecor();
+    ungame();
+    unappearance();
     unpresence();
     unrevoke();
   };

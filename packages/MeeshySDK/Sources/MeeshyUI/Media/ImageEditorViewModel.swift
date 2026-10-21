@@ -1,6 +1,7 @@
 import Combine
 import SwiftUI
 import UIKit
+import MeeshySDK
 
 // MARK: - Image Editor View Model
 
@@ -168,8 +169,7 @@ public final class ImageEditorViewModel: ObservableObject {
         renderTask?.cancel()
         let snapshot = state
         renderTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(90))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .milliseconds(90)), let self else { return }
             let rendered = self.engine.render(self.working, state: snapshot)
             guard !Task.isCancelled else { return }
             self.previewImage = rendered

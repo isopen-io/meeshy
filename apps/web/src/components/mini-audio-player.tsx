@@ -138,6 +138,7 @@ export function MiniAudioPlayer({ carried, onClose, onOpen, concealed = false, c
         <audio
           ref={bindAudio}
           preload="auto"
+          data-np-attachment={attachment.id}
           data-mini-audio-track={carried.trackLanguage}
           className="hidden"
           {...(carried.trackUrl === '' ? {} : { src: attachmentSrc(carried.trackUrl) })}

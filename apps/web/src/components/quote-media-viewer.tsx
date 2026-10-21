@@ -68,7 +68,7 @@ export default function QuoteMediaViewer({
       messageId: quote.id,
       conversationId: quote.conversationId,
       offers,
-      ...(offers.share ? { share: attachmentSendRequest({ attachment, message: quote, mine: false, now, quoted: true }) } : {}),
+      ...(offers.share ? { share: attachmentSendRequest({ attachment, message: quote, now, quoted: true }) } : {}),
     };
   };
   return (

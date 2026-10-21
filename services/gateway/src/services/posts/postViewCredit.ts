@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { incrementPostCounters } from './postCounters';
 import { NOT_DELETED } from './postIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { errorIdentity } from '../../utils/error-identity';
 import { isExitOfCountedOpen, noteCountedOpen, sharedViewOpenLedger, type ViewOpenLedger } from './viewOpenLedger';
 import { viewBreakdowns, viewProvenanceRow, type ViewContext } from './viewProvenance';
 
@@ -128,7 +129,7 @@ export async function creditEngagedReaderView(
     if (isUniqueRace(error)) return;
     log.warn('creditEngagedReaderView failed — gesture kept', {
       postId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorIdentity(error),
     });
   }
 }

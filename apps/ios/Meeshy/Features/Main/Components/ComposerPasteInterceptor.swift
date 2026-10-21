@@ -85,7 +85,7 @@ struct ComposerPasteInterceptor: UIViewRepresentable {
         var limit: Int
         var onIngest: ([ComposerIngest]) -> Void
         weak var textView: UITextView?
-        private static let logger = Logger(subsystem: "me.meeshy.app", category: "composer-paste")
+        private static let logger = MeeshyLog.logger(.composerPaste)
 
         /// Ce que le champ accepte EN PLUS du texte : ce qu'on joint.
         static let attachableTypes: [String] = [UTType.image, .movie, .audio, .fileURL, .data].map(\.identifier)
@@ -100,13 +100,15 @@ struct ComposerPasteInterceptor: UIViewRepresentable {
         func install(on textView: UITextView) {
             self.textView = textView
             textView.pasteDelegate = self
-            if let configuration = textView.pasteConfiguration {
-                configuration.addAcceptableTypeIdentifiers(Self.attachableTypes)
-            } else {
-                textView.pasteConfiguration = UIPasteConfiguration(
-                    acceptableTypeIdentifiers: [UTType.plainText.identifier, UTType.text.identifier, UTType.url.identifier] + Self.attachableTypes
-                )
-            }
+            textView.pasteConfiguration = Self.configuration(merging: textView.pasteConfiguration)
+        }
+
+        /// Ne mute JAMAIS la configuration existante (UIKit peut la poser gelée) : en construit une neuve.
+        static func configuration(merging existing: UIPasteConfiguration?) -> UIPasteConfiguration {
+            let base = existing?.acceptableTypeIdentifiers
+                ?? [UTType.plainText.identifier, UTType.text.identifier, UTType.url.identifier]
+            let merged = base + attachableTypes.filter { !base.contains($0) }
+            return UIPasteConfiguration(acceptableTypeIdentifiers: merged)
         }
 
         func textPasteConfigurationSupporting(_ textPasteConfigurationSupporting: UITextPasteConfigurationSupporting,

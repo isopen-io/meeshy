@@ -114,6 +114,19 @@ describe('la détection', () => {
     expect(flame).toHaveLength(1);
     expect(flame[0]?.detectedAt).toBeUndefined();
   });
+
+  it('un palier atteint de nouveau après un Prestige redevient un moment de photo ; celui du cycle d’avant ne repart pas (#10911)', async () => {
+    const w = world();
+    w.setBlock({ levelRecord: 34 });
+    await w.service.detect(USER, new Date(DETECTED.getTime() - 3600_000));
+    w.db.gamePhotoMoment.rows.push({ id: 'old', userId: USER, stepId: 'tier:lueur', presentedAt: new Date('2026-10-01T09:00:00Z') });
+    w.setBlock({ levelRecord: 20, prestige: 1, score: 100 * 20 * 20, pastCycleRecords: [100] });
+
+    const detection = await w.service.detect(USER, DETECTED);
+
+    expect(detection).toEqual({ kind: 'detected', stepIds: expect.arrayContaining(['tier:lueur:1', 'tier:lumiere:1']) });
+    expect(w.rows().filter((row) => String(row.stepId).startsWith('tier:')).map((row) => row.stepId).sort()).toEqual(['tier:lueur', 'tier:lumiere:1', 'tier:lueur:1'].sort());
+  });
 });
 
 describe('l’envoi', () => {

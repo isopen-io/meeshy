@@ -61,7 +61,8 @@ describe('GameBlockService.build', () => {
     expect(block.glory).toMatchObject({ glory: 2800, rank: 'echo', division: 3, division5: 4, mythic: null });
     expect(block.treasury).toMatchObject({ held: 7, tier: 'bourse' });
     expect(block.flame).toMatchObject({ days: 12, freezes: 1, status: 'at-risk' });
-    expect(block.boosts.tailwind).toBe(1.25);
+    // Le Vent arrière est éteint depuis les étincelles (#10846) : le niveau ne descend plus sous son record à la frappe.
+    expect(block.boosts.tailwind).toBe(1);
   });
 
   it('les points sont là, l\'étape du 10 manque : le niveau attend à 9 et dit laquelle (#9706)', async () => {
@@ -106,7 +107,7 @@ describe('GameBlockService.build', () => {
     expect(block.guideSeen).toEqual([]);
   });
 
-  it('la frappe annonce le prix de la PROCHAINE pièce : la 11e coûte 1 587 (#10011)', async () => {
+  it('la frappe annonce le prix de la PROCHAINE pièce : la 11e vaut 1 587 de rang, au facteur du niveau actuel (#10011, #10847)', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 5000, levelRecord: 31 });
     counter(db, 5000);
@@ -114,7 +115,9 @@ describe('GameBlockService.build', () => {
 
     const block = await build(db);
 
-    expect(block.mint).toMatchObject({ number: 11, price: 1587, canMint: true, edition: 'silver' });
+    expect(block.mint).toMatchObject({ number: 11, basePrice: 1587, canMint: true, edition: 'silver' });
+    expect(block.mint.price).toBeLessThan(1587);
+    expect(block.mint.price).toBe(Math.round((1587 * Math.round((block.mint.costFactor ?? 1) * 1000)) / 1000));
   });
 
   it('la Flamme éteinte se rallume sous 48 h : la série perdue est celle d’avant la rupture', async () => {
@@ -312,5 +315,25 @@ describe('GameBlockService.build — la mission personnelle (#9539)', () => {
     const block = await buildWith(db, NOW);
 
     expect(block!.missions.personal).toBeUndefined();
+  });
+});
+
+describe('GameBlockService.build — le record de chaque cycle clos (#10911)', () => {
+  it('sert les records gardés par les Prestiges, dans l’ordre, sur l’échelle ouverte', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 100 * 12 * 12, levelRecord: 12, levelMaxLifetime: 150, prestige: 2, prestigeLevelRecords: [150, 100] });
+
+    const block = await build(db);
+
+    expect(block.level.ladder?.pastCycleRecords).toEqual([150, 100]);
+  });
+
+  it('un compte qui n’en a aucun sert une liste vide, jamais un record inventé', async () => {
+    const db = fakeGameDb();
+    seedUser(db, { engagementScore: 100 * 12 * 12, levelRecord: 12 });
+
+    const block = await build(db);
+
+    expect(block.level.ladder?.pastCycleRecords).toEqual([]);
   });
 });

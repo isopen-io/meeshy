@@ -33,18 +33,32 @@ public final class CacheBackgroundFlushTask: Sendable {
     private static let budget: TimeInterval = 25
 
     private let coordinator: CacheCoordinator
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "cache-bg-flush")
+    private let logger = MeeshyLog.logger(.cacheBgFlush)
 
     public init(coordinator: CacheCoordinator = .shared) {
         self.coordinator = coordinator
     }
 
-    /// Registers the task identifier with `BGTaskScheduler`. Idempotent —
-    /// `BGTaskScheduler.register` returns `false` if the identifier was
-    /// already registered, which we treat as a no-op so it's safe to
-    /// call on every cold start.
+    private static let registration = Locked(false)
+
+    /// Un seul enregistrement par processus. `BGTaskScheduler` ne rend PAS `false` sur un doublon : il lève
+    /// `NSInternalInconsistencyException` (« launch handler … already registered ») et l'app meurt au lancement —
+    /// vu sur simulateur, build 1936, depuis `MeeshyApp.init`. Rend `true` à la première demande seulement.
+    static func claimRegistration() -> Bool {
+        registration.mutate { claimed in
+            guard !claimed else { return false }
+            claimed = true
+            return true
+        }
+    }
+
+    /// Registers the task identifier with `BGTaskScheduler`, once per process — a second call is a no-op.
     public func register() {
         #if canImport(BackgroundTasks)
+        guard Self.claimRegistration() else {
+            logger.notice("background flush task already registered — skipped")
+            return
+        }
         let coordinator = self.coordinator
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: Self.identifier,
@@ -74,7 +88,7 @@ public final class CacheBackgroundFlushTask: Sendable {
         coordinator: CacheCoordinator
     ) {
         let deadline = Date().addingTimeInterval(Self.budget)
-        let logger = Logger(subsystem: "me.meeshy.app", category: "cache-bg-flush")
+        let logger = MeeshyLog.logger(.cacheBgFlush)
         processingTask.expirationHandler = {
             logger.warning("Background flush task expired before completion")
         }

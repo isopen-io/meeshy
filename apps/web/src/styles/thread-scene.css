@@ -422,3 +422,40 @@ button.focus-stamp::after {
     color-mix(in srgb, var(--accent) calc(var(--backdrop-light-tint-end) * 100%), var(--backdrop-light-base)) 100%
   );
 }
+
+/* LE FOND CHOISI (#10631, § 8.1). Signature (ci-dessus) reste le défaut et n'est
+   pas touché : ces règles ne s'appliquent qu'à `data-appearance`. La couche est
+   isolée (`contain: strict`) : ni la frappe ni le défilement ne la repeignent. */
+.thread-backdrop[data-appearance] {
+  contain: strict;
+  animation: thread-backdrop-in 180ms ease-out;
+}
+.thread-backdrop[data-appearance='photo'] {
+  overflow: hidden;
+}
+.thread-backdrop-photo,
+.thread-backdrop-veil {
+  position: absolute;
+  inset: 0;
+}
+.thread-backdrop-photo {
+  inset: -32px;
+  background-size: cover;
+  background-position: center;
+}
+[dir='rtl'] .thread-backdrop[data-flip-rtl] {
+  transform: scaleX(-1);
+}
+@keyframes thread-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .thread-backdrop[data-appearance] {
+    animation: none;
+  }
+}

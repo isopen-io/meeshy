@@ -103,7 +103,9 @@ describe('les vecteurs croisés (rejoués aussi par le miroir Swift)', () => {
   });
 
   it('les libellés des vecteurs couvrent toutes les clés exportées', () => {
-    expect(new Set(vectors.labels.map((v) => v.key))).toEqual(new Set(Object.values(FRAME_USAGE_LABEL_KEYS)));
+    const avatarLabels = JSON.parse(readFileSync(resolve(__dirname, '../../design/packs/frame-usage-avatar-vectors.json'), 'utf8')) as Vectors;
+    const bannerLabels = JSON.parse(readFileSync(resolve(__dirname, '../../design/packs/frame-usage-banner-vectors.json'), 'utf8')) as Vectors;
+    expect(new Set([...vectors.labels, ...avatarLabels.labels, ...bannerLabels.labels].map((v) => v.key))).toEqual(new Set(Object.values(FRAME_USAGE_LABEL_KEYS)));
   });
 
   it.each(vectors.invalidUsages.map((v) => [JSON.stringify(v), v] as const))('usage illisible %s ⇒ null', (_label, v) => {

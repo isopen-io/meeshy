@@ -127,7 +127,7 @@ describe('carte 1 — les langues', () => {
     signIn();
     const { deps, saves, patches } = harness();
     const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
-    expect(host.querySelector('[data-onb-gauge]')?.getAttribute('aria-label')).toBe('0 / 10 pts pour ton niveau 1');
+    expect(host.querySelector('[data-onb-gauge]')?.getAttribute('aria-label')).toBe('0 / 10 étincelles pour ton niveau 1');
     await click(action(host, 'languages.confirm'));
     expect(saves).toEqual([]);
     expect(patches).toEqual([{ step: 'languages', outcome: 'done' }]);
@@ -164,7 +164,7 @@ describe('carte 2 — le salut part VRAIMENT dans Meeshy Global', () => {
     expect(greetings[0]?.content).toContain('Maya');
     expect(host.querySelector('[data-onb-sent]')).not.toBeNull();
     expect(host.querySelector('[data-onb-flight]')?.textContent).toBe('+14');
-    expect(host.querySelector('[data-onb-announce]')?.textContent).toBe('Tu gagnes 14 points.');
+    expect(host.querySelector('[data-onb-announce]')?.textContent).toBe('Tu fais jaillir 14 étincelles.');
     expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('0');
     await landed();
     expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('14');

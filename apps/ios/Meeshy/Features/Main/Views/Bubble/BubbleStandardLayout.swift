@@ -149,9 +149,15 @@ struct BubbleStandardLayout: View {
     /// (`SharedPlace` vs `MessageAttachment`).
     @State private var fullscreenPlace: BubbleFullscreenPlace?
 
+    func presentFullscreen(_ place: SharedPlace) {
+        fullscreenPlace = BubbleFullscreenPlace(place: place)
+    }
+
     // MARK: - Adaptive sizing (iPad regular size class needs a tighter cap)
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.bubbleContainerWidth) private var bubbleContainerWidth
+    @Environment(\.bubbleSkin) var skin
 
     // MARK: - Layout constants
 
@@ -160,7 +166,7 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Theme accessor
 
-    private var theme: ThemeManager { ThemeManager.shared }
+    var theme: ThemeManager { ThemeManager.shared }
 
     // MARK: - Derived properties (read from BubbleContent where possible)
 
@@ -216,13 +222,13 @@ struct BubbleStandardLayout: View {
         return hasOverflowingOverlay ? 32 : 2
     }
 
-    private var showIdentityBar: Bool {
+    var showIdentityBar: Bool {
         !isDirect && isLastInGroup && !content.isMe
     }
 
-    private var hasAnyTranslation: Bool { content.translation != nil }
+    var hasAnyTranslation: Bool { content.translation != nil }
 
-    private var effectiveContent: String {
+    var effectiveContent: String {
         // Driven by `content.text?.raw` (post-translation, post-active-lang
         // resolution by BubbleContentBuilder). Falls back to `message.content`
         // only when the content has no text payload at all (attachment-only
@@ -230,18 +236,18 @@ struct BubbleStandardLayout: View {
         content.text?.raw ?? message.content
     }
 
-    private var secondaryContent: String? {
+    var secondaryContent: String? {
         content.translation?.secondaryContent
     }
 
-    private var isEmojiOnly: Bool { content.isEmojiOnly }
+    var isEmojiOnly: Bool { content.isEmojiOnly }
 
     /// Cache key for `BubbleBodyFooterLayout`. nil (no caching) for expandable
     /// bubbles: their measured height depends on the host's expansion state
     /// (`longMessageExpansion`, #8147), which the content-keyed cache cannot
     /// observe — so a long message always measures live and never risks a stale
     /// collapsed/expanded height. Every other bubble keys on (id, content).
-    private var heightCacheContext: BubbleHeightCacheContext? {
+    var heightCacheContext: BubbleHeightCacheContext? {
         if let raw = content.text?.raw, LongMessageExcerpt.isLong(raw) {
             return nil
         }
@@ -300,7 +306,7 @@ struct BubbleStandardLayout: View {
     /// an empty padded strip below its content. Behavior-preserving: every
     /// branch mirrors a child of the stack, so non-empty bubbles render
     /// exactly as before.
-    private var hasBubbleBodyContent: Bool {
+    var hasBubbleBodyContent: Bool {
         // Lieu porté par `message.location` (voie serveur actuelle) — la bulle
         // a un corps à rendre même sans texte ni pièce jointe.
         if content.location != nil { return true }
@@ -311,14 +317,14 @@ struct BubbleStandardLayout: View {
         return false
     }
 
-    private var emojiFontSize: CGFloat {
+    var emojiFontSize: CGFloat {
         content.text?.emojiFontSize ?? 15
     }
 
-    private var timeString: String { content.meta.timeString }
+    var timeString: String { content.meta.timeString }
 
     /// BUG3 — an outgoing message whose send failed (drives the orange retry band).
-    private var isFailedOutgoing: Bool {
+    var isFailedOutgoing: Bool {
         content.isMe && content.meta.deliveryStatus == .failed
     }
 
@@ -333,8 +339,7 @@ struct BubbleStandardLayout: View {
     /// status sheet). The footer keeps its retry handler in every other case.
     static func footerShowsRetry(isFailedOutgoing: Bool) -> Bool { !isFailedOutgoing }
 
-
-    private var reactionSummaries: [ReactionSummary] { content.reactions }
+    var reactionSummaries: [ReactionSummary] { content.reactions }
 
     /// VoiceOver phrasing for the quoted-reply context of this bubble, injected
     /// between the sender name and the body so the reading order is
@@ -456,20 +461,9 @@ struct BubbleStandardLayout: View {
                         )
                     }
                 }
-                // Les effets du message se posent sur LA BULLE, jamais sur la
-                // rangée. Ils ont vécu montés sur `BubbleStandardLayout(...)`
-                // depuis `ThemedMessageBubble` — c'est-à-dire sur le `HStack`
-                // ci-dessous, qui contient l'avatar, la bulle, le strip de
-                // réactions ET tout l'espace vide jusqu'au bord de l'écran.
-                // Le liseré arc-en-ciel encadrait donc du vide sur la moitié
-                // de sa longueur, et aucun réglage d'animation ne pouvait
-                // rattraper ça.
-                //
-                // Ce `ZStack` a exactement la largeur intrinsèque du contenu :
-                // le cap de `bubbleMaxWidth` est appliqué PLUS HAUT, sur le
-                // `VStack` parent. Posé ici — et avant l'overlay de réactions,
-                // pour que les pastilles restent au-dessus du liseré — le
-                // contour épouse la bulle réelle.
+                // Les effets se posent sur LA BULLE (largeur intrinsèque du ZStack), avant l'overlay de réactions.
+                .modifier(BubbleDragSourceModifier(source: BubbleDragPolicy.source(for: message, servedText: content.text?.raw,
+                    isRegularWidth: horizontalSizeClass == .regular, standalone: standalone)))
                 .messageEffects(message.effects)
                 // Reactions sit at the BOTTOM corner of the bubble, sur le
                 // cote OPPOSE au bord d'ecran. Une bulle recue (a gauche)
@@ -508,7 +502,7 @@ struct BubbleStandardLayout: View {
             // (UserIdentityBar's greedy Spacer is collapsed via
             // `.fixedSize(horizontal: true, vertical: false)` on the bar
             // inside `textBubbleContent`).
-            .frame(maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass), alignment: isMe ? .trailing : .leading)
+            .frame(maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass, containerWidth: bubbleContainerWidth), alignment: isMe ? .trailing : .leading)
             // Standalone (aperçu) : hug jusqu'au cap. `.fixedSize(horizontal:)`
             // fait remonter la largeur idéale du contenu (clampée au cap par le
             // `.frame(maxWidth:)` ci-dessus) → une bulle courte n'occupe plus
@@ -540,21 +534,7 @@ struct BubbleStandardLayout: View {
         )) { attachment in
             switch attachment.type {
             case .image:
-                let original = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
-                // 5.2 — cible plein écran = largeur écran × scale. La variante la
-                // plus petite `>=` cette cible évite de charger l'original 4000px
-                // quand une 1920 suffit ; sans variante → original.
-                // L'ÉCRAN et non la fenêtre, délibérément : c'est un budget de
-                // décodage, pas une métrique de layout. Sur-décoder est invisible,
-                // sous-décoder ne l'est pas — et la fenêtre peut grandir jusqu'à
-                // l'écran (Stage Manager) après le choix de la variante.
-                let targetPx = Int((UIScreen.main.bounds.width * UIScreen.main.scale).rounded())
-                let chosen = original.isEmpty ? "" : ImageVariantSelector.bestImageURL(
-                    variants: attachment.imageVariants ?? [],
-                    originalURL: original,
-                    originalWidth: attachment.width,
-                    targetWidthPx: targetPx
-                )
+                let chosen = GalleryImageSource.fullscreenURL(for: attachment)
                 let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
                 // Composant UNIFIÉ « Enregistrer » : le flow vit DANS le cover
                 // pour que la sheet de destinations se présente par-dessus.
@@ -617,7 +597,7 @@ struct BubbleStandardLayout: View {
                     placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                     accentColor: contactColor,
                     senderName: content.senderName
-                )
+                ).closesForConversationOpening(.place)
             }
         }
         .fullScreenCover(item: $fullscreenPlace) { item in
@@ -631,7 +611,7 @@ struct BubbleStandardLayout: View {
                 address: item.place.address,
                 accentColor: contactColor,
                 senderName: content.senderName
-            )
+            ).closesForConversationOpening(.place)
         }
     }
 
@@ -742,12 +722,12 @@ struct BubbleStandardLayout: View {
                 let perPageTranslatedAudios = perAttachmentAudios.allSatisfy({ $0.value.isEmpty })
                     ? Dictionary(grouping: translatedAudios, by: { $0.attachmentId })
                     : perAttachmentAudios
-                AudioCarouselView(
+                AudioStackView(
                     items: auds,
                     message: message,
-                    contactColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                    contactColor: skin.accentHex(isMe: content.isMe, received: otherBubbleColor),
                     isDark: isDark,
-                    accentColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                    accentColor: skin.accentHex(isMe: content.isMe, received: otherBubbleColor),
                     transcriptions: perPageTranscriptions,
                     translatedAudios: perPageTranslatedAudios,
                     textTranslations: textTranslations,
@@ -768,7 +748,8 @@ struct BubbleStandardLayout: View {
                     audioQueueTailProvider: audioQueueTailProvider,
                     parentIsMe: content.isMe,
                     voiceConsentMissing: voiceConsentMissing,
-                    onTapConsentNotice: onTapConsentNotice
+                    onTapConsentNotice: onTapConsentNotice,
+                    onOpenFullscreen: onMediaTap
                 )
             } else {
                 ForEach(audioAttachments) { attachment in
@@ -786,12 +767,12 @@ struct BubbleStandardLayout: View {
                 }
             }
 
-            // Emoji-only WITHOUT a reply: large emoji free-floating, no bubble.
-            // An emoji-only message that quotes another message keeps the
-            // bubble so the quoted-reply card renders — `textBubbleContent`
-            // hosts it and renders the emoji large & centered above the quote
-            // (see `bubbleInnerContent`).
-            if isEmojiOnly && content.reply == nil {
+            // Emoji-only: large emoji free-floating, no bubble. When it
+            // quotes another message, only the small quote card is boxed and
+            // the emoji sits below it, bubble-less (#10628).
+            if content.emojiReplyFloatsBelowQuote {
+                emojiReplyContent
+            } else if isEmojiOnly {
                 emojiOnlyContent
             } else if (content.hasTextOrNonMediaContent
                 || (content.reply != nil && !content.audioHostsReply && !content.visualHostsReply))
@@ -811,606 +792,4 @@ struct BubbleStandardLayout: View {
         // une bulle floutable on garde les modifiers pour animer la révélation.
         .modifier(BlurRevealModifier(isBlurrable: content.requiresVeil, shouldBlur: shouldBlur))
     }
-
-    // MARK: - Emoji-only path
-
-    @ViewBuilder
-    private var emojiOnlyContent: some View {
-        // Layout emoji-only sans reply : l'emoji et la meta-row (timestamp +
-        // delivery) forment un BLOC INDISSOCIABLE rendu sur la meme baseline,
-        // colle au bord de la conversation cote isMe. `.fixedSize()` garantit
-        // que le container epouse le contenu : pas de container invisible
-        // qui s'etire sur toute la largeur disponible (ce qui faisait "voler"
-        // la date a un endroit excentre). Le VStack exterieur conserve
-        // l'alignement isMe pour le secondary content (langue alternative
-        // active) qui descend dessous.
-        VStack(alignment: content.isMe ? .trailing : .leading, spacing: MeeshySpacing.xxs) {
-            HStack(alignment: .lastTextBaseline, spacing: 6) {
-                // Emoji-only intentionally renders the ORIGINAL `message.content`,
-                // not the translated text — emoji bubbles are not translated.
-                Text(message.content)
-                        .font(MeeshyFont.emoji(emojiFontSize))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                compactInlineFooter
-            }
-            .fixedSize()
-
-            secondaryContentView
-        }
-    }
-
-    /// Meta-row minimaliste pose a cote d'un emoji free-floating : timestamp
-    /// + delivery check (si isMe), sans drapeaux, sans translate, sans capsule.
-    /// Re-utilise le builder `resolvedFooter` pour rester aligne sur la meme
-    /// source de verite que le `standardFooter`.
-    private var compactInlineFooter: some View {
-        let (model, actions) = resolvedFooter(includesTranslationControls: false)
-        return BubbleFooter(model: model, actions: actions, style: .compact, isDark: isDark)
-            .equatable()
-    }
-
-    // MARK: - Text bubble path (with non-media attachments + reply preview)
-    //
-    // Timestamp-visibility gating + delivery resolution now live in the pure
-    // `BubbleFooterModel.make(...)` builder — see `resolvedFooter`.
-
-    private var bubbleInnerContent: AnyView {
-        AnyView(bubbleInnerContentBody)
-    }
-
-    @ViewBuilder
-    private var bubbleInnerContentBody: some View {
-        // Quoted reply preview (inside bubble)
-        //
-        // `detachedStoryCitation == nil` : quand la vue `3h` a sorti la story
-        // de la bulle, cette carte plate la RENDRAIT une seconde fois. Le
-        // prédicat est le MÊME des deux côtés — un seul site décide, sinon
-        // les deux rendus divergent au premier cas de bord.
-        if let reply = content.reply, detachedStoryCitation == nil {
-            quotedReplyView(reply.reference)
-                .padding(.bottom, MeeshySpacing.xs)
-                .onTapGesture {
-                    guard reply.reference.opensQuotedTarget else { return }
-                    HapticFeedback.light()
-                    if reply.isStory {
-                        onStoryReplyTap?(reply.reference.messageId)
-                    } else {
-                        onReplyTap?(reply.reference.messageId)
-                    }
-                }
-        }
-
-        // « modifié » se dit dans le PIED, à côté de l'heure (#7620) — posé
-        // ici, le crayon tombait dans le coin arrondi que le clip rogne.
-        if hasBubbleBodyContent {
-            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                // Lieu porté par `message.location` (voie serveur actuelle).
-                // Rendu UNE seule fois : le builder exclut la pièce jointe
-                // `.location` de `content.attachments` quand le message porte
-                // les deux (cf. BubbleContentBuilder), donc cette branche et
-                // la branche par pièce jointe ci-dessous sont exclusives.
-                if let place = content.location {
-                    LocationMessageView(
-                        place: place,
-                        accentColor: contactColor,
-                        onTapFullscreen: {
-                            fullscreenPlace = BubbleFullscreenPlace(place: place)
-                        }
-                    )
-                }
-
-                ForEach(nonMediaAttachments) { attachment in
-                    attachmentView(attachment)
-                }
-
-                if let text = content.text, !text.raw.isEmpty {
-                    // No `.onLongPressGesture` — see comment in `emojiOnlyContent`.
-                    // The container's long-press opens the options overlay; the
-                    // translate icon in the identity bar opens translation detail.
-                    if text.isEmojiOnly {
-                        // Emoji-only reply: emoji hosted inside the bubble, above
-                        // the quoted-reply card — large (same 90/60/45pt sizing as
-                        // the free-floating path). Pas de `.frame(maxWidth: .infinity)` :
-                        // la bulle doit epouser le contenu (emoji + quoted-reply
-                        // card), pas s'etirer sur 70% de la largeur d'ecran. Le
-                        // VStack parent gere deja l'alignement naturel a gauche.
-                        Text(message.content)
-                            .font(MeeshyFont.emoji(emojiFontSize))
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        expandableTextView
-                    }
-                }
-
-                if let text = content.text {
-                    BubbleLinkEmbed(text: text, accentColor: contactColor, isDark: isDark)
-                }
-
-                secondaryContentView
-            }
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, content.hasTextOrNonMediaContent ? 10 : 4)
-        }
-    }
-
-    @ViewBuilder
-    private var textBubbleContent: some View {
-        // Body + footer are stacked by `BubbleBodyFooterLayout`, not a plain
-        // VStack. The footer carries a trailing Spacer — language flags on the
-        // leading edge, timestamp + delivery check on the trailing edge. In a
-        // plain VStack that Spacer is greedy and stretches the whole bubble to
-        // its 70% max width; `.fixedSize` collapses the Spacer instead, which
-        // pins the check right after the flags rather than on the bubble edge.
-        // The custom Layout measures the body once and hands that exact width
-        // to the footer: the text still wraps, the bubble stays sized to its
-        // content, and the check lands on the trailing edge — matching the
-        // corner-pinned footer of media bubbles. `sizeThatFits` and
-        // `placeSubviews` both derive every value from the same resolved
-        // width, so the reported height is self-consistent (no
-        // UICollectionView cell-height drift).
-        BubbleBodyFooterLayout(spacing: 4, cacheContext: heightCacheContext) {
-            // Wrapped in a VStack so the Layout sees the body as ONE opaque
-            // subview — a bare @ViewBuilder property would be flattened into
-            // its individual conditional branches.
-            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                bubbleInnerContent
-            }
-            // `textBubbleContent` n'est plus rendu pour `audioHostsReply` /
-            // `visualHostsReply` (voir `contentStack`), donc le footer standard
-            // est toujours adapté ici — le widget média qui héberge sa propre
-            // citation gère son footer en interne (bottomSlot ou overlay).
-            standardFooter
-        }
-        // FAILED outgoing send — reserve a trailing strip and glue the retry
-        // band INTO it as an integrated edge tab (clipped to the bubble's rounded
-        // corner, no gap). The content + footer are inset by the band width so
-        // the bubble's own timestamp + delivery state stay visible to its LEFT;
-        // and because the band lives INSIDE the bubble's frame, a failed bubble
-        // right-aligns exactly like every other bubble (no left-shift).
-        .padding(.trailing, isFailedOutgoing ? Self.retryBandWidth : 0)
-        .background(bubbleBackground)
-        .overlay(alignment: .trailing) {
-            if isFailedOutgoing {
-                BubbleFailedRetryBar(onRetry: { performManualRetry() })
-                    .frame(width: Self.retryBandWidth)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        // Simplification forte : plus d'ombre portée par bulle. Une `.shadow`
-        // teintée par cellule force un rendu offscreen à chaque frame de scroll
-        // (classique tueur de FPS). Les bulles sont désormais plates et nettes.
-    }
-
-    // MARK: - Identity bar (top of bubble for received last-in-group, otherwise meta row)
-
-    /// Builds the footer model + actions for this bubble.
-    /// - Parameter includesTranslationControls: when `false`, language flags
-    ///   and the translate button are omitted — the audio widget owns its own
-    ///   per-language switcher, so rendering both would compete.
-    func resolvedFooter(includesTranslationControls: Bool = true, retryBandShown: Bool = false) -> (BubbleFooterModel, BubbleFooterActions) {
-        // Traduisible = un TEXTE ou un audio (sa transcription) ; une position,
-        // un fichier, un média seul ou un émoji n'ont rien à traduire (#7620).
-        let isTranslatableContent = BubbleFooterModel.offersTranslation(
-            hasText: !(content.text?.raw.isEmpty ?? true),
-            isEmojiOnly: isEmojiOnly,
-            hasAudio: !audioAttachments.isEmpty
-        )
-        let showTranslation = includesTranslationControls && isTranslatableContent
-        // Les drapeaux n'apparaissent que quand au moins une traduction est
-        // déjà disponible (sinon il n'y a rien à montrer côté flag strip).
-        let showFlags = showTranslation && hasAnyTranslation
-        let sender: SenderIdentity? = showIdentityBar ? SenderIdentity(
-            name: content.senderName ?? "?",
-            username: SenderIdentity.handle(fromUsername: message.senderUsername),
-            role: nil,
-            avatarURL: message.senderAvatarURL,
-            accentColor: message.senderColor ?? contactColor,
-            moodEmoji: senderMoodEmoji,
-            presence: presenceState,
-            storyRing: senderStoryRingState,
-            isHere: senderIsHere
-        ) : nil
-
-        // #7365 — statut RÉSOLU (tout-ou-rien en groupe), jamais le brut.
-        let model = BubbleFooterModel.make(
-            timeString: content.meta.timeString,
-            deliveryStatus: content.meta.deliveryStatus ?? .sent,
-            isMe: content.isMe,
-            isOnline: networkIsOnline,
-            sender: sender,
-            flags: showFlags
-                ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
-                : [],
-            showsTranslate: showTranslation,
-            sendStartedAt: message.createdAt, retryBandShown: retryBandShown,
-            edit: BubbleEditMark.resolve(editedAt: content.editedAt, isSaving: content.isEditSaving)
-        )
-
-        // Le tap sur les coches n'a de sens que sur les messages envoyes
-        // (les seuls qui portent une `delivery` non-nulle dans le footer).
-        // Sur un message recu, `model.delivery == nil` donc le bouton n'est
-        // jamais rendu meme si un callback etait branche.
-        let readStatusCallback: (() -> Void)? = (content.isMe && onShowReadStatus != nil)
-            ? { onShowReadStatus?(content.messageId) }
-            : nil
-
-        let actions = BubbleFooterActions(
-            onFlagTap: showFlags ? { code in handleFlagTap(code) } : nil,
-            onTranslate: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
-            // BUG3 — suppress the footer's own retry button for failed outgoing
-            // messages: the orange `BubbleFailedRetryBar` owns the resend so the
-            // bubble never shows two competing retry affordances.
-            onRetry: Self.footerShowsRetry(isFailedOutgoing: isFailedOutgoing) ? { performManualRetry() } : nil,
-            onSenderTap: { selectedProfileUser = .from(message: message) },
-            onViewStory: onViewStory,
-            onShowReadStatus: readStatusCallback
-        )
-        return (model, actions)
-    }
-
-    /// The standard footer row rendered below text and emoji bubbles.
-    private var standardFooter: some View {
-        let (model, actions) = resolvedFooter(retryBandShown: isFailedOutgoing)
-        return BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
-            .equatable()
-            .padding(.horizontal, showIdentityBar ? 10 : 14)
-            .padding(.top, showIdentityBar ? 8 : 0)
-            .padding(.bottom, MeeshySpacing.sm)
-    }
-
-    /// Live read of the global network monitor. Kept as a computed property
-    /// so the bubble doesn't subscribe to its `@Published` and re-render on
-    /// every offline/online edge — the parent (`ConversationViewModel`) is
-    /// what bumps `message.deliveryStatus` and `updatedAt` to drive the
-    /// bubble's Equatable.
-    private var networkIsOnline: Bool {
-        NetworkMonitor.shared.isOnline
-    }
-
-    /// Manual resend triggered by the orange retry band (or the footer's retry).
-    /// Delegates to the ViewModel via `onRetry` → `retryMessage(messageId:)`,
-    /// which re-inserts a fresh optimistic `.sending` row (immediate feedback,
-    /// the band swaps to the normal sending indicator), re-enqueues, AND kicks
-    /// the outbox flusher. The previous local path
-    /// (`OfflineQueue.retryByClientMessageId`) only reset the outbox row to
-    /// `.pending` without ever flushing it, so on a foregrounded/online device
-    /// the resend silently never fired.
-    private func performManualRetry() {
-        onRetry?(message.id)
-    }
-
-    // MARK: - Expandable text
-
-    private var linkTint: Color {
-        content.isMe ? .white.opacity(MeeshyOpacity.intense) : Color(hex: contactColor)
-    }
-
-    /// Distinct des liens URL — et THÉMATISÉ : l'`indigo400` figé d'avant ne
-    /// contrastait qu'à 2.98:1 sur le fond clair de l'app.
-    private var mentionTint: Color {
-        MeeshyColors.mentionColor(isDark: theme.mode.isDark)
-    }
-
-    private var hashtagTint: Color {
-        MeeshyColors.hashtagColor(isDark: theme.mode.isDark)
-    }
-
-    @ViewBuilder
-    private var expandableTextView: some View {
-        BubbleExpandableText(
-            content: effectiveContent,
-            isMe: content.isMe,
-            mentionDisplayNames: mentionDisplayNames,
-            highlightTerm: highlightSearchTerm,
-            mentionTint: mentionTint,
-            hashtagTint: hashtagTint,
-            linkTint: linkTint,
-            isDark: isDark,
-            trackedLinks: content.text?.trackedLinks ?? [:], linksAreInert: content.text?.linksAreInert == true
-        )
-    }
-
-    // MARK: - Secondary content (inline translation panel)
-
-    @ViewBuilder
-    private var secondaryContentView: some View {
-        if let secondary = secondaryContent, let code = secondaryLangCode {
-            BubbleSecondaryContent(
-                content: secondary,
-                langCode: code,
-                isMe: content.isMe,
-                textPrimary: theme.textPrimary,
-                mentionDisplayNames: mentionDisplayNames,
-                mentionTint: mentionTint,
-                hashtagTint: hashtagTint,
-                linkTint: linkTint,
-                trackedLinks: content.text?.trackedLinks ?? [:], linksAreInert: content.text?.linksAreInert == true
-            )
-        }
-    }
-
-    // MARK: - Quoted reply
-
-    /// **Vue `3h` (#4098)** — la citation qui QUITTE la bulle, ou `nil`.
-    ///
-    /// Site UNIQUE de la décision : le `body` s'en sert pour monter la carte,
-    /// `bubbleInnerContentBody` pour ne PAS monter la citation plate. Deux
-    /// prédicats jumeaux auraient fini par diverger, et la divergence rendrait
-    /// la citation deux fois — une fois en scène, une fois aplatie.
-    ///
-    /// Quatre refus, chacun pour sa raison :
-    /// - pas une story ⇒ une citation de message garde sa carte dans la bulle ;
-    /// - une **humeur** (`moodEmoji != nil`) ⇒ elle n'a pas de scène, et son
-    ///   rendu dédié (emoji + contenu + date) vit dans `BubbleQuotedReply` ;
-    /// - `visualHostsReply` / `audioHostsReply` ⇒ la citation est DÉJÀ logée
-    ///   dans le conteneur unifié média ou dans le lecteur audio. La sortir de
-    ///   là est une autre chirurgie ; la faire ici la rendrait EN DOUBLE.
-    /// #5059 — la règle a QUITTÉ ce fichier pour `BubbleContent`, d'où les
-    /// trois peaux peuvent l'atteindre. Elle était déclarée « site unique » ici
-    /// et l'était : mais à portée `private`, donc unique dans son fichier
-    /// seulement. La rangée plate et la rivière retombaient sur l'aperçu plat.
-    private var detachedStoryCitation: ReplyReference? { content.detachedStoryCitation }
-
-    /// Le geste de la carte, ou `nil` — sans identifiant il n'y a rien à
-    /// ouvrir, et un tap qui n'ouvre rien est une cible morte (loi 4). La
-    /// carte, elle, se rend quand même : c'est la citation qui « subsiste ».
-    ///
-    /// L'ÉCHEC d'ouverture n'est pas jugé ici : seul l'hôte peut constater
-    /// qu'il ne retrouve pas la story, et c'est lui qui le dit.
-    private var storyCitationOpenTap: (() -> Void)? {
-        guard let citation = detachedStoryCitation,
-              citation.opensQuotedTarget,
-              let onStoryReplyTap else { return nil }
-        return { onStoryReplyTap(citation.messageId) }
-    }
-
-    private func quotedReplyView(_ reply: ReplyReference) -> some View {
-        BubbleQuotedReply(
-            reply: reply,
-            parentIsMe: content.isMe,
-            accentHex: contactColor,
-            isDark: isDark,
-            mentionDisplayNames: mentionDisplayNames,
-            onQuotedAuthorTap: onQuotedAuthorTap,
-            onQuotedMediaTap: onQuotedMediaTap
-        )
-        .equatable()
-    }
-
-    // MARK: - Attachment view (file, location, etc.)
-
-    @ViewBuilder
-    private func attachmentView(_ attachment: MessageAttachment) -> some View {
-        BubbleAttachmentView(
-            attachment: attachment,
-            isMe: content.isMe,
-            isDark: isDark,
-            accentHex: contactColor,
-            transcription: transcription,
-            translatedAudios: translatedAudios,
-            onShareFile: { url in
-                shareURL = url
-                showShareSheet = true
-            },
-            onTapLocation: { att in
-                fullscreenLocationAttachment = att
-            },
-            onPlayAudio: onPlayAudio
-        )
-    }
-
-    // MARK: - Reactions overlay
-
-    @ViewBuilder
-    private var reactionsOverlay: some View {
-        // Use the SAME accent as the bubble background under the pill so
-        // (a) the add-reaction button reads as "attached" to the bubble it
-        // belongs to and (b) reactions the connected user has placed get a
-        // border that matches the host bubble's accent — own messages get
-        // the brand indigo (matches the bubble fill), received messages
-        // get the blended `otherBubbleColor`. Passing `contactColor` (the
-        // raw conversation color) made every bubble's pills look like
-        // they belonged to the same generic surface.
-        let bubbleAccent = content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor
-
-        BubbleReactionsOverlay(
-            messageId: content.messageId,
-            summaries: reactionSummaries,
-            isMe: content.isMe,
-            isDark: isDark,
-            isLastReceivedMessage: isLastReceivedMessage,
-            accentHex: bubbleAccent,
-            onAddReaction: onAddReaction,
-            onToggleReaction: onToggleReaction,
-            onOpenReactPicker: onOpenReactPicker,
-            onShowReactions: onShowReactions
-        )
-    }
-
-    // MARK: - Bubble background
-
-    private var bubbleBackground: some View {
-        BubbleBackground(
-            isMe: content.isMe,
-            accentHex: otherBubbleColor,
-            isDark: isDark
-        )
-    }
-
-    // MARK: - Audio standalone
-
-    @ViewBuilder
-    private func mediaStandaloneView(
-        _ attachment: MessageAttachment,
-        injectFooter: Bool = false,
-        replyReference: ReplyReference? = nil,
-        replyIsStory: Bool = false,
-        embedsCaption: Bool = false
-    ) -> some View {
-        let isMe = content.isMe
-        // Audio-only messages host the bubble footer inside the audio widget;
-        // `AudioMediaView` folds the audio-language flags into this model.
-        // When `replyReference` is non-nil, the citation is also hosted inside
-        // the audio widget (topSlot) — no chat bubble around the player.
-        // `includesTranslationControls: true` because audio IS translatable
-        // (transcription + audio translation): without it an inbound audio-only
-        // bubble would lose its translate globe and flags (Prisme Linguistique).
-        let footer = injectFooter ? resolvedFooter(includesTranslationControls: true) : nil
-        switch attachment.type {
-        case .audio:
-            AudioMediaView(
-                attachment: attachment,
-                message: message,
-                contactColor: isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
-                visualAttachments: visualAttachments,
-                isDark: isDark,
-                accentColor: isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
-                transcription: transcription,
-                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
-                textTranslations: textTranslations,
-                allAudioItems: allAudioItems,
-                mentionDisplayNames: mentionDisplayNames,
-                onScrollToMessage: onScrollToMessage,
-                onShareFile: { url in
-                    shareURL = url
-                    showShareSheet = true
-                },
-                onShowTranslationDetail: onShowTranslationDetail,
-                onRequestTranslation: onRequestTranslation,
-                activeAudioLanguageOverride: activeAudioLanguage,
-                // La bande interne écrit le CANAL DU MESSAGE (binding routé
-                // vers le VM par ThemedMessageBubble) — la piste jouée, le
-                // texte et le drapeau de rangée suivent le même tap.
-                onSelectAudioLanguage: { code in
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                        activeDisplayLangCode = code
-                    }
-                },
-                footerModel: footer?.0,
-                footerActions: footer?.1 ?? .none,
-                replyReference: replyReference,
-                replyIsStory: replyIsStory,
-                parentIsMe: isMe,
-                onReplyTap: onReplyTap,
-                onStoryReplyTap: onStoryReplyTap,
-                onQuotedAuthorTap: onQuotedAuthorTap,
-                onQuotedMediaTap: onQuotedMediaTap,
-                onPlayAudio: onPlayAudio,
-                conversationName: conversationName,
-                audioQueueTailProvider: audioQueueTailProvider,
-                embedsCaptionInWidget: embedsCaption,
-                voiceConsentMissing: voiceConsentMissing,
-                onTapConsentNotice: onTapConsentNotice,
-                onOpenFullscreen: onMediaTap.map { open in { open(attachment) } }
-            )
-            .equatable()
-
-        default:
-            EmptyView()
-        }
-    }
-
-    // MARK: - Fog overlay (blur reveal disappearance)
-
-    @ViewBuilder
-    private var fogOverlay: some View {
-        ZStack {
-            RadialGradient(
-                gradient: Gradient(colors: [
-                    Color.white.opacity(0.35),
-                    Color.white.opacity(MeeshyOpacity.light),
-                    Color.clear
-                ]),
-                center: .center,
-                startRadius: 5,
-                endRadius: 120
-            )
-            .blur(radius: 18)
-            .scaleEffect(1.3)
-
-            Circle()
-                .fill(Color.white.opacity(MeeshyOpacity.light))
-                .blur(radius: 25)
-                .frame(width: 70, height: 70)
-                .offset(x: -25, y: -18)
-
-            Circle()
-                .fill(Color.white.opacity(MeeshyOpacity.light))
-                .blur(radius: 30)
-                .frame(width: 55, height: 55)
-                .offset(x: 20, y: 12)
-        }
-        .opacity(blurController.fogOpacity)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .allowsHitTesting(false)
-    }
-
-    // MARK: - Language flag handling
-
-    /// Returns the available language flags for the language strip.
-    /// Reads from `content.translation.availableFlags` when BubbleContent
-    /// has populated them (live binding to active lang), with a fallback
-    /// for the cold-cache cases where Translation is nil. Mirrors legacy
-    /// ThemedMessageBubble.buildAvailableFlags exactly.
-    private func buildAvailableFlags() -> [String] {
-        if let flags = content.translation?.availableFlags {
-            return flags
-        }
-        return []
-    }
-
-    private func handleFlagTap(_ code: String) {
-        let outcome = BubbleLanguageFlagController.handleTap(
-            code: code,
-            current: BubbleLanguageFlagController.Context(
-                activeDisplayLangCode: activeDisplayLangCode,
-                secondaryLangCode: secondaryLangCode
-            ),
-            messageOriginalLang: message.originalLanguage,
-            translations: textTranslations
-        )
-        HapticFeedback.light()
-        switch outcome.action {
-        case .switchPrimary:
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                activeDisplayLangCode = outcome.activeDisplayLangCode
-                secondaryLangCode = outcome.secondaryLangCode
-            }
-        case .openSecondary, .closeSecondary:
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                secondaryLangCode = outcome.secondaryLangCode
-            }
-        case .requestTranslation(let target):
-            onRequestTranslation?(content.messageId, target)
-        }
-    }
-
-    // MARK: - Blur reveal action (delegated to controller)
-
-    /// #8389 — le voile se lève SUR PLACE, médias compris : chaque case
-    /// révélée ouvre ensuite son plein écran par son propre toucher.
-    private func revealBlurredContent() {
-        HapticFeedback.medium()
-        blurController.requestReveal(
-            request: BubbleBlurRevealLifecycle.RevealRequest(
-                messageId: content.messageId,
-                isViewOnce: content.veilConsumesViewOnce
-            ),
-            consumeViewOnce: onConsumeViewOnce
-        )
-    }
-
-    // MARK: - Fullscreen video author chip
-
-    private func makeFullscreenVideoAuthor() -> MeeshyVideoPlayer.VideoAuthor? {
-        let name = message.senderName ?? ""
-        guard !name.isEmpty else { return nil }
-        return MeeshyVideoPlayer.VideoAuthor(
-            displayName: name,
-            avatarUrl: message.senderAvatarURL,
-            userId: message.senderUserId ?? message.senderId
-        )
-    }
 }
-

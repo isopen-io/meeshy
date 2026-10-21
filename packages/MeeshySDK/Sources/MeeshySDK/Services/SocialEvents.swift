@@ -49,12 +49,17 @@ public enum SocialEvent: Codable, Sendable, Equatable {
     case impression(postId: String, source: String, surface: ReachSurface?, listing: SocialListing? = nil, visibility: SocialVisibility? = nil)
     case open(postId: String, origin: OpenOrigin?)
     case dwell(EngagementSession)
+    /// #10764 — le PREMIER CONTACT d'une session de consommation : le corps
+    /// d'un `dwell`, sous la même clé de session, envoyé dès qu'elle commence.
+    /// Un serveur qui ne sait pas fusionner une session le refuse ; il part
+    /// donc toujours dans une requête à lui.
+    case dwellStart(EngagementSession)
 
     public var postId: String {
         switch self {
         case .view(let postId, _, _, _), .impression(let postId, _, _, _, _), .open(let postId, _):
             return postId
-        case .dwell(let session):
+        case .dwell(let session), .dwellStart(let session):
             return session.postId
         }
     }
@@ -72,6 +77,7 @@ public enum SocialEvent: Codable, Sendable, Equatable {
 
     private enum Kind: String, Codable {
         case view, impression, open, dwell
+        case dwellStart = "dwell-start"
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -97,6 +103,9 @@ public enum SocialEvent: Codable, Sendable, Equatable {
             try container.encodeIfPresent(origin, forKey: .origin)
         case .dwell(let session):
             try container.encode(Kind.dwell, forKey: .type)
+            try session.encode(to: encoder)
+        case .dwellStart(let session):
+            try container.encode(Kind.dwellStart, forKey: .type)
             try session.encode(to: encoder)
         }
     }
@@ -129,6 +138,8 @@ public enum SocialEvent: Codable, Sendable, Equatable {
             self = .open(postId: postId, origin: origin)
         case .dwell:
             self = .dwell(try EngagementSession(from: decoder))
+        case .dwellStart:
+            self = .dwellStart(try EngagementSession(from: decoder))
         }
     }
 }
@@ -197,20 +208,19 @@ struct SocialEventsBody: Encodable {
 /// D'où un lot de COMPTAGE tient le consentement d'analyse (#10552). Le SDK ne
 /// lit aucun réglage : l'app installe sa règle une fois au lancement. Sans
 /// source installée (extension, test), le lot part sans `context.consent`.
-public final class SocialEventsConsentSource: @unchecked Sendable {
+public final class SocialEventsConsentSource: Sendable {
     public static let shared = SocialEventsConsentSource()
 
-    private let lock = NSLock()
-    private var standing: (@MainActor @Sendable () -> SocialEventContext.Consent?)?
+    private let standingSlot = Locked<(@MainActor @Sendable () -> SocialEventContext.Consent?)?>(nil)
 
     public init() {}
 
     public func install(_ standing: @escaping @MainActor @Sendable () -> SocialEventContext.Consent?) {
-        lock.withLock { self.standing = standing }
+        standingSlot.mutate { $0 = standing }
     }
 
     public func current() async -> SocialEventContext.Consent? {
-        guard let standing = lock.withLock({ self.standing }) else { return nil }
+        guard let standing = standingSlot.read({ $0 }) else { return nil }
         return await standing()
     }
 }

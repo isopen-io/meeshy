@@ -40,8 +40,6 @@ export const GUIDE_ACTIONS = [
   'see-next-tier',
   'open-first-mission',
   'mint-or-climb',
-  'regain-levels',
-  'relight-badge',
   'see-mint-preview',
   'take-photo',
   'keep-or-spend',
@@ -95,8 +93,9 @@ export type GuideEvent =
   | { readonly kind: 'new-tier'; readonly tier: LevelTierKey; readonly nextTierLevel: number | null }
   | { readonly kind: 'missions-unlocked' }
   | { readonly kind: 'first-mint-possible'; readonly price: number; readonly levelsLost: number; readonly gloryGain: number }
-  | { readonly kind: 'first-mint'; readonly levelBefore: number; readonly levelAfter: number; readonly tailwindUntilLevel: number }
-  | { readonly kind: 'badge-extinguished'; readonly missingActions: number }
+  // La frappe ne fait plus baisser le niveau, n'éteint aucun badge et n'ouvre plus de Vent arrière (porteur, 2026-10-16) : la
+  // première frappe n'a plus de niveaux « de 14 à 9 » à dire, ni de niveau jusqu'où le bonus dure. `badge-extinguished` n'existe plus.
+  | { readonly kind: 'first-mint' }
   | { readonly kind: 'price-rises'; readonly nextPrice: number }
   | {
       readonly kind: 'new-rank';
@@ -120,7 +119,6 @@ export const GUIDE_MOMENT_KEYS: readonly GuideMomentKey[] = [
   'missions-unlocked',
   'first-mint-possible',
   'first-mint',
-  'badge-extinguished',
   'price-rises',
   'new-rank',
   'treasury-tier',
@@ -151,8 +149,7 @@ const PERSONA: Readonly<Record<GuideMomentKey, Persona>> = {
   'new-tier': { speaker: 'duo', mood: 'cheer', action: 'see-next-tier' },
   'missions-unlocked': { speaker: 'mee', mood: 'guide', action: 'open-first-mission' },
   'first-mint-possible': { speaker: 'meo', mood: 'ready', action: 'mint-or-climb' },
-  'first-mint': { speaker: 'duo', mood: 'minting', action: 'regain-levels' },
-  'badge-extinguished': { speaker: 'meo', mood: 'calm', action: 'relight-badge' },
+  'first-mint': { speaker: 'duo', mood: 'minting', action: 'see-progress' },
   'price-rises': { speaker: 'meo', mood: 'calm', action: 'see-mint-preview' },
   'new-rank': { speaker: 'duo', mood: 'proud', action: 'take-photo' },
   'treasury-tier': { speaker: 'mee', mood: 'cheer', action: 'keep-or-spend' },
@@ -171,7 +168,6 @@ export const GUIDE_MOMENT_PRIORITY: readonly GuideMomentKey[] = [
   'flame-at-risk',
   'new-tier',
   'treasury-tier',
-  'badge-extinguished',
   'price-rises',
   'first-mint-possible',
   'missions-unlocked',

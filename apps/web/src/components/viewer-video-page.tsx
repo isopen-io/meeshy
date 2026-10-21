@@ -190,6 +190,7 @@ export default function ViewerVideoPage({
   return (
     <div
       className="relative flex size-full items-center justify-center bg-media-backdrop"
+      style={{ touchAction: 'none' }}
       onDoubleClick={isActive ? onLateralDoubleClick : undefined}
       {...(isActive ? { onPointerDown: reveal, onPointerMove } : {})}
     >
@@ -201,7 +202,7 @@ export default function ViewerVideoPage({
         {...(posterUrl !== undefined ? { poster: posterUrl } : {})}
         src={videoSrc}
         onError={failure.onError}
-        className="media-viewer-media"
+        className="media-viewer-media size-full"
       />
       {paused ? (
         <span className="absolute rounded-full bg-scrim px-3 py-1 text-mini font-medium text-on-media">En pause</span>
@@ -219,6 +220,9 @@ export default function ViewerVideoPage({
           }}
           onFocus={reveal}
           onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === ' ') event.stopPropagation();
+          }}
         >
           {playing ? <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={28} /> : <Glyph name="fillPlay" size={28} />}
         </button>
@@ -244,7 +248,12 @@ export default function ViewerVideoPage({
           )
         : null}
       {isActive && slots.info !== null
-        ? createPortal(<ViewerInfoLine attachment={attachment} facts={showsFacts} duration={duration} language={language} />, slots.info)
+        ? createPortal(
+            <OffStage>
+              <ViewerInfoLine attachment={attachment} facts={showsFacts} duration={duration} language={language} />
+            </OffStage>,
+            slots.info,
+          )
         : null}
     </div>
   );

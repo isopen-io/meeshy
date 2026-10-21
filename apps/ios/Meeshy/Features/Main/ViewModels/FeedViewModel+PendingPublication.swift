@@ -14,16 +14,22 @@ extension FeedViewModel {
     /// requête était déjà partie, le serveur fait foi — la publication
     /// apparaîtra en ligne au rechargement, sans carte fantôme ici.
     func withdrawPendingPublication(_ cmid: String) async {
-        let snapshot = posts
+        let removedIndex = posts.firstIndex(where: { $0.id == cmid })
+        let removedPost = removedIndex.map { posts[$0] }
         removeOptimisticPost(id: cmid)
+        // Remet CETTE carte à sa place — le fil chargé pendant l'attente reste (`OptimisticRollback`).
+        let putBack = { [weak self] in
+            guard let self, let removedPost, let removedIndex else { return }
+            self.posts = OptimisticRollback.restoring(removedPost, at: removedIndex, into: self.posts)
+        }
         switch await offlineQueue.cancelPendingPublication(clientMutationId: cmid) {
         case .removed, .cancelRequested:
             FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pending.withdrawn", defaultValue: "Envoi annulé", bundle: .main))
         case .notFound:
-            posts = snapshot
+            putBack()
             FeedbackToastManager.shared.showError(String(localized: "feed.post.pending.alreadySent", defaultValue: "Cette publication vient de partir. Supprimez-la une fois en ligne.", bundle: .main))
         case .failed:
-            posts = snapshot
+            putBack()
             FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
         }
     }
@@ -84,6 +90,15 @@ extension FeedViewModel {
     /// Removes an optimistic post by id (re-resolving the index since the feed
     /// may mutate across an `await`). Rolls back a queued create the outbox
     /// refused or exhausted.
+    /// Retire le commentaire optimiste `cmid` du post — et lui seul : les commentaires reçus pendant
+    /// l'attente restent. Le compteur suit la ligne retirée.
+    func withdrawOptimisticComment(_ cmid: String, fromPost postId: String) {
+        guard let i = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let result = OptimisticRollback.withdrawing(cmid, from: posts[i].comments)
+        posts[i].comments = result.items
+        posts[i].commentCount = OptimisticRollback.decremented(posts[i].commentCount, removed: result.removed)
+    }
+
     func removeOptimisticPost(id: String) {
         guard let i = posts.firstIndex(where: { $0.id == id }) else { return }
         posts.remove(at: i)

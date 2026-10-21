@@ -60,19 +60,12 @@ const PRISMA_ALLOWLIST: Readonly<Record<string, string>> = {
     'LIT le compteur (`findMany`) pour planifier la reprise #6434 ; ses écritures Prisma visent les paliers (`engagementMilestone`), et sa commande brute est déclarée dans `RAW_ALLOWLIST`',
   'services/engagement/engagementScoreBackfill.ts':
     'LIT le compteur (`findMany`) pour recalculer un score ; écrit `User`, jamais le compteur',
-  'services/game/GameBlockService.ts': 'LIT le compteur (`findMany`) pour le bloc du jeu ; son `update` vise un autre modèle',
-  'services/game/PrestigeService.ts':
-    'ÉCRIT le compteur EN VALEUR (`updateMany … data: { points: 0 }`, #9675) : poser un nombre ne fabrique jamais `null`',
-  'services/meesh/MeeshService.ts':
-    'LIT le compteur (`findMany` : le plan de frappe) ; le débit passe par `debitEngagementCounter`, ses écritures Prisma visent le registre, les paliers et le compte',
   'services/onboarding/OnboardingService.ts': 'LIT le compteur (`findMany`, `findUnique`) ; son `update` vise un autre modèle',
 };
 
 /** Les fichiers qui nomment la collection ET émettent une commande brute. */
 const RAW_ALLOWLIST: Readonly<Record<string, string>> = {
   [SOLE_WRITER]: 'le site unique : crédit, débit et reprise par pipeline `$ifNull`',
-  'services/engagement/EngagementService.ts':
-    'sa commande brute vise `User` (`updateEngagementScore`) ; le compteur n’y est nommé qu’en prose',
   'services/engagement/engagementPointsBackfill.ts':
     'la reprise #6434 : pose une VALEUR calculée hors ligne (`$set` littéral), sous garde de la valeur lue — jamais un incrément',
 };

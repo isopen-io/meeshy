@@ -236,7 +236,16 @@ describe('ROUTE_TABLE (#4278)', () => {
     // `admin-moderation-acts` (`/api/v1/admin/reports/:reportId/act`,
     // `/api/v1/admin/comments/:commentId/remove`). Aucun alias, aucune route
     // retirée ni renommée ; le manifeste gagne exactement ces sept routes.
-    expect(ROUTE_TABLE.length).toBe(84);
+    // 88 : #10632 ajoute `packs-wallpaper`, `packs-avatar-ring`, `packs-banner`
+    // (les trois domaines d'apparence de la boutique unifiée, sous
+    // `/api/v1/packs/<domaine>`) et `packs-shop` (`GET /api/v1/packs/shop`,
+    // la vitrine qui les agrège). Aucun alias, aucune route retirée ni
+    // renommée.
+    // 89 : #10936 ajoute `packs-banner-frame` (le domaine des cadres posés sur
+    // la bannière, vendu en boutique sous `/api/v1/packs/banner-frame`, monté
+    // par le même `appearancePacksPlugin`). Aucun alias, aucune route retirée
+    // ni renommée.
+    expect(ROUTE_TABLE.length).toBe(89);
   });
 });
 

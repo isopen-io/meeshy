@@ -51,6 +51,7 @@ private struct FaceRampEntryButton: View {
                         accentColor: entry.colorHex,
                         avatarURL: entry.avatarURL,
                         presenceState: entry.presence,
+                        ring: entry.ring,
                         enablePulse: false,
                         isDark: isDark
                     )

@@ -15,13 +15,15 @@ import Foundation
 /// résolution d'identité n'est ni supprimée ni contournée, juste bornée dans
 /// le temps.
 ///
-/// Implémenté en `withCheckedContinuation` + boîte de résolution unique
-/// plutôt qu'en `withTaskGroup` : un `addTask { @MainActor in await
+/// Implémenté en `withCheckedContinuation` + case de résolution unique plutôt
+/// qu'en `withTaskGroup` : un groupe attend TOUS ses enfants, donc après le
+/// délai il attendrait encore une opération qui ignore l'annulation — la borne
+/// de temps ne tiendrait plus ; et un `addTask { @MainActor in await
 /// operation() }` capturant une closure `@Sendable` fait buter le vérificateur
-/// d'isolation par régions sur une limitation réelle du compilateur
-/// (« pattern that the region based isolation checker does not understand
-/// how to check », reproductible avec Swift 6.0 / Xcode 26.1). Ce patron
-/// évite `withTaskGroup`.
+/// d'isolation par régions (« pattern that the region based isolation checker
+/// does not understand how to check », Swift 6.0 / Xcode 26.1).
+///
+/// L'annulation de l'appelant rend `nil` sans attendre le délai.
 public enum BoundedAsyncResolution {
 
     /// Borne partagée par TOUS les chemins d'export de story qui résolvent
@@ -67,39 +69,57 @@ public enum BoundedAsyncResolution {
         _ operation: @escaping @MainActor @Sendable () async -> T?,
         timeout: Duration
     ) async -> T? {
-        await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
-            let box = _RaceBox<T>(continuation)
-            Task { @MainActor in
-                let value = await operation()
-                box.finish(with: value)
+        let slot = BoundedResolutionSlot<T>()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<T?, Never>) in
+                slot.install(continuation)
+                Task { @MainActor in
+                    slot.finish(await operation())
+                }
+                slot.arm(timer: Task {
+                    guard await cancellableSleep(for: timeout) else { return }
+                    slot.finish(nil)
+                })
+                if Task.isCancelled { slot.finish(nil) }
             }
-            Task { @MainActor in
-                try? await Task.sleep(for: timeout)
-                box.finish(with: nil)
-            }
+        } onCancel: {
+            slot.finish(nil)
         }
     }
 }
 
-/// Résout une continuation partagée exactement une fois : la première des
-/// deux tentatives (opération ou timeout, voir `BoundedAsyncResolution`) à
-/// finir gagne, l'autre est ignorée sans crasher (`CheckedContinuation`
-/// interdit une double reprise). Les deux `Task` qui appellent `finish(with:)`
-/// sont créées depuis le MÊME contexte `@MainActor` et héritent donc du
-/// MainActor par défaut (SE-0461) — `didFinish` est donc sérialisé en
-/// pratique malgré l'annotation `@unchecked Sendable`, requise pour franchir
-/// la frontière non-Sendable du closure de `withCheckedContinuation`.
-private final class _RaceBox<T: Sendable>: @unchecked Sendable {
-    private let continuation: CheckedContinuation<T?, Never>
-    private var didFinish = false
-
-    init(_ continuation: CheckedContinuation<T?, Never>) {
-        self.continuation = continuation
+/// Résout la continuation partagée exactement une fois : la première des
+/// tentatives (opération, délai, annulation de l'appelant) gagne, les autres
+/// sont ignorées sans crasher (`CheckedContinuation` interdit une double
+/// reprise). La continuation est reprise hors verrou.
+private final class BoundedResolutionSlot<T: Sendable>: Sendable {
+    private struct State {
+        var continuation: CheckedContinuation<T?, Never>?
+        var timer: Task<Void, Never>?
     }
 
-    func finish(with value: T?) {
-        guard !didFinish else { return }
-        didFinish = true
-        continuation.resume(returning: value)
+    private let state = Locked(State())
+
+    func install(_ continuation: CheckedContinuation<T?, Never>) {
+        state.mutate { $0.continuation = continuation }
+    }
+
+    func arm(timer: Task<Void, Never>) {
+        let alreadyFinished = state.mutate { current -> Bool in
+            guard current.continuation != nil else { return true }
+            current.timer = timer
+            return false
+        }
+        if alreadyFinished { timer.cancel() }
+    }
+
+    func finish(_ value: T?) {
+        let taken = state.mutate { current -> State in
+            let snapshot = current
+            current = State()
+            return snapshot
+        }
+        taken.timer?.cancel()
+        taken.continuation?.resume(returning: value)
     }
 }

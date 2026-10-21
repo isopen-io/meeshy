@@ -227,7 +227,7 @@ function transportSouverain(): { readonly transport: HttpTransport; readonly cal
 
 const VIEWER: Viewer = { id: 'u-membre', handle: 'membre', displayName: 'Le membre', isAnonymous: false };
 
-async function lire(readerLanguages: readonly string[], readerLocale: string, prisme: 'membre' | 'lecteur' = 'membre') {
+async function lire(readerLanguages: readonly string[], prisme: 'membre' | 'lecteur' = 'membre') {
   const { transport, calls } = transportSouverain();
   const host = await mounter.mount(
     <QueryClientProvider client={appQueryClient}>
@@ -236,7 +236,6 @@ async function lire(readerLanguages: readonly string[], readerLocale: string, pr
         language="fr"
         prisme={prisme}
         readerLanguages={readerLanguages}
-        readerLocale={readerLocale}
         viewer={VIEWER}
         deps={{ source: 'gateway', transport }}
       />
@@ -261,7 +260,6 @@ describe('le motif écrit précède la requête, et il est FIGÉ', () => {
           language="fr"
           prisme="membre"
           readerLanguages={['de', 'es']}
-          readerLocale="de"
           viewer={VIEWER}
           deps={{ source: 'gateway', transport }}
         />
@@ -272,7 +270,7 @@ describe('le motif écrit précède la requête, et il est FIGÉ', () => {
   });
 
   test('le motif VALIDÉ part en querystring, et le formulaire disparaît', async () => {
-    const { host, calls } = await lire(['de', 'es'], 'de');
+    const { host, calls } = await lire(['de', 'es']);
     expect(calls().length).toBeGreaterThan(0);
     expect(calls()[0]?.path).toContain(new URLSearchParams({ reason: MOTIF }).toString());
     // FIGÉ : il n'y a plus de champ à modifier une fois la lecture demandée.
@@ -282,7 +280,7 @@ describe('le motif écrit précède la requête, et il est FIGÉ', () => {
 
 describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
   test('sert le RANG 2 du membre — ni son rang 1 absent, ni la langue de l’administrateur', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     const texte = host.textContent ?? '';
 
     expect(texte).toContain('Hola');
@@ -295,7 +293,7 @@ describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
   test('LE CONTRASTE — le MÊME corpus au prisme de l’administrateur rend un AUTRE texte', async () => {
     // Sans ce second montage, le témoin ci-dessus verdirait aussi bien si le
     // composant ignorait `readerLanguages` et servait toujours l'espagnol.
-    const { host } = await lire(['fr'], 'fr');
+    const { host } = await lire(['fr']);
     const texte = host.textContent ?? '';
 
     expect(texte).toContain('Bonjour');
@@ -303,13 +301,13 @@ describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
   });
 
   test('rend LA BULLE du produit, pas une ligne à plat — l’auteur est là', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelector('[data-row="m-traduit"]')).not.toBe(null);
     expect(host.textContent ?? '').toContain('Alice');
   });
 
   test('DIT dans quelle langue il sert — un administrateur ne doit pas prendre une traduction pour l’original', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelector('[data-admin-reading-prism]')?.textContent).toContain('de › es');
   });
 
@@ -325,7 +323,7 @@ describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
    * le cas où elle est juste.
    */
   test('mais PAS quand le prisme est celui du lecteur — il n’y a aucun membre à annoncer', async () => {
-    const { host } = await lire(['fr'], 'fr', 'lecteur');
+    const { host } = await lire(['fr'], 'lecteur');
     // Le fil EST peint : sans ce constat, l'absence du bandeau se confondrait
     // avec un écran vide (leçon 261 — un verdict qui ne peut pas tomber).
     expect(host.textContent ?? '').toContain('Bonjour');
@@ -335,7 +333,7 @@ describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
 
 describe('UN MESSAGE PROTÉGÉ REND SA MENTION — jamais une bulle vide', () => {
   test('la mention est PEINTE', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.textContent ?? '').toContain('Contenu retenu');
   });
 
@@ -343,12 +341,12 @@ describe('UN MESSAGE PROTÉGÉ REND SA MENTION — jamais une bulle vide', () =>
     // Le contenu n'est pas masqué à l'affichage, il est ABSENT de la charge.
     // Offrir « Toucher pour révéler » découvrirait une bulle vide — le contrôle
     // sans effet que la loi 4 interdit.
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelector('[data-protected="hidden"]')).toBe(null);
   });
 
   test('le libellé LU dit la même chose que le libellé PEINT', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     const rangee = host.querySelector('[data-row="m-chiffre"] [role="article"], [role="article"][aria-label]');
     const etiquettes = [...host.querySelectorAll('[role="article"]')].map((n) => n.getAttribute('aria-label') ?? '');
     expect(rangee).not.toBe(null);
@@ -361,7 +359,7 @@ describe('RIEN DE CE QUI EST LU NE TOUCHE LE DISQUE', () => {
     // Le point d'accroche UNIQUE de l'exclusion. Sans ce témoin, celui qui
     // suit verdirait aussi bien parce que la clé est exclue que parce
     // qu'aucune requête n'a jamais été mise en cache.
-    await lire(['de', 'es'], 'de');
+    await lire(['de', 'es']);
     const clefs = appQueryClient
       .getQueryCache()
       .getAll()
@@ -370,7 +368,7 @@ describe('RIEN DE CE QUI EST LU NE TOUCHE LE DISQUE', () => {
   });
 
   test('le contenu servi est REFUSÉ par le prédicat de déshydratation', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     // Le contenu EST à l'écran — sans quoi ce témoin verdirait sur un écran vide.
     expect(host.textContent ?? '').toContain('Hola');
 
@@ -390,7 +388,7 @@ describe('RIEN DE CE QUI EST LU NE TOUCHE LE DISQUE', () => {
     // Sans lui, le témoin ci-dessus verdirait aussi si `dehydrate` ne rendait
     // jamais rien : « aucun contenu souverain » et « aucun contenu du tout »
     // produisent la même chaîne.
-    await lire(['de', 'es'], 'de');
+    await lire(['de', 'es']);
     appQueryClient.setQueryData(['conversations', 'c-ordinaire'], { repere: 'Hola-ordinaire' });
 
     const etat = JSON.stringify(dehydrate(appQueryClient, { shouldDehydrateQuery: persistableQuery }));
@@ -415,7 +413,7 @@ describe('RIEN DE CE QUI EST LU NE TOUCHE LE DISQUE', () => {
  */
 describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
   test('aucun bouton de prise de langue — ni pastille, ni drapeau', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     // Le message TRADUIT est bien à l'écran : sans lui, ce témoin verdirait
     // sur une page vide (leçon 261 — un verdict qui ne peut pas tomber).
     expect(host.textContent ?? '').toContain('Hola');
@@ -424,7 +422,7 @@ describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
   });
 
   test('mais le FAIT de la traduction reste dit — l’indicateur du Prisme survit', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelectorAll('[data-prism-indicator]').length).toBeGreaterThan(0);
   });
 
@@ -438,10 +436,10 @@ describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
    * rougir ce témoin, et c'est voulu — il faudra alors dire lequel, et prouver
    * qu'il fait quelque chose.
    */
-  const GESTES_OFFERTS = ['Précédents', 'Suivants', 'Ouvrir plan.png', "Lire l'audio", 'Vitesse de lecture', 'Ouvrir en plein écran'];
+  const GESTES_OFFERTS = ['Précédents', 'Suivants', 'Ouvrir plan.png', 'Lire l’audio', 'Vitesse de lecture', 'Ouvrir en plein écran'];
 
   test('la fenêtre n’offre QUE les gestes dont l’effet existe', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     const inconnus = [...host.querySelectorAll('button')]
       .map((bouton) => (bouton.getAttribute('aria-label') ?? bouton.textContent ?? '').trim())
       .filter((nom) => !GESTES_OFFERTS.includes(nom));
@@ -464,18 +462,18 @@ describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
  */
 describe('la lecture souveraine rend aussi ce qui n’est pas du texte', () => {
   test('l’image du message atteint le DOM', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelector('[data-attachment="a-image"]')).not.toBe(null);
     expect(host.innerHTML).toContain('PIXEL-SOUVERAIN');
   });
 
   test('le vocal est JOUABLE — un <audio> avec sa source', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelector('[data-attachment="a-vocal"] audio')).not.toBe(null);
   });
 
   test('et la piste servie suit le prisme DU MEMBRE, jamais l’original', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     const audio = host.querySelector('[data-attachment="a-vocal"] audio');
     expect(audio?.getAttribute('src') ?? '').toContain('VOCAL-ES');
   });
@@ -483,7 +481,7 @@ describe('la lecture souveraine rend aussi ce qui n’est pas du texte', () => {
   test('CONTRASTE — au prisme de l’administrateur (fr), c’est l’ORIGINAL qui est servi', async () => {
     // `fr` n'a aucune piste : la règle du Prisme est alors de servir
     // l'original, jamais `translations.first` (règle critique 1).
-    const { host } = await lire(['fr'], 'fr');
+    const { host } = await lire(['fr']);
     const audio = host.querySelector('[data-attachment="a-vocal"] audio');
     expect(audio?.getAttribute('src') ?? '').toContain('VOCAL-SOUVERAIN');
   });
@@ -500,7 +498,6 @@ describe('le rang souverain lit sans motif (spec 2026-10-04 § 4)', () => {
           language="fr"
           prisme="membre"
           readerLanguages={['de', 'es']}
-          readerLocale="de"
           viewer={VIEWER}
           deps={{ source: 'gateway', transport }}
         />
@@ -529,7 +526,6 @@ async function lireAvec(reponse: ApiResult<unknown>) {
         language="fr"
         prisme="lecteur"
         readerLanguages={['fr']}
-        readerLocale="fr"
         viewer={VIEWER}
         deps={{ source: 'gateway', transport: transportRendant(reponse) }}
       />

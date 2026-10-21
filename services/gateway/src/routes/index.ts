@@ -144,6 +144,8 @@ import { meStickersRoutes } from './me/stickers';
 import { stickerPacksRoutes } from './sticker-packs';
 import { gloryFramePacksRoutes } from './packs-glory-frame';
 import { packAssetsRoutes } from './pack-assets';
+import { avatarRingPacksRoutes, bannerFramePacksRoutes, bannerPacksRoutes, wallpaperPacksRoutes } from './packs-appearance';
+import { packsShopRoutes } from './packs-shop';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -355,6 +357,15 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // stickers, sur la spec `glory-frame` : un montage PAR DOMAINE, jamais un
   // `:domain`. Registre VIDE jusqu'au L3 (boutique `[]`, installation 404).
   { name: 'packs-glory-frame', prefix: `${API_PREFIX}/packs/glory-frame`, module: gloryFramePacksRoutes },
+  // La boutique UNIFIÉE (#10632) — trois domaines de plus sur le MÊME moteur
+  // (fonds de conversation, contours d'avatar, bannières de profil), chacun
+  // avec son achat en Meeshes, et la vitrine qui les agrège. Un montage par
+  // domaine, jamais un `:domain`.
+  { name: 'packs-wallpaper', prefix: `${API_PREFIX}/packs/wallpaper`, module: wallpaperPacksRoutes },
+  { name: 'packs-avatar-ring', prefix: `${API_PREFIX}/packs/avatar-ring`, module: avatarRingPacksRoutes },
+  { name: 'packs-banner', prefix: `${API_PREFIX}/packs/banner`, module: bannerPacksRoutes },
+  { name: 'packs-banner-frame', prefix: `${API_PREFIX}/packs/banner-frame`, module: bannerFramePacksRoutes },
+  { name: 'packs-shop', prefix: `${API_PREFIX}/packs/shop`, module: packsShopRoutes },
   // Le magasin adressé par contenu des packs officiels (#10157, L5) — PUBLIC,
   // immuable, liste blanche calculée au démarrage par `PackIndex`, aucune
   // lecture de base, seau de débit propre. Préfixe distinct de `/packs/` pour

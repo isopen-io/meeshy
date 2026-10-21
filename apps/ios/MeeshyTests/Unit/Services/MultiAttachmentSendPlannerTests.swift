@@ -109,11 +109,14 @@ final class MultiAttachmentSendPlannerTests: XCTestCase {
             .appendingPathComponent("Meeshy")
         let source = try String(contentsOf: appRoot.appendingPathComponent(
             "Features/Main/Views/ConversationView+AttachmentHandlers.swift"), encoding: .utf8)
+        let outbox = try String(contentsOf: appRoot.appendingPathComponent(
+            "Features/Main/Views/AttachmentGroupOutbox.swift"), encoding: .utf8)
         let count: (String) -> Int = { needle in source.components(separatedBy: needle).count - 1 }
+        let countInOutbox: (String) -> Int = { needle in outbox.components(separatedBy: needle).count - 1 }
 
         XCTAssertEqual(count("content: send.group.messageContent,"), 2,
                        "la bulle optimiste et l'envoi en ligne du groupe portent sa légende")
-        XCTAssertEqual(count("content: send.group.text,"), 4,
+        XCTAssertEqual(count("content: send.group.text,") + countInOutbox("content: send.group.text,"), 4,
                        "les quatre mises en file (hors ligne et échec en ligne, audio et visuel) portent la légende")
     }
 }

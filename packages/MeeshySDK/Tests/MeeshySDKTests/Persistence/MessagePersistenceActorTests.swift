@@ -25,6 +25,40 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched[0].state, .sending)
     }
 
+    // MARK: - Un message « own » se vise par son id serveur
+
+    /// Un message envoyé de cet appareil garde sa ligne optimiste `cid_*` ;
+    /// l'interface et les événements socket le désignent par son id SERVEUR.
+    /// Épingler, rétablir une suppression ou rafraîchir ses pièces jointes ne
+    /// visaient que `localId` : l'écriture ne touchait aucune ligne.
+    private func insertOwnAckedMessage() async throws {
+        try await actor.insertOptimistic(MessageRecordFactory.make(localId: "cid_own_pin", conversationId: "conv_own"))
+        _ = try await actor.applyEvent(localId: "cid_own_pin", event: .serverAck(serverId: "srv_own_pin", at: Date()))
+    }
+
+    func test_updatePinned_byServerId_reachesTheOwnOptimisticRow() async throws {
+        try await insertOwnAckedMessage()
+        try await actor.updatePinned(localId: "srv_own_pin", pinnedAt: Date(), pinnedBy: "me")
+        let row = try XCTUnwrap(try actor.messages(for: "conv_own", limit: 10).first)
+        XCTAssertNotNil(row.pinnedAt, "l'épingle d'un autre appareil se voit sur mon propre message")
+    }
+
+    func test_markUndeleted_byServerId_reachesTheOwnOptimisticRow() async throws {
+        try await insertOwnAckedMessage()
+        try await actor.markDeleted(localId: "srv_own_pin", deletedAt: Date())
+        try await actor.markUndeleted(localId: "srv_own_pin")
+        let row = try XCTUnwrap(try actor.messages(for: "conv_own", limit: 10).first)
+        XCTAssertNil(row.deletedAt, "une suppression refusée par le serveur se rétablit")
+    }
+
+    func test_updateAttachmentsJson_byServerId_reachesTheOwnOptimisticRow() async throws {
+        try await insertOwnAckedMessage()
+        let json = Data("[]".utf8)
+        try await actor.updateAttachmentsJson(localId: "srv_own_pin", attachmentsJson: json)
+        let row = try XCTUnwrap(try actor.messages(for: "conv_own", limit: 10).first)
+        XCTAssertEqual(row.attachmentsJson, json)
+    }
+
     // MARK: - Apply Event
 
     func test_applyEvent_serverAck_updatesStateAndPersists() async throws {
@@ -1518,6 +1552,117 @@ final class MessagePersistenceActorTests: XCTestCase {
         }
         XCTAssertEqual(rows.count, 1, "bufferIncomingAPIMessages must commit through the write stream")
         XCTAssertEqual(rows.first?.content, "Buffered")
+    }
+
+    /// `message:new` part dans le flux d'écriture, `message:deleted` s'écrit
+    /// tout de suite : la suppression trouvait la table sans la ligne et le
+    /// message arrivait ensuite intact — « supprimé pour tous », il restait lisible.
+    func test_markDeleted_beforeItsBufferedMessageLands_stillDeletesIt() async throws {
+        let apiMsg = makeAPIMessage(id: "srv_race_1", conversationId: "conv_race", content: "secret")
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
+        try await actor.markDeleted(localId: "srv_race_1", deletedAt: Date())
+        await actor.start()
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_race", limit: 10)
+            if rows.first?.deletedAt != nil { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertNotNil(rows.first?.deletedAt, "la suppression arrivée avant la ligne s'applique à son arrivée")
+        XCTAssertNil(rows.first?.content)
+    }
+
+    /// Généralisation de la suppression ci-dessus (cycle 4) : une MODIFICATION
+    /// arrivée avant sa ligne s'appliquait à rien, et le message arrivait avec
+    /// son ancien texte.
+    func test_markEdited_beforeItsBufferedMessageLands_stillEditsIt() async throws {
+        let apiMsg = makeAPIMessage(id: "srv_race_edit", conversationId: "conv_race_edit", content: "avant")
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
+        try await actor.markEdited(localId: "srv_race_edit", newContent: "après", editedAt: Date())
+        await actor.start()
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_race_edit", limit: 10)
+            if rows.first?.content == "après" { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows.first?.content, "après", "la modification arrivée avant la ligne s'applique à son arrivée")
+        XCTAssertEqual(rows.first?.isEdited, true)
+    }
+
+    /// Et une RÉACTION arrivée avant sa ligne n'apparaissait jamais.
+    func test_appendReaction_beforeItsBufferedMessageLands_stillShowsIt() async throws {
+        let apiMsg = makeAPIMessage(id: "srv_race_react", conversationId: "conv_race_react", content: "salut")
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
+        try await actor.appendReaction(localId: "srv_race_react", reactionId: "r_race", messageId: "srv_race_react",
+                                       participantId: "p_race", emoji: "🔥")
+        await actor.start()
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_race_react", limit: 10)
+            if (rows.first?.reactionCount ?? 0) > 0 { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertEqual(rows.first?.reactionCount, 1, "la réaction arrivée avant la ligne s'applique à son arrivée")
+        let json = try XCTUnwrap(rows.first?.reactionsJson)
+        XCTAssertEqual(try JSONDecoder().decode([MeeshyReaction].self, from: json).map(\.emoji), ["🔥"])
+    }
+
+    /// Une modification gardée plus vieille qu'une autre gardée ne la remplace pas.
+    func test_pendingEdits_keepTheNewest() async throws {
+        let now = Date()
+        try await actor.markEdited(localId: "srv_order", newContent: "récent", editedAt: now)
+        try await actor.markEdited(localId: "srv_order", newContent: "ancien", editedAt: now.addingTimeInterval(-60))
+        let kept = await actor.pendingRowEvents["srv_order"]?.edit?.newContent
+        XCTAssertEqual(kept, "récent")
+    }
+
+    /// Ce qui attend un message qu'on ne recevra jamais ne vit pas au-delà de
+    /// sa durée de vie.
+    func test_pendingRowEvents_expireAfterTheirLifetime() async throws {
+        let past = Date().addingTimeInterval(-(PendingRowEventBuffer.lifetime + 1))
+        await actor.rememberPendingRowEvent("srv_stale", now: past) {
+            $0.edit = .init(newContent: "périmé", editedAt: past, marksEdited: true, noticeJson: nil)
+        }
+        let apiMsg = makeAPIMessage(id: "srv_stale", conversationId: "conv_stale", content: "servi")
+        await actor.bufferIncomingAPIMessages([apiMsg], preferredLanguages: ["fr"])
+        await actor.start()
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_stale", limit: 10)
+            if !rows.isEmpty { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        rows = try actor.messages(for: "conv_stale", limit: 10)
+        XCTAssertEqual(rows.first?.content, "servi", "un événement échu ne se rejoue pas")
+        let stillPending = await actor.pendingRowEvents["srv_stale"]
+        XCTAssertNil(stillPending)
+    }
+
+    /// Bornés en nombre : le plus ancien part, les réactions d'une ligne aussi.
+    func test_pendingRowEvents_areBoundedInCount_andPerRowReactions() async throws {
+        let cap = PendingRowEventBuffer.cap
+        for index in 0...cap {
+            try await actor.markDeleted(localId: "srv_cap_\(index)", deletedAt: Date())
+        }
+        let count = await actor.pendingRowEvents.count
+        let first = await actor.pendingRowEvents["srv_cap_0"]
+        XCTAssertEqual(count, cap)
+        XCTAssertNil(first, "le plus ancien est oublié")
+
+        for index in 0..<(PendingRowEventBuffer.reactionCapPerRow + 5) {
+            try await actor.appendReaction(localId: "srv_many", reactionId: "r_\(index)", messageId: "srv_many",
+                                           participantId: "p_\(index)", emoji: "👍")
+        }
+        let reactions = await actor.pendingRowEvents["srv_many"]?.reactions.count
+        XCTAssertEqual(reactions, PendingRowEventBuffer.reactionCapPerRow)
     }
 
     // MARK: - Socket mutators resolve own messages by serverId

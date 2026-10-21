@@ -133,7 +133,7 @@ function makeNotificationService() {
 function makePrisma() {
   return {
     anonymousPostOpen: { create: jest.fn<any>().mockResolvedValue({}), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
-    postImpression: {
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }),
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },

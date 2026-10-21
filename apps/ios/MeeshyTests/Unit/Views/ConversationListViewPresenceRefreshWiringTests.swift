@@ -35,8 +35,10 @@ final class ConversationListViewPresenceRefreshWiringTests: XCTestCase {
             viewSource.contains("private var presenceManager: PresenceManager { PresenceManager.shared }"),
             "presenceManager must remain a plain computed property, never @ObservedObject/@EnvironmentObject"
         )
+        // Balayage NÉGATIF sur l'UNITÉ : les types extraits de la liste ne doivent pas non plus observer le manager.
+        let unitSource = try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
         XCTAssertFalse(
-            viewSource.contains("@ObservedObject private var presenceManager"),
+            unitSource.contains("@ObservedObject private var presenceManager"),
             "PresenceManager itself must never become the observed object — only the debounced signal"
         )
     }

@@ -733,17 +733,42 @@ describe('resendVerification() — POST /auth/resend-verification (magic-link.ts
   });
 });
 
-describe('verifyResetToken() — GET /auth/reset-password/verify-token (password-reset.ts:341-401)', () => {
-  test('jeton dans la query string, jamais dans le corps (méthode GET)', async () => {
+describe('verifyResetToken() — POST /auth/reset-password/verify-token, le jeton dans le CORPS (#10859)', () => {
+  test('jeton dans le corps, jamais dans une adresse journalisée', async () => {
     const store = memoryStore();
     const { transport, calls } = stubTransport([{ ok: true, data: { valid: true, requires2FA: false }, status: 200 }]);
     const auth = createAuthClient({ transport, store });
 
     const result = await auth.verifyResetToken('abc123');
 
-    expect(calls[0]).toEqual({ method: 'GET', path: '/api/v1/auth/reset-password/verify-token?token=abc123' });
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/reset-password/verify-token', body: { token: 'abc123' } });
     expect(result.ok).toBe(true);
     expect(result.ok && result.data.valid).toBe(true);
+  });
+
+  test('passerelle d’avant #10859 (POST inconnu, 404) : repli sur le GET, le temps de la transition', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([
+      { ok: false, status: 404, error: 'Route POST:/api/v1/auth/reset-password/verify-token not found' },
+      { ok: true, data: { valid: true, requires2FA: false }, status: 200 },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.verifyResetToken('abc 123');
+
+    expect(calls.map((call) => call.method)).toEqual(['POST', 'GET']);
+    expect(calls[1]).toEqual({ method: 'GET', path: '/api/v1/auth/reset-password/verify-token?token=abc%20123' });
+    expect(result.ok && result.data.valid).toBe(true);
+  });
+
+  test('un autre échec ne retombe JAMAIS sur le GET', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: false, status: 429, error: 'trop' }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyResetToken('abc123');
+
+    expect(calls.map((call) => call.method)).toEqual(['POST']);
   });
 
   test('un jeton EXPIRÉ rend `valid:false` — pas une erreur HTTP (§ description de la route)', async () => {

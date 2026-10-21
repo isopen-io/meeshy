@@ -20,9 +20,10 @@ import { LANDING_LANGUAGES, LANGUAGE_AUTONYMS, landingDirection, landingPath, ty
  * première peinture de l'application ne paie pas un en-tête qu'elle ne rend pas).
  *
  * `onLanding` distingue la seule chose qui change d'un hôte à l'autre : sur la
- * landing, les ancres (`#comment`, `#rejoindre`) sont dans la page et le script
- * de la landing (`landingBoot`) les anime ; ailleurs, elles visent la landing
- * de la langue de la page, où le formulaire d'entrée sans compte les attend.
+ * landing, les ancres (`#comment`, `#world`) sont dans la page ; ailleurs, elles
+ * visent la landing de la langue de la page. Aucune porte « Entrer sans
+ * compte » : l'entrée anonyme dans World Wide ne passe plus que par le QR de la
+ * landing, flashé vers `/world` (#10784).
  * « Mes conversations » n'existe que sur la landing : c'est son script qui
  * reconnaît un compte avant la première peinture, et les pages statiques n'en
  * portent aucun — un compte y voit « Se connecter », que `/login` résout.
@@ -61,19 +62,10 @@ export function SiteHeader({ language, copy, onLanding, languageControl }: SiteH
           {copy.signIn}
         </a>
         {onLanding ? (
-          <>
-            <a href="#rejoindre" className="ld-btn ld-btn--primary" data-session-visitor data-world-entry data-world-cta>
-              {copy.enterWithoutAccount}
-            </a>
-            <a href="/chats" className="ld-btn ld-btn--primary" data-session-member data-my-conversations>
-              {copy.myConversations}
-            </a>
-          </>
-        ) : (
-          <a href={anchor('rejoindre')} className="ld-btn ld-btn--primary">
-            {copy.enterWithoutAccount}
+          <a href="/chats" className="ld-btn ld-btn--primary" data-session-member data-my-conversations>
+            {copy.myConversations}
           </a>
-        )}
+        ) : null}
       </div>
     </header>
   );
@@ -89,8 +81,7 @@ export function SiteHeader({ language, copy, onLanding, languageControl }: SiteH
  *   suit `data-landing-language`) et `/download` (traduite, qui passe
  *   `onSelect` : la page change de langue sur place) ;
  * - `purpose: 'reading'` (#10098) — la langue de LECTURE dans World Wide, posée
- *   avant « Rejoindre » sur la landing (son script suit `data-world-language`)
- *   et sur `/world` (`onSelect`). Elle ne change pas la page. Chaque option
+ *   avant « Entrer » sur `/world` (`onSelect`). Elle ne change pas la page. Chaque option
  *   commence par son drapeau (`getLanguageInfo(code).flag`, la source unique) :
  *   la pastille montre donc celui de la langue choisie à la place du globe,
  *   sans une ligne de script pour le suivre.

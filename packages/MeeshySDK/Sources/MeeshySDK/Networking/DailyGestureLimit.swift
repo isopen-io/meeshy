@@ -77,39 +77,38 @@ extension SocialSocketManager {
     /// L'erreur d'un accusé de réaction refusé : la limite du jour quand l'accusé
     /// la porte (`DAILY_REACTION_LIMIT`), la phrase du serveur sinon.
     nonisolated static func postReactionAckFailure(_ response: [String: Any]) -> Error {
-        if let limit = DailyGestureLimit.fromAck(response) { return limit }
-        let message = (response["error"] as? [String: Any])?["message"] as? String
-            ?? (response["error"] as? String)
-            ?? "unknown error"
-        return PostReactionError.serverError(message)
+        postReactionAckFailure(SocketAckRefusal(response: response))
+    }
+
+    nonisolated static func postReactionAckFailure(_ refusal: SocketAckRefusal) -> Error {
+        let limit = DailyGestureLimit(code: refusal.code, resetAt: DailyGestureLimit.parseInstant(refusal.resetAt), limit: refusal.limit)
+        if let limit { return limit }
+        return PostReactionError.serverError(refusal.message ?? "unknown error")
     }
 }
 
 /// Les limites du jour qui ont fait RENONCER la file durable, par identifiant
 /// de mutation : la file ne rejoue pas le geste, et l'écran qui l'a posé dit
 /// pourquoi — l'heure de remise à zéro plutôt qu'un « impossible » muet. Borné.
-public final class DailyGestureLimitLedger: @unchecked Sendable {
+public final class DailyGestureLimitLedger: Sendable {
     public static let shared = DailyGestureLimitLedger()
 
     private static let capacity = 64
-    private let lock = NSLock()
-    private var byMutation: [String: DailyGestureLimit] = [:]
+    private let byMutation = Locked([String: DailyGestureLimit]())
 
     public init() {}
 
     public func record(_ limit: DailyGestureLimit, clientMutationId: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        if byMutation.count >= Self.capacity, let evicted = byMutation.keys.first {
-            byMutation.removeValue(forKey: evicted)
+        byMutation.mutate { table in
+            if table.count >= DailyGestureLimitLedger.capacity, let evicted = table.keys.first {
+                table.removeValue(forKey: evicted)
+            }
+            table[clientMutationId] = limit
         }
-        byMutation[clientMutationId] = limit
     }
 
     /// La limite qui a fait renoncer cette mutation, une seule fois.
     public func take(clientMutationId: String) -> DailyGestureLimit? {
-        lock.lock()
-        defer { lock.unlock() }
-        return byMutation.removeValue(forKey: clientMutationId)
+        byMutation.mutate { $0.removeValue(forKey: clientMutationId) }
     }
 }

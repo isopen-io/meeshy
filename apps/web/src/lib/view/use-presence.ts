@@ -37,15 +37,11 @@ type PresenceHookOptions = {
  * jamais pour la transition d'un autre : une bulle de Bob ne se repeint pas
  * quand Carol se connecte, ni toutes les 30 s quand rien n'a bougé.
  */
-export function usePresences(
-  participants: readonly (Participant | undefined)[],
-  { now = Date.now, store = presenceStore, clock = presenceClock }: PresenceHookOptions = {},
+function useResolvedPresences(
+  resolveAt: (state: PresenceState, at: number) => readonly UserPresenceStatus[],
+  { now = Date.now, store = presenceStore, clock = presenceClock }: PresenceHookOptions,
 ): readonly UserPresenceStatus[] {
-  const resolve = (): readonly UserPresenceStatus[] => {
-    const at = now();
-    const state = store.getState();
-    return participants.map((participant) => servedPresenceOf(state, participant, at));
-  };
+  const resolve = (): readonly UserPresenceStatus[] => resolveAt(store.getState(), now());
   const statuses = resolve();
   const shown = useRef({ resolve, signature: statuses.join('|') });
   shown.current = { resolve, signature: statuses.join('|') };
@@ -66,6 +62,31 @@ export function usePresences(
   return statuses;
 }
 
+export function usePresences(
+  participants: readonly (Participant | undefined)[],
+  options: PresenceHookOptions = {},
+): readonly UserPresenceStatus[] {
+  return useResolvedPresences((state, at) => participants.map((participant) => servedPresenceOf(state, participant, at)), options);
+}
+
 export function usePresence(participant: Participant | undefined, options?: PresenceHookOptions): UserPresenceStatus {
   return usePresences([participant], options)[0] ?? 'offline';
+}
+
+/**
+ * LA PRÉSENCE D'UNE PERSONNE CONNUE PAR SON SEUL IDENTIFIANT (#10944) — l'auteur
+ * d'un post, d'un commentaire, d'une notification : la charge n'en porte
+ * aucune, et la carte vivante (`user:status`, `presence:snapshot`) est la seule
+ * présence que la passerelle a SERVIE à ce lecteur. Absente ⇒ `offline`,
+ * c'est-à-dire aucun point : rien ne se fabrique.
+ */
+export function usePresencesOfUsers(
+  userIds: readonly (string | undefined)[],
+  options: PresenceHookOptions = {},
+): readonly UserPresenceStatus[] {
+  return useResolvedPresences((state, at) => userIds.map((userId) => livePresenceOf(state, userId, at) ?? 'offline'), options);
+}
+
+export function usePresenceOfUser(userId: string | undefined, options?: PresenceHookOptions): UserPresenceStatus {
+  return usePresencesOfUsers([userId], options)[0] ?? 'offline';
 }

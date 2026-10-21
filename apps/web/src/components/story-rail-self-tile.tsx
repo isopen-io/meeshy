@@ -6,6 +6,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
 import type { StoryRailSelfEntry } from '@/lib/view/story-rail-self';
 import { Link } from '@/routes/route-table';
+import { useMyRing } from '@/lib/profile-decor/my-ring';
 
 /**
  * **MA CELLULE DU RAIL, ET SES DEUX PORTES** (#6150) — directive porteur du
@@ -94,6 +95,7 @@ type SelfTileProps = {
 };
 
 export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
+  const myRing = useMyRing();
   const anneau = railRingBox(size);
   const cellule = railCellWidth(size, true);
   const trait = railStroke(size, entry.hasActiveStory);
@@ -130,6 +132,7 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
         /* MA PHOTO (#6975) — résolue par `selfRailEntry`, pas ici : cette
            tuile est un rendu, la descente est une loi. */
         {...(entry.avatar === undefined ? {} : { src: entry.avatar })}
+        {...(myRing === null ? {} : { ring: myRing })}
       />
     </span>
   );

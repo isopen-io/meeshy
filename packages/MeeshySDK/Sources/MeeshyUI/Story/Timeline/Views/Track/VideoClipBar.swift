@@ -86,6 +86,7 @@ public struct VideoClipBar: View, Equatable {
 
     /// Filmstrip auto-extrait quand l'hôte ne fournit pas de frames (vidéos).
     /// Exclu de `==` (état interne, pas une prop visuelle d'entrée).
+    @Environment(\.displayScale) private var displayScale
     @State private var loadedFrames: [UIImage] = []
 
     private var effectiveFrames: [UIImage] {
@@ -102,6 +103,24 @@ public struct VideoClipBar: View, Equatable {
             format: String(localized: "story.timeline.a11y.clip.video", bundle: .module),
             title
         )
+    }
+
+    var accessibilityModel: ClipBarAccessibility {
+        ClipBarAccessibility(
+            geometry: geometry,
+            isLocked: isLocked,
+            muteLabels: onToggleMute == nil ? nil : (
+                mute: String(localized: "story.video.mute", defaultValue: "Couper le son de la vidéo", bundle: .module),
+                unmute: String(localized: "story.video.unmute", defaultValue: "Activer le son de la vidéo", bundle: .module)
+            ),
+            isMuted: isMuted
+        )
+    }
+
+    var accessibilityCallbacks: ClipBarCallbacks {
+        ClipBarCallbacks(onTap: onTap, onDoubleTap: onDoubleTap, onMoveDelta: onMoveDelta,
+                         onMoveEnded: onMoveEnded, onTrimStartDelta: onTrimStartDelta,
+                         onTrimEndDelta: onTrimEndDelta, onToggleMute: onToggleMute)
     }
 
     public init(
@@ -168,7 +187,8 @@ public struct VideoClipBar: View, Equatable {
             if ClipTrimHandles.shouldShow(isSelected: isSelected, isLocked: isLocked) {
                 ClipTrimHandles(laneHeight: laneHeight,
                                 onTrimStartDelta: onTrimStartDelta,
-                                onTrimEndDelta: onTrimEndDelta)
+                                onTrimEndDelta: onTrimEndDelta,
+                                adjustStepPoints: accessibilityModel.stepPoints)
             }
         }
         .frame(width: width, height: laneHeight - 4)
@@ -195,14 +215,16 @@ public struct VideoClipBar: View, Equatable {
             startTime, duration
         ))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-        .task(id: videoURL ?? imageURL) {
+        .clipBarAccessibility(accessibilityModel, callbacks: accessibilityCallbacks)
+        .task(id: "\((videoURL ?? imageURL)?.absoluteString ?? "")|\(displayScale)") {
             guard frames.isEmpty else { return }
             if let videoURL {
                 loadedFrames = await VideoFilmstrip.frames(url: videoURL, count: 6,
-                                                           maxHeight: laneHeight)
+                                                           maxHeight: laneHeight, scale: displayScale)
             } else if let imageURL,
                       let still = await ImageStill.thumbnail(url: imageURL,
-                                                             maxHeight: laneHeight) {
+                                                             maxHeight: laneHeight,
+                                                             scale: displayScale) {
                 loadedFrames = [still]
             }
         }

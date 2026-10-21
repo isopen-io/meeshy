@@ -1,3 +1,4 @@
+import '@/lib/links/email-link-boot';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Fragment, StrictMode, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -6,6 +7,7 @@ import { useStore } from 'zustand/react';
 import './styles/app.css';
 import './styles/sealed-exit.css';
 
+import { ScreenWait } from '@/components/screen-wait';
 import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -18,7 +20,7 @@ import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
 import { useAnonymousScope } from '@/lib/view/use-anonymous-scope';
 import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';
 import { shellStartHref } from '@/lib/links/shell-start';
-import { Router, href, navigate } from '@/routes/route-table';
+import { Router, href, navigate, preload } from '@/routes/route-table';
 
 /**
  * Defaut 3c (recette 2026-09-07, #5604) : la bascule clair/sombre du systeme
@@ -73,7 +75,7 @@ function SessionGate({ children }: { children: ReactNode }) {
   /* L'IDENTITÉ SUIT LA CONVERSATION LUE (#8816) — posée AVANT la décision
      d'accès : sous l'identité anonyme d'un compte, la liste redirigerait
      sinon vers la connexion au lieu de rendre le compte. */
-  return useAnonymousScope(route) ? <RouteAccessGate>{children}</RouteAccessGate> : <Skeleton />;
+  return useAnonymousScope(route) ? <RouteAccessGate>{children}</RouteAccessGate> : <ScreenWait />;
 }
 
 function RouteAccessGate({ children }: { children: ReactNode }) {
@@ -103,21 +105,7 @@ function RouteAccessGate({ children }: { children: ReactNode }) {
     );
   }, [status, key, viewerId]);
 
-  return decision === 'allow' ? children : <Skeleton />;
-}
-
-/** Le squelette d'attente d'un ecran decoupe — statique, jamais un spinner. */
-function Skeleton() {
-  return (
-    <div className="grid gap-2 p-4" aria-busy="true">
-      <p className="text-meta" style={{ color: 'var(--color-ios-ink-2)' }}>
-        L’écran arrive…
-      </p>
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="h-20 rounded-[14px]" style={{ backgroundColor: 'var(--color-ios-card)' }} />
-      ))}
-    </div>
-  );
+  return decision === 'allow' ? children : <ScreenWait />;
 }
 
 /**
@@ -135,10 +123,16 @@ function InterfaceLanguageRoot({ children }: { children: ReactNode }) {
   return <Fragment key={language}>{children}</Fragment>;
 }
 
-/* LA COQUE DÉMARRE SUR LA LISTE (#10353) — `navigate`, pas un `replaceState`
-   nu : le routeur a lu l'adresse à l'import et ne verrait pas la réécriture. */
+/* LA COQUE DÉMARRE SUR LA LISTE (#10353), OU SUR LA CONNEXION SANS COMPTE
+   (#10784) — la session est restaurée plus haut, de façon synchrone.
+   `navigate`, pas un `replaceState` nu : le routeur a lu l'adresse à l'import
+   et ne verrait pas la réécriture. */
 if (__SHELL__) {
-  const start = shellStartHref(window.location, href('list'));
+  const start = shellStartHref(window.location, {
+    listHref: href('list'),
+    loginHref: href('login'),
+    authenticated: sessionStore.getState().session.status === 'authenticated',
+  });
   if (start !== null) navigate(start, true);
 }
 
@@ -154,11 +148,33 @@ createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={appQueryClient}>
       <InterfaceLanguageRoot>
-        <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<Skeleton />} />
+        <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<ScreenWait />} />
       </InterfaceLanguageRoot>
     </QueryClientProvider>
   </StrictMode>,
 );
+
+/**
+ * LES ÉCRANS PRINCIPAUX SE PRÉCHARGENT EN TÂCHE DE FOND (#10636) — après le
+ * `load`, un écran par moment d'inactivité, et seulement pour un compte
+ * connecté : un visiteur ne télécharge pas les écrans qu'il n'ouvrira pas.
+ */
+{
+  const precharger = (): void => {
+    const lancer = (): void =>
+      void import('@/lib/view/screen-preload').then(({ preloadScreensWhenIdle, browserIdle, browserNetworkHints }) =>
+        preloadScreensWhenIdle({ preload, idle: browserIdle, network: browserNetworkHints() }),
+      );
+    if (sessionStore.getState().session.status === 'authenticated') return lancer();
+    const stop = sessionStore.subscribe((state) => {
+      if (state.session.status !== 'authenticated') return;
+      stop();
+      lancer();
+    });
+  };
+  if (document.readyState === 'complete') precharger();
+  else window.addEventListener('load', precharger, { once: true });
+}
 
 /**
  * LE CONSENTEMENT D'ANALYSE QUE LA TÉLÉMÉTRIE DÉCLARE (#10502) — la bascule
@@ -228,6 +244,34 @@ if (__SHELL__) {
 }
 
 /**
+ * LES WIDGETS D'ÉCRAN D'ACCUEIL DE LA COQUE ANDROID (#10626) — la page leur
+ * publie ce qu'elle tient déjà (non-lus, conversations, favoris) et vide leur
+ * file « marquer lu » ; une déconnexion les vide sur-le-champ. Hors coque, ou
+ * dans une coque construite avant le plugin, rien ne se charge — et, comme
+ * les autres écoutes de la coque, après la première peinture.
+ */
+if (__SHELL__) {
+  const brancherWidgets = (): void => {
+    void import('@/lib/shell-widgets/start').then(({ startShellWidgets }) => startShellWidgets());
+  };
+  if (document.readyState === 'complete') brancherWidgets();
+  else window.addEventListener('load', brancherWidgets, { once: true });
+}
+
+/**
+ * ET « RAPPELER » SUR LA BANNIÈRE D'UN APPEL MANQUÉ COMPOSE L'APPEL (#10908) —
+ * le jumeau, dans la coque, de l'écoute que le web monte avec son worker ;
+ * après la première peinture, le signal natif étant retenu jusque-là.
+ */
+if (__SHELL__) {
+  const ecouterRappels = (): void => {
+    void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInShell }) => listenCallBackIntentsInShell());
+  };
+  if (document.readyState === 'complete') ecouterRappels();
+  else window.addEventListener('load', ecouterRappels, { once: true });
+}
+
+/**
  * UNE IMAGE, UNE VIDÉO OU UN LIEN PARTAGÉ DEPUIS UNE AUTRE APPLICATION OUVRE LA
  * FEUILLE D'ENVOI (#8884) — l'intent `SEND` de la coque Android est copié par
  * `MeeshyShareIntentPlugin`, lu ici ; le partage d'un lancement à froid attend
@@ -258,6 +302,16 @@ if (__SHELL__) {
     holdWhileAudioPlays(document, shellPlaybackHold());
     pauseVideosWhenNoisy(document, shellNoisy());
   });
+}
+
+/**
+ * ET DANS LE NAVIGATEUR, LA NOTIFICATION D'UN VOCAL DIT QUI PARLE ET SE PILOTE
+ * (#10890) — la même carte que la coque, par la Media Session API : l'auteur,
+ * la conversation, la date, l'avatar, la barre et les ±15 s. Un navigateur
+ * sans Media Session garde sa carte générique et ne charge rien.
+ */
+if (!__SHELL__ && 'mediaSession' in navigator) {
+  void import('@/lib/view/web-now-playing').then(({ startWebNowPlaying }) => startWebNowPlaying());
 }
 
 /**
@@ -362,6 +416,20 @@ if (__SHELL__) {
 }
 
 /**
+ * ET LA COQUE ANDROID CONNAÎT LA SESSION DE LA PAGE (#10662) : le natif accuse
+ * la remise d'un push, refuse un appel et joue un vocal depuis sa notification
+ * sans la page (#10641). Posé à chaque lancement, après la première peinture,
+ * indépendamment du socket et des appels, retiré à la déconnexion.
+ */
+if (__SHELL__) {
+  const poserCredential = (): void => {
+    void import('@/lib/notifications/shell-credential').then(({ startShellCredentialSync }) => startShellCredentialSync());
+  };
+  if (document.readyState === 'complete') poserCredential();
+  else window.addEventListener('load', poserCredential, { once: true });
+}
+
+/**
  * LA CAPTURE D'UN CONTENU (#10508) — dans la coque seulement : un navigateur
  * ne détecte aucune capture. L'écoute se charge après la première peinture ;
  * elle déclare à la télémétrie ce que la coque détecte réellement, puis émet
@@ -410,14 +478,20 @@ if (__SHELL__) {
 
 /**
  * L'ENTONNOIR DES NOTIFICATIONS (#10507) — ce que le service worker a noté
- * (reçue, affichée, ouverte, écartée) passe dans la file v2 au chargement.
+ * (reçue, affichée, ouverte, écartée) passe dans la file v2 au chargement ;
+ * et ce que la coque Android a noté app fermée aussi (#10938).
  */
 {
   const viderNotifications = (): void => {
-    void Promise.all([import('@/lib/notifications/notification-telemetry'), import('@/lib/view/reading-telemetry')]).then(
-      ([{ drainNotificationTelemetry }, { readingTelemetry }]) =>
-        drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, (event) => readingTelemetry.recordV2(event)),
-    );
+    void Promise.all([
+      import('@/lib/notifications/notification-telemetry'),
+      import('@/lib/view/reading-telemetry'),
+      import('@/lib/native-shell'),
+    ]).then(([{ drainNotificationTelemetry, drainShellNotificationTelemetry }, { readingTelemetry }, { coqueCourante }]) => {
+      const record = (event: Parameters<typeof readingTelemetry.recordV2>[0]): void => readingTelemetry.recordV2(event);
+      void drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, record);
+      void drainShellNotificationTelemetry(coqueCourante(), record);
+    });
   };
   if (document.readyState === 'complete') viderNotifications();
   else window.addEventListener('load', viderNotifications, { once: true });

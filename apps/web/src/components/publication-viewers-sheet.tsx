@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { Sheet } from '@/components/sheet';
@@ -58,8 +58,10 @@ import { Link } from '@/routes/route-table';
  * HORS LIGNE (`coldStateOf`), REFUS (403), erreur avec « Réessayer », vide,
  * et la liste — plus, depuis #9727, le détail d'une personne.
  *
- * **L'EN-TÊTE LIT LE COMPTE AUTORITATIF** (`viewCount`), jamais la longueur
- * d'une page qui peut être partielle — et retombe sur le total servi.
+ * **L'EN-TÊTE LIT LE COMPTE AUTORITATIF**, jamais la longueur d'une page qui
+ * peut être partielle : celui que la passerelle relit AVEC la liste (#11065),
+ * puis l'instantané reçu à l'ouverture (plus vieux que la liste qu'il
+ * surmonte), puis le total servi.
  */
 export type ViewersSubject = 'story' | 'publication';
 
@@ -91,7 +93,7 @@ export function PublicationViewersSheet({
   const [openedId, setOpenedId] = useState<string | null>(null);
   const [returnTo, setReturnTo] = useState<string | null>(null);
   const opened = openedId === null ? undefined : viewers.find((viewer) => viewer.id === openedId);
-  const count = viewCount ?? query.data?.pagination.total;
+  const count = query.data?.viewCount ?? viewCount ?? query.data?.pagination.total;
   const visitors = query.data?.anonymousViewCount ?? anonymousViewCount ?? 0;
   const title =
     count === undefined
@@ -279,7 +281,8 @@ const nameOf = (viewer: PostViewerRow): string => viewer.displayName ?? viewer.u
 function ViewerAvatar({ viewer, size }: { readonly viewer: PostViewerRow; readonly size: number }) {
   const label = nameOf(viewer);
   return (
-    <Avatar
+    <PeerAvatar
+      presenceKey={viewer.id}
       initials={initialsOf(label)}
       color={colorForName(label)}
       size={size}

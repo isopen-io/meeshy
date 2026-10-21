@@ -170,8 +170,11 @@ extension ConversationViewModel {
     /// `.task` (one run per `.id(conversationId)` identity); the `hasStarted`
     /// guard makes re-entry (background→foreground re-task) a no-op.
     func start() {
+        // #10830 — le `.task` qui ramène l'écran réarme son rattrapage.
+        ConversationCatchUpGate.shared.arrive(self)
         guard !hasStarted else { return }
         hasStarted = true
+        ExplicitUnreadMarks.clear(conversationId) // rouvrir, c'est relire : la marque d'un « non lu » ne vaut plus
         // Declare this conversation as currently visible so the sync engine
         // forces its `unreadCount` to 0 on every server broadcast (the user
         // IS reading it) and excludes it from the cross-conversation
@@ -187,7 +190,9 @@ extension ConversationViewModel {
         // que le serveur disait 94 (recette 2026-09-21). La frontière n'est
         // plus posée que par une lecture COMPLÈTE (`sendReadReceipt`, lot qui
         // contient le message le plus récent) ou un geste explicite.
-        syncEngine.setCurrentlyOpenConversation(conversationId)
+        // Multi-fenêtre : une scène = une ouverture, équilibrée par la fermeture de `deinit`. Le moteur tient
+        // l'ENSEMBLE — deux fenêtres, deux conversations lues, aucune ne remplace l'autre.
+        syncEngine.openConversation(conversationId)
         // Open side-effects (socket room join + active-conversation publish to
         // the notification singletons). Lives here — NOT in the handler's init
         // — so the throwaway VMs SwiftUI allocates on every parent
@@ -334,7 +339,7 @@ extension ConversationViewModel {
     /// Call before any programmatic scroll. Resets after a short delay.
     func markProgrammaticScroll() {
         isProgrammaticScroll = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        CoalescingDeadline.shared.schedule(for: self, after: .milliseconds(500)) { [weak self] in
             self?.isProgrammaticScroll = false
         }
     }

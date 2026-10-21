@@ -108,6 +108,10 @@ final class CallManager: ObservableObject {
 
     @Published var callState: CallState = .idle {
         didSet {
+            if !CallStateMachine.isLegal(from: oldValue, to: callState) {
+                let status = String(describing: CallStateMachine.status(of: callState))
+                Logger.calls.fault("[CallFSM] transition illégale \(String(describing: oldValue)) -> \(String(describing: self.callState)) (status=\(status))")
+            }
             let active = callState.isActive
             CallManager.isCallActiveFlag = active
             // Étape B unification audio — point de propagation unique de l'état
@@ -117,21 +121,18 @@ final class CallManager: ObservableObject {
             // Synchrone (setCallActive est nonisolated) → pas de reorder de Task.
             MediaSessionCoordinator.shared.setCallActive(active)
 
-            // Au DÉMARRAGE d'un appel (transition inactif→actif uniquement) : couper
-            // tout média en cours (voice notes, vidéo, story). L'appel VoIP prend la
-            // main sur l'audio. Placé APRÈS setCallActive → le stop est call-aware (la
-            // session reste à l'appel, aucun teardown). Évite le média orphelin qui
-            // resterait « muet définitivement » au raccrochage : plus rien à réactiver,
-            // le prochain tap utilisateur reconfigure proprement la session.
+            // Au DÉMARRAGE d'un appel : les ENREGISTREURS s'arrêtent — un vocal en
+            // cours capturait l'appel (arrivé par le socket, sans interruption
+            // système).
             if active && !oldValue.isActive {
-                // AVANT stopAll() : celui-ci détruit le lecteur (`player = nil`,
-                // `isPlaying = false`), or la suspension doit capturer si la
-                // lecture était en cours pour décider de la reprise. `@Published`
-                // émettant en `willSet`, un abonné différé par `.receive(on:)`
-                // lirait déjà `false` — d'où ce push synchrone.
-                ConversationAudioCoordinator.shared.suspendForSystemCall()
-                PlaybackCoordinator.shared.stopAll()
+                RecorderCallGuard.shared.stopAllForCall()
             }
+            // Les LECTEURS suivent la loi de la sonnerie (#11063) : un appel entrant
+            // qui sonne les baisse, décroché il les interrompt (reprise au
+            // raccrochage), refusé il rend le volume ; un appel sortant les
+            // interrompt aussitôt. Synchrone, APRÈS setCallActive : l'arrêt est
+            // call-aware, et la suspension des vocaux lit l'état d'avant l'arrêt.
+            CallRingPlayback.apply(CallRingPlaybackLaw.effect(from: oldValue, to: callState))
 
             // Retour au repos : rendre les surfaces système au lecteur de vocaux.
             //
@@ -179,30 +180,19 @@ final class CallManager: ObservableObject {
     @Published var isVideoEnabled: Bool = false {
         didSet { if isVideoEnabled != oldValue { updateProximityMonitoring() } }
     }
-    /// P0-3 — the REMOTE peer's camera state, driven by `call:media-toggled`.
-    /// Defaults to `true` (assume on) and flips to `false` when the peer turns
-    /// its camera off, so the UI can show an avatar placeholder instead of the
-    /// peer's frozen last frame. 1:1 only — the gateway routes the toggle to the
-    /// other participant via `socket.to(room)` so we never see our own echo.
-    @Published var isRemoteVideoEnabled: Bool = true
-    /// `false` when the remote peer has muted their microphone (call:media-toggled
-    /// audioType=="audio"). Drives the mute indicator in the call UI so the local
-    /// user knows why the remote peer sounds silent. Resets to `true` on call end.
-    @Published var isRemoteAudioEnabled: Bool = true
     /// #8063 — partage d'écran, local et distant (`CallManager+ScreenShare.swift`).
     private(set) lazy var screenShare: CallScreenShareController = makeScreenShareController()
     /// #8064 — l'enregistrement consenti de l'appel (`CallManager+Recording.swift`).
     private(set) lazy var recording: CallRecordingController = makeRecordingController()
-    /// `true` when the remote peer is actively screen-capturing this call
-    /// (call:screen-capture-alert with isCapturing==true). Drives a privacy warning
-    /// banner in CallView. Resets to `false` on call end to prevent leaking state
-    /// into subsequent calls.
-    @Published var isRemoteScreenCapturing: Bool = false
-    /// Set to `true` when the gateway reports the remote peer has high RTT or packet
-    /// loss (call:quality-alert). Auto-resets after 15 s of silence — sustained poor
-    /// conditions keep resetting the timer, so the indicator stays up as long as
-    /// alerts keep arriving.
-    @Published var isRemoteQualityDegraded: Bool = false
+    /// État des médias du pair distant (caméra, micro, capture d'écran, qualité),
+    /// piloté par `call:media-toggled`, `call:screen-capture-alert` et
+    /// `call:quality-alert`. Une seule valeur publiée ; remise à `.initial` à
+    /// chaque fin d'appel pour ne rien fuir vers l'appel suivant.
+    @Published var remoteMedia: RemoteMediaState = .initial
+    var isRemoteVideoEnabled: Bool { remoteMedia.isVideoEnabled }
+    var isRemoteAudioEnabled: Bool { remoteMedia.isAudioEnabled }
+    var isRemoteScreenCapturing: Bool { remoteMedia.isScreenCapturing }
+    var isRemoteQualityDegraded: Bool { remoteMedia.isQualityDegraded }
     /// EXIGENCE №1 — true while the signaling socket is down during an
     /// established call. The P2P media keeps flowing; CallView shows a
     /// discreet banner and signaling ops resync on the socket reconnect.
@@ -321,7 +311,7 @@ final class CallManager: ObservableObject {
     @Published var availableCameras: [CameraDeviceOption] = []
     /// §7.1 — uniqueID of the active capture camera (drives the picker's check).
     @Published var selectedCameraId: String?
-    @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?, conversationId: String?)?
+    @Published var pendingIncomingCall: IncomingCall?
 
     // MARK: - Audio Guard (DEBUG override for tests)
 
@@ -513,6 +503,10 @@ final class CallManager: ObservableObject {
     /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
     /// state leaves `.ringing(isOutgoing: true)` (offering / connecting / ended).
     var outgoingRingTimeoutTask: Task<Void, Never>?
+    /// Callee-side twin: an incoming call still ringing well past the ring budget — its `call:ended` lost (socket
+    /// mounted after the caller hung up, `call_cancel` push missed) — ends locally as missed. Without it the state
+    /// stayed `.ringing` with no exit: every later incoming call answered « busy » and `startCall` refused.
+    var incomingRingTimeoutTask: Task<Void, Never>?
     /// Task de setup d'un appel sortant (force-leave + ACK + media + listen).
     /// Auparavant un Task non-tracké : si endCallInternal fire pendant le
     /// setup (ex: CallKit teardown), le Task continuait à tourner — gardant
@@ -544,7 +538,7 @@ final class CallManager: ObservableObject {
     /// `retryCall()` (« Réessayer ») — `resetEndedStateForNewCall` clears the
     /// live identity fields, so the retry must re-dial from this snapshot rather
     /// than the (already-torn-down) call state. Parité web/Android retry.
-    var lastOutgoingContext: (conversationId: String, userId: String, displayName: String, isVideo: Bool)?
+    var lastOutgoingContext: OutgoingCallContext?
     /// `private(set)` (not `private`) so CallView can compute a "since call
     /// start" elapsed time for each live-caption row — the only other
     /// existing consumer of call timing is `callDuration`, which is a ticking
@@ -676,6 +670,9 @@ final class CallManager: ObservableObject {
     /// One-shot stuck-muted fallback (§RC-2): armed when `.connected` is
     /// reached on iPhone/iPad before CallKit delivered `provider:didActivate:`.
     var audioActivationFallbackTask: Task<Void, Never>?
+    /// L'app a activé la session elle-même pendant cet appel (sonnerie in-app,
+    /// filet « micro muet ») : elle devra la rendre, CallKit ou pas.
+    var audioSessionSelfActivated = false
     var voipFreshnessTask: Task<Void, Never>?
     var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
@@ -748,6 +745,15 @@ final class CallManager: ObservableObject {
     /// `reason == "rejected"` marks a DECLINE — the replay must preserve it,
     /// or it resurrects the `missed` mislabel (arc reject 2026-07-12).
     var pendingEndReconciliations: [(callId: String, reason: String?)] = []
+
+    /// Combien de fois la fin de chaque appel a été armée pour un rejeu. Sans plafond, une fin que la passerelle
+    /// refuse (appel déjà clos, `NOT_A_PARTICIPANT`) se réarmait à CHAQUE reconnexion pour toute la vie du
+    /// processus : deux émissions par reconnexion, jusqu'à vider le quota de fins d'appel — et refuser le
+    /// raccroché d'un vrai appel. Borné en FIFO : un compteur par appel jamais purgé grossissait à chaque appel
+    /// à fin incertaine, pour toute la vie du processus (iPad laissé ouvert des jours).
+    var endReconciliationArmings = BoundedFIFOMap<String, Int>(capacity: CallManager.endReconciliationArmingCapacity)
+    static let maxEndReconciliationArmings = 4
+    static let endReconciliationArmingCapacity = 64
 
     #if canImport(WebRTC)
     /// Paresseux (#7955) : `PiPCallController` monte une vue AVKit à sa naissance.
@@ -902,5 +908,5 @@ final class CallManager: ObservableObject {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

@@ -127,11 +127,12 @@ async function monterAlias(
  * jamais déclaré par `publicProfileSchema`), plus les trois clés FABRIQUÉES
  * par `buildPublicProfile` — `voicePublic`, `isAnonymous`, `isMeeshyer`.
  * Identiques, clé pour clé, aux quinze clés mesurées sur staging par #4449
- * pour ces deux adresses (voir le corps de l'issue).
+ * pour ces deux adresses (voir le corps de l'issue), plus `profileDecor` (#10632,
+ * additif : le contour et la bannière équipés).
  */
 const CLES_PROFIL_ID = [
   'avatar', 'banner', 'bio', 'createdAt', 'displayName', 'firstName', 'id',
-  'isAnonymous', 'isMeeshyer', 'isOnline', 'lastActiveAt', 'lastName', 'role',
+  'isAnonymous', 'isMeeshyer', 'isOnline', 'lastActiveAt', 'lastName', 'profileDecor', 'role',
   'username', 'voicePublic',
 ].sort();
 

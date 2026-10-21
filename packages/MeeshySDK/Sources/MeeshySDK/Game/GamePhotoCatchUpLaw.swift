@@ -40,6 +40,9 @@ public struct PhotoCatchUpStanding: Equatable, Sendable {
     public let treasuryTier: TreasuryTierKey?
     /// La plus longue Flamme (`ladder.steps.flameRecord`, à défaut les jours en cours).
     public let flameRecord: Int
+    /// Le record de chaque cycle clos par un Prestige (`ladder.pastCycleRecords`, #10911) — `nil` devant un serveur
+    /// antérieur. Il dit combien de fois un palier a été atteint (`GamePhotoCatchUpLaw.levelReachCount`).
+    public let pastCycleRecords: [Int]?
 
     public init(
         rank: GloryRank = .murmure,
@@ -48,8 +51,10 @@ public struct PhotoCatchUpStanding: Equatable, Sendable {
         prestige: Int = 0,
         minted: Int = 0,
         treasuryTier: TreasuryTierKey? = nil,
-        flameRecord: Int = 0
+        flameRecord: Int = 0,
+        pastCycleRecords: [Int]? = nil
     ) {
+        self.pastCycleRecords = pastCycleRecords
         self.rank = rank
         self.division = division
         self.levelRecord = levelRecord
@@ -69,7 +74,8 @@ public struct PhotoCatchUpStanding: Equatable, Sendable {
             prestige: game.level.prestige,
             minted: max(0, game.mint.number - 1),
             treasuryTier: game.treasury.tier,
-            flameRecord: max(shown.steps?.flameRecord ?? 0, game.flame.days)
+            flameRecord: max(shown.steps?.flameRecord ?? 0, game.flame.days),
+            pastCycleRecords: shown.pastCycleRecords
         )
     }
 }
@@ -78,7 +84,8 @@ public struct PhotoCatchUpStanding: Equatable, Sendable {
 public enum PhotoStepEmblem: Equatable, Sendable {
     case start
     case rank(GloryRank, division: GloryDivision5?)
-    case tier(LevelTierKey, level: Int)
+    /// `prestige` : le cycle où le palier est atteint ; `times` : combien de cycles l'ont atteint, celui-ci compris (#10911).
+    case tier(LevelTierKey, level: Int, prestige: Int, times: Int)
     case levelHundred
     case prestige(number: Int)
     case meesh(number: Int, edition: MeeshEdition)
@@ -202,10 +209,30 @@ public enum GamePhotoCatchUpLaw {
         return Array(ladder[1...reached])
     }
 
+    /// L'identité d'une étape de PALIER (#10911) — miroir de `photoTierStepId` : celle d'hier au premier cycle, une par
+    /// cycle ensuite (`tier:<palier>:<Prestige>`). Les autres pistes gardent une identité unique.
+    public static func tierStepId(_ tier: LevelTierKey, prestige: Int) -> String {
+        count(prestige) == 0 ? "tier:\(tier.rawValue)" : "tier:\(tier.rawValue):\(count(prestige))"
+    }
+
+    /// Combien de cycles ont atteint ce niveau, le cycle en cours compris (#10911) — miroir de `levelReachCount` : un
+    /// cycle clos dont le record n'a pas été gardé a atteint le niveau du Prestige (100), jamais plus.
+    public static func levelReachCount(_ standing: PhotoCatchUpStanding, level: Int) -> Int {
+        let prestige = count(standing.prestige)
+        let kept = (standing.pastCycleRecords ?? []).prefix(prestige).map { count($0) }
+        let closed = kept + Array(repeating: GameLevels.prestigeLevel, count: prestige - kept.count)
+        return closed.filter { $0 >= level }.count + (count(standing.levelRecord) >= level ? 1 : 0)
+    }
+
     private static func tierSteps(_ standing: PhotoCatchUpStanding) -> [PhotoLawStep] {
         let index = GameLevels.tierIndex(of: count(standing.levelRecord))
         return LevelTierKey.allCases.prefix(index + 1).dropFirst().map { tier in
-            PhotoLawStep(track: .tier, id: "tier:\(tier.rawValue)", emblem: .tier(tier, level: GameLevels.tierStart(of: tier)))
+            let level = GameLevels.tierStart(of: tier)
+            return PhotoLawStep(
+                track: .tier,
+                id: tierStepId(tier, prestige: standing.prestige),
+                emblem: .tier(tier, level: level, prestige: count(standing.prestige), times: levelReachCount(standing, level: level))
+            )
         }
     }
 

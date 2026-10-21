@@ -80,6 +80,9 @@ export type ReachWorld = {
 };
 
 /** Les collections dont l'`insert` brut tient l'index unique PARTIEL de `eventKey`. */
+const idOf = (value: unknown): string =>
+  typeof value === 'object' && value !== null && '$oid' in value ? String((value as { $oid: unknown }).$oid) : String(value);
+
 const KEYED_COLLECTIONS = new Set(['ContentEvent', 'PostImpression']);
 
 export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly ReachGuest[] = [], world: ReachWorld = {}) {
@@ -203,6 +206,23 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
         record('postImpression', 'createMany', args);
         impressions.push(...args.data);
         return { count: args.data.length };
+      }),
+      // Les lignes à clé arrivent par `$runCommandRaw` en JSON étendu (`{ $oid }`) :
+      // une ligne se compare sur ses identifiants NUS, quelle que soit sa voie d'écriture.
+      findFirst: jest.fn(async ({ where }: { where: { postId: string; userId: string } }) =>
+        impressions.find((row) => idOf(row.postId) === where.postId && idOf(row.userId) === where.userId) ?? null),
+      findMany: jest.fn(async ({ where }: { where: { userId: string; postId: { in: string[] }; source?: string } }) =>
+        impressions
+          .map((row, index) => ({ row, index }))
+          .filter(({ row }) => idOf(row.userId) === where.userId && where.postId.in.includes(idOf(row.postId))
+            && (where.source === undefined || row.source === where.source))
+          .map(({ row, index }) => ({ id: String(row.id ?? `impression-${index}`), postId: idOf(row.postId) }))),
+      deleteMany: jest.fn(async ({ where }: { where: { id: { in: string[] } } }) => {
+        record('postImpression', 'deleteMany', { where });
+        const doomed = new Set(where.id.in);
+        const kept = impressions.filter((row, index) => !doomed.has(String(row.id ?? `impression-${index}`)));
+        impressions.splice(0, impressions.length, ...kept);
+        return { count: doomed.size };
       }),
     },
     participant: {

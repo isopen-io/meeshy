@@ -892,4 +892,15 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(endCount, 1,
                        "the CallKit guard's early return must end the task it cannot hand off to the isPlaying sink")
     }
+
+    // MARK: - #10730 — la fin d'une piste n'avance que la file du coordinateur
+
+    func test_init_withConcreteEngine_engineNeverRelaysItsEndToTheLegacyAutoplayRegistry() {
+        let engine = AudioPlaybackManager()
+
+        _ = ConversationAudioCoordinator(engine: engine)
+
+        XCTAssertFalse(engine.relaysEndToAutoplayRegistry,
+                       "la fin d'une piste du coordinateur ne doit avancer que SA file (AudioQueueBuilder) — jamais le registre statique des bulles, qui remonte le fil et rejoue mes propres vocaux (#10730)")
+    }
 }

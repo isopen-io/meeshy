@@ -78,6 +78,34 @@ describe('exportGame', () => {
     const game = await exportGame(db.prisma, USER, PAGE);
 
     expect(game.progress).toMatchObject({ engagementScore: 4000, levelRecord: 20, prestige: 1, publicLeagueConsentVersion: 'v1' });
+  });
+
+  it('exporte les étincelles (cycle, total à vie) et le niveau max à vie en NOMBRES : un BigInt ferait lever JSON.stringify (#10846)', async () => {
+    const db = fakeGameDb();
+    seed(db);
+    Object.assign(db.user.rows[0]!, { sparksSincePrestige: 3000n, sparksEarnedLifetime: 5_000_000_000n, levelMaxLifetime: 52 });
+
+    const game = await exportGame(db.prisma, USER, PAGE);
+
+    expect(game.progress).toMatchObject({ sparks: 4000, sparksCycle: 4000, sparksLifetime: 5_000_000_000, levelMaxLifetime: 52 });
+    expect(() => JSON.stringify(game)).not.toThrow();
+  });
+
+  it('exporte le record de chaque cycle clos par un Prestige (#10911) — une liste vide pour un compte qui n’en a pas', async () => {
+    const db = fakeGameDb();
+    seed(db);
+    Object.assign(db.user.rows[0]!, { prestige: 2, prestigeLevelRecords: [150, 100] });
+
+    const game = await exportGame(db.prisma, USER, PAGE);
+
+    expect(game.progress).toMatchObject({ prestige: 2, prestigeLevelRecords: [150, 100] });
+  });
+
+  it('rend les réglages, le pseudonyme et chaque liste du compte', async () => {
+    const db = fakeGameDb();
+    seed(db);
+    const game = await exportGame(db.prisma, USER, PAGE);
+
     expect(game.settings).toMatchObject({ showcaseVisibility: 'friends', atlasVisibility: 'me', showcaseOrder: ['trophy.prestige.1'] });
     expect(game.pseudonym).toMatchObject({ pseudonym: 'Colibri-0001', kind: 'drawn' });
     expect(game.leagueHistory).toHaveLength(1);

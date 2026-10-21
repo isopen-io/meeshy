@@ -7,7 +7,7 @@ import MeeshySDK
 import os
 import UIKit
 
-private nonisolated let containerLogger = Logger(subsystem: "me.meeshy.app", category: "dependency-container")
+private nonisolated let containerLogger = MeeshyLog.logger(.dependencyContainer)
 
 /// Diagnostic record produced by ``DependencyContainer`` boot.
 ///
@@ -502,17 +502,38 @@ final class DependencyContainer {
                     await SocialEventsV2Outbox.shared.purgeAll()
                     SocialNotificationInbox.shared.purge()
                     await MainActor.run { RecentDisplayCaptureSource.shared.reset() }
+                    // La présence vue (carte + fichier sans compte) appartient au
+                    // compte sortant : le suivant ne la reçoit jamais du serveur.
+                    await MainActor.run { DependencyContainer.resetInMemoryAccountState() }
+                    ContactResolveService.shared.purge()
                     await PendingStatusQueue.shared.clearAll()
                     // #8656 — les brouillons de commentaire sont rangés par post,
                     // sans compte : un post vu des deux comptes rendait au
                     // second le brouillon du premier.
                     await MainActor.run { CommentDraftStore.shared.clearAll() }
-                    // #8848 — la création en cours du composer appartient au
-                    // compte sortant, comme son brouillon de story (E9).
+                    // #8848 — création du composer (E9) et copies temporaires du glisser : au compte sortant.
                     ComposerAutosaveStore.shared.deleteAll()
+                    BubbleDragScratch.purge()
                 }
             }
             .store(in: &cancellables)
+    }
+
+    /// L'état « par compte » tenu en mémoire hors des bases, rendu vierge à la
+    /// déconnexion : la présence vue, les contours de story, les amis du `@`,
+    /// les relations des fiches contact, la citation du brouillon de
+    /// commentaire, les rappels de série, les protections armées — et la
+    /// preuve « déchiffré sur cet appareil » (#11212), que le compte suivant
+    /// n'hérite jamais.
+    private static func resetInMemoryAccountState() {
+        PresenceManager.shared.resetForLogout()
+        StoryViewerParticipationStore.shared.resetForLogout()
+        MentionContactsStore.shared.resetForLogout()
+        CommentQuotationStore.shared.clearAll()
+        StreakReminderScheduler.shared.annulerTout()
+        ConversationProtectionPreferenceStore.shared.purgeAll()
+        ArrivalCelebrationController.shared.resetForLogout()
+        DecryptedMessageLedger.shared.removeAll()
     }
 
     // MARK: - Recovery (P1.5 — no more fatalError on DB init)

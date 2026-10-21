@@ -17,6 +17,7 @@ import CoreGraphics
 /// La garde du site épingle au passage l'habillage de la barre (échelle 2, sans
 /// capsule) : c'est le même arbitrage porteur, et le rendre au site est la seule
 /// preuve que la barre commandée est celle qui se monte.
+@MainActor
 final class StoryReactionStripGestureTests: XCTestCase {
 
     // MARK: - 1 · La loi
@@ -275,7 +276,8 @@ final class StoryReactionStripGestureTests: XCTestCase {
     }
 
     private func contentSource() throws -> String {
-        try strippedSource(at: "Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+        // L'unité de `StoryViewerView+Content` : le drag du lecteur vit dans `+Content+Gestures`.
+        Self.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift"))
     }
 
     /// COMMENTAIRES RETIRÉS : une garde qui compte des occurrences dans un

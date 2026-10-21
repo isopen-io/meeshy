@@ -6,6 +6,9 @@ import { unwrap } from './client';
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
 import type { Participant } from './types';
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+
+import { servedRingOf } from '@/lib/profile-decor/author-ring';
 import { participantAvatarOf } from '@/lib/view/conversation';
 
 /**
@@ -21,8 +24,10 @@ import { participantAvatarOf } from '@/lib/view/conversation';
  * une forme APLATIE, où la photo est DÉJÀ résolue et où `username` vaut le
  * NOM LOCAL quand le participant n'a pas de compte — d'où la règle ci-dessous.
  *
- * La présence n'est pas lue ici : la feuille n'en peint aucune, et la
- * passerelle ne la sert qu'aux amis (directive 2026-08-25).
+ * La présence n'est pas lue ici, même servie (aux amis seuls, directive
+ * 2026-08-25) : la page est persistée, et la présence d'autrui n'entre dans
+ * aucun cache persisté (D-60). Chaque rangée la lit dans la carte vivante
+ * (`MemberAvatar`, #10944).
  */
 export type ConversationMember = {
   readonly id: string;
@@ -33,6 +38,8 @@ export type ConversationMember = {
   readonly avatar: string | undefined;
   /** `creator` · `admin` · `moderator` · `member`, tel que la conversation le stocke. */
   readonly role: string;
+  /** Le contour d'avatar équipé (#10713), servi avec la ligne ; absent sans lui. */
+  readonly ring?: ServedProfileDecorItem;
 };
 
 export type ConversationMembersPage = {
@@ -64,6 +71,7 @@ const WireMember = z.object({
   lastName: text,
   avatar: text,
   conversationRole: text,
+  profileDecor: z.optional(z.unknown()),
 });
 
 const WirePagination = z.object({
@@ -71,6 +79,11 @@ const WirePagination = z.object({
   nextCursor: text,
   totalCount: z.optional(z.number()),
 });
+
+const ringOf = (person: unknown): { readonly ring?: ServedProfileDecorItem } => {
+  const ring = servedRingOf(person);
+  return ring === null ? {} : { ring };
+};
 
 const present = (value: string | null | undefined): string | undefined =>
   typeof value === 'string' && value.trim() !== '' ? value : undefined;
@@ -90,6 +103,7 @@ export function decodeConversationMember(raw: unknown): ConversationMember | nul
     displayName: present(wire.displayName) ?? present(fullName) ?? username ?? '',
     avatar: present(wire.avatar),
     role: present(wire.conversationRole) ?? 'member',
+    ...ringOf(raw),
   };
 }
 
@@ -108,6 +122,7 @@ export function memberFromParticipant(participant: Participant): ConversationMem
     displayName: present(participant.displayName) ?? present(participant.user?.displayName) ?? username ?? '',
     avatar: participantAvatarOf(participant),
     role: present(participant.role) ?? 'member',
+    ...ringOf(participant),
   };
 }
 

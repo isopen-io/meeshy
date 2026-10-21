@@ -222,7 +222,11 @@ struct ProgressionConceptContent: View {
     private var gestures: some View {
         ProgressionConceptGestures(
             concept: concept, viewModel: viewModel, progress: progress, game: game, isDark: isDark,
-            onOpenLink: onOpenLink, onReveal: onReveal
+            onOpenLink: onOpenLink, onReveal: onReveal,
+            // La fin de mission se photographie (#10816) : le déroulé de la fiche, celui des propositions.
+            onPhotoMission: prefs.prefs.offersPhotos ? { [photos] mission in
+                photos.start(GamePhotoMoments.mission(id: mission.id, templateKey: mission.templateKey, target: mission.target))
+            } : nil
         )
     }
 
@@ -344,6 +348,7 @@ struct ProgressionConceptGestures: View {
     let isDark: Bool
     let onOpenLink: (ProgressionConceptLink) -> Void
     let onReveal: (ProgressionRevealRequest) -> Void
+    var onPhotoMission: ((GameBlock.Mission) -> Void)?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -386,7 +391,7 @@ struct ProgressionConceptGestures: View {
                 // LE héro de frappe — le SEUL du jeu (#9537).
                 GameMintPreviewView(
                     game: game, convertible: progress.meesh?.debitablePoints,
-                    badgesLost: viewModel.mintBadgeImpact?.lost, online: viewModel.isOnline,
+                    online: viewModel.isOnline,
                     minting: viewModel.isMinting, error: viewModel.mintError,
                     celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
                 )
@@ -424,7 +429,8 @@ struct ProgressionConceptGestures: View {
                     game: game, online: viewModel.isOnline, pendingRerollId: viewModel.pending.rerollMissionId,
                     chestOpening: viewModel.pending.chest, errors: viewModel.gameErrors,
                     onReroll: { id in Task { await viewModel.reroll(missionId: id) } },
-                    onClaim: { Task { await viewModel.claimChest() } }
+                    onClaim: { Task { await viewModel.claimChest() } },
+                    onPhotoMission: onPhotoMission
                 )
             }
         case .league:

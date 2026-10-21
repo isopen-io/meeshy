@@ -15,6 +15,11 @@ public enum ClientCapability: String, CaseIterable, Sendable {
     /// `/me/onboarding` (#9927) : la passerelle ne les sert qu'à qui sait les
     /// dessiner.
     case onboardingAge = "onboarding-age"
+    /// Le lien de connexion lié à l'appareil (#10872) : ce binaire présente son
+    /// secret et sait demander « Se connecter en tant que @x ? ». Sans elle, un
+    /// iOS < 1.1.4 garde la connexion directe pendant la transition (#10878) —
+    /// les builds de dev et TestFlight qui portent #10872 s'annoncent encore 1.1.3.
+    case linkDeviceBinding = "link-device-binding"
 }
 
 public enum ClientCapabilities {

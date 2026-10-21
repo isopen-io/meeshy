@@ -26,6 +26,7 @@ import deSignup from './catalog-de-signup';
 import deGallery from './catalog-de-gallery';
 import deMessageCard from './catalog-de-message-card';
 import deMentions from './catalog-de-mentions';
+import deShellLabels from './catalog-de-shell-labels';
 import deStudioChrome from './catalog-de-studio-chrome';
 import deEphemeral from './catalog-de-ephemeral';
 import deWriteRestriction from './catalog-de-write-restriction';
@@ -39,7 +40,9 @@ import deDownload from './catalog-de-download';
 import dePhonePrompt from './catalog-de-phone-prompt';
 import deUserProfile from './catalog-de-user-profile';
 import deContentRefused from './catalog-de-content-refused';
+import deContentRemoval from './catalog-de-content-removal';
 import dePublicEntry from './catalog-de-public-entry';
+import deThreadSearch from './catalog-de-thread-search';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -306,6 +309,7 @@ const de = {
   'notFound.title': 'Diese Adresse gibt es nicht.',
 
   'pending.back': 'Zurück zu den Unterhaltungen',
+  'pending.screen': 'Der Bildschirm wird geladen',
 
   'linkPage.home': 'Zurück zu Meeshy',
   'linkPage.retry': 'Erneut versuchen',
@@ -322,8 +326,6 @@ const de = {
   'trackingLink.opening': 'Link wird geöffnet…',
   'trackingLink.dead.title': 'Dieser Link ist nicht mehr verfügbar',
   'trackingLink.dead.body': 'Er ist abgelaufen, wurde deaktiviert oder hat nie existiert.',
-  'accountDeletion.incomplete.title': 'Unvollständiger Link',
-  'accountDeletion.incomplete.body': 'Diesem Link fehlen die nötigen Angaben. Melde dich an, um die Löschung deines Kontos zu beantragen.',
   'accountDeletion.confirm.title': 'Löschung deines Kontos bestätigen',
   'accountDeletion.confirm.body':
     'Dein Konto wird nach einer Karenzzeit von 30 Tagen deaktiviert. Bis dahin kannst du es dir über den Link „Abbrechen“ in der E-Mail anders überlegen.',
@@ -1054,6 +1056,7 @@ const de = {
   'message.detail.language.original': '{language} (Original)',
 
   ...deMentions,
+  ...deShellLabels,
   ...deStudioChrome,
   ...deEphemeral,
   ...deWriteRestriction,
@@ -1070,7 +1073,9 @@ const de = {
   ...deContactDiscovery,
   ...deUserProfile,
   ...deContentRefused,
+  ...deContentRemoval,
   ...dePublicEntry,
+  ...deThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default de;

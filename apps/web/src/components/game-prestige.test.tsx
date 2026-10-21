@@ -35,7 +35,7 @@ const props = (score = levelThreshold(100) + 40, prestige = 1, patch: Partial<Ga
 
 /**
  * LE PRESTIGE (#9389) — proposition, explication par Mee et Meo, confirmation
- * qui dit ce qui repart ET la perte d’accès à la ligue et au duo, passage. Pas
+ * qui dit ce qui repart ET que la ligue et le duo restent ouverts, passage. Pas
  * de passage sans confirmation.
  */
 describe('la proposition au niveau 100', () => {
@@ -43,15 +43,15 @@ describe('la proposition au niveau 100', () => {
 
   test('Mee et Meo expliquent : ce qui repart, ce qu’on gagne', () => {
     const t = text(html);
-    expect(t).toContain('tu peux passer en Prestige, ou continuer à monter');
-    expect(t).toContain('Ton niveau repart à 1');
-    expect(t).toContain(`${formatCount(GLORY_POINTS.prestige, 'fr').replace(/\s/g, ' ')} de Gloire`);
+    expect(t).toContain('ta lumière peut renaître, ou grandir encore');
+    expect(t).toContain('ton niveau repart à 1 et tes étincelles à 0. Ce que tu as reçu depuis toujours et ta plus haute lumière restent gravés');
+    expect(t).toContain(`${formatCount(GLORY_POINTS.prestige, 'fr').replace(/\s/g, ' ')} de gloire`);
     expect(html).toContain('data-game-bird="meeGuide"');
     expect(html).toContain('data-game-bird="meoGuide"');
   });
 
   test('les étoiles déjà posées sont dites et dessinées ; sans étoile, pas de trophée', () => {
-    expect(text(html)).toContain('Étoiles : 1 sur 5');
+    expect(text(html)).toContain('Renaissances : 1 sur 5');
     expect(html).toContain('data-game-prestige-star');
     const withStar = renderToStaticMarkup(<GamePrestige {...props(undefined, 0)} />);
     expect(withStar).not.toContain('data-game-prestige-trophy');
@@ -66,22 +66,22 @@ describe('la proposition au niveau 100', () => {
     expect(host.querySelector('[data-game-prestige-confirm]')).not.toBeNull();
   });
 
-  test('la confirmation dit ce qui repart, ce qui reste, et la perte de la ligue et du duo', async () => {
+  test('la confirmation dit ce qui repart, ce qui reste, et que la ligue et le duo restent ouverts', async () => {
     const host = await mount(<GamePrestige {...props()} />);
     await click(host.querySelector('[data-game-prestige-go]'));
     const t = host.textContent ?? '';
-    expect(t).toContain('Passer en Prestige 2 ?');
+    expect(t).toContain('Commencer ta Renaissance 2 ?');
     expect(t).toContain('Ce qui repart');
     expect(t).toContain('Ce qui reste');
-    expect(t).toContain('ligue (niveau 10) et ton duo (niveau 20) se referment');
+    expect(t).toContain('joute (niveau 10) et ton alliance (niveau 20) restent ouvertes, car elles lisent ta plus haute lumière');
   });
 
-  test('la confirmation donne les VALEURS avant → après : points en poche, niveau, record, étoiles, Gloire (#9705)', async () => {
+  test('la confirmation donne les VALEURS avant → après : étincelles convertibles, niveau, record, étoiles, Gloire (#9705)', async () => {
     const host = await mount(<GamePrestige {...props()} />);
     await click(host.querySelector('[data-game-prestige-go]'));
     const plain = (value: string): string => value.replace(/\s/g, ' ');
     const rows = plain(text(host.querySelector('[data-game-prestige-values]')?.innerHTML ?? ''));
-    expect(rows).toContain(plain(`En poche ${formatCount(props().score, 'fr')} points → 0 point`));
+    expect(rows).toContain(plain(`Ta lumière ${formatCount(props().score, 'fr')} étincelles → 0 étincelle`));
     expect(rows).toContain('Niveau 100 → 1');
     expect(rows).toContain('Étoiles 1 → 2');
     expect(rows).toContain(plain(`Gloire +${formatCount(GLORY_POINTS.prestige, 'fr')}`));
@@ -90,7 +90,7 @@ describe('la proposition au niveau 100', () => {
   test('la confirmation dit que le consentement à la ligue publique reste enregistré', async () => {
     const host = await mount(<GamePrestige {...props()} />);
     await click(host.querySelector('[data-game-prestige-go]'));
-    expect(host.textContent ?? '').toContain('Ton consentement à la ligue publique reste enregistré : tu retrouves ta ligue au niveau 10.');
+    expect(host.textContent ?? '').toContain('Ton accord pour la joute publique reste enregistré.');
   });
 
   test('confirmer envoie UN passage, et l’écran annonce la nouvelle étoile', async () => {
@@ -99,10 +99,10 @@ describe('la proposition au niveau 100', () => {
     await click(host.querySelector('[data-game-prestige-go]'));
     await click(host.querySelector('[data-game-prestige-confirm-go]'));
     expect(passes).toBe(1);
-    expect(host.textContent).toContain('Prestige 2 !');
+    expect(host.textContent).toContain('Renaissance 2 !');
   });
 
-  test('« Garder mon niveau » referme la confirmation sans rien envoyer', async () => {
+  test('« Garder ma lumière » referme la confirmation sans rien envoyer', async () => {
     let passes = 0;
     const host = await mount(<GamePrestige {...props(undefined, 1, { onPass: () => (passes += 1) })} />);
     await click(host.querySelector('[data-game-prestige-go]'));
@@ -121,9 +121,9 @@ describe('la proposition au niveau 100', () => {
     const host = await mount(<GamePrestige {...props()} />);
     await click(host.querySelector('[data-game-prestige-go]'));
     await click(host.querySelector('[data-game-prestige-confirm-go]'));
-    expect(host.textContent).toContain('Prestige 2 !');
-    await rerender(host, <GamePrestige {...props(undefined, undefined, { error: 'Le Prestige s’ouvre au niveau 100.' })} />);
-    expect(host.textContent).not.toContain('Prestige 2 !');
+    expect(host.textContent).toContain('Renaissance 2 !');
+    await rerender(host, <GamePrestige {...props(undefined, undefined, { error: 'La Renaissance s’ouvre au niveau 100.' })} />);
+    expect(host.textContent).not.toContain('Renaissance 2 !');
     expect(host.textContent).toContain('s’ouvre au niveau 100');
   });
 });
@@ -139,7 +139,7 @@ describe('les états fermés', () => {
 
   test('aux cinq étoiles : on le fête, aucune offre', () => {
     const html = renderToStaticMarkup(<GamePrestige {...props(levelThreshold(100) + 40, 5)} />);
-    expect(text(html)).toContain('les cinq étoiles');
+    expect(text(html)).toContain('ses cinq renaissances');
     expect(html).not.toContain('data-game-prestige-go');
   });
 });

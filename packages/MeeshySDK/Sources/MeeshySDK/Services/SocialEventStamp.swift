@@ -36,6 +36,13 @@ public struct SocialEventStamp: Codable, Sendable, Equatable, Hashable {
         )
     }
 
+    /// Le premier contact d'une session (#10764) : un identifiant stable mais
+    /// DISTINCT de celui de la mesure finale (le reçu de rejeu ne doit pas
+    /// confondre les deux réceptions), daté du début de la séance.
+    public static func startOf(_ session: EngagementSession) -> SocialEventStamp {
+        SocialEventStamp(eventId: stableEventId(from: "dwell-start:" + session.sessionId), occurredAt: session.startedAt)
+    }
+
     /// Un identifiant d'événement STABLE dérivé d'une clé durable (identifiant
     /// de séance, `cmid_<uuid>` d'une file hors ligne) : la même clé rend
     /// toujours le même UUID. Une clé qui n'est pas un UUID est hachée.
@@ -108,6 +115,9 @@ public struct StampedSocialEvent: Codable, Sendable, Equatable {
     ) -> StampedSocialEvent {
         if case .dwell(let session) = event {
             return StampedSocialEvent(event: event, stamp: .of(session))
+        }
+        if case .dwellStart(let session) = event {
+            return StampedSocialEvent(event: event, stamp: .startOf(session))
         }
         return StampedSocialEvent(event: event, stamp: .minted(at: occurredAt, newId: newId))
     }

@@ -34,7 +34,7 @@ final class StoryInteractionService {
     /// Le rail de la story pose l'anneau du cœur sur « Commentaires » quand le lecteur
     /// a commenté (directive porteur 2026-10-01) ; la passerelle ne le sert pas.
     private let participation: StoryViewerParticipationRecording
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "story.interaction")
+    private static let logger = MeeshyLog.logger(.storyInteraction)
 
     init(api: APIClientProviding = APIClient.shared,
          participation: StoryViewerParticipationRecording? = nil) {
@@ -90,7 +90,7 @@ final class StoryInteractionService {
     /// list / show empty state"; an empty array means "loaded, no one
     /// has seen this story yet".
     func loadViewers(storyId: String) async -> [StoryViewerSnapshot]? {
-        guard case .loaded(let snapshots) = await loadViewerList(postId: storyId) else { return nil }
+        guard case .loaded(let snapshots, _) = await loadViewerList(postId: storyId) else { return nil }
         return snapshots
     }
 
@@ -117,7 +117,7 @@ final class StoryInteractionService {
                     reactionEmoji: wire.engagement.latestReaction ?? wire.reaction,
                     engagement: wire.engagement
                 )
-            })
+            }, response.data.counts)
         } catch MeeshyError.forbidden(_, _) {
             return .forbidden
         } catch {
@@ -205,11 +205,34 @@ struct StoryViewersWireResponse: Decodable {
         }
     }
     let viewers: [Viewer]
+    let counts: ViewerListCounts
+
+    private enum CodingKeys: String, CodingKey {
+        case viewers, viewCount, impressionCount, anonymousViewCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        viewers = try container.decode([Viewer].self, forKey: .viewers)
+        counts = ViewerListCounts(
+            viewCount: try? container.decodeIfPresent(Int.self, forKey: .viewCount),
+            impressionCount: try? container.decodeIfPresent(Int.self, forKey: .impressionCount),
+            anonymousViewCount: try? container.decodeIfPresent(Int.self, forKey: .anonymousViewCount)
+        )
+    }
+}
+
+/// Les compteurs que la passerelle relit dans la MÊME lecture que la liste des
+/// vues (#11065) — `nil` d'un serveur antérieur, qui ne les sert pas.
+struct ViewerListCounts: Equatable {
+    let viewCount: Int?
+    let impressionCount: Int?
+    let anonymousViewCount: Int?
 }
 
 /// L'issue d'une lecture de la liste des vues (#9727) — voir `loadViewerList`.
 enum ViewerListOutcome {
-    case loaded([StoryViewerSnapshot])
+    case loaded([StoryViewerSnapshot], ViewerListCounts)
     case forbidden
     case failed
 }

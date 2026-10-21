@@ -1,4 +1,7 @@
-import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
+import type { NotificationAction, SocialEventV2Input } from '@/lib/api/social-events-v2-types';
+import type { NotificationChannel } from '@meeshy/shared/types/social-events-v2';
+
+import { appelNatifMethode, type CoqueNative } from '@/lib/native-shell';
 
 /**
  * **L'ENTONNOIR DES NOTIFICATIONS, CÔTÉ PAGE** (#10507) — le service worker
@@ -24,6 +27,37 @@ type IdbDatabase = {
 };
 type IdbOpenRequest = IdbRequest & { onupgradeneeded: ((event: unknown) => void) | null };
 export type IdbFactoryLike = { open(name: string, version?: number): IdbOpenRequest };
+
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+const TECHNICAL_CODE = /^[A-Za-z0-9_.:-]{1,64}$/;
+
+const textOf = (value: unknown): string => (typeof value === 'string' ? value.trim() : '');
+
+/**
+ * L'événement d'une notification depuis la `data` de son push — JUMEAU
+ * d'`evenementDeNotification` (`sw-push.js`) et de `SocialNotificationEvents`
+ * (iOS) : l'identifiant de la notification, son type et le post visé, jamais
+ * un titre ni un corps. `null` sans identifiant vérifiable par la passerelle.
+ */
+export function notificationEventOf(
+  data: unknown,
+  action: NotificationAction,
+  channel: NotificationChannel,
+): SocialEventV2Input | null {
+  const fields = data !== null && typeof data === 'object' ? (data as Readonly<Record<string, unknown>>) : {};
+  const id = textOf(fields.notificationId);
+  if (!OBJECT_ID.test(id)) return null;
+  const postId = textOf(fields.postId);
+  const type = textOf(fields.type);
+  return {
+    type: 'notification',
+    action,
+    target: { kind: 'notification', id, ...(OBJECT_ID.test(postId) ? { parent: { kind: 'post', id: postId } } : {}) },
+    surface: 'notifications',
+    channel,
+    ...(TECHNICAL_CODE.test(type) ? { notificationType: type } : {}),
+  };
+}
 
 const isNotificationEvent = (value: unknown): value is SocialEventV2Input =>
   value !== null && typeof value === 'object' && (value as { readonly type?: unknown }).type === 'notification';
@@ -84,6 +118,36 @@ export async function drainNotificationTelemetry(
   const pending = await takeAll(db);
   db.close();
   const events = pending.filter(isNotificationEvent);
+  events.forEach(record);
+  return events.length;
+}
+
+const shellEventOf = (line: unknown): SocialEventV2Input | null => {
+  if (typeof line !== 'string') return null;
+  try {
+    const event: unknown = JSON.parse(line);
+    return isNotificationEvent(event) && (event as { readonly channel?: unknown }).channel === 'fcm' ? event : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * **CE QUE LA COQUE ANDROID A NOTÉ APP FERMÉE** (#10938) — une bannière posée
+ * par FCM lui-même ne passe ni par le plugin ni par la page : le natif la note
+ * (`NotificationFunnelRules`, jumeau de `sw-push.js`) et la page la vide ici,
+ * au démarrage, à côté de la file du worker. Un navigateur, ou une coque
+ * construite avant la méthode, ne verse rien.
+ */
+export async function drainShellNotificationTelemetry(
+  coque: CoqueNative | undefined,
+  record: (event: SocialEventV2Input) => void,
+): Promise<number> {
+  const drain = appelNatifMethode(coque, 'MeeshyNotificationSettings', 'drainNotificationEvents');
+  if (drain === null) return 0;
+  const result = await drain({}).catch((): unknown => null);
+  const lines = result !== null && typeof result === 'object' ? (result as { readonly events?: unknown }).events : undefined;
+  const events = (Array.isArray(lines) ? lines : []).map(shellEventOf).filter((event) => event !== null);
   events.forEach(record);
   return events.length;
 }

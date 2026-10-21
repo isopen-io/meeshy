@@ -18,12 +18,69 @@ enum PlayerBannerCopy {
         PlayerBannerView.Texts(
             points: GameText.bannerPoints(points: GameCopy.formatCount(banner.score)),
             missing: banner.pointsToNext.map {
-                GameText.bannerMissing(points: GameCopy.formatCount($0), level: GameCopy.formatCount(banner.nextLevel ?? banner.level + 1))
+                GameText.bannerMissing(points: GameCopy.compactCount($0), level: GameCopy.formatCount(banner.nextLevel ?? banner.level + 1))
             },
             meeshes: banner.meeshes.map { GameCopy.formatCount($0) },
             place: banner.league.map { GameText.bannerPlace(count: $0.place) },
-            flameDays: banner.flame.map { GameCopy.formatCount($0.days) }
+            flameDays: banner.flame.map { GameCopy.formatCount($0.days) },
+            trophies: banner.trophies.map { GameCopy.formatCount($0) },
+            mission: banner.dailyMission.map { "\(GameCopy.formatCount($0.done))/\(GameCopy.formatCount($0.total))" },
+            season: banner.season.map { seasonShort($0.number) },
+            rank: banner.rank.map { GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic) },
+            gloryMissing: banner.rank.map(gloryMissing),
+            pieceLabels: Dictionary(uniqueKeysWithValues: banner.pieces.map { ($0, pieceLabel($0, banner)) })
         )
+    }
+
+    /// « 5 543 vers Passeur II », ou « Gloire 990 k » quand il n'y a plus de marche.
+    static func gloryMissing(_ rank: GamePlayerBanner.Rank) -> String {
+        guard let next = rank.next, let missing = rank.gloryMissing else {
+            return GameText.bannerGloryTotal(points: GameCopy.compactCount(rank.glory))
+        }
+        return GameText.bannerGloryMissing(points: GameCopy.compactCount(missing),
+                                           rank: GameCopy.rankLabel(next.rank, division5: next.shownDivision))
+    }
+
+    /// « S1 ».
+    static func seasonShort(_ number: Int) -> String {
+        String(localized: "game2.banner.season.short", defaultValue: "S\(GameCopy.formatCount(number))", bundle: .main)
+    }
+
+    /// Ce que dit VoiceOver de CHAQUE pièce-bouton (#10846) — elle ouvre sa fiche.
+    static func pieceLabel(_ piece: GamePlayerBanner.Piece, _ banner: GamePlayerBanner) -> String {
+        switch piece {
+        case .level:
+            let toNext = banner.nextLevel.map {
+                GameText.bannerToNext(percent: GameCopy.formatCount(banner.percent), level: GameCopy.formatCount($0))
+            } ?? GameCopy.levelTopShort(cap: banner.levelCap)
+            return [GameText.bannerLevel(level: GameCopy.formatCount(banner.level)), GameCopy.tierName(banner.tier), toNext]
+                .joined(separator: GameText.bannerSeparator)
+        case .sparks:
+            return GameSparksCopy.sparks(banner.score)
+        case .meesh:
+            return GameCopy.meeshes(banner.meeshes ?? 0)
+        case .rank:
+            return banner.rank.map {
+                [GameCopy.rankLabel($0.rank, division5: $0.division, mythic: $0.mythic), gloryMissing($0)].joined(separator: GameText.bannerSeparator)
+            } ?? ""
+        case .league:
+            return banner.league.map {
+                GameText.bannerLeague(league: GameText.leagueName($0.league), place: GameText.bannerPlace(count: $0.place))
+            } ?? ""
+        case .flame:
+            return banner.flame.map { GameText.bannerFlame(days: GameCopy.days($0.days)) } ?? ""
+        case .trophies:
+            let count = banner.trophies ?? 0
+            return String(localized: "game2.banner.trophies.a11y", defaultValue: "Trophées : \(GameCopy.formatCount(count))", bundle: .main)
+        case .mission:
+            let mission = banner.dailyMission ?? .init(done: 0, total: 0)
+            return String(localized: "game2.banner.mission.a11y",
+                          defaultValue: "Rêve : \(GameCopy.formatCount(mission.done)) sur \(GameCopy.formatCount(mission.total))",
+                          bundle: .main)
+        case .season:
+            return String(localized: "game2.banner.season.a11y",
+                          defaultValue: "Voyage \(GameCopy.formatCount(banner.season?.number ?? 0))", bundle: .main)
+        }
     }
 
     /// Ce que lit VoiceOver, en UNE phrase et dans l'ordre de la bannière : « Niveau 34, Éclat, 78 % vers le 35,

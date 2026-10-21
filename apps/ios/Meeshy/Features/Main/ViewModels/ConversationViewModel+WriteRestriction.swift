@@ -25,7 +25,7 @@ extension ConversationViewModel {
     func withdrawRefusedMessage(tempId: String, restriction: ConversationWriteRestriction) async {
         Logger.messages.warning("perf:ios.send.fail.write-restricted clientMessageId=\(tempId, privacy: .public) restriction=\(restriction.wireValue, privacy: .public)")
         learnedWriteRestriction = restriction
-        try? await messagePersistence.purgeMessages(ids: [tempId])
+        await sendCoordinator.withdraw(localId: tempId)
         await ConversationSyncEngine.shared.withdrawLocalMessage(conversationId: conversationId, messageId: tempId)
     }
 
@@ -35,8 +35,8 @@ extension ConversationViewModel {
     /// temps, dans sa langue.
     func holdForSlowMode(tempId: String, slowMode: NewcomerSlowMode, error: Error) async {
         Logger.messages.warning("perf:ios.send.fail.slow-mode clientMessageId=\(tempId, privacy: .public) retryAfter=\(slowMode.retryAfterSeconds, privacy: .public)")
-        _ = try? await messagePersistence.applyEvent(localId: tempId, event: .sendFailed(error))
-        _ = try? await messagePersistence.applyEvent(localId: tempId, event: .retryExhausted)
+        await sendCoordinator.recordFailure(error, localId: tempId)
+        await sendCoordinator.exhaust(localId: tempId)
         FeedbackToastManager.shared.showError(Self.slowModeNotice(slowMode))
     }
 

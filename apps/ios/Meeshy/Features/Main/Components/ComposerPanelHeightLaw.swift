@@ -1,4 +1,5 @@
 import CoreGraphics
+import SwiftUI
 
 /// Hauteur du panneau (+) du composeur — source unique, testée dans
 /// `ComposerPanelHeightLawTests` (#8869).
@@ -27,6 +28,12 @@ nonisolated enum ComposerPanelHeightLaw {
     /// barre d'outils du composeur, sa ligne de saisie et un bandeau de
     /// conversation. Sur un écran court (paysage) ce plafond l'emporte.
     static let composerChromeReserve: CGFloat = 180
+
+    /// Le plancher de la grille des médias récents : sa largeur, pas l'appareil. Une colonne de largeur iPhone
+    /// (Slide Over, Split View étroit, petite fenêtre Stage Manager) garde le plancher d'iPhone.
+    static func recentMediaFloor(horizontalSizeClass: UserInterfaceSizeClass?) -> CGFloat {
+        horizontalSizeClass == .regular ? 460 : 324
+    }
 
     /// Hauteur libérée par un clavier, lue sur sa trame de FIN.
     ///

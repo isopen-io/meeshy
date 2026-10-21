@@ -21,7 +21,7 @@ final class AvatarMoodCoverageTests: XCTestCase {
 
     private func stripped(_ relativePath: String) throws -> String {
         let url = appRoot.appendingPathComponent(relativePath)
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     private let views = "Meeshy/Features/Main/Views/"
@@ -42,7 +42,7 @@ final class AvatarMoodCoverageTests: XCTestCase {
 
     func test_profileView_mountsTheAvatarThatCarriesMyMood() throws {
         XCTAssertTrue(
-            try stripped(views + "ProfileView.swift").contains("ProfileOwnAvatar(user: user, accentColor: accentColor, isEditing: isEditing)"),
+            try stripped(views + "ProfileView.swift").contains("ProfileOwnAvatar(user: user, accentColor: user?.profileAccentHex ?? accentColor, isEditing: isEditing)"),
             "l'écran de mon profil peint mon avatar par ProfileOwnAvatar — sans lui, mon humeur manque sur le seul écran qui me présente"
         )
     }
@@ -104,7 +104,7 @@ final class AvatarMoodCoverageTests: XCTestCase {
             .filter { $0.pathExtension == "swift" }
         var sites = 0
         for file in files {
-            let code = AppSourceGuard.stripComments(try String(contentsOf: file, encoding: .utf8))
+            let code = AppSourceGuard.stripComments(try AppSourceGuard.text(at: file))
             for call in Self.calls(of: "UserProfileSheet(", in: code) {
                 sites += 1
                 XCTAssertTrue(call.contains("moodEmoji:"), "\(file.lastPathComponent) présente un profil sans son humeur")

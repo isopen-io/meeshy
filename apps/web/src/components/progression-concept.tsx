@@ -20,10 +20,10 @@ import { GlyphSvg } from '@/components/glyph';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { shownLevelOf } from '@/lib/game/ladder';
 import type { EngagementWithGame } from '@/lib/api/engagement';
-import { gameText, shownRank } from '@/lib/view/game-copy';
+import { shownRank } from '@/lib/view/game-copy';
 import { progressPercent } from '@/lib/view/progression';
 import type { ElementDetail } from '@/lib/view/game-detail';
-import type { ConceptChipView, ConceptView } from '@/lib/view/progression-concepts';
+import type { ConceptView, FactId } from '@/lib/view/progression-concepts';
 import { Link } from '@/routes/route-table';
 
 import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2, GAME_WARM } from './game-surface';
@@ -92,66 +92,6 @@ export function ConceptEmblem({ concept, view, size }: { readonly concept: Progr
     case 'atlas':
       return <AtlasStamp code={game?.atlas?.stamps[0]?.language ?? null} size={size} />;
   }
-}
-
-/**
- * UNE CHIP NE SE COUPE JAMAIS (#9563) : `whitespace-nowrap` sur la chip,
- * `flex-wrap` sur sa rangée — une rangée trop longue passe à la ligne ENTRE deux
- * chips. Un libellé trop long se raccourcit dans le catalogue.
- *
- * ET ELLE N'ÉLARGIT JAMAIS SA CARTE (amendement n° 3) : `max-w-full` la borne à
- * sa rangée, `truncate` la coupe d'une ellipse en DERNIER recours — un texte
- * agrandi par le système, une valeur que personne n'avait prévue.
- */
-export function ConceptChip({ children, tint = 'var(--color-ios-ink-3)', urgent = false }: { readonly children: ReactNode; readonly tint?: string; readonly urgent?: boolean }) {
-  return (
-    <span
-      data-chip=""
-      {...(urgent ? { 'data-chip-urgent': '' } : {})}
-      className="max-w-full truncate whitespace-nowrap rounded-chip px-2.5 py-1 text-check font-semibold"
-      style={{ backgroundColor: `color-mix(in srgb, ${tint} 14%, transparent)`, color: GAME_INK }}
-    >
-      {children}
-    </span>
-  );
-}
-
-/**
- * Les pastilles d'un concept. Sur la première page elles se LISENT (la carte
- * entière est un lien vers la fiche) ; sur la fiche, `open` en fait des boutons :
- * chacune ouvre les précisions de SA donnée. Le bouton porte la cible de 44 pt,
- * la pastille garde sa taille.
- */
-export function ConceptChips({
-  chips,
-  open,
-  urgent = false,
-}: {
-  readonly chips: readonly ConceptChipView[];
-  readonly open?: (chip: ConceptChipView) => ElementDetail | null;
-  /** La première pastille demande une action : elle prend la teinte d'attention (#9563, amendement n° 4). */
-  readonly urgent?: boolean;
-}) {
-  if (chips.length === 0) return null;
-  return (
-    <span data-chips="" className={`flex min-w-0 max-w-full flex-wrap ${open === undefined ? 'gap-1.5' : 'justify-center gap-x-1.5'}`}>
-      {chips.map((chip, index) =>
-        open === undefined ? (
-          urgent && index === 0 ? (
-            <ConceptChip key={chip.text} tint="var(--color-warn)" urgent>
-              {chip.text}
-            </ConceptChip>
-          ) : (
-            <ConceptChip key={chip.text}>{chip.text}</ConceptChip>
-          )
-        ) : (
-          <GameTouch key={chip.text} detail={open(chip)} className="inline-flex min-w-0 max-w-full items-center" style={{ minHeight: 44 }}>
-            <ConceptChip>{chip.text}</ConceptChip>
-          </GameTouch>
-        ),
-      )}
-    </span>
-  );
 }
 
 /**
@@ -229,42 +169,57 @@ function Head({ emblem, name, value }: { readonly emblem: ReactNode; readonly na
 }
 
 /**
- * LA CARTE D'UN CONCEPT sur la première page — quatre étages, et la carte
- * entière ouvre la fiche : la tête ; les données importantes en chips (et la
- * jauge fine quand il y a une étape suivante) ; la phrase d'état, qui dit
- * l'étape où l'on est et ce que la valeur vise (#10540) ; à quoi ça sert et comment ça
- * marche, deux lignes au plus chacune — sans libellé visible, la place manque à
- * 320 px : la première phrase est à l'encre, la seconde en retrait, et un
- * lecteur d'écran entend « à quoi ça sert » puis « comment ça marche ». Aucun
- * geste ici : ils vivent dans la fiche. Ce qui demande une action (coffre prêt,
- * Flamme en danger, frappe possible…) est la PREMIÈRE pastille, teintée.
+ * LES ATTRIBUTS D'IDENTITÉ D'UN RENDU (#11178, épopée § 3.3) : `data-fact` pour un fait, `data-facts` pour une ligne
+ * qui en porte plusieurs. Les témoins s'en servent pour vérifier qu'un fait ne paraît qu'une fois par écran.
+ */
+export const factAttributes = (facts: readonly FactId[]): Readonly<Record<string, string>> =>
+  facts.length === 0 ? {} : facts.length === 1 ? { 'data-fact': facts[0] ?? '' } : { 'data-facts': facts.join(' ') };
+
+/**
+ * LA CARTE D'UN CONCEPT sur la première page (#11178, épopée § 5) — trois étages, et la carte entière ouvre la
+ * fiche : le NOM en petit, la VALEUR en grand, UNE ligne en petit. Ni pastilles, ni jauge, ni paragraphe : la fiche
+ * dit le reste. Ce qui demande un geste (coffre prêt, Flamme en danger, frappe possible…) PREND la ligne, marquée
+ * d'un point d'attention. L'emblème qui montre un fait (l'anneau porte le niveau) le dit au lecteur d'écran.
+ *
+ * Rien ne glisse de côté : le nom passe à la ligne, la valeur se borne à la carte, la ligne passe à la ligne.
  */
 export function ConceptCard({ concept, view }: { readonly concept: ConceptView; readonly view: EngagementWithGame }) {
+  const { emblem, line } = concept;
   return (
     <Link
       to="progressionConcept"
       params={{ concept: concept.key }}
       data-concept-card={concept.key}
       {...(concept.urgent ? { 'data-concept-urgent': '' } : {})}
-      className={`${PRESS} flex flex-col gap-2 rounded-card px-4 py-3`}
+      className={`${PRESS} flex items-center gap-3 rounded-card px-4 py-3`}
       style={{ minHeight: 44, backgroundColor: GAME_CARD }}
     >
-      <Head emblem={<ConceptEmblem concept={concept.key} view={view} size={36} />} name={concept.name} value={concept.value} />
-      <ConceptChips chips={concept.chips} urgent={concept.urgent} />
-      {concept.gauge === null ? null : <ConceptGauge gaugeKey={`card:${concept.key}`} progress={concept.gauge} label={`${concept.name} — ${concept.value}`} />}
-      {concept.state === null ? null : (
-        <span data-concept-state="" className="text-caption font-semibold" style={{ color: GAME_INK }}>
-          {concept.state}
+      <span
+        className="grid size-10 shrink-0 place-items-center"
+        {...(emblem === null ? { 'aria-hidden': 'true' } : { role: 'img', 'aria-label': emblem.label, 'data-fact': emblem.id })}
+      >
+        <ConceptEmblem concept={concept.key} view={view} size={36} />
+      </span>
+      <span data-concept-head="" className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span data-concept-name="" className="min-w-0 max-w-full break-words text-check font-semibold uppercase tracking-wide" style={{ color: GAME_INK_2 }}>
+          {concept.name}
         </span>
-      )}
-      <span className="sr-only">{gameText('game.concept.why_label')} :</span>
-      <span data-concept-why="" className="line-clamp-2 text-caption" style={{ color: GAME_INK }}>
-        {concept.why}
+        <span data-concept-value="" data-fact={concept.valueId} className="min-w-0 max-w-full truncate text-thread font-bold leading-tight" style={{ color: GAME_INK }}>
+          {concept.value}
+        </span>
+        {line === null ? null : (
+          <span
+            data-concept-line=""
+            {...factAttributes(line.facts)}
+            className="flex min-w-0 max-w-full items-baseline gap-1.5 break-words text-caption font-semibold"
+            style={{ color: concept.urgent ? GAME_INK : GAME_INK_2 }}
+          >
+            {concept.urgent ? <span aria-hidden="true" data-concept-attention="" className="inline-block size-2 shrink-0 rounded-full" style={{ backgroundColor: 'var(--color-warn)' }} /> : null}
+            <span className="min-w-0">{line.text}</span>
+          </span>
+        )}
       </span>
-      <span className="sr-only">{gameText('game.concept.how_label')} :</span>
-      <span data-concept-how="" className="line-clamp-2 text-caption" style={{ color: GAME_INK_2 }}>
-        {concept.how}
-      </span>
+      <Chevron />
     </Link>
   );
 }
@@ -306,7 +261,7 @@ export function RowEmblem({ tint = GAME_BRAND }: { readonly tint?: string }) {
   return <SignatureEmblem size={36} tint={tint} />;
 }
 
-type FactRow = { readonly label: string; readonly value: string };
+type FactRow = { readonly label: string; readonly value: string; readonly id?: FactId };
 
 /**
  * Les données d'un concept, libellé → valeur : la fiche (« Où j'en suis ») et
@@ -330,7 +285,7 @@ export function ConceptFacts<Fact extends FactRow>({ facts, open }: { readonly f
   return (
     <ul data-concept-facts="" className="flex flex-col">
       {facts.map((fact) => (
-        <li key={fact.label} className="border-b last:border-b-0" style={{ borderColor: 'color-mix(in srgb, var(--color-ios-ink) 8%, transparent)' }}>
+        <li key={fact.label} {...(fact.id === undefined ? {} : { 'data-fact': fact.id })} className="border-b last:border-b-0" style={{ borderColor: 'color-mix(in srgb, var(--color-ios-ink) 8%, transparent)' }}>
           {open === undefined ? (
             <span className={line}>{cells(fact)}</span>
           ) : (

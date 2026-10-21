@@ -81,6 +81,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     var deleteCallCount = 0
     var lastDeletePostId: String?
+    var lastDeleteReason: String?
 
     var likeCallCount = 0
     var lastLikePostId: String?
@@ -107,6 +108,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var deleteCommentCallCount = 0
     var lastDeleteCommentPostId: String?
     var lastDeleteCommentCommentId: String?
+    var lastDeleteCommentReason: String?
 
     var repostCallCount = 0
     var lastRepostPostId: String?
@@ -277,8 +279,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try (getReelsResult ?? getFeedResult).get()
     }
 
+    /// Une réponse par curseur, servie après ce que le témoin fait PENDANT l'appel.
+    var getPostsByHashtagByCursor: [String: PaginatedAPIResponse<[APIPost]>] = [:]
+    var duringGetPostsByHashtag: (@MainActor (_ cursor: String?) async -> Void)?
+
     func getPostsByHashtag(tag: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         getPostsByHashtagCallCount += 1
+        await duringGetPostsByHashtag?(cursor)
+        if let served = getPostsByHashtagByCursor[cursor ?? ""] { return served }
         return try getPostsByHashtagResult.get()
     }
 
@@ -364,8 +372,13 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     }
 
     func delete(postId: String) async throws {
+        try await delete(postId: postId, reason: nil)
+    }
+
+    func delete(postId: String, reason: String?) async throws {
         deleteCallCount += 1
         lastDeletePostId = postId
+        lastDeleteReason = reason
         try deleteResult.get()
     }
 
@@ -419,9 +432,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     }
 
     func deleteComment(postId: String, commentId: String) async throws {
+        try await deleteComment(postId: postId, commentId: commentId, reason: nil)
+    }
+
+    func deleteComment(postId: String, commentId: String, reason: String?) async throws {
         deleteCommentCallCount += 1
         lastDeleteCommentPostId = postId
         lastDeleteCommentCommentId = commentId
+        lastDeleteCommentReason = reason
         try deleteCommentResult.get()
     }
 
@@ -667,10 +685,15 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try getBookmarksResult.get()
     }
 
+    /// Joué PENDANT l'appel : ce qui arrive à l'écran le temps de la réponse.
+    var onRemoveBookmark: (@MainActor (String) async -> Void)?
+
     func removeBookmark(postId: String) async throws {
         removeBookmarkCallCount += 1
         lastRemoveBookmarkPostId = postId
-        try removeBookmarkResult.get()
+        let result = removeBookmarkResult
+        if let onRemoveBookmark { await onRemoveBookmark(postId) }
+        try result.get()
     }
 
     func getPost(postId: String) async throws -> APIPost {
@@ -731,6 +754,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         deleteResult = .success(())
         deleteCallCount = 0
         lastDeletePostId = nil
+        lastDeleteReason = nil
 
         likeResult = .success(())
         likeCallCount = 0
@@ -764,6 +788,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         deleteCommentCallCount = 0
         lastDeleteCommentPostId = nil
         lastDeleteCommentCommentId = nil
+        lastDeleteCommentReason = nil
 
         repostResult = .success(stubPost)
         repostCallCount = 0

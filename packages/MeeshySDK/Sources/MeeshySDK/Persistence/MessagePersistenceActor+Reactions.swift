@@ -57,15 +57,21 @@ extension MessagePersistenceActor {
     }
 
     /// Lit `reactionsJson`, applique `change` (`nil` ⇒ rien à écrire), réécrit
-    /// la ligne et publie le rafraîchissement de SA conversation.
-    private func mutateReactions(
+    /// la ligne et publie le rafraîchissement de SA conversation. Une ligne
+    /// encore absente (le message est dans le flux d'écriture) garde le
+    /// changement, rejoué à son arrivée (`replayPendingRowEvents`).
+    func mutateReactions(
         localId: String,
         change: @escaping @Sendable ([MeeshyReaction]) -> [MeeshyReaction]?
     ) throws {
+        var rowIsMissing = false
         let affectedConversationId: String? = try dbWriter.write { db -> String? in
             guard var record = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db) else { return nil }
+                .fetchOne(db) else {
+                rowIsMissing = true
+                return nil
+            }
             // `reactionsJson == nil` (aucune réaction) est le cas nominal et ne
             // doit PAS être journalisé : on ne décode que s'il y a des octets.
             let reactions: [MeeshyReaction] = record.reactionsJson.flatMap {
@@ -79,6 +85,10 @@ extension MessagePersistenceActor {
             record.changeVersion += 1
             try record.update(db)
             return record.conversationId
+        }
+        if rowIsMissing {
+            rememberPendingRowEvent(localId) { $0.reactions.append(change) }
+            return
         }
         if let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])

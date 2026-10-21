@@ -11,7 +11,7 @@ final class AnalyticsManager {
     nonisolated deinit {}
     static let shared = AnalyticsManager()
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "analytics")
+    private let logger = MeeshyLog.logger(.analytics)
 
     private init() {
         syncCollectionState()
@@ -83,6 +83,7 @@ extension Route {
         case .starredMessages: return "StarredMessages"
         case .friendRequests: return "FriendRequests"
         case .storyNotificationTarget: return "StoryNotificationTarget"
+        case .moodSpotlight: return "MoodSpotlight"
         }
     }
 }

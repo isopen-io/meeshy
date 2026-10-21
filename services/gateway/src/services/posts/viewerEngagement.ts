@@ -11,6 +11,7 @@ import { NOT_DELETED } from './softDelete';
 import { filterConsumablePostIds, type PostConsumptionPrisma } from '../../routes/posts/postConsumptionGate';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { errorIdentity } from '../../utils/error-identity';
 
 const logger = enhancedLogger.child({ module: 'viewerEngagement' });
 
@@ -137,6 +138,13 @@ export type ViewerInteractionsPage = {
 export type ViewerListUniques = {
   readonly uniqueViewCount?: number;
   readonly anonymousUniqueViewCount?: number;
+  /**
+   * Les compteurs AUTORITATIFS relus dans la même lecture que la liste (#11065) :
+   * l'en-tête de la feuille les affiche, jamais l'instantané reçu à l'ouverture,
+   * qui peut être plus vieux que la liste qu'il surmonte.
+   */
+  readonly viewCount?: number;
+  readonly impressionCount?: number;
 };
 
 /**
@@ -146,6 +154,7 @@ export type ViewerListUniques = {
  */
 const VIEWER_LIST_POST_SELECT = {
   id: true, authorId: true, type: true, anonymousViewCount: true, uniqueViewCount: true, anonymousUniqueViewCount: true,
+  viewCount: true, impressionCount: true,
 } as const;
 
 /**
@@ -156,7 +165,7 @@ export const viewerListCounts = (
   result: { readonly anonymousViewCount?: number } & ViewerListUniques,
 ): { readonly anonymousViewCount?: number } & ViewerListUniques =>
   Object.fromEntries(
-    (['anonymousViewCount', 'uniqueViewCount', 'anonymousUniqueViewCount'] as const)
+    (['anonymousViewCount', 'uniqueViewCount', 'anonymousUniqueViewCount', 'viewCount', 'impressionCount'] as const)
       .filter((key) => result[key] !== undefined)
       .map((key) => [key, result[key]]),
   );
@@ -167,9 +176,13 @@ const anonymousViewsOf = (post: { readonly anonymousViewCount?: number | null })
 const uniquesOf = (post: {
   readonly uniqueViewCount?: number | null;
   readonly anonymousUniqueViewCount?: number | null;
+  readonly viewCount?: number | null;
+  readonly impressionCount?: number | null;
 }): Required<ViewerListUniques> => ({
   uniqueViewCount: post.uniqueViewCount ?? 0,
   anonymousUniqueViewCount: post.anonymousUniqueViewCount ?? 0,
+  viewCount: post.viewCount ?? 0,
+  impressionCount: post.impressionCount ?? 0,
 });
 
 /**
@@ -236,7 +249,7 @@ async function openViewerList(
     logger.error('[viewerEngagement] trace d’audit non écrite — lecture administrateur refusée', {
       postId: post.id,
       adminId: reader.id,
-      error,
+      error: errorIdentity(error),
     });
     throw new Error('AUDIT_UNAVAILABLE');
   }
@@ -343,7 +356,7 @@ async function visibleRestrictedReposts(
       .filter((repost) => visible.has(repost.id))
       .reduce<Counts>((acc, repost) => new Map(acc).set(repost.authorId, (acc.get(repost.authorId) ?? 0) + 1), new Map());
   } catch (error: unknown) {
-    logger.warn('[viewerEngagement] republications restreintes non conclues — non comptées', { postId, error });
+    logger.warn('[viewerEngagement] republications restreintes non conclues — non comptées', { postId, error: errorIdentity(error) });
     return new Map();
   }
 }
@@ -493,7 +506,7 @@ export async function readViewerEngagementPage(
     gates,
     activityDisclosureFloor(post.type, disclosedSince),
   ).catch((error: unknown) => {
-    logger.warn('[viewerEngagement] lecture des engagements refusée faute de conclure', { postId: post.id, error });
+    logger.warn('[viewerEngagement] lecture des engagements refusée faute de conclure', { postId: post.id, error: errorIdentity(error) });
     return null;
   });
 

@@ -43,6 +43,9 @@ struct FocalIdentityHeader: View, Equatable {
     /// Décidé par le type, jamais par le pseudo : `ano_` est un préfixe
     /// lisible, pas un espace réservé, et un compte peut le porter.
     var senderIsAnonymous: Bool = false
+    /// Le contour d'avatar équipé de l'auteur (#10713) : la RÉFÉRENCE servie, que l'avatar
+    /// résout et pose dans son empreinte (#10946).
+    var senderRing: ServedProfileDecorItem? = nil
     /// L'auteur, déjà résolu par `Focal/Core/`. La rangée le transmet au
     /// présentateur sans jamais le composer — voir la garde §5.1.
     var profileUser: ProfileSheetUser
@@ -85,6 +88,7 @@ struct FocalIdentityHeader: View, Equatable {
             && lhs.senderStoryRing == rhs.senderStoryRing
             && lhs.senderMoodEmoji == rhs.senderMoodEmoji
             && lhs.senderIsAnonymous == rhs.senderIsAnonymous
+            && lhs.senderRing == rhs.senderRing
             && lhs.isDark == rhs.isDark
             && lhs.agentStyle == rhs.agentStyle
             && lhs.avatarDiameter == rhs.avatarDiameter
@@ -125,6 +129,7 @@ struct FocalIdentityHeader: View, Equatable {
                     moodEmoji: senderMoodEmoji,
                     presenceState: senderPresence,
                     isHere: senderIsHere,
+                    ring: senderRing,
                     enablePulse: false,
                     isDark: isDark,
                     onMoodTap: onMoodTap

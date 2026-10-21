@@ -36,7 +36,7 @@ import {
   type DuoMission,
   type DuoStatus,
 } from '@meeshy/shared/utils/game/duo';
-import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
+import { SPARKS_USER_SELECT, currentLevelOf, unlockLevelOf } from './SparksFacts';
 import { leagueWeekOfMoment } from '@meeshy/shared/utils/game/league';
 import type { GameBlockExtrasFacts } from '@meeshy/shared/utils/game/game-block-extras';
 import { isBlockedBetween } from '../../utils/blocking';
@@ -82,10 +82,10 @@ type DuoRow = {
   readonly inviteePaidAt: Date | null;
 };
 
-const ACCOUNT_SELECT = { ...FLAME_USER_SELECT, isActive: true, deletedAt: true, engagementScore: true, levelRecord: true, displayName: true, firstName: true, lastName: true, username: true } as const;
+const ACCOUNT_SELECT = { ...FLAME_USER_SELECT, isActive: true, deletedAt: true, ...SPARKS_USER_SELECT, displayName: true, firstName: true, lastName: true, username: true } as const;
 
-const recordOf = (row: { engagementScore?: number | null; levelRecord?: number | null } | null): number =>
-  Math.max(levelForUnlocks({ score: row?.engagementScore ?? 0, levelRecord: row?.levelRecord ?? null }), row?.levelRecord ?? 0);
+/** Le niveau qui ouvre le duo : le max à vie compte (#10846), un Prestige ne le ferme pas. */
+const recordOf = (row: Parameters<typeof unlockLevelOf>[0]): number => unlockLevelOf(row);
 
 const NOT_PAID = (field: 'inviterPaidAt' | 'inviteePaidAt') => ({ OR: [{ [field]: null }, { [field]: { isSet: false } }] });
 
@@ -189,8 +189,8 @@ export class DuoService {
       userA: inviterId,
       userB: friendId,
       weekKey,
-      levelA: levelForUnlocks({ score: inviter?.engagementScore ?? 0, levelRecord: inviter?.levelRecord ?? null }),
-      levelB: levelForUnlocks({ score: invitee?.engagementScore ?? 0, levelRecord: invitee?.levelRecord ?? null }),
+      levelA: currentLevelOf(inviter),
+      levelB: currentLevelOf(invitee),
       unavailableSignals: [],
     });
 
@@ -384,7 +384,7 @@ export class DuoService {
     try {
       const account = await this.account(userId);
       const flame = flameFactsOf(account ?? {}, now);
-      const reward = duoReward({ level: levelForUnlocks({ score: account?.engagementScore ?? 0, levelRecord: account?.levelRecord ?? null }), flameDays: flame.streak, mineDone: true, partnerDone });
+      const reward = duoReward({ level: currentLevelOf(account), flameDays: flame.streak, mineDone: true, partnerDone });
       if (reward.points > 0) await this.deps.creditPoints(userId, reward.points, GAME_BONUS_AXIS);
     } catch (error) {
       await this.prisma.gameDuo.updateMany({ where: { id: duo.id, [field]: now }, data: { [field]: null } });

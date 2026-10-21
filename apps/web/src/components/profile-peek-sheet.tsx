@@ -77,7 +77,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
                 />
               )}
               {relation.kind === 'blocked' ? null : (
-                <ProfileStatsSection language={language} stats={view.data?.stats ?? null} createdAt={person.createdAt} loading={view.isFetching} />
+                <ProfileStatsSection language={language} stats={profile.stats} createdAt={person.createdAt} loading={profile.statsLoading} />
               )}
               <Link
                 to="userProfile"

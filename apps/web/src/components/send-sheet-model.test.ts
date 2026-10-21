@@ -3,13 +3,17 @@ import { describe, expect, test } from 'bun:test';
 import type { PersonSummary } from '@/lib/api/friend-requests';
 import type { Conversation, Participant } from '@/lib/api/types';
 import type { SendPayload } from '@/lib/send/send-sheet-plan';
+import { sharePlanOf } from '@/lib/send/share-entry';
 
 import {
+  blockedReasonOf,
+  newGroupTitleOf,
   planErrorMessageOf,
   previewOf,
-  protectedFromPublishing,
   recipientRows,
   statusViewOf,
+  withdrawnLineOf,
+  withheldLineOf,
   RECENTS_MAX,
 } from './send-sheet-model';
 
@@ -98,12 +102,11 @@ describe('statusViewOf — ce que la ligne dit pendant et après l’envoi', () 
     expect(statusViewOf({ state: 'idle' }, false)).toBe(null);
   });
 
+  test('hors ligne : « En file », sans bouton (la file repart seule au retour du réseau)', () => {
+    expect(statusViewOf({ state: 'queued' }, true)).toEqual({ tone: 'queued', label: 'sendSheet.state.queued', retry: false });
+  });
+
   test('chaque échec a son mot, et tous se rejouent', () => {
-    expect(statusViewOf({ state: 'failed', failure: { kind: 'offline' } }, true)).toEqual({
-      tone: 'failed',
-      label: 'sendSheet.state.waitingNetwork',
-      retry: true,
-    });
     expect(statusViewOf({ state: 'failed', failure: { kind: 'network' } }, true)?.label).toBe('sendSheet.state.failed');
     expect(statusViewOf({ state: 'failed', failure: { kind: 'download' } }, true)?.label).toBe('sendSheet.failure.download');
     expect(statusViewOf({ state: 'failed', failure: { kind: 'refused', status: 403, message: 'non' } }, true)?.label).toBe(
@@ -117,8 +120,8 @@ describe('planErrorMessageOf — un refus du plan se DIT', () => {
   test('les limites parlent de leur nombre', () => {
     expect(planErrorMessageOf({ kind: 'too-many-targets', max: 10 })).toEqual({ key: 'sendSheet.limit.recipients', count: 10 });
     expect(planErrorMessageOf({ kind: 'caption-too-long', max: 5000 })).toEqual({ key: 'sendSheet.error.captionTooLong', count: 5000 });
-    expect(planErrorMessageOf({ kind: 'too-many-files', max: 10 })).toEqual({ key: 'sendSheet.error.tooManyFiles', count: 10 });
-    expect(planErrorMessageOf({ kind: 'protected' })).toEqual({ key: 'sendSheet.protected' });
+    expect(planErrorMessageOf({ kind: 'over-limits', trimCount: 2 })).toEqual({ key: 'sendSheet.limit.removeToSend', count: 2 });
+    expect(planErrorMessageOf({ kind: 'blocked' })).toEqual({ key: 'sendSheet.blocked.title' });
   });
 });
 
@@ -129,8 +132,7 @@ const attachment = (over: Partial<Extract<SendPayload, { kind: 'attachment' }>> 
   attachmentId: 'a1',
   mime: 'image/jpeg',
   previewUrl: 'https://cdn.test/a1.jpg',
-  mine: false,
-  protected: false,
+  exit: { id: 'm1', pieces: [{ id: 'a1', mimeType: over.mime ?? 'image/jpeg' }] },
   ...over,
 });
 
@@ -141,6 +143,7 @@ describe('previewOf — l’aperçu de ce qui part', () => {
         kind: 'messages',
         conversationId: 'c1',
         messages: [],
+        exit: [],
         preview: { kind: 'messages', count: 3 },
       }),
     ).toEqual({ kind: 'messages', label: { key: 'sendSheet.preview.messages', count: 3 } });
@@ -149,6 +152,7 @@ describe('previewOf — l’aperçu de ce qui part', () => {
         kind: 'messages',
         conversationId: 'c1',
         messages: [],
+        exit: [],
         preview: { kind: 'text', text: 'Bonjour' },
       }),
     ).toEqual({ kind: 'text', text: 'Bonjour' });
@@ -175,19 +179,81 @@ describe('previewOf — l’aperçu de ce qui part', () => {
   });
 });
 
-describe('protectedFromPublishing — l’explication n’apparaît que pour une vraie protection', () => {
-  test('pièce protégée : oui ; pièce audio non protégée : non (rien à publier, mais rien de protégé)', () => {
-    expect(protectedFromPublishing(attachment({ protected: true }))).toBe(true);
-    expect(protectedFromPublishing(attachment({ mime: 'audio/mp4' }))).toBe(false);
-    expect(
-      protectedFromPublishing({
-        kind: 'messages',
-        conversationId: 'c1',
-        messages: [{ id: 'm1', content: '', originalLanguage: 'fr' }],
-        preview: { kind: 'image' },
-        soleMedia: { attachmentId: 'a1', mime: 'image/png', protected: true },
-      }),
-    ).toBe(true);
+const messagesOf = (exit: Extract<SendPayload, { kind: 'messages' }>['exit']): SendPayload => ({
+  kind: 'messages',
+  conversationId: 'c1',
+  messages: exit.map((m) => ({ id: m.id, content: m.text ?? '', originalLanguage: 'fr' })),
+  exit,
+  preview: { kind: 'messages', count: exit.length },
+});
+
+describe('les lignes de motif — ce que la loi retire ou interdit se DIT', () => {
+  test('une flamme : la ligne dit qu’elle ne se publie, ne s’enregistre ni ne se copie', () => {
+    expect(withheldLineOf(sharePlanOf(attachment({ exit: { id: 'm1', effectFlags: 1, ephemeralDuration: 60, pieces: [{ id: 'a1', mimeType: 'image/jpeg' }] } })))).toBe('sendSheet.withheld.flame');
+  });
+
+  test('une photo seule ne fait pas un réel', () => {
+    expect(withheldLineOf(sharePlanOf(attachment()))).toBe('sendSheet.withheld.singlePhoto');
+  });
+
+  test('un contenu ordinaire sans réserve : aucune ligne', () => {
+    expect(withheldLineOf(sharePlanOf({ kind: 'text', text: 'Bonjour' }))).toBeNull();
+  });
+
+  test('D6 — le message à vue unique reste, les autres partent, et la ligne le compte', () => {
+    expect(withdrawnLineOf(sharePlanOf(messagesOf([{ id: 'a' }, { id: 'b', isViewOnce: true }, { id: 'c' }])))).toEqual({ reason: 'sendSheet.withdrawn.viewOnce', leaving: 2 });
+  });
+
+  test('rien ne part : la carte « ne sort pas de Meeshy » et son motif', () => {
+    const plan = sharePlanOf(messagesOf([{ id: 'b', isViewOnce: true }]));
+    expect(withdrawnLineOf(plan)).toBeNull();
+    expect(blockedReasonOf(plan)).toBe('sendSheet.withdrawn.viewOnce');
+  });
+});
+
+describe('les destinataires — communautés, détails, chiffrement', () => {
+  test('les canaux d’une communauté se rangent sous elle (D11), seulement si l’on connaît son nom', () => {
+    const channel = conversation({ id: 'k-general', title: '#général', communityId: 'k1', memberCount: 40 });
+    const rows = recipientRows({ conversations: [channel], friends: [], searchResults: undefined, viewerId: VIEWER, query: '', communities: { k1: { name: 'Lyon Polyglotte' } } });
+    expect(rows.communities.map((c) => [c.name, c.channels.map((row) => row.key)])).toEqual([['Lyon Polyglotte', ['conversation:k-general']]]);
+    expect(recipientRows({ conversations: [channel], friends: [], searchResults: undefined, viewerId: VIEWER, query: '' }).communities).toEqual([]);
+  });
+
+  test('une conversation où l’on ne peut pas écrire n’est pas un destinataire', () => {
+    const readOnly = conversation({ id: 'c-ro', viewerWriteRestriction: 'announcement-only' as never });
+    expect(recipientRows({ conversations: [readOnly], friends: [], searchResults: undefined, viewerId: VIEWER, query: '' }).conversations).toEqual([]);
+  });
+
+  test('une conversation chiffrée le dit ; un groupe dit son effectif', () => {
+    const rows = recipientRows({
+      conversations: [conversation({ id: 'c-e', encryptionMode: 'e2ee', memberCount: 4 }), conversation({ id: 'c-g', memberCount: 12 })],
+      friends: [],
+      searchResults: undefined,
+      viewerId: VIEWER,
+      query: '',
+    });
+    expect(rows.conversations.map((row) => [row.key, row.encrypted, row.detail])).toEqual([
+      ['conversation:c-e', true, { key: 'sendSheet.row.encryptedGroup', count: 4 }],
+      ['conversation:c-g', false, { key: 'sendSheet.row.group', count: 12 }],
+    ]);
+  });
+
+  test('la recherche serveur ajoute les conversations hors cache, sans doublon', () => {
+    const cached = conversation({ id: 'c-a', title: 'Lecture du soir' });
+    const found = conversation({ id: 'c-b', title: 'Lecture partagée' });
+    const rows = recipientRows({ conversations: [cached], friends: [], searchResults: undefined, viewerId: VIEWER, query: 'lec', conversationResults: [cached, found] });
+    expect(rows.conversations.map((row) => row.key)).toEqual(['conversation:c-a', 'conversation:c-b']);
+  });
+
+  test('une personne porte sa clé de présence ; un groupe, jamais', () => {
+    const rows = recipientRows({ conversations: [conversation({ id: 'c-g' }), direct('c-d', 'u-ana', 'Ana')], friends: [person('u-lea', 'Léa')], searchResults: undefined, viewerId: VIEWER, query: '' });
+    expect(rows.conversations.map((row) => row.presenceKey)).toEqual([undefined, 'u-ana']);
+    expect(rows.people.map((row) => row.presenceKey)).toEqual(['u-lea']);
+  });
+
+  test('le nom d’un groupe neuf : les prénoms, dans l’ordre choisi', () => {
+    const rows = recipientRows({ conversations: [], friends: [person('u-1', 'Léa Martin'), person('u-2', 'Léon Ndiaye')], searchResults: undefined, viewerId: VIEWER, query: '' });
+    expect(newGroupTitleOf(rows.people)).toBe('Léa, Léon');
   });
 });
 

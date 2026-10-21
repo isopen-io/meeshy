@@ -341,6 +341,15 @@ const THREAD_MENU = [
   'chat-text',
   'caret-left',
   'caret-right',
+  // Les gestes du TYPE et du RÔLE (#11210) : réessayer un envoi, ouvrir un
+  // lien, un lieu dans une carte, épingler, retirer le message d'un autre, et
+  // la mention discrète du bout en bout dans « Plus ».
+  'arrow-clockwise',
+  'arrow-square-out',
+  'map-pin',
+  'push-pin',
+  'prohibit',
+  'lock-simple',
 ];
 
 emit({
@@ -633,6 +642,7 @@ const PROFILE = [
   'calendar-blank',
   'user-plus',
   'caret-right',
+  'frame-corners',
 ];
 
 emit({
@@ -744,6 +754,35 @@ emit({
   constant: 'CALL_FEEDBACK_GLYPHS',
   type: 'CallFeedbackGlyphName',
   role: "LE JEU de la note d'apres-appel (#8072) : charge avec sa carte, jamais dans le socle.",
+});
+
+/**
+ * LE JEU DU MENU D'UNE LIGNE DE CONVERSATION (#10593) — miroir des symboles du
+ * menu d'appui long d'iOS (`ConversationListView+Overlays.swift:79-366`) :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `info.circle.fill` (Détails) | `info` |
+ * | `pencil` (Renommer) | `pencil-simple` |
+ * | `star` / `star.fill` (Favori, posé ou non) | `star` / `star-fill` |
+ * | `folder.fill` (Déplacer vers…) | `folder-simple` |
+ * | `hand.raised.fill` (Bloquer / Débloquer) | `hand-palm` |
+ * | `chevron.forward` (ouvre un sous-menu) | `caret-right` |
+ * | `person.badge.plus` (Inviter, #11211) | `user-plus` |
+ * | `shield.lefthalf.filled` (Ouvrir dans l'administration) | `shield-check` |
+ * | `rectangle.portrait.and.arrow.right` (Quitter) | `sign-out` |
+ *
+ * `caretLeft` (retour du sous-menu), `check` (l'entrée courante) et `users`
+ * (Gérer les membres, `person.3.fill`) restent au SOCLE. Chargé avec la liste, jamais dans le socle.
+ */
+const ROW_MENU = ['info', 'pencil-simple', 'star', 'star-fill', 'folder-simple', 'hand-palm', 'caret-right', 'user-plus', 'shield-check', 'sign-out'];
+
+emit({
+  ids: ROW_MENU,
+  output: join(HERE, '../src/components/glyphs-row-menu.ts'),
+  constant: 'ROW_MENU_GLYPHS',
+  type: 'RowMenuGlyphName',
+  role: "LE JEU du menu d'une ligne de conversation (#10593, #11211) : detail, renommage, favori, rangement, blocage, invitation, membres, administration, depart, charge avec la liste, jamais dans le socle.",
 });
 
 const STARRED = ['star', 'star-fill', 'chats-circle'];

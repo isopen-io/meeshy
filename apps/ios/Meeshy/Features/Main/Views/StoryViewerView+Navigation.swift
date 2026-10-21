@@ -26,11 +26,7 @@ extension StoryViewerView {
                 isPresented = false
                 return
             }
-            groupTransition(forward: true) {
-                currentGroupIndex += 1
-                currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
-                progressClock.reset()
-            }
+            groupTransition(forward: true) { landOnNextGroup() }
         } else {
             if isPreviewMode {
                 isPresented = false
@@ -50,12 +46,51 @@ extension StoryViewerView {
                 progressClock.reset()
             }
         } else if currentGroupIndex > 0 {
-            groupTransition(forward: false) {
-                currentGroupIndex -= 1
-                currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
-                progressClock.reset()
-            }
+            groupTransition(forward: false) { landOnPreviousGroup() }
         }
+    }
+
+    /// « Auteur précédent », borné : la liste a pu rétrécir sous le lecteur
+    /// depuis que l'index a été posé (`StoryViewerPosition`).
+    /// Atterrit sur l'auteur SUIVANT, borné par la liste que la transition tient. La garde du tap se lit 0,38 s
+    /// avant cette closure : entre-temps `reanchorPosition` peut avoir recalé l'index (un `story:created` trié
+    /// devant), et `groups[currentGroupIndex]` après un `+= 1` sortait du tableau — plantage.
+    func landOnNextGroup() {
+        guard let next = StoryViewerPosition.nextGroupIndex(after: currentGroupIndex, groupCount: groups.count) else { return }
+        currentGroupIndex = next
+        currentStoryIndex = entryIndex(of: groups[next])
+        progressClock.reset()
+    }
+
+    func landOnPreviousGroup() {
+        guard let landing = StoryViewerPosition.previousGroupLanding(
+            storyCounts: groups.map(\.stories.count), from: currentGroupIndex
+        ) else { return }
+        currentGroupIndex = landing.group
+        currentStoryIndex = landing.story
+        progressClock.reset()
+    }
+
+    /// `groups` a bougé sous le lecteur (tri, insertion, purge) : la position
+    /// suit la story montrée, pas son rang. Quand c'est la MÊME story qui reste
+    /// à l'écran, les index bougent sans rejouer minuteur, intro ni marquage.
+    func reanchorPosition(from old: [StoryViewerPosition.GroupShape], to new: [StoryViewerPosition.GroupShape]) {
+        let here = StoryViewerPosition.Landing(group: currentGroupIndex, story: currentStoryIndex)
+        guard let landing = StoryViewerPosition.reanchor(from: old, to: new, at: here), landing != here else { return }
+        let shownBefore = StoryViewerPosition.storyId(at: here, in: old)
+        let shownAfter = StoryViewerPosition.storyId(at: landing, in: new)
+        if let shownBefore, shownBefore == shownAfter {
+            reanchoredStoryId = shownBefore
+            DispatchQueue.main.async { reanchoredStoryId = nil }
+        }
+        currentGroupIndex = landing.group
+        currentStoryIndex = landing.story
+    }
+
+    /// Vrai pendant le seul tour où `reanchorPosition` a déplacé les index sans
+    /// changer la story montrée : les observateurs d'index n'ont rien à rejouer.
+    var isReanchoringSameStory: Bool {
+        reanchoredStoryId != nil && reanchoredStoryId == currentStory?.id
     }
 
     /// Dismiss — shrink to small card and fly toward top

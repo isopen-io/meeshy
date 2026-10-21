@@ -351,7 +351,8 @@ final class GameElementDetailTests: XCTestCase {
         let detail = GameElementDetails.levelRing(game.level)
 
         XCTAssertEqual(detail.status, .value(GameCopy.levelToNext(remaining: 1_301, nextLevel: 28), progress: game.level.shown.progress))
-        XCTAssertEqual(detail.facts.first, ProgressionConceptFact(label: ConceptText.factHeld, value: GameCopy.points(77_099)))
+        // La poche (#10846) : sans étincelles servies (fixture d'un serveur antérieur), elle se lit sur `score`.
+        XCTAssertEqual(detail.facts.first, ProgressionConceptFact(label: GameSparksCopy.pocketLabel, value: GameCopy.points(77_099)))
         XCTAssertFalse(detail.facts.contains { $0.label == ConceptText.factNextLevel }, "hors plafond, le reste est dans la valeur")
     }
 
@@ -496,7 +497,7 @@ final class GameElementDetailTests: XCTestCase {
         let game = GameWave2Fixture.atLevel100(prestige: 1)
         let values = GamePrestigeScreen.passValues(game: game)
         XCTAssertEqual(values.map(\.label), [
-            ConceptText.factBalance, ConceptText.name(.level), ConceptText.factRecord, ConceptText.factStars, ConceptText.name(.glory),
+            GameSparksCopy.pocketLabel, ConceptText.name(.level), ConceptText.factRecord, ConceptText.factStars, ConceptText.name(.glory),
         ])
         XCTAssertEqual(values.first?.value, "\(GameCopy.points(game.level.score)) → \(GameCopy.points(0))")
         XCTAssertEqual(values[3].value, "\(GameCopy.formatCount(1)) → \(GameCopy.formatCount(2))")

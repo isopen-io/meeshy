@@ -92,4 +92,28 @@ final class ComposerReturnKeyTests: XCTestCase {
     func test_unSeulSautEstRetire() {
         XCTAssertEqual(ComposerReturnKey.stripped("a\n\n"), "a\n")
     }
+
+    // MARK: - Clavier MATÉRIEL (iPad) : Maj+Retour passe à la ligne, Cmd+Retour envoie
+
+    /// Un clavier matériel remonte ses touches (iOS 17+, `onKeyPress`) : Maj+Retour ou Option+Retour y insère un saut
+    /// de ligne VOULU — il ne doit jamais envoyer. Avant, il envoyait le message, sans retour possible.
+    func test_aLiteralNewline_fromAModifiedReturn_neverSends() {
+        XCTAssertFalse(ComposerReturnKey.submits(previous: "Salut", current: "Salut\n", literalNewline: true))
+        XCTAssertTrue(ComposerReturnKey.submits(previous: "Salut", current: "Salut\n", literalNewline: false))
+    }
+
+    func test_theModifiersThatMeanANewLine() {
+        XCTAssertTrue(ComposerReturnKey.isLiteralNewline(shift: true, option: false))
+        XCTAssertTrue(ComposerReturnKey.isLiteralNewline(shift: false, option: true))
+        XCTAssertFalse(ComposerReturnKey.isLiteralNewline(shift: false, option: false))
+    }
+
+    /// Au-delà de sept mots, Retour passe à la ligne : sans Cmd+Retour, un message long ne s'envoyait pas au clavier.
+    func test_commandReturn_sendsFromTheKeyboard_whateverTheLength() throws {
+        let bar = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift"))
+        XCTAssertFalse(bar.contains(".keyboardShortcut(.return, modifiers: .command)"))
+        XCTAssertFalse(bar.contains("Button(\"\")"))
+        XCTAssertTrue(bar.contains("PublishesComposerSend(send: handleSend)"))
+        XCTAssertTrue(bar.contains("let literal = literalNewlinePending") && bar.contains("literalNewline: literal)"))
+    }
 }

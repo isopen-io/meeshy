@@ -63,4 +63,11 @@ final class CommentQuotationStore: ObservableObject {
     func clear(for postId: String) {
         quotations.removeValue(forKey: postId)
     }
+
+    /// Déconnexion : l'autre moitié du brouillon de commentaire
+    /// (`CommentDraftStore.clearAll()`) part avec le compte sortant.
+    func clearAll() {
+        guard !quotations.isEmpty else { return }
+        quotations = [:]
+    }
 }

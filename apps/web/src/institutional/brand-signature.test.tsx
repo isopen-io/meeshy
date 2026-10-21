@@ -11,7 +11,7 @@ import { BrandSignature } from './brand-signature';
  * partagent l'en-tête de la landing (#10071).
  */
 describe('BrandSignature — pied de marque des pages institutionnelles', () => {
-  const html = render(<BrandSignature version="3.1.0" />);
+  const html = render(<BrandSignature version="3.1.0" language="fr" />);
   const creditLink = () => html.match(/<a [^>]*>.*?<\/a>/)?.[0] ?? '';
 
   test('porte la ligne de version', () => {

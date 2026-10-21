@@ -9,7 +9,9 @@ import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
+import type { ActionScope } from '@/lib/view/message-action-scope';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
+import { menuScope } from '@/test-support/menu-viewer';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { Attachments } from './attachment-blocks';
@@ -109,7 +111,11 @@ const until = async (check: () => boolean) => {
 
 const viewer = (): HTMLElement | null => document.body.querySelector<HTMLElement>('[data-media-viewer]');
 
-function mountThreadGrid(onReplyToMedia: (messageId: string, attachmentId: string) => void, viewerId = 'u-me'): void {
+function mountThreadGrid(
+  onReplyToMedia: (messageId: string, attachmentId: string) => void,
+  viewerId = 'u-me',
+  actionScope: ActionScope = menuScope({ id: viewerId }),
+): void {
   container = document.createElement('div');
   container.id = 'root';
   document.body.appendChild(container);
@@ -118,7 +124,7 @@ function mountThreadGrid(onReplyToMedia: (messageId: string, attachmentId: strin
   act(() => {
     root.render(
       <QueryClientProvider client={client}>
-        <ThreadMediaContext.Provider value={{ viewerId, onReplyToMedia }}>
+        <ThreadMediaContext.Provider value={{ viewerId, onReplyToMedia, actionScope }}>
           <Attachments
             attachments={opened.attachments as readonly Attachment[]}
             message={opened}
@@ -162,7 +168,7 @@ describe('le fil ouvre la visionneuse conversation-entière (#6303)', () => {
     expect(viewer()).toBeNull();
   });
 
-  test('« Partager » ouvre la feuille d’envoi avec la PIÈCE regardée (ses identifiants, jamais son fichier), « mine » faux pour le message d’un autre (#8884)', async () => {
+  test('« Partager » ouvre la feuille d’envoi avec la PIÈCE regardée (ses identifiants, jamais son fichier), seule elle partira (#8884, #9914)', async () => {
     mountThreadGrid(() => {});
     act(() => {
       container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
@@ -172,27 +178,45 @@ describe('le fil ouvre la visionneuse conversation-entière (#6303)', () => {
       viewer()!.querySelector<HTMLButtonElement>('[data-viewer-action="share"]')!.click();
     });
     const request = sendSheetStore.getState().request;
-    expect(request?.intent).toBe('share');
+    expect(request?.intent).toBe('forward');
     expect(request?.payload).toMatchObject({
       kind: 'attachment',
       conversationId: CONVERSATION,
       messageId: M2,
       attachmentId: A3,
       mime: 'image/jpeg',
-      mine: false,
-      protected: false,
+      exit: { id: M2, pieces: [{ id: A3 }] },
     });
   });
 
-  test('sur sa propre pièce, « mine » est vrai : la copie serveur lui est permise', async () => {
-    mountThreadGrid(() => {}, 'u-nour');
+  const openOnSecondTile = async () => {
     act(() => {
       container.querySelectorAll<HTMLButtonElement>('[data-media-tile]')[1]!.click();
     });
-    await until(() => viewer()?.querySelector('[data-viewer-action="share"]') != null);
-    act(() => {
-      viewer()!.querySelector<HTMLButtonElement>('[data-viewer-action="share"]')!.click();
-    });
-    expect(sendSheetStore.getState().request?.payload).toMatchObject({ kind: 'attachment', mine: true });
+    await until(() => viewer()?.getAttribute('data-viewer-attachment') === A3);
+    await settle();
+  };
+
+  test('en bout en bout, la visionneuse ne répond ni ne partage : le web n’enverrait que du clair (#11372)', async () => {
+    mountThreadGrid(() => {}, 'u-me', menuScope({ id: 'u-me' }, { encryptionMode: 'e2ee' }));
+    await openOnSecondTile();
+    expect(viewer()!.querySelector('[data-viewer-reply]')).toBeNull();
+    expect(viewer()!.querySelector('[data-viewer-action="reply"]')).toBeNull();
+    expect(viewer()!.querySelector('[data-viewer-action="share"]')).toBeNull();
+  });
+
+  test('un lecteur qui n’est plus membre ne réagit ni ne répond depuis la visionneuse (#11372)', async () => {
+    mountThreadGrid(() => {}, 'u-me', menuScope({ id: 'u-me', isActiveMember: false }));
+    await openOnSecondTile();
+    expect(viewer()!.querySelector('[data-viewer-action="react"]')).toBeNull();
+    expect(viewer()!.querySelector('[data-viewer-reply]')).toBeNull();
+  });
+
+  test('un membre qui écrit en clair y garde Réagir, Répondre et Partager', async () => {
+    mountThreadGrid(() => {});
+    await openOnSecondTile();
+    expect(viewer()!.querySelector('[data-viewer-action="react"]')).not.toBeNull();
+    expect(viewer()!.querySelector('[data-viewer-reply]')).not.toBeNull();
+    expect(viewer()!.querySelector('[data-viewer-action="share"]')).not.toBeNull();
   });
 });

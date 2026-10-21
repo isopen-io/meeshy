@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// Garde de source sur le CÂBLAGE de la republication de story.
@@ -14,9 +15,10 @@ import XCTest
 /// pourrait défaire en silence, et dont l'absence est précisément l'état d'AVANT
 /// ce lot — donc des témoins qui discriminent :
 ///
-/// 1. Le rail OUVRE le composeur ; il ne republie plus d'un tap côté serveur.
-///    L'ancien chemin appelait `PostService.shared.repost` directement : la
-///    story repartait à l'identique, sans texte ajouté ni choix d'audience.
+/// 1. Le rail republie EN STORY d'un tap (#9953) par l'écrivain unique
+///    `RepostPublisher` — jamais par l'appel réseau nu `PostService.shared.repost`.
+///    Le composeur de republication (`StoryRepublishComposer`) reste la porte qui
+///    porte le plafond d'audience et `repostOfId` (points 2 et 3).
 /// 2. Le sélecteur d'audience du composeur est PLAFONNÉ par la loi
 ///    (`StoryRepostAudience`) — même audience ou plus restreinte, jamais plus
 ///    large.
@@ -47,22 +49,25 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    // MARK: - 1. Le rail ouvre le composeur
+    // MARK: - 1. Le rail republie en STORY, d'un tap (#9953)
 
-    func test_railRepostButton_opensTheComposer_andNoLongerRepostsInOneTap() throws {
+    /// Décision du porteur (2026-10-10) : « Republier » du rail republie EN
+    /// STORY d'un tap — la mécanique existante (`RepostIntent.simple` remis à
+    /// `RepostPublisher` : jeton d'idempotence, file hors ligne, verrou par
+    /// cible), cible `.story`. Il n'ouvre plus le composeur, et ne repasse pas
+    /// par l'appel réseau nu `PostService.shared.repost`.
+    func test_railRepostButton_republishesAsAStory_inOneTap() throws {
         let sidebar = AppSourceGuard.stripComments(
             try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
 
-        XCTAssertTrue(
-            sidebar.contains("republishStorySource = RepostPostSourceWrapper("),
-            "Le bouton de republication du rail doit OUVRIR le composeur en posant " +
-            "`republishStorySource` — c'est la demande produit du 2026-08-19."
-        )
-        XCTAssertFalse(
-            sidebar.contains("PostService.shared.repost("),
-            "Le rail ne doit plus republier d'un tap côté serveur : ce chemin ne " +
-            "laissait ni ajouter de texte ni choisir l'audience."
-        )
+        XCTAssertTrue(sidebar.contains("StoryDirectRepost.publish(story, as: .story)"),
+                      "Le bouton du rail republie en STORY d'un tap.")
+        XCTAssertFalse(sidebar.contains("republishStorySource"),
+                       "Le rail n'ouvre plus le composeur de republication.")
+        XCTAssertTrue(sidebar.contains("try await RepostPublisher.shared.publish("),
+                      "La republication directe passe par l'écrivain unique, jamais par un appel réseau nu.")
+        XCTAssertFalse(sidebar.contains("PostService.shared.repost("))
+        XCTAssertEqual(StoryRepostDestination.story.targetType, .story)
     }
 
     /// Le libellé annonçait « Partager » pour une action de republication —
@@ -81,23 +86,35 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - 1bis. Envoyer et Republier vivent au RAIL, plus dans le menu (...)
+    // MARK: - 1bis. Envoyer reste au rail ; post et réel passent par « Partager ▸ »
 
-    /// Le porteur a retiré du menu (…) « Envoyer », « Republier en post » et
-    /// « Citer en post » (#9953). Republier et transférer ne disparaissent
-    /// pas : le rail garde « Envoyer » (qui transfère n'importe où dans l'app)
-    /// et « Republier », dont le composeur offre l'éventail story / post.
-    func test_sendAndRepublish_stayOnTheRail_andLeftTheMenu() throws {
+    /// #9953 : le rail garde « Envoyer » (qui transfère n'importe où dans
+    /// l'app) et « Republier » (en story). Le menu (…) offre « Republier en
+    /// post » et « Republier en réel » par la MÊME mécanique, sur TOUTE story
+    /// (la sienne comprise depuis la v4). « Citer en post » a disparu :
+    /// « Composer » le fait.
+    func test_sendStaysOnTheRail_postAndReelAreInTheShareMenu_quoteIsGone() throws {
         let sidebar = AppSourceGuard.stripComments(
             try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
         XCTAssertTrue(sidebar.contains("story.viewer.action.send"), "« Envoyer » reste au rail.")
-        XCTAssertTrue(sidebar.contains("sharedContentWrapper = SharedContentWrapper(content: .story("))
-        XCTAssertTrue(sidebar.contains("republishStorySource = RepostPostSourceWrapper("), "« Republier » reste au rail.")
+        XCTAssertTrue(sidebar.contains("sharedContentWrapper = SharedContentWrapper(subject: .story("))
 
         let header = AppSourceGuard.stripComments(
             try source("Meeshy/Features/Main/Views/StoryViewerView+Header.swift"))
-        for key in ["story.viewer.repostAsPost", "story.viewer.editAndRepostAsPost", "story.viewer.share.internal"] {
+        XCTAssertTrue(header.contains("StoryDirectRepost.publish(story, as: .post)"))
+        XCTAssertTrue(header.contains("StoryDirectRepost.publish(story, as: .reel)"))
+        for key in ["story.viewer.editAndRepostAsPost", "story.viewer.share.internal", "editAndRepostAsPostSource"] {
             XCTAssertFalse(header.contains(key), "\(key) a quitté le menu (…) — #9953")
+        }
+        let viewer = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Main/Views/StoryViewerView.swift"))
+        XCTAssertFalse(viewer.contains("editAndRepostAsPostSource"), "Le cover de « Citer en post » est parti avec son entrée.")
+
+        for isOwnStory in [true, false] {
+            let plan = StoryOptionsMenuPlan.resolve(hasStory: true, isOwnStory: isOwnStory, isPublicStory: false,
+                                                    hasAudioTranscript: false, canCompose: false)
+            XCTAssertTrue(plan.shareEntries.contains(.repostAsPost) && plan.shareEntries.contains(.repostAsReel),
+                          "Toute story, la sienne comprise, sur toute audience (porteur, v4).")
         }
     }
 

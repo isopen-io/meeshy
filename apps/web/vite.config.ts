@@ -12,6 +12,7 @@ import { LANDING_LANGUAGES, LANDING_SUBPATH_PATTERN, landingFiles } from './src/
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
+import { loadedPreloadDeps } from './src/lib/build-preload-deps';
 import { apiCacheIdentityPlugin } from './src/lib/net/api-cache-identity';
 import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
 import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
@@ -325,9 +326,13 @@ const prerenderLanding = (): Plugin => {
  *    image, une vidéo ou un lien partagé depuis une autre application arrive
  *    sur la feuille d'envoi. Le `share_target` du manifeste (plus bas) l'y
  *    adresse ; la coque Android reçoit le même partage par un intent, pas par
- *    ce worker.
+ *    ce worker ;
+ *  - `sw-background-upload.js` range l'issue d'un envoi de fond (#11311) : quand
+ *    la page passe à l'arrière-plan en plein envoi, le navigateur poursuit le
+ *    reste du fichier (Background Fetch, Chrome et PWA Chromium) et ce worker
+ *    inscrit l'accusé sur le checkpoint IndexedDB de l'envoi.
  */
-const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js', 'sw-share-target.js'] as const;
+const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js', 'sw-share-target.js', 'sw-background-upload.js'] as const;
 
 /**
  * LES SCRIPTS DU SERVICE WORKER N'ENTRENT PAS DANS LA COQUE (#5604,
@@ -441,6 +446,14 @@ const productionBuildGuard = (): Plugin => {
     },
   };
 };
+
+/** Voir `src/lib/build-preload-deps.ts` (#10974) : capturé AVANT que Vite écrive les listes de préchargement. */
+const preloadDeps = loadedPreloadDeps();
+const capturePreloadBundle = (): Plugin => ({
+  name: 'meeshy:capture-preload-bundle',
+  apply: 'build',
+  generateBundle: { order: 'pre', handler: (_options, bundle) => preloadDeps.capture(bundle) },
+});
 
 const proxyTarget = process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me';
 
@@ -566,6 +579,7 @@ export default defineConfig({
   },
   plugins: [
     productionBuildGuard(),
+    capturePreloadBundle(),
     tailwind(),
     inlineSchemeBootstrap(),
     inlineInterfaceLanguageBootstrap(),
@@ -679,9 +693,9 @@ export default defineConfig({
                * ne croise pas les `/`, donc l'`index.html` de la racine — la
                * coquille de l'application — n'est PAS exclu.
                *
-               * Trois SCRIPTS IMPORTÉS n'y entrent pas non plus (#6702,
-               * étendu #7305, #8884) : `sw-legacy-purge.js`, `sw-push.js` et
-               * `sw-share-target.js`, tous
+               * Quatre SCRIPTS IMPORTÉS n'y entrent pas non plus (#6702,
+               * étendu #7305, #8884, #11311) : `sw-legacy-purge.js`, `sw-push.js`,
+               * `sw-share-target.js` et `sw-background-upload.js`, tous
                * chargés par `importScripts` — le navigateur garde déjà
                * les scripts importés avec le worker. Les précacher ferait
                * payer leurs octets une seconde fois, à chaque installation,
@@ -740,6 +754,7 @@ export default defineConfig({
                 'sw-legacy-purge.js',
                 'sw-push.js',
                 'sw-share-target.js',
+                'sw-background-upload.js',
                 'assets/*.woff2',
                 /* Le flou d'arrière-plan par segmentation (#8471) : MediaPipe
                    et son chargeur WebAssembly ne se téléchargent qu'au premier
@@ -946,6 +961,7 @@ export default defineConfig({
   worker: { format: 'es' },
   build: {
     target: 'es2022',
+    modulePreload: { resolveDependencies: preloadDeps.resolveDependencies },
     cssCodeSplit: true,
     reportCompressedSize: true,
     rollupOptions: {
@@ -1065,6 +1081,13 @@ export default defineConfig({
              * `call_video_segmentation`), hors du précache (`globIgnores`).
              */
             if (id.includes('@mediapipe/tasks-vision')) return undefined;
+            /**
+             * LOTTIE ET SON DÉZIPPEUR (#10638) — atteints UNIQUEMENT par les
+             * `import()` de `lib/lottie/engine.ts` et `lib/lottie/decode.ts`.
+             * Rangés dans `core`, ils y entraient malgré l'import dynamique :
+             * mesuré, la première peinture passait de ~85 à 137 Ko.
+             */
+            if (id.includes('/lottie-web/') || id.includes('/fflate/')) return undefined;
             return 'core';
           }
           /**

@@ -12,8 +12,6 @@ import {
   debitsActionCount,
   MEESH_DEBIT_ORDER,
   MEESH_MINT_COST,
-  MEESH_OPERATIONS_OUTSIDE_DEBIT,
-  operationsNonRangees,
   type MeeshAxisState,
 } from '../utils/meesh.js';
 import { ENGAGEMENT_AXES, type EngagementAxisKey } from '../types/engagement.js';
@@ -228,34 +226,14 @@ describe('la résolution des Meeshes pour l\'écran (#5743)', () => {
 
 
 /**
- * `axesHorsOrdreDeDebit` ne confronte l'ordre de débit qu'aux vingt AXES : elle
- * reste verte quand le catalogue d'OPÉRATIONS grandit. Mesuré en production le
- * 2026-10-13 (#10541) : 54 526 points sur 360 711 vivaient sur des opérations
- * que la frappe ignore, sans qu'aucune décision ne l'ait dit. Cette garde ne
- * décide rien — elle exige que chaque opération ait été RANGÉE par quelqu'un.
+ * La distinction « points à convertir » est SUPPRIMÉE (#10846, porteur 2026-10-16) : tout est convertible, la
+ * frappe dépense la poche. `MEESH_OPERATIONS_OUTSIDE_DEBIT` et `operationsNonRangees` n'existent plus.
  */
-describe('chaque opération du catalogue est rangée — débitée, ou déclarée hors débit', () => {
-  it("ne laisse AUCUNE opération sans rangement", () => {
-    expect(operationsNonRangees()).toEqual([]);
-  });
-
-  it('rougit sur une opération nouvelle que personne n’a rangée', () => {
-    expect(operationsNonRangees([...ENGAGEMENT_OPERATIONS, 'tool.geste_de_demain'])).toEqual(['tool.geste_de_demain']);
-  });
-
-  it('ne range jamais une opération des DEUX côtés — elle serait débitée en étant déclarée intouchable', () => {
-    const debitees = new Set<string>(MEESH_DEBIT_ORDER.flat());
-    expect(MEESH_OPERATIONS_OUTSIDE_DEBIT.filter((operation) => debitees.has(operation))).toEqual([]);
-    expect(MEESH_OPERATIONS_OUTSIDE_DEBIT).toHaveLength(new Set(MEESH_OPERATIONS_OUTSIDE_DEBIT).size);
-  });
-
-  it('ne déclare hors débit que des opérations du catalogue', () => {
-    const catalogue = new Set<string>(ENGAGEMENT_OPERATIONS);
-    expect(MEESH_OPERATIONS_OUTSIDE_DEBIT.filter((operation) => !catalogue.has(operation))).toEqual([]);
-  });
-
-  it("fige l'état du 2026-10-13 : la frappe ne reprend que les vingt axes, les opérations ajoutées restent hors débit", () => {
-    expect([...MEESH_OPERATIONS_OUTSIDE_DEBIT].sort()).toEqual([...EXTRA_ENGAGEMENT_OPERATIONS].sort());
+describe('plus de distinction entre points convertibles et inconvertibles', () => {
+  it("n'exporte plus ni la liste hors débit ni sa garde", async () => {
+    const meesh = (await import('../utils/meesh.js')) as Record<string, unknown>;
+    expect(meesh.MEESH_OPERATIONS_OUTSIDE_DEBIT).toBeUndefined();
+    expect(meesh.operationsNonRangees).toBeUndefined();
   });
 });
 

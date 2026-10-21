@@ -194,18 +194,29 @@ struct ConversationMediaGalleryView: View {
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
     /// ET à chaque fermeture (`stopActiveVideoAudio`). `internal` : `+Consumption.swift` la lit.
     let indexByID: [String: Int]
+    /// #11163 — la forme du lot, lue une fois ici et non par chaque page.
+    let lotShape: GalleryLotShape
 
     @Environment(\.dismiss) private var dismiss
+    /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
+    /// Les marges de la fenêtre qui porte la galerie, la fenêtre clé en repli.
+    var galleryInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
     /// `internal` — le couloir bas du plateau le PILOTE depuis
     /// `+Geometry.swift`, et `private` est une portée de FICHIER. Même prix que
     /// celui payé par les pages au #4014, et pour la même raison.
     @State var currentPageID: String?
+    /// Les pages de la source au dernier suivi : de quoi trouver la VOISINE
+    /// d'une pièce retirée (`GalleryPagePinning.pageAfterRemoval`).
+    @State var lastPageIDs: [String]
     /// **L'état d'immersion, un seul** (#6142, spec § 3.2). Il a remplacé
     /// `showControls` : un booléen ne pouvait pas porter la RAISON de l'entrée,
     /// et sans elle l'appui long et le glissement rendaient le même écran. Il ne
-    /// s'écrit qu'en un endroit — `onEnterStage`, `+Presentation.swift` — et il
-    /// commande DEUX choses : le plateau, et les cotes que le solveur rend.
-    @State var stagePresentation: StagePresentation = .carded
+    /// s'écrit qu'en un endroit — `onEnterStage`, `+Presentation.swift`. Il ne
+    /// commande plus que le plateau (#10930) : on ENTRE en plein écran, sans
+    /// chrome, et le toucher le pose par-dessus le média sans en changer les
+    /// cotes (`MediaStageVeil.geometryPresentation`).
+    @State var stagePresentation: StagePresentation
     /// `internal` — le menu ⋯ le PILOTE depuis `+Menu.swift`, et `private` est
     /// une portée de FICHIER. Même prix que celui payé par `currentPageID`
     /// au-dessus, et pour la même raison.
@@ -242,19 +253,6 @@ struct ConversationMediaGalleryView: View {
     /// les doigts, et la bannière mentirait sur ce que l'envoi gravera.
     @State private var replyTarget: MessageAttachment?
 
-    /// La langue de composition de la barre, tenue ICI pour survivre au
-    /// montage / démontage de la barre : la refermer et la rouvrir ne doit pas
-    /// ramener la langue au défaut.
-    @State private var replyLanguage: String = DefaultComposerLanguage.resolve()
-
-    /// **Le brouillon de réponse, PAR PIÈCE** — « en sortir rend le média
-    /// intact, brouillon compris » (#6165).
-    ///
-    /// Par pièce et non global : deux photos d'un même lot se commentent
-    /// séparément, et un texte écrit sous l'une n'a rien à faire sous l'autre.
-    /// C'est la même raison que `captionLanguage` quelques lignes plus haut —
-    /// ce qui appartient à un média se range par média.
-    @State private var replyDrafts: [String: String] = [:]
     /// #6751 — la transition clavier ANNONCÉE, seule source de sa hauteur.
     @State private var replyKeyboard: KeyboardTransition?
 
@@ -286,9 +284,13 @@ struct ConversationMediaGalleryView: View {
         replyableMedia: ((MessageAttachment) -> Bool)? = nil,
         composableMedia: ((MessageAttachment) -> Bool)? = nil,
         reactableMedia: ((MessageAttachment) -> Bool)? = nil,
-        sceneContext: GallerySceneContext? = nil
+        sceneContext: GallerySceneContext? = nil,
+        entryPresentation: StagePresentation? = nil
     ) {
-        self.allAttachments = allAttachments
+        let pages = GalleryPagePinning.distinct(allAttachments)
+        self.allAttachments = pages
+        _stagePresentation = State(initialValue: entryPresentation
+            ?? MediaStageVeil.entryPresentation(voiceOverRunning: UIAccessibility.isVoiceOverRunning))
         self.startAttachmentId = startAttachmentId
         self.accentColor = accentColor
         self.captionServings = captionServings
@@ -305,23 +307,29 @@ struct ConversationMediaGalleryView: View {
         self.composableMedia = composableMedia
         self.reactableMedia = reactableMedia
         self.sceneContext = sceneContext
-        let positions = Dictionary(
-            allAttachments.enumerated().map { ($0.element.id, $0.offset) },
-            uniquingKeysWith: { first, _ in first }
-        )
+        let positions = Dictionary(uniqueKeysWithValues: pages.enumerated().map { ($0.element.id, $0.offset) })
         self.indexByID = positions
+        self.lotShape = GalleryLotShape(pages)
+        _lastPageIDs = State(initialValue: pages.map(\.id))
         _currentPageID = State(
             initialValue: positions[startAttachmentId] != nil
                 ? startAttachmentId
-                : allAttachments.first?.id
+                : pages.first?.id
         )
     }
 
     /// Position courante, DÉRIVÉE de `currentPageID` — plus de `@State`
     /// miroir à tenir synchronisé (et donc plus d'écriture d'état, donc plus
     /// d'invalidation racine, à chaque page traversée).
+    ///
+    /// Une page qui n'est plus dans la source (message supprimé pour tous,
+    /// éphémère expiré) n'a PAS de position : rendre 0 faisait réagir,
+    /// répondre, enregistrer ou PARTAGER la première pièce à la place de celle
+    /// regardée. La position rendue est alors hors bornes, et chaque lecteur
+    /// (`currentIndex < allAttachments.count`) s'abstient le temps que
+    /// `keepCurrentPageAcrossGrowth` épingle la voisine.
     var currentIndex: Int {
-        guard let currentPageID, let index = indexByID[currentPageID] else { return 0 }
+        guard let currentPageID, let index = indexByID[currentPageID] else { return allAttachments.count }
         return index
     }
 
@@ -375,7 +383,10 @@ struct ConversationMediaGalleryView: View {
             // **La barre de réponse est la couche du DIALOGUE** (#6165) — au
             // même rang que la traînée d'émojis, et pour la même raison : elle
             // doit passer par-dessus tous les contrôleurs du plateau.
-            replyComposerLayer
+            GalleryReplyComposerLayer(accentColor: accentColor,
+                                      replyCitation: replyCitation,
+                                      onSendReplyToMedia: onSendReplyToMedia,
+                                      replyTarget: $replyTarget)
                 // #6751 — l'inset est EXPLICITE : l'ajustement automatique de
                 // SwiftUI ne s'applique pas à une couche alignée en bas d'un
                 // `ZStack` que ses quatre autres enfants étendent à l'écran
@@ -411,6 +422,9 @@ struct ConversationMediaGalleryView: View {
         }
         .task(id: playPauseFade) { await fadePlayPauseAfterDelay() }
         .sheet(isPresented: $showFullEmojiPicker) { fullEmojiPickerSheet }
+        // #10729 — présentée en `fullScreenCover`, la galerie recouvre l'hôte
+        // des toasts de la racine : « Enregistrer » se taisait à l'écran.
+        .feedbackToastOverlay()
     }
 
     /// L'animation de l'état d'immersion est portée ICI et non sur la racine :
@@ -422,56 +436,6 @@ struct ConversationMediaGalleryView: View {
     /// atteignable — pendant toute la transition : sans cette ligne, un tap posé
     /// pendant ces deux dixièmes fermerait la galerie par un bouton que
     /// l'utilisateur voit déjà disparaître.
-    /// **La barre monte, le média RESTE** (#6165).
-    ///
-    /// `ignoresSafeArea(.keyboard)` est posé sur la SCÈNE (le pager et les
-    /// couches du plateau, chacun chez lui), jamais ici : sans cette asymétrie,
-    /// SwiftUI remonterait la pile ENTIÈRE à l'ouverture du clavier et le média
-    /// sortirait par le haut — exactement ce que l'exigence interdit. Cette
-    /// couche-ci, elle, doit suivre le clavier : c'est elle qu'on tape.
-    @ViewBuilder
-    private var replyComposerLayer: some View {
-        if let target = replyTarget, let citation = replyCitation?(target) {
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                MediaReplyComposerBar(
-                    citation: citation,
-                    accentColor: accentColor,
-                    pieceId: target.id,
-                    draft: Binding(
-                        get: { replyDrafts[target.id] ?? "" },
-                        set: { replyDrafts[target.id] = $0 }
-                    ),
-                    composerLanguage: $replyLanguage,
-                    onSend: { text, language in
-                        onSendReplyToMedia?(target, text, language)
-                        // #6751 — le clavier d'abord, la barre ensuite : la
-                        // suite est décidée par `MediaReplyKeyboardInset`.
-                        MediaReplyKeyboardInset.apply(MediaReplyKeyboardInset.sendEffects) {
-                        // **La galerie NE SE REFERME PAS** — ni ici, ni au
-                        // retrait de la barre. C'est tout l'objet du lot : on
-                        // parle de la pièce en la regardant. La barre redescend
-                        // pour rendre le média entier, et un second tap sur
-                        // « répondre » la remonte.
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                replyTarget = nil
-                            }
-                        }
-                        HapticFeedback.light()
-                    },
-                    onCancel: {
-                        MediaReplyKeyboardInset.apply(MediaReplyKeyboardInset.cancelEffects) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                replyTarget = nil
-                            }
-                        }
-                    }
-                )
-            }
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-        }
-    }
-
     /// **Le chrome du plateau, et ce qui l'efface** (#6142 pour l'immersion,
     /// #6789 pour le voile).
     ///
@@ -518,10 +482,14 @@ struct ConversationMediaGalleryView: View {
     /// deux retraits sont ceux que le solveur a réservés — lui et le plateau
     /// lisent la MÊME table (`stageCorridors`, `+Geometry.swift`).
     private var galleryPager: some View {
+        // #11162 — par SÉLECTION : la page se suit par son identité quand le
+        // catalogue insère des pièces avant elle, et ouvrir la 900e ne
+        // construit pas les 899 qui la précèdent.
         AdaptiveHorizontalPager(
             items: allAttachments,
             currentPageID: $currentPageID,
-            fillVertical: true
+            fillVertical: true,
+            paging: .selection
         ) { index, attachment in
             galleryPage(attachment, index: index)
         }
@@ -588,6 +556,15 @@ struct ConversationMediaGalleryView: View {
     private func galleryPage(_ attachment: MessageAttachment, index: Int) -> some View {
         let distance = abs(index - currentIndex)
 
+        if !GalleryRenderWindow.buildsPage(distance: distance) {
+            Color.black
+        } else {
+            builtGalleryPage(attachment, distance: distance)
+        }
+    }
+
+    @ViewBuilder
+    private func builtGalleryPage(_ attachment: MessageAttachment, distance: Int) -> some View {
         switch attachment.type {
         case .image:
             GalleryImagePage(
@@ -636,6 +613,19 @@ struct ConversationMediaGalleryView: View {
 
     // MARK: - Caption Overlay
 
+    /// La rangée de langues de la légende (`GalleryCaptionLanguageRow`) — absente
+    /// dès qu'il n'y a rien à basculer (loi 4).
+    @ViewBuilder
+    private func captionLanguageRow(_ id: String) -> some View {
+        let langues = captionLanguages(id)
+        if !langues.isEmpty {
+            GalleryCaptionLanguageRow(languages: langues,
+                                      active: activeCaptionLanguage(id)) { code in
+                captionLanguage[id] = code
+            }
+        }
+    }
+
     /// **La légende du plein écran rejoint la couche PARTAGÉE** (#4768).
     ///
     /// Elle était la TROISIÈME façon de replier la même chose : `Text` brut,
@@ -652,46 +642,6 @@ struct ConversationMediaGalleryView: View {
     /// l'invite, l'ancrage bas-gauche déplié. Le retrait reste 16 pt, celui de
     /// `bottomMetadataOverlay` juste au-dessus : la légende s'aligne sur sa
     /// colonne, comme en réel (directive porteur 2026-09-01).
-    /// **La rangée de langues de la légende** (#4934) — au-DESSUS du bandeau,
-    /// jamais dedans.
-    ///
-    /// Deux raisons, et la seconde est celle qui décide : le bandeau se DÉPLIE
-    /// au tap (`captionExpanded`), donc y loger des boutons ferait cohabiter
-    /// deux gestes sur la même surface — taper pour lire plus, taper pour
-    /// changer de langue. La rangée vit donc au-dessus, comme la rangée méta
-    /// d'un réel, et emprunte ses métriques (`.overlay`, 32 pt) pour la même
-    /// raison qu'elle : au-dessus d'un média, une bande de 44 pt volerait le tap
-    /// qui pilote la lecture.
-    ///
-    /// **Absente dès qu'il n'y a rien à basculer** — pas grisée, pas vide : le
-    /// cas nominal d'un post à plusieurs médias n'offre aucune traduction de
-    /// légende (#4904), et une rangée fantôme y occuperait la place pour rien.
-    @ViewBuilder
-    private func captionLanguageRow(_ id: String) -> some View {
-        let langues = captionLanguages(id)
-        if !langues.isEmpty {
-            let active = activeCaptionLanguage(id)
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                ForEach(langues, id: \.self) { code in
-                    LanguageFlagChip(code: code,
-                                     isActive: active == code,
-                                     metrics: .overlay) {
-                        // L'écriture est la SEULE ; le texte affiché et le
-                        // libellé VoiceOver la relisent tous deux par
-                        // `servedCaption`. Deux états parallèles auraient permis
-                        // à l'un de dire une langue que l'autre ne sert pas.
-                        captionLanguage[id] = code
-                    }
-                }
-            }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.bottom, MeeshySpacing.xxs)
-            .accessibilityLabel(String(localized: "gallery.caption.languages",
-                                       defaultValue: "Langue de la légende",
-                                       bundle: .main))
-        }
-    }
-
     private func captionOverlay(_ text: String, links: [String: String]) -> some View {
         MediaCaptionOverlay(caption: text,
                             isExpanded: captionExpanded,
@@ -1005,72 +955,11 @@ struct ConversationMediaGalleryView: View {
     }
 
     private func bottomMetadataOverlay(_ att: MessageAttachment) -> some View {
-        let info = senderInfoMap[att.id]
-        return VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
-            // Rangée auteur : affichée seulement si l'info est fournie par le call
-            // site — sinon on masque (pas d'avatar « ? » vide au-dessus des dimensions).
-            if let info {
-                // **Les actions ont quitté cette rangée** (#6161) : elles
-                // sont une colonne verticale posée à droite du cadre
-                // (`cadreActionColumn`). Ce qui reste ici est ce que le
-                // porteur a explicitement gardé sous le voile — l'auteur, sa
-                // date, la légende, la ligne format / dimensions / poids.
-                FullscreenIdentityRow(
-                    name: info.senderName,
-                    subtitle: info.sentAt.formatted(.dateTime.day().month(.abbreviated).hour().minute())
-                ) {
-                    MeeshyAvatar(
-                        name: info.senderName,
-                        context: .messageBubble,
-                        accentColor: info.senderColor,
-                        avatarURL: info.senderAvatarURL
-                    )
-                }
-            }
-            // **Une scène n'a ni format, ni dimensions, ni poids** (#6709) : sa
-            // pièce est synthétique, et la ligne n'y montrerait qu'un glyphe
-            // « photo » qui ment sur ce qu'on regarde. L'auteur et sa date restent.
-            if sceneContext?.scenes[att.id] == nil {
-                // **`largeur × hauteur · poids · durée`** (#9577) — les
-                // segments et leur point médian viennent de `MediaInfoLine` ;
-                // la durée est la feuille qui observe le moteur : temps restant
-                // pendant la lecture, durée totale à l'arrêt.
-                HStack(spacing: MeeshySpacing.xs) {
-                    // Glyphe de type média décoratif (apparié aux dimensions) —
-                    // scale avec le texte mais masqué de VoiceOver.
-                    Image(systemName: att.type == .video ? "video.fill" : "photo")
-                        .accessibilityHidden(true)
-                        .padding(.trailing, MeeshySpacing.xs)
-                    let segments = MediaInfoLine.segments(
-                        width: att.width, height: att.height,
-                        fileSizeLabel: att.fileSize > 0 ? att.fileSizeFormatted : nil,
-                        hasDuration: MediaGalleryStage.carriesDuration([att]))
-                    ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
-                        if index > 0 { Text(MediaInfoLine.separatorGlyph) }
-                        switch segment {
-                        case .dimensions(let texte), .fileSize(let texte):
-                            Text(texte)
-                        case .duration:
-                            MediaPlaybackDurationText(
-                                manager: videoManager,
-                                declaredSeconds: Double(att.duration ?? 0) / 1000,
-                                followsEngine: currentAttachmentIsActiveTrack)
-                        }
-                    }
-                    Spacer()
-                }
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
-                // Regroupe dimensions + poids en un seul arrêt VoiceOver et
-                // remplace le « × » (lu « multiplication ») par un « par » localisé.
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(mediaMetadataAccessibilityLabel(att))
-                .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.md)
-        .padding(.bottom, MeeshySpacing.sm)
+        GalleryMediaMetadataBlock(att: att,
+                                  info: senderInfoMap[att.id],
+                                  isScene: sceneContext?.scenes[att.id] != nil,
+                                  videoManager: videoManager,
+                                  currentAttachmentIsActiveTrack: currentAttachmentIsActiveTrack)
     }
 
     // MARK: - Actions

@@ -27,6 +27,10 @@ public enum FreeFrameSurface: String, CaseIterable, Codable, Sendable, Hashable 
     case call
     case photo
     case video
+    /// Les contours d'avatar de profil (#10632) : une surface à part entière.
+    case avatar
+    /// Les cadres posés sur la photo de bannière (#10932) : une surface à part entière.
+    case banner
 }
 
 /// Les familles de moments du jeu qu'un cadre de moment peut servir.
@@ -63,6 +67,8 @@ public enum FrameUsage: Sendable, Hashable {
 /// Le contexte qui demande un cadre : l'appel, une capture, une étape du jeu.
 public enum FrameUseContext: Sendable, Hashable {
     case call
+    case avatar
+    case banner
     case capture(FrameCaptureMedia)
     case rank(GloryRank, division: GloryDivision5?)
     case prestige
@@ -85,7 +91,7 @@ public struct FrameUsageLabel: Sendable, Hashable {
 
 public enum FrameUsageLaw {
 
-    /// Les dix clés du libellé d'usage, identiques au web (`FRAME_USAGE_LABEL_KEYS`).
+    /// Les douze clés du libellé d'usage, identiques au web (`FRAME_USAGE_LABEL_KEYS`).
     public enum LabelKey {
         public static let callAndCapture = "frame.usage.callAndCapture"
         public static let captureOnly = "frame.usage.captureOnly"
@@ -97,10 +103,15 @@ public enum FrameUsageLaw {
         public static let achievementOnly = "frame.usage.achievementOnly"
         public static let achievementRarityOnly = "frame.usage.achievementRarityOnly"
         public static let momentOnly = "frame.usage.momentOnly"
+        /// « Contour de profil uniquement » (#10632) — dans la table depuis #10715, comme côté TS.
+        public static let avatarOnly = "frame.usage.avatarOnly"
+        /// « Cadre de bannière uniquement » (#10932).
+        public static let bannerFrameOnly = "frame.usage.bannerFrameOnly"
 
         public static let all: [String] = [
             callAndCapture, captureOnly, photoOnly, videoOnly, rankOnly,
             rankDivisionOnly, prestigeOnly, achievementOnly, achievementRarityOnly, momentOnly,
+            avatarOnly, bannerFrameOnly,
         ]
     }
 
@@ -129,6 +140,10 @@ public enum FrameUsageLaw {
         switch context {
         case .call:
             return surfaces.contains(.call)
+        case .avatar:
+            return surfaces.contains(.avatar)
+        case .banner:
+            return surfaces.contains(.banner)
         case .capture(let media):
             return surfaces.contains(.call) || surfaces.contains(media == .photo ? .photo : .video)
         case .rank, .prestige, .achievement, .moment:
@@ -156,6 +171,8 @@ public enum FrameUsageLaw {
     }
 
     private static func freeLabel(_ surfaces: [FreeFrameSurface]) -> String {
+        if surfaces == [.avatar] { return LabelKey.avatarOnly }
+        if surfaces == [.banner] { return LabelKey.bannerFrameOnly }
         if surfaces.contains(.call) { return LabelKey.callAndCapture }
         if surfaces.contains(.photo) && surfaces.contains(.video) { return LabelKey.captureOnly }
         return surfaces.contains(.photo) ? LabelKey.photoOnly : LabelKey.videoOnly
@@ -240,6 +257,10 @@ extension FrameUseContext: Codable {
         switch kind {
         case "call":
             self = .call
+        case "avatar":
+            self = .avatar
+        case "banner":
+            self = .banner
         case "capture":
             self = .capture(try container.decode(FrameCaptureMedia.self, forKey: .media))
         case "rank":
@@ -265,6 +286,10 @@ extension FrameUseContext: Codable {
         switch self {
         case .call:
             try container.encode("call", forKey: .kind)
+        case .avatar:
+            try container.encode("avatar", forKey: .kind)
+        case .banner:
+            try container.encode("banner", forKey: .kind)
         case .capture(let media):
             try container.encode("capture", forKey: .kind)
             try container.encode(media, forKey: .media)

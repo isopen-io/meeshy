@@ -1,13 +1,17 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, test } from 'bun:test';
 import { createStore } from 'zustand/vanilla';
 
 import type { HttpRequest } from '@/lib/api/http';
+import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
 import type { SessionState } from '@/lib/api/session';
 import { pushTapTarget, type PushTapTarget } from '@/lib/notifications/target';
 
 import {
   SHELL_PUSH_CHANNEL_ID,
-  deliveredMessageOf,
   shellPushTargetInput,
   startShellPush,
   type ShellPushPermission,
@@ -63,11 +67,16 @@ const authenticated = (id: string): SessionState => ({
 
 const anonymous: SessionState = { status: 'anonymous' };
 
-function harness(session: SessionState, pluginOptions: Parameters<typeof fakePlugin>[0] = {}) {
+function harness(
+  session: SessionState,
+  pluginOptions: Parameters<typeof fakePlugin>[0] = {},
+  deviceIdentity: () => Promise<unknown> = async () => ({}),
+) {
   const fake = fakePlugin(pluginOptions);
   const store = createStore<{ session: SessionState }>(() => ({ session }));
   const requests: HttpRequest[] = [];
   const visited: string[] = [];
+  const recorded: SocialEventV2Input[] = [];
   const env = {
     plugin: fake.plugin,
     sessionStore: store,
@@ -80,8 +89,10 @@ function harness(session: SessionState, pluginOptions: Parameters<typeof fakePlu
     navigate: (url: string) => visited.push(url),
     urlOf: (target: PushTapTarget) => `${target.route}:${JSON.stringify('params' in target ? target.params : 'search' in target ? target.search : {})}`,
     appVersion: '2.0.12',
+    deviceIdentity,
+    record: (event: SocialEventV2Input) => recorded.push(event),
   };
-  return { ...fake, store, requests, visited, start: () => startShellPush(env) };
+  return { ...fake, store, requests, visited, recorded, start: () => startShellPush(env) };
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -162,6 +173,41 @@ describe('startShellPush — le jeton FCM de la coque part sous le compte couran
   });
 });
 
+describe('le jeton part avec l’identité de l’appareil (#10858)', () => {
+  const registeredBody = async (deviceIdentity: () => Promise<unknown>) => {
+    const h = harness(authenticated('u1'), {}, deviceIdentity);
+    await h.start();
+    await flush();
+    return h.requests.map((request) => request.body);
+  };
+
+  test('l’identifiant stable de l’appareil accompagne le jeton, pour que la passerelle retire l’ancien', async () => {
+    const bodies = await registeredBody(async () => ({ deviceId: 'a1b2c3d4e5f60718', deviceName: 'Pixel 8' }));
+    expect(bodies).toEqual([
+      {
+        token: 'fcm-token-1-xxxxxxxx',
+        platform: 'android',
+        type: 'fcm',
+        appVersion: '2.0.12',
+        deviceId: 'a1b2c3d4e5f60718',
+        deviceName: 'Pixel 8',
+      },
+    ]);
+  });
+
+  test('une coque sans le pont d’identité enregistre quand même son jeton', async () => {
+    const bodies = await registeredBody(async () => {
+      throw new Error('not implemented');
+    });
+    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' }]);
+  });
+
+  test('ce que le pont rend d’inattendu ne part pas', async () => {
+    const bodies = await registeredBody(async () => ({ deviceId: '', deviceName: 42, extra: 'x' }));
+    expect(bodies).toEqual([{ token: 'fcm-token-1-xxxxxxxx', platform: 'android', type: 'fcm', appVersion: '2.0.12' }]);
+  });
+});
+
 describe('une identité anonyme tenue par le compte (#8816)', () => {
   const heldBy = (account: SessionState): SessionState =>
     account.status === 'authenticated'
@@ -183,18 +229,14 @@ describe('une identité anonyme tenue par le compte (#8816)', () => {
     expect(h.calls).toEqual(['register']);
   });
 
-  test('le jeton et les accusés partent sous le COMPTE, jamais sous l’identité anonyme', async () => {
+  test('le jeton part sous le COMPTE, jamais sous l’identité anonyme', async () => {
     const h = harness(authenticated('u1'));
     await h.start();
     await flush();
     h.store.setState({ session: heldBy(authenticated('u1')) });
     h.requests.length = 0;
     h.fire('registration', { value: 'fcm-token-refreshed' });
-    h.fire('pushNotificationReceived', { id: 'n', data: { type: 'new_message', conversationId: 'c42', messageId: 'm7' } });
-    expect(h.requests.map((request) => request.credential)).toEqual([
-      { kind: 'registered', token: 'jwt-u1' },
-      { kind: 'registered', token: 'jwt-u1' },
-    ]);
+    expect(h.requests.map((request) => request.credential)).toEqual([{ kind: 'registered', token: 'jwt-u1' }]);
   });
 });
 
@@ -217,30 +259,24 @@ describe('le tap d’une bannière de la coque aboutit (#7307)', () => {
   });
 });
 
-describe('la coque accuse la remise d’un message reçu (#7307, report de #7368)', () => {
-  test('une arrivée de message poste l’accusé « delivered » sur la route canonique', async () => {
+describe('la coque accuse la remise d’un message reçu UNE fois, en natif (#11122)', () => {
+  test('une arrivée de message ne poste aucun accusé depuis la page : `onMessageReceived` l’a déjà envoyé', async () => {
     const h = harness(authenticated('u1'));
     await h.start();
     await flush();
     h.requests.length = 0;
     h.fire('pushNotificationReceived', { id: 'n', data: { type: 'new_message', conversationId: 'c42', messageId: 'm7' } });
-    expect(h.requests).toEqual([
-      {
-        method: 'POST',
-        path: '/api/v1/conversations/c42/receipts',
-        body: { type: 'delivered', messageIds: ['m7'] },
-        credential: { kind: 'registered', token: 'jwt-u1' },
-      },
-    ]);
+    expect(h.requests).toEqual([]);
   });
 
-  test('une réaction porte le message RÉAGI : aucun accusé', async () => {
-    const h = harness(authenticated('u1'));
-    await h.start();
-    await flush();
-    h.requests.length = 0;
-    h.fire('pushNotificationReceived', { id: 'n', data: { type: 'message_reaction', conversationId: 'c42', messageId: 'm7' } });
-    expect(h.requests).toEqual([]);
+  test('le natif accuse toujours la remise d’un push relayé à la page', () => {
+    const service = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../../android/app/src/main/java/me/meeshy/app/MeeshyMessagingService.java'),
+      'utf8',
+    );
+    const received = service.slice(service.indexOf('public void onMessageReceived('), service.indexOf('private void acknowledgeDelivery('));
+    expect(received).toContain('forward("sendRemoteMessage"');
+    expect(received).toContain('acknowledgeDelivery(PushDeliveryReceipt.of(');
   });
 });
 
@@ -271,9 +307,55 @@ describe('ce que la coque lit de la charge', () => {
       params: { username: 'marie' },
     });
   });
+});
 
-  test('une remise sans message ni conversation n’est pas une remise', () => {
-    expect(deliveredMessageOf({ type: 'new_message', conversationId: 'c1', messageId: '' })).toBeNull();
-    expect(deliveredMessageOf(null)).toBeNull();
+describe('startShellPush — l’entonnoir des notifications compte la coque (#10910)', () => {
+  const NOTIFICATION_ID = '65f0c0ffee0000000000abcd';
+  const POST_ID = '65f0c0ffee0000000000beef';
+
+  test('toucher une bannière note « opened » sur le canal fcm, comme le worker web sur webpush', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    h.fire('pushNotificationActionPerformed', {
+      actionId: 'tap',
+      notification: { data: { notificationId: NOTIFICATION_ID, type: 'post_like', postId: POST_ID, title: 'Nour aime', body: 'secret' } },
+    });
+    expect(h.recorded).toEqual([
+      {
+        type: 'notification',
+        action: 'opened',
+        target: { kind: 'notification', id: NOTIFICATION_ID, parent: { kind: 'post', id: POST_ID } },
+        surface: 'notifications',
+        channel: 'fcm',
+        notificationType: 'post_like',
+      },
+    ]);
+  });
+
+  test('un push reçu app ouverte note « received »', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    h.fire('pushNotificationReceived', { data: { notificationId: NOTIFICATION_ID, type: 'new_message', conversationId: 'c1', messageId: 'm1' } });
+    expect(h.recorded).toEqual([
+      {
+        type: 'notification',
+        action: 'received',
+        target: { kind: 'notification', id: NOTIFICATION_ID },
+        surface: 'notifications',
+        channel: 'fcm',
+        notificationType: 'new_message',
+      },
+    ]);
+  });
+
+  test('sans identifiant de notification valide, rien n’est noté ; un type illisible ne part pas', async () => {
+    const h = harness(authenticated('u1'));
+    await h.start();
+    h.fire('pushNotificationActionPerformed', { actionId: 'tap', notification: { data: { notificationId: 'pas-un-id', type: 'post_like' } } });
+    h.fire('pushNotificationReceived', { data: {} });
+    h.fire('pushNotificationActionPerformed', { actionId: 'tap', notification: { data: { notificationId: NOTIFICATION_ID, type: 'type avec espaces' } } });
+    expect(h.recorded).toEqual([
+      { type: 'notification', action: 'opened', target: { kind: 'notification', id: NOTIFICATION_ID }, surface: 'notifications', channel: 'fcm' },
+    ]);
   });
 });

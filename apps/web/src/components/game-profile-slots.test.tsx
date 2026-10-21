@@ -62,11 +62,18 @@ describe('mon profil', () => {
     expect(host.querySelector('[data-profile-banner-game]') !== null).toBe(true);
   });
 
-  test('sur ma fiche : mes points et ce qu’il me reste, au début de la bannière (#10231)', async () => {
+  test('sur ma fiche : mes étincelles au début de la bannière ; ce qu’il me reste, le cercle le dit (#10231, #10951)', async () => {
     const host = await mount(<GameBannerOwnSlot enabled />);
     await settle();
     expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-points]') !== null).toBe(true);
-    expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-missing]') !== null).toBe(true);
+    expect(host.querySelector('[data-profile-banner-level] [data-profile-banner-missing]') === null).toBe(true);
+  });
+
+  test('sur ma fiche : ma Gloire totale à côté du blason, plus le total d’étincelles à vie (#10913, #10951)', async () => {
+    const host = await mount(<GameBannerOwnSlot enabled />);
+    await settle();
+    expect(host.querySelector('[data-profile-banner-rank] [data-profile-banner-glory="620"]') !== null).toBe(true);
+    expect(host.querySelector('[data-profile-banner-lifetime]') === null).toBe(true);
   });
 
   test('« Jeu masqué » : le jeu ne se dessine pas sur le profil', async () => {
@@ -92,6 +99,20 @@ describe('le profil d’un autre et la carte de contact', () => {
     expect(host.querySelector('[data-profile-banner-game] [data-game-rank]') !== null).toBe(true);
     /* Sa progression n'est jamais servie : aucun « encore » sur la fiche d'un autre. */
     expect(host.querySelector('[data-profile-banner-missing]') === null).toBe(true);
+  });
+
+  test('un AMI lit sa Gloire totale, servie par la passerelle ; un non-ami, à qui elle n’est pas servie, rien (#10913)', async () => {
+    const shown = { level: 11, tier: 'lueur', prestige: 0, flame: null, rank: 'conteur', division: 3, division5: 5, mythic: null } as const;
+    appQueryClient.setQueryData(userGameQueryKey('friend-3'), { visible: true, standing: { ...shown, points: 976, sparks: 976, sparksLifetime: 41_250, glory: 16_000 }, treasury: null });
+    appQueryClient.setQueryData(userGameQueryKey('stranger-1'), { visible: true, standing: shown, treasury: null });
+    const friend = await mount(<GameBannerVisitorSlot userId="friend-3" enabled={false} />);
+    await settle();
+    expect(friend.querySelector('[data-profile-banner-rank] [data-profile-banner-glory="16000"]') !== null).toBe(true);
+    expect(friend.querySelector('[data-profile-banner-lifetime]') === null).toBe(true);
+    const stranger = await mount(<GameBannerVisitorSlot userId="stranger-1" enabled={false} />);
+    await settle();
+    expect(stranger.querySelector('[data-profile-banner-game]') !== null).toBe(true);
+    expect(stranger.querySelector('[data-profile-banner-glory]') === null).toBe(true);
   });
 
   test('ses réglages ferment son rang : rien ne se dessine, pas même « fermé »', async () => {

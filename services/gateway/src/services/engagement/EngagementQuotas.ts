@@ -136,17 +136,17 @@ export class EngagementQuotas {
    * qu'une seconde suppression ne reprenne rien. Le seau reste consommé : le
    * contenu ne recréditera jamais.
    */
-  async reclaim(userId: string, operationKey: string, targetId: string, since: Date): Promise<number> {
+  async reclaim(userId: string, operationKey: string, targetId: string, since: Date): Promise<{ readonly points: number; readonly creditedAt?: Date }> {
     const row = await this.prisma.engagementQuota.findUnique({
       where: { userId_operationKey_bucket: { userId, operationKey, bucket: contentBucket(targetId) } },
       select: { points: true, createdAt: true },
     });
-    if (!row || row.points <= 0 || row.createdAt < since) return 0;
+    if (!row || row.points <= 0 || row.createdAt < since) return { points: 0 };
     const cleared = await this.prisma.engagementQuota.updateMany({
       where: { userId, operationKey, bucket: contentBucket(targetId), points: row.points },
       data: { points: 0 },
     });
-    return cleared.count > 0 ? row.points : 0;
+    return cleared.count > 0 ? { points: row.points, creditedAt: row.createdAt } : { points: 0 };
   }
 
   /**

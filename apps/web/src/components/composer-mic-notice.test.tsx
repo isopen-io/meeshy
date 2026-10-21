@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
-import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { Composer } from './composer';
@@ -56,7 +56,8 @@ async function pressMicrophone(language: 'fr' | 'en'): Promise<HTMLDivElement> {
     root.render(<Composer onSend={() => {}} />);
   });
   act(() => {
-    container.querySelector<HTMLButtonElement>('[aria-label="Enregistrer un message vocal"]')!.click();
+    // Le micro se nomme dans la langue d'interface (« Record a voice message » en anglais).
+    container.querySelector<HTMLButtonElement>(`[aria-label="${translate(language, 'composer.attach.voice.action')}"]`)!.click();
   });
   const deadline = Date.now() + 2000;
   while (!/Micro/.test(container.textContent ?? '') && Date.now() < deadline) {

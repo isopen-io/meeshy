@@ -197,6 +197,6 @@ final class ReadingModesFlagIntegrationTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent("Meeshy/Features/Main/Views/\(fileName)")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 }

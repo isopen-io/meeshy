@@ -91,6 +91,15 @@ nonisolated enum AudioFullscreenPaging {
     /// cours peut montrer.
     static let renderRadius = 1
 
+    /// La position de la page REGARDÉE dans la liste du moment. La liste bouge
+    /// sous l'écran ouvert (vocal expiré, supprimé pour tous) : une position
+    /// gardée telle quelle glissait sur le vocal voisin, qui recevait alors la
+    /// réaction ou la réponse.
+    static func index(of pageID: String?, in ids: [String]) -> Int? {
+        guard let pageID else { return nil }
+        return ids.firstIndex(of: pageID)
+    }
+
     static func renders(index: Int, current: Int) -> Bool {
         abs(index - current) <= renderRadius
     }

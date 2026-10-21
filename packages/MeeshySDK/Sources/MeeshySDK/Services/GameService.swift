@@ -24,7 +24,7 @@ public protocol GameServiceProviding: Sendable {
     func markGuideSeen(keys: [String], requestId: String) async throws -> GuideSeenResponse
 }
 
-public final class GameService: GameServiceProviding, @unchecked Sendable {
+public final class GameService: GameServiceProviding, Sendable {
     public static let shared = GameService()
     private let api: APIClientProviding
 

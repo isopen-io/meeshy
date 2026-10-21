@@ -36,10 +36,20 @@ export function evaluateExpression(expression: Expression, row: MongoLikeRow): u
     const value = evaluateExpression(operands[0], row);
     return isAbsent(value) ? evaluateExpression(operands[1], row) : value;
   }
+  if (operator === '$toLong') {
+    // `$toLong` (#10912) : un opérande unique, `null` ou absent rend `null` ; un `long` déjà gravé (BigInt du client) se relit en nombre.
+    const value = evaluateExpression(Array.isArray(operands) ? operands[0] : operands, row);
+    if (isAbsent(value)) return null;
+    return typeof value === 'bigint' ? Number(value) : Math.trunc(Number(value));
+  }
   const values = operands.map((operand) => evaluateExpression(operand, row));
   if (operator === '$max') {
     const present = values.filter((value): value is number => typeof value === 'number');
     return present.length === 0 ? null : Math.max(...present);
+  }
+  if (operator === '$min') {
+    const present = values.filter((value): value is number => typeof value === 'number');
+    return present.length === 0 ? null : Math.min(...present);
   }
   if (operator === '$add' || operator === '$subtract') {
     if (!values.every((value): value is number => typeof value === 'number')) return null;
@@ -54,6 +64,9 @@ const matchesCondition = (actual: unknown, condition: unknown): boolean => {
     if (operator === '$oid') return actual === expected;
     if (operator === '$gte') return typeof actual === 'number' && actual >= (expected as number);
     if (operator === '$gt') return typeof actual === 'number' && actual > (expected as number);
+    // `$in` : `null` y couvre aussi l'absence ; `$exists` : la présence du champ, `null` compris (rattrapage #10845).
+    if (operator === '$in') return (expected as unknown[]).some((candidate) => (candidate === null ? isAbsent(actual) : actual === candidate));
+    if (operator === '$exists') return (actual !== undefined) === expected;
     throw new Error(`opérateur de requête non reproduit par le double : ${operator}`);
   });
 };
@@ -61,6 +74,7 @@ const matchesCondition = (actual: unknown, condition: unknown): boolean => {
 const equalityFields = (query: Record<string, unknown>): MongoLikeRow =>
   Object.fromEntries(
     Object.entries(query)
+      .filter(([key]) => key !== '$or')
       .map(([key, condition]): [string, unknown] | null => {
         if (typeof condition !== 'object' || condition === null) return [key, condition];
         return '$oid' in condition ? [key, (condition as { $oid: string }).$oid] : null;
@@ -87,7 +101,11 @@ export function findAndModifyLikeMongo(
   command: FindAndModifyCommand,
   create: (fields: MongoLikeRow) => MongoLikeRow = (fields) => ({ ...fields }),
 ): { ok: 1; value: MongoLikeRow | null } {
-  const found = rows.find((row) => Object.entries(command.query).every(([key, condition]) => matchesCondition(row[key], condition)));
+  const matchesQuery = (row: MongoLikeRow, query: Record<string, unknown>): boolean =>
+    Object.entries(query).every(([key, condition]) =>
+      key === '$or' ? (condition as Record<string, unknown>[]).some((branch) => matchesQuery(row, branch)) : matchesCondition(row[key], condition),
+    );
+  const found = rows.find((row) => matchesQuery(row, command.query));
   if (!found && !command.upsert) return { ok: 1, value: null };
   const target = found ?? create(equalityFields(command.query));
   const before = { ...target };

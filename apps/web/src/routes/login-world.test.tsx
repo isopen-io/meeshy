@@ -1,9 +1,7 @@
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
-import type { WorldEntry } from '@meeshy/shared/types/world';
 
-import type { ApiResult } from '@/lib/api/http';
 import { sessionStore } from '@/lib/api/session';
 import { INTERFACE_LANGUAGE_KEY } from '@/lib/inline-interface-language-bootstrap.js';
 import { setInterfaceLanguage } from '@/lib/interface-language';
@@ -13,12 +11,12 @@ import { href } from '@/routes/route-table';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 /**
- * LA CONNEXION PROPOSE WORLD WIDE EN PREMIER, ET L'EN-TÊTE PUBLIC CHANGE LA
+ * LA CONNEXION S'OUVRE SUR LA CONNEXION, ET L'EN-TÊTE PUBLIC CHANGE LA
  * LANGUE (#10007, planche « Login »).
  *
- * Au-dessus de « ou avec votre compte », une carte « Entrer dans World Wide —
- * sans compte » mène au parcours invité de #10003 (`/world`). Elle ne paraît
- * plus quand `GET /world` dit qu'aucune entrée n'est ouverte. L'en-tête porte
+ * La carte « Entrer dans World Wide — sans compte » qui la précédait est
+ * retirée (#10784, directive porteur du 2026-10-16) : l'entrée anonyme ne
+ * passe plus que par le QR de meeshy.me, qui mène à `/world`. L'en-tête porte
  * le logo et le sélecteur des sept langues d'interface : choisir une langue la
  * RETIENT et l'APPLIQUE sans rechargement — l'écran se relit dans la langue
  * choisie.
@@ -51,20 +49,6 @@ afterEach(async () => {
   localStorage.removeItem(INTERFACE_LANGUAGE_KEY);
 });
 
-const servedEntry = (): WorldEntry => ({
-  identifier: 'world',
-  title: 'World Wide',
-  shareLinkIdentifier: 'mshy_world',
-  memberCount: 12,
-});
-
-const open = (): Promise<ApiResult<WorldEntry>> => Promise.resolve({ ok: true, data: servedEntry() });
-
-const closed = (): Promise<ApiResult<WorldEntry>> =>
-  Promise.resolve({ ok: false, status: 404, error: 'Aucune entrée ouverte', code: 'WORLD_UNAVAILABLE' });
-
-const never = (): Promise<ApiResult<WorldEntry>> => new Promise(() => undefined);
-
 async function mount(node: ReactNode): Promise<HTMLDivElement> {
   window.history.replaceState({}, '', '/login');
   const host = document.createElement('div');
@@ -91,64 +75,22 @@ async function choose(select: HTMLSelectElement, language: string): Promise<void
   });
 }
 
-const precedes = (first: Element, second: Element) =>
-  (first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-
-describe('/login — World Wide en premier (#10007)', () => {
-  test('la carte « Entrer dans World Wide — sans compte » mène à /world, AVANT « ou avec votre compte » et le champ e-mail', async () => {
-    const el = await mount(<LoginDoors method="lien" world={{ load: open }} />);
-    const card = el.querySelector('a[data-login-world]');
-    expect(card).not.toBeNull();
-    expect(card?.getAttribute('href')).toBe(href('world'));
-    expect(text(card)).toContain('Entrer dans World Wide');
-    expect(text(card)).toContain('Sans compte · votre nom et votre langue');
-
-    const separator = el.querySelector('[data-login-world-separator]');
-    expect(text(separator)).toBe('ou avec votre compte');
-
-    const email = el.querySelector('#magic-link-email');
-    expect(email).not.toBeNull();
-    if (card === null || separator === null || email === null) return;
-    expect(precedes(card, separator)).toBe(true);
-    expect(precedes(separator, email)).toBe(true);
-  });
-
-  test('la carte paraît SANS attendre le réseau : la lecture de GET /world ne la retient pas', async () => {
-    const el = await mount(<LoginDoors method="lien" world={{ load: never }} />);
-    expect(el.querySelector('a[data-login-world]')).not.toBeNull();
-  });
-
-  test('la porte du mot de passe la propose aussi, en tête', async () => {
-    const el = await mount(<LoginDoors method="password" world={{ load: open }} />);
-    const card = el.querySelector('a[data-login-world]');
-    const username = el.querySelector('#login-username');
-    expect(card).not.toBeNull();
-    if (card === null || username === null) throw new Error('carte ou identifiant absent');
-    expect(precedes(card, username)).toBe(true);
-  });
-
-  test('GET /world répond WORLD_UNAVAILABLE : ni carte, ni séparateur', async () => {
-    const el = await mount(<LoginDoors method="lien" world={{ load: closed }} />);
-    expect(el.querySelector('a[data-login-world]')).toBeNull();
-    expect(el.querySelector('[data-login-world-separator]')).toBeNull();
-    expect(el.querySelector('#magic-link-email')).not.toBeNull();
-  });
-
-  test('pendant le second facteur, la carte se tait : l’écran ne propose que le code', async () => {
-    sessionStore.getState().beginTwoFactor({
-      user: { id: 'u1', username: 'ada', email: 'ada@example.com', firstName: 'Ada', lastName: 'L', displayName: 'Ada', avatar: '' },
-      twoFactorToken: 'jeton-2fa',
+describe('/login ne propose plus World Wide (#10784)', () => {
+  for (const method of ['lien', 'password'] as const) {
+    test(`porte « ${method} » : ni carte World Wide, ni séparateur, ni lien vers /world — l’écran s’ouvre sur la connexion`, async () => {
+      const el = await mount(<LoginDoors method={method} />);
+      expect(el.querySelector('[data-login-world]')).toBeNull();
+      expect(el.querySelector('[data-login-world-separator]')).toBeNull();
+      expect(el.querySelector(`a[href="${href('world')}"]`)).toBeNull();
+      expect(text(el)).not.toContain('World Wide');
+      expect(el.querySelector(method === 'lien' ? '#magic-link-email' : '#login-username')).not.toBeNull();
     });
-    const el = await mount(<LoginDoors method="lien" world={{ load: open }} />);
-    expect(el.querySelector('#login-2fa-code')).not.toBeNull();
-    expect(el.querySelector('a[data-login-world]')).toBeNull();
-    expect(el.querySelector('[data-login-world-separator]')).toBeNull();
-  });
+  }
 });
 
 describe('l’en-tête public change la langue d’interface (#10007)', () => {
   test('la connexion porte le sélecteur des sept langues, chacune dans sa propre langue — et pas l’icône d’application', async () => {
-    const el = await mount(<LoginDoors method="lien" world={{ load: open }} />);
+    const el = await mount(<LoginDoors method="lien" />);
     const header = el.querySelector('[data-public-header]');
     expect(header).not.toBeNull();
     expect(el.innerHTML).not.toContain('/brand/logo.png');
@@ -170,21 +112,19 @@ describe('l’en-tête public change la langue d’interface (#10007)', () => {
   });
 
   test('choisir « English » retient le choix et relit l’écran en anglais, sans rechargement', async () => {
-    const el = await mount(<LoginDoors method="lien" world={{ load: open }} />);
+    const el = await mount(<LoginDoors method="lien" />);
     const select = el.querySelector('select[data-interface-language]') as HTMLSelectElement;
     await choose(select, 'en');
 
     expect(document.documentElement.lang).toBe('en');
     expect(localStorage.getItem(INTERFACE_LANGUAGE_KEY)).toBe('en');
-    expect(text(el.querySelector('a[data-login-world]'))).toContain('Enter World Wide');
-    expect(text(el.querySelector('[data-login-world-separator]'))).toBe('or with your account');
     expect(text(el)).toContain('Your email address');
     expect(text(el)).not.toContain('Votre adresse e-mail');
     expect((el.querySelector('select[data-interface-language]') as HTMLSelectElement).value).toBe('en');
   });
 
   test('le sélecteur montre le choix TOUT DE SUITE, pendant que le catalogue de la langue se charge', async () => {
-    const el = await mount(<LoginDoors method="lien" world={{ load: open }} />);
+    const el = await mount(<LoginDoors method="lien" />);
     const select = el.querySelector('select[data-interface-language]') as HTMLSelectElement;
     act(() => {
       select.value = 'de';
@@ -199,7 +139,7 @@ describe('l’en-tête public change la langue d’interface (#10007)', () => {
   });
 
   test('l’arabe retourne la page : `dir="rtl"` posé avec la langue', async () => {
-    const el = await mount(<LoginDoors method="password" world={{ load: open }} />);
+    const el = await mount(<LoginDoors method="password" />);
     const select = el.querySelector('select[data-interface-language]') as HTMLSelectElement;
     await choose(select, 'ar');
     expect(document.documentElement.lang).toBe('ar');
@@ -245,18 +185,17 @@ describe('sur un téléphone court, la porte du mot de passe tient dans la vue (
     }
   };
 
-  test('à 667 px de haut, le blason cède la place à World Wide', async () => {
+  test('à 667 px de haut, le blason cède la place aux champs', async () => {
     await withViewportHeight(667, async () => {
-      const el = await mount(<LoginDoors method="password" world={{ load: open }} />);
+      const el = await mount(<LoginDoors method="password" />);
       expect(el.querySelector('h1')).toBeNull();
-      expect(el.querySelector('a[data-login-world]')).not.toBeNull();
       expect(el.querySelector('#login-username')).not.toBeNull();
     });
   });
 
   test('à 844 px de haut, le blason reste', async () => {
     await withViewportHeight(844, async () => {
-      const el = await mount(<LoginDoors method="password" world={{ load: open }} />);
+      const el = await mount(<LoginDoors method="password" />);
       expect(text(el.querySelector('h1'))).toBe('Meeshy');
     });
   });
@@ -267,7 +206,7 @@ describe('sur un téléphone court, la porte du mot de passe tient dans la vue (
       twoFactorToken: 'jeton-2fa',
     });
     await withViewportHeight(667, async () => {
-      const el = await mount(<LoginDoors method="password" world={{ load: open }} />);
+      const el = await mount(<LoginDoors method="password" />);
       expect(text(el.querySelector('h1'))).toBe('Meeshy');
     });
   });

@@ -62,7 +62,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
             // plein format. MÉMOIRE seule (#10354) : l'init n'est pas le lieu
             // d'un décodage disque — le `.task` le fait hors du fil principal.
             if let targetSize,
-               let sized = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: targetSize)) {
+               let sized = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(targetSize))) {
                 cachedFull = sized
             } else {
                 cachedFull = WarmImageProbe.residentImage(for: resolved)
@@ -119,7 +119,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
             // ne flashent pas leur thumbHash quand la nouvelle URL est deja sur
             // disque.
             let cached = targetSize.flatMap {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0))
+                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting($0)))
             } ?? WarmImageProbe.warmedImage(for: resolved)
             image = cached
             // Refresh the ThumbHash blur for the new url — cells are reused, so
@@ -157,10 +157,6 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         )
     }
 
-    @MainActor private static func pixelSize(for points: CGSize) -> CGFloat {
-        max(points.width, points.height) * UIScreen.main.scale
-    }
-
     /// Returns `true` for `file://` URLs — local sandbox media that must never
     /// be subject to the network policy gate. The bytes are already on device;
     /// no download can ever happen.
@@ -174,7 +170,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
         if image != nil {
             let sizedResident = targetSize.map {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0)) != nil
+                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting($0))) != nil
             } ?? false
             if sizedResident || DiskCacheStore.cachedImage(for: resolved) != nil { return }
         }
@@ -209,7 +205,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         isLoading = true; hasFailed = false; isDeferred = false
         let loaded: UIImage?
         if let targetSize {
-            let maxPixel = Self.pixelSize(for: targetSize)
+            let maxPixel = DecodeBudget.maxPixelWidth(for: .fitting(targetSize))
             loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel)
         } else {
             loaded = await CacheCoordinator.shared.images.image(for: resolved)
@@ -282,7 +278,7 @@ public struct CachedAvatarImage: View {
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            cachedFull = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: size))
+            cachedFull = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
                 ?? WarmImageProbe.warmedImage(for: resolved)
         } else {
             cachedFull = nil
@@ -307,7 +303,7 @@ public struct CachedAvatarImage: View {
         .adaptiveOnChange(of: urlString) { _, newUrl in
             guard let newUrl, !newUrl.isEmpty else { image = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            image = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: size))
+            image = DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size))))
                 ?? WarmImageProbe.warmedImage(for: resolved)
         }
     }
@@ -323,17 +319,13 @@ public struct CachedAvatarImage: View {
         }
     }
 
-    @MainActor private static func pixelSize(for points: CGFloat) -> CGFloat {
-        points * UIScreen.main.scale
-    }
-
     private func loadAvatar(for currentUrlString: String?) async {
         guard let currentUrlString, !currentUrlString.isEmpty else { return }
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
         if image != nil,
-           DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: size)) != nil
+           DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size)))) != nil
             || DiskCacheStore.cachedImage(for: resolved) != nil { return }
-        let maxPixel = Self.pixelSize(for: size)
+        let maxPixel = DecodeBudget.maxPixelWidth(for: .fitting(CGSize(width: size, height: size)))
         if let loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel) {
             if self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
@@ -395,28 +387,11 @@ public struct CachedBannerImage: View {
         }
     }
 
-    /// Banners are laid out with a fixed `height` via `.frame(height:).clipped()`
-    /// but NO width constraint — every known call site (`ProfileView`,
-    /// `CommunityListView`, `CommunityDetailView`,
-    /// `ConversationListHelpers.ThemedCommunityCard`) stretches the view to
-    /// fill its container's width, which is at minimum comparable to, and
-    /// often much larger than, `height`. `kCGImageSourceThumbnailMaxPixelSize`
-    /// (used by `DiskCacheStore.downsampledImage`) bounds the LARGER of the
-    /// two rendered dimensions, so deriving the cap from `height` alone
-    /// starves the image on its actually-dominant width axis, producing a
-    /// visibly blurrier upscale than the pipeline's prior flat 1200px cap.
-    /// Anchoring on the device's screen width (this file has no visibility
-    /// into any per-call-site container width) restores parity with that
-    /// baseline for full-bleed banners.
-    @MainActor private static func pixelSize(for height: CGFloat) -> CGFloat {
-        max(UIScreen.main.bounds.width, height) * UIScreen.main.scale
-    }
-
     private func loadBanner(for currentUrlString: String?) async {
         guard let currentUrlString, !currentUrlString.isEmpty else { return }
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
         if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
-        let maxPixel = Self.pixelSize(for: height)
+        let maxPixel = DecodeBudget.maxPixelWidth(for: .fullBleed(height: height))
         if let loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel) {
             if self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) {
@@ -507,7 +482,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         if let fullUrl, !fullUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
             cachedFull = targetSize.flatMap {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0))
+                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting($0)))
             } ?? WarmImageProbe.residentImage(for: resolved)
         } else {
             cachedFull = nil
@@ -562,8 +537,8 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         }
         .task(id: fullUrl) {
             showPlaceholder = false
-            try? await Task.sleep(for: .milliseconds(200))
-            if !Task.isCancelled { showPlaceholder = true }
+            guard await cancellableSleep(for: .milliseconds(200)) else { return }
+            showPlaceholder = true
         }
         .adaptiveOnChange(of: thumbnailUrl) { _, newUrl in
             guard fullImage == nil else { return }
@@ -575,7 +550,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
             guard let newUrl, !newUrl.isEmpty else { fullImage = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
             let cached = targetSize.flatMap {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0))
+                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting($0)))
             } ?? WarmImageProbe.warmedImage(for: resolved)
             if let cached {
                 fullImage = cached
@@ -605,10 +580,6 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     /// `CachedAsyncImage.isLocalFileURL` so the gate logic reads the same.
     nonisolated static func isLocalFileURL(_ urlString: String) -> Bool {
         urlString.hasPrefix("file://")
-    }
-
-    @MainActor private static func pixelSize(for points: CGSize) -> CGFloat {
-        max(points.width, points.height) * UIScreen.main.scale
     }
 
     private func loadThumbnail() async {
@@ -651,7 +622,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
         if fullImage != nil {
             let sizedResident = targetSize.map {
-                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: Self.pixelSize(for: $0)) != nil
+                DiskCacheStore.cachedImage(for: resolved, maxPixelSize: DecodeBudget.maxPixelWidth(for: .fitting($0))) != nil
             } ?? false
             if sizedResident || DiskCacheStore.cachedImage(for: resolved) != nil {
                 onFullImageLoaded?()
@@ -676,7 +647,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         }
         let loaded: UIImage?
         if let targetSize {
-            let maxPixel = Self.pixelSize(for: targetSize)
+            let maxPixel = DecodeBudget.maxPixelWidth(for: .fitting(targetSize))
             loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel)
         } else {
             loaded = await CacheCoordinator.shared.images.image(for: resolved)

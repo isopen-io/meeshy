@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy, useRef, useState, type ReactNode } from 'react';
 
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
@@ -19,6 +19,7 @@ import {
 import { shortRelativeTime } from '@/lib/relative-time';
 import { useImpressionRef } from '@/lib/view/reading-telemetry';
 import { META_TEXT_OPACITY, QUOTED_CARD_WIDTH } from '@/lib/reading-mode/metrics';
+import '@/styles/sticker-float.css';
 
 import { GlyphSvg } from './glyph';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
@@ -48,7 +49,93 @@ import { QuoteRail } from './message-blocks';
 /** Le catalogue de Mee et Meo n'est chargé qu'au premier sticker qui le demande (#9034). */
 const MeeBubbleSticker = lazy(() => import('./mee-sticker-bubble'));
 
+const StickerSheet = lazy(() => import('./sticker-sheet').then((m) => ({ default: m.StickerSheet })));
+
+/** Un appui plus long que ceci est l'appui long du MENU du message, pas un toucher. */
+const TAP_MAX_MS = 450;
+
+/**
+ * LE STICKER SE TOUCHE (#10630) — un toucher ouvre sa FICHE (aperçu, « Ajouter
+ * à mes stickers », « Voir le pack »), jamais la visionneuse : ce n'est pas un
+ * média de la conversation. L'appui long reste celui du message (le menu).
+ * `interactive={false}` : l'aperçu de la fiche elle-même.
+ */
 export function StickerArtwork({
+  sticker,
+  picture,
+  side,
+  interactive = true,
+  senderName,
+}: {
+  readonly sticker: MessageSticker;
+  readonly picture: Pick<Attachment, 'fileUrl'> | undefined;
+  readonly side: number;
+  readonly interactive?: boolean;
+  /** L'expéditeur, nommé sur la fiche (#10703). */
+  readonly senderName?: string | undefined;
+}) {
+  const art = <StickerArt sticker={sticker} picture={picture} side={side} />;
+  return interactive ? (
+    <StickerTouch sticker={sticker} picture={picture} senderName={senderName}>
+      {art}
+    </StickerTouch>
+  ) : (
+    art
+  );
+}
+
+const stickerAltOf = (sticker: MessageSticker): string => (sticker.emoji !== undefined ? `Sticker ${sticker.emoji}` : 'Sticker');
+
+function StickerTouch({
+  sticker,
+  picture,
+  senderName,
+  children,
+}: {
+  readonly sticker: MessageSticker;
+  readonly picture: Pick<Attachment, 'fileUrl'> | undefined;
+  readonly senderName: string | undefined;
+  readonly children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  /* La durée se tranche au RELÂCHER, jamais au clic : le double toucher
+     (#10599) RETIENT le clic d'une tuile puis le rejoue, et le clavier n'a
+     aucun appui — l'un ou l'autre, jugé à l'heure du clic, était refusé. */
+  const pressedAt = useRef(0);
+  const heldTooLong = useRef(false);
+  return (
+    <>
+      <button
+        type="button"
+        data-sticker-open
+        aria-label={stickerAltOf(sticker)}
+        aria-haspopup="dialog"
+        onPointerDown={() => {
+          pressedAt.current = Date.now();
+          heldTooLong.current = false;
+        }}
+        onPointerUp={() => {
+          heldTooLong.current = pressedAt.current !== 0 && Date.now() - pressedAt.current > TAP_MAX_MS;
+          pressedAt.current = 0;
+        }}
+        onClick={() => {
+          const held = heldTooLong.current;
+          heldTooLong.current = false;
+          if (!held) setOpen(true);
+        }}
+      >
+        {children}
+      </button>
+      {open ? (
+        <Suspense fallback={null}>
+          <StickerSheet sticker={sticker} picture={picture} senderName={senderName} onClose={() => setOpen(false)} />
+        </Suspense>
+      ) : null}
+    </>
+  );
+}
+
+function StickerArt({
   sticker,
   picture,
   side,
@@ -57,7 +144,7 @@ export function StickerArtwork({
   readonly picture: Pick<Attachment, 'fileUrl'> | undefined;
   readonly side: number;
 }) {
-  const alt = sticker.emoji !== undefined ? `Sticker ${sticker.emoji}` : 'Sticker';
+  const alt = stickerAltOf(sticker);
   const hasTemplate = sticker.templateId !== undefined && sticker.templateId !== '';
 
   if (!hasTemplate && sticker.emoji !== undefined && sticker.emoji !== '') {

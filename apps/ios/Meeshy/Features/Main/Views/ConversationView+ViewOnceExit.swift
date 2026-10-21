@@ -60,6 +60,20 @@ extension ConversationView {
     /// changement de phase sont synchrones. La consommation est un accusé — si
     /// elle échoue, le message reste consommable, ce qui est le bon sens de
     /// l'échec : on ne détruit pas ce qu'on n'a pas pu confirmer.
+    /// **La sortie par NAVIGATION** — retour à la liste, ouverture d'une
+    /// autre conversation. Consomme ce qu'on a lu (#7500) et, quitté depuis
+    /// le Résumé, rattrape la conversation (#10818, `ConversationCatchUpLaw
+    /// .exitCatchesUp`) : le Résumé ne rend aucune bulle, la sortie est sa
+    /// seule preuve de lecture. Le passage en arrière-plan n'est pas une
+    /// sortie de lecture : il ne rattrape pas.
+    func leaveConversationByNavigation() {
+        viewModel.noteScreenLeft()
+        consumeOpenedViewOnceOnExit()
+        if ConversationCatchUpLaw.exitCatchesUp(mode: readingModeController.mode) {
+            viewModel.markCaughtUpFromSummaryOrRiver()
+        }
+    }
+
     func consumeOpenedViewOnceOnExit() {
         // #8303 — la flamme-œil suit la MÊME porte : ce qu'on y a lu disparaît
         // quand on quitte (retour, arrière-plan, verrouillage).

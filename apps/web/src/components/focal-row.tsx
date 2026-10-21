@@ -25,11 +25,11 @@ import {
   META_TEXT_OPACITY,
   ROW_PADDING_HORIZONTAL,
   ROW_PADDING_VERTICAL,
-  STICKER_RENDER_SCALE,
   STICKER_SIDE,
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
 import { useFocusFrame } from '@/lib/view/use-focus-frame';
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
@@ -174,9 +174,8 @@ export const FocalRow = memo(function FocalRow({
   /** Les emojis que CE lecteur a posés sur CE message (`reaction-store.ts`)
    * — marque `ReactionChip mine` (#5814, T12). */
   myReactions?: readonly string[];
-  /** Retire une réaction MIENNE en tapant sa capsule (#5865) — jamais câblé
-   * sur une capsule d'autrui (`ReactionChip`, `onToggle`). `undefined` ⇒ la
-   * capsule reste un `<span>` inerte (loi 4). */
+  /** Bascule MA réaction en tapant une capsule — la mienne se retire (#5865),
+   * celle d'autrui pose la même (#10583). `undefined` ⇒ `<span>` inerte (loi 4). */
   onReact?: (emoji: string) => void;
   /**
    * OUVRE LA FICHE DU MESSAGE (#8536) — le MÊME panneau que « Plus… » au menu
@@ -576,7 +575,7 @@ export const FocalRow = memo(function FocalRow({
       {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
-        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE * STICKER_RENDER_SCALE} />
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} senderName={message.sender?.displayName} />
       ) : body.kind === 'emoji-only' ? (
         <EmojiOnly text={body.text} fontSize={body.fontSize} />
       ) : rendered.text ? (
@@ -708,12 +707,12 @@ export const FocalRow = memo(function FocalRow({
             >
               {selected ? '✓' : null}
             </span>
-            <span className="offscreen">Sélectionner ce message</span>
+            <span className="offscreen">{translate(currentInterfaceLanguage(), 'thread.select.message')}</span>
           </button>
         ) : head ? (
           <span className="relative inline-flex">
           <AuthorAvatar
-            {...(isMine ? {} : { authorId: hereKeyOf(message.sender), participant: { id: message.senderId, name: senderAvatarName } })}
+            {...(isMine ? {} : { authorId: hereKeyOf(message.sender), sender: message.sender, participant: { id: message.senderId, name: senderAvatarName } })}
             initials={initialsOf(senderAvatarName)}
             color="var(--accent)"
             size={AVATAR_SIZE}
@@ -763,7 +762,8 @@ export const FocalRow = memo(function FocalRow({
             {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
             username={senderHandle}
             {...(senderRing === undefined ? {} : { storyRing: senderRing })}
-            {...(isMine ? {} : { participantId: message.senderId })}
+            {...(isMine ? {} : { participantId: message.senderId, authorId: hereKeyOf(message.sender) })}
+            presence={senderPresence}
           />
         ) : null}
 
@@ -887,7 +887,7 @@ export const FocalRow = memo(function FocalRow({
               reactions={reactions}
               {...(myReactions === undefined ? {} : { myReactions })}
               {...(onPickLanguage === undefined ? {} : { onPickLanguage })}
-              {...(onReact === undefined ? {} : { onReact })}
+              {...(onReact === undefined ? {} : { onReact, reactorsFor: message.id })}
             />
           </div>
 
@@ -978,14 +978,14 @@ export const FocalRow = memo(function FocalRow({
                       })}
                   reactions={reactions}
                   {...(myReactions === undefined ? {} : { myReactions })}
-                  {...(onReact === undefined ? {} : { onToggleReaction: onReact })}
+                  {...(onReact === undefined ? {} : { onToggleReaction: onReact, reactorsFor: message.id })}
                 />
               ) : null}
               <FocusStamp
                 sentAt={new Date(message.createdAt)}
                 now={nowMoment}
                 timeString={time(message.createdAt)}
-                locale={languages[0] ?? 'fr'}
+                locale={currentInterfaceLanguage()}
                 delivery={delivery}
                 isMine={isMine}
                 {...(sendStartedAt === undefined ? {} : { sendStartedAt })}

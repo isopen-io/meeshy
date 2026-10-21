@@ -31,9 +31,15 @@ nonisolated struct MessageCardLoadedMedia: Sendable {
         items.filter { $0.media.kind != .audio && !painted.contains($0.media.id) }.map(\.media.id)
     }
 
-    /// Les médias tels qu'on les peint : chaque son avec l'onde et la durée de SA piste.
-    func media(of items: [MessageCardSubjectMedia]) -> [MessageCardMedia] {
+    /// Les médias tels qu'on les peint : chaque son avec l'onde et la durée de SA piste ;
+    /// chaque sticker (et le hero `heroID`) dont les côtés n'étaient pas déclarés, avec
+    /// le rapport LU SUR SES PIXELS — jamais un carré par défaut (#10915). Une photo
+    /// du corps garde son cadre d'avant.
+    func media(of items: [MessageCardSubjectMedia], heroID: String? = nil) -> [MessageCardMedia] {
         items.map { item in
+            if item.media.kind.isVisual, item.media.isSticker || item.media.id == heroID, let image = pictures.images[item.media.id] {
+                return item.media.with(pixelWidth: image.width, pixelHeight: image.height)
+            }
             guard item.media.kind == .audio, let sound = sounds[item.fileURL] else { return item.media }
             let timed = item.media.with(duration: item.media.duration ?? sound.duration)
             return sound.samples.isEmpty ? timed : timed.with(samples: sound.samples)
@@ -127,9 +133,13 @@ nonisolated enum MessageCardMediaLoader {
     }
 
     /// La photo, ou la PREMIÈRE image d'une vidéo : son poster s'il existe, sinon l'image à 0 s.
+    /// Une PHOTO dont le fichier ne se charge pas retombe sur sa vignette (`posterURL`) —
+    /// jamais sur `AVAssetImageGenerator`, qui ne lit que des vidéos (#10915).
     private static func picture(_ item: MessageCardSubjectMedia) async -> CGImage? {
         if item.media.kind == .image {
-            return await CacheCoordinator.shared.images.image(for: resolved(item.fileURL), maxPixelSize: 1080)?.cgImage
+            if let image = await CacheCoordinator.shared.images.image(for: resolved(item.fileURL), maxPixelSize: 1080)?.cgImage { return image }
+            guard let poster = item.posterURL else { return nil }
+            return await CacheCoordinator.shared.images.image(for: resolved(poster), maxPixelSize: 1080)?.cgImage
         }
         if let poster = item.posterURL,
            let image = await CacheCoordinator.shared.images.image(for: resolved(poster), maxPixelSize: 1080)?.cgImage {
