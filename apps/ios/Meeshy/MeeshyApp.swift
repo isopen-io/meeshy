@@ -14,15 +14,15 @@ struct MeeshyApp: App {
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var a11yPrefs = MeeshyAccessibilityPreferences.shared
-    /// #8089 — la célébration de l'arrivée, au-dessus de la racine connectée.
+    /// La célébration de l'arrivée, au-dessus de la racine connectée.
     @StateObject private var arrivalCelebration = ArrivalCelebrationController.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    /// Le splash et sa loi de vie (#6744) : il tombe dès que la session et la
+    /// Le splash et sa loi de vie : il tombe dès que la session et la
     /// liste en cache sont prêtes, et à son plafond quoi que fasse le démarrage.
     @StateObject private var launchSplash = LaunchSplashController()
     @State private var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
-    /// #9171 — le contenu d'un lien ouvert sans session, au-dessus de la connexion.
+    /// Le contenu d'un lien ouvert sans session, au-dessus de la connexion.
     @StateObject private var visitorPresenter = VisitorContentPresenter.shared
     @State private var crashReportsToShow: [CrashDiagnostic] = []
     @State private var showCrashSheet = false
@@ -39,27 +39,26 @@ struct MeeshyApp: App {
 
     init() {
         // Prisme Linguistique — l'override de langue UI est écrit AVANT
-        // `UIApplicationMain`, par `MeeshyLaunch.main()` (#10804) : ici, il
-        // arrivait après que le bundle eut figé sa localisation.
+        // `UIApplicationMain`, par `MeeshyLaunch.main()` : le bundle fige sa
+        // localisation au lancement, un override tardif ne l'atteindrait pas.
 
-        // #8951 — les extensions de notification tournent dans leur propre
+        // Les extensions de notification tournent dans leur propre
         // processus : elles lisent cette langue dans le groupe d'app, et les
         // catégories que l'AppDelegate enregistre juste après aussi.
         UILanguageOverride.publishInterfaceLanguage()
 
-        // Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste
-        // (#6921). Lu APRÈS l'override de `MeeshyLaunch.main()` : c'est lui
+        // Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste.
+        // Lu APRÈS l'override de `MeeshyLaunch.main()` : c'est lui
         // qui décide dans quelle langue le catalogue va répondre.
         //
         // Le SDK ne lit pas le catalogue de l'app ; il reçoit ce mot une fois,
         // et ses chemins (pont socket, moteur de synchro) le relaient.
         ConversationListAuthor.configureReaderLabel(ConversationListViewModel.youAuthorLabel)
 
-        // Sortie de bêta (2026-09-14, #6482) : la préférence « Activer les
-        // bêta » ne gouverne plus rien — sa clé est retirée de l'appareil.
+        // Sortie de bêta : la clé de la préférence « Activer les bêta » est effacée de l'appareil.
         LentilleFeatureFlag.removeRetiredBetaPreference()
 
-        // #8365 — publier, inviter par e-mail ou créer un lien sans adresse
+        // Publier, inviter par e-mail ou créer un lien sans adresse
         // prouvée ouvre la validation, puis la requête repart (`APIClient`).
         EmailVerificationGate.current = EmailVerificationGateController.shared
 
@@ -80,7 +79,7 @@ struct MeeshyApp: App {
         // submits the request later, when `willTerminate` fires.
         CacheBackgroundFlushTask().register()
 
-        // CALL-FIX 2026-06-05 — wire the "is a call active?" guard into both socket
+        // Wire the "is a call active?" guard into both socket
         // managers. While a call is active, `forceReconnect()` (token rotation,
         // re-auth, lifecycle) is suppressed so the realtime socket carrying the
         // WebRTC signaling is never torn down mid-call (which strands the call on
@@ -121,7 +120,7 @@ struct MeeshyApp: App {
     /// L'aperçu DEBUG de l'onboarding REMPLACE l'écran de connexion au lieu de
     /// s'y superposer : un frère de `ZStack` est proposé la taille du plus
     /// grand, et `LoginView` en arabe sur iPhone SE en annonce 666 pour 647 —
-    /// le calque débordait alors de 19 pt, coupant son bouton au bord (#7729).
+    /// le calque débordait alors de 19 pt, coupant son bouton au bord.
     private static var onboardingPreviewReplacesLogin: Bool {
         #if DEBUG
         OnboardingPreviewLaunch.isActive
@@ -140,7 +139,7 @@ struct MeeshyApp: App {
                     Group {
                         if authManager.isAuthenticated {
                             AdaptiveRootView()
-                                // #7847 — les listes `@` du SDK servent les
+                                // Les listes `@` du SDK servent les
                                 // mêmes contacts que celles de l'app, réchauffés
                                 // de la même façon.
                                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
@@ -154,7 +153,7 @@ struct MeeshyApp: App {
                                 // Un lien d'appel reçu avant que la session soit relue
                                 // n'attend pas la connexion : se connecter ne relance rien.
                                 .onAppear { deepLinkRouter.discardPendingCallRequest() }
-                                // #9612 — la fermeture prononcée par le serveur s'explique AVANT la reconnexion.
+                                // La fermeture prononcée par le serveur s'explique AVANT la reconnexion.
                                 .sheet(item: Binding(
                                     get: { authManager.sessionRevocationNotice },
                                     set: { if $0 == nil { authManager.acknowledgeSessionRevocationNotice() } }
@@ -166,7 +165,7 @@ struct MeeshyApp: App {
                     .opacity(launchSplash.phase == .covering ? 0 : 1)
                     .accessibilityHidden(arrivalCelebration.isShowing).modifier(ComposerRetoucheRecetteCover())
 
-                    // #8089 — l'adresse prouvée vient d'ouvrir la session : la
+                    // L'adresse prouvée vient d'ouvrir la session : la
                     // fête passe AVANT l'onboarding, qui l'attend
                     // (`OnboardingHost`), pendant que la racine, montée
                     // dessous, et `ArrivalPrefetcher` remplissent les caches.
@@ -176,7 +175,7 @@ struct MeeshyApp: App {
                             .zIndex(3)
                     }
 
-                    // #4363 / #6744 — il s'efface d'abord (`fullScreenGate`
+                    // Il s'efface d'abord (`fullScreenGate`
                     // coupe touches et VoiceOver), puis quitte l'arbre SANS
                     // transition. Son plafond vit dans SA tâche : aucune attente
                     // du démarrage ne peut le retenir. Voir `LaunchSplashController`.
@@ -188,7 +187,7 @@ struct MeeshyApp: App {
                     }
 
                     #if DEBUG
-                    // Aperçu de l'onboarding (#7729) pour la vérification au
+                    // Aperçu de l'onboarding pour la vérification au
                     // simulateur — voir `OnboardingPreviewLaunch`.
                     if OnboardingPreviewLaunch.isActive {
                         OnboardingPreviewScreen().zIndex(2)
@@ -255,11 +254,10 @@ struct MeeshyApp: App {
                 )) {
                     WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
                 }
-                // **L'hôte des toasts est un modificateur depuis #4872.** Il
-                // vivait ici, et ici SEULEMENT : un `fullScreenCover` — le
-                // composer — le couvrait, donc tout toast levé de là-haut était
-                // invisible. La forme n'a pas changé ; sa PLACE peut désormais
-                // se répéter sans se recopier.
+                // **L'hôte des toasts est un modificateur.** Un `fullScreenCover` — le
+                // composer — couvrirait un hôte posé à la seule racine : tout toast levé
+                // de là-haut serait invisible. Sa PLACE peut donc se répéter sans se
+                // recopier.
                 .feedbackToastOverlay()
                 .ageGateOverlay()
                 .sheet(isPresented: $showCrashSheet) {
@@ -270,7 +268,7 @@ struct MeeshyApp: App {
                 .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
                 .preferredColorScheme(theme.preferredColorScheme)
                 .onOpenURL { url in
-                    // **#5056 — `meeshy://compose-share` n'est pas une
+                    // **`meeshy://compose-share` n'est pas une
                     // DESTINATION.** Il ne navigue nulle part : il demande de
                     // reprendre une fiche que l'extension vient de déposer, et
                     // c'est le cover racine qui la présente. Le faire passer par
@@ -280,7 +278,7 @@ struct MeeshyApp: App {
                     // L'identifiant est PASSÉ, pas deviné : deux partages
                     // rapides se suivent, et reprendre « la plus ancienne »
                     // ouvrirait la première pièce sur le geste de la seconde.
-                    // #10947 — même principe pour un partage RELAYÉ par
+                    // Même principe pour un partage RELAYÉ par
                     // l'extension : la fiche est déjà sur le disque, l'écran de
                     // partage de la racine la présente.
                     if let relayId = ShareRelayHandoff.shareId(from: url) {
@@ -315,7 +313,7 @@ struct MeeshyApp: App {
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
                     #if DEBUG
-                    // Vitrine App Store (#8855) : session fictive et lien fixé AVANT la
+                    // Vitrine App Store : session fictive et lien fixé AVANT la
                     // restauration de l'environnement et de la session — voir `VitrineStage`.
                     VitrineStage.preparer()
                     #endif
@@ -337,7 +335,7 @@ struct MeeshyApp: App {
                     NotificationToastManager.shared.hapticPlayer = {
                         HapticFeedback.light()
                     }
-                    // #6999 — un fil consommé quitte le centre iOS. Le SDK sait
+                    // Un fil consommé quitte le centre iOS. Le SDK sait
                     // CE QUI est consommé ; la couture `UNUserNotificationCenter`
                     // et le budget d'arrière-plan qui l'entoure vivent
                     // app-side, dans `NotificationActionHandler`.
@@ -348,7 +346,7 @@ struct MeeshyApp: App {
                     // bannière déjà livrée suit la suppression — même atome de
                     // retrait que le push de contrôle `notification_revoked`.
                     NotificationActionHandler.shared.observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted.eraseToAnyPublisher())
-                    // #7453 — le balayage des bannières éphémères échues, au
+                    // Le balayage des bannières éphémères échues, au
                     // démarrage puis à chaque retour au premier plan. C'est le
                     // seul des trois chemins qui tourne quand l'utilisateur
                     // REGARDE : la NSE nettoie plus souvent, mais elle ne
@@ -356,14 +354,14 @@ struct MeeshyApp: App {
                     await NotificationActionHandler.sweepExpiredEphemeralBanners()
                     NotificationActionHandler.shared.observeForegroundSweep()
                     launchSplash.reach(.cache)
-                    // #8674 — le cache vivant est-il bien celui du compte qui
+                    // Le cache vivant est-il bien celui du compte qui
                     // s'ouvre ? Sans effet dans le cas nominal ; après une
                     // bascule interrompue, il est rendu ou effacé AVANT la
                     // première lecture.
                     await CacheAccountBinder.shared.bind(DependencyContainer.activeAccountStoreKey()).value
                     await CacheCoordinator.shared.start()
                     #if DEBUG
-                    // Vitrine (#8855, #8922) : le fil et les médias sont rangés AVANT que la
+                    // Vitrine : le fil et les médias sont rangés AVANT que la
                     // restauration de la session ne monte les racines qui les lisent.
                     await VitrineStage.remplirLesCaches()
                     #endif
@@ -410,7 +408,7 @@ struct MeeshyApp: App {
                     // disque pour la reprise en avant-plan.
                     Task { await SharePendingSendConsumer.shared.consumeAll() }
 
-                    // **L'entrée externe** (#5056, vue `2a`) — jumelle du
+                    // **L'entrée externe** (vue `2a`) — jumelle du
                     // balayage ci-dessus, et pour la même raison. L'extension
                     // tente d'ouvrir `meeshy://compose-share` après avoir déposé
                     // sa fiche, mais `extensionContext.open` peut échouer sans
@@ -482,17 +480,15 @@ struct MeeshyApp: App {
                             // Le chemin vient d'un enregistrement PERSISTÉ, écrit
                             // par une version possiblement antérieure de l'app :
                             // aucun type ne lui survit. C'est le seul appelant
-                            // légitime de cette entrée, et son nom le dit (#4282).
+                            // légitime de cette entrée, et son nom le dit.
                             //
-                            // L'ENVELOPPE SEULE, et rien de `data`. Ce site exigeait
-                            // `APIResponse<MeeshyUser>` ; `PATCH /users/me` sert
-                            // `data: { user, message }` (profile-updates.ts), donc le
-                            // décodage tombait TOUJOURS — après une écriture réussie,
-                            // dans le catch générique, action gardée en file, rejouée
-                            // à chaque retour en ligne, compteur jamais redescendu.
-                            // Un rejeu ne veut rien de la réponse sinon son acceptation :
-                            // exiger une forme de `data` est un pari sur une route qu'on
-                            // ne connaît pas (`SettingsReplayEnvelopeTests`).
+                            // L'ENVELOPPE SEULE, et rien de `data`. `PATCH /users/me` sert
+                            // `data: { user, message }` (profile-updates.ts) : exiger
+                            // `APIResponse<MeeshyUser>` ferait échouer le décodage après une
+                            // écriture réussie, et l'action resterait en file, rejouée à chaque
+                            // retour en ligne. Un rejeu ne veut rien de la réponse sinon son
+                            // acceptation : exiger une forme de `data` est un pari sur une route
+                            // qu'on ne connaît pas (`SettingsReplayEnvelopeTests`).
                             let _: SimpleAPIResponse = try await APIClient.shared.replayPersistedRequest(
                                 persistedPath: action.endpoint,
                                 method: action.httpMethod,
@@ -556,15 +552,15 @@ struct MeeshyApp: App {
                         // `.inflight` state by a prior crash mid-dispatch. Without
                         // this, those rows are invisible to flush() (which only
                         // selects `.pending`) until the next background/foreground
-                        // cycle triggers BackgroundTransitionCoordinator which also
+                        // transition triggers BackgroundTransitionCoordinator which also
                         // calls bootRecovery. SwiftUI's onChange(of:scenePhase) does
                         // NOT fire on the initial `.active` state, so the coordinator
-                        // path is skipped on cold start. P2 — do/catch + log
+                        // path is skipped on cold start. do/catch + log
                         // instead of a silent `try?`: BackgroundTransitionCoordinator's
                         // own `resumeFromBackground()` call to `bootRecovery()`
                         // (on the next foreground) is an independent retry
                         // path, so a failure here is not fatal, but it MUST
-                        // be visible — a silent failure here previously left
+                        // be visible — a silent failure would leave
                         // crash-orphaned `.inflight` rows invisible to
                         // flush() for the rest of THIS cold start with zero
                         // trace in the logs.
@@ -588,12 +584,12 @@ struct MeeshyApp: App {
                         )
                         let nextRetry = await flusher.flush()
                         await OutboxRetryScheduler.shared.schedule(at: nextRetry)
-                        // T10 — wake the outbox flusher on every network
+                        // Wake the outbox flusher on every network
                         // reconnect: a mutation enqueued offline leaves no
                         // backoff timer armed, so without this it waits for an
                         // incidental lifecycle event.
                         await OutboxRetryScheduler.shared.startObservingNetworkReconnect()
-                        // outbox-04 — wake the flusher immediately after any
+                        // Wake the flusher immediately after any
                         // social mutation is enqueued online (like/post/
                         // comment), instead of leaving it `.pending` until the
                         // next incidental lifecycle event.
@@ -614,11 +610,11 @@ struct MeeshyApp: App {
                         EngagementRetryScheduler.shared.startObservingNetworkReconnect()
                     }
 
-                    // #9680 — un envoi long (média, story, publication) se suit
+                    // Un envoi long (média, story, publication) se suit
                     // dans la Dynamic Island et sur l'écran verrouillé.
                     OutboxLiveActivityCoordinator.shared.start()
 
-                    // #9782 · #9783 · #9784 — l'appel, le vocal en lecture et
+                    // L'appel, le vocal en lecture et
                     // l'enregistrement se pilotent depuis l'îlot : les boutons
                     // de leurs activités reviennent ici.
                     LiveActivityCommandBinding.shared.install()
@@ -650,7 +646,7 @@ struct MeeshyApp: App {
                         // with no userId to scope its Keychain wipe against.
                         Task { await SessionManager.shared.migrateKeychainIfNeeded() }
                         #if DEBUG
-                        // Vitrine (#8855) : les vraies bases se remplissent avant le
+                        // Vitrine : les vraies bases se remplissent avant le
                         // préchargement de la liste ; l'écran de la scène s'ouvre une fois
                         // le voile du lancement parti.
                         await VitrineStage.remplir()
@@ -661,13 +657,12 @@ struct MeeshyApp: App {
                         // le splash attend pour tomber : la liste se montre
                         // servie, jamais vide puis remplie.
                         launchSplash.reach(.conversationList)
-                        // #10927 — la liste se lit DÈS la session restaurée : le
-                        // `.task` de la racine arrivait 0,6 à 2,2 s plus tard, et
-                        // le voile tombait sur une liste vide. La racine rejoint
-                        // ce chargement (`ConversationListVMOwner.loadAtLaunch`).
-                        // Lancé AVANT de rendre la main : le premier rendu de la
-                        // racine tient le fil principal 0,8 à 1,9 s (Debug), et la
-                        // lecture du cache le chevauche au lieu de le suivre.
+                        // La liste se lit DÈS la session restaurée : le `.task` de la racine
+                        // arriverait 0,6 à 2,2 s plus tard, et le voile tomberait sur une liste
+                        // vide. La racine rejoint ce chargement
+                        // (`ConversationListVMOwner.loadAtLaunch`). Lancé AVANT de rendre la
+                        // main : le premier rendu de la racine tient le fil principal 0,8 à
+                        // 1,9 s (Debug), et la lecture du cache le chevauche au lieu de le suivre.
                         ConversationListVMOwner.prewarm(userId: authManager.currentUser?.id ?? "")
                         _ = await CacheCoordinator.shared.conversations.load(for: "list")
 
@@ -690,11 +685,10 @@ struct MeeshyApp: App {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
 
-                    // **Plus d'attente des sockets derrière un cache prêt**
-                    // (#6223, arbitré le 2026-09-15 : « Dès que prêt »). Elle
-                    // retenait le splash jusqu'à 1,5 s pour que présences et
-                    // non-lus ne se mettent pas à jour sous les yeux — ce que
-                    // Cache-First demande justement de laisser voir.
+                    // **Pas d'attente des sockets derrière un cache prêt** : le splash tombe
+                    // dès que le cache est prêt. Attendre les sockets le retiendrait jusqu'à
+                    // 1,5 s pour que présences et non-lus ne se mettent pas à jour sous les
+                    // yeux — ce que Cache-First demande justement de laisser voir.
                     await launchSplash.markReady()
                     // Surface any crash/hang reports captured since the last
                     // foreground. Done after the splash + session work so the
@@ -750,7 +744,7 @@ struct MeeshyApp: App {
                         isDeliberate: true
                     )
                 }
-                // #10006 — « Entrer dans World Wide » depuis l'écran de
+                // « Entrer dans World Wide » depuis l'écran de
                 // connexion : la session invitée s'ouvre sur la clé SERVIE
                 // par `GET /world`, et reprend celle que cet appareil y a déjà.
                 .adaptiveOnChange(of: deepLinkRouter.requestedWorldEntry) { _, entry in
@@ -822,9 +816,9 @@ struct MeeshyApp: App {
     // MARK: - Push Notifications
 
     /// Un RELAIS vers le site unique (`PushPermissionPrompt`), jamais une
-    /// seconde copie : le fil d'envoi la déclenche aussi (#5218). Au démarrage
+    /// seconde copie : le fil d'envoi la déclenche aussi. Au démarrage
     /// à froid, le report de l'inscription et la carte 5 de l'onboarding
-    /// passent d'abord (#7915).
+    /// passent d'abord.
     private func requestPushPermissionIfNeeded() async {
         await PushPermissionPrompt.onColdStart(request: { await PushPermissionPrompt.requestIfNeeded(using: pushManager) })
     }
@@ -900,7 +894,7 @@ struct MeeshyApp: App {
         activeGuestSession = nil
     }
 
-    /// #10442 — la passerelle a terminé la session (lien échu, accès retiré) :
+    /// La passerelle a terminé la session (lien échu, accès retiré) :
     /// l'appareil l'oublie (trousseau, jeton, socket et ses reconnexions) et
     /// le fil laisse place à l'écran qui le dit.
     private func endGuestSession(_ notification: Notification) {
@@ -947,7 +941,7 @@ struct MeeshyApp: App {
             deepLinkRouter.consumePendingDeepLink()
             UIApplication.shared.open(url)
         default:
-            // #9171 — une publication ou un réel s'affiche au visiteur, SANS
+            // Une publication ou un réel s'affiche au visiteur, SANS
             // consommer le lien : il s'ouvrira encore après la connexion.
             visitorPresenter.present(link)
         }
@@ -978,7 +972,7 @@ struct SystemThemeDetector<Content: View>: View {
 // MARK: - Profile sheet environment
 
 private struct ProfileSheetEnvironment: ViewModifier {
-    /// #9481, #10093 — le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA visibilité autorise,
+    /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA visibilité autorise,
     /// rien sinon. Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
     /// injection, toutes les feuilles de profil la reçoivent.
     func body(content: Content) -> some View {
