@@ -40,7 +40,7 @@ final class ConversationListPersister {
             // voir `ConversationListLastMessage.persisting`.
             let store = await CacheCoordinator.shared.conversations
             if await store.load(for: "list").snapshot() == nil {
-                try? await store.savePreservingFreshness(snapshot, for: "list")
+                await bestEffort("conversationListPersister.store.savePreservingFreshness", category: .cache) { try await store.savePreservingFreshness(snapshot, for: "list") }
             } else {
                 await store.update(for: "list") { ConversationListLastMessage.persisting(snapshot, over: $0) }
             }
@@ -60,7 +60,7 @@ final class ConversationListPersister {
         task = Task {
             // try? : Wave 1 Local-First a rendu .save() throwing.
             // Best-effort persist — l'erreur est loggee en aval.
-            try? await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list")
+            await bestEffort("conversationListPersister.conversations.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.conversations.savePreservingFreshness(snapshot, for: "list") }
             await CacheCoordinator.shared.conversations.saveCursor(
                 nextCursor: persistedCursor,
                 hasMore: persistedHasMore,

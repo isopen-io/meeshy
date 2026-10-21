@@ -228,7 +228,7 @@ internal struct _InlineOverlayControls: View {
 
     private var centerControls: some View {
         AdaptiveGlassContainer(spacing: 24) {
-            HStack(spacing: MeeshySpacing.xxl) {
+            HStack(spacing: MeeshySpacing.xxl - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular)) {
                 if Self.showsSkipButtons(controls: controls) {
                     skipButton(systemName: "gobackward.10", seconds: -10)
                 }
@@ -250,6 +250,7 @@ internal struct _InlineOverlayControls: View {
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle(), interactive: true)
+                .meeshyTapTarget()
         }
     }
 

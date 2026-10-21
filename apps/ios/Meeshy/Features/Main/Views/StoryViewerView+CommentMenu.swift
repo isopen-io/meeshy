@@ -111,7 +111,7 @@ struct StoryCommentThreadWriter {
         count = max(0, count + countDelta)
         do {
             try await request()
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(postId)")
+            await bestEffort("storyViewerViewCommentMenu.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(postId)") }
             return true
         } catch {
             comments = snapshot.comments

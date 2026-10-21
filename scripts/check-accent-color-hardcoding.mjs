@@ -302,17 +302,18 @@
 // web `--game-tier-*` (`apps/web/src/styles/game.css`) — la palette fixe des paliers, pas une
 // couleur de conversation. Valeur MESURÉE le 2026-10-08.
 //
-// 2026-10-21 (#11176, #11177, l'épopée du jeu) — littéraux 145 → 180 :
+// 2026-10-21 (#11176, #11177, l'épopée du jeu) — littéraux 145 → 178 :
 // - `GameMaterial.swift` (+13, d50c95c584) : les matières de la Meesh rejouées du web
 //   (`packages/shared/design/meesh-coin.json`, jetons `--game-coin-*`) — or pur centre compris,
 //   or mêlé de diamant, diamant, veines d'or de l'argent — dans la palette FIXE du jeu, même
 //   précédent que #9636 et #9688 ;
-// - `MintCeremonyLayers.swift` (+20) et `MintStrikeScene.swift` (+2, e63e8c0f72) : la palette de
-//   la cérémonie de la frappe, miroir de `apps/web/src/lib/game/choreography-mint-ceremony.ts` —
+// - `MintCeremonyLayers.swift` (+20, e63e8c0f72) : la palette de la cérémonie de la frappe
+//   (`MintCeremonyPalette`, que `MintStrikeScene.swift` lit aussi pour son enclume), miroir de
+//   `apps/web/src/lib/game/choreography-mint-ceremony.ts` —
 //   acier de l'enclume et du coin, bois du marteau, poussières d'argent, d'or et de diamant, nuit
 //   du prisme, halo de la lumière. Couleurs de DESSIN du jeu, indépendantes du thème de
 //   conversation : aucun `accentColor` ne peut les remplacer. Valeur MESURÉE le 2026-10-21 en local.
-const REFERENCE_LITERAL_COLOR_COUNT = 180;
+const REFERENCE_LITERAL_COLOR_COUNT = 178;
 // 2026-10-06 (#9516, vague 2 du jeu, iOS) — variables inconnues 444 → 445 :
 // `GameAtlasViews.swift` calcule `Color(hex: $0.colorHex)` depuis
 // `LanguageData.info(for: code)` — la teinte ASSOCIÉE À UNE LANGUE de l'atlas

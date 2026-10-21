@@ -28,6 +28,7 @@ import { getJwtSecret } from './utils/secrets';
 import { readerKeySecret } from './services/posts/readerKey';
 import { schemaValidationErrorResponse } from './utils/schema-validation-error';
 import { contentTypeParserErrorResponse } from './utils/content-type-parser-error';
+import { rateLimitRefusalResponse } from './utils/rate-limit-refusal';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MessageTranslationService } from './services/message-translation/MessageTranslationService';
@@ -456,6 +457,26 @@ class MeeshyServer {
           error: parserRefusal.error,
           message: parserRefusal.message,
           code: parserRefusal.code
+        });
+      }
+
+      // Refus de DÉBIT (#11462) : un objet nu `statusCode: 429` lancé par
+      // @fastify/rate-limit. Même raison et même place que les deux refus
+      // ci-dessus — une défense normale du produit, pas une panne.
+      const rateRefusal = rateLimitRefusalResponse(error);
+      if (rateRefusal) {
+        logger.warn('Rate limit refused request', {
+          module: 'ErrorHandler',
+          func: 'setErrorHandler',
+          path: redactReaderFileUrl(request.url),
+          method: request.method,
+          code: rateRefusal.code
+        });
+        return reply.code(rateRefusal.statusCode).send({
+          success: false,
+          error: rateRefusal.error,
+          message: rateRefusal.message,
+          code: rateRefusal.code
         });
       }
 

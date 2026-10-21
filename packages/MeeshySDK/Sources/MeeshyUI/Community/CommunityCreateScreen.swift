@@ -58,6 +58,7 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
                     .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .background(.ultraThinMaterial)
                     .clipShape(Circle())
+                    .meeshyTapTarget()
             }
 
             Spacer()
@@ -68,10 +69,10 @@ public struct CommunityCreateScreen<ViewModel: CommunityCreateModeling>: View {
 
             Spacer()
 
-            Color.clear.frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
+            Color.clear.frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
         }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.smPlus)
+        .padding(.horizontal, MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
+        .padding(.vertical, MeeshySpacing.smPlus - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
     }
 
     // MARK: - Scroll Content

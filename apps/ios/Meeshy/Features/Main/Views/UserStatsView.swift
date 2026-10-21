@@ -244,8 +244,8 @@ final class UserStatsViewModel: ObservableObject {
             stats = s
             timeline = t
             errorMessage = nil
-            try? await CacheCoordinator.shared.stats.save([s], for: userId)
-            try? await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)")
+            await bestEffort("userStatsView.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([s], for: userId) }
+            await bestEffort("userStatsView.timeline.save", category: .cache) { try await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)") }
         } catch {
             UserStatsViewModel.logger.error("stats refresh failed: \(error.localizedDescription)")
             errorMessage = error.localizedDescription

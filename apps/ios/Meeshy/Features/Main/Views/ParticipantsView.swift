@@ -374,12 +374,16 @@ struct ParticipantsView: View {
         // Ouvrir la fiche : c'est la SEULE surface de profil d'un visiteur sans
         // compte. Réservée à eux — un inscrit a déjà sa page `/u/{pseudo}`, et
         // dupliquer l'entrée ferait deux profils pour une même personne.
-        .onTapGesture {
-            guard participant.isAnonymous else { return }
-            profileParticipantId = participant.id
-        }
+        .onTapGesture { openAnonymousProfile(participant) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(participantAccessibilityLabel(participant, isCurrentUser: isCurrentUser, presence: presence))
+        .accessibilityAddTraits(participant.isAnonymous ? .isButton : [])
+        .accessibilityAction { openAnonymousProfile(participant) }
+    }
+
+    private func openAnonymousProfile(_ participant: PaginatedParticipant) {
+        guard participant.isAnonymous else { return }
+        profileParticipantId = participant.id
     }
 
     // MARK: - Role Badge

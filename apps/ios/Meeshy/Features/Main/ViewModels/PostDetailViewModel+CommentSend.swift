@@ -66,7 +66,7 @@ extension PostDetailViewModel {
         )
         do {
             try await offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            await bestEffort("postDetailViewModelCommentSend.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)") }
 
             // R5 — roll back the optimistic comment if the outbox exhausts its
             // retry budget (server permanently rejects). The synchronous catch
@@ -134,8 +134,8 @@ extension PostDetailViewModel {
             try await offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())
             // Une réponse vit sous une clé SÉPARÉE de son parent : persister
             // les deux, sinon un kill avant flush perd la réponse au cold start.
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(repliesMap[parentId] ?? [], for: "replies-\(parentId)")
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            await bestEffort("postDetailViewModelCommentSend.comments.savePreservingFreshness.2", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(repliesMap[parentId] ?? [], for: "replies-\(parentId)") }
+            await bestEffort("postDetailViewModelCommentSend.comments.savePreservingFreshness.3", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)") }
 
             observeOutcome(cmid: cmid, rollback: { [weak self] in
                 guard let self else { return }
@@ -273,7 +273,7 @@ extension PostDetailViewModel {
                 comments.insert(server, at: 0)
             }
             CommentMediaUploader.discardLocalFiles(pendingMedia)
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            await bestEffort("postDetailViewModelCommentSend.comments.savePreservingFreshness.4", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)") }
             return true
         } catch {
             let rollback = { self.withdrawOptimisticComment(tempId, parentId: parentId) }

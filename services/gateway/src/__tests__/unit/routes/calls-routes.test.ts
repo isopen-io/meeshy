@@ -89,6 +89,7 @@ jest.mock('../../../middleware/rate-limit', () => ({
     initiateCall: {},
     joinCall: {},
     callOperations: {},
+    activeCallProbe: {},
   },
 }));
 

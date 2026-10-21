@@ -137,6 +137,18 @@ public extension View {
     }
 }
 
+// MARK: - Tap target geometry
+
+public nonisolated enum MeeshyTapTarget {
+    public static func inset(forVisualSide side: CGFloat) -> CGFloat {
+        max(0, (MeeshyControlSize.tapTarget - side) / 2)
+    }
+
+    public static func overlaps(visualA: CGFloat, visualB: CGFloat, gap: CGFloat) -> Bool {
+        gap < inset(forVisualSide: visualA) + inset(forVisualSide: visualB)
+    }
+}
+
 // MARK: - Dynamic Type typography
 
 public extension MeeshyFont {
