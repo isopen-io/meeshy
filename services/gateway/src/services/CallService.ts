@@ -42,6 +42,7 @@ import { assertCallableConversationType, assertViewerMayStartCall } from './call
 import { commitCallEnd } from './calls/endCallRetry';
 import { callEngagementCrediter } from './calls/callEngagementCredits';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { KeyedMutex } from '../utils/keyed-mutex';
 import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from './calls/liveCallParticipations';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
@@ -149,6 +150,13 @@ type CallSessionWithParticipants = Prisma.CallSessionGetPayload<{
     };
   };
 }>;
+
+/** `rejoined` : l'utilisateur était déjà participant actif — le join n'a rien écrit (#11468). */
+type JoinCallResult = {
+  callSession: CallSessionWithParticipants;
+  iceServers: RTCIceServer[];
+  rejoined: boolean;
+};
 
 const callSessionInclude = {
   participants: {
@@ -1296,12 +1304,18 @@ export class CallService {
    * - CVE-005: Returns dynamic TURN credentials via TURNCredentialService
    * - Returns updated CallSession with ICE servers
    */
-  async joinCall(data: JoinCallData): Promise<{
-    callSession: CallSessionWithParticipants;
-    iceServers: RTCIceServer[]
-  }> {
-    return this.joinCallAttempt(data, 0);
+  async joinCall(data: JoinCallData): Promise<JoinCallResult> {
+    return this.joinsInFlight.runExclusive(`${data.callId}:${data.userId}`, () => this.joinCallAttempt(data, 0));
   }
+
+  /**
+   * #11468 — les joins d'un MÊME utilisateur sur un MÊME appel passent un par
+   * un : un appelé à plusieurs appareils en envoie une rafale à la sonnerie, et
+   * chacun ouvrait sa transaction sur la même ligne `CallSession` (conflit
+   * d'écriture MongoDB, puis CALL_STATE_CONFLICT). Le suivant lit la ligne du
+   * précédent et rejoint sans écrire. Les autres utilisateurs ne s'attendent pas.
+   */
+  private readonly joinsInFlight = new KeyedMutex();
 
   /**
    * MongoDB can detect two transactions racing on the same CallSession
@@ -1338,10 +1352,7 @@ export class CallService {
    * where the cap check above will correctly reject it if the winner took
    * the last slot.
    */
-  private async joinCallAttempt(data: JoinCallData, attempt: number): Promise<{
-    callSession: CallSessionWithParticipants;
-    iceServers: RTCIceServer[]
-  }> {
+  private async joinCallAttempt(data: JoinCallData, attempt: number): Promise<JoinCallResult> {
     const { callId, userId, participantId, settings } = data;
 
     logger.info('📞 User joining call', { callId, userId });
@@ -1404,7 +1415,8 @@ export class CallService {
       const callSession = await this.getCallSession(callId);
       return {
         callSession,
-        iceServers
+        iceServers,
+        rejoined: true
       };
     }
 
@@ -1504,7 +1516,8 @@ export class CallService {
 
     return {
       callSession,
-      iceServers
+      iceServers,
+      rejoined: false
     };
   }
 
