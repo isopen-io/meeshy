@@ -1092,7 +1092,14 @@ final class ViewOnceTextConsumedOnExitGuardTests: XCTestCase {
         XCTAssertTrue(sortie[porte.upperBound...].prefix(120).contains("consumeOpenedViewOnceOnExit()"),
                       "La sortie par navigation consomme avant tout le reste.")
 
-        guard let fond = hôte.range(of: "if phase == .background {") else {
+        // #11074 : le `scenePhase` se lit dans le modificateur nominal du cycle de
+        // vie, qui remet l'arrière-plan à l'hôte ; l'hôte y consomme.
+        let cycle = try source(at: "Features/Main/Views/ConversationLayers/ConversationBodyLifecycle.swift")
+        XCTAssertTrue(cycle.contains("if phase == .background { actions.didEnterBackground() }"),
+                      "Le cycle de vie remet le passage en arrière-plan à l'hôte.")
+        XCTAssertTrue(hôte.contains("didEnterBackground: { conversationDidEnterBackground() }"),
+                      "L'hôte branche l'arrière-plan sur son geste de sortie.")
+        guard let fond = hôte.range(of: "func conversationDidEnterBackground() {") else {
             return XCTFail("Impossible de localiser la sortie par arrière-plan.")
         }
         let corpsFond = String(hôte[fond.upperBound...].prefix(700))

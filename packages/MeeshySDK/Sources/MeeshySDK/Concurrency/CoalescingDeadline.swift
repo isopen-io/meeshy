@@ -7,11 +7,11 @@ public final class CoalescingDeadline {
         let task: Task<Void, Never>
     }
 
-    private let sleep: @Sendable (Duration) async -> Bool
+    private let sleep: @Sendable @concurrent (Duration) async -> Bool
     private var pending: [ObjectIdentifier: Pending] = [:]
     private var nextGeneration = 0
 
-    public init(sleep: @escaping @Sendable (Duration) async -> Bool = cancellableSleep(for:)) {
+    public init(sleep: @escaping @Sendable @concurrent (Duration) async -> Bool = { await cancellableSleep(for: $0) }) {
         self.sleep = sleep
     }
 
