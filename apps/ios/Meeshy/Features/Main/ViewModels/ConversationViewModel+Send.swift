@@ -609,35 +609,13 @@ extension ConversationViewModel {
         // (Phase 4 §6.2), so the gateway dedup `(conversationId,
         // clientMessageId)` catches a prior attempt that DID reach the server.
         await sendCoordinator.markRetrying(localId: messageId)
-        let succeeded = await send(retryOutgoing(of: failedMsg, messageId: messageId)).isAccepted
+        let succeeded = await send(FailedMessageReplay.outgoing(of: failedMsg, conversationId: conversationId)).isAccepted
         // #4042 — un retry RÉUSSI fait disparaître la ligne outbox D'ORIGINE
         // (même clientMessageId) que `SyncPillViewModel` surface tant qu'elle
         // reste `.failed`/`.exhausted`.
         if succeeded {
             await offlineQueue.clearSendMessageRow(clientMessageId: messageId)
         }
-    }
-
-    /// Ce que le renvoi d'un message en échec rejoue : son contenu, sa langue
-    /// d'ORIGINE (le Prisme ne se réécrit pas à chaque retry), sa relation —
-    /// réponse ou transfert — et son lieu.
-    private func retryOutgoing(of failedMsg: Message, messageId: String) -> OutgoingMessage {
-        OutgoingMessage(
-            conversationId: ConversationID(conversationId),
-            content: failedMsg.content,
-            relation: .legacy(
-                replyToId: failedMsg.replyToId,
-                storyReplyToId: nil,
-                storyReference: nil,
-                forwardedFromId: failedMsg.forwardedFromId,
-                forwardedFromConversationId: failedMsg.forwardedFromConversationId,
-                attachmentReplyTo: nil
-            ),
-            attachments: .none,
-            originalLanguage: failedMsg.originalLanguage,
-            reusedClientMessageId: MessageID(messageId),
-            location: failedMsg.location
-        )
     }
 
     /// Un message média en échec rejoue par l'outbox durable : elle seule
