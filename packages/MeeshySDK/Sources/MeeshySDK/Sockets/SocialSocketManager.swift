@@ -662,6 +662,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// cross-queue sharing.)
     private static let offMainDecoder: JSONDecoder = makeSocketPayloadDecoder()
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.social-socket.decode", qos: .userInitiated)
+    private static let deliveryLane = MainActorDeliveryLane()
 
     nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @MainActor @Sendable (T) -> Void) {
         guard let first = data.first else { return }
@@ -685,7 +686,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         Self.decodeQueue.async {
             do {
                 let decoded = try Self.offMainDecoder.decode(type, from: jsonData)
-                Task { @MainActor in handler(decoded) }
+                Self.deliveryLane.deliver { handler(decoded) }
             } catch {
                 Logger.socket.error("SocialSocket decode error for \(String(describing: type)): \(error)")
             }
