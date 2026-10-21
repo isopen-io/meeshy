@@ -139,6 +139,7 @@ struct ShareContentZone: View {
         switch shortfall {
         case .unprepared: return "exclamationmark.icloud"
         case .overBudget: return "externaldrive.badge.exclamationmark"
+        case .refusedSource: return "doc.badge.ellipsis"
         }
     }
 

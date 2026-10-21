@@ -73,6 +73,9 @@ nonisolated enum ShareShortfall: Hashable, Sendable {
     /// Ces pièces n'ont pas été copiées : elles dépassaient les 500 Mo d'un
     /// partage (D10, #11429).
     case overBudget(uncopied: Int)
+    /// L'app n'a remis qu'un chemin de fichier, que Meeshy n'ouvre pas : seul
+    /// le fichier lui-même se partage (#11134, #11430).
+    case refusedSource
 }
 
 /// Une pièce venue d'une autre app — son fichier local sert l'aperçu.

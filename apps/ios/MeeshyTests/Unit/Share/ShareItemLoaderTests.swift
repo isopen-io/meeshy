@@ -104,6 +104,32 @@ final class ShareItemLoaderTests: XCTestCase {
         XCTAssertEqual(gathered.media, [])
         XCTAssertEqual(gathered.failure, .refusedSource)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [])
+        let incoming = ShareExtensionIncoming.make(text: gathered.content, media: gathered.media, mediaRoot: root, failures: gathered.failures)
+        XCTAssertEqual(incoming.shortfalls, [.refusedSource], "l'écran dit pourquoi rien ne part (#11430)")
+    }
+
+    // MARK: - Le lien avant sa vignette (#11430)
+
+    /// La forme que remet Safari : le lien de la page et, dans le MÊME
+    /// fournisseur, sa vignette. C'est le lien qui part ; la vignette n'est
+    /// ni copiée ni jointe.
+    func test_gather_aWebLinkWithItsThumbnail_sendsTheLink_andCopiesNothing() async throws {
+        let source = try makeDirectory()
+        let root = try makeDirectory()
+        let thumbnail = try makeFile(named: "apercu.png", bytes: 512, in: source)
+        let provider = NSItemProvider()
+        provider.registerObject(try XCTUnwrap(URL(string: "https://meeshy.me/article")) as NSURL, visibility: .all)
+        provider.registerFileRepresentation(forTypeIdentifier: UTType.png.identifier, fileOptions: [], visibility: .all) { completion in
+            completion(thumbnail, false, nil)
+            return nil
+        }
+
+        let gathered = await load([provider], into: root)
+
+        XCTAssertEqual(gathered.content, "https://meeshy.me/article")
+        XCTAssertEqual(gathered.media, [])
+        XCTAssertEqual(gathered.failures, [])
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [], "la vignette n'est pas copiée")
     }
 
     func test_gather_aLinkCarryingAFileURL_isRefused() async throws {

@@ -146196,6 +146196,53 @@
         }
       }
     },
+    "share.sheet.content.refused-source": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم يسلّم هذا التطبيق سوى مسار ملف، ولا يفتحه Meeshy. شارك الملف نفسه، أو احفظه أولًا في الصور أو الملفات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese App hat nur einen Dateipfad übergeben, den Meeshy nicht öffnet. Teile die Datei selbst oder sichere sie zuerst in Fotos oder Dateien."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This app only handed over a file path, which Meeshy does not open. Share the file itself, or save it to Photos or Files first."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta app solo entregó una ruta de archivo, que Meeshy no abre. Comparte el archivo en sí, o guárdalo antes en Fotos o Archivos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette app n’a remis qu’un chemin de fichier, que Meeshy n’ouvre pas. Partagez le fichier lui-même, ou enregistrez-le d’abord dans Photos ou Fichiers."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Questa app ha passato solo un percorso di file, che Meeshy non apre. Condividi il file stesso, oppure salvalo prima in Foto o File."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este app entregou apenas um caminho de arquivo, que o Meeshy não abre. Compartilhe o próprio arquivo ou salve-o antes em Fotos ou Arquivos."
+          }
+        }
+      }
+    },
     "share.sheet.content.remove-last": {
       "extractionState": "manual",
       "localizations": {

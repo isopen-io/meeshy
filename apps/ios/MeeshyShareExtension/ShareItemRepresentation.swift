@@ -8,10 +8,16 @@ import UniformTypeIdentifiers
 /// représentation média. Or `public.file-url` est conforme à `public.url` :
 /// l'extension la prenait pour un lien, et le destinataire recevait un chemin.
 ///
-/// L'ordre : média (image, vidéo) > fichier (un document, ou l'URL d'un
-/// fichier qu'on COPIE) > lien > texte > donnée nue. Un document ne prime sur
-/// un lien que s'il vient avec son URL de fichier : Safari peut remettre une
-/// archive web à côté du lien d'une page, et c'est le lien qu'on partage.
+/// **Le lien d'abord quand il est le sujet** (#11430). Safari, YouTube et les
+/// réseaux sociaux mettent dans le MÊME fournisseur le lien d'une page et sa
+/// vignette : c'est le lien qu'on partage, la vignette n'est pas jointe. Un
+/// lien WEB s'annonce par `public.url` sans `public.file-url` (mesuré : une
+/// `NSURL` web n'enregistre que `public.url`, une `NSURL` de fichier les deux).
+///
+/// L'ordre : lien web > média (image, vidéo) > fichier (un document, ou l'URL
+/// d'un fichier qu'on COPIE) > lien > texte > donnée nue. Un document ne prime
+/// sur un lien que s'il vient avec son URL de fichier : Safari peut remettre
+/// une archive web à côté du lien d'une page, et c'est le lien qu'on partage.
 nonisolated enum ShareItemRepresentation: Equatable, Sendable {
     case media(typeIdentifier: String)
     case file(typeIdentifier: String)
@@ -39,6 +45,7 @@ nonisolated enum ShareItemRepresentation: Equatable, Sendable {
     ]
 
     static func choose(from typeIdentifiers: [String]) -> ShareItemRepresentation {
+        if carriesWebLink(typeIdentifiers) { return .link }
         if let media = preferredMedia(in: typeIdentifiers) { return .media(typeIdentifier: media) }
         if typeIdentifiers.contains(fileURLTypeIdentifier) {
             return typeIdentifiers.first(where: isDocument).map { .file(typeIdentifier: $0) } ?? .fileURL
@@ -52,6 +59,10 @@ nonisolated enum ShareItemRepresentation: Equatable, Sendable {
         usualMediaTypeIdentifiers.contains(identifier)
             || conforms(identifier, to: .image)
             || conforms(identifier, to: .movie)
+    }
+
+    private static func carriesWebLink(_ identifiers: [String]) -> Bool {
+        identifiers.contains(UTType.url.identifier) && !identifiers.contains(fileURLTypeIdentifier)
     }
 
     private static func preferredMedia(in identifiers: [String]) -> String? {

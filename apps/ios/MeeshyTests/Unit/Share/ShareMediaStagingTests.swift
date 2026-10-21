@@ -272,6 +272,11 @@ final class ShareMediaStagingTests: XCTestCase {
             ]),
             [.overBudget(uncopied: 2), .unprepared]
         )
+        XCTAssertEqual(
+            ShareExtensionIncoming.shortfalls(from: [.refusedSource, .refusedSource]),
+            [.refusedSource],
+            "un chemin refusé se dit pour ce qu'il est, pas comme un fichier à télécharger"
+        )
         XCTAssertEqual(ShareExtensionIncoming.shortfalls(from: []), [])
     }
 

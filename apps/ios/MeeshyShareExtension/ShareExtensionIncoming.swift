@@ -29,8 +29,10 @@ nonisolated enum ShareExtensionIncoming {
     /// combien de pièces le plafond a laissées, et qu'il en manque d'autres.
     static func shortfalls(from failures: [ShareMediaStagingError]) -> [ShareShortfall] {
         let overBudget = failures.filter(\.isOverBudget).count
-        let others = failures.count - overBudget
+        let refused = failures.contains(.refusedSource)
+        let others = failures.count - overBudget - failures.filter { $0 == .refusedSource }.count
         return [
+            refused ? ShareShortfall.refusedSource : nil,
             overBudget > 0 ? ShareShortfall.overBudget(uncopied: overBudget) : nil,
             others > 0 ? ShareShortfall.unprepared : nil,
         ].compactMap { $0 }
