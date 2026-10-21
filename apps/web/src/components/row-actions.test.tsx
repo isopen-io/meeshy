@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ConversationFlags } from '@/lib/api/preferences';
+import { installHapticsDriver, type HapticCue } from '@/lib/view/haptics';
 
 import { RowActions } from './row-actions';
 
@@ -153,5 +154,28 @@ describe('RowActions — appeler depuis la ligne, au clic droit comme à l’app
     expect(menuIsOpen()).toBe(true);
     expect(event.defaultPrevented).toBe(true);
     expect(menuItem('Appel vocal') !== null).toBe(true);
+  });
+
+  /**
+   * L'APPUI LONG DE LA LIGNE SE SENT COMME CELUI D'UN MESSAGE (revue #11207) :
+   * Chromium Android ouvre ce panneau par `contextmenu`, et il s'ouvrait sans
+   * la vibration que donne le menu d'un message. La pression et le seuil de
+   * 350 ms viennent avec `useLongPress` (#11211).
+   */
+  test('le menu contextuel de la ligne vibre une fois, comme celui d’un message', () => {
+    const cues: HapticCue[] = [];
+    installHapticsDriver({ cue: (name) => (cues.push(name), true), pattern: () => true });
+    try {
+      mountRowActions();
+      const row = container.querySelector('li[data-row]');
+      if (row === null) throw new Error('ligne introuvable');
+      act(() => {
+        row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      });
+      expect(menuIsOpen()).toBe(true);
+      expect(cues).toEqual(['medium']);
+    } finally {
+      installHapticsDriver(null);
+    }
   });
 });

@@ -33,11 +33,7 @@ struct GlobalSearchView: View {
                 resultsList
             }
         }
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                isSearchFieldFocused = true
-            }
-        }
+        .onAppear(after: .milliseconds(100)) { isSearchFieldFocused = true }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,

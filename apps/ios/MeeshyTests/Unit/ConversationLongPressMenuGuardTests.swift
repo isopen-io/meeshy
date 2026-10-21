@@ -1,8 +1,12 @@
 import XCTest
 @testable import Meeshy
 
-/// **#4004 — le menu longpress custom ferme le clavier et remonte le message
-/// vers le centre s'il est trop bas.**
+/// **#4004 — le menu longpress custom ferme le clavier avant de paraître.**
+/// **#11208 — il s'ouvre sur la cellule elle-même, à sa place, sans défilement
+/// préalable, avec une seule haptique.** Le recentrage d'un message trop bas
+/// (#4004) passait par un défilement de la liste puis un délai : la loi de
+/// placement de l'overlay (`MessageOverlayRevealLaw`) remonte désormais le
+/// cluster, et la liste ne bouge plus sous le doigt.
 ///
 /// Périmètre : le menu longpress CUSTOM (`MessageOverlayMenu`, < iOS 26)
 /// piloté par `overlayState.showOverlayMenu`. Le menu NATIF (`.contextMenu`,
@@ -64,34 +68,196 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Repositionnement vers le centre si le message est trop bas
+    // MARK: - #11208 — le cadre de la cellule est GARDÉ, l'aperçu s'ouvre à sa place
 
-    func test_presentLongPressMenu_scrollsTowardCenter_whenMessageIsTooLow() throws {
+    /// Le cadre que l'appel apporte (`cellFrameInWindow`) devient la source de
+    /// l'aperçu. Il était reçu puis jeté : l'overlay lisait `frameTracker`, vide
+    /// hors des bulles suivies, et retombait sur un aperçu reconstruit.
+    func test_presentLongPressMenu_storesTheCellFrame_asTheOverlaySource() throws {
         let code = try source("Features/Main/Views/ConversationView+LongPressMenu.swift")
         guard let fn = body(of: "func presentLongPressMenu(", in: code) else {
             return XCTFail("`presentLongPressMenu` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
-            fn.contains("guard let frame = cellFrame,"),
-            "`presentLongPressMenu` doit lire la position réelle via le paramètre `cellFrame` (résolu côté "
-                + "UIKit, `cellFrameInWindow`) — PAS `frameTracker`, qui n'est jamais alimenté en mode liste "
-                + "standard (revue 2026-08-27)."
+            fn.contains("overlayState.overlaySourceFrame = "),
+            "`presentLongPressMenu` doit garder le cadre reçu de `cellFrameInWindow` dans `overlaySourceFrame`."
         )
         XCTAssertFalse(
             fn.contains("frameTracker.frame(for:"),
-            "`presentLongPressMenu` ne doit PLUS lire `frameTracker` : `MessageFramePreferenceKey` ne "
-                + "traverse la frontière UIKit qu'en mode Rivière (seul site qui la publie réellement) — "
-                + "l'utiliser ici rendrait le repositionnement un NO-OP silencieux en mode liste standard."
+            "`presentLongPressMenu` ne lit pas `frameTracker` : `MessageFramePreferenceKey` ne traverse la "
+                + "frontière UIKit qu'en mode Rivière (seul site qui la publie réellement)."
         )
+        guard let storeRange = fn.range(of: "overlayState.overlaySourceFrame = "),
+              let presentRange = fn.range(of: "showOverlayMenu = true") else {
+            return XCTFail("Ancres `overlaySourceFrame` / `showOverlayMenu = true` introuvables.")
+        }
+        XCTAssertTrue(storeRange.lowerBound < presentRange.lowerBound,
+                      "Le cadre est posé AVANT la présentation : le premier rendu de l'aperçu le lit.")
+    }
+
+    func test_overlayState_declaresTheSourceFrame() throws {
+        let code = try source("Features/Main/Views/ConversationOverlayState.swift")
+        XCTAssertTrue(code.contains("var overlaySourceFrame: CGRect? = nil"),
+                      "`ConversationOverlayState` porte le cadre source de l'aperçu, `nil` hors appui long.")
+    }
+
+    func test_overlayLayer_readsTheStoredFrameBeforeTheTracker() throws {
+        let code = try source("Features/Main/Views/ConversationLayers/ConversationBodyPresentations.swift")
         XCTAssertTrue(
-            fn.contains("scrollState.scrollToMessageId ="),
-            "`presentLongPressMenu` doit déclencher un scroll via `scrollState.scrollToMessageId` — le même "
-                + "mécanisme que le saut vers une citation ou un message non lu."
+            code.contains("bubbleFrame: overlayState.overlaySourceFrame ?? frameTracker.frame(for: msg.id) ?? .zero"),
+            "L'overlay lit d'abord le cadre gardé, puis le suivi des bulles (Rivière), puis rien."
         )
+    }
+
+    /// Plus de défilement préalable ni de présentation différée : la loi de
+    /// placement de l'overlay remonte le cluster, la liste ne bouge pas sous le
+    /// doigt et le menu paraît dans la même image que le geste.
+    func test_presentLongPressMenu_presentsAtOnce_withoutScrollingFirst() throws {
+        let code = try source("Features/Main/Views/ConversationView+LongPressMenu.swift")
+        guard let fn = body(of: "func presentLongPressMenu(", in: code) else {
+            return XCTFail("`presentLongPressMenu` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertFalse(fn.contains("asyncAfter"), "La présentation n'attend plus un défilement.")
+        XCTAssertFalse(fn.contains("scrollToMessageTrigger"), "L'appui long ne fait plus défiler la liste.")
+        XCTAssertFalse(code.contains("longPressRepositionDelay"), "Le délai de repositionnement n'a plus de raison d'être.")
+    }
+
+    // MARK: - #11208 — une seule haptique, celle du geste
+
+    func test_openingChain_firesASingleHaptic_theGesturesOwn() throws {
+        let list = try source("Features/Main/Views/MessageListView.swift")
+        guard let gesture = body(of: "private struct ConditionalBubbleLongPress", in: list) else {
+            return XCTFail("`ConditionalBubbleLongPress` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertEqual(gesture.components(separatedBy: "HapticFeedback.").count - 1, 1,
+                       "Le geste porte l'unique haptique de l'ouverture.")
+
+        let host = try source("Features/Main/Views/ConversationView+LongPressMenu.swift")
+        guard let present = body(of: "func presentLongPressMenu(", in: host) else {
+            return XCTFail("`presentLongPressMenu` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertFalse(present.contains("HapticFeedback."), "La présentation ne vibre pas une seconde fois.")
+
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        guard let entrance = body(of: "private func enter()", in: menu) else {
+            return XCTFail("L'entrée de l'overlay (`enter()`) introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertFalse(entrance.contains("HapticFeedback."), "L'entrée de l'overlay ne vibre pas : le geste l'a déjà fait.")
+        XCTAssertTrue(menu.contains(".onAppear { enter() }"), "L'overlay entre par `enter()`, et seulement par elle.")
+    }
+
+    // MARK: - #11208 — « Réduire les animations » est lu à l'entrée
+
+    func test_entrance_readsReduceMotion_andFadesInsteadOfSpringing() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertTrue(menu.contains("@Environment(\\.accessibilityReduceMotion)"),
+                      "L'overlay lit « Réduire les animations ».")
+        guard let entrance = body(of: "private func enter()", in: menu) else {
+            return XCTFail("L'entrée de l'overlay (`enter()`) introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(entrance.contains("reduceMotion"), "L'entrée choisit sa courbe selon « Réduire les animations ».")
+        XCTAssertTrue(entrance.contains(".easeOut(duration: Self.reducedMotionFadeDuration)"),
+                      "Sous « Réduire les animations », l'entrée est un fondu.")
+    }
+
+    // MARK: - #11208 — l'aperçu est la cellule, plus une bulle reconstruite
+
+    func test_legacyRebuiltPreview_isGone() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        for removed in ["previewTextBubble", "previewFileRow", "clearPreviewContent", "func messagePreview("] {
+            XCTAssertFalse(menu.contains(removed), "`\(removed)` reconstruisait une bulle générique — il ne revient pas.")
+        }
+        XCTAssertTrue(menu.contains("MessageOverlayCellPreview("), "L'aperçu monte la cellule du fil.")
+    }
+
+    func test_preview_wearsTheThreadSkin() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        guard let range = menu.range(of: "MessageOverlayCellPreview(") else {
+            return XCTFail("`MessageOverlayCellPreview(` introuvable — la garde ne mesurerait rien.")
+        }
+        let mount = String(menu[range.lowerBound...].prefix(600))
+        XCTAssertTrue(mount.contains(".environment(\\.bubbleSkin, previewSkin)"),
+                      "La peau du fil est posée sur l'aperçu, quelle que soit sa face.")
+    }
+
+    func test_preview_isChosenByTheReadingModeLaw() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertTrue(menu.contains("MessageOverlayPreviewKind.resolve(readingMode: threadLanguage.readingMode)"),
+                      "La face de l'aperçu se lit au mode de lecture du fil, par la loi pure.")
+        let cell = try source("Features/Main/Components/MessageOverlayCellPreview.swift")
+        XCTAssertTrue(cell.contains("FocalRow(input:"), "La face rangée plate rend la `FocalRow` du fil.")
+        XCTAssertTrue(cell.contains("ThemedMessageBubble"), "La face bulle rend la `ThemedMessageBubble` du fil.")
+        XCTAssertTrue(cell.contains("OverlayProtectedPreview("), "La protection reste en amont des deux faces.")
+    }
+
+    /// La rangée plate lit l'objet du révélé des heures (`FocalRevealedTime`,
+    /// `@EnvironmentObject`). La cellule le reçoit de sa liste ; l'overlay vit
+    /// hors de la liste et doit le poser lui-même — sans lui, l'appui long en
+    /// Script ou en Focal plante à l'ouverture.
+    func test_flatRowPreview_receivesTheTimestampRevealObject() throws {
+        let cell = try source("Features/Main/Components/MessageOverlayCellPreview.swift")
+        XCTAssertTrue(cell.contains("@StateObject private var timestampReveal = FocalTimestampRevealState()"))
+        guard let row = cell.range(of: "FocalRow(input:") else {
+            return XCTFail("`FocalRow(input:` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(String(cell[row.lowerBound...].prefix(200)).contains(".environmentObject(timestampReveal)"),
+                      "La rangée de l'aperçu reçoit son révélé des heures.")
+    }
+
+    /// Le voile ne floute plus le fond à 12 : un flou léger, d'au plus 8, sous
+    /// l'assombrissement de l'overlay (#11222 en fixe la loi commune).
+    func test_backdropBlur_isAtMostEight() throws {
+        let code = try source("Features/Main/Views/ConversationLayers/ConversationBodyPresentations.swift")
+        XCTAssertFalse(code.contains("showOverlayMenu ? 12 : 0"), "Le flou plein écran de 12 est retiré.")
+        XCTAssertTrue(code.contains(".blur(radius: overlayState.showOverlayMenu ? ConversationOverlayBackdrop.blurRadius : 0)"))
+        XCTAssertLessThanOrEqual(ConversationOverlayBackdrop.blurRadius, 8)
+    }
+
+    // MARK: - #11208 — le cadre de fenêtre passe dans le repère de l'overlay
+
+    /// Le cadre de la cellule arrive en coordonnées de FENÊTRE ; l'overlay pose
+    /// l'aperçu dans le repère de son `GeometryReader`. Sur iPad, la
+    /// conversation vit à droite de la colonne de gauche : lire le cadre brut
+    /// décalait la bulle de toute la largeur de cette colonne. Le corps ne le
+    /// lit qu'une fois, pour le convertir (la loi est éprouvée par
+    /// `MessageOverlayPreviewKindTests.test_sourceFrame_*`).
+    func test_overlayBody_convertsTheWindowFrame_beforeAnyGeometry() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        guard let body = body(of: "var body: some View", in: menu) else {
+            return XCTFail("Le corps de `MessageOverlayMenu` introuvable — la garde ne mesurerait rien.")
+        }
         XCTAssertTrue(
-            fn.contains("scrollState.scrollToMessageTrigger +="),
-            "`presentLongPressMenu` doit incrémenter `scrollToMessageTrigger` pour déclencher le scroll."
-        )
+            body.contains("Self.sourceFrame(windowFrame: messageBubbleFrame, containerOrigin: geometry.frame(in: .global).origin)"),
+            "Le cadre de fenêtre est ramené au repère de l'overlay avant toute géométrie.")
+        XCTAssertEqual(body.components(separatedBy: "messageBubbleFrame").count - 1, 1,
+                       "Le cadre brut n'est lu qu'une fois : pour sa conversion.")
+    }
+
+    /// La cellule n'a aucune marge verticale (`.margins(.all, 0)`) : son cadre
+    /// commence au haut de la bulle. Un retrait de 8 pt supposé y ajoutait un
+    /// saut de la bulle à l'ouverture.
+    func test_overlay_assumesNoRowInsetAboveTheBubble() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        XCTAssertFalse(menu.contains("bubbleRowInset"), "Aucun retrait vertical supposé entre la cellule et sa bulle.")
+        XCTAssertFalse(menu.contains("rowInset"), "Aucun retrait vertical supposé entre la cellule et sa bulle.")
+        let rows = try source("Features/Main/Views/MessageListViewController+Rows.swift")
+        XCTAssertTrue(rows.contains(".margins(.all, 0)"), "La cellule de message est configurée sans marge.")
+    }
+
+    // MARK: - #11208 — la rangée plate ne se reconstruit pas à chaque image
+
+    /// Le corps se réévalue à chaque image du glissement ; la rangée plate (et
+    /// sa `BubbleContent`, balayage des liens compris) se construit une fois
+    /// par jeu d'entrées, par sa mémoire.
+    func test_flatRowFace_isBuiltThroughItsMemo() throws {
+        let menu = try source("Features/Main/Components/MessageOverlayMenu.swift")
+        guard let face = body(of: "private func previewFace(", in: menu) else {
+            return XCTFail("`previewFace` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(face.contains("flatRowMemo.row(for: flatRowKey(availableWidth: width))"),
+                      "La rangée plate passe par sa mémoire.")
+        XCTAssertEqual(menu.components(separatedBy: "previewRow(availableWidth:").count - 1, 2,
+                       "`previewRow` n'est appelée que par la mémoire (une déclaration, un appel).")
     }
 
     // MARK: - Le frame voyage AVEC l'appel, résolu côté UIKit (même patron qu'`onAddReaction`)

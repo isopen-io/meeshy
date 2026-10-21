@@ -2,7 +2,7 @@
   "rules": {
     "anyview": 97,
     "available-floor": 3,
-    "fixed-font": 946,
+    "fixed-font": 945,
     "idiom": 0,
     "logger-subsystem": 5,
     "nonisolated-unsafe": 152,
