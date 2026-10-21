@@ -6,7 +6,7 @@ import { quotedIsProtected } from '@/lib/view/quoted-protection';
 import { decodeAttachment } from './decode';
 
 import { deleteLastMessage, editLastMessage } from './list-preview';
-import { findCachedThreadMessage, patchThreadMessages } from './messages';
+import { findCachedThreadMessage, latestSurvivingThreadMessage, patchThreadMessages } from './messages';
 import { belongsTo, quotes, tombstone } from './quote-tombstone';
 import type { Attachment, Message } from './types';
 import { purgeViewOnceIn } from './view-once-seal';
@@ -158,5 +158,5 @@ export function applyMessageDeleted(queryClient: QueryClient, data: MessageDelet
     });
   });
 
-  deleteLastMessage(queryClient, data.conversationId, data.messageId, now);
+  deleteLastMessage(queryClient, data.conversationId, data.messageId, now, latestSurvivingThreadMessage(queryClient, data.conversationId, data.messageId));
 }

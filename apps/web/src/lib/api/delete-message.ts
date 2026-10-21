@@ -90,7 +90,20 @@ function restoreTombstone(queryClient: QueryClient, conversationId: string, snap
     }),
   );
   if (conversation?.lastMessage?.id !== id) return;
-  patchConversation(queryClient, conversationId, (c) => (c.lastMessage?.id === id && wasTombstonedAt(c.lastMessage, deletedAt) ? conversation : c));
+  patchConversation(queryClient, conversationId, (c) => (stillStandsIn(c.lastMessage, id, deletedAt, conversation) ? conversation : c));
+}
+
+/**
+ * LA LIGNE PORTE ENCORE CE QUE LE GESTE Y A POSÉ (#11466) — la pierre tombale
+ * du message, ou le message PLUS ANCIEN qui a pris sa place (le survivant du
+ * fil, ou l'aperçu recalculé). Un message plus récent arrivé pendant le vol
+ * n'est jamais défait.
+ */
+function stillStandsIn(current: Message | null | undefined, id: string, deletedAt: string, before: Conversation): boolean {
+  if (current === undefined || current === null) return false;
+  if (current.id === id) return wasTombstonedAt(current, deletedAt);
+  const replacedAt = before.lastMessage?.createdAt;
+  return replacedAt !== undefined && new Date(current.createdAt).getTime() < new Date(replacedAt).getTime();
 }
 
 export async function performDeleteForEveryone(params: DeleteParams & { readonly now?: Date; readonly reason?: string }): Promise<MessageDeleteResult> {
@@ -101,6 +114,7 @@ export async function performDeleteForEveryone(params: DeleteParams & { readonly
   const now = params.now ?? new Date();
   const deletedAt = now.toISOString();
   const snapshots = messages.map((message) => snapshotOf(queryClient, conversationId, message));
+  const describedByList = snapshots.some((s) => s.conversation?.lastMessage?.id === s.id);
   messages.forEach((message) => applyMessageDeleted(queryClient, { messageId: message.id, conversationId }, now));
 
   const outcome = await snapshots.reduce<Promise<{ readonly deleted: number; readonly failed: readonly TombstoneSnapshot[]; readonly offline: boolean }>>(
@@ -119,6 +133,10 @@ export async function performDeleteForEveryone(params: DeleteParams & { readonly
   );
 
   outcome.failed.forEach((snapshot) => restoreTombstone(queryClient, conversationId, snapshot, deletedAt));
+  /* La ligne décrivait un message supprimé : son remplaçant, seul le serveur le
+     sait (#11466). Il le pousse par `conversation:updated` ; la liste est relue
+     pour le cas où cet évènement se perd — socket coupé, onglet en veille. */
+  if (describedByList && outcome.deleted > 0) void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY, exact: true });
   return { deleted: outcome.deleted, failed: outcome.failed.length, offline: outcome.offline };
 }
 
