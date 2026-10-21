@@ -96,6 +96,23 @@ describe('le résultat', () => {
     expect(await createImagePreparer(answering(webp(400)).port).prepare(original)).toBe(original);
   });
 
+  test('un WebP qui porte de l’EXIF (drapeau VP8X) est ré-encodé même plus gros : la position ne part pas', async () => {
+    const header = new TextEncoder().encode('RIFF\0\0\0\0WEBPVP8X');
+    const withExif = file('IMG_2.webp', 'image/webp', [...header, 0, 0, 0, 10, 0x08, 0, 0, 0, ...new Array<number>(80).fill(0)]);
+    const prepared = await createImagePreparer(answering(webp(500)).port).prepare(withExif);
+    expect(prepared).not.toBe(withExif);
+    expect(prepared.size).toBe(500);
+  });
+
+  test('un PNG qui porte un bloc eXIf est ré-encodé même plus gros : la position ne part pas', async () => {
+    const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    const exif = [0, 0, 0, 4, ...new TextEncoder().encode('eXIf'), 0x4d, 0x4d, 0, 0x2a, 0, 0, 0, 0];
+    const withExif = file('shot.png', 'image/png', [...signature, ...exif, ...new Array<number>(80).fill(0)]);
+    const prepared = await createImagePreparer(answering(webp(500)).port).prepare(withExif);
+    expect(prepared).not.toBe(withExif);
+    expect(prepared.size).toBe(500);
+  });
+
   test('un PNG qui rétrécit est remplacé', async () => {
     const prepared = await createImagePreparer(answering(webp(10)).port).prepare(file('a.png', 'image/png', 100));
     expect(prepared.type).toBe('image/webp');

@@ -178,10 +178,34 @@ describe('hors du fil principal (#11310)', () => {
     expect(decoded).toEqual([]);
   });
 
-  test('le worker ne sait pas la lire : la photo part telle quelle', async () => {
+  test('le worker rend null (panne, worker muet) : le fil principal reprend, et la photo part développée', async () => {
+    const { env, decoded } = offMainEnv(() => Promise.resolve(null));
+    const shot = new File([new Uint8Array(4)], 'IMG_9.HEIC', { type: 'image/heic' });
+    const developed = await developPhotoFile(shot, env);
+    expect(decoded).toEqual([1]);
+    expect(developed.name).toBe('IMG_9.jpg');
+  });
+
+  test('le worker rend null et le fil principal ne sait pas la lire non plus : la photo part telle quelle', async () => {
     const { env } = offMainEnv(() => Promise.resolve(null));
+    const unreadable: PhotoFileEnv = { ...env, decode: () => Promise.reject(new Error('decode')) };
     const shot = new File([new Uint8Array(4)], 'IMG_9.jpg', { type: 'image/jpeg' });
-    expect(await developPhotoFile(shot, env)).toBe(shot);
+    expect(await developPhotoFile(shot, unreadable)).toBe(shot);
+  });
+
+  test('le repli sur le fil principal ne repasse pas par le worker', async () => {
+    const offloaded: unknown[] = [];
+    const { env } = offMainEnv(() => Promise.resolve(null));
+    const withFrames: PhotoFileEnv = { ...env, develop: (request) => (offloaded.push(request.size), Promise.resolve(null)) };
+    await developPhotoFile(new File([new Uint8Array(4)], 'IMG_9.jpg', { type: 'image/jpeg' }), withFrames);
+    expect(offloaded).toEqual([]);
+  });
+
+  test('un cadre que le worker rend null (panne) est développé sur le fil principal : la prise de vue ne se perd pas', async () => {
+    const { env, journal } = fakeEnv();
+    const blob = await developPhoto({ image: {} as CanvasImageSource, size: { width: 800, height: 600 } }, { ...env, develop: () => Promise.resolve(null) });
+    expect(blob?.type).toBe('image/jpeg');
+    expect(journal.painted).toHaveLength(1);
   });
 
   test('sans worker (undefined) : le chemin d’avant, sur le fil principal', async () => {

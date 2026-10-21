@@ -7,8 +7,11 @@ import { fileURLToPath } from 'node:url';
  * **TOUTE IMAGE QUI PART SUR LE RÉSEAU PASSE PAR LA PRÉPARATION** (#11310) —
  * les pièces d'un message (le fil et la feuille d'envoi) et le TUS des posts
  * (feuille d'envoi, commentaires, studio). La loi (bornes, format, EXIF,
- * repli) vit dans `prepare-image-upload.ts` ; cette garde lit les sources
- * des SITES D'ENVOI : un site qui monte une image brute la fait tomber.
+ * repli) vit dans `prepare-image-upload.ts` ; le COMPORTEMENT des pièces d'un
+ * message est éprouvé par `image-upload-prepare.test.ts`. Cette garde lit les
+ * sources des SITES D'ENVOI, y compris les TUS que la colle du navigateur
+ * (import paresseux, crochet Preact) tient hors de portée d'un témoin : un
+ * site qui monte une image brute la fait tomber.
  */
 
 const SRC = fileURLToPath(new URL('../..', import.meta.url));
@@ -18,9 +21,9 @@ const PREPARATION = "from '@/lib/media/prepare-image-upload'";
 
 describe('les sites qui envoient une image', () => {
   const sites: ReadonlyArray<readonly [string, string, RegExp]> = [
-    ['les pièces du fil', 'lib/send/perform-send.ts', /\bprepareUploads\s*\(/],
-    ['les pièces de la feuille d’envoi', 'lib/send/send-sheet-ports.ts', /\bprepareUploads\s*\(/],
-    ['le TUS de la feuille d’envoi', 'lib/send/send-sheet-ports.ts', /\bprepareImageForUpload\s*\(/],
+    ['les pièces du fil', 'lib/send/perform-send.ts', /\.prepareUploads\s*\(/],
+    ['les pièces de la feuille d’envoi', 'lib/send/send-sheet-ports.ts', /\bprepare\.prepareUploads\s*\(/],
+    ['le TUS de la feuille d’envoi', 'lib/send/send-sheet-ports.ts', /\bprepare\.prepare\s*\(file\)/],
     ['le TUS des commentaires', 'lib/comments/comment-media.ts', /\bprepareImageForUpload\s*\(/],
     ['le TUS du studio', 'routes/use-studio-uploads.ts', /\bprepareImageForUpload\s*\(/],
   ];

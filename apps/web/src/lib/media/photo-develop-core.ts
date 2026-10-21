@@ -81,7 +81,7 @@ export type PhotoOutput =
   | { readonly kind: 'jpeg'; readonly quality: number }
   | { readonly kind: 'efficient'; readonly quality: number; readonly opaque?: boolean };
 
-/** Une image déjà prise, que l'environnement peut confier à un worker : `undefined` = pas de worker, le canevas courant fait le travail. */
+/** Une image déjà prise, que l'environnement peut confier à un worker : `undefined` = pas de worker, `null` = le worker a échoué ; dans les deux cas le canevas courant fait le travail — une prise de vue ne se perd jamais. */
 export type PhotoDevelopRequest = {
   readonly image: CanvasImageSource;
   readonly crop: PhotoCrop;
@@ -167,8 +167,8 @@ export async function developPhoto(source: PhotoSource, env: PhotoEnv = canvasPh
   const size = developedSize(crop, options.maxEdge ?? PHOTO_MAX_EDGE);
   const look = options.look === undefined ? PHOTO_LOOK : options.look;
   const output = options.output ?? { kind: 'jpeg', quality: options.quality ?? PHOTO_QUALITY };
-  const offloaded = env.develop?.({ image: source.image, crop, size, look, output });
-  if (offloaded !== undefined) return offloaded;
+  const offloaded = await env.develop?.({ image: source.image, crop, size, look, output });
+  if (offloaded !== undefined && offloaded !== null) return offloaded;
   const surface = env.surface(size);
   if (surface === null) return null;
   surface.paint(source.image, crop, size);

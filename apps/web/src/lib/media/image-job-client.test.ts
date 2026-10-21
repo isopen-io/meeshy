@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createImageJobClient, type ImageJobWorker, type WorkerSignal } from './image-job-client';
+import { createImageJobClient, IMAGE_JOB_IDLE_MS, IMAGE_JOB_WATCHDOG_MS, type ImageJobWorker, type WorkerSignal } from './image-job-client';
 import type { ImageJob, ImageJobRequest } from './image-job';
 
 /**
@@ -45,15 +45,16 @@ const rig = (): Rig => {
 };
 
 const timers = () => {
-  const pending = new Map<number, () => void>();
+  const pending = new Map<number, { readonly run: () => void; readonly ms: number }>();
   let next = 1;
   return {
-    set: (run: () => void) => {
-      pending.set(next, run);
+    set: (run: () => void, ms: number) => {
+      pending.set(next, { run, ms });
       return next++;
     },
     clear: (handle: number) => void pending.delete(handle),
-    fire: () => [...pending.values()].forEach((run) => run()),
+    /** Les minuteries d'un délai donné — l'extinction par défaut. */
+    fire: (ms: number = IMAGE_JOB_IDLE_MS) => [...pending.entries()].filter(([, timer]) => timer.ms === ms).forEach(([handle, timer]) => (pending.delete(handle), timer.run())),
     count: () => pending.size,
   };
 };
@@ -134,5 +135,58 @@ describe('la panne du worker', () => {
     expect(worker.terminated).toBe(1);
     void client.run(job());
     expect(spawned).toBe(2);
+  });
+});
+
+describe('le worker muet ou impossible à créer (jamais une promesse pendante)', () => {
+  test('aucune réponse pendant le délai de garde : les photos en cours rendent null et le worker est éteint', async () => {
+    const worker = rig();
+    const clock = timers();
+    const client = createImageJobClient({ spawn: () => worker.worker, timers: clock });
+    const pending = client.run(job());
+    clock.fire(IMAGE_JOB_WATCHDOG_MS);
+    expect(await pending).toBeNull();
+    expect(worker.terminated).toBe(1);
+  });
+
+  test('un worker qui avance n’est pas tenu pour muet : chaque réponse réarme la garde', async () => {
+    const worker = rig();
+    const clock = timers();
+    const client = createImageJobClient({ spawn: () => worker.worker, timers: clock });
+    const first = client.run(job());
+    const second = client.run(job());
+    const blob = new Blob(['a']);
+    worker.reply({ id: worker.sent[0]?.id ?? -1, blob });
+    expect(await first).toBe(blob);
+    expect(clock.count()).toBe(1);
+    worker.reply({ id: worker.sent[1]?.id ?? -1, blob });
+    expect(await second).toBe(blob);
+    clock.fire(IMAGE_JOB_WATCHDOG_MS);
+    expect(worker.terminated).toBe(0);
+  });
+
+  test('le navigateur refuse de créer le worker : null, jamais une promesse rejetée', async () => {
+    const client = createImageJobClient({
+      spawn: () => {
+        throw new Error('SecurityError');
+      },
+    });
+    expect(await client.run(job())).toBeNull();
+  });
+
+  test('le worker refuse la demande (cadre déjà transféré) : null, et la suivante repart sur un worker neuf', async () => {
+    const worker = rig();
+    let spawned = 0;
+    const refusing: ImageJobWorker = {
+      ...worker.worker,
+      post: () => {
+        throw new Error('DataCloneError');
+      },
+    };
+    const client = createImageJobClient({ spawn: () => (spawned += 1, spawned === 1 ? refusing : worker.worker) });
+    expect(await client.run(job())).toBeNull();
+    void client.run(job());
+    expect(spawned).toBe(2);
+    expect(worker.sent).toHaveLength(1);
   });
 });

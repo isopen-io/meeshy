@@ -72,7 +72,7 @@ export const developPhoto = (source: PhotoSource, env: PhotoEnv = browserPhotoEn
 
 export type PhotoFileEnv = PhotoEnv & {
   readonly decode: (file: Blob) => Promise<DecodedPhoto>;
-  /** Le fichier développé par un worker (décodage, réduction, look, JPEG) ; `undefined` : pas de worker, le fil courant le fait. */
+  /** Le fichier développé par un worker (décodage, réduction, look, JPEG) ; `undefined` (pas de worker) ou `null` (worker en panne, muet, ou image illisible) : le fil courant le fait. */
   readonly offMain?: (file: Blob) => Promise<Blob | null> | undefined;
 };
 
@@ -88,10 +88,11 @@ export const browserPhotoFileEnv: PhotoFileEnv = {
 
 const jpegName = (name: string): string => `${name.replace(/\.[^./]+$/, '') || 'photo'}.jpg`;
 
+/** Le repli, sur le canevas courant SEULEMENT : sans `develop`, le cadre décodé ne repart pas vers un worker qui vient d'échouer. */
 async function developOnMainThread(file: File, env: PhotoFileEnv): Promise<Blob | null> {
   const decoded = await env.decode(file);
   try {
-    return await developPhoto({ image: decoded.image, size: decoded.size }, env);
+    return await developOnEnv({ image: decoded.image, size: decoded.size }, { surface: env.surface });
   } finally {
     decoded.close();
   }
@@ -101,7 +102,7 @@ async function developOnMainThread(file: File, env: PhotoFileEnv): Promise<Blob 
 export async function developPhotoFile(file: File, env: PhotoFileEnv = browserPhotoFileEnv): Promise<File> {
   if (!file.type.startsWith('image/')) return file;
   try {
-    const blob = await (env.offMain?.(file) ?? developOnMainThread(file, env));
+    const blob = (await env.offMain?.(file)) ?? (await developOnMainThread(file, env));
     return blob === null ? file : new File([blob], jpegName(file.name), { type: blob.type || PHOTO_MIME, lastModified: file.lastModified });
   } catch {
     return file;

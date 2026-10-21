@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import { uploadAttachments } from '@/lib/api/attachments';
-import { prepareUploads } from '@/lib/media/prepare-image-upload';
+import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { offerLastMessage } from '@/lib/api/list-preview';
@@ -30,6 +30,8 @@ export type SendDeps = ConversationsDeps & {
   readonly online: boolean;
   /** Horloge injectable — jamais `Date.now()` lu directement (témoins). */
   readonly now?: () => number;
+  /** La préparation des photos avant téléversement (#11310) — le worker d'image par défaut. */
+  readonly prepare?: ImagePreparer;
 };
 
 export type Draft = {
@@ -242,7 +244,7 @@ async function uploadPhase(params: {
   const result = await uploadAttachments({
     source: deps.source,
     transport: deps.transport,
-    pending: await prepareUploads(upload.files),
+    pending: await (deps.prepare ?? browserImagePreparer).prepareUploads(upload.files),
   });
 
   if (!result.ok) {
