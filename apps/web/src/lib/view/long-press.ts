@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent as ReactMouseEvent,
@@ -169,6 +169,11 @@ const pressSurfaceOf = (host: HTMLElement): HTMLElement => {
  * natif — il tombe sur le voile ou sur l'aperçu (une image, un lien), jamais
  * sur l'élément qui a ouvert. L'écouter sur la rangée laissait la WebView
  * ouvrir son propre menu (« Télécharger l'image ») par-dessus celui de Meeshy.
+ *
+ * Écouter la fenêtre rend l'avalement GLOBAL : il ne survit donc ni à un
+ * nouvel appui (un `pointerdown` dit que le doigt qui a ouvert s'est levé,
+ * même si son relâcher s'est perdu) ni au démontage de son hôte — sans quoi
+ * il couperait le menu de tout autre hôte.
  */
 const swallowHeldContextMenu = (until: { current: number }): (() => void) => {
   until.current = Number.POSITIVE_INFINITY;
@@ -177,10 +182,9 @@ const swallowHeldContextMenu = (until: { current: number }): (() => void) => {
     event.preventDefault();
     event.stopPropagation();
   };
-  const detach = (): void => {
-    window.removeEventListener('contextmenu', swallow, true);
-    window.removeEventListener('pointerup', settle, true);
-    window.removeEventListener('pointercancel', settle, true);
+  const reset = (): void => {
+    until.current = 0;
+    detach();
   };
   function settle(event: Event): void {
     window.removeEventListener('pointerup', settle, true);
@@ -189,10 +193,17 @@ const swallowHeldContextMenu = (until: { current: number }): (() => void) => {
     until.current = graceUntil;
     if (graceUntil === 0) detach();
   }
+  function detach(): void {
+    window.removeEventListener('contextmenu', swallow, true);
+    window.removeEventListener('pointerup', settle, true);
+    window.removeEventListener('pointercancel', settle, true);
+    window.removeEventListener('pointerdown', reset, true);
+  }
   window.addEventListener('contextmenu', swallow, true);
   window.addEventListener('pointerup', settle, true);
   window.addEventListener('pointercancel', settle, true);
-  return detach;
+  window.addEventListener('pointerdown', reset, true);
+  return reset;
 };
 
 /**
@@ -241,6 +252,15 @@ export function useLongPress(options: {
    */
   const onOpenRef = useRef(options.onOpen);
   onOpenRef.current = options.onOpen;
+  useEffect(
+    () => () => {
+      detachSwallowRef.current?.();
+      detachSwallowRef.current = null;
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+      timerRef.current = null;
+    },
+    [],
+  );
   const enabledRef = useRef(options.enabled ?? true);
   enabledRef.current = options.enabled ?? true;
   const pressFeedbackRef = useRef(options.pressFeedback ?? true);

@@ -192,6 +192,38 @@ describe('useLongPress — la pression se voit, l’ouverture se sent', () => {
     veil.remove();
   });
 
+  test('l’avalement ne survit ni au démontage de son hôte ni à un nouvel appui — il ne coupe jamais le menu d’un AUTRE hôte', async () => {
+    const first = mount();
+    pointer(first.row, 'pointerdown');
+    await wait(LONG_PRESS_MS + 40);
+    const leaving = mounted.splice(0);
+    for (const { root, host } of leaving) {
+      act(() => root.unmount());
+      host.remove();
+    }
+    const second = mount();
+    const context = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
+    act(() => {
+      second.row.dispatchEvent(context);
+    });
+    expect(second.opened.length).toBe(1);
+
+    pointer(second.row, 'pointerdown');
+    await wait(LONG_PRESS_MS + 40);
+    expect(second.opened.length).toBe(2);
+    const veil = document.createElement('div');
+    document.body.append(veil);
+    act(() => {
+      veil.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }));
+    });
+    const after = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 });
+    act(() => {
+      veil.dispatchEvent(after);
+    });
+    expect(after.defaultPrevented).toBe(false);
+    veil.remove();
+  });
+
   test('après un appui long RELÂCHÉ (sur le voile du menu), un clic droit rouvre — rien ne reste avalé', async () => {
     const { row, cues, opened } = mount();
     pointer(row, 'pointerdown');
