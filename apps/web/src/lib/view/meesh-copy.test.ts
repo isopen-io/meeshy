@@ -20,9 +20,9 @@ describe('l’étincelle s’accorde', () => {
   test('à 1 et à 2, le mot change', () =>
     expect(motAccorde(meeshMissing(1, 0))).not.toBe(motAccorde(meeshMissing(2, 0))));
   test('« étincelle » au singulier', () =>
-    expect(meeshMissing(1, 0)).toBe('Encore 1 étincelle avant une Meesh.'));
+    expect(meeshMissing(1, 0)).toBe('1 étincelle jusqu’à ta prochaine Meesh.'));
   test('« étincelles » au pluriel', () =>
-    expect(meeshMissing(2, 0)).toBe('Encore 2 étincelles avant une Meesh.'));
+    expect(meeshMissing(2, 0)).toBe('2 étincelles jusqu’à ta prochaine Meesh.'));
 });
 
 describe('le point de conversation s’accorde', () => {
@@ -37,16 +37,16 @@ describe('le point de conversation s’accorde', () => {
 
   test('à UN, aucun chiffre n’accompagne le plancher', () => {
     const seconde = meeshMissing(5, 1).replace(meeshMissing(5, 0), '').trim();
-    expect(seconde).toBe('Votre étincelle de conversation sera reprise en dernier, sans éteindre aucun badge.');
+    expect(seconde).toBe('Ton étincelle de conversation se figera en dernier, sans éteindre aucune médaille.');
     expect(seconde).not.toContain('1');
   });
 
   test('au-delà, le chiffre revient', () =>
-    expect(meeshMissing(5, 3)).toContain('Vos 3 étincelles de conversation'));
+    expect(meeshMissing(5, 3)).toContain('Tes 3 étincelles de conversation'));
 });
 
 describe('le plancher ABSENT ne compose rien', () => {
-  test('zéro ⇒ une seule phrase', () => expect(meeshMissing(4, 0)).toBe('Encore 4 étincelles avant une Meesh.'));
+  test('zéro ⇒ une seule phrase', () => expect(meeshMissing(4, 0)).toBe('4 étincelles jusqu’à ta prochaine Meesh.'));
 });
 
 describe('la langue d’interface (#10823)', () => {

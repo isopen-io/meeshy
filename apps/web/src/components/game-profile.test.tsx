@@ -68,7 +68,7 @@ describe('la carte de contact : le niveau et le rang en quelques pictogrammes', 
     expect(html).toContain('data-game-contact-standing');
     expect(html).toContain('data-game-level="34"');
     expect(html).toContain('data-game-shield');
-    expect(text(html)).toContain('Trésor : Trésor');
+    expect(text(html)).toContain('Héritage : Trésor');
     expect(text(html)).not.toContain('Flamme');
     expect(html).not.toContain('data-game-flame');
   });
@@ -81,7 +81,7 @@ describe('la carte de contact : le niveau et le rang en quelques pictogrammes', 
 
   test('un réglage « rang » fermé (standing nul) mais un trésor ouvert : le trésor seul', () => {
     const only = renderToStaticMarkup(<ContactGameStrip game={{ visible: true, standing: null, treasury: { tier: 'bourse' } }} showcase={undefined} />);
-    expect(text(only)).toContain('Trésor : Bourse');
+    expect(text(only)).toContain('Héritage : Bourse');
     expect(only).not.toContain('data-game-level');
   });
 

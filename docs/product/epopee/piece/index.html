@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Meesh — revue</title>
+<style>
+  :root { --bg: #f6f5f2; --ink: #1e1b4b; --muted: #5b5a73; --card: #ffffff; --line: #e4e2ec; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #0d0c14; --ink: #eef2ff; --muted: #a5a8c4; --card: #16142a; --line: #2a2748; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 -apple-system, system-ui, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 28px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  figure { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pair img { width: 100%; height: auto; display: block; }
+  figcaption { margin-top: 10px; font-size: 14px; color: var(--muted); }
+  figcaption b { color: var(--ink); }
+  .small img { width: 100%; height: auto; border-radius: 12px; display: block; margin-top: 8px; }
+  h2 { font-size: 17px; margin: 32px 0 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>La Meesh</h1>
+  <p class="lead">Épopée § 6, #11176 — les six faces rendues par le vrai composant web (<code>apps/web/src/components/game/meesh-coin.tsx</code>), depuis la géométrie partagée <code>packages/shared/design/meesh-coin.json</code>. Avers : « MEESHY · 1 MEESH », jamais traduite. Revers : l'oiseau ou les oiseaux de l'édition, l'année et « Nº ».</p>
+  <div class="grid">
+    <figure>
+      <div class="pair"><img src="silver-obverse.png" alt="Avers argent"><img src="silver-reverse.png" alt="Revers argent, Mee, Nº 92"></div>
+      <figcaption><b>Argent</b> · chaque pièce · sobre<br>de l'argent veiné d'un peu d'or ; la tranche cannelée et la couronne, rien de plus ; Mee au revers</figcaption>
+    </figure>
+    <figure>
+      <div class="pair"><img src="gold-obverse.png" alt="Avers or"><img src="gold-reverse.png" alt="Revers or, Meo, Nº 100"></div>
+      <figcaption><b>Or</b> · chaque centième · raffiné<br>de l'or pur, centre compris ; grènetis fin, rosace guillochée, étoiles dans la couronne, lauriers autour du numéro ; Meo au revers</figcaption>
+    </figure>
+    <figure>
+      <div class="pair"><img src="prism-obverse.png" alt="Avers prisme"><img src="prism-reverse.png" alt="Revers prisme, Mee et Meo couronnés, Nº 1000"></div>
+      <figcaption><b>Prisme</b> · chaque millième · royal<br>de l'or mêlé de diamant, tranche irisée ; double grènetis, huit cabochons, soleil guilloché, éclats qui scintillent, couronne royale au-dessus de Mee et Meo</figcaption>
+    </figure>
+  </div>
+  <h2>À 44 pt</h2>
+  <p class="lead">La taille de la pièce dans le Coffret : les traits fins (grènetis, guilloché, veines) s'effacent, la matière et la silhouette restent.</p>
+  <div class="small">
+    <img src="a-44pt-clair.png" alt="Les six faces à 44 points, fond clair">
+    <img src="a-44pt-sombre.png" alt="Les six faces à 44 points, fond sombre">
+  </div>
+</main>
+</body>
+</html>

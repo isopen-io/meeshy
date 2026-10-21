@@ -44,7 +44,7 @@ const modelOf = (game: ReturnType<typeof gameBlockFixture>): PlayerBannerModel =
 };
 const newcomer = (): PlayerBannerModel => modelOf(gameBlockFixture(NEWCOMER));
 const markup = (model: PlayerBannerModel): string => renderToStaticMarkup(<PlayerBanner model={model} />);
-/** Conteur III à 3 400 Gloire, encore 1 200 vers Conteur II — l'exemple du porteur (#11125). */
+/** Conteur III à 3 400 Gloire, 1 200 de gloire jusqu’à Conteur II — l'exemple du porteur (#11125). */
 const conteur = (patch: Partial<PlayerBannerRank> = {}): PlayerBannerRank => ({
   rank: 'conteur',
   division: 3,
@@ -229,8 +229,8 @@ describe('le toucher : chaque pièce ouvre SA fiche (porteur 2026-10-16)', () =>
     expect(hrefOf(host, 'missions')).toBe('/me/progression/concept/missions');
     expect(hrefOf(host, 'season')).toBe('/me/progression/concept/season');
     expect(host.querySelector('a[data-player-banner-link="showcase"]')?.getAttribute('aria-label')).toBe('Trophées : 2');
-    expect(host.querySelector('a[data-player-banner-link="missions"]')?.getAttribute('aria-label')).toBe('Missions du jour : 1 sur 3');
-    expect(host.querySelector('a[data-player-banner-link="season"]')?.getAttribute('aria-label')).toBe('Saison : 25 étoiles');
+    expect(host.querySelector('a[data-player-banner-link="missions"]')?.getAttribute('aria-label')).toBe('Rêve : 1 sur 3');
+    expect(host.querySelector('a[data-player-banner-link="season"]')?.getAttribute('aria-label')).toBe('Voyage : 25 pas');
   });
 
   test('une pièce absente n\'a pas de lien', async () => {
@@ -399,25 +399,25 @@ describe('le rang, sa jauge de Gloire et ce qui manque', () => {
     const block = rankBlock(host);
     expect(block?.querySelector('[data-player-banner-rank-name]')?.textContent).toBe('Conteur III');
     expect(block?.querySelector<HTMLElement>('[data-player-banner-rank-fill]')?.style.transform).toBe('scaleX(0.400)');
-    expect(block?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('1 200 vers Conteur II');
+    expect(block?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('1 200 jusqu’à Conteur II');
     expect(block?.querySelector('[data-player-banner-rank-total]')).toBeNull();
   });
 
   test('un manque de 10 000 et plus se dit en chiffre compact', async () => {
     const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur({ gloryMissing: 12_345, next: { rank: 'passeur', division: 2 } }) }} motion={motion().value} />);
-    expect(rankBlock(host)?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('12,3 k vers Passeur II');
+    expect(rankBlock(host)?.querySelector('[data-player-banner-rank-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('12,3 k jusqu’à Passeur II');
   });
 
   test('la jauge du niveau dit la forme courte : « 8 700 vers le 62 », compacte dès 10 000', async () => {
     const at = (pointsToNext: number): PlayerBannerModel => ({ ...newcomer(), level: { level: 61, progress: 0.5, prestige: 0, nextLevel: 62, pointsToNext, opener: null } });
     const short = (host: ParentNode): string => host.querySelector('[data-player-banner-missing]')?.textContent?.replace(/[\s\u202f]/g, ' ') ?? '';
-    expect(short(await mount(<PlayerBanner model={at(8700)} motion={motion().value} />))).toBe('8 700 vers le 62');
-    expect(short(await mount(<PlayerBanner model={at(12_345)} motion={motion().value} />))).toBe('12,3 k vers le 62');
+    expect(short(await mount(<PlayerBanner model={at(8700)} motion={motion().value} />))).toBe('8 700 jusqu’au 62');
+    expect(short(await mount(<PlayerBanner model={at(12_345)} motion={motion().value} />))).toBe('12,3 k jusqu’au 62');
   });
 
   test('le lien du rang est nommé de son nom, de sa Gloire et de ce qui manque — la forme complète', async () => {
     const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: conteur() }} motion={motion().value} />);
-    expect(host.querySelector('a[data-player-banner-link="glory"]')?.getAttribute('aria-label')?.replace(/[\s\u202f]/g, ' ')).toBe('Conteur III, 3 400 Gloire, encore 1 200 vers Conteur II');
+    expect(host.querySelector('a[data-player-banner-link="glory"]')?.getAttribute('aria-label')?.replace(/[\s\u202f]/g, ' ')).toBe('Conteur III, gloire 3 400, 1 200 de gloire jusqu’à Conteur II');
   });
 
   test('au Mythe (pas de suite) : le nom et « Gloire N » en chiffre compact, ni jauge ni manque', async () => {
@@ -425,7 +425,7 @@ describe('le rang, sa jauge de Gloire et ce qui manque', () => {
     const host = await mount(<PlayerBanner model={{ ...newcomer(), rank: mythe }} motion={motion().value} />);
     const block = rankBlock(host);
     expect(block?.querySelector('[data-player-banner-rank-name]')?.textContent).toBe('Mythe n° 18');
-    expect(block?.querySelector('[data-player-banner-rank-total]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('Gloire 1 M');
+    expect(block?.querySelector('[data-player-banner-rank-total]')?.textContent?.replace(/[\s\u202f]/g, ' ')).toBe('gloire 1 M');
     expect(block?.querySelector('[data-player-banner-rank-fill]')).toBeNull();
     expect(block?.querySelector('[data-player-banner-rank-missing]')).toBeNull();
   });

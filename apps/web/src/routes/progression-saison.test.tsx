@@ -69,7 +69,7 @@ describe('la page Saison', () => {
   });
 
   test('un refus de la passerelle remonte sous le parcours', async () => {
-    const refused = { run: () => undefined, pending: false, vars: undefined as number | undefined, error: 'Cette étape est déjà réclamée.' };
+    const refused = { run: () => undefined, pending: false, vars: undefined as number | undefined, error: 'Cette halte est déjà réclamée.' };
     const host = await mount(<SaisonBody progress={progress()} online actions={actions({ claimStep: refused })} />);
     expect(host.textContent).toContain('déjà réclamée');
   });
@@ -82,7 +82,7 @@ describe('la page Saison', () => {
 
   test('aucune saison ouverte (null) n’est PAS un ancien serveur : on le dit autrement', async () => {
     const host = await mount(<SaisonBody progress={progress({ ...gameBlockWithExtrasFixture(), season: null })} online actions={actions()} />);
-    expect(host.textContent).toContain('Aucune saison n’est ouverte');
+    expect(host.textContent).toContain('Aucun voyage n’est en cours');
     expect(host.textContent).not.toContain('pas encore disponible');
   });
 });
