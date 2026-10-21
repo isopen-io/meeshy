@@ -9,9 +9,9 @@ import { createPeerLink, ICE_DISCONNECT_GRACE_MS, ICE_RESTART_MAX_ATTEMPTS, isPo
  */
 
 type Track = { readonly kind: 'audio' | 'video' };
-type Transceiver = { direction: string; readonly sender: { track: Track | null; replaceTrack: (t: Track | null) => Promise<void> }; readonly receiver: { readonly track: Track }; readonly setCodecPreferences: (codecs: readonly { readonly mimeType: string }[]) => void };
+type Transceiver = { direction: string; readonly sender: { track: Track | null; replaceTrack: (t: Track | null) => Promise<void> }; readonly receiver: { readonly track: Track }; readonly setCodecPreferences?: (codecs: readonly { readonly mimeType: string }[]) => void };
 
-function fakeConnection() {
+function fakeConnection(options: { readonly codecPreferences?: boolean } = {}) {
   const calls: string[] = [];
   const transceivers: Transceiver[] = [];
   const addTransceiver = (trackOrKind: Track | 'audio' | 'video', init: { direction: string }): Transceiver => {
@@ -21,7 +21,9 @@ function fakeConnection() {
       direction: init.direction,
       sender,
       receiver: { track: { kind } },
-      setCodecPreferences: (codecs: readonly { readonly mimeType: string }[]) => void calls.push(`codecs:${kind}:${codecs.map((codec) => codec.mimeType).join(',')}`),
+      ...(options.codecPreferences === false
+        ? {}
+        : { setCodecPreferences: (codecs: readonly { readonly mimeType: string }[]) => void calls.push(`codecs:${kind}:${codecs.map((codec) => codec.mimeType).join(',')}`) }),
     };
     transceivers.push(transceiver);
     calls.push(`add:${kind}:${init.direction}`);
@@ -66,8 +68,8 @@ function fakeConnection() {
   return { pc, calls, setState };
 }
 
-function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean; readonly receiveOnly?: boolean; readonly shapeSdp?: (sdp: string) => string } = {}) {
-  const fake = fakeConnection();
+function link(options: { readonly local?: string; readonly remote?: string; readonly video?: boolean; readonly receiveOnly?: boolean; readonly shapeSdp?: (sdp: string) => string; readonly codecPreferences?: boolean } = {}) {
+  const fake = fakeConnection(options.codecPreferences === undefined ? {} : { codecPreferences: options.codecPreferences });
   const sent: OutgoingSignal[] = [];
   const states: LinkState[] = [];
   const timers: Array<{ fn: () => void; ms: number; active: boolean }> = [];
@@ -379,10 +381,35 @@ describe('configuration et codecs de la négociation (#11319)', () => {
     expect(fake.calls).toContain('codecs:audio:audio/opus,audio/red,audio/G722');
   });
 
-  test('un navigateur sans setCodecPreferences négocie par défaut sans erreur', async () => {
+  test('un navigateur qui n’annonce aucune capacité garde la négociation par défaut', async () => {
     const { peer, fake } = link({ video: true });
     await peer.offer();
     expect(fake.calls).toContain('setLocal:offer');
     expect(fake.calls.some((call) => call.startsWith('codecs:'))).toBe(false);
+  });
+
+  test('un navigateur sans setCodecPreferences (Firefox avant 128) offre quand même, sans erreur', async () => {
+    const { peer, fake, sent } = link({ video: true, codecPreferences: false });
+    await withCodecCapabilities(() => peer.offer());
+    expect(fake.calls).toContain('setLocal:offer');
+    expect(sent.map((signal) => signal.type)).toEqual(['offer']);
+  });
+
+  test('le côté qui répond applique H264 > VP8 > VP9 aux lignes vidéo de l’offre reçue', async () => {
+    const { peer, fake } = link({ video: true, local: 'u-b', remote: 'u-a' });
+    fake.pc.addTransceiver('audio', { direction: 'recvonly' });
+    fake.pc.addTransceiver('video', { direction: 'recvonly' });
+    await withCodecCapabilities(() => peer.receiveDescription({ type: 'offer', sdp: 'remote-offer' }, 1));
+    expect(fake.calls).toContain('codecs:video:video/H264,video/VP8,video/VP9,video/rtx');
+    expect(fake.calls.indexOf('codecs:video:video/H264,video/VP8,video/VP9,video/rtx')).toBeLessThan(fake.calls.indexOf('setLocal:answer'));
+  });
+
+  test('une caméra allumée après une offre sans vidéo garde H264 d’abord sur sa nouvelle ligne', async () => {
+    const { peer, fake } = link({ local: 'u-b', remote: 'u-a' });
+    fake.pc.addTransceiver('audio', { direction: 'recvonly' });
+    await peer.receiveDescription({ type: 'offer', sdp: 'audio-only-offer' }, 1);
+    await withCodecCapabilities(() => peer.setVideoTrack({ kind: 'video' } as unknown as MediaStreamTrack));
+    expect(fake.calls).toContain('add:video:sendrecv');
+    expect(fake.calls).toContain('codecs:video:video/H264,video/VP8,video/VP9,video/rtx');
   });
 });
