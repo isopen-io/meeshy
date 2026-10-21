@@ -278,6 +278,24 @@ describe('le motif écrit précède la requête, et il est FIGÉ', () => {
   });
 });
 
+describe('un ADMIN ne se justifie pas : le motif proposé est déjà écrit (#11410)', () => {
+  test('le champ s’ouvre rempli, « Lire » part d’un seul geste avec le motif proposé', async () => {
+    appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, adminIdentityFixture({ role: 'ADMIN' }));
+    const { transport, calls } = transportSouverain();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading conversationId={CONVERSATION} language="fr" prisme="membre" readerLanguages={['fr']} viewer={VIEWER} deps={{ source: 'gateway', transport }} />
+      </QueryClientProvider>,
+    );
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-admin-reason]');
+    expect(champ?.value).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(false);
+    await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+    await mounter.settle();
+    expect(calls()[0]?.path).toContain(new URLSearchParams({ reason: 'Contrôle aléatoire, test de fonctionnalité et suivi client' }).toString());
+  });
+});
+
 describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
   test('sert le RANG 2 du membre — ni son rang 1 absent, ni la langue de l’administrateur', async () => {
     const { host } = await lire(['de', 'es']);

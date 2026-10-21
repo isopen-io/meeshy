@@ -10,6 +10,7 @@ import {
   loadAdminSovereignThread,
   MOTIF_LONGUEUR_MINIMALE,
 } from '@/lib/api/admin-conversations';
+import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import { formatDuration } from '@/lib/admin/interpret/time';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -175,10 +176,12 @@ export function AdminConversationReading({
    */
   readonly layout?: 'fill' | 'bounded';
 }) {
-  const [saisie, setSaisie] = useState('');
+  /* L'ADMIN trouve le motif PROPOSÉ déjà écrit (#11410) : « Lire » d'un seul geste, la
+     passerelle le recevant écrit (elle n'exempte que le rang souverain). */
+  const { sovereign: souverain, fallback: motifPropose } = useAdminMotive(language);
+  const [saisie, setSaisie] = useState(motifPropose ?? '');
   /** Le motif VALIDÉ — figé une fois la lecture demandée. */
   const [motif, setMotif] = useState<string | null>(null);
-  const souverain = useAdminReach().isSovereign;
   /** La lecture est armée : un motif validé, ou le rang souverain qui n'en écrit pas. */
   const armee = motif !== null || souverain;
   const [offset, setOffset] = useState(0);
