@@ -402,7 +402,11 @@ const REFERENCE_LITERAL_COLOR_COUNT = 158;
 // 478 -> 479 (2026-10-21, #11449, la pièce Meesh sur iOS) : même commit `d50c95c584` que le littéral ci-dessus,
 // `GameMaterial.swift` (1) — une des variables de matière de la pièce ne passe pas la liste admise. Même précédent
 // (palette fixe du jeu). Valeur MESURÉE le 2026-10-21 en local.
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 479;
+// 479 -> 480 (2026-10-21, #11231, le fond de la conversation dans l'aperçu d'appui long) :
+// `ConversationRecentMessagesPreview.swift` (1) peint la couleur de fond UNIE que l'utilisateur a choisie pour la
+// conversation (`.solid(let hex)`), à l'identique de `ConversationBackgroundView` (déjà compté, 459 -> 467) : la couleur
+// est la DONNÉE choisie, l'accent de conversation la trahirait. Valeur MESURÉE en CI le 2026-10-21 (PR #11405).
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 480;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
