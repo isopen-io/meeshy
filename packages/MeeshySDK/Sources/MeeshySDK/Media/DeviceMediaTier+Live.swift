@@ -49,8 +49,10 @@ enum DeviceMediaProbe {
 
     static func tier() -> DeviceMediaTier {
         if let known = resolved.withLock({ $0 }) { return known }
-        guard Thread.isMainThread else { return DeviceMediaTier.classify(baseSignals) }
-        let tier = DeviceMediaTier.classify(baseSignals.withFramesPerSecond(mainScreenFramesPerSecond()))
+        guard Thread.isMainThread, let framesPerSecond = sceneScreenFramesPerSecond() else {
+            return DeviceMediaTier.classify(baseSignals)
+        }
+        let tier = DeviceMediaTier.classify(baseSignals.withFramesPerSecond(framesPerSecond))
         resolved.withLock { $0 = tier }
         return tier
     }
@@ -63,11 +65,23 @@ enum DeviceMediaProbe {
         }
     }
 
+    /// L'écran se lit par une scène connectée, jamais par `UIScreen.main`
+    /// (déprécié depuis iOS 16, banni par la règle maison `uiscreen-main`).
+    /// Sans scène encore connectée (tout début du lancement), `nil` : le tier
+    /// est alors calculé à 60 Hz et NON gardé, comme hors du fil principal.
+    ///
     /// `assumeIsolated` n'existe qu'à partir d'iOS 17 — et aucun appareil `pro`
     /// (AV1 matériel : A17 Pro, M3) ne tourne sous iOS 16 : 60 Hz y est exact
     /// pour la décision que la cadence éclaire.
-    private static func mainScreenFramesPerSecond() -> Int {
+    private static func sceneScreenFramesPerSecond() -> Int? {
         guard #available(iOS 17, *) else { return 60 }
-        return MainActor.assumeIsolated { UIScreen.main.maximumFramesPerSecond }
+        return MainActor.assumeIsolated {
+            UIApplication.shared.connectedScenes
+                .lazy
+                .compactMap { $0 as? UIWindowScene }
+                .first?
+                .screen
+                .maximumFramesPerSecond
+        }
     }
 }
