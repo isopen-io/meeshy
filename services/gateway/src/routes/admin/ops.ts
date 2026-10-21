@@ -7,11 +7,17 @@
  *   le runner publie. `canAccessAdmin` + rang d'administration (BIGBOSS, ADMIN).
  * - `GET /status` — le dernier passage de chaque opération, sa prochaine
  *   disponibilité, et la carte de la dernière sauvegarde (`etat.json`).
- * - `POST /:operation` — `backup` ou `image-prune`, BIGBOSS SEUL, après une
+ * - `GET /containers` — les conteneurs Docker de l'environnement (état, image
+ *   et sa date, démarrage, consommation, réseaux, ports), tels que le runner les
+ *   publie (`state/containers.json`). Rang d'administration (#11441).
+ * - `POST /:operation` — `backup` ou `image-prune`, RANG D'ADMINISTRATION
+ *   (BIGBOSS et ADMIN, demande porteur 2026-10-21, #11441), après une
  *   confirmation qui NOMME l'opération. La passerelle ne fait que DÉPOSER la
  *   demande (`services/admin/ops-relay.ts`) : c'est le runner de l'hôte qui
- *   l'exécute, sur liste blanche. Chaque demande acceptée est journalisée
- *   (`TRIGGER_SERVER_OPERATION`, entité `Server`).
+ *   l'exécute, sur liste blanche et sous délai. Chaque demande acceptée est
+ *   journalisée (`TRIGGER_SERVER_OPERATION`, entité `Server`), et chaque tentative
+ *   REFUSÉE aussi (`SERVER_OPERATION_REFUSED`, avec son code — #10459 point 3) :
+ *   rang insuffisant, confirmation fausse, délai, opération en cours, relais absent.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
@@ -21,7 +27,7 @@ import {
   type ServerOperation,
 } from '@meeshy/shared/types/admin-ops';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { requireAdminRank, requirePermission, requireSovereign } from '../../middleware/authorize';
+import { requireAdminRank, requirePermission } from '../../middleware/authorize';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { backupCardOf, backupScheduleFromEnv, backupStatusFile, readBackupVerdict, type BackupSchedule } from '../../services/admin/backup-status';
 import { hostMetricsProbe, type HostMetricsProbe } from '../../services/admin/host-metrics-probe';
@@ -29,6 +35,7 @@ import { createOpsRelay, type OpsRelay } from '../../services/admin/ops-relay';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendError, sendSuccess } from '../../utils/response';
 import {
+  containersViewResponseSchema,
   hostMetricsSnapshotResponseSchema,
   operationConflictResponseSchema,
   serverOperationAcceptedResponseSchema,
@@ -58,36 +65,58 @@ function actorOf(request: FastifyRequest): { readonly id: string; readonly usern
   return { id: user.id, username: typeof user.username === 'string' && user.username ? user.username : user.id };
 }
 
+type OperationAudit =
+  | { readonly kind: 'queued'; readonly operation: ServerOperation; readonly requestId: string; readonly reason?: string | undefined }
+  | { readonly kind: 'refused'; readonly operation: ServerOperation; readonly code: string };
+
 async function writeOperationAudit(
   request: FastifyRequest,
-  entry: { readonly adminId: string; readonly operation: ServerOperation; readonly requestId: string; readonly environment: string; readonly reason?: string },
+  entry: { readonly adminId: string; readonly environment: string; readonly audit: OperationAudit },
 ): Promise<void> {
+  const { audit } = entry;
   try {
     await (request.server as unknown as { prisma: { adminAuditLog: { create: (a: unknown) => Promise<unknown> } } }).prisma.adminAuditLog.create({
       data: {
         adminId: entry.adminId,
         userId: entry.adminId,
-        action: 'TRIGGER_SERVER_OPERATION',
+        action: audit.kind === 'queued' ? 'TRIGGER_SERVER_OPERATION' : 'SERVER_OPERATION_REFUSED',
         entity: 'Server',
         entityId: entry.environment,
-        metadata: JSON.stringify({
-          operation: entry.operation,
-          requestId: entry.requestId,
-          environment: entry.environment,
-          ...(entry.reason ? { reason: entry.reason } : {}),
-        }),
+        metadata: JSON.stringify(
+          audit.kind === 'queued'
+            ? { operation: audit.operation, requestId: audit.requestId, environment: entry.environment, ...(audit.reason ? { reason: audit.reason } : {}) }
+            : { operation: audit.operation, environment: entry.environment, code: audit.code },
+        ),
         ipAddress: request.ip,
         userAgent: typeof request.headers['user-agent'] === 'string' ? request.headers['user-agent'] : undefined,
       },
     });
   } catch (error) {
-    logger.warn('server operation audit write failed', { operation: entry.operation, requestId: entry.requestId, error });
+    logger.warn('server operation audit write failed', { operation: audit.operation, kind: audit.kind, error });
   }
 }
 
 export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
   return async function adminOpsPlugin(fastify: FastifyInstance): Promise<void> {
     const adminGate = [fastify.authenticate, requirePermission('canAccessAdmin'), requireAdminRank()];
+    const environment = deps.relay.settings.environment;
+
+    /** Journalise une tentative REFUSÉE — seulement quand il y a un acteur à nommer et une opération connue. */
+    const auditRefusal = async (request: FastifyRequest, code: string): Promise<void> => {
+      const actor = actorOf(request);
+      const operation = serverOperationSchema.safeParse((request.params as { operation?: string } | undefined)?.operation);
+      if (!actor || !operation.success) return;
+      await writeOperationAudit(request, { adminId: actor.id, environment, audit: { kind: 'refused', operation: operation.data, code } });
+    };
+
+    /**
+     * UN REFUS DE RANG SE JOURNALISE (#10459 point 3) — les gardes restent les gardes
+     * PARTAGÉES (le manifeste des routes les lit pour classer la route), et c'est la
+     * réponse 403 qu'elles ont envoyée qui laisse sa trace, une fois partie.
+     */
+    const auditForbidden = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      if (reply.statusCode === 403) await auditRefusal(request, 'FORBIDDEN');
+    };
 
     fastify.get(
       '/host-metrics',
@@ -131,15 +160,32 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
       },
     );
 
+    fastify.get(
+      '/containers',
+      {
+        onRequest: adminGate,
+        schema: {
+          description:
+            "Les conteneurs Docker de l'environnement — nom, service, image et sa date, état, santé, démarrage, redémarrages, consommation, réseaux et ports — tels que le runner de l'hôte les publie chaque minute. Rien d'autre : ni variable d'environnement, ni label. BIGBOSS et ADMIN. #11441.",
+          tags: ['admin'],
+          summary: 'Environment containers (admin)',
+          security: [{ bearerAuth: [] }],
+          response: { 200: enveloppe(containersViewResponseSchema), ...reponsesEnErreur },
+        },
+      },
+      async (_request: FastifyRequest, reply: FastifyReply) => sendSuccess(reply, await deps.relay.containers()),
+    );
+
     fastify.post(
       '/:operation',
       {
-        onRequest: [fastify.authenticate, requirePermission('canAccessAdmin'), requireSovereign()],
+        onRequest: adminGate,
+        onResponse: auditForbidden,
         schema: {
           description:
-            "Déclenche une opération serveur (backup | image-prune) après une confirmation qui la nomme. BIGBOSS seul ; la demande est déposée pour le runner de l'hôte et journalisée. #10385, #10386.",
+            "Déclenche une opération serveur (backup | image-prune) après une confirmation qui la nomme. Rang d'administration (BIGBOSS, ADMIN) ; la demande est déposée pour le runner de l'hôte, et chaque tentative, acceptée ou refusée, est journalisée. #10385, #10386, #11441.",
           tags: ['admin'],
-          summary: 'Trigger a server operation (BIGBOSS)',
+          summary: 'Trigger a server operation (admin)',
           security: [{ bearerAuth: [] }],
           params: { type: 'object', properties: { operation: { type: 'string' } }, required: ['operation'] },
           response: {
@@ -163,6 +209,7 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
           return sendError(reply, 400, 'Demande invalide', { code: 'VALIDATION_ERROR', violations: violationsOf(body.error.issues) });
         }
         if (body.data.confirm !== operation.data) {
+          await auditRefusal(request, 'CONFIRMATION_MISMATCH');
           return sendError(reply, 400, "La confirmation ne nomme pas l'opération demandée", { code: 'CONFIRMATION_MISMATCH' });
         }
 
@@ -171,6 +218,7 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
 
         const result = await deps.relay.submit({ operation: operation.data, requestedBy: actor.username });
         if (result.kind === 'refused') {
+          await auditRefusal(request, result.code);
           if (result.code === 'OPERATION_COOLDOWN') {
             return sendError(reply, 409, 'Opération trop récente', { code: result.code, details: { data: { availableAt: result.availableAt } } });
           }
@@ -182,10 +230,8 @@ export function buildAdminOpsRoutes(deps: AdminOpsDeps) {
 
         await writeOperationAudit(request, {
           adminId: actor.id,
-          operation: operation.data,
-          requestId: result.accepted.requestId,
-          environment: deps.relay.settings.environment,
-          reason: body.data.reason || undefined,
+          environment,
+          audit: { kind: 'queued', operation: operation.data, requestId: result.accepted.requestId, reason: body.data.reason || undefined },
         });
         logger.info('server operation queued', {
           operation: operation.data,

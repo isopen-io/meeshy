@@ -164,10 +164,29 @@ describe('POST /:operation', () => {
     await app.close();
   });
 
-  it.each(['ADMIN', 'MODERATOR', 'USER'])('refuse 403 à un %s, sans rien déposer', async (role) => {
+  it('ADMIN : 202 aussi — le rang d’administration lance sauvegarde et nettoyage (#11441)', async () => {
+    const { app, audit, dirs } = await buildApp({ role: 'ADMIN' });
+    const res = await post(app, 'image-prune', { confirm: 'image-prune' });
+    expect(res.statusCode).toBe(202);
+    expect(readdirSync(dirs!.requests)).toEqual([`${REQUEST_ID}.json`]);
+    expect((audit.mock.calls[0][0] as { data: Record<string, unknown> }).data).toMatchObject({ action: 'TRIGGER_SERVER_OPERATION', adminId: ACTOR_ID });
+    await app.close();
+  });
+
+  it.each(['MODERATOR', 'AUDIT', 'USER'])('refuse 403 à un %s, sans rien déposer, et JOURNALISE la tentative (#10459)', async (role) => {
     const { app, audit, dirs } = await buildApp({ role });
     expect((await post(app, 'backup', { confirm: 'backup' })).statusCode).toBe(403);
     expect(readdirSync(dirs!.requests)).toEqual([]);
+    expect(audit).toHaveBeenCalledTimes(1);
+    const entry = (audit.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+    expect(entry).toMatchObject({ action: 'SERVER_OPERATION_REFUSED', adminId: ACTOR_ID, entity: 'Server', entityId: 'staging' });
+    expect(JSON.parse(entry.metadata as string)).toEqual({ operation: 'backup', environment: 'staging', code: 'FORBIDDEN' });
+    await app.close();
+  });
+
+  it('une tentative sans session n’écrit rien (aucun acteur à nommer)', async () => {
+    const { app, audit } = await buildApp({ role: null });
+    expect((await post(app, 'backup', { confirm: 'backup' })).statusCode).toBe(401);
     expect(audit).not.toHaveBeenCalled();
     await app.close();
   });
@@ -196,6 +215,15 @@ describe('POST /:operation', () => {
     await app.close();
   });
 
+  it('une confirmation qui ne nomme pas l’opération est JOURNALISÉE comme tentative refusée (#10459)', async () => {
+    const { app, audit } = await buildApp();
+    await post(app, 'image-prune', { confirm: 'backup' });
+    const entry = (audit.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+    expect(entry.action).toBe('SERVER_OPERATION_REFUSED');
+    expect(JSON.parse(entry.metadata as string)).toEqual({ operation: 'image-prune', environment: 'staging', code: 'CONFIRMATION_MISMATCH' });
+    await app.close();
+  });
+
   it('409 OPERATION_COOLDOWN avec data.availableAt', async () => {
     const dirs = opsDirs();
     writeFileSync(
@@ -206,7 +234,10 @@ describe('POST /:operation', () => {
     const res = await post(app, 'backup', { confirm: 'backup' });
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ success: false, code: 'OPERATION_COOLDOWN', data: { availableAt: '2026-10-13T03:00:00.000Z' } });
-    expect(audit).not.toHaveBeenCalled();
+    expect(audit).toHaveBeenCalledTimes(1);
+    const entry = (audit.mock.calls[0][0] as { data: Record<string, unknown> }).data;
+    expect(entry.action).toBe('SERVER_OPERATION_REFUSED');
+    expect(JSON.parse(entry.metadata as string)).toEqual({ operation: 'backup', environment: 'staging', code: 'OPERATION_COOLDOWN' });
     await app.close();
   });
 
@@ -264,6 +295,81 @@ describe('GET /status', () => {
   it('refuse un MODERATOR', async () => {
     const { app } = await buildApp({ role: 'MODERATOR' });
     expect((await app.inject({ method: 'GET', url: '/status' })).statusCode).toBe(403);
+    await app.close();
+  });
+});
+
+describe('GET /containers (#11441)', () => {
+  const CONTAINER = {
+    name: 'meeshy-gateway-staging',
+    service: 'gateway-staging',
+    image: 'isopen/meeshy-gateway:dev',
+    imageId: '3f1c2a9e8b7d',
+    imageCreatedAt: '2026-10-11T19:40:00.987Z',
+    state: 'running',
+    health: 'healthy',
+    startedAt: '2026-10-11T20:00:00.123Z',
+    finishedAt: null,
+    restartCount: 2,
+    exitCode: 0,
+    stats: {
+      cpuPercent: 3.2,
+      memoryUsedBytes: 268_435_456,
+      memoryLimitBytes: 2_147_483_648,
+      netRxBytes: 1_200_000,
+      netTxBytes: 3_400_000,
+      blockReadBytes: 0,
+      blockWriteBytes: 4_100,
+      pids: 24,
+    },
+    networks: [{ name: 'meeshy-staging-network', ipAddress: '172.20.0.5' }],
+    ports: [{ containerPort: 443, protocol: 'tcp', hostIp: '0.0.0.0', hostPort: 8443 }],
+  };
+  const publish = (dirs: { state: string }, body: unknown) => writeFileSync(path.join(dirs.state, 'containers.json'), typeof body === 'string' ? body : JSON.stringify(body));
+
+  it.each(['BIGBOSS', 'ADMIN'])('sert à un %s chaque conteneur publié, champ par champ, à travers le sérialiseur', async (role) => {
+    const dirs = opsDirs();
+    publish(dirs, { measuredAt: NOW.toISOString(), containers: [CONTAINER] });
+    const { app } = await buildApp({ role, relayDirs: dirs });
+    const res = await app.inject({ method: 'GET', url: '/containers' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ success: true, data: { environment: 'staging', measuredAt: NOW.toISOString(), containers: [CONTAINER] } });
+    await app.close();
+  });
+
+  it('ne sert RIEN de ce que le contrat ne déclare pas, même si le fichier le porte', async () => {
+    const dirs = opsDirs();
+    publish(dirs, { measuredAt: NOW.toISOString(), containers: [{ ...CONTAINER, env: ['JWT_SECRET=fuite'], labels: { a: 'b' } }] });
+    const { app } = await buildApp({ relayDirs: dirs });
+    const body = (await app.inject({ method: 'GET', url: '/containers' })).body;
+    expect(body).not.toContain('JWT_SECRET');
+    expect(body).not.toContain('labels');
+    await app.close();
+  });
+
+  it('sans publication, ou une publication hors contrat : measuredAt null et liste vide, jamais une erreur', async () => {
+    const empty = await buildApp();
+    expect((await empty.app.inject({ method: 'GET', url: '/containers' })).json()).toEqual({ success: true, data: { environment: 'staging', measuredAt: null, containers: [] } });
+    await empty.app.close();
+
+    const dirs = opsDirs();
+    publish(dirs, { measuredAt: NOW.toISOString(), containers: [{ ...CONTAINER, state: 'zombie' }] });
+    const broken = await buildApp({ relayDirs: dirs });
+    expect((await broken.app.inject({ method: 'GET', url: '/containers' })).json().data).toEqual({ environment: 'staging', measuredAt: null, containers: [] });
+    await broken.app.close();
+  });
+
+  it('refuse un fichier démesuré (frontière de confiance bornée)', async () => {
+    const dirs = opsDirs();
+    publish(dirs, JSON.stringify({ measuredAt: NOW.toISOString(), containers: [CONTAINER], padding: 'x'.repeat(300 * 1024) }));
+    const { app } = await buildApp({ relayDirs: dirs });
+    expect((await app.inject({ method: 'GET', url: '/containers' })).json().data.containers).toEqual([]);
+    await app.close();
+  });
+
+  it.each(['MODERATOR', 'AUDIT', 'USER'])('refuse un %s', async (role) => {
+    const { app } = await buildApp({ role });
+    expect((await app.inject({ method: 'GET', url: '/containers' })).statusCode).toBe(403);
     await app.close();
   });
 });
