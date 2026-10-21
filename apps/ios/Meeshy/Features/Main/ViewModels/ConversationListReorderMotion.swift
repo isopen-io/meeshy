@@ -94,6 +94,6 @@ struct ConversationListReorderAnimation: ViewModifier {
             .onReceive(scrollRelay.objectWillChange) { _ in pulse.noteTick() }
             .animation(motion, value: order)
             .onAppear { memory.order = order }
-            .onChange(of: order) { memory.order = $0 }
+            .adaptiveOnChange(of: order) { _, newOrder in memory.order = newOrder }
     }
 }

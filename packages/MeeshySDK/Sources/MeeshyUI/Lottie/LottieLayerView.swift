@@ -60,7 +60,7 @@ public struct LottieLayerView: View {
                 onScreen = false
                 slot.wantsToPlay(false)
             }
-            .onChange(of: mayPlay) { playable in slot.wantsToPlay(onScreen && playable) }
+            .adaptiveOnChange(of: mayPlay) { _, playable in slot.wantsToPlay(onScreen && playable) }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
