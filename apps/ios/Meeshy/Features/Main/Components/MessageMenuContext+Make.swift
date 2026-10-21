@@ -136,6 +136,13 @@ extension MessageMenuContext {
         // Un envoi jamais parti (`cid_…`) est OPTIMISTE pour la loi : ni « pour
         // moi » ni « pour tous », mais `.discard` — sans lui, il restait dans le fil.
         let discards = law.groups.destructive.contains(.discard)
+        // **Un favori EMPORTE le texte** : `StarredSnapshotFactory` en grave 280
+        // caractères dans `UserDefaults`, en clair et durablement. Ce qui ne peut
+        // pas sortir (flou, flamme, vue unique) ou ne doit pas survivre au chiffrement
+        // (E2EE) ne devient donc pas favori. Défavoriser reste toujours permis.
+        let starKeepsContent = message.exitOffer.offers(.copy)
+            && !message.exitOffer.isEncrypted
+            && verdicts.serverFeatureAbsence == nil
         return MessageMenuContext(
             isMine: message.isMe,
             canEdit: verdicts.edit != nil,
@@ -162,7 +169,7 @@ extension MessageMenuContext {
             hasPaintableMedia: !MessageCardSubject.paintableMedia(of: message).isEmpty,
             canReply: verdicts.canReply,
             canPin: verdicts.pin != nil,
-            canStar: authority.viewer.isRegistered && !gone,
+            canStar: authority.viewer.isRegistered && !gone && (facts.isStarred || starKeepsContent),
             canReport: verdicts.report,
             // En E2EE la loi rend `.device` : la vue Langue ne sait demander
             // qu'au serveur, qui refuse. « Traduire » reste offert, mais par
