@@ -33,15 +33,15 @@ const world = (seed: { glory?: number; trophies?: string[]; seasons?: { number: 
       findUnique: async () => (seed.mythic === true ? { number: 7, edition: 1 } : null),
     },
     gameTrophy: {
-      findMany: async ({ where }: { where: { userId: string } }) => {
+      findMany: async ({ where }: { where: { userId: string; key: string } }) => {
         reads.push('trophy');
-        return where.userId === USER ? (seed.trophies ?? []).map((key) => ({ key })) : [];
+        return where.userId === USER ? (seed.trophies ?? []).filter((key) => key === where.key).map((key) => ({ key })) : [];
       },
     },
     gameSeason: {
-      findMany: async ({ where }: { where: { userId: string } }) => {
+      findMany: async ({ where }: { where: { userId: string; number: number; stars: { gt: number } } }) => {
         reads.push('season');
-        return where.userId === USER ? (seed.seasons ?? []).filter((season) => season.stars > 0).map(({ number }) => ({ number })) : [];
+        return where.userId === USER ? (seed.seasons ?? []).filter((season) => season.number === where.number && season.stars > where.stars.gt).map(({ number }) => ({ number })) : [];
       },
     },
   };

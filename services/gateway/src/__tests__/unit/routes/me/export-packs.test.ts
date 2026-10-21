@@ -50,6 +50,7 @@ function seeded(): FakeDb {
     userPackOwnership: [
       { id: 'o1', userId: USER, packKey: 'avatar-ring.echantillon', priceMeeshes: 30, requestId: 'achat-0001', acquiredAt: AT },
       { id: 'o2', userId: OTHER, packKey: 'wallpaper.echantillon', priceMeeshes: 40, requestId: 'achat-0002', acquiredAt: AT },
+      { id: 'o3', userId: USER, packKey: 'banner.fete', source: 'event', reference: 'fete-2026', acquiredAt: AT },
     ],
   });
 }
@@ -98,8 +99,11 @@ describe('GET /export?types=packs', () => {
         ],
       }),
     ]);
-    expect(packs.ownerships).toEqual([{ domain: 'avatar-ring', slug: 'echantillon', priceMeeshes: 30, acquiredAt: AT.toISOString() }]);
-    expect(packs.counts).toEqual({ choices: 2, library: 1, submissions: 1, ownerships: 1, appearanceSubmissions: 0 });
+    expect(packs.ownerships).toEqual([
+      { domain: 'avatar-ring', slug: 'echantillon', source: 'purchase', reference: null, priceMeeshes: 30, acquiredAt: AT.toISOString() },
+      { domain: 'banner', slug: 'fete', source: 'event', reference: 'fete-2026', priceMeeshes: 0, acquiredAt: AT.toISOString() },
+    ]);
+    expect(packs.counts).toEqual({ choices: 2, library: 1, submissions: 1, ownerships: 2, appearanceSubmissions: 0 });
     expect(packs.hasMore).toEqual({ choices: false, library: false, submissions: false, ownerships: false, appearanceSubmissions: false });
     expect(JSON.stringify(packs)).not.toContain(OTHER);
     await app.close();
