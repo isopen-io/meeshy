@@ -97,7 +97,11 @@ final class ProfileDecorModelTests: XCTestCase {
                 ShopPack(slug: "cadres-grec", name: "x", installed: true, price: 40, owned: false),
             ] : nil
         })
-        XCTAssertTrue(model.frames.isEmpty, "liste non lue : aucun pack de cadres n'est installé d'office")
+        // #11165 (5ffd59ef35) : deux packs de cadres sont installés d'office
+        // (haussmannien, ancestral) ; liste non lue, ce sont eux, et eux seuls.
+        let parDefaut = BannerFrameCatalog.shared.framePacks.filter(\.installedByDefault).map(\.slug)
+        XCTAssertFalse(parDefaut.isEmpty)
+        XCTAssertEqual(model.frames.map(\.pack), parDefaut, "liste non lue : les packs de cadres installés d'office")
 
         await model.load()
 

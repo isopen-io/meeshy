@@ -165,7 +165,9 @@ final class PermissionGateSourceGuardTests: XCTestCase {
             "Meeshy/Features/Contacts/CallStarter.swift",
             "Meeshy/Features/Main/ViewModels/ConversationViewModel+CallLauncher.swift",
             "Meeshy/Features/Main/Views/ConversationListView+Overlays.swift",
-            "Meeshy/Features/Main/Views/ConversationView+Header.swift",
+            // Le bouton d'appel de l'en-tête de conversation a quitté
+            // `ConversationView+Header.swift` pour son type nominal (654efe9ca5).
+            "Meeshy/Features/Main/Views/ConversationLayers/ConversationHeaderCallButton.swift",
         ]
         for path in surfaces {
             let src = try source(path)
@@ -179,6 +181,10 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                 "\(path) doit utiliser le point d'entrée avec pré-flight de permissions."
             )
         }
+        XCTAssertFalse(
+            try source("Meeshy/Features/Main/Views/ConversationView+Header.swift").contains("CallManager.shared.startCall("),
+            "L'en-tête de conversation ne compose jamais par `startCall` direct."
+        )
     }
 
     /// La bannière in-app est le seul chemin où l'on peut demander AVANT que

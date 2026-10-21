@@ -33,6 +33,7 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
     private let originalLocalColor: String
     private let originalLocalEmoji: String
     private let service: CommunityServiceProviding
+    private let imageUploader: UserServiceProviding
 
     var hasChanges: Bool {
         name != originalName ||
@@ -47,9 +48,11 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
     init(
         community: MeeshyCommunity,
         service: CommunityServiceProviding = CommunityService.shared,
+        imageUploader: UserServiceProviding = UserService.shared,
         currentUserId: @MainActor () -> String = { AuthManager.shared.currentUser?.id ?? "" }
     ) {
         self.service = service
+        self.imageUploader = imageUploader
         self.communityId = community.id
         self.isCreator = community.createdBy == currentUserId()
 
@@ -137,20 +140,13 @@ final class CommunitySettingsViewModel: ObservableObject, CommunitySettingsModel
         )
     }
 
+    /// L'avatar et la bannière d'une communauté sont des images d'IDENTITÉ,
+    /// comme celles d'un profil : elles passent par le même chemin
+    /// (`UserService.uploadImage`), jamais par un téléversement TUS sans
+    /// contexte, réservé aux pièces jointes de message (#11411).
     private func uploadCompressedImage(_ data: Data, prefix: String) async -> String? {
         do {
-            let fileName = "\(prefix)_\(UUID().uuidString).jpg"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try data.write(to: tempURL)
-
-            let serverOrigin = MeeshyConfig.shared.serverOrigin
-            guard let baseURL = URL(string: serverOrigin),
-                  let token = APIClient.shared.authToken else { return nil }
-
-            let manager = TusUploadManager(baseURL: baseURL)
-            let result = try await manager.uploadFile(fileURL: tempURL, mimeType: "image/jpeg", credential: .bearer(token))
-            try? FileManager.default.removeItem(at: tempURL)
-            return result.fileUrl
+            return try await imageUploader.uploadImage(data, filename: "\(prefix)_\(UUID().uuidString).jpg")
         } catch {
             errorMessage = error.localizedDescription
             showError = true

@@ -1539,11 +1539,8 @@ describe('CallEventsHandler', () => {
   // ── call:end ─────────────────────────────────────────────────────────────
 
   describe('call:request-ice-servers', () => {
-    // Scoping par appel (contrat CallError.callId) — cf. 43d4d7b7e. Le refus
-    // d'un refresh doit nommer l'appel : un client avec un appel actif A ne
-    // doit pas interpréter le refus d'un refresh pour l'appel B. Depuis #11463
-    // le refus porte sur la PARTICIPATION (la room n'autorise plus rien) : le
-    // témoin pose donc explicitement « aucun participant actif ».
+    // Scoping par appel (CallError.callId, 43d4d7b7e) : le refus d'un refresh nomme l'appel, un client en appel A
+    // n'interprète pas le refus pour B. Depuis #11463 il porte sur la PARTICIPATION : « aucun participant actif ».
     it('scopes the not-a-participant rejection to the callId', async () => {
       mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({ participants: [] }));
       const { socket } = setupWithSocket();
