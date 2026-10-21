@@ -40,7 +40,15 @@ final class SDKDynamicTypeSweepSourceGuardTests: XCTestCase {
         "Primitives/FeedbackToastView.swift",
         "Packs/PackShopView.swift",
         "Packs/FramePackShelfView.swift",
-        "Location/LocationFullscreenView.swift"
+        "Location/LocationFullscreenView.swift",
+        "Media/DocumentViewerView.swift",
+        "Media/CodeViewerView.swift",
+        "Media/AudioRecorderSheet.swift",
+        "Media/UniversalAudioRecorderView.swift",
+        "Media/AudioEditorToolPanel.swift",
+        "Media/MeeshyAudioEditorView.swift",
+        "Media/MeeshyImageEditorView.swift",
+        "Media/ImageEditorHistoryOverlay.swift"
     ]
 
     private static let fixedGlyphs: [FixedGlyph] = [
