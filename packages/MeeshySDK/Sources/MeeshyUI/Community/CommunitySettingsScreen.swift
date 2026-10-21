@@ -5,7 +5,8 @@ import MeeshySDK
 
 public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: View {
     @ObservedObject private var viewModel: ViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
 
     @State private var avatarItem: PhotosPickerItem? = nil

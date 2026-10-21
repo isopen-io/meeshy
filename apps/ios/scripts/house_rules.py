@@ -24,10 +24,15 @@ class Rule:
     pattern: re.Pattern
     kind: Literal["pattern", "unchecked", "floor"] = "pattern"
     excluded: tuple = ()
+    file_name: re.Pattern | None = None
 
 
 def _pattern(rule_id, regex, excluded=()):
     return Rule(rule_id, re.compile(regex), "pattern", excluded)
+
+
+def _named(rule_id, regex, file_name, excluded=()):
+    return Rule(rule_id, re.compile(regex), "pattern", excluded, re.compile(file_name))
 
 
 RULES = (
@@ -59,6 +64,12 @@ RULES = (
         r"\.onChange\(of:(?:[^\n{]*\)\s*\{(?:\s*\w+\s+in\b|[^\n}]*\$0)|[^\n)]*perform:)",
         ("packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveOnChange.swift",),
     ),
+    _pattern(
+        "observed-theme-singleton",
+        r"@(?:ObservedObject|StateObject)\s+(?:\w+(?:\(set\))?\s+)*var\s+\w+\s*(?::\s*ThemeManager\s*)?=\s*(?:ThemeManager)?\.shared\b",
+        ("apps/ios/Meeshy/MeeshyApp.swift",),
+    ),
+    _named("viewmodel-shared", r"\.shared\b", r"ViewModel[^/]*\.swift$"),
     Rule("unchecked-sendable", re.compile(r"@unchecked\s+Sendable"), "unchecked"),
     Rule("available-floor", re.compile(r"#available\(\s*iOS\s+(\d+)(?:\.(\d+))?"), "floor"),
 )
@@ -188,6 +199,8 @@ def _count_floor(rule, rel, stripped):
 
 def count_stripped(rule, rel, src, stripped):
     if rel in rule.excluded:
+        return 0
+    if rule.file_name is not None and not rule.file_name.search(rel):
         return 0
     if rule.kind == "unchecked":
         return _count_unchecked(rule, src, stripped)

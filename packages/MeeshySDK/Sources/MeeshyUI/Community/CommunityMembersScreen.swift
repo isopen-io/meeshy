@@ -4,7 +4,8 @@ import MeeshySDK
 
 public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite: View>: View {
     @ObservedObject private var viewModel: ViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     public var onInvite: (() -> Void)? = nil
     @State private var showInviteSheet = false
@@ -128,7 +129,8 @@ struct MemberRow: View {
     var onRoleChange: ((MemberRole) -> Void)? = nil
     var onRemove: (() -> Void)? = nil
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     private var user: APICommunityUser? { member.user }
     private var displayName: String { user?.name ?? String(localized: "community.members.unknownUser", defaultValue: "Unknown", bundle: .module) }
