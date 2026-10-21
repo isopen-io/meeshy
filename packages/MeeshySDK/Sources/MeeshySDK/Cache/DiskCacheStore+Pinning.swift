@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 extension DiskCacheStore {
     // MARK: - Pinning (eviction exemption — R5 offline replay)
