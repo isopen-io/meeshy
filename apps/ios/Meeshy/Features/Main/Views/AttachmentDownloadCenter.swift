@@ -131,20 +131,35 @@ final class AttachmentDownloadCenter {
     /// montrera au geste suivant (le réel qui suit l'actif). Même registre,
     /// même clé, même dédoublonnage que `start` : la surface montée plus tard
     /// REJOINT ce téléchargement, ou le trouve fini. Aucune vibration, ni au
-    /// départ ni à la fin : l'utilisateur n'a rien demandé.
-    func prefetch(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) {
-        start(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, origin: .automatic)
+    /// départ ni à la fin : l'utilisateur n'a rien demandé. `profile` choisit la
+    /// session réseau (#11283) : un préchargement lointain la veut
+    /// discrétionnaire, et hors réseau facturé si le réglage vidéo le demande.
+    func prefetch(
+        urlString: String,
+        expectedSize: Int64,
+        cacheStore: CacheStoreKind,
+        profile: MediaTransferProfile = .standard
+    ) {
+        guard launch(urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, profile: profile) else {
+            return
+        }
+        origins[Self.key(for: urlString)] = .automatic
     }
 
     /// `false` quand il n'y a rien à lancer — URL vide, ou clé déjà en cours.
-    private func launch(urlString: String, expectedSize: Int64, cacheStore: CacheStoreKind) -> Bool {
+    private func launch(
+        urlString: String,
+        expectedSize: Int64,
+        cacheStore: CacheStoreKind,
+        profile: MediaTransferProfile = .standard
+    ) -> Bool {
         guard !urlString.isEmpty else { return false }
         let key = Self.key(for: urlString)
         guard tasks[key] == nil else { return false }
         publish(.progress(DownloadProgress(downloadedBytes: 0, totalBytes: expectedSize)), for: key)
         tasks[key] = Task.detached { [weak self] in
             guard let self else { return }
-            await self.run(key: key, urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore)
+            await self.run(key: key, urlString: urlString, expectedSize: expectedSize, cacheStore: cacheStore, profile: profile)
         }
         return true
     }
@@ -207,7 +222,8 @@ final class AttachmentDownloadCenter {
         key resolvedKey: String,
         urlString: String,
         expectedSize: Int64,
-        cacheStore: CacheStoreKind
+        cacheStore: CacheStoreKind,
+        profile: MediaTransferProfile
     ) async {
         do {
             guard MeeshyConfig.resolveMediaURL(urlString) != nil else { throw URLError(.badURL) }
@@ -231,7 +247,7 @@ final class AttachmentDownloadCenter {
 
             // La progression arrive cadencée par le téléchargeur (au plus
             // ~10 rapports par seconde), jamais un saut MainActor par paquet.
-            let data = try await store.data(for: resolvedKey, progress: { [weak self] written, expected in
+            let data = try await store.data(for: resolvedKey, profile: profile, progress: { [weak self] written, expected in
                 Task { @MainActor in
                     self?.report(key: resolvedKey, downloaded: written, total: expected > 0 ? expected : nil)
                 }

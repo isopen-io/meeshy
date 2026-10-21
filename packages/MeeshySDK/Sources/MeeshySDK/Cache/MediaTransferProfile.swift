@@ -51,3 +51,28 @@ extension MediaTransferPriority {
         }
     }
 }
+
+extension MediaTransferProfile {
+    /// Le profil d'un préchargement de réel au palier `reelTier`, selon le
+    /// réglage vidéo de l'utilisateur (`videoPolicy`).
+    ///
+    /// Ce qu'on regarde ou qu'on va voir au geste suivant (play / decode /
+    /// mount) passe sur tout réseau : le bloquer sur cellulaire casserait la
+    /// lecture. Ce qui se prépare pour plus tard (prime / idle) ne part sur un
+    /// réseau facturé (cellulaire, point d'accès) que si le réglage vidéo
+    /// autorise le cellulaire ; sinon il attend le Wi-Fi.
+    public init(reelTier: ReelPreloadWindow.Tier, videoPolicy: AutoDownloadPolicy) {
+        let priority = MediaTransferPriority(reelTier: reelTier)
+        self.init(
+            priority: priority,
+            allowsExpensiveNetworkAccess: priority == .immediate || Self.allowsCellular(videoPolicy)
+        )
+    }
+
+    private static func allowsCellular(_ policy: AutoDownloadPolicy) -> Bool {
+        switch policy {
+        case .always, .wifiAndGoodCellular: return true
+        case .wifiOnly, .never: return false
+        }
+    }
+}

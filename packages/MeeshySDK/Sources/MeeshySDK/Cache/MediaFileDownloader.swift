@@ -140,7 +140,7 @@ public final class MediaFileDownloader: NSObject, @unchecked Sendable {
 
     /// Une session par profil : une `URLSession` ne change pas de configuration
     /// après sa création. Au plus quatre (deux priorités × deux réglages).
-    private func session(for profile: MediaTransferProfile) -> URLSession {
+    func session(for profile: MediaTransferProfile) -> URLSession {
         lock.withLock {
             if let existing = sessions[profile] { return existing }
             let created = URLSession(
