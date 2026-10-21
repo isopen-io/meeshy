@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import { uploadAttachments } from '@/lib/api/attachments';
+import { prepareUploads } from '@/lib/media/prepare-image-upload';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { offerLastMessage } from '@/lib/api/list-preview';
@@ -241,7 +242,7 @@ async function uploadPhase(params: {
   const result = await uploadAttachments({
     source: deps.source,
     transport: deps.transport,
-    pending: upload.files,
+    pending: await prepareUploads(upload.files),
   });
 
   if (!result.ok) {

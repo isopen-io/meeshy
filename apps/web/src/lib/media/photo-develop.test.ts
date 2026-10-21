@@ -165,7 +165,7 @@ describe('hors du fil principal (#11310)', () => {
     const base = fakeEnv().env;
     return {
       decoded,
-      env: { ...base, decode: async () => (decoded.push(1), { image: {} as CanvasImageSource, size: { width: 10, height: 10 }, close: () => undefined }), offMain },
+      env: { ...base, decode: async () => (decoded.push(1), { image: {} as CanvasImageSource, size: { width: 10, height: 10 }, close: () => undefined }), ...(offMain === undefined ? {} : { offMain }) },
     };
   };
 

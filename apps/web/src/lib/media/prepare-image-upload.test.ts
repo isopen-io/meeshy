@@ -29,16 +29,20 @@ const animatedWebp = (): File => {
 };
 
 describe('ce qui n’est jamais touché', () => {
-  test.each([
+  const untouched: ReadonlyArray<readonly [string, string, string]> = [
     ['un document', 'a.pdf', 'application/pdf'],
     ['un GIF animé', 'a.gif', 'image/gif'],
     ['un SVG', 'a.svg', 'image/svg+xml'],
     ['une photo HEIC', 'a.heic', 'image/heic'],
-  ])('%s part tel quel, sans réveiller le worker', async (_label, name, type) => {
-    const { port, jobs } = answering(webp(1));
-    const original = file(name, type);
-    expect(await createImagePreparer(port).prepare(original)).toBe(original);
-    expect(jobs).toEqual([]);
+  ];
+
+  untouched.forEach(([label, name, type]) => {
+    test(`${label} part tel quel, sans réveiller le worker`, async () => {
+      const { port, jobs } = answering(webp(1));
+      const original = file(name, type);
+      expect(await createImagePreparer(port).prepare(original)).toBe(original);
+      expect(jobs).toEqual([]);
+    });
   });
 
   test('un PNG animé (APNG) garde son animation', async () => {

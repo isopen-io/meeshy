@@ -3,6 +3,7 @@ import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
 import { createDirectConversation, createGroupConversation, type ConversationsDeps } from '@/lib/api/conversations';
 import { uploadAttachments } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
+import { prepareImageForUpload, prepareUploads } from '@/lib/media/prepare-image-upload';
 import type { ApiResult } from '@/lib/api/http';
 import { sendMessage } from '@/lib/api/messages';
 import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
@@ -37,7 +38,7 @@ const browserOnline = (): boolean => typeof navigator === 'undefined' || navigat
  * amputé (même réconciliation que `perform-send.ts`).
  */
 async function uploadFiles(deps: ConversationsDeps, files: readonly File[]): Promise<ApiResult<{ readonly attachmentIds: readonly string[] }>> {
-  const result = await uploadAttachments({ ...deps, pending: files.map((file) => ({ file })) });
+  const result = await uploadAttachments({ ...deps, pending: await prepareUploads(files.map((file) => ({ file }))) });
   if (!result.ok) return result;
   if (result.data.attachments.length < files.length) {
     return { ok: false, status: 200, error: 'Lot de pièces jointes incomplet', code: 'UPLOAD_PARTIAL' };
@@ -80,7 +81,7 @@ export function createSendSheetPorts(params: SendSheetPortsParams): SendSheetPor
     fetchFile: (media) => downloadFile(fetchImpl, media),
     uploadMedia: async (file) => {
       const { uploadPostMedia } = await import('@/lib/api/post-media-upload');
-      const result = await uploadPostMedia({ ...mediaDeps, file, uploadContext: 'story' });
+      const result = await uploadPostMedia({ ...mediaDeps, file: await prepareImageForUpload(file), uploadContext: 'story' });
       return result.ok ? { ok: true, data: result.data } : result;
     },
     publishMedia: async ({ format, media, caption }) => {
