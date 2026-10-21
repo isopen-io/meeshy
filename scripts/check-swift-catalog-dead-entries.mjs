@@ -527,7 +527,15 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // sur e13e8be719.
 // 325 -> 324 (2026-10-17) : une entrée du catalogue Swift a trouvé son appelant sur dev (lien de réinitialisation
 // ouvert dans l'app, ceb0b1572a). Valeur MESURÉE en CI (Quality, run du 89160f284c) et en local sur origin/dev.
-const BASELINE_DEAD_ENTRIES = 324;
+// 324 -> 325 (#11441, 2026-10-21) : `AdminEndpoint.opsContainers` (`GET /api/v1/admin/ops/containers`, les
+// conteneurs Docker de l'environnement). Prématurée comme toutes les entrées `AdminEndpoint` : l'administration
+// vit dans le web (`apps/web/src/lib/api/admin-ops-containers.ts` l'appelle), aucun écran iOS ne l'expose. Valeur
+// MESURÉE le 2026-10-21 en local.
+// 325 -> 323 (#11421, #11431, 2026-10-21) : MessagesEndpoint.byMessageIdDeleteForMe et
+// MessagesEndpoint.bulkDeleteForMe trouvent leur appelant iOS — MessageService.hideForMe et le plan de sélection
+// ForMeSelectionPlan (« Supprimer pour moi »). Valeur MESURÉE en CI (Quality, run 119150128073) et en local en
+// diffant deadEntries() entre origin/dev et la branche de #11421, puis sur la fusion avec #11441 (325).
+const BASELINE_DEAD_ENTRIES = 323;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

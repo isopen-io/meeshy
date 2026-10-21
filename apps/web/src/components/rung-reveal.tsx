@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 /**
  * UN BARREAU QUI PARAÎT (#6405) — le ressort d'entrée des champs de
@@ -13,28 +13,17 @@ import { useEffect, useState, type ReactNode } from 'react';
  * **L'animation est une ENTRÉE, jamais une sortie.** La loi des barreaux est
  * monotone (`signup-phases.ts`, #8288) : rien ne se referme, donc il n'y a rien à
  * animer en sens inverse. Le ressort est celui que l'inscription emploie déjà
- * (`.signup-spring`, `app.css` § « LE RESSORT DU COMPOSER ») : une grille
- * `0fr → 1fr`, donc la HAUTEUR réelle du contenu, jamais une valeur devinée
- * qui se couperait au premier cran de Dynamic Type. `prefers-reduced-motion`
- * la coupe déjà, à la source.
- *
- * Le premier rendu pose `0fr`, l'effet de montage passe à `1fr` : sans ces
- * deux temps, le navigateur n'a aucune valeur de départ à interpoler et le
- * bloc paraîtrait d'un coup.
+ * (`.signup-spring`, `app.css` § « LE RESSORT DU COMPOSER ») : un fondu et un
+ * glissé vers le bas, en `opacity` et `transform` seuls (#11314). Le bloc a sa
+ * HAUTEUR réelle dès le premier rendu — jamais une valeur devinée qui se
+ * couperait au premier cran de Dynamic Type, et aucune mise en page par image.
+ * `prefers-reduced-motion` la coupe déjà, à la source.
  */
 export function RungReveal({ shown, children }: { readonly shown: boolean; readonly children: ReactNode }) {
   if (!shown) return null;
-  return <RevealBody>{children}</RevealBody>;
-}
-
-function RevealBody({ children }: { readonly children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    setOpen(true);
-  }, []);
   return (
-    <div className="signup-spring grid" style={{ gridTemplateRows: open ? '1fr' : '0fr' }} data-rung-reveal={open ? 'open' : 'opening'}>
-      <div className="grid gap-5 overflow-hidden">{children}</div>
+    <div className="signup-spring grid gap-5" data-rung-reveal="open">
+      {children}
     </div>
   );
 }

@@ -33,19 +33,23 @@ public nonisolated enum StoryBackgroundLook {
         return peints
     }
 
-    /// Le bitmap du fond tel qu'il se peint : le filtre de slide, puis les
-    /// réglages. L'image elle-même, à l'identique, quand il n'y a ni l'un ni
-    /// l'autre. Les deux étages gardent leur cache : le filtre par `imageId`
-    /// (comme avant), les réglages par l'INSTANCE filtrée — un bitmap retouché
-    /// ou un autre filtre ne resservent jamais les réglages d'un autre état.
+    /// **La chaîne du look, pure** : le filtre de slide, puis les réglages, sur
+    /// une source DÉJÀ redressée (`StoryRenderingContext.orientedSource`).
+    /// C'est ce que l'aperçu et l'export rendent (loi 6) ; la source telle
+    /// quelle quand il n'y a rien à peindre.
+    public static func ciImage(_ source: CIImage, filter: StoryFilter?, intensity: Float,
+                               adjustments: ImageAdjustments?) -> CIImage {
+        let filtree = filter.map { StoryFilterProcessor.filtered(source, $0, intensity: intensity) } ?? source
+        guard let adjustments, adjustments.activeCount > 0 else { return filtree }
+        return ImageAdjustmentStage.apply(filtree, adjustments, extent: source.extent)
+    }
+
+    /// Le bitmap du fond tel qu'il se peint : la chaîne ci-dessus, cuite en UN
+    /// passage (`StoryLookBake`). L'image elle-même, à l'identique, quand il
+    /// n'y a ni filtre ni réglage.
     public static func image(_ image: UIImage, filter: StoryFilter?, intensity: Float,
                              adjustments: ImageAdjustments?, imageId: String?) -> UIImage {
-        let filtree = filter.map {
-            StoryFilterProcessor.apply($0, to: image, imageId: imageId, intensity: intensity)
-        } ?? image
-        guard let adjustments else { return filtree }
-        return StoryMediaAdjustmentsProcessor.apply(adjustments, to: filtree,
-                                                    imageId: "fond-\(ObjectIdentifier(filtree).hashValue)")
+        StoryLookBake.image(image, filter: filter, intensity: intensity, adjustments: adjustments, imageId: imageId)
     }
 
     /// Le bitmap du fond de ces effets — la vignette composite et l'export.

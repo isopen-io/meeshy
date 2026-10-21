@@ -192,7 +192,7 @@ enum GameBadgeGuideText {
     /// Le titre de la phrase de l'axe — « Ce qui compte ».
     static var countsLabel: String { String(localized: "game.badge.counts_label", defaultValue: "Ce qu’elle suit", bundle: .main) }
 
-    static var starsLabel: String { String(localized: "game.badge.stars_label", defaultValue: "Étoiles", bundle: .main) }
+    static var starsLabel: String { String(localized: "game.badge.stars_label", defaultValue: "Paliers", bundle: .main) }
 
     static var materialLabel: String { String(localized: "game.badge.material_label", defaultValue: "Matière", bundle: .main) }
 

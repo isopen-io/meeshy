@@ -49,8 +49,8 @@ describe('retirer son commentaire — à qui la reprise s’applique', () => {
     await service.deleteComment(COMMENT, COMMENTER, undefined);
 
     expect(recorder.reclaimSource.mock.calls).toEqual([
-      [COMMENTER, `comment:${COMMENT}`, {}],
-      [COMMENTER, `comment:${REPLY_BY_SELF}`, {}],
+      [COMMENTER, `comment:${COMMENT}`],
+      [COMMENTER, `comment:${REPLY_BY_SELF}`],
     ]);
   });
 
@@ -69,9 +69,9 @@ describe('retirer un commentaire PAR LA MODÉRATION (#10394)', () => {
 
     expect(result?.deletedCommentIds).toEqual([COMMENT, REPLY_BY_OTHER, REPLY_BY_SELF]);
     expect(recorder.reclaimSource.mock.calls).toEqual([
-      [COMMENTER, `comment:${COMMENT}`, {}],
-      [OTHER, `comment:${REPLY_BY_OTHER}`, {}],
-      [COMMENTER, `comment:${REPLY_BY_SELF}`, {}],
+      [COMMENTER, `comment:${COMMENT}`],
+      [OTHER, `comment:${REPLY_BY_OTHER}`],
+      [COMMENTER, `comment:${REPLY_BY_SELF}`],
     ]);
   });
 

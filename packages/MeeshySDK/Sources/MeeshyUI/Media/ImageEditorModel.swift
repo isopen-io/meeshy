@@ -33,7 +33,7 @@ public enum ImageEditorMode: String, Codable, Sendable, CaseIterable {
 /// type (~100 bytes) — the source image is never embedded — so a full history
 /// of snapshots costs almost nothing and `render` can be replayed at any
 /// resolution from the untouched original.
-public struct ImageEditState: Codable, Equatable, Sendable {
+public nonisolated struct ImageEditState: Codable, Equatable, Sendable {
     /// Orthogonal rotation in 90° clockwise steps (normalised to 0...3).
     public var orientationTurns: Int
     public var flipHorizontal: Bool

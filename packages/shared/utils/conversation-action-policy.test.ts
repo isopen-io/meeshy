@@ -78,4 +78,27 @@ describe('conversationActionsFor — rôles de plateforme et de conversation (#1
     const actions = actionsOf({ viewer: { isAnonymous: true } });
     expect([actions.hide, actions.report, actions.call]).toEqual([false, false, false]);
   });
+
+  it('dans une conversation publique, tout membre inscrit fabrique un lien, comme mayMintShareLink', () => {
+    expect(actionsOf({ conversation: { type: 'public' } }).invite).toBe(true);
+    expect(actionsOf({ conversation: { type: 'public' }, viewer: { hasAccount: false, isAnonymous: true, platformRole: null } }).invite).toBe(false);
+    expect(actionsOf({ conversation: { type: 'public' }, viewer: { isActiveMember: false, conversationRole: null } }).invite).toBe(false);
+  });
+
+  it('une chaîne broadcast reste réservée aux moderators : seul public ouvre le lien au membre', () => {
+    expect(actionsOf({ conversation: { type: 'broadcast' } }).invite).toBe(false);
+    expect(actionsOf({ conversation: { type: 'broadcast' }, viewer: { conversationRole: 'moderator' } }).invite).toBe(true);
+  });
+
+  it('un invité ne quitte pas par cette route : POST /leave refuse les anonymes', () => {
+    expect(actionsOf({ viewer: { hasAccount: false, isAnonymous: true, platformRole: null } }).leave).toBe(false);
+  });
+
+  it.each([
+    ['MODERATOR', 'rename'],
+    ['ADMIN', 'deleteForAll'],
+    ['Creator', 'manageMembers'],
+  ] as const)('un rang de ligne %j se lit casse pliée, comme effectiveConversationRole', (conversationRole, verdict) => {
+    expect(actionsOf({ viewer: { conversationRole } })[verdict]).toBe(true);
+  });
 });

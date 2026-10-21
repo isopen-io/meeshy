@@ -114,12 +114,13 @@
     {
       "pattern": "(?<!de\\s)(?<![\\p{L}\\p{N}])estrelas?(?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "« passos » (a viagem) ; « eras » (o renascimento)",
+      "instead": "« passos » (a viagem) ; « eras » (o renascimento) ; « patamares » (uma medalha)",
       "keys": [
         "game.season.",
         "game.prestige.",
         "game.fact.strides",
-        "game.fact.rebirths"
+        "game.fact.rebirths",
+        "game.badge.stars_label"
       ]
     },
     {
@@ -216,6 +217,14 @@
       "instead": "« você », « seu », « sua »: o jogo trata por você (português do Brasil)",
       "keys": [
         "game."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])chamas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« N dias » sob 🔥: a Chama é a do herói, nunca a de uma conversa",
+      "keys": [
+        "engagement.pill.streak."
       ]
     }
   ],
@@ -331,6 +340,8 @@
     "game.gauge.treasury": "Herança",
     "game.gauge.flame": "Chama",
     "game.fact.strides": "Passos",
-    "game.fact.rebirths": "Renascimentos"
+    "game.fact.rebirths": "Renascimentos",
+    "game.badge.stars_label": "Patamares",
+    "game.badge.ladder_title": "Os sete patamares"
   }
 }

@@ -433,19 +433,11 @@ public struct ComposerControlsLayer: View {
             // le porte à 44 sans bouger le rendu ni la hauteur de layout.
             .padding(.vertical, MeeshySpacing.lg)
             .composerHitTarget()
-            .onTapGesture {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                    bandStateMachine.showChrome()
-                }
-            }
+            .onTapGesture { restoreChrome() }
             .gesture(
                 DragGesture(minimumDistance: 15)
                     .onEnded { value in
-                        if value.translation.height < -20 {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                                bandStateMachine.showChrome()
-                            }
-                        }
+                        if value.translation.height < -20 { restoreChrome() }
                     }
             )
             .accessibilityLabel(String(
@@ -454,6 +446,13 @@ public struct ComposerControlsLayer: View {
                 bundle: .module
             ))
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction { restoreChrome() }
+    }
+
+    private func restoreChrome() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            bandStateMachine.showChrome()
+        }
     }
 
     // MARK: - Badges

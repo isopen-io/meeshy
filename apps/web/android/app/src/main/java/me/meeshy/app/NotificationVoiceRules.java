@@ -43,7 +43,9 @@ final class NotificationVoiceRules {
     );
 
     private static final Pattern IPV4 = Pattern.compile("^\\d{1,3}(\\.\\d{1,3}){3}$");
-    private static final Pattern LANGUAGE = Pattern.compile("^[a-z]{2}$");
+    /** JUMEAU de `wireLanguageCode` (`services/gateway/src/validation/messages-schemas.ts`) : bas, dua, pt-br (#11376). */
+    private static final Pattern LANGUAGE = Pattern.compile("^[a-z]{2,3}([-_][a-z0-9]+)*$");
+    private static final int MAX_LANGUAGE_CHARS = 16;
 
     private NotificationVoiceRules() {}
 
@@ -201,8 +203,8 @@ final class NotificationVoiceRules {
             }
             body.append(']');
         }
-        String lang = text(language).toLowerCase(Locale.ROOT);
-        if (LANGUAGE.matcher(lang).matches()) body.append(",\"language\":\"").append(lang).append('"');
+        String lang = text(language).trim().toLowerCase(Locale.ROOT);
+        if (lang.length() <= MAX_LANGUAGE_CHARS && LANGUAGE.matcher(lang).matches()) body.append(",\"language\":\"").append(lang).append('"');
         return body.append('}').toString();
     }
 

@@ -56,6 +56,15 @@ const row = (id: string) => document.querySelector(`[data-admin-ban="${id}"]`);
 const textOf = (element: Element | null) => (element?.textContent ?? '').replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim();
 
 describe('l’historique des bannissements', () => {
+  test('l’historique est TITRÉ, et « Annuler » vit à côté de « Bannir » — une seule rangée de gestes (#11410)', async () => {
+    await open();
+    expect(textOf(document.querySelector('[data-admin-ban-history] h3'))).toBe('Historique des bannissements');
+    const rangees = [...document.querySelectorAll('[data-admin-form-actions]')];
+    expect(rangees).toHaveLength(1);
+    expect(rangees[0]?.querySelector('[data-admin-form-cancel]')).not.toBeNull();
+    expect(textOf(rangees[0] ?? null)).toContain('Bannir');
+  });
+
   test('qui a banni se dit par son nom, l’échéance ou « permanent » aussi', async () => {
     await open();
     const active = textOf(row('b-active'));

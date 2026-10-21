@@ -22,8 +22,6 @@ struct ConversationMessageActions {
     let edit: (Message) -> Void
     let export: (Message, Bool) -> Void
     let compose: (Message) -> Void
-    /// #11151 — « Retirer » le message d'un autre s'offre-t-il ? (créateur compris, jamais en direct)
-    var canRemove: (Message) -> Bool = { _ in false }
 }
 
 struct ConversationMessageSheets: ViewModifier {
@@ -32,8 +30,7 @@ struct ConversationMessageSheets: ViewModifier {
     let conversation: Conversation?
     let accentColor: String
     let isDark: Bool
-    let isGuest: Bool
-    let isAdminOrMod: Bool
+    let authority: ConversationMenuAuthority
     let mediaSaveCoordinator: MediaSaveCoordinator
     let actions: ConversationMessageActions
 
@@ -42,23 +39,8 @@ struct ConversationMessageSheets: ViewModifier {
     func body(content: Content) -> some View {
         content
             .sheet(item: $overlayState.detailSheetMessage) { msg in
-                let ctx = MessageMenuContext(
-                    isMine: msg.isMe,
-                    canEdit: msg.isMe || isAdminOrMod,
-                    canDelete: msg.isMe || isAdminOrMod || actions.canRemove(msg),
-                    hasText: !msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                    hasMedia: !msg.attachments.isEmpty,
-                    hasTimebasedMedia: msg.attachments.contains { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack },
-                    isPinned: msg.pinnedAt != nil,
-                    isStarred: viewModel.isStarred(messageId: msg.id),
-                    isEdited: msg.isEdited,
-                    hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty,
-                    // Décoration (épinglage, 2026-09-05) ; `nil` ⇒ pas un sticker (loi 4). #10630 : sticker + ajout.
-                    stickerFavorite: MessageStickerFavorite.state(for: msg.sticker),
-                    isSticker: msg.sticker != nil, stickerAddable: ReceivedSticker.offersAdd(for: msg, known: ReceivedStickerLedger.shared.ids),
-                    showReadReceipts: GuestViewerAccess.offersWhoSaw(prefersReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts, isGuest: isGuest),
-                    exits: msg.exitOffer, isViewOnce: msg.holdsViewOnce, isBlurred: msg.holdsBlur, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: msg).isEmpty
-                )
+                // #11214 — la fabrique unique : les verdicts de la loi partagée, jamais une règle locale.
+                let ctx = MessageMenuContext.make(message: msg, viewModel: viewModel, authority: authority)
                 MessageMoreSheet(
                     message: msg,
                     contactColor: conversation?.accentColor ?? MeeshyColors.brandPrimaryHex,
@@ -80,9 +62,7 @@ struct ConversationMessageSheets: ViewModifier {
                         overlayState.replyThreadParentId = msg.id
                         overlayState.showReplyThread = true
                     },
-                    onSaveMedia: {
-                        if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() }
-                    },
+                    onSaveMedia: { if MessageExitTransport.save(msg, through: mediaSaveCoordinator) { HapticFeedback.light() } },
                     onDeleteMedia: { actions.deleteMedia(msg) },
                     onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                     onToggleStar: {
@@ -95,7 +75,7 @@ struct ConversationMessageSheets: ViewModifier {
                     onDeleteMessage: { actions.requestDelete(msg.id) },
                     onEdit: { actions.edit(msg) },
                     onCopy: {
-                        guard MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg) else { return }
+                        guard MessageExitTransport.copyDisplayed(msg, in: viewModel) else { return }
                         HapticFeedback.success()
                     },
                     onShare: { if MessageExitTransport.mayShare(msg) { overlayState.shareMessage = msg } }, onImagine: { actions.export(msg, false) },
@@ -120,7 +100,8 @@ struct ConversationMessageSheets: ViewModifier {
                         Task {
                             await viewModel.requestTextTranslation(
                                 messageId: msg.id, content: msg.content,
-                                sourceLanguage: sourceLang, targetLanguage: targetLang
+                                sourceLanguage: sourceLang, targetLanguage: targetLang,
+                                conversationEncryptionMode: authority.conversation.encryptionMode
                             )
                         }
                     },
@@ -128,10 +109,12 @@ struct ConversationMessageSheets: ViewModifier {
                         Task {
                             await viewModel.requestAudioTranslation(
                                 messageId: msg.id, attachmentId: attachmentId,
-                                sourceLanguage: msg.originalLanguage, targetLanguage: targetLang
+                                sourceLanguage: msg.originalLanguage, targetLanguage: targetLang,
+                                conversationEncryptionMode: authority.conversation.encryptionMode
                             )
                         }
-                    }
+                    },
+                    serverFeaturesAbsent: ctx.serverFeaturesAbsent
                 )
             }
             .sheet(item: $overlayState.callDetailMessage) { msg in

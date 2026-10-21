@@ -6,7 +6,7 @@ import MeeshyUI
 /// l'hôte garde ce qu'ils font (reprise du brouillon, activation du
 /// ViewModel, sortie d'une vue unique), le modificateur ne garde que QUAND.
 struct ConversationLifecycleActions {
-    let startup: () async -> Void
+    let startup: @MainActor () async -> Void
     let didAppear: () -> Void
     let didDisappear: () -> Void
     let willResignActive: () -> Void
@@ -60,8 +60,8 @@ struct ConversationRouterSignals: Equatable {
 /// la recherche et le contexte de réponse se consomment à chaud.
 struct ConversationRouterWatch: ViewModifier {
     let signals: ConversationRouterSignals
-    let openSearch: () async -> Void
-    let consumeHighlight: () async -> Void
+    let openSearch: @MainActor () async -> Void
+    let consumeHighlight: @MainActor () async -> Void
     let applyReplyContext: () -> Void
 
     func body(content: Content) -> some View {

@@ -373,7 +373,7 @@ struct StoryComposerBlankCanvasStarters: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "story.composer.start.a11y.recent",
                                            defaultValue: "Utiliser la dernière photo", bundle: .module))
-                PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
+                PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos]), preferredItemEncoding: .current) {
                     // `.forward` et non `.right` : le chevron désigne « la
                     // suite » et doit se retourner en arabe (RTL).
                     Image(systemName: "chevron.forward")
@@ -397,7 +397,7 @@ struct StoryComposerBlankCanvasStarters: View {
         // main-actor-isolé (avertissement de concurrence, futur erreur).
         let galleryTitle = String(localized: "story.composer.start.gallery",
                                   defaultValue: "Galerie", bundle: .module)
-        return PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
+        return PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos]), preferredItemEncoding: .current) {
             BlankCanvasStarterLabel(icon: "photo.on.rectangle.angled", title: galleryTitle)
         }
         .accessibilityLabel(String(localized: "story.composer.start.a11y.gallery",

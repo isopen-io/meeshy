@@ -530,12 +530,14 @@ struct StoryHeaderView: View {
             } label: {
                 Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
             }
-        default:
+        case .report:
             Button(role: .destructive) {
                 showReportSheet = true
             } label: {
                 Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
             }
+        default:
+            EmptyView()
         }
     }
 

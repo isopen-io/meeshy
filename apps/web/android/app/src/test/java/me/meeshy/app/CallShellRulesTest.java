@@ -86,6 +86,15 @@ public class CallShellRulesTest {
     }
 
     @Test
+    public void aVoiceCallFloatsWhenThePeersVideoIsShownLikeTheWeb() {
+        // pipSource (call-pip.ts) : un ecran partage ou la camera d'un pair flotte aussi (#11346).
+        assertTrue(CallShellRules.entersPictureInPicture(36, true, false, true, true));
+        assertFalse(CallShellRules.entersPictureInPicture(36, true, false, false, true));
+        assertFalse(CallShellRules.entersPictureInPicture(36, false, false, true, true));
+        assertFalse(CallShellRules.entersPictureInPicture(25, true, false, true, true));
+    }
+
+    @Test
     public void aSystemWithoutPictureInPictureNeverFloats() {
         assertFalse(CallShellRules.entersPictureInPicture(25, true, true, true));
         assertFalse(CallShellRules.entersPictureInPicture(36, true, true, false));

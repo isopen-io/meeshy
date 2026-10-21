@@ -27,6 +27,17 @@ struct AboutView: View {
         String(localized: "common.copy", defaultValue: "Copier", bundle: .main)
     }
 
+    /// Le tier média de l'appareil (#11281) — ce que les lois de lecture (fenêtre
+    /// des réels, cadence des stories, cache décodé) lisent pour se régler.
+    private var mediaTierLabel: String {
+        switch DeviceMediaTier.current {
+        case .low: return String(localized: "about.info.mediaTier.low", defaultValue: "Basique", bundle: .main)
+        case .mid: return String(localized: "about.info.mediaTier.mid", defaultValue: "Intermédiaire", bundle: .main)
+        case .high: return String(localized: "about.info.mediaTier.high", defaultValue: "Élevé", bundle: .main)
+        case .pro: return String(localized: "about.info.mediaTier.pro", defaultValue: "Pro", bundle: .main)
+        }
+    }
+
     private func copyValue(_ value: String) {
         UIPasteboard.general.string = value
         HapticFeedback.success()
@@ -106,6 +117,7 @@ struct AboutView: View {
                 infoRow(icon: "apple.logo", title: String(localized: "about.info.platform", defaultValue: "Plateforme", bundle: .main), value: "iOS \(UIDevice.current.systemVersion)", color: accentColor)
                 infoRow(icon: "shippingbox.fill", title: String(localized: "about.info.bundleId", defaultValue: "Bundle ID", bundle: .main), value: Bundle.main.bundleIdentifier ?? "me.meeshy.app", color: accentColor)
                 infoRow(icon: "wrench.and.screwdriver.fill", title: String(localized: "about.info.sdkVersion", defaultValue: "Version du SDK", bundle: .main), value: "1.0.0", color: accentColor)
+                infoRow(icon: "gauge.with.dots.needle.67percent", title: String(localized: "about.info.mediaTier", defaultValue: "Profil média", bundle: .main), value: mediaTierLabel, color: accentColor)
             }
             .background(sectionBackground(tint: accentColor))
         }

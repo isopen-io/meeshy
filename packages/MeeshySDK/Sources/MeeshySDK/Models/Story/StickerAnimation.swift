@@ -119,6 +119,11 @@ public enum StickerAnimation: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// L'instant depuis lequel plus rien ne bouge, ou `nil` pour un mouvement
+    /// qui se répète : c'est ce qui permet à une horloge d'affichage de se
+    /// mettre en PAUSE au lieu de battre pour une pose immobile.
+    public var settlesAfter: Double? { isOneShot ? period : nil }
+
     /// La pose à `seconds` depuis l'APPARITION de la décoration (son
     /// `startTime`, ou le début de la slide).
     public func pose(at seconds: Double) -> Pose {

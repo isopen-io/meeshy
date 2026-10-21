@@ -1207,7 +1207,7 @@ final class StoryViewModelTests: XCTestCase {
     func test_deleteStory_source_goesThroughTheConcurrentBoundary() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.storyViewModelSource())
         let body = try XCTUnwrap(
-            source.range(of: "func deleteStory(storyId: String) async -> Bool").map { String(source[$0.lowerBound...].prefix(500)) },
+            source.range(of: "func deleteStory(storyId: String, reason: String? = nil) async -> Bool").map { String(source[$0.lowerBound...].prefix(500)) },
             "deleteStory a disparu de StoryViewModel"
         )
         XCTAssertTrue(body.contains("Self.deleteRemotely(storyId:"), "deleteStory doit appeler la frontière @concurrent")

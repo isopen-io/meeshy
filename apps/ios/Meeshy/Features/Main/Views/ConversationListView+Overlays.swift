@@ -28,6 +28,11 @@ extension ConversationListView {
 
     @ViewBuilder
     func conversationContextMenu(for conversation: Conversation) -> some View {
+        // Les verdicts de la loi partagée (`ConversationActionPolicy`) — les
+        // mêmes que lit le menu custom de repli, ci-dessous (#11215).
+        let capabilities = rowMenuCapabilities(for: conversation)
+        let actions = ConversationRowMenuActions.make(for: conversation, in: self)
+
         // Sa propre fenêtre (iPad) : écrire à cette personne ou à ce groupe pendant qu'une autre conversation
         // reste ouverte dans la fenêtre principale.
         if DetachedWindowOpener.shared.isAvailable, ConversationOpenRoute.mayDetach(conversation.id) {
@@ -45,7 +50,7 @@ extension ConversationListView {
         // Pin/Unpin
         Button {
             HapticFeedback.medium()
-            Task { await conversationViewModel.togglePin(for: conversation.id) }
+            actions.onPin()
         } label: {
             Label(
                 conversation.userState.isPinned
@@ -58,7 +63,7 @@ extension ConversationListView {
         // Mute/Unmute
         Button {
             HapticFeedback.light()
-            Task { await conversationViewModel.toggleMute(for: conversation.id) }
+            actions.onMute()
         } label: {
             Label(
                 conversation.userState.isMuted
@@ -107,26 +112,17 @@ extension ConversationListView {
         Divider()
 
         // Marquer lu / non lu
-        if conversation.userState.unreadCount > 0 {
-            Button {
-                HapticFeedback.light()
-                Task { await conversationViewModel.markAsRead(conversationId: conversation.id) }
-            } label: {
-                Label(
-                    String(localized: "context.mark_read", defaultValue: "Marquer comme lu", bundle: .main),
-                    systemImage: "envelope.open.fill"
-                )
-            }
-        } else {
-            Button {
-                HapticFeedback.light()
-                Task { await conversationViewModel.markAsUnread(conversationId: conversation.id) }
-            } label: {
-                Label(
-                    String(localized: "context.mark_unread", defaultValue: "Marquer comme non lu", bundle: .main),
-                    systemImage: "envelope.badge.fill"
-                )
-            }
+        let hasUnread = conversation.userState.unreadCount > 0
+        Button {
+            HapticFeedback.light()
+            actions.onMarkReadToggle()
+        } label: {
+            Label(
+                hasUnread
+                    ? String(localized: "context.mark_read", defaultValue: "Marquer comme lu", bundle: .main)
+                    : String(localized: "context.mark_unread", defaultValue: "Marquer comme non lu", bundle: .main),
+                systemImage: hasUnread ? "envelope.open.fill" : "envelope.badge.fill"
+            )
         }
 
         // Mode de lecture (contrat LWS-8/I-072) — sous-menu APRÈS « Marquer
@@ -147,7 +143,7 @@ extension ConversationListView {
         // Détails
         Button {
             HapticFeedback.light()
-            sheetTargets.info = conversation
+            actions.onDetails()
         } label: {
             Label(
                 String(localized: "context.details", defaultValue: "Détails", bundle: .main),
@@ -155,12 +151,12 @@ extension ConversationListView {
             )
         }
 
-        // Renommer — groupes/communautés uniquement (parité menu custom)
-        if conversation.type != .direct {
+        // Renommer — MODERATOR+ ou rôle de plateforme qui administre, jamais
+        // Global ni un direct : ce que la passerelle accepte (#11215).
+        if capabilities.rename {
             Button {
                 HapticFeedback.light()
-                renameText = conversation.name
-                sheetTargets.rename = conversation
+                actions.onRename()
             } label: {
                 Label(
                     String(localized: "context.rename", defaultValue: "Renommer", bundle: .main),
@@ -174,7 +170,7 @@ extension ConversationListView {
             ForEach(["⭐️", "❤️", "🔥", "💎", "🎯", "✨", "🏆", "💡"], id: \.self) { emoji in
                 Button {
                     HapticFeedback.light()
-                    Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
+                    actions.onSetFavorite(emoji)
                 } label: {
                     Text(emoji)
                 }
@@ -183,7 +179,7 @@ extension ConversationListView {
                 Divider()
                 Button(role: .destructive) {
                     HapticFeedback.light()
-                    Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
+                    actions.onRemoveFavorite()
                 } label: {
                     Label(
                         String(localized: "context.remove_favorite", defaultValue: "Retirer le favori", bundle: .main),
@@ -206,7 +202,7 @@ extension ConversationListView {
                 currentSectionId: conversation.userState.sectionId,
                 onMove: { sectionId in
                     HapticFeedback.light()
-                    conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
+                    actions.onMove(sectionId)
                 }
             )
         } label: {
@@ -221,93 +217,7 @@ extension ConversationListView {
         // Actions secondaires — groupées pour garder ≤8 items top-level
         // (au-delà, iOS bascule sur le style liste où les icônes disparaissent).
         Menu {
-            if canCreateShareLink(for: conversation) {
-                Button {
-                    HapticFeedback.medium()
-                    sheetTargets.inviteSheet = conversation
-                } label: {
-                    Label(
-                        String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main),
-                        systemImage: "person.badge.plus"
-                    )
-                }
-            }
-
-            // Verrouiller / Déverrouiller
-            let isLockedCtx = ConversationLockManager.shared.isLocked(conversation.id)
-            Button {
-                HapticFeedback.medium()
-                if isLockedCtx {
-                    lockSheetMode = .unlockConversation
-                    sheetTargets.lockSheet = conversation
-                } else if ConversationLockManager.shared.masterPinConfigured {
-                    lockSheetMode = .lockConversation
-                    sheetTargets.lockSheet = conversation
-                } else {
-                    showNoMasterPinAlert = true
-                }
-            } label: {
-                Label(
-                    isLockedCtx
-                        ? String(localized: "context.unlock", defaultValue: "Déverrouiller", bundle: .main)
-                        : String(localized: "context.lock", defaultValue: "Verrouiller", bundle: .main),
-                    systemImage: isLockedCtx ? "lock.open.fill" : "lock.fill"
-                )
-            }
-
-            // Archiver / Désarchiver — état PAR UTILISATEUR (userState), jamais `isActive`.
-            // Global d'un mineur reste aux archives : aucune bascule (#9929).
-            let isArchivedConv = conversation.userState.isArchived
-            if !conversation.isArchiveImposed { Button {
-                HapticFeedback.medium()
-                if isArchivedConv {
-                    Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
-                } else {
-                    Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
-                }
-            } label: {
-                Label(
-                    isArchivedConv
-                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver", bundle: .main)
-                        : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main),
-                    systemImage: isArchivedConv ? "tray.and.arrow.up.fill" : "archivebox.fill"
-                )
-            } }
-
-            // RETRAIT FOCAL iOS (2026-08-18) : l'item « Focal (bêta) »
-            // (I-075), qui forçait Focal pour une seule ouverture, est retiré
-            // avec le mode — Script est le mode nominal.
-
-            // Bloquer / Débloquer (DM uniquement)
-            if conversation.type == .direct, let userId = conversation.participantUserId {
-                let isBlockedCtx = BlockService.shared.isBlocked(userId: userId)
-                Divider()
-                if isBlockedCtx {
-                    Button {
-                        HapticFeedback.heavy()
-                        Task {
-                            await BlockActionCoordinator.shared.unblock(userId: userId)
-                            await MainActor.run { HapticFeedback.success() }
-                        }
-                    } label: {
-                        Label(
-                            String(localized: "context.unblock", defaultValue: "Débloquer", bundle: .main),
-                            systemImage: "hand.raised.slash.fill"
-                        )
-                    }
-                } else {
-                    Button(role: .destructive) {
-                        HapticFeedback.heavy()
-                        sheetTargets.blockTarget = conversation
-                        showBlockConfirmation = true
-                    } label: {
-                        Label(
-                            String(localized: "context.block", defaultValue: "Bloquer", bundle: .main),
-                            systemImage: "hand.raised.fill"
-                        )
-                    }
-                }
-            }
+            conversationMoreOptionsItems(for: conversation, capabilities: capabilities, actions: actions)
         } label: {
             Label(
                 String(localized: "context.more_options", defaultValue: "Plus d'options", bundle: .main),
@@ -317,15 +227,129 @@ extension ConversationListView {
 
         Divider()
 
-        // Supprimer — arme la confirmation système (jamais de delete direct).
-        Button(role: .destructive) {
-            HapticFeedback.heavy()
-            sheetTargets.deleteTarget = conversation
+        // Quitter le groupe — hors direct et hors Global ; confirmé par l'alerte
+        // de départ (`sheetTargets.leaveTarget`), jamais un départ direct.
+        if capabilities.leave {
+            Button(role: .destructive) {
+                HapticFeedback.heavy()
+                actions.onLeave()
+            } label: {
+                Label(ConversationContextMenuView.leaveLabel, systemImage: ConversationContextMenuView.leaveIcon)
+            }
+        }
+
+        // Supprimer — ou « Masquer la discussion » pour un membre de groupe sans
+        // droit de supprimer pour tous : arme la confirmation système (jamais
+        // de delete direct).
+        if let removal = capabilities.removal {
+            Button(role: .destructive) {
+                HapticFeedback.heavy()
+                sheetTargets.deleteTarget = conversation
+            } label: {
+                Label(
+                    ConversationContextMenuView.removalLabel(removal),
+                    systemImage: ConversationContextMenuView.removalIcon(removal)
+                )
+            }
+        }
+    }
+
+    /// « Plus d'options » du menu natif : inviter, verrouiller, archiver,
+    /// bloquer, puis signaler et l'administration — les verdicts de la loi.
+    @ViewBuilder
+    private func conversationMoreOptionsItems(
+        for conversation: Conversation,
+        capabilities: ConversationRowMenuCapabilities,
+        actions: ConversationRowMenuActions
+    ) -> some View {
+        if capabilities.invite {
+            Button {
+                HapticFeedback.medium()
+                actions.onInvite()
+            } label: {
+                Label(
+                    String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main),
+                    systemImage: "person.badge.plus"
+                )
+            }
+        }
+
+        let isLocked = ConversationLockManager.shared.isLocked(conversation.id)
+        Button {
+            HapticFeedback.medium()
+            actions.onLock()
         } label: {
             Label(
-                String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main),
-                systemImage: "trash"
+                isLocked
+                    ? String(localized: "context.unlock", defaultValue: "Déverrouiller", bundle: .main)
+                    : String(localized: "context.lock", defaultValue: "Verrouiller", bundle: .main),
+                systemImage: isLocked ? "lock.open.fill" : "lock.fill"
             )
+        }
+
+        // Archiver / Désarchiver — état PAR UTILISATEUR (userState), jamais `isActive`.
+        // Global d'un mineur reste aux archives : aucune bascule (#9929).
+        let isArchived = conversation.userState.isArchived
+        if !conversation.isArchiveImposed {
+            Button {
+                HapticFeedback.medium()
+                actions.onArchive()
+            } label: {
+                Label(
+                    isArchived
+                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver", bundle: .main)
+                        : String(localized: "context.archive", defaultValue: "Archiver", bundle: .main),
+                    systemImage: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill"
+                )
+            }
+        }
+
+        // Bloquer / Débloquer (DM uniquement) — débloquer est immédiat.
+        if conversation.type == .direct, let userId = conversation.participantUserId {
+            let isBlocked = BlockService.shared.isBlocked(userId: userId)
+            Divider()
+            Button(role: isBlocked ? nil : .destructive) {
+                HapticFeedback.heavy()
+                actions.onBlock()
+            } label: {
+                Label(
+                    isBlocked
+                        ? String(localized: "context.unblock", defaultValue: "Débloquer", bundle: .main)
+                        : String(localized: "context.block", defaultValue: "Bloquer", bundle: .main),
+                    systemImage: isBlocked ? "hand.raised.slash.fill" : "hand.raised.fill"
+                )
+            }
+        }
+
+        conversationModerationItems(capabilities: capabilities, actions: actions)
+    }
+
+    /// Signaler (hors soi), puis l'administration — ADMIN et BIGBOSS seulement.
+    @ViewBuilder
+    private func conversationModerationItems(
+        capabilities: ConversationRowMenuCapabilities,
+        actions: ConversationRowMenuActions
+    ) -> some View {
+        if capabilities.report || capabilities.adminOpen {
+            Divider()
+        }
+
+        if capabilities.report {
+            Button {
+                HapticFeedback.light()
+                actions.onReport()
+            } label: {
+                Label(ConversationContextMenuView.reportLabel, systemImage: ConversationContextMenuView.reportIcon)
+            }
+        }
+
+        if capabilities.adminOpen {
+            Button {
+                HapticFeedback.light()
+                actions.onOpenAdmin()
+            } label: {
+                Label(ConversationContextMenuView.adminOpenLabel, systemImage: ConversationContextMenuView.adminOpenIcon)
+            }
         }
     }
 
@@ -530,74 +554,12 @@ extension ConversationListView {
                                 ConversationMenuCategory(id: $0.id, name: $0.name, icon: $0.icon)
                             },
                             currentSectionId: conversation.userState.sectionId,
-                            canInvite: canCreateShareLink(for: conversation),
                             isLocked: ConversationLockManager.shared.isLocked(conversation.id),
                             isArchived: conversation.userState.isArchived, canToggleArchive: !conversation.isArchiveImposed,
                             isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
                             isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
-                            canRename: conversation.type != .direct,
-                            onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
-                            onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
-                            onMarkReadToggle: {
-                                Task {
-                                    if conversation.userState.unreadCount > 0 {
-                                        await conversationViewModel.markAsRead(conversationId: conversation.id)
-                                    } else {
-                                        await conversationViewModel.markAsUnread(conversationId: conversation.id)
-                                    }
-                                }
-                            },
-                            onDetails: { sheetTargets.info = conversation },
-                            onRename: {
-                                renameText = conversation.name
-                                sheetTargets.rename = conversation
-                            },
-                            onSetFavorite: { emoji in
-                                Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
-                            },
-                            onRemoveFavorite: {
-                                Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
-                            },
-                            onMove: { sectionId in
-                                conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
-                            },
-                            onInvite: { sheetTargets.inviteSheet = conversation },
-                            onLock: {
-                                if ConversationLockManager.shared.isLocked(conversation.id) {
-                                    lockSheetMode = .unlockConversation
-                                    sheetTargets.lockSheet = conversation
-                                } else if ConversationLockManager.shared.masterPinConfigured {
-                                    lockSheetMode = .lockConversation
-                                    sheetTargets.lockSheet = conversation
-                                } else {
-                                    showNoMasterPinAlert = true
-                                }
-                            },
-                            onArchive: {
-                                Task {
-                                    if conversation.userState.isArchived {
-                                        await conversationViewModel.unarchiveConversation(conversationId: conversation.id)
-                                    } else {
-                                        await conversationViewModel.archiveConversation(conversationId: conversation.id)
-                                    }
-                                }
-                            },
-                            onBlock: {
-                                if let uid = conversation.participantUserId, BlockService.shared.isBlocked(userId: uid) {
-                                    Task {
-                                        await BlockActionCoordinator.shared.unblock(userId: uid)
-                                        await MainActor.run { HapticFeedback.success() }
-                                    }
-                                } else {
-                                    sheetTargets.blockTarget = conversation
-                                    showBlockConfirmation = true
-                                }
-                            },
-                            onDelete: {
-                                // Destructif → confirmation système obligatoire
-                                // (dialog attaché dans ConversationListView.body).
-                                sheetTargets.deleteTarget = conversation
-                            },
+                            capabilities: rowMenuCapabilities(for: conversation),
+                            actions: ConversationRowMenuActions.make(for: conversation, in: self),
                             onOpenFocalBetaPreview: {
                                 // RETRAIT FOCAL iOS (2026-08-18) : l'item n'est
                                 // plus monté par ConversationContextMenuView —
@@ -828,5 +790,86 @@ struct ConversationPreviewMotionReader<Content: View>: View {
 
     var body: some View {
         content(MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion))
+    }
+}
+
+// MARK: - Les gestes du menu d'une rangée, construits par la liste (#11215)
+
+extension ConversationRowMenuActions {
+
+    /// Les gestes que la liste offre pour `conversation` — le MÊME jeu pour le
+    /// menu natif et le menu custom. Supprimer, Quitter et Bloquer arment une
+    /// confirmation (dialog attaché dans ConversationListView.body), jamais l'effet.
+    static func make(for conversation: Conversation, in list: ConversationListView) -> ConversationRowMenuActions {
+        let viewModel = list.conversationViewModel
+        let id = conversation.id
+        return ConversationRowMenuActions(
+            onPin: { Task { await viewModel.togglePin(for: id) } },
+            onMute: { Task { await viewModel.toggleMute(for: id) } },
+            onMarkReadToggle: {
+                let unread = conversation.userState.unreadCount > 0
+                Task {
+                    if unread { await viewModel.markAsRead(conversationId: id) } else { await viewModel.markAsUnread(conversationId: id) }
+                }
+            },
+            onDetails: { list.sheetTargets.info = conversation },
+            onRename: {
+                list.renameText = conversation.name
+                list.sheetTargets.rename = conversation
+            },
+            onSetFavorite: { emoji in Task { await viewModel.setFavoriteReaction(conversationId: id, emoji: emoji) } },
+            onRemoveFavorite: { Task { await viewModel.setFavoriteReaction(conversationId: id, emoji: nil) } },
+            onMove: { sectionId in viewModel.moveToSection(conversationId: id, sectionId: sectionId) },
+            onInvite: { list.sheetTargets.inviteSheet = conversation },
+            onLock: { requestLockToggle(for: conversation, in: list) },
+            onArchive: {
+                let archived = conversation.userState.isArchived
+                Task {
+                    if archived { await viewModel.unarchiveConversation(conversationId: id) } else { await viewModel.archiveConversation(conversationId: id) }
+                }
+            },
+            onBlock: { requestBlockToggle(for: conversation, in: list) },
+            onDelete: {
+                list.sheetTargets.deleteTarget = conversation
+            },
+            onLeave: { list.sheetTargets.leaveTarget = conversation },
+            onReport: { list.sheetTargets.reportTarget = conversation },
+            onOpenAdmin: { openAdminConsole(for: conversation) }
+        )
+    }
+
+    /// La fiche de la conversation dans la console d'administration web.
+    static func openAdminConsole(for conversation: Conversation) {
+        guard let url = ConversationRowMenuCapabilities.adminConsoleURL(
+            conversationId: conversation.id,
+            webOrigin: MeeshyConfig.shared.webOrigin
+        ) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    /// Verrouiller passe par le PIN maître ; sans lui, l'alerte qui l'explique.
+    private static func requestLockToggle(for conversation: Conversation, in list: ConversationListView) {
+        if ConversationLockManager.shared.isLocked(conversation.id) {
+            list.lockSheetMode = .unlockConversation
+            list.sheetTargets.lockSheet = conversation
+        } else if ConversationLockManager.shared.masterPinConfigured {
+            list.lockSheetMode = .lockConversation
+            list.sheetTargets.lockSheet = conversation
+        } else {
+            list.showNoMasterPinAlert = true
+        }
+    }
+
+    /// Débloquer est immédiat ; bloquer demande confirmation.
+    private static func requestBlockToggle(for conversation: Conversation, in list: ConversationListView) {
+        guard let uid = conversation.participantUserId, BlockService.shared.isBlocked(userId: uid) else {
+            list.sheetTargets.blockTarget = conversation
+            list.showBlockConfirmation = true
+            return
+        }
+        Task {
+            await BlockActionCoordinator.shared.unblock(userId: uid)
+            await MainActor.run { HapticFeedback.success() }
+        }
     }
 }

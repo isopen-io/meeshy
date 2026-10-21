@@ -174,9 +174,14 @@ enum CommentAttachmentIntake {
         }
         Task { @MainActor in
             for pair in kept {
-                let isVideo = pair.piece.type == .video
-                let data = try? await pair.item.loadTransferable(type: Data.self)
-                fill(pair.piece.id, with: await write(data, isVideo: isVideo), in: attachments)
+                let file: (url: URL, size: Int)?
+                if pair.piece.type == .video {
+                    file = await stagedVideo(pair.item)
+                } else {
+                    let data = try? await PickedMedia.loadImageData(pair.item)
+                    file = await writeImage(data)
+                }
+                fill(pair.piece.id, with: file, in: attachments)
             }
         }
     }
@@ -196,7 +201,7 @@ enum CommentAttachmentIntake {
                 return nil
             }
             Task { @MainActor in
-                fill(piece.id, with: await write(data, isVideo: false), in: attachments)
+                fill(piece.id, with: await writeImage(data), in: attachments)
             }
             return piece
         }
@@ -217,7 +222,7 @@ enum CommentAttachmentIntake {
                 return
             }
             Task { @MainActor in
-                fill(piece.id, with: await write(data, isVideo: false), in: attachments)
+                fill(piece.id, with: await writeImage(data), in: attachments)
             }
         }
     }
@@ -233,11 +238,19 @@ enum CommentAttachmentIntake {
         item.supportedContentTypes.contains { $0.conforms(to: .movie) }
     }
 
-    /// Écrit les octets d'un média dans un fichier temporaire, hors du fil
+    /// Une vidéo entre par son FICHIER (`PickedMedia`, #9870) : ses octets ne
+    /// traversent pas la mémoire. La taille se lit sur le fichier posé.
+    private static func stagedVideo(_ item: PhotosPickerItem) async -> (url: URL, size: Int)? {
+        guard let url = try? await PickedMedia.loadVideoFile(item) else { return nil }
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int) ?? 0
+        return (url, size)
+    }
+
+    /// Écrit les octets d'une image dans un fichier temporaire, hors du fil
     /// principal. L'extension d'une image se lit dans ses OCTETS (#4925).
-    private static func write(_ data: Data?, isVideo: Bool) async -> (url: URL, size: Int)? {
+    private static func writeImage(_ data: Data?) async -> (url: URL, size: Int)? {
         guard let data else { return nil }
-        let ext = isVideo ? "mov" : await CommentComposerStaging.imageFileExtension(for: data)
+        let ext = await CommentComposerStaging.imageFileExtension(for: data)
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("comment_\(UUID().uuidString).\(ext)")
         let written = await Task.detached(priority: .userInitiated) {

@@ -33,6 +33,11 @@ extension MeeshyApp {
             // Les bannières ne partent plus qu'à la consommation de ce
             // qu'elles annoncent.
             NotificationGapResyncCoordinator.shared.refreshOnForeground()
+            // IL8 (#11286) — lancement à froid ET retour au premier plan :
+            // une autre application a pu remplir le volume pendant que la
+            // nôtre ne faisait que lire. Passe hors du fil principal, bornée
+            // à une toutes les dix minutes.
+            DiskPressureSweeper.shared.requestSweep()
             // CALL-FIX 2026-06-06 — tell the gateway we're foreground so
             // incoming calls use the in-app banner (socket) instead of a
             // VoIP push / CallKit.
