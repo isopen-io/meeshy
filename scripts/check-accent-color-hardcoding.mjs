@@ -301,7 +301,14 @@
 // Galaxie), dans `LevelTierPalette` (`MeeshyUI/Game/GameMaterial.swift`), MIROIR des jetons
 // web `--game-tier-*` (`apps/web/src/styles/game.css`) — la palette fixe des paliers, pas une
 // couleur de conversation. Valeur MESURÉE le 2026-10-08.
-const REFERENCE_LITERAL_COLOR_COUNT = 145;
+//
+// 2026-10-21 (#11449, la pièce Meesh sur iOS) — littéraux 145 → 158 : `d50c95c584` ajoute la
+// géométrie et les matières de la pièce Meesh (`MeeshCoinGeometry`, `MeeshCoinPainter`,
+// `MeeshCoinFaces`) dans `MeeshyUI/Game/GameMaterial.swift` — dégradés or/argent/prisme
+// (`coinGoldInk`, `coinDiamondInk`, `coinVein`, `sparkles`…), même précédent que #9636/#9688 :
+// la matière FIXE d'un objet du jeu, pas une couleur de conversation. Valeur MESURÉE le
+// 2026-10-21 en local (diff par fichier contre ed76ab6af4, seul GameMaterial.swift a bougé).
+const REFERENCE_LITERAL_COLOR_COUNT = 158;
 // 2026-10-06 (#9516, vague 2 du jeu, iOS) — variables inconnues 444 → 445 :
 // `GameAtlasViews.swift` calcule `Color(hex: $0.colorHex)` depuis
 // `LanguageData.info(for: code)` — la teinte ASSOCIÉE À UNE LANGUE de l'atlas
@@ -392,7 +399,10 @@ const REFERENCE_LITERAL_COLOR_COUNT = 145;
 // `ProfileDecorSheet.swift` (1) teinte l'aperçu de la bannière par l'accent du PROFIL (`accentHex`, déjà remis à
 // `MeeshyAvatar(accentColor:)`), hors de tout contexte de conversation. Masqué en CI derrière le gate de poids web (#10974) ;
 // valeur MESURÉE le 2026-10-19 en CI (run 39192153480) et en local, commit par commit (c61aac2d11 : +4, c242265209 : +1).
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 478;
+// 478 -> 479 (2026-10-21, #11449, la pièce Meesh sur iOS) : même commit `d50c95c584` que le littéral ci-dessus,
+// `GameMaterial.swift` (1) — une des variables de matière de la pièce ne passe pas la liste admise. Même précédent
+// (palette fixe du jeu). Valeur MESURÉE le 2026-10-21 en local.
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 479;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

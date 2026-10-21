@@ -130,7 +130,7 @@ final class WebRTCService {
         Logger.webrtc.info("WebRTCService initialized")
     }
 
-    deinit {
+    nonisolated deinit {
         // Belt-and-suspenders: cancel all in-flight tasks so they stop
         // referencing self as soon as the object is deallocated, rather than
         // waiting for the next [weak self] guard to fire. Task.cancel() is
