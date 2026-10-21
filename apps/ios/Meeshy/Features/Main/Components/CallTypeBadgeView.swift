@@ -18,7 +18,7 @@ struct CallTypeBadgeView: View {
             Text(label)
                 .font(.caption2.weight(.semibold))
         }
-        .foregroundColor(MeeshyColors.indigo400)
+        .foregroundStyle(MeeshyColors.indigo400)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.xsPlus)
         .background(

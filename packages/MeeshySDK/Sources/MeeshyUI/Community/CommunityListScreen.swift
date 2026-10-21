@@ -4,7 +4,8 @@ import MeeshySDK
 
 public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
     @ObservedObject private var viewModel: ViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
 
     public var onSelectCommunity: ((MeeshyCommunity) -> Void)?
@@ -98,7 +99,7 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
 
             TextField(String(localized: "community.list.search.placeholder", defaultValue: "Rechercher...", bundle: .module), text: $viewModel.searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: MeeshyFont.bodySize, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if !viewModel.searchText.isEmpty {
@@ -279,14 +280,14 @@ private struct VibrantCommunityCard: View, Equatable {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(community.name)
-                    .font(.system(size: MeeshyFont.bodySize, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
 
                 if let desc = community.description, !desc.isEmpty {
                     Text(desc)
-                        .font(.system(size: MeeshyFont.footnoteSize, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
                         .foregroundColor(.white.opacity(0.8))
                         .lineLimit(2)
                 }

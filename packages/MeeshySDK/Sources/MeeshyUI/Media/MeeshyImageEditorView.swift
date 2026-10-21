@@ -186,7 +186,7 @@ public struct MeeshyImageEditorView: View {
     private var compareBadge: some View {
         if isComparing {
             Text(String(localized: "media.editor.before", defaultValue: "Original", bundle: .module))
-                .font(.system(size: MeeshyFont.footnoteSize, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                 .foregroundColor(.white)
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.xsPlus)
@@ -270,7 +270,7 @@ public struct MeeshyImageEditorView: View {
                 Image(systemName: "checkmark")
                     .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                 Text(String(localized: "media.editor.done", defaultValue: "Termin\u{00E9}", bundle: .module))
-                    .font(.system(size: MeeshyFont.bodySize, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
             }
             .foregroundColor(.white)
             .padding(.horizontal, MeeshySpacing.lg)
@@ -527,7 +527,7 @@ public struct MeeshyImageEditorView: View {
             }
         } label: {
             Text(ratio.label)
-                .font(.system(size: MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
                 .foregroundColor(isSelected ? .white : theme.textSecondary)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.vertical, MeeshySpacing.sm)
@@ -620,7 +620,7 @@ public struct MeeshyImageEditorView: View {
                         HapticFeedback.light()
                     } label: {
                         Text(String(localized: "media.editor.reset", defaultValue: "R\u{00E9}initialiser", bundle: .module))
-                            .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                             .foregroundColor(accent)
                     }
                     .buttonStyle(.plain)
@@ -646,7 +646,7 @@ public struct MeeshyImageEditorView: View {
                 .frame(width: 18)
 
             Text(kind.label)
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .frame(width: 78, alignment: .leading)
 

@@ -15,7 +15,7 @@ struct PhonebookListView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     @State private var invitationTarget: PhonebookInvitation?
     @State private var isOfferingPhone = false
@@ -116,7 +116,7 @@ struct PhonebookListView: View {
                 ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.visibleContacts) { contact in
-                        DirectoryPersonRow(
+                        LivePresence { DirectoryPersonRow(
                             name: contact.resolvedName,
                             subtitle: contact.subtitle,
                             avatarURL: contact.matchedUser?.avatar,
@@ -129,7 +129,7 @@ struct PhonebookListView: View {
                             isDark: colorScheme == .dark,
                             onAction: { contact.isOnMeeshy ? open(contact) : invite(contact) }
                         )
-                        .equatable()
+                        .equatable() }
                     }
 
                     if viewModel.showsPlatformResults {
@@ -169,7 +169,7 @@ struct PhonebookListView: View {
                     .padding(.vertical, MeeshySpacing.sm)
             } else {
                 ForEach(viewModel.platformResults) { user in
-                    DirectoryPersonRow(
+                    LivePresence { DirectoryPersonRow(
                         name: user.displayName.flatMap { $0.isEmpty ? nil : $0 } ?? user.username,
                         subtitle: "@\(user.username)",
                         avatarURL: user.avatar,
@@ -179,7 +179,7 @@ struct PhonebookListView: View {
                         isDark: colorScheme == .dark,
                         onAction: { openPlatformUser(user) }
                     )
-                    .equatable()
+                    .equatable() }
                 }
             }
         }

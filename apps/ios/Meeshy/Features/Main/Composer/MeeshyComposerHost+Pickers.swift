@@ -68,7 +68,7 @@ extension MeeshyComposerHost {
         } label: {
             Text(ComposerLanguageFlag.label(for: documentLanguage))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo400)
+                .foregroundStyle(MeeshyColors.indigo400)
                 .padding(.horizontal, MeeshySpacing.smPlus)
                 .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(

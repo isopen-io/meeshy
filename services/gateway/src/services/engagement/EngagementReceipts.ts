@@ -28,7 +28,6 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MEESH_DEBIT_ORDER } from '@meeshy/shared/utils/meesh';
 import { takeBackAcrossEngagementCounters } from './EngagementCounterWrites';
 import type { EngagementQuotas } from './EngagementQuotas';
-import type { EngagementScaleSource } from './EngagementScaleService';
 import type { PostPointsRecorder } from './PostPointsRecorder';
 import { announceGameState } from '../game/GameStateBroadcast';
 import { gameRevisionPipelineSet } from '../game/GameRevision';
@@ -37,6 +36,20 @@ const NO_POST = '-';
 
 export const receiptBucket = (source: string, postId: string | undefined): string =>
   `receipt:${source}|${postId ?? NO_POST}`;
+
+/**
+ * Les reçus d'UNE source, et d'elle seule, par un INTERVALLE lexical — jamais par
+ * `startsWith`. Prisma traduit `startsWith` sur MongoDB en regex `^<valeur>` NON
+ * échappée (mesuré sur mongod 8 + Prisma 6.19, #11467) : le `|` du seau y devient
+ * une alternative qui matche tous les seaux du compte, mémoires `content:<id>`
+ * comprises. Retirer un contenu reprenait alors les crédits de TOUS les autres. Le
+ * `|` (0x7C) est suivi de `}` (0x7D) : `[receipt:<source>|, receipt:<source>})`
+ * contient exactement les seaux qui commencent par `receipt:<source>|`.
+ */
+export const receiptBucketsOf = (source: string): { readonly gte: string; readonly lt: string } => ({
+  gte: `receipt:${source}|`,
+  lt: `receipt:${source}}`,
+});
 
 const postIdOfReceipt = (bucket: string): string | undefined => {
   const postId = bucket.slice(bucket.lastIndexOf('|') + 1);
@@ -131,7 +144,6 @@ export class EngagementReceipts {
     private readonly prisma: ReceiptPrisma,
     private readonly quotas: EngagementQuotas,
     private readonly posts: PostPointsRecorder,
-    private readonly scale: EngagementScaleSource,
     private readonly league: ReceiptLeague = NO_LEAGUE,
   ) {}
 
@@ -149,19 +161,14 @@ export class EngagementReceipts {
     return taken;
   }
 
-  /** Le début de la fenêtre de reprise du barème (`abuse.clawbackHours`). */
-  private async clawbackSince(): Promise<Date> {
-    const scale = await this.scale.current();
-    return new Date(Date.now() - scale.abuse.clawbackHours * 3_600_000);
-  }
-
   /**
-   * Un contenu lourd SUPPRIMÉ (#8959) : s'il a été publié dans la fenêtre du
-   * barème, les points de sa publication, gardés par la mémoire par contenu,
-   * sont repris — publier, supprimer, republier ne pompe rien.
+   * Un contenu lourd SUPPRIMÉ (#8959) : les points de sa publication, gardés par
+   * la mémoire par contenu, sont repris — publier, supprimer, republier ne pompe
+   * rien. L'âge de la publication se juge chez l'appelant, qui la connaît
+   * (`reclaimRemovedContent`, trente jours — #11467).
    */
   async reclaimPublication(userId: string, operationKey: string, targetId: string): Promise<number> {
-    const { points, creditedAt } = await this.quotas.reclaim(userId, operationKey, targetId, await this.clawbackSince());
+    const { points, creditedAt } = await this.quotas.reclaim(userId, operationKey, targetId);
     if (points <= 0) return 0;
     await this.takeBack(userId, operationKey, points, creditedAt);
     return points;
@@ -180,20 +187,14 @@ export class EngagementReceipts {
   /**
    * Reprend tout ce que `source` a crédité à `userId` — sur chaque post, au
    * score, au compteur et dans ce que le post lui a rapporté. Rend les points
-   * repris ; zéro pour une reprise déjà faite. `withinClawback` borne aux
-   * crédits de la fenêtre du barème — la règle des publications.
+   * repris ; zéro pour une reprise déjà faite.
    */
-  async reclaim(userId: string, source: string, options: { readonly withinClawback?: boolean } = {}): Promise<number> {
-    const since = options.withinClawback ? await this.clawbackSince() : undefined;
+  async reclaim(userId: string, source: string): Promise<number> {
     const receipts = await this.prisma.engagementQuota.findMany({
-      where: { userId, bucket: { startsWith: `receipt:${source}|` }, points: { gt: 0 } },
+      where: { userId, bucket: receiptBucketsOf(source), points: { gt: 0 } },
       select: { operationKey: true, bucket: true, points: true, createdAt: true },
     });
-    const taken = await Promise.all(
-      receipts
-        .filter((receipt) => since === undefined || receipt.createdAt >= since)
-        .map((receipt) => this.reclaimOne(userId, receipt)),
-    );
+    const taken = await Promise.all(receipts.map((receipt) => this.reclaimOne(userId, receipt)));
     return taken.reduce((sum, points) => sum + points, 0);
   }
 

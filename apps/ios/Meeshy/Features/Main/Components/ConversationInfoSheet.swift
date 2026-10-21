@@ -252,7 +252,7 @@ struct ConversationInfoSheet: View {
 
     private var directConversationHeader: some View {
         VStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: conversation.name,
                 context: .profileSheet,
                 accentColor: accentColor,
@@ -262,7 +262,7 @@ struct ConversationInfoSheet: View {
                 isHere: otherUserId.map { presenceManager.here(userId: $0, conversationId: conversation.id) } ?? .absent,
                 ring: conversation.participantRing,
                 onMoodTap: otherUserId.flatMap { moodTapResolver?($0) }
-            )
+            ) }
 
             Text(conversation.name)
                 .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
@@ -443,7 +443,7 @@ struct ConversationInfoSheet: View {
                         Rectangle()
                             .fill(isSelected ? accent : Color.clear)
                             .frame(height: 2)
-                            .cornerRadius(1)
+                            .clipShape(RoundedRectangle(cornerRadius: 1))
                     }
                 }
                 .frame(maxWidth: .infinity)

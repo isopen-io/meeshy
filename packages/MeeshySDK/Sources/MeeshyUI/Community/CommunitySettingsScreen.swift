@@ -5,7 +5,8 @@ import MeeshySDK
 
 public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: View {
     @ObservedObject private var viewModel: ViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
 
     @State private var avatarItem: PhotosPickerItem? = nil
@@ -104,7 +105,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             Spacer()
 
             Text(String(localized: "community.settings.title", defaultValue: "Réglages", bundle: .module))
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(16, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -124,7 +125,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
                         .tint(MeeshyColors.indigo500)
                 } else {
                     Text(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module))
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(16, weight: .semibold, design: .rounded))
                         .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }
             }
@@ -176,7 +177,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
 
             PhotosPicker(selection: $bannerItem, matching: .images) {
                 Label(editLabel, systemImage: "photo.fill")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(11, weight: .semibold, design: .rounded))
                     .foregroundColor(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -231,7 +232,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
     private var colorPickerCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(String(localized: "community.settings.color", defaultValue: "Couleur", bundle: .module))
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(12, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textSecondary)
 
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
@@ -312,13 +313,13 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             VStack(spacing: 12) {
                 settingsField(label: String(localized: "community.settings.field.name", defaultValue: "Nom", bundle: .module)) {
                     TextField(String(localized: "community.settings.field.name.placeholder", defaultValue: "Nom de la communauté", bundle: .module), text: $viewModel.name)
-                        .font(.system(size: 16, design: .rounded))
+                        .font(MeeshyFont.relative(16, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                 }
 
                 settingsField(label: String(localized: "community.settings.field.description", defaultValue: "Description", bundle: .module)) {
                     TextField(String(localized: "community.settings.field.description", defaultValue: "Description", bundle: .module), text: $viewModel.descriptionText, axis: .vertical)
-                        .font(.system(size: 16, design: .rounded))
+                        .font(MeeshyFont.relative(16, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(3...6)
                 }
@@ -335,10 +336,10 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "community.settings.privacy.title", defaultValue: "Communauté privée", bundle: .module))
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                     Text(viewModel.isPrivate ? String(localized: "community.settings.privacy.byInvitation", defaultValue: "Sur invitation", bundle: .module) : String(localized: "community.settings.privacy.openToAll", defaultValue: "Ouverte à tous", bundle: .module))
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textSecondary)
                 }
                 Spacer()
@@ -396,7 +397,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .font(MeeshyFont.relative(13, weight: .bold, design: .rounded))
             .foregroundColor(theme.textMuted)
             .textCase(.uppercase)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -405,7 +406,7 @@ public struct CommunitySettingsScreen<ViewModel: CommunitySettingsModeling>: Vie
     private func settingsField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(12, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textSecondary)
             content()
                 .textFieldStyle(.plain)

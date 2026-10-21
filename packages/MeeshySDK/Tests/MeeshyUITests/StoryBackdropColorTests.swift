@@ -3,6 +3,7 @@ import MeeshySDK
 @testable import MeeshyUI
 
 /// Le sol du composer se peint de la teinte du Cadre : seul le flou n'en a pas.
+@MainActor
 final class StoryBackdropColorTests: XCTestCase {
 
     func test_solidColor_flou_nAPasDeTeinte() {

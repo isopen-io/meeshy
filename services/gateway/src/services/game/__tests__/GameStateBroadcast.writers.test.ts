@@ -111,7 +111,7 @@ describe('les écrivains du jeu annoncent game:updated (#10900)', () => {
     seedUser(db, { engagementScore: 500, sparksSincePrestige: 500, sparksEarnedLifetime: 500 });
     db.engagementCounter.rows.push({ id: 'c1', userId: USER, axisKey: 'content.post', count: 1, points: 40 });
     db.engagementQuota.rows.push({ id: 'q1', userId: USER, operationKey: 'content.post', bucket: 'receipt:post-1|content.post', points: 40, createdAt: new Date() });
-    const receipts = new EngagementReceipts(db.prisma as never, {} as never, { takeBack: async () => undefined } as never, { current: async () => DEFAULT_ENGAGEMENT_SCALE });
+    const receipts = new EngagementReceipts(db.prisma as never, {} as never, { takeBack: async () => undefined } as never);
 
     await receipts.reclaim(USER, 'post-1');
     await flush();

@@ -6,7 +6,8 @@ public struct AnonymousJoinFormView<ViewModel: JoinFlowModeling>: View {
     @ObservedObject var viewModel: ViewModel
     let onBack: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @FocusState private var focusedField: FormField?
 
     private var isDark: Bool { theme.mode.isDark }

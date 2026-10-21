@@ -38,7 +38,9 @@ const matchField = (actual: unknown, expected: unknown): boolean => {
     if (op === 'lt') return typeof actual === 'number' ? actual < (value as number) : actual instanceof Date ? actual < (value as Date) : typeof actual === 'string' && actual < (value as string);
     if (op === 'lte') return typeof actual === 'number' ? actual <= (value as number) : actual instanceof Date && actual <= (value as Date);
     if (op === 'notIn') return !(value as unknown[]).includes(actual);
-    if (op === 'startsWith') return typeof actual === 'string' && actual.startsWith(value as string);
+    // Prisma sur MongoDB traduit `startsWith` en regex `^<valeur>` SANS l'échapper (mesuré sur mongod 8 + Prisma
+    // 6.19, #11467) : un `|` y devient une alternative qui matche tout. Le faux rend la même chose que la base.
+    if (op === 'startsWith') return typeof actual === 'string' && new RegExp(`^${value as string}`).test(actual);
     if (op === 'gt') return typeof actual === 'number' ? actual > (value as number) : actual instanceof Date ? actual > (value as Date) : typeof actual === 'string' && actual > (value as string);
     if (op === 'not') return value === null ? actual !== null && actual !== undefined : !matchField(actual, value);
     if (op === 'has') return Array.isArray(actual) && actual.includes(value);

@@ -4,7 +4,8 @@ import MeeshySDK
 
 public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings: View, AddChannel: View>: View {
     @ObservedObject private var viewModel: ViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
 
     public var onSelectConversation: ((APIConversation) -> Void)? = nil
@@ -176,6 +177,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .background(Color.black.opacity(0.35))
                     .clipShape(Circle())
+                    .meeshyTapTarget()
             }
 
             Spacer()
@@ -204,6 +206,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                         .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
+                        .meeshyTapTarget()
                 }
             } else {
                 Button {
@@ -216,11 +219,12 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                         .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
+                        .meeshyTapTarget()
                 }
             }
         }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.xs)
+        .padding(.horizontal, MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
+        .padding(.top, MeeshySpacing.xs - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
     }
 
     // MARK: - Header (bannière + avatar + infos)
@@ -254,12 +258,12 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                     Text(community.name)
-                        .font(.system(size: MeeshyFont.titleSize, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
 
                     if let desc = community.description, !desc.isEmpty {
                         Text(desc)
-                            .font(.system(size: MeeshyFont.subheadSize, design: .rounded))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, design: .rounded))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(2)
                     }
@@ -272,7 +276,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     Image(systemName: community.isPrivate ? "lock.fill" : "globe")
                         .font(.system(size: MeeshyIconSize.xxs))
                     Text(community.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privée", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
-                        .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 }
                 .foregroundColor(theme.textMuted)
                 .padding(.horizontal, MeeshySpacing.md)
@@ -339,7 +343,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .foregroundColor(theme.textPrimary)
             }
             Text(label)
-                .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
@@ -405,7 +409,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .font(.system(size: MeeshyIconSize.lg))
                     .foregroundColor(MeeshyColors.brandPrimary)
                 Text(title)
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: .medium, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .rounded))
                     .foregroundColor(theme.textSecondary)
             }
             .frame(maxWidth: .infinity)
@@ -479,13 +483,13 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(viewModel.conversationTitles[conversation.id] ?? String(localized: "community.detail.channel.fallbackName", defaultValue: "Channel", bundle: .module))
-                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 if let desc = conversation.description, !desc.isEmpty {
                     Text(desc)
-                        .font(.system(size: MeeshyFont.smallSize, weight: .regular))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(1)
                 }
@@ -495,7 +499,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
 
             if let count = conversation.memberCount {
                 Text("\(count)")
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
         }

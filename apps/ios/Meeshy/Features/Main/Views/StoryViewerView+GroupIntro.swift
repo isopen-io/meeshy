@@ -19,8 +19,7 @@ extension StoryViewerView {
                 // le payload stories (`StoryGroup.authorPresence`) — plus
                 // de « Hors ligne » par défaut faute de donnée pour un
                 // auteur hors contacts.
-                presence: PresenceManager.shared.presenceMap[intro.userId]
-                    ?? currentGroup?.authorPresence,
+                presence: PresenceManager.shared.servedPresence(for: intro.userId, fallback: currentGroup?.authorPresence),
                 // Détail « en ligne » réservé aux amis (directive user
                 // 2026-07-13) : lookup O(1) synchrone, primitive Bool
                 // descendue à la leaf view (règle "Zero Unnecessary

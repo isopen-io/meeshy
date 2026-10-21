@@ -613,7 +613,7 @@ export class PostCommentService {
     // suppression rejouée ne reprend rien.
     [{ id: commentId, authorId: comment.authorId }, ...descendantAuthors]
       .filter(({ authorId }) => removalReclaimsAuthorCredits({ removedBy: userId, authorId, byModeration }))
-      .forEach(({ id, authorId }) => reclaimContentCredits(this.prisma, authorId, creditSource.comment(id), {}, this.engagement));
+      .forEach(({ id, authorId }) => reclaimContentCredits(this.prisma, authorId, creditSource.comment(id), this.engagement));
 
     await this.prisma.post.update({
       where: { id: comment.postId },
@@ -781,7 +781,7 @@ export class PostCommentService {
 
     await this.prisma.commentReaction.deleteMany({ where: { commentId, userId, emoji: cible } });
     // Retirer le like reprend ce qu'il a rapporté (#9584).
-    reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(pile[0]!.id), {}, this.engagement);
+    reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(pile[0]!.id), this.engagement);
     // `removedEmoji` voyage AVEC le commentaire, exactement comme sur le chemin
     // des publications (`PostService.unlikePost`). La route diffuse ce que le
     // serveur a FAIT, jamais ce que le client a DEMANDÉ : sans lui, un retrait

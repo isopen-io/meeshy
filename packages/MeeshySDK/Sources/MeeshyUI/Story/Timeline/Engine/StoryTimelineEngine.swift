@@ -348,7 +348,7 @@ public final class StoryTimelineEngine {
     private func startDriveClock(from playhead: Float, anchorHostTime: UInt64) {
         stopDriveClock()
         driveOrigin = (playhead, TimelinePlaybackSync.hostSeconds(anchorHostTime))
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .clock) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return

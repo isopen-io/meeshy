@@ -207,21 +207,23 @@ describe('buildLivingSummary — les trois cas de conversion', () => {
     expect(model.digest.media.links).toBe(2);
   });
 
-  test('roster_isDerivedFromMessages_firstSeenOrder_withPresenceFromParticipantWhenKnown', () => {
+  test('roster_isDerivedFromMessages_firstSeenOrder_carryingTheServedParticipantNeverAFrozenPresence', () => {
+    const amina = participant({ userId: 'u-amina', displayName: 'Amina', isOnline: true });
     const model = buildLivingSummary(
       baseInput({
-        participants: [participant({ userId: 'u-amina', displayName: 'Amina', isOnline: true })],
+        participants: [amina],
         messages: [
           message({ id: 'm1', senderId: 'u-amina', createdAt: NOW, content: '@vous, ça va ?' }),
           message({ id: 'm2', senderId: 'u-ghost', createdAt: NOW + MIN, content: 'inconnu' }),
         ],
       }),
     );
-    // `u-amina` est connue (présence en ligne), `u-ghost` n'a pas de
-    // roster : repli honnête sur son id comme nom.
-    const [amina] = model.faceRamp;
-    expect(amina?.id).toBe('u-amina');
-    expect(amina?.presence).toBe('online');
+    // `u-amina` est connue : le visage porte sa charge REST, que la vue résout
+    // VIVANTE (#11412) ; `u-ghost` n'a pas de roster : repli honnête sur son id.
+    const [face] = model.faceRamp;
+    expect(face?.id).toBe('u-amina');
+    expect(face?.participant).toBe(amina);
+    expect(Object.keys(face ?? {})).not.toContain('presence');
   });
 });
 

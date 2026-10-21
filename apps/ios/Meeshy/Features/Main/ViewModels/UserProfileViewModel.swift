@@ -100,11 +100,11 @@ final class UserProfileViewModel: ObservableObject {
             let user = profil.user
             if let stats = profil.stats {
                 userStats = stats
-                try? await CacheCoordinator.shared.stats.save([stats], for: user.id)
+                await bestEffort("userProfileViewModel.stats.save", category: .cache) { try await CacheCoordinator.shared.stats.save([stats], for: user.id) }
             }
-            try? await CacheCoordinator.shared.profiles.save([user], for: user.id)
+            await bestEffort("userProfileViewModel.profiles.save", category: .cache) { try await CacheCoordinator.shared.profiles.save([user], for: user.id) }
             if idOrUsername != user.id {
-                try? await CacheCoordinator.shared.profiles.save([user], for: idOrUsername)
+                await bestEffort("userProfileViewModel.profiles.save.2", category: .cache) { try await CacheCoordinator.shared.profiles.save([user], for: idOrUsername) }
             }
             await SearchIndex.shared.indexUsers([user])
             fullUser = user
@@ -160,7 +160,7 @@ final class UserProfileViewModel: ObservableObject {
         do {
             let stats = try await userService.getUserStats(userId: userId)
             userStats = stats
-            try? await CacheCoordinator.shared.stats.save([stats], for: userId)
+            await bestEffort("userProfileViewModel.stats.save.2", category: .cache) { try await CacheCoordinator.shared.stats.save([stats], for: userId) }
         } catch {
             statsError = "Impossible de charger les statistiques"
         }

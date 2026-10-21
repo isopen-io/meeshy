@@ -12,14 +12,14 @@ struct FeedComposerQuotedPostPreview: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             HStack(spacing: MeeshySpacing.sm) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: quoted.author,
                     context: .postComment,
                     accentColor: quoted.authorColor,
                     avatarURL: quoted.authorAvatarURL,
                     presenceState: PresenceManager.shared.knownPresenceState(for: quoted.authorId),
                     ring: quoted.authorRing
-                )
+                ) }
                 Text(quoted.author)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.accentText(quoted.authorColor))

@@ -9,7 +9,8 @@ struct SplashScreen: View {
     @State private var showSubtitle = false
     @State private var glowPulse = false
     @State private var backgroundScale: CGFloat = 1.2
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion

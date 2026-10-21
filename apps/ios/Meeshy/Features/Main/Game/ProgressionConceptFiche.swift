@@ -176,7 +176,7 @@ struct ProgressionConceptFiche: Equatable {
         return [
             fact(ConceptText.name(.season), count(season.number), .season, detail: .season),
             fact(ConceptText.factWeek, ProgressionConceptModel.ratio(season.week, GameSeason.weeks), .seasonWeek, detail: .seasonWeek),
-            fact(ConceptText.factStars, count(season.stars), .seasonStars, detail: .seasonStars),
+            fact(ConceptText.factStrides, count(season.stars), .seasonStars, detail: .seasonStars),
             fact(ConceptText.factSeal, season.sealOwned ? ConceptText.factYes : ConceptText.factNo, .seasonSeal),
         ]
     }

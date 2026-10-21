@@ -22,7 +22,8 @@ public struct MeeshyNewPasswordView: View {
     private let onSignIn: () -> Void
     private let onRequestNewLink: () -> Void
 
-    @StateObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     @State private var newPassword = ""
     @State private var confirmPassword = ""

@@ -4,7 +4,8 @@ import MeeshySDK
 
 public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite: View>: View {
     @ObservedObject private var viewModel: ViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     public var onInvite: (() -> Void)? = nil
     @State private var showInviteSheet = false
@@ -106,9 +107,9 @@ public struct CommunityMembersScreen<ViewModel: CommunityMembersModeling, Invite
             Image(systemName: role.icon)
                 .font(.system(size: MeeshyIconSize.xxs))
             Text(role.sectionTitle(in: .module))
-                .font(.system(size: MeeshyFont.smallSize, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
             Text("\(count)")
-                .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .foregroundColor(theme.textSecondary)
@@ -128,7 +129,8 @@ struct MemberRow: View {
     var onRoleChange: ((MemberRole) -> Void)? = nil
     var onRemove: (() -> Void)? = nil
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     private var user: APICommunityUser? { member.user }
     private var displayName: String { user?.name ?? String(localized: "community.members.unknownUser", defaultValue: "Unknown", bundle: .module) }
@@ -147,7 +149,7 @@ struct MemberRow: View {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
-                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
@@ -155,7 +157,7 @@ struct MemberRow: View {
                     Image(systemName: member.communityRole.icon)
                         .font(.system(size: MeeshyIconSize.xxs))
                     Text(member.communityRole.displayName)
-                        .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
                 .foregroundColor(roleColor)
             }

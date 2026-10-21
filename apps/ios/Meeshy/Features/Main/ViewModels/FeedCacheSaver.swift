@@ -24,7 +24,7 @@ final class FeedCacheSaver {
             // newest-first : sans ce prefix(100), au-delà de 100 posts
             // accumulés le cold start sert la tranche la plus vieille en
             // .fresh. Miroir de ProfileUserPostsList.
-            try? await feedCache.savePreservingFreshness(Array(snapshot.prefix(100)), for: "main-feed")
+            await bestEffort("feedCacheSaver.feedCache.savePreservingFreshness", category: .cache) { try await feedCache.savePreservingFreshness(Array(snapshot.prefix(100)), for: "main-feed") }
         }
     }
 }

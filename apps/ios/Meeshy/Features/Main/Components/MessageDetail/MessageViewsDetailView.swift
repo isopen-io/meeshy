@@ -207,14 +207,14 @@ struct MessageViewsDetailView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             // Author card with avatar
             HStack(spacing: MeeshySpacing.md) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: message.senderName ?? "?",
                     context: .userListItem,
                     accentColor: message.senderColor ?? contactColor,
                     avatarURL: message.senderAvatarURL,
                     presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message),
                     ring: message.senderRing
-                )
+                ) }
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
@@ -491,14 +491,14 @@ struct MessageViewsDetailView: View {
 
     private func userStatusRow(participantId: String, username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: username,
                 context: .userListItem,
                 accentColor: contactColor,
                 avatarURL: avatar,
                 presenceState: memberPresence(participantId),
                 ring: membersByParticipant[participantId]?.avatarRing
-            )
+            ) }
 
             Text(username)
                 .font(.footnote.weight(.medium))
