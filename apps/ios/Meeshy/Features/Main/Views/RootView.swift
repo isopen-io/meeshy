@@ -751,7 +751,7 @@ struct RootView: View {
     /// GRDB → network), falling back to normal navigation when it isn't a
     /// conversation notification or can't be resolved.
     private func openNotificationPreview(for event: SocketNotificationEvent) {
-        guard let conversationId = event.conversationId, !conversationId.isEmpty else {
+        guard let conversationId = event.conversationId, !conversationId.isEmpty, ConversationOpenRoute.mayPreview(conversationId) else {
             handleSocketNotificationTap(event)
             return
         }

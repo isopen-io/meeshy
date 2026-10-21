@@ -218,6 +218,18 @@ extension Route {
     }
 }
 
+/// Une ouverture de conversation que le verrou PIN retient (#11386).
+///
+/// Elle garde l'ouverture ENTIÈRE — cible du saut, transition, colonne iPad —
+/// pour la rejouer telle quelle quand le PIN est donné, et rien n'en est armé
+/// avant : un surlignage posé avant le PIN survivrait à un PIN abandonné.
+struct LockedConversationOpening: Identifiable {
+    let conversation: Conversation
+    let open: @MainActor () -> Void
+
+    var id: String { conversation.id }
+}
+
 @MainActor
 final class Router: ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -245,15 +257,24 @@ final class Router: ObservableObject {
     /// Ce qui est présenté par-dessus la navigation (#10539).
     private let surfaces: PresentedSurfaceRegistryProviding
 
+    /// Le verrou PIN des conversations, interrogé à la porte (#11386).
+    private let locks: ConversationLockGating
+
+    /// L'ouverture retenue par le verrou, que la racine présente avec la
+    /// feuille du PIN (`ConversationLockGateLayer`). `nil` : aucune.
+    @Published private(set) var pendingLockedOpening: LockedConversationOpening?
+
     /// La fenêtre de ce routeur (#10543) : la racine la pose dans
     /// l'environnement, et une ouverture ne referme que les surfaces qui s'y
     /// sont présentées — pas celles de l'autre fenêtre d'un iPad.
     let surfaceScope = PresentedSurfaceScope()
 
     init(refusesProfiles: Bool = false,
-         surfaces: PresentedSurfaceRegistryProviding = PresentedSurfaceRegistry.shared) {
+         surfaces: PresentedSurfaceRegistryProviding = PresentedSurfaceRegistry.shared,
+         locks: ConversationLockGating = ConversationLockManager.shared) {
         self.refusesProfiles = refusesProfiles
         self.surfaces = surfaces
+        self.locks = locks
     }
 
     /// La fiche d'un participant SANS COMPTE, à ouvrir.
@@ -328,18 +349,20 @@ final class Router: ObservableObject {
     /// recherche, communauté — passe par le site qui libère l'écran (#10543) :
     /// rien de présenté, elle s'empile sur-le-champ, comme avant.
     func push(_ route: Route) {
-        guard case .conversation = route else {
+        guard case .conversation(let conversation) = route else {
             place(route)
             return
         }
         clearPresentedSurfaces { [weak self] beneathClosingSurface in
-            guard beneathClosingSurface else {
-                self?.place(route)
-                return
+            self?.admitConversation(conversation) { [weak self] in
+                guard beneathClosingSurface else {
+                    self?.place(route)
+                    return
+                }
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) { self?.place(route) }
             }
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) { self?.place(route) }
         }
     }
 
@@ -496,8 +519,61 @@ final class Router: ObservableObject {
 
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         clearPresentedSurfaces { [weak self] beneathClosingSurface in
-            self?.showConversation(conversation, highlightMessageId: highlightMessageId,
-                                   beneathClosingSurface: beneathClosingSurface)
+            self?.admitConversation(conversation) { [weak self] in
+                self?.showConversation(conversation, highlightMessageId: highlightMessageId,
+                                       beneathClosingSurface: beneathClosingSurface)
+            }
+        }
+    }
+
+    // MARK: - Verrou PIN (#11386)
+
+    /// **LA porte du verrou PIN.** Toute ouverture de conversation la traverse :
+    /// `navigateToConversation` (widget, notification, lien profond, Siri,
+    /// contacts, transfert, réponse à une story, « Aller au message »),
+    /// `push(.conversation)` (recherche, liste), `replaceStack` et, sur iPad,
+    /// `iPadRootView.openConversation`. Le verrou n'était vérifié que dans la
+    /// liste : tout autre chemin ouvrait le fil sans le PIN.
+    ///
+    /// Une conversation déjà dans la pile, ou déjà à l'écran (`alreadyShowing`,
+    /// la colonne de détail de l'iPad), a déjà passé la porte : un saut vers
+    /// elle ne redemande rien. Sinon le verrou répond ; retenue, l'ouverture
+    /// attend le PIN dans `pendingLockedOpening`.
+    func admitConversation(_ conversation: Conversation,
+                           alreadyShowing: Bool = false,
+                           then open: @escaping @MainActor () -> Void) {
+        guard alreadyShowing || isStacked(conversation.id) || locks.admitsOpening(conversation.id) else {
+            pendingLockedOpening = LockedConversationOpening(conversation: conversation, open: open)
+            return
+        }
+        open()
+    }
+
+    /// Le PIN est donné : l'ouverture retenue reprend — à condition que le
+    /// verrou l'admette ENCORE. La feuille ne peut pas forcer la porte.
+    func resumeLockedOpening() {
+        guard let opening = pendingLockedOpening else { return }
+        pendingLockedOpening = nil
+        guard locks.admitsOpening(opening.conversation.id) else { return }
+        opening.open()
+    }
+
+    /// PIN abandonné : l'ouverture part, et avec elle ce que l'appelant avait
+    /// déjà armé pour elle — réponse à une story, cible d'un saut — pour que
+    /// rien ne s'applique à la prochaine conversation ouverte.
+    func abandonLockedOpening() {
+        guard let opening = pendingLockedOpening else { return }
+        pendingLockedOpening = nil
+        pendingReplyContext = nil
+        guard landsOnMessage(in: opening.conversation.id) else { return }
+        pendingHighlightMessageId = nil
+        pendingHighlightConversationId = nil
+    }
+
+    private func isStacked(_ conversationId: String) -> Bool {
+        path.contains { route in
+            guard case .conversation(let stacked) = route else { return false }
+            return stacked.id == conversationId
         }
     }
 
@@ -542,7 +618,11 @@ final class Router: ObservableObject {
             push(route)
             return
         }
-        path = [route]
+        guard case .conversation(let conversation) = route else {
+            path = [route]
+            return
+        }
+        admitConversation(conversation) { [weak self] in self?.path = [route] }
     }
 
     // MARK: - Profile

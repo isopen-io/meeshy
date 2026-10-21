@@ -22,9 +22,9 @@ final class ConversationPinHardeningTests: XCTestCase {
     private func makeSUT(
         vault: InMemoryConversationLockVault = InMemoryConversationLockVault(),
         biometrics: StubBiometricUnlocker = StubBiometricUnlocker(),
-        clock: TestClock? = nil
-    ) -> (sut: ConversationLockManager, vault: InMemoryConversationLockVault, clock: TestClock) {
-        let clock = clock ?? TestClock(now: start)
+        clock: PinLockClock? = nil
+    ) -> (sut: ConversationLockManager, vault: InMemoryConversationLockVault, clock: PinLockClock) {
+        let clock = clock ?? PinLockClock(now: start)
         let sut = ConversationLockManager(
             vault: vault,
             defaults: UserDefaults(suiteName: "pin-hardening-\(UUID().uuidString)")!,
@@ -138,7 +138,8 @@ final class ConversationPinHardeningTests: XCTestCase {
         let vault = InMemoryConversationLockVault(items: [lockKey: legacySHA256Hex("2468")])
         let defaults = UserDefaults(suiteName: "pin-legacy-\(UUID().uuidString)")!
         defaults.set([conversationId], forKey: "meeshy.lockedConversationIds")
-        let sut = ConversationLockManager(vault: vault, defaults: defaults, biometrics: StubBiometricUnlocker(), iterations: 1_000, now: { self.start })
+        let start = self.start
+        let sut = ConversationLockManager(vault: vault, defaults: defaults, biometrics: StubBiometricUnlocker(), iterations: 1_000, now: { start })
 
         XCTAssertTrue(sut.isLocked(conversationId))
         XCTAssertEqual(sut.attemptLock(conversationId: conversationId, pin: "1357"), .rejected(retryIn: 0))
@@ -327,6 +328,8 @@ final class ConversationPinHardeningTests: XCTestCase {
 
 @MainActor
 final class InMemoryConversationLockVault: ConversationLockVault {
+    nonisolated deinit {}
+
     private(set) var items: [String: String]
 
     init(items: [String: String] = [:]) {
@@ -349,6 +352,8 @@ final class InMemoryConversationLockVault: ConversationLockVault {
 
 @MainActor
 final class StubBiometricUnlocker: BiometricUnlocking {
+    nonisolated deinit {}
+
     var kind: BiometricKind? = .faceID
     var enrollment: Data? = Data([1, 2, 3])
     var accepts = true
@@ -368,8 +373,7 @@ final class StubBiometricUnlocker: BiometricUnlocking {
     }
 }
 
-@MainActor
-final class TestClock {
+private final class PinLockClock {
     var now: Date
 
     init(now: Date) {

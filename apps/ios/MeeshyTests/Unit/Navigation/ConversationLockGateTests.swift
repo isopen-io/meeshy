@@ -114,6 +114,22 @@ final class ConversationLockGateTests: XCTestCase {
         XCTAssertEqual(router.pendingLockedOpening?.conversation.id, lockedId)
     }
 
+    /// Appui long sur le toast d'une notification : l'aperçu monte le fil en
+    /// lecture sans la porte du routeur — jamais pour une conversation
+    /// verrouillée, où l'appui long se replie sur le toucher, qui la passe.
+    func test_mayPreview_lockedConversation_refusesTheNotificationPreview() {
+        let locks = ConversationLockManager(
+            vault: InMemoryConversationLockVault(),
+            defaults: UserDefaults(suiteName: "lock-preview-\(UUID().uuidString)")!,
+            biometrics: StubBiometricUnlocker(),
+            iterations: 1_000
+        )
+        locks.setLock(conversationId: lockedId, pin: "1234")
+
+        XCTAssertFalse(ConversationOpenRoute.mayPreview(lockedId, locks: locks))
+        XCTAssertTrue(ConversationOpenRoute.mayPreview(openId, locks: locks))
+    }
+
     // MARK: - Après la porte
 
     func test_resume_afterThePin_opensTheWithheldConversation() {
@@ -221,7 +237,7 @@ final class ConversationLockGateTests: XCTestCase {
         }
         return try enumerator.compactMap { $0 as? URL }
             .filter { $0.pathExtension == "swift" }
-            .map { ($0.lastPathComponent, try String(contentsOf: $0, encoding: .utf8)) }
+            .map { (name: $0.lastPathComponent, text: try String(contentsOf: $0, encoding: .utf8)) }
     }
 
     /// Aucune vue n'empile une conversation en écrivant la pile elle-même : la
@@ -231,10 +247,25 @@ final class ConversationLockGateTests: XCTestCase {
 
         let offenders = try swiftSources()
             .filter { $0.name != "Router.swift" }
-            .filter { source in forbidden.contains { source.text.contains($0) } }
+            .filter { source in
+                source.text.split(separator: "\n")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.hasPrefix("//") }
+                    .contains { line in forbidden.contains { line.contains($0) } }
+            }
             .map(\.name)
 
         XCTAssertEqual(offenders, [], "ces fichiers posent une conversation sans passer la porte du verrou")
+    }
+
+    /// Les deux racines consultent le verrou avant l'aperçu d'un toast.
+    func test_sources_bothRootsAskTheLockBeforeANotificationPreview() throws {
+        let sources = try swiftSources()
+        for file in ["RootView.swift", "iPadRootView+Navigation.swift"] {
+            let source = try XCTUnwrap(sources.first { $0.name == file }?.text, file)
+            let start = try XCTUnwrap(source.range(of: "func openNotificationPreview(for event: SocketNotificationEvent) {"), file)
+            XCTAssertTrue(source[start.upperBound...].prefix(250).contains("ConversationOpenRoute.mayPreview(conversationId)"), file)
+        }
     }
 
     /// iPad : toutes les ouvertures directes de la racine (`openConversation`)
@@ -251,6 +282,8 @@ final class ConversationLockGateTests: XCTestCase {
 /// Le verrou, réduit à la question que le routeur lui pose.
 @MainActor
 final class StubConversationLockGate: ConversationLockGating {
+    nonisolated deinit {}
+
     private let locked: Set<String>
     private var passes: Set<String> = []
 

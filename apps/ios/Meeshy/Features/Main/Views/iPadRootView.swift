@@ -266,8 +266,10 @@ struct iPadRootView: View {
     private func installRouterCallbacks() {
 
         router.onRouteRequested = { route in
+            // Le routeur a déjà refermé les surfaces et passé la porte du verrou
+            // PIN (#11386) : la conversation se pose, sans seconde porte.
             if case .conversation(let conv) = route {
-                openConversation(conv)
+                placeConversation(conv)
                 return true
             }
             if let root = rightPanelRoute, GameNavigationMap.stacks(route, over: root) {
