@@ -198,7 +198,7 @@ export function MagicLinkPanel({
           <>
             {expired ? (
               <p role="alert" style={{ color: 'var(--ios-error)' }}>
-                Lien expiré, renvoyez-en un nouveau
+                {translate(language, 'magicLink.linkExpired')}
               </p>
             ) : (
               <p
@@ -231,13 +231,13 @@ export function MagicLinkPanel({
         <button
           type="button"
           disabled={(!expired && remaining > 0) || submitting || !online}
-          aria-label="Renvoyer le lien"
+          aria-label={translate(language, 'magicLink.resend.label')}
           onClick={send}
           className="inline-flex items-center gap-2 font-semibold text-title"
           style={{ minHeight: 44, color: expired ? 'var(--ios-indigo-400)' : 'var(--color-ios-ink-2)' }}
         >
           <GlyphSvg glyph={AUTH_GLYPHS.arrowClockwise} size={18} />
-          Renvoyer
+          {translate(language, 'magicLink.resend')}
         </button>
 
         <button
@@ -246,7 +246,7 @@ export function MagicLinkPanel({
           className="text-title font-medium"
           style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
         >
-          Annuler
+          {translate(language, 'magicLink.cancel')}
         </button>
       </EmailSentNotice>
     );
