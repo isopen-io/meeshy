@@ -12,9 +12,14 @@
  */
 import { parseMediaRef } from '@meeshy/shared/api/media-ref';
 
+/**
+ * Une valeur de colonne : une chaîne (adresse, référence), ou un document JSON
+ * (variantes d'image, pistes TTS de `translations`, scènes de story) que le
+ * balayage fouille en profondeur.
+ */
 export type StaticUploadUrlRow = {
   readonly id: string;
-  readonly values: Readonly<Record<string, string | null>>;
+  readonly values: Readonly<Record<string, unknown>>;
 };
 
 export type StaticUploadUrlStore = {
@@ -67,6 +72,43 @@ export function isStaticUploadUrl(value: string): boolean {
   }
 }
 
+/** Assez pour toute scène de story réelle ; borne une donnée cyclique ou pathologique. */
+const PROFONDEUR_MAX = 32;
+
+function parsedJsonText(value: string): unknown {
+  const debut = value.trimStart()[0];
+  if (debut !== '{' && debut !== '[') return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * La PREMIÈRE adresse `static.<domaine>/uploads` que porte une valeur de
+ * colonne, ou rien. Une colonne JSON est fouillée en profondeur — tableaux,
+ * objets, et un JSON stocké en texte —, parce qu'une variante d'image, une
+ * piste TTS ou un média de scène y grave son adresse aussi sûrement qu'un
+ * `fileUrl` : un compte limité aux colonnes texte rendrait 0 pendant que ces
+ * médias cassent au retrait.
+ */
+export function firstStaticUploadUrl(value: unknown, profondeur = 0): string | null {
+  if (profondeur > PROFONDEUR_MAX) return null;
+  if (typeof value === 'string') {
+    if (isStaticUploadUrl(value)) return value;
+    const json = parsedJsonText(value);
+    return json === undefined ? null : firstStaticUploadUrl(json, profondeur + 1);
+  }
+  if (value === null || typeof value !== 'object') return null;
+  const enfants: readonly unknown[] = Array.isArray(value) ? value : Object.values(value);
+  for (const enfant of enfants) {
+    const trouvee = firstStaticUploadUrl(enfant, profondeur + 1);
+    if (trouvee !== null) return trouvee;
+  }
+  return null;
+}
+
 type StoreScan = { readonly tally: StaticUploadUrlTally; readonly exemples: readonly string[] };
 
 async function scanStore(store: StaticUploadUrlStore, exemplesRestants: number): Promise<StoreScan> {
@@ -81,14 +123,14 @@ async function scanStore(store: StaticUploadUrlStore, exemplesRestants: number):
 
     for (const row of rows) {
       scanned += 1;
-      const touchees = store.fields.filter((field) => {
-        const value = row.values[field];
-        return typeof value === 'string' && isStaticUploadUrl(value);
+      const touchees = store.fields.flatMap((field) => {
+        const adresse = firstStaticUploadUrl(row.values[field]);
+        return adresse === null ? [] : [{ field, adresse }];
       });
-      parColonne = touchees.reduce((acc, field) => ({ ...acc, [field]: acc[field] + 1 }), parColonne);
+      parColonne = touchees.reduce((acc, { field }) => ({ ...acc, [field]: (acc[field] ?? 0) + 1 }), parColonne);
       exemples = [
         ...exemples,
-        ...touchees.map((field) => `${store.name}.${field}  ${row.id}  ${row.values[field]}`),
+        ...touchees.map(({ field, adresse }) => `${store.name}.${field}  ${row.id}  ${adresse}`),
       ].slice(0, exemplesRestants);
     }
     cursor = rows[rows.length - 1]!.id;

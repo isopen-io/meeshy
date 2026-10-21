@@ -443,19 +443,26 @@ final class ProgressionConceptGuardTests: XCTestCase {
         XCTAssertEqual(try catalog(prefix: "game.mint.")["game.mint.chip.glory"]?["fr"]?.hasPrefix("+"), true, "le « + » de la Gloire reste")
     }
 
-    /// La fiche pose les quatre réponses et la phrase d'état ; la carte porte la phrase d'état.
-    func test_theSheetAndTheCard_showTheStateAndTheFourAnswers() throws {
+    /// La fiche pose les quatre réponses, puis « Où j'en suis » : la phrase d'état d'abord, puis les lignes — l'une
+    /// et l'autre lues sur `ProgressionConceptFiche`, qui ne redit rien de ce que l'écran montre (#11180). La carte
+    /// n'a plus de phrase d'état : un nom, une valeur, une ligne.
+    func test_theSheetShowsTheFourAnswersAndItsWhere_theCardThreeStoreys() throws {
         let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
         for piece in ["ConceptText.what(concept)", "ConceptText.why(concept)", "ConceptText.how(concept)", "ConceptText.use(concept)",
-                      "ProgressionConceptModel.state(concept, progress: progress, game: game)", "section(ConceptText.ficheUse)"] {
+                      "ProgressionConceptFiche.make(concept, progress: progress, game: game)", "section(ConceptText.ficheUse)"] {
             XCTAssertTrue(fiche.contains(piece), "« \(piece) » n'est plus dans la fiche")
         }
         let where_ = try XCTUnwrap(fiche.range(of: "section(ConceptText.ficheWhere)"))
-        let stateLine = try XCTUnwrap(fiche.range(of: "sentence(state, strong: true)"))
-        let facts = try XCTUnwrap(fiche.range(of: "ProgressionConceptFacts(facts: facts, concept: concept)"))
+        let stateLine = try XCTUnwrap(fiche.range(of: "sentence(state.text, strong: true)"))
+        let facts = try XCTUnwrap(fiche.range(of: "ProgressionConceptFacts(facts: fiche.facts, concept: concept)"))
         XCTAssertTrue(where_.lowerBound < stateLine.lowerBound && stateLine.lowerBound < facts.lowerBound,
                       "la phrase d'état ouvre « Où j'en suis », avant les lignes")
         let card = try body(of: "struct ProgressionConceptCardView: View {", in: try source("Meeshy/Features/Main/Game/ProgressionConceptViews.swift"))
-        XCTAssertTrue(card.contains("if let state = card.state"), "la carte ne porte plus la phrase d'état")
+        for storey in ["Text(card.name)", "Text(card.value)", "if let line = card.line"] {
+            XCTAssertTrue(card.contains(storey), "la carte ne rend pas « \(storey) »")
+        }
+        for gone in ["card.state", "card.why", "card.how", "ProgressionBar(", "GameChip("] {
+            XCTAssertFalse(card.contains(gone), "la carte rend encore « \(gone) » : la fiche dit le reste")
+        }
     }
 }

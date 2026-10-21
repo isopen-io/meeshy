@@ -24,15 +24,6 @@ export const TUS_CHECKPOINT_STORE_NAME = 'checkpoints';
  * comme iOS) pointe vers une adresse qui répondra 404 — on le lâche avant de le payer. */
 export const TUS_CHECKPOINT_MAX_AGE_MS = 22 * 60 * 60 * 1000;
 
-/** Le média qu'un envoi de fond a terminé pendant que la page était absente — l'accusé de la dernière tranche
- * (`tus-handler.ts:612-652`), rangé par le service worker (`public/sw-background-upload.js`). */
-export type TusFinishedMedia = {
-  readonly postMediaId: string;
-  readonly fileUrl: string;
-  readonly mimeType: string;
-  readonly thumbHash?: string;
-};
-
 export type TusCheckpoint = {
   /** L'adresse de la session, telle que `Location` l'a donnée (résolue contre la base). */
   readonly location: string;
@@ -41,10 +32,6 @@ export type TusCheckpoint = {
   readonly fileSize: number;
   readonly fingerprint: string;
   readonly savedAt: number;
-  /** L'identifiant de l'envoi de fond (Background Fetch) qui porte le reste du fichier, tant qu'il tourne. */
-  readonly background?: string | undefined;
-  /** Posé par le worker quand l'envoi de fond a abouti : la page suivante rend ce média sans réseau. */
-  readonly finished?: TusFinishedMedia | undefined;
 };
 
 export type TusCheckpointStore = {
@@ -63,18 +50,6 @@ export function tusFingerprint(params: {
   return JSON.stringify([base, uploadContext, thumbHash ?? '', file.name, file.size, file.lastModified, file.type]);
 }
 
-const isFinishedMedia = (value: unknown): value is TusFinishedMedia => {
-  if (typeof value !== 'object' || value === null) return false;
-  const row = value as Record<string, unknown>;
-  return (
-    typeof row['postMediaId'] === 'string' &&
-    row['postMediaId'] !== '' &&
-    typeof row['fileUrl'] === 'string' &&
-    typeof row['mimeType'] === 'string' &&
-    (row['thumbHash'] === undefined || typeof row['thumbHash'] === 'string')
-  );
-};
-
 const isCheckpoint = (value: unknown): value is TusCheckpoint => {
   if (typeof value !== 'object' || value === null) return false;
   const row = value as Record<string, unknown>;
@@ -86,9 +61,7 @@ const isCheckpoint = (value: unknown): value is TusCheckpoint => {
     Number.isFinite(row['offset']) &&
     typeof row['fileSize'] === 'number' &&
     Number.isFinite(row['fileSize']) &&
-    typeof row['savedAt'] === 'number' &&
-    (row['background'] === undefined || typeof row['background'] === 'string') &&
-    (row['finished'] === undefined || isFinishedMedia(row['finished']))
+    typeof row['savedAt'] === 'number'
   );
 };
 
