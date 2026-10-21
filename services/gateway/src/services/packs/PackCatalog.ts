@@ -38,9 +38,11 @@ import {
   type PackDomain,
   type PackRegistries,
 } from '@meeshy/shared/types/content-pack';
+import { ownedPackKeys } from '@meeshy/shared/types/pack-ownership';
 import type { PackInstallationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { GameRefusal } from '../game/GameRefusal';
 import { MeeshSpend, type SpendTx } from '../game/MeeshSpend';
+import { PackGrants, type PackAward, type PackAwardOutcome } from './PackGrants';
 
 export type PackViewer = { readonly userId: string; readonly canModerate: boolean };
 
@@ -117,6 +119,9 @@ export type PurchaseOutcome<S> =
   | { readonly kind: 'insufficient'; readonly balance: number }
   | { readonly kind: 'request-id-conflict' };
 
+/** Une possession SANS achat (#11272) : `granted`, ou pourquoi rien n'a été écrit. */
+export type AwardOutcome = { readonly kind: PackAwardOutcome | 'not-found' | 'free' };
+
 /** La ligne de registre rejouée est-elle l'achat de CE pack ? `null` : une autre écriture a gagné la course. */
 const purchasedPack = (meta: unknown): { readonly domain?: unknown; readonly slug?: unknown } | null =>
   typeof meta === 'object' && meta !== null ? (meta as { domain?: unknown; slug?: unknown }) : null;
@@ -159,6 +164,7 @@ export class PackCatalog<S, D extends S> {
   private readonly broadcast: PackInstallationBroadcast | undefined;
   private readonly registries: PackRegistries;
   private readonly spend: MeeshSpend;
+  private readonly grants: PackGrants;
 
   constructor(deps: PackCatalogDeps<S, D>) {
     this.prisma = deps.prisma;
@@ -167,6 +173,7 @@ export class PackCatalog<S, D extends S> {
     this.now = deps.now ?? (() => new Date());
     this.broadcast = deps.broadcast;
     this.spend = deps.spend ?? new MeeshSpend(deps.prisma);
+    this.grants = new PackGrants({ prisma: deps.prisma, now: this.now });
     this.registries = { [deps.spec.domain]: deps.spec.registry.map(({ slug, installedByDefault }) => ({ slug, installedByDefault })) };
   }
 
@@ -257,7 +264,7 @@ export class PackCatalog<S, D extends S> {
           if (owned !== null) throw new PurchaseRefusal('already-owned');
         },
         apply: async (tx: SpendTx) => {
-          await tx.userPackOwnership.create({ data: { userId, packKey: key, priceMeeshes: price, requestId } });
+          await tx.userPackOwnership.create({ data: { userId, packKey: key, source: 'purchase', priceMeeshes: price, requestId } });
           return this.settle(tx, userId, key, true, byDefault);
         },
       });
@@ -281,11 +288,28 @@ export class PackCatalog<S, D extends S> {
     }
   }
 
+  /**
+   * POSSÈDE un pack payant sans l'acheter (#11272, #11252) : par le jeu (une règle
+   * de rang, de trophée ou de saison, évaluée ICI), par un octroi ou un événement.
+   * Idempotent ; un pack gratuit n'a pas de ligne ; posséder n'est pas installer.
+   * Les autres appareils du compte l'apprennent (`owned: true`).
+   */
+  async award(userId: string, slug: string, award: PackAward): Promise<AwardOutcome> {
+    const registry = this.registryPack(slug);
+    const target = registry === undefined && this.spec.community?.priced === true ? await this.spec.community.installable(slug) : null;
+    if (registry === undefined && target === null) return { kind: 'not-found' };
+    if ((registry?.price ?? target?.price) === undefined) return { kind: 'free' };
+    const outcome = await this.grants.award({ userId, pack: { domain: this.domain, slug }, award });
+    if (outcome !== 'granted') return { kind: outcome };
+    const installed = this.installedOf(await this.choices(userId))(slug);
+    this.broadcast?.(userId, { domain: this.domain, slug, installed, owned: true, at: this.now().toISOString() });
+    return { kind: 'granted' };
+  }
+
   /** Les clés de possession du lecteur, lues seulement pour un magasin communautaire à packs payants. */
   private async communityOwnedKeys(userId: string): Promise<ReadonlySet<string> | undefined> {
     if (this.spec.community?.priced !== true) return undefined;
-    const rows = await this.prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } });
-    return new Set(rows.map((row) => row.packKey));
+    return ownedPackKeys(await this.prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } }));
   }
 
   private async communityOwned(userId: string, slug: string): Promise<boolean> {
@@ -296,8 +320,7 @@ export class PackCatalog<S, D extends S> {
   /** La loi de possession pour ce lecteur ; sans pack payant dans le domaine, aucune lecture. */
   private async ownedOf(userId: string): Promise<(pack: RegistryPack<D>) => boolean> {
     if (!this.spec.registry.some((pack) => pack.price !== undefined)) return () => true;
-    const rows = await this.prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } });
-    const keys = new Set(rows.map((row) => row.packKey));
+    const keys = ownedPackKeys(await this.prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } }));
     return (pack) => isPackOwned({ domain: this.domain, slug: pack.slug, price: pack.price }, keys);
   }
 

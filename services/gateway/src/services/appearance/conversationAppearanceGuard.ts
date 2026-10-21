@@ -25,6 +25,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isPackOwned } from '@meeshy/shared/types/content-pack';
+import { ownedPackKeys } from '@meeshy/shared/types/pack-ownership';
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 import { messageProtection } from '@meeshy/shared/utils/message-protection';
 import { parseConversationAppearance, type ConversationAppearance } from '@meeshy/shared/types/conversation-appearance';
@@ -52,8 +53,8 @@ async function designOwned({ prisma, index, userId }: AppearanceGuardParams, pac
   const entry = index.entries('wallpaper').find((candidate) => candidate.slug === pack && !candidate.hidden);
   if (entry === undefined || !index.itemKeys(entry).includes(design)) return false;
   if (entry.price === undefined) return true;
-  const rows = await prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } });
-  return isPackOwned({ domain: 'wallpaper', slug: pack, price: entry.price }, new Set(rows.map((row) => row.packKey)));
+  const owned = ownedPackKeys(await prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } }));
+  return isPackOwned({ domain: 'wallpaper', slug: pack, price: entry.price }, owned);
 }
 
 async function isMember({ prisma, userId, conversationId }: AppearanceGuardParams): Promise<boolean> {
