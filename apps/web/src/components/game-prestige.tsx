@@ -63,7 +63,7 @@ function passValues(level: GamePrestigeProps['level'], score: number, prestige: 
     { fact: 'level_record', label: gameText('game.fact.record'), value: arrow(formatCount(level.record), formatCount(pass.levelRecordAfter)) },
     {
       fact: 'prestige_glory',
-      label: gameText('game.fact.stars'),
+      label: gameText('game.fact.rebirths'),
       value: arrow(formatCount(prestige.stars), formatCount(pass.prestigeAfter)),
       detail: starDetail(prestige, pass.prestigeAfter),
     },

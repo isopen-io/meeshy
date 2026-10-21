@@ -17,8 +17,10 @@
  *
  * Le gateway gèle lastActiveAt à la déconnexion, donc la décroissance
  * vert -> orange -> gris démarre au dernier instant d'activité réelle.
- * Un typing:start reçu vaut activité immédiate : les clients doivent forcer
- * localement isOnline=true + lastActiveAt=now pour l'émetteur.
+ * Un typing:start reçu vaut activité immédiate : les clients rafraîchissent
+ * localement lastActiveAt=now pour l'émetteur, SANS forcer isOnline (#11412) —
+ * un émetteur non connecté décroît alors vert -> orange -> gris comme tout
+ * autre, au lieu de rester vert cinq minutes puis de disparaître.
  */
 
 export type UserPresenceStatus = 'online' | 'away' | 'idle' | 'offline';
