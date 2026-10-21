@@ -54,6 +54,7 @@ final class SendPathGuardTests: XCTestCase {
             "Meeshy/Features/Main/ViewModels/ConversationViewModel+FullscreenReply.swift",
             "Meeshy/Features/Main/ViewModels/ConversationViewModel+WriteRestriction.swift",
             "Meeshy/Features/Main/ViewModels/Conversation/ConversationSendCoordinator.swift",
+            "Meeshy/Features/Main/ViewModels/Conversation/OptimisticMessageStager.swift",
             "Meeshy/Features/Main/Views/ConversationView+AttachmentHandlers.swift",
             "Meeshy/Features/Main/Views/ConversationView+Sticker.swift",
         ]
