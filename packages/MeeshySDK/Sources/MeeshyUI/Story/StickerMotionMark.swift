@@ -90,8 +90,7 @@ public struct StickerMotionPreview: ViewModifier {
             .task(id: animation) {
                 isSettled = false
                 guard let delay = animation.settlesAfter else { return }
-                try? await Task.sleep(for: .seconds(delay))
-                guard !Task.isCancelled else { return }
+                do { try await Task.sleep(for: .seconds(delay)) } catch { return }
                 isSettled = true
             }
         } else {
