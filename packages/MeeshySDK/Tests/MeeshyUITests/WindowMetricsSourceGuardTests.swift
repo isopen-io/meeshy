@@ -30,7 +30,6 @@ final class WindowMetricsSourceGuardTests: XCTestCase {
 
     func test_meeshyUI_confinesTheMainScreenToWindowMetricsAndTheShrinkingDebt() throws {
         let debt: Set<String> = [
-            "SlideMiniPreview.swift",
             "StickerPickerView+Templates.swift",
             "AudioWaveform.swift",
             "VideoFilmstrip.swift",
