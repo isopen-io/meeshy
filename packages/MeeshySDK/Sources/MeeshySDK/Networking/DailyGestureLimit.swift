@@ -90,28 +90,25 @@ extension SocialSocketManager {
 /// Les limites du jour qui ont fait RENONCER la file durable, par identifiant
 /// de mutation : la file ne rejoue pas le geste, et l'écran qui l'a posé dit
 /// pourquoi — l'heure de remise à zéro plutôt qu'un « impossible » muet. Borné.
-public final class DailyGestureLimitLedger: @unchecked Sendable {
+public final class DailyGestureLimitLedger: Sendable {
     public static let shared = DailyGestureLimitLedger()
 
     private static let capacity = 64
-    private let lock = NSLock()
-    private var byMutation: [String: DailyGestureLimit] = [:]
+    private let byMutation = Locked([String: DailyGestureLimit]())
 
     public init() {}
 
     public func record(_ limit: DailyGestureLimit, clientMutationId: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        if byMutation.count >= Self.capacity, let evicted = byMutation.keys.first {
-            byMutation.removeValue(forKey: evicted)
+        byMutation.mutate { table in
+            if table.count >= DailyGestureLimitLedger.capacity, let evicted = table.keys.first {
+                table.removeValue(forKey: evicted)
+            }
+            table[clientMutationId] = limit
         }
-        byMutation[clientMutationId] = limit
     }
 
     /// La limite qui a fait renoncer cette mutation, une seule fois.
     public func take(clientMutationId: String) -> DailyGestureLimit? {
-        lock.lock()
-        defer { lock.unlock() }
-        return byMutation.removeValue(forKey: clientMutationId)
+        byMutation.mutate { $0.removeValue(forKey: clientMutationId) }
     }
 }

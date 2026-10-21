@@ -13,7 +13,7 @@ import MeeshyUI
 
 extension GameText {
     static func visitorTreasury(tier: String) -> String {
-        String(localized: "game2.profile.visitor_treasury", defaultValue: "Trésor : \(tier)", bundle: .main)
+        String(localized: "game2.profile.visitor_treasury", defaultValue: "Héritage : \(tier)", bundle: .main)
     }
 }
 

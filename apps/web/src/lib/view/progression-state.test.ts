@@ -5,14 +5,13 @@ import { PROGRESSION_CONCEPTS, progressionConcepts, type ProgressionConcept } fr
 
 import type { EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { ALL_LEVEL_STEPS, GAME_EXTRAS_TODAY, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { ALL_LEVEL_STEPS, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { interfaceDirection, SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { conceptView } from './progression-concepts';
-import { conceptState } from './progression-state';
+import { conceptState, conceptStateOf } from './progression-state';
 
 /**
  * LA PHRASE D'ÉTAT D'UN CONCEPT (#10540) — retour du porteur : « j'ai 77 099 points, il te manque 1 839
@@ -32,7 +31,6 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-const NOW = new Date(`${GAME_EXTRAS_TODAY}T10:00:00.000Z`);
 const before = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
 const playing: EngagementWithGame = { ...before, game: gameBlockWithExtrasFixture(), mintBadgeLoss: 2 };
 
@@ -188,8 +186,14 @@ describe('chaque concept servi a sa phrase d’état, dans les sept langues', ()
   });
 });
 
-describe('la vue du concept porte la phrase : la carte et la fiche lisent la même', () => {
-  test('conceptView rend la phrase d’état de conceptState', () => {
-    for (const concept of PROGRESSION_CONCEPTS) expect(conceptView(concept, jcnm, NOW).state).toBe(conceptState(concept, jcnm));
+describe('chaque phrase dit les faits qu’elle porte (#11178)', () => {
+  test('une phrase qui enchâsse un chiffre déclare au moins une identité', () => {
+    for (const view of [jcnm, before]) {
+      for (const concept of PROGRESSION_CONCEPTS) {
+        const said = conceptStateOf(concept, view);
+        expect({ concept, text: said?.text ?? null }).toEqual({ concept, text: conceptState(concept, view) });
+        if (said !== null && /\d/.test(said.text)) expect({ concept, declared: said.facts.length > 0 }).toEqual({ concept, declared: true });
+      }
+    }
   });
 });

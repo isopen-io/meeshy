@@ -9,17 +9,17 @@ extension GameText {
     // MARK: La saison passée — mon palmarès
 
     static func archiveSeasonPastTitle(number: String) -> String {
-        String(localized: "game2.archive.season.past_title", defaultValue: "Saison \(number) · terminée", bundle: .main)
+        String(localized: "game2.archive.season.past_title", defaultValue: "Voyage \(number) · terminé", bundle: .main)
     }
 
     /// Une saison ouverte que le bloc gardé ne porte pas encore (#10131).
     static func archiveSeasonCurrentTitle(number: String) -> String {
-        String(localized: "game2.archive.season.current_title", defaultValue: "Saison \(number) · en cours", bundle: .main)
+        String(localized: "game2.archive.season.current_title", defaultValue: "Voyage \(number) · en cours", bundle: .main)
     }
 
     static var archiveSeasonOpenedNote: String {
         String(localized: "game2.archive.season.opened_note",
-               defaultValue: "La saison est ouverte : ton parcours s’affiche dès qu’elle est relue.", bundle: .main)
+               defaultValue: "Le voyage est en cours : ton chemin s’affiche dès qu’il est relu.", bundle: .main)
     }
 
     static func archiveSeasonDates(start: String, end: String) -> String {
@@ -34,29 +34,29 @@ extension GameText {
     }
 
     static var archiveSeasonCupWon: String {
-        String(localized: "game2.archive.season.cup_won", defaultValue: "Parcours terminé : la coupe de saison est à toi.", bundle: .main)
+        String(localized: "game2.archive.season.cup_won", defaultValue: "Voyage accompli : la coupe du voyage est à toi.", bundle: .main)
     }
 
     static var archiveSeasonCupMissed: String {
-        String(localized: "game2.archive.season.cup_missed", defaultValue: "Parcours non terminé : la coupe de saison n’a pas été gagnée.", bundle: .main)
+        String(localized: "game2.archive.season.cup_missed", defaultValue: "Voyage inachevé : la coupe du voyage n’a pas été gagnée.", bundle: .main)
     }
 
     static var archiveSeasonSealOwned: String {
-        String(localized: "game2.archive.season.seal_owned", defaultValue: "Sceau de la saison obtenu.", bundle: .main)
+        String(localized: "game2.archive.season.seal_owned", defaultValue: "Sceau du voyage obtenu.", bundle: .main)
     }
 
     static var archiveSeasonNotPlayed: String {
-        String(localized: "game2.archive.season.not_played", defaultValue: "Tu n’as pas joué cette saison.", bundle: .main)
+        String(localized: "game2.archive.season.not_played", defaultValue: "Tu n’as pas fait ce voyage.", bundle: .main)
     }
 
     // MARK: La semaine passée — mon résultat gravé
 
     static func archiveWeekRank(rank: String) -> String {
-        String(localized: "game2.archive.week.rank", defaultValue: "Rang final : \(rank)", bundle: .main)
+        String(localized: "game2.archive.week.rank", defaultValue: "Place finale : \(rank)", bundle: .main)
     }
 
     static func archiveWeekPoints(points: String) -> String {
-        String(localized: "game2.archive.week.points", defaultValue: "Total de la semaine : \(points)", bundle: .main)
+        String(localized: "game2.archive.week.points", defaultValue: "Étincelles de la semaine : \(points)", bundle: .main)
     }
 
     static var archiveWeekNoCup: String {
@@ -68,7 +68,7 @@ extension GameText {
     }
 
     static var archiveWeekNotPlaced: String {
-        String(localized: "game2.archive.week.not_placed", defaultValue: "Tu n’avais pas de place en ligue cette semaine-là.", bundle: .main)
+        String(localized: "game2.archive.week.not_placed", defaultValue: "Tu n’avais pas de place en joute cette semaine-là.", bundle: .main)
     }
 
     static var archiveWeekPurged: String {
@@ -80,6 +80,6 @@ extension GameText {
     }
 
     static var archiveWeekPrivacy: String {
-        String(localized: "game2.archive.week.privacy", defaultValue: "Seul ton résultat est gardé : les autres membres du groupe ne se relisent pas.", bundle: .main)
+        String(localized: "game2.archive.week.privacy", defaultValue: "Seul ton résultat est gardé : les autres héros de la joute ne se relisent pas.", bundle: .main)
     }
 }

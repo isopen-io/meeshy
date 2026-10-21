@@ -78,7 +78,7 @@ describe('les noms du jeu couvrent tout le catalogue partagé, dans les sept lan
   });
 
   test('les noms sont traduits, pas recopiés du français', () => {
-    expect(levelTierName('etincelle', 'en')).toBe('Ember');
+    expect(levelTierName('etincelle', 'en')).toBe('Spark');
     expect(rankName('voix', 'es')).toBe('Voz');
     expect(treasuryName('coffre', 'de')).not.toBe(treasuryName('coffre', 'fr'));
     expect(flameFormName('soleil', 'ar')).not.toBe(flameFormName('soleil', 'fr'));
@@ -124,7 +124,7 @@ describe('les nombres s’accordent', () => {
   });
   test('un gabarit futur se dit sans casser l’écran', () => {
     expect(missionTitle('gabarit-de-2027', 3, 'fr')).toBe('Un acte du rêve');
-    expect(missionTitle('gabarit-de-2027', 3, 'en')).toBe('Mission of the day');
+    expect(missionTitle('gabarit-de-2027', 3, 'en')).toBe('An act of the dream');
   });
 });
 

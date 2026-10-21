@@ -278,12 +278,28 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
           forwardItems: [item('forward', 'message.menu.forward'), item('exportDiscussion', 'message.menu.exportDiscussion')],
           choices: [],
           subjectLabel: 'Actions',
+          canReact: true,
         },
       }),
       [ownMessage()],
     );
     await mounter.click(document.querySelector<HTMLElement>('.message-menu-list [data-action="forward"]'));
     expect(document.querySelector('.message-menu-list [data-action="exportDiscussion"]') !== null).toBe(true);
+    element.remove();
+  });
+
+  test('réagir refusé (#11206) : le menu se monte SANS rail de réactions', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    await mountSheets(
+      menuOf({
+        menuTarget: { messageId: SERVER_MESSAGE_ID, element, isMine: true },
+        menuData: { items: [], forwardItems: [], choices: [], subjectLabel: 'Actions', canReact: false },
+      }),
+      [ownMessage()],
+    );
+    expect(document.querySelector('[role="menu"]') !== null).toBe(true);
+    expect(document.querySelector('[data-message-menu-rail]')).toBe(null);
     element.remove();
   });
 

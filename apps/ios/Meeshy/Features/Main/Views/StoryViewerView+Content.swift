@@ -163,13 +163,13 @@ extension StoryViewerView {
         neighborPreviewDirection = forward ? 1 : -1
 
         let exitX: CGFloat = forward ? -screenW : screenW
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) {
+        withAnimation(StoryGroupCube.commitAnimation) {
             groupSlide = exitX
         }
 
-        // Swap quand l'arête est quasi à 90° (~96 % de la course du spring) :
-        // la face entrante est alors à ~quelques points de l'identité.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) {
+        // Swap APRÈS la fin de la courbe (#11192) : la face entrante est
+        // exactement à l'identité, la vraie carte la remplace sans saut.
+        DispatchQueue.main.asyncAfter(deadline: .now() + StoryGroupCube.swapDelay) {
             update()
             // Pas de `markCurrentViewed()` ici : l'interlude du nouvel auteur
             // n'est décidé qu'ensuite, par l'`adaptiveOnChange(of:

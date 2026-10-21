@@ -1,0 +1,1668 @@
+{
+  "$format": "{ law, ...paramètres } — la loi de la cérémonie de la frappe (mint-ceremony-plan, mint-ceremony-skip, mint-refusal-reason). Instants en millisecondes entières depuis le toucher. `expected` est la sortie de la loi TypeScript (utils/game/mint-ceremony.ts).",
+  "vectors": [
+    {
+      "_label": "silver : la passerelle répond à temps",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "silver",
+        "mode": "normal"
+      },
+      "expected": {
+        "edition": "silver",
+        "mode": "normal",
+        "grand": false,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "mee",
+              "material": "silver",
+              "count": 1500
+            },
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 170
+            }
+          ],
+          "bursts": [
+            320
+          ],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 4800
+          },
+          "strikes": {
+            "fromMs": 4800,
+            "toMs": 4890
+          },
+          "engrave": {
+            "fromMs": 4890,
+            "toMs": 5070
+          },
+          "dieOff": {
+            "fromMs": 5010,
+            "toMs": 5310
+          },
+          "reveal": {
+            "fromMs": 5140,
+            "toMs": 5940
+          },
+          "ancestors": null,
+          "celebrate": {
+            "fromMs": 5940,
+            "toMs": 6590
+          },
+          "flight": {
+            "fromMs": 6590,
+            "toMs": 7240
+          },
+          "glory": {
+            "fromMs": 7040,
+            "toMs": 7890
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 4800,
+            "impactMs": 4890,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 8040
+      }
+    },
+    {
+      "_label": "gold : la passerelle répond à temps",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "gold",
+        "mode": "normal"
+      },
+      "expected": {
+        "edition": "gold",
+        "mode": "normal",
+        "grand": true,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 1500
+            }
+          ],
+          "bursts": [
+            120,
+            120,
+            420
+          ],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 4800
+          },
+          "strikes": {
+            "fromMs": 4800,
+            "toMs": 6140
+          },
+          "engrave": {
+            "fromMs": 4890,
+            "toMs": 5070
+          },
+          "dieOff": {
+            "fromMs": 6260,
+            "toMs": 6560
+          },
+          "reveal": {
+            "fromMs": 6390,
+            "toMs": 7640
+          },
+          "ancestors": {
+            "fromMs": 6640,
+            "toMs": 7140
+          },
+          "celebrate": {
+            "fromMs": 7640,
+            "toMs": 8840
+          },
+          "flight": {
+            "fromMs": 8840,
+            "toMs": 9490
+          },
+          "glory": {
+            "fromMs": 9290,
+            "toMs": 10140
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 4800,
+            "impactMs": 4890,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 5380,
+            "impactMs": 5470,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 6050,
+            "impactMs": 6140,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 10290
+      }
+    },
+    {
+      "_label": "prism : la passerelle répond à temps",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "prism",
+        "mode": "normal"
+      },
+      "expected": {
+        "edition": "prism",
+        "mode": "normal",
+        "grand": true,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 900
+            },
+            {
+              "from": "mee",
+              "material": "diamond",
+              "count": 950
+            }
+          ],
+          "bursts": [
+            120,
+            120,
+            420
+          ],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 4800
+          },
+          "strikes": {
+            "fromMs": 4800,
+            "toMs": 6190
+          },
+          "engrave": {
+            "fromMs": 4890,
+            "toMs": 5070
+          },
+          "dieOff": {
+            "fromMs": 6310,
+            "toMs": 6610
+          },
+          "reveal": {
+            "fromMs": 6440,
+            "toMs": 7690
+          },
+          "ancestors": {
+            "fromMs": 6690,
+            "toMs": 7190
+          },
+          "celebrate": {
+            "fromMs": 7690,
+            "toMs": 8890
+          },
+          "flight": {
+            "fromMs": 8890,
+            "toMs": 9540
+          },
+          "glory": {
+            "fromMs": 9340,
+            "toMs": 10190
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 4800,
+            "impactMs": 4890,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 5380,
+            "impactMs": 5470,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 6100,
+            "impactMs": 6190,
+            "hitters": [
+              "mee",
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 10340
+      }
+    },
+    {
+      "_label": "silver : la passerelle répond à 6,3 s, le marteau reste levé",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "silver",
+        "mode": "normal",
+        "answeredAtMs": 6300
+      },
+      "expected": {
+        "edition": "silver",
+        "mode": "normal",
+        "grand": false,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "mee",
+              "material": "silver",
+              "count": 1500
+            },
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 170
+            }
+          ],
+          "bursts": [
+            320
+          ],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 6300
+          },
+          "strikes": {
+            "fromMs": 6300,
+            "toMs": 6390
+          },
+          "engrave": {
+            "fromMs": 6390,
+            "toMs": 6570
+          },
+          "dieOff": {
+            "fromMs": 6510,
+            "toMs": 6810
+          },
+          "reveal": {
+            "fromMs": 6640,
+            "toMs": 7440
+          },
+          "ancestors": null,
+          "celebrate": {
+            "fromMs": 7440,
+            "toMs": 8090
+          },
+          "flight": {
+            "fromMs": 8090,
+            "toMs": 8740
+          },
+          "glory": {
+            "fromMs": 8540,
+            "toMs": 9390
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 6300,
+            "impactMs": 6390,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 9540
+      }
+    },
+    {
+      "_label": "gold : la passerelle répond à 6,3 s, le marteau reste levé",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "gold",
+        "mode": "normal",
+        "answeredAtMs": 6300
+      },
+      "expected": {
+        "edition": "gold",
+        "mode": "normal",
+        "grand": true,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 1500
+            }
+          ],
+          "bursts": [
+            120,
+            120,
+            420
+          ],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 6300
+          },
+          "strikes": {
+            "fromMs": 6300,
+            "toMs": 7640
+          },
+          "engrave": {
+            "fromMs": 6390,
+            "toMs": 6570
+          },
+          "dieOff": {
+            "fromMs": 7760,
+            "toMs": 8060
+          },
+          "reveal": {
+            "fromMs": 7890,
+            "toMs": 9140
+          },
+          "ancestors": {
+            "fromMs": 8140,
+            "toMs": 8640
+          },
+          "celebrate": {
+            "fromMs": 9140,
+            "toMs": 10340
+          },
+          "flight": {
+            "fromMs": 10340,
+            "toMs": 10990
+          },
+          "glory": {
+            "fromMs": 10790,
+            "toMs": 11640
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 6300,
+            "impactMs": 6390,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 6880,
+            "impactMs": 6970,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 7550,
+            "impactMs": 7640,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 11790
+      }
+    },
+    {
+      "_label": "prism : la passerelle répond à 6,3 s, le marteau reste levé",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "prism",
+        "mode": "normal",
+        "answeredAtMs": 6300
+      },
+      "expected": {
+        "edition": "prism",
+        "mode": "normal",
+        "grand": true,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 900
+            },
+            {
+              "from": "mee",
+              "material": "diamond",
+              "count": 950
+            }
+          ],
+          "bursts": [
+            120,
+            120,
+            420
+          ],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 6300
+          },
+          "strikes": {
+            "fromMs": 6300,
+            "toMs": 7690
+          },
+          "engrave": {
+            "fromMs": 6390,
+            "toMs": 6570
+          },
+          "dieOff": {
+            "fromMs": 7810,
+            "toMs": 8110
+          },
+          "reveal": {
+            "fromMs": 7940,
+            "toMs": 9190
+          },
+          "ancestors": {
+            "fromMs": 8190,
+            "toMs": 8690
+          },
+          "celebrate": {
+            "fromMs": 9190,
+            "toMs": 10390
+          },
+          "flight": {
+            "fromMs": 10390,
+            "toMs": 11040
+          },
+          "glory": {
+            "fromMs": 10840,
+            "toMs": 11690
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 6300,
+            "impactMs": 6390,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 6880,
+            "impactMs": 6970,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 7600,
+            "impactMs": 7690,
+            "hitters": [
+              "mee",
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 11840
+      }
+    },
+    {
+      "_label": "prisme sur un appareil modeste : moitié moins de particules",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "prism",
+        "mode": "normal",
+        "modest": true
+      },
+      "expected": {
+        "edition": "prism",
+        "mode": "normal",
+        "grand": true,
+        "particles": {
+          "weave": 1300,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 450
+            },
+            {
+              "from": "mee",
+              "material": "diamond",
+              "count": 475
+            }
+          ],
+          "bursts": [
+            60,
+            60,
+            210
+          ],
+          "puff": 35
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 4800
+          },
+          "strikes": {
+            "fromMs": 4800,
+            "toMs": 6190
+          },
+          "engrave": {
+            "fromMs": 4890,
+            "toMs": 5070
+          },
+          "dieOff": {
+            "fromMs": 6310,
+            "toMs": 6610
+          },
+          "reveal": {
+            "fromMs": 6440,
+            "toMs": 7690
+          },
+          "ancestors": {
+            "fromMs": 6690,
+            "toMs": 7190
+          },
+          "celebrate": {
+            "fromMs": 7690,
+            "toMs": 8890
+          },
+          "flight": {
+            "fromMs": 8890,
+            "toMs": 9540
+          },
+          "glory": {
+            "fromMs": 9340,
+            "toMs": 10190
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 4800,
+            "impactMs": 4890,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 5380,
+            "impactMs": 5470,
+            "hitters": [
+              "meo"
+            ],
+            "final": false
+          },
+          {
+            "atMs": 6100,
+            "impactMs": 6190,
+            "hitters": [
+              "mee",
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 10340
+      }
+    },
+    {
+      "_label": "argent : une réponse avant le marteau ne change rien",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "silver",
+        "mode": "normal",
+        "answeredAtMs": 420
+      },
+      "expected": {
+        "edition": "silver",
+        "mode": "normal",
+        "grand": false,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "mee",
+              "material": "silver",
+              "count": 1500
+            },
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 170
+            }
+          ],
+          "bursts": [
+            320
+          ],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 4800
+          },
+          "strikes": {
+            "fromMs": 4800,
+            "toMs": 4890
+          },
+          "engrave": {
+            "fromMs": 4890,
+            "toMs": 5070
+          },
+          "dieOff": {
+            "fromMs": 5010,
+            "toMs": 5310
+          },
+          "reveal": {
+            "fromMs": 5140,
+            "toMs": 5940
+          },
+          "ancestors": null,
+          "celebrate": {
+            "fromMs": 5940,
+            "toMs": 6590
+          },
+          "flight": {
+            "fromMs": 6590,
+            "toMs": 7240
+          },
+          "glory": {
+            "fromMs": 7040,
+            "toMs": 7890
+          }
+        },
+        "strikes": [
+          {
+            "atMs": 4800,
+            "impactMs": 4890,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 8040
+      }
+    },
+    {
+      "_label": "refus rapide : l’Ombre se dit au plus tôt à 1,5 s",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "silver",
+        "mode": "refused",
+        "answeredAtMs": 300
+      },
+      "expected": {
+        "edition": "silver",
+        "mode": "refused",
+        "grand": false,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "mee",
+              "material": "silver",
+              "count": 1500
+            },
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 170
+            }
+          ],
+          "bursts": [],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": null,
+          "dust": null,
+          "blank": null,
+          "descent": null,
+          "places": null,
+          "die": null,
+          "windup": null,
+          "hold": null,
+          "strikes": null,
+          "engrave": null,
+          "dieOff": null,
+          "reveal": null,
+          "ancestors": null,
+          "celebrate": null,
+          "flight": null,
+          "glory": null
+        },
+        "strikes": [],
+        "refusal": {
+          "atMs": 1500,
+          "rewind": {
+            "fromMs": 1500,
+            "toMs": 2650
+          },
+          "rewindToMs": 350,
+          "shadowIn": {
+            "fromMs": 1500,
+            "toMs": 2200
+          },
+          "shadowOut": {
+            "fromMs": 3150,
+            "toMs": 3750
+          },
+          "sayMs": 2800
+        },
+        "endMs": 5300
+      }
+    },
+    {
+      "_label": "refus pendant la poussière",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "gold",
+        "mode": "refused",
+        "answeredAtMs": 2600
+      },
+      "expected": {
+        "edition": "gold",
+        "mode": "refused",
+        "grand": true,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 1500
+            }
+          ],
+          "bursts": [],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": null,
+          "descent": null,
+          "places": null,
+          "die": null,
+          "windup": null,
+          "hold": null,
+          "strikes": null,
+          "engrave": null,
+          "dieOff": null,
+          "reveal": null,
+          "ancestors": null,
+          "celebrate": null,
+          "flight": null,
+          "glory": null
+        },
+        "strikes": [],
+        "refusal": {
+          "atMs": 2600,
+          "rewind": {
+            "fromMs": 2600,
+            "toMs": 3800
+          },
+          "rewindToMs": 350,
+          "shadowIn": {
+            "fromMs": 2600,
+            "toMs": 3300
+          },
+          "shadowOut": {
+            "fromMs": 4250,
+            "toMs": 4850
+          },
+          "sayMs": 3900
+        },
+        "endMs": 6400
+      }
+    },
+    {
+      "_label": "refus tardif, marteau levé : le flan se dénoue aussi",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "prism",
+        "mode": "refused",
+        "answeredAtMs": 6000
+      },
+      "expected": {
+        "edition": "prism",
+        "mode": "refused",
+        "grand": true,
+        "particles": {
+          "weave": 2600,
+          "dust": [
+            {
+              "from": "meo",
+              "material": "gold",
+              "count": 900
+            },
+            {
+              "from": "mee",
+              "material": "diamond",
+              "count": 950
+            }
+          ],
+          "bursts": [],
+          "puff": 70
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 400
+          },
+          "emit": {
+            "fromMs": 350,
+            "toMs": 1400
+          },
+          "braid": {
+            "fromMs": 350,
+            "toMs": 2200
+          },
+          "tighten": {
+            "fromMs": 2000,
+            "toMs": 2550
+          },
+          "dust": {
+            "fromMs": 2200,
+            "toMs": 2900
+          },
+          "blank": {
+            "fromMs": 3300,
+            "toMs": 3800
+          },
+          "descent": {
+            "fromMs": 3800,
+            "toMs": 4200
+          },
+          "places": {
+            "fromMs": 3950,
+            "toMs": 4300
+          },
+          "die": {
+            "fromMs": 4150,
+            "toMs": 4450
+          },
+          "windup": {
+            "fromMs": 4400,
+            "toMs": 4750
+          },
+          "hold": {
+            "fromMs": 4750,
+            "toMs": 6000
+          },
+          "strikes": null,
+          "engrave": null,
+          "dieOff": null,
+          "reveal": null,
+          "ancestors": null,
+          "celebrate": null,
+          "flight": null,
+          "glory": null
+        },
+        "strikes": [],
+        "refusal": {
+          "atMs": 6000,
+          "rewind": {
+            "fromMs": 6000,
+            "toMs": 7200
+          },
+          "rewindToMs": 350,
+          "shadowIn": {
+            "fromMs": 6000,
+            "toMs": 6700
+          },
+          "shadowOut": {
+            "fromMs": 7650,
+            "toMs": 8250
+          },
+          "sayMs": 7300
+        },
+        "endMs": 9800
+      }
+    },
+    {
+      "_label": "silver : animations réduites, un fondu",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "silver",
+        "mode": "reduced"
+      },
+      "expected": {
+        "edition": "silver",
+        "mode": "reduced",
+        "grand": false,
+        "particles": {
+          "weave": 0,
+          "dust": [],
+          "bursts": [],
+          "puff": 0
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 260
+          },
+          "emit": null,
+          "braid": null,
+          "tighten": null,
+          "dust": null,
+          "blank": null,
+          "descent": null,
+          "places": null,
+          "die": null,
+          "windup": null,
+          "hold": null,
+          "strikes": null,
+          "engrave": null,
+          "dieOff": null,
+          "reveal": {
+            "fromMs": 0,
+            "toMs": 260
+          },
+          "ancestors": null,
+          "celebrate": {
+            "fromMs": 260,
+            "toMs": 2600
+          },
+          "flight": null,
+          "glory": null
+        },
+        "strikes": [
+          {
+            "atMs": 0,
+            "impactMs": 0,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 2600
+      }
+    },
+    {
+      "_label": "gold : animations réduites, un fondu",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "gold",
+        "mode": "reduced"
+      },
+      "expected": {
+        "edition": "gold",
+        "mode": "reduced",
+        "grand": true,
+        "particles": {
+          "weave": 0,
+          "dust": [],
+          "bursts": [],
+          "puff": 0
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 260
+          },
+          "emit": null,
+          "braid": null,
+          "tighten": null,
+          "dust": null,
+          "blank": null,
+          "descent": null,
+          "places": null,
+          "die": null,
+          "windup": null,
+          "hold": null,
+          "strikes": null,
+          "engrave": null,
+          "dieOff": null,
+          "reveal": {
+            "fromMs": 0,
+            "toMs": 260
+          },
+          "ancestors": null,
+          "celebrate": {
+            "fromMs": 260,
+            "toMs": 2600
+          },
+          "flight": null,
+          "glory": null
+        },
+        "strikes": [
+          {
+            "atMs": 0,
+            "impactMs": 0,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 2600
+      }
+    },
+    {
+      "_label": "prism : animations réduites, un fondu",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "prism",
+        "mode": "reduced"
+      },
+      "expected": {
+        "edition": "prism",
+        "mode": "reduced",
+        "grand": true,
+        "particles": {
+          "weave": 0,
+          "dust": [],
+          "bursts": [],
+          "puff": 0
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 260
+          },
+          "emit": null,
+          "braid": null,
+          "tighten": null,
+          "dust": null,
+          "blank": null,
+          "descent": null,
+          "places": null,
+          "die": null,
+          "windup": null,
+          "hold": null,
+          "strikes": null,
+          "engrave": null,
+          "dieOff": null,
+          "reveal": {
+            "fromMs": 0,
+            "toMs": 260
+          },
+          "ancestors": null,
+          "celebrate": {
+            "fromMs": 260,
+            "toMs": 2600
+          },
+          "flight": null,
+          "glory": null
+        },
+        "strikes": [
+          {
+            "atMs": 0,
+            "impactMs": 0,
+            "hitters": [
+              "mee",
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 2600
+      }
+    },
+    {
+      "_label": "animations réduites : la pièce attend la réponse",
+      "input": {
+        "law": "mint-ceremony-plan",
+        "edition": "silver",
+        "mode": "reduced",
+        "answeredAtMs": 900
+      },
+      "expected": {
+        "edition": "silver",
+        "mode": "reduced",
+        "grand": false,
+        "particles": {
+          "weave": 0,
+          "dust": [],
+          "bursts": [],
+          "puff": 0
+        },
+        "phases": {
+          "open": {
+            "fromMs": 0,
+            "toMs": 260
+          },
+          "emit": null,
+          "braid": null,
+          "tighten": null,
+          "dust": null,
+          "blank": null,
+          "descent": null,
+          "places": null,
+          "die": null,
+          "windup": null,
+          "hold": null,
+          "strikes": null,
+          "engrave": null,
+          "dieOff": null,
+          "reveal": {
+            "fromMs": 900,
+            "toMs": 1160
+          },
+          "ancestors": null,
+          "celebrate": {
+            "fromMs": 1160,
+            "toMs": 3500
+          },
+          "flight": null,
+          "glory": null
+        },
+        "strikes": [
+          {
+            "atMs": 900,
+            "impactMs": 900,
+            "hitters": [
+              "meo"
+            ],
+            "final": true
+          }
+        ],
+        "refusal": null,
+        "endMs": 3500
+      }
+    },
+    {
+      "_label": "toucher pendant le tissage : l’état final",
+      "input": {
+        "law": "mint-ceremony-skip",
+        "edition": "gold",
+        "mode": "normal",
+        "atMs": 1200
+      },
+      "expected": {
+        "toMs": 10290
+      }
+    },
+    {
+      "_label": "toucher après la fin : rien ne recule",
+      "input": {
+        "law": "mint-ceremony-skip",
+        "edition": "silver",
+        "mode": "normal",
+        "atMs": 9000
+      },
+      "expected": {
+        "toMs": 9000
+      }
+    },
+    {
+      "_label": "toucher pendant un refus",
+      "input": {
+        "law": "mint-ceremony-skip",
+        "edition": "silver",
+        "mode": "refused",
+        "answeredAtMs": 2000,
+        "atMs": 2500
+      },
+      "expected": {
+        "toMs": 5800
+      }
+    },
+    {
+      "_label": "refus MINT_BLOCKED_BY_DEBT",
+      "input": {
+        "law": "mint-refusal-reason",
+        "code": "MINT_BLOCKED_BY_DEBT"
+      },
+      "expected": {
+        "reason": "shadow"
+      }
+    },
+    {
+      "_label": "refus TREASURY_LOCKED",
+      "input": {
+        "law": "mint-refusal-reason",
+        "code": "TREASURY_LOCKED"
+      },
+      "expected": {
+        "reason": "locked"
+      }
+    },
+    {
+      "_label": "refus INSUFFICIENT_POINTS",
+      "input": {
+        "law": "mint-refusal-reason",
+        "code": "INSUFFICIENT_POINTS"
+      },
+      "expected": {
+        "reason": "light"
+      }
+    },
+    {
+      "_label": "refus NETWORK",
+      "input": {
+        "law": "mint-refusal-reason",
+        "code": "NETWORK"
+      },
+      "expected": {
+        "reason": "offline"
+      }
+    },
+    {
+      "_label": "refus PRICE_CHANGED",
+      "input": {
+        "law": "mint-refusal-reason",
+        "code": "PRICE_CHANGED"
+      },
+      "expected": {
+        "reason": "other"
+      }
+    },
+    {
+      "_label": "refus sans code",
+      "input": {
+        "law": "mint-refusal-reason",
+        "code": null
+      },
+      "expected": {
+        "reason": "other"
+      }
+    }
+  ]
+}

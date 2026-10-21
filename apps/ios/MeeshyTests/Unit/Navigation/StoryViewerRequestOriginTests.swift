@@ -58,3 +58,64 @@ final class StoryViewerRequestOriginTests: XCTestCase {
         XCTAssertNil(groupe.postId)
     }
 }
+
+/// **La conversation demande le lecteur par une REQUÊTE** (#11197), comme les
+/// racines : ses deux états (l'avatar de l'en-tête, l'anneau ou la citation
+/// d'une bulle) se projettent en une `StoryViewerRequest` que monte le
+/// couvercle unique.
+@MainActor
+final class ConversationStoryReaderRequestTests: XCTestCase {
+
+    private func overlay(userId: String?, postId: String? = nil, slide: Int = 0,
+                         firstUnviewed: Bool = false) -> ConversationOverlayState {
+        var state = ConversationOverlayState()
+        state.showStoryViewer = true
+        state.storyViewerUserId = userId
+        state.storyViewerPostId = postId
+        state.storyViewerSlideIndex = slide
+        state.storyViewerStartAtFirstUnviewed = firstUnviewed
+        return state
+    }
+
+    private func header(userId: String?) -> ConversationHeaderState {
+        var state = ConversationHeaderState()
+        state.showStoryViewerFromHeader = true
+        state.storyUserIdForHeader = userId
+        return state
+    }
+
+    func test_rienDemandé_aucunLecteur() {
+        XCTAssertNil(ConversationStoryReaderRequest.resolve(header: ConversationHeaderState(),
+                                                            overlay: ConversationOverlayState()))
+    }
+
+    /// La citation d'une réponse à une story nomme une slide précise : elle
+    /// VOYAGE jusqu'au lecteur, avec le post.
+    func test_citationDUneStory_transporteLePostEtLaSlide() throws {
+        let request = try XCTUnwrap(ConversationStoryReaderRequest.resolve(
+            header: ConversationHeaderState(),
+            overlay: overlay(userId: "u1", postId: "p9", slide: 2)
+        ))
+        XCTAssertEqual(request.id, "u1")
+        XCTAssertEqual(request.postId, "p9")
+        XCTAssertEqual(request.initialStoryIndex, 2)
+        XCTAssertTrue(request.singleGroup, "depuis une conversation, on lit UNE personne")
+        XCTAssertFalse(request.startAtFirstUnviewed)
+    }
+
+    func test_avatarDeLEnTête_litLaPersonneÀSaPremièreNonVue() throws {
+        let request = try XCTUnwrap(ConversationStoryReaderRequest.resolve(
+            header: header(userId: "u2"), overlay: ConversationOverlayState()
+        ))
+        XCTAssertEqual(request.id, "u2")
+        XCTAssertTrue(request.singleGroup)
+        XCTAssertTrue(request.startAtFirstUnviewed)
+    }
+
+    /// Sans auteur, l'ancien couvercle s'ouvrait sur « Story introuvable ».
+    func test_sansAuteur_aucunLecteur() {
+        XCTAssertNil(ConversationStoryReaderRequest.resolve(header: header(userId: nil),
+                                                            overlay: overlay(userId: nil)))
+    }
+}
+

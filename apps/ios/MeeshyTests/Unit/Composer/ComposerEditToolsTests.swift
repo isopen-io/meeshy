@@ -195,6 +195,42 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertFalse(ConversationPieceRetouchOpening.abandoned(wasEditing: false, isEditing: true, settled: false))
     }
 
+    /// **Une disparition n'est pas une fermeture** (#11347) : SwiftUI détache puis
+    /// rattache le contenu d'un plein écran sans le détruire. La retouche
+    /// rattachée se réarme et rouvre sa vidéo — sans quoi elle restait noire,
+    /// sans croix ni « Terminé », sur une session éteinte.
+    func test_11347_aRetouchDetachedThenReattached_showsItsVideoAgain() async throws {
+        let choisie = try Self.piece(.video).fileURL
+        let session = ConversationPieceRetouchOpening.session(
+            gallery: MockComposerGallery(),
+            loopPlayerFactory: { _ in MockComposerLoopPlayer(duration: 6, hasAudio: true) })
+        var vie = ConversationPieceRetouchLife()
+        vie.detach()
+        session.disarm()
+        XCTAssertTrue(vie.attach(), "rattachée après une disparition, la retouche se réarme")
+        ConversationPieceRetouchOpening.reattach(session)
+        let ouverte = await ConversationPieceRetouchOpening.open(.video(choisie), in: session)
+        XCTAssertTrue(ouverte)
+        XCTAssertNotEqual(session.stage, .off, "le montage ne peint rien sur une session éteinte")
+        guard case .editing(.video) = session.phase else { return XCTFail("la vidéo est en retouche") }
+        XCTAssertFalse(vie.attach(), "un second rattachement sans disparition ne réarme rien")
+    }
+
+    /// Détachée, la retouche ne répond pas à l'hôte : ni « Abandonner » lu
+    /// dans le désarmement, ni fermeture ; rattachée, elle répond une fois.
+    func test_11347_aDetachedRetouch_neitherSettlesNorReadsItsDisarmAsAnAbandon() {
+        var vie = ConversationPieceRetouchLife()
+        vie.detach()
+        XCTAssertFalse(vie.abandoned(wasEditing: true, isEditing: false),
+                       "le désarmement d'une disparition n'est pas « Abandonner »")
+        XCTAssertFalse(vie.settle(), "une retouche détachée ne ferme rien")
+        _ = vie.attach()
+        XCTAssertTrue(vie.abandoned(wasEditing: true, isEditing: false), "rattachée, « Abandonner » retire la pièce")
+        XCTAssertTrue(vie.settle(), "la première réponse part")
+        XCTAssertFalse(vie.settle(), "une seule réponse à l'hôte")
+        XCTAssertFalse(vie.abandoned(wasEditing: true, isEditing: false), "« Terminé » a déjà répondu")
+    }
+
     func test_11133_tappingAPendingPiece_opensTheCaptureRetouch_withoutTheCamera() throws {
         let toucher = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationView+ComposerAttachments.swift")
         XCTAssertTrue(toucher.contains("openPieceRetouch(attachment.id)"), "toucher une pièce ouvre la retouche de la caméra")

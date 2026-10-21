@@ -15,6 +15,7 @@ import { routeKey, useOptionalRoute } from '@/lib/router';
 import { claimOpenRowSwipe, dismissOpenRowSwipe, releaseOpenRowSwipe } from '@/lib/view/row-swipe-open';
 import { readingDelta, swipeYieldsTo } from '@/lib/view/swipe';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { impact } from '@/lib/view/haptics';
 
 import { RowActionGlyph } from './row-actions';
 
@@ -61,11 +62,6 @@ type Gesture = {
   readonly widths: RowSwipeWidths;
   readonly engaged: boolean;
   readonly samples: readonly Sample[];
-};
-
-const vibrate = (ms: number): void => {
-  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
-  navigator.vibrate(ms);
 };
 
 const directionOf = (element: Element): 'ltr' | 'rtl' => {
@@ -211,7 +207,7 @@ export function useConversationRowSwipe(sidesOf: () => RowSwipeSides) {
       swallowClickUntil.current = Date.now() + SWALLOW_CLICK_MS;
       const dx = readingDelta(event.clientX - current.x, current.direction);
       const target = rowSwipeSettle({ base: current.base, dx, velocity: velocityOf(current.samples), widths: current.widths });
-      if (target !== current.base) vibrate(10);
+      if (target !== current.base) impact('light');
       settle(target);
     },
     [settle],

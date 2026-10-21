@@ -23,7 +23,7 @@ final class MediaPlaybackPositionSeedTests: XCTestCase {
 
     func test_aucunePositionLocale_sèmeDepuisLeServeur() {
         XCTAssertEqual(
-            ConversationViewModel.seedResumePositionSeconds(positionMs: 4_500, localPositionSeconds: nil),
+            MediaConsumptionSeeder.resumePositionSeconds(positionMs: 4_500, localPositionSeconds: nil),
             4.5
         )
     }
@@ -33,7 +33,7 @@ final class MediaPlaybackPositionSeedTests: XCTestCase {
     /// le téléphone, on reprend sur l'iPad qu'on avait déjà ouvert une fois.
     func test_leServeurPlusAVANCÉ_metÀJourUnePositionLocaleDéjàPosée() {
         XCTAssertEqual(
-            ConversationViewModel.seedResumePositionSeconds(positionMs: 90_000, localPositionSeconds: 12),
+            MediaConsumptionSeeder.resumePositionSeconds(positionMs: 90_000, localPositionSeconds: 12),
             90
         )
     }
@@ -42,7 +42,7 @@ final class MediaPlaybackPositionSeedTests: XCTestCase {
 
     func test_unePositionLocalePlusAvancée_nEstJAMAISReculée() {
         XCTAssertNil(
-            ConversationViewModel.seedResumePositionSeconds(positionMs: 12_000, localPositionSeconds: 90)
+            MediaConsumptionSeeder.resumePositionSeconds(positionMs: 12_000, localPositionSeconds: 90)
         )
     }
 
@@ -50,7 +50,7 @@ final class MediaPlaybackPositionSeedTests: XCTestCase {
         // Écrire la même valeur ne changerait rien et ferait battre le magasin
         // pour rien à chaque ouverture de conversation.
         XCTAssertNil(
-            ConversationViewModel.seedResumePositionSeconds(positionMs: 30_000, localPositionSeconds: 30)
+            MediaConsumptionSeeder.resumePositionSeconds(positionMs: 30_000, localPositionSeconds: 30)
         )
     }
 
@@ -58,16 +58,16 @@ final class MediaPlaybackPositionSeedTests: XCTestCase {
 
     func test_aucunePositionServeur_nÉcritRien() {
         XCTAssertNil(
-            ConversationViewModel.seedResumePositionSeconds(positionMs: nil, localPositionSeconds: nil)
+            MediaConsumptionSeeder.resumePositionSeconds(positionMs: nil, localPositionSeconds: nil)
         )
         XCTAssertNil(
-            ConversationViewModel.seedResumePositionSeconds(positionMs: nil, localPositionSeconds: 42)
+            MediaConsumptionSeeder.resumePositionSeconds(positionMs: nil, localPositionSeconds: 42)
         )
     }
 
     func test_positionServeurNULLE_nÉcritRien() {
         XCTAssertNil(
-            ConversationViewModel.seedResumePositionSeconds(positionMs: 0, localPositionSeconds: nil)
+            MediaConsumptionSeeder.resumePositionSeconds(positionMs: 0, localPositionSeconds: nil)
         )
     }
 
@@ -77,10 +77,10 @@ final class MediaPlaybackPositionSeedTests: XCTestCase {
     /// 5 s de local doivent donc gagner contre 4 500 ms de serveur.
     func test_lesDeuxGrandeursSeComparentDansLaMÊMEUnité() {
         XCTAssertNil(
-            ConversationViewModel.seedResumePositionSeconds(positionMs: 4_500, localPositionSeconds: 5)
+            MediaConsumptionSeeder.resumePositionSeconds(positionMs: 4_500, localPositionSeconds: 5)
         )
         XCTAssertEqual(
-            ConversationViewModel.seedResumePositionSeconds(positionMs: 5_500, localPositionSeconds: 5),
+            MediaConsumptionSeeder.resumePositionSeconds(positionMs: 5_500, localPositionSeconds: 5),
             5.5
         )
     }

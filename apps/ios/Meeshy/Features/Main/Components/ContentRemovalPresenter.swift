@@ -111,44 +111,6 @@ enum ContentRemovalOffer {
     }
 }
 
-/// **Retirer une SÉLECTION de messages** (#11159) : UN motif pour les messages des autres, les siens
-/// partent pour tous sans motif. Les non-envoyés se retirent localement, toute la sélection envoyée
-/// s'efface aussitôt, puis chaque refus ne ramène que son message ; le dernier refus est rapporté.
-/// En ligne seulement, comme `removeMessage`. Hors du view-model : une responsabilité, un type.
-@MainActor
-struct ConversationSelectionRemoval {
-    let viewModel: ConversationViewModel
-
-    func run(_ ids: Set<String>, reason: String) async {
-        guard viewModel.networkMonitor.isOnline else {
-            viewModel.error = String(localized: "moderation.removal.offline", defaultValue: "Connectez-vous pour retirer ce contenu.", bundle: .main)
-            return
-        }
-        let selected = viewModel.messages.filter { ids.contains($0.id) }
-        let unsent = selected.filter { $0.isMe && $0.deliveryStatus == .failed }
-        let sent = selected.filter { !($0.isMe && $0.deliveryStatus == .failed) }
-        for message in unsent { await viewModel.deleteMessage(messageId: message.id, mode: .everyone) }
-        let deletedAt = Date()
-        for message in sent {
-            try? await viewModel.messagePersistence.markDeleted(localId: message.id, deletedAt: deletedAt)
-            StarredMessagesStore.shared.remove(messageId: viewModel.serverId(for: message.id))
-        }
-        var refusal: Error?
-        for message in sent {
-            do {
-                try await viewModel.messageService.delete(
-                    conversationId: viewModel.conversationId, messageId: viewModel.serverId(for: message.id),
-                    reason: message.isMe ? nil : reason
-                )
-            } catch {
-                try? await viewModel.messagePersistence.markUndeleted(localId: message.id)
-                refusal = error
-            }
-        }
-        if let refusal { viewModel.error = viewModel.userFacingMessage(for: refusal) }
-    }
-}
-
 /// Le contrôleur présenté, tenu FAIBLEMENT : la feuille le ferme sans le retenir.
 private final class RemovalPresentedHost {
     weak var controller: UIViewController?

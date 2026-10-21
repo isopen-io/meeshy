@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { SCENE_ENTER_DURATION_MS, SCENE_FLATTEN_DURATION_MS, SCENE_REST_DELAY_MS } from '@/lib/reading-mode/metrics';
+import { trackVisibleRows } from '@/lib/view/visible-rows';
+
+/**
+ * Le MOUVEMENT de la liste s'importe d'un seul lieu : la perspective au
+ * défilement (`useScene`, ci-dessous) et le glissement d'une remontée en tête
+ * (`useListReorderFlip`, #11207), qui vit dans `lib/view` parce qu'il ne
+ * connaît rien de la Lentille.
+ */
+export { useListReorderFlip } from '@/lib/view/list-reorder-flip';
 
 import {
   BAND_OFFSET,
@@ -56,7 +65,21 @@ import {
  *    transition CSS posée juste avant l'écriture finale, jamais pendant le
  *    défilement actif — sinon chaque écriture par image serait, elle aussi,
  *    transitionnée, et la perspective prendrait du retard sur le doigt).
+ *
+ * 5. **La passe ne travaille que sur ce qui se VOIT** (#11207). Elle lisait
+ *    et écrivait toutes les rangées `[data-row]` montées : deux cents
+ *    rangées chargées par la pagination, deux cents lectures de géométrie et
+ *    quatre cents écritures par image pour huit rangées à l'écran.
+ *    `trackVisibleRows` (`lib/view/visible-rows.ts`) tient l'ensemble visible
+ *    plus `SCENE_OVERSCAN_PX` de chaque côté — la marge qui laisse une rangée
+ *    recevoir sa perspective AVANT d'entrer à l'écran. Une rangée qui SORT de
+ *    l'ensemble est rendue à l'identité, une fois : hors de l'ensemble, toute
+ *    rangée est plate, et c'est ce qui permet à l'aplatissement de ne toucher,
+ *    lui aussi, que l'ensemble.
  */
+
+/** La marge de la passe, de chaque côté du défileur — deux à trois rangées. */
+export const SCENE_OVERSCAN_PX = 240;
 
 /** Ce que la scène remet à la liste, et qui traverse React. */
 export type Scene = {
@@ -72,6 +95,14 @@ export type Scene = {
 
 const REDUCED_MOTION = () =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const toIdentity = (rank: HTMLElement): void => {
+  const visual = rank.firstElementChild;
+  if (!(visual instanceof HTMLElement)) return;
+  visual.style.transition = '';
+  visual.style.opacity = '1';
+  visual.style.transform = 'translateY(0px) scale(1)';
+};
 
 const flattenTransition = (reduced: boolean): string =>
   reduced ? 'none' : `opacity ${SCENE_FLATTEN_DURATION_MS}ms ease-in-out, transform ${SCENE_FLATTEN_DURATION_MS}ms ease-in-out`;
@@ -91,11 +122,22 @@ export function useScene(frame: { current: HTMLElement | null }): Scene {
 
     const reduced = REDUCED_MOTION();
 
+    const schedule = () => {
+      if (request.current === 0) request.current = requestAnimationFrame(pass);
+    };
+
+    const rows = trackVisibleRows(element, {
+      selector: '[data-row]',
+      overscanPx: SCENE_OVERSCAN_PX,
+      onEnter: schedule,
+      onLeave: (left) => left.forEach(toIdentity),
+    });
+
     const pass = () => {
       request.current = 0;
-      const box = element.getBoundingClientRect();
-      const ranks = element.querySelectorAll<HTMLElement>('[data-row]');
+      const ranks = rows.current();
       if (ranks.length === 0) return;
+      const box = element.getBoundingClientRect();
 
       const focusY = bandCenter({
         frameTop: box.top,
@@ -173,9 +215,7 @@ export function useScene(frame: { current: HTMLElement | null }): Scene {
        * s'arrête d'elle-même dès `currentLevel === 1`, sans minuteur ni
        * boucle permanente.
        */
-      if (levelRef.current === 1 && currentLevel < 1 && request.current === 0) {
-        request.current = requestAnimationFrame(pass);
-      }
+      if (levelRef.current === 1 && currentLevel < 1) schedule();
     };
 
     /**
@@ -188,7 +228,7 @@ export function useScene(frame: { current: HTMLElement | null }): Scene {
       levelRef.current = 0;
       enteredAt.current = null;
       setLevel(0);
-      for (const rank of element.querySelectorAll<HTMLElement>('[data-row]')) {
+      for (const rank of rows.current()) {
         const visual = rank.firstElementChild;
         if (visual instanceof HTMLElement) {
           visual.style.transition = flattenTransition(reduced);
@@ -207,21 +247,22 @@ export function useScene(frame: { current: HTMLElement | null }): Scene {
         // éventuel aplatissement précédent, sans quoi les écritures par
         // image de la passe active seraient, elles aussi, transitionnées —
         // la perspective prendrait du retard sur le doigt.
-        for (const rank of element.querySelectorAll<HTMLElement>('[data-row]')) {
+        for (const rank of rows.current()) {
           const visual = rank.firstElementChild;
           if (visual instanceof HTMLElement) visual.style.transition = '';
         }
       }
       if (rest.current !== null) clearTimeout(rest.current);
       rest.current = setTimeout(flatten, SCENE_REST_DELAY_MS);
-      if (request.current === 0) request.current = requestAnimationFrame(pass);
+      schedule();
     };
 
     element.addEventListener('scroll', onScroll, { passive: true });
     // Une passe initiale : sans elle, rien n'est élu tant qu'on n'a pas défilé.
-    request.current = requestAnimationFrame(pass);
+    schedule();
 
     return () => {
+      rows.stop();
       element.removeEventListener('scroll', onScroll);
       if (request.current !== 0) cancelAnimationFrame(request.current);
       if (rest.current !== null) clearTimeout(rest.current);
