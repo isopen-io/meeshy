@@ -131,7 +131,7 @@ extension MessageSocketManager: CallControlsSocketProviding {
     }
 
     var callControlRoutes: [SocketInboundRoute] {
-        [
+        let controls: [SocketInboundRoute] = [
             route(.callParticipantInvited, CallParticipantInvitedEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.participantInvited(event))
             },
@@ -147,7 +147,8 @@ extension MessageSocketManager: CallControlsSocketProviding {
             route(.callReactionReceived, CallReactionReceivedEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.reactionReceived(event))
             },
-        ] + callLiveFrameRoutes
+        ]
+        return controls + callLiveFrameRoutes
     }
 
     public func inviteCallParticipant(callId: String, userId: String) async throws {
