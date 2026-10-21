@@ -119,6 +119,35 @@ final class ComposerSceneSoundHeaderTests: XCTestCase {
                        "le tracé vit dans la rangée partagée")
     }
 
+    /// **L'onde se dessine à l'échelle de ce qu'elle porte (#9886).** Le champ
+    /// `waveformSamples` est le champ PUBLIÉ : normalisé au pic, linéaire, comme
+    /// le serveur et le web le servent. L'échelle décibel est celle de la MESURE
+    /// (RMS absolu) ; la poser sur le champ publié écrasait les barres vers le
+    /// haut. La rangée lit donc le champ par `WaveformScale.publishedHeight`.
+    func test_laRangee_dessineLeChampPublieALEchelleDuChampPublie() throws {
+        let code = try source("ComposerSoundTraceRow.swift")
+        XCTAssertFalse(code.contains("displayHeight("),
+                       "l'échelle décibel est faite pour un RMS absolu, pas pour le champ publié")
+        XCTAssertFalse(code.contains("AudioWaveform"),
+                       "AudioWaveform est un reliquat : la rangée n'en dépend plus")
+        XCTAssertTrue(code.contains("WaveformScale.publishedHeight("))
+    }
+
+    /// Les trois écritures du champ publié le normalisent au pic, depuis la
+    /// mesure absolue du cache : un seul contrat, tenu aux trois sites.
+    func test_leChampPublie_estEcritNormaliseAuPic_auxTroisSites() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        for chemin in ["packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+ContentMedia.swift",
+                       "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel+PastedAudio.swift",
+                       "packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView+Media.swift"] {
+            let code = AppSourceGuard.stripComments(
+                try String(contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8))
+            XCTAssertTrue(code.contains("WaveformScale.peakNormalized("), "\(chemin) écrit la mesure brute dans le champ publié")
+        }
+    }
+
     // MARK: - La règle de service, inchangée
 
     private func fond() -> StoryAudioPlayerObject {
