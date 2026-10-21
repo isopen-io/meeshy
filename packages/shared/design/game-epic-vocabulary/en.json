@@ -127,12 +127,13 @@
     {
       "pattern": "(?<![\\p{L}\\p{N}])stars?(?![\\p{L}\\p{N}])(?!\\s+fragment)",
       "flags": "iu",
-      "instead": "“strides” (the journey); “ages” (rebirth)",
+      "instead": "“strides” (the journey); “ages” (rebirth); “marks” (a medal)",
       "keys": [
         "game.season.",
         "game.prestige.",
         "game.fact.strides",
-        "game.fact.rebirths"
+        "game.fact.rebirths",
+        "game.badge.stars_label"
       ]
     },
     {
@@ -215,6 +216,14 @@
       "pattern": "\\+\\s*\\S+\\s+Glory(?![\\p{L}\\p{N}])",
       "flags": "u",
       "instead": "“+250 glory”: lowercase in a sentence"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])flames?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“N days” under 🔥: the Flame is the hero’s, never a conversation’s",
+      "keys": [
+        "engagement.pill.streak."
+      ]
     }
   ],
   "names": {
@@ -329,6 +338,8 @@
     "game.gauge.treasury": "Legacy",
     "game.gauge.flame": "Flame",
     "game.fact.strides": "Strides",
-    "game.fact.rebirths": "Rebirths"
+    "game.fact.rebirths": "Rebirths",
+    "game.badge.stars_label": "Marks",
+    "game.badge.ladder_title": "The seven marks"
   }
 }

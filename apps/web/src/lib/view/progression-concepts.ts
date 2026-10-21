@@ -1,5 +1,6 @@
 import { LEAGUE_MIN_LEVEL } from '@meeshy/shared/utils/game/league';
 import { sparksReading } from '@/lib/game/ladder';
+import { meeshDisplayEdition } from '@meeshy/shared/utils/game/mint';
 import { MISSIONS_MIN_LEVEL } from '@meeshy/shared/utils/game/missions';
 import { SHOWCASE_DEFAULT_VISIBILITY } from '@meeshy/shared/utils/game/trophies';
 import { progressionConcepts, type ProgressionConcept } from '@meeshy/shared/utils/progression-layout';
@@ -287,7 +288,7 @@ function meesh(view: EngagementWithGame): Body {
       fact(
         'mint_next',
         gameText('game.fact.next_meesh'),
-        `${gameText('game.mint.number_label', { number: formatCount(mint.number) })} · ${editionName(mint.edition)}`,
+        `${gameText('game.mint.number_label', { number: formatCount(mint.number) })} · ${editionName(meeshDisplayEdition(mint.number))}`,
         about('mint_next'),
       ),
       fact('mint_price', gameText('game.mint.row.price'), pointsLabel(mint.price), about('mint_price')),

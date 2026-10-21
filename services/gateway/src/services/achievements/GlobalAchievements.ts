@@ -15,6 +15,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ACHIEVEMENT_FAMILIES, familyId } from '@meeshy/shared/types/achievement-families';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { prefixRange } from '../../utils/prefix-range';
 import { graveEtAnnonce, type AchievementOrigin } from './AchievementAnnounce';
 
 const log = enhancedLogger.child({ module: 'GlobalAchievements' });
@@ -241,7 +242,7 @@ export class GlobalAchievements {
             where: {
               uploadedBy: event.userId,
               messageId: { not: null },
-              mimeType: { startsWith: `${prefixe}/` },
+              mimeType: prefixRange(`${prefixe}/`),
             },
           });
           return grave(id, n);

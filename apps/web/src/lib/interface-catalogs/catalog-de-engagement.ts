@@ -4,8 +4,8 @@
  * catalogue `catalog-de.ts`, qu'il RÉPAND.
  */
 const deEngagement = {
-  'engagement.pill.streak.one': 'Flamme seit {count} Tag',
-  'engagement.pill.streak.other': 'Flamme seit {count} Tagen',
+  'engagement.pill.streak.one': '{count} Tag',
+  'engagement.pill.streak.other': '{count} Tage',
   'engagement.pill.points.one': '{total} Funke, davon {today} heute',
   'engagement.pill.points.other': '{total} Funken, davon {today} heute',
   'engagement.pill.total.one': '{total} Funke in dieser Unterhaltung gesammelt',

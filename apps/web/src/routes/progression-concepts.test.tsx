@@ -11,6 +11,7 @@ import { gamePrefs } from '@/lib/game/preferences';
 import { loadGameCatalog, translateGame } from '@/lib/i18n-game-catalog';
 import { interfaceDirection, SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { coinDetail } from '@/lib/view/game-detail';
 import { conceptView, ficheView } from '@/lib/view/progression-concepts';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -379,6 +380,15 @@ const owners = (progress: EngagementWithGame, key: string): readonly Progression
 const withGame = (patch: (game: NonNullable<EngagementWithGame['game']>) => NonNullable<EngagementWithGame['game']>): EngagementWithGame => ({
   ...playing,
   game: patch(gameBlockWithExtrasFixture()),
+});
+
+describe('la prochaine pièce se nomme par son DESSIN (#11483)', () => {
+  test('le n° 248, ordinaire après la centième, se dit « or » dans l’Héritage et dans la feuille de la pièce', () => {
+    const progress = withGame((game) => ({ ...game, mint: { ...game.mint, number: 248, edition: 'silver' } }));
+    const expected = `${translateGame('fr', 'game.mint.number_label', { number: '248' })} · ${translateGame('fr', 'game.edition.gold')}`;
+    expect(conceptView('meesh', progress, NOW).facts.find((fact) => fact.id === 'mint_next')?.value).toBe(expected);
+    expect(coinDetail(progress)?.facts.find((fact) => fact.label === translateGame('fr', 'game.fact.next_meesh'))?.value).toBe(expected);
+  });
 });
 
 describe('règle 1 — une donnée appartient à un seul concept', () => {

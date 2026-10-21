@@ -349,6 +349,12 @@
     animation: gamePop var(--game-spring-duration) var(--game-spring) both;
   }
 
+  /* L'ARRIVÉE d'une frappe dans l'Héritage (#11482) : à la fin de la cérémonie, la nouvelle pièce et le compte se
+     posent d'un mouvement court. Sous « animations réduites », l'attribut n'est pas posé : ils changent sans bouger. */
+  [data-heritage-arrival] {
+    animation: gamePop var(--game-spring-duration) var(--game-spring) both;
+  }
+
   /* La feuille monte du bas de l'écran ; en large, elle se pose au centre. */
   dialog[data-sheet-presentation='bottom'] {
     animation: gameSheetRise 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
