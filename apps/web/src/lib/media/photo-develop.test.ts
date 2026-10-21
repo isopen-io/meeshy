@@ -158,3 +158,48 @@ describe('developPhotoFile', () => {
     expect(await developPhotoFile(file, fileEnv(env, true))).toBe(file);
   });
 });
+
+describe('hors du fil principal (#11310)', () => {
+  const offMainEnv = (offMain: PhotoFileEnv['offMain']): { readonly env: PhotoFileEnv; readonly decoded: number[] } => {
+    const decoded: number[] = [];
+    const base = fakeEnv().env;
+    return {
+      decoded,
+      env: { ...base, decode: async () => (decoded.push(1), { image: {} as CanvasImageSource, size: { width: 10, height: 10 }, close: () => undefined }), offMain },
+    };
+  };
+
+  test('une photo de la caméra du système est développée par le worker : aucun décodage ni pixel sur le fil principal', async () => {
+    const { env, decoded } = offMainEnv(() => Promise.resolve(new Blob(['j'], { type: 'image/jpeg' })));
+    const shot = new File([new Uint8Array(4)], 'IMG_9.HEIC', { type: 'image/heic' });
+    const developed = await developPhotoFile(shot, env);
+    expect(developed.name).toBe('IMG_9.jpg');
+    expect(developed.type).toBe('image/jpeg');
+    expect(decoded).toEqual([]);
+  });
+
+  test('le worker ne sait pas la lire : la photo part telle quelle', async () => {
+    const { env } = offMainEnv(() => Promise.resolve(null));
+    const shot = new File([new Uint8Array(4)], 'IMG_9.jpg', { type: 'image/jpeg' });
+    expect(await developPhotoFile(shot, env)).toBe(shot);
+  });
+
+  test('sans worker (undefined) : le chemin d’avant, sur le fil principal', async () => {
+    const { env, decoded } = offMainEnv(() => undefined);
+    const shot = new File([new Uint8Array(4)], 'IMG_9.jpg', { type: 'image/jpeg' });
+    await developPhotoFile(shot, env);
+    expect(decoded).toEqual([1]);
+  });
+
+  test('une image capturée (cadre vidéo) est confiée au worker quand l’environnement en a un', async () => {
+    const { env, journal } = fakeEnv();
+    const offloaded: unknown[] = [];
+    const blob = await developPhoto({ image: {} as CanvasImageSource, size: { width: 4000, height: 3000 } }, {
+      ...env,
+      develop: (request) => (offloaded.push(request.size), Promise.resolve(new Blob(['j'], { type: 'image/jpeg' }))),
+    });
+    expect(blob?.type).toBe('image/jpeg');
+    expect(offloaded).toEqual([{ width: PHOTO_MAX_EDGE, height: 1920 }]);
+    expect(journal.painted).toEqual([]);
+  });
+});
