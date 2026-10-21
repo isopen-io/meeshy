@@ -208,6 +208,21 @@ struct MessageOverlayPreviewViewport<Content: View>: View {
     @ViewBuilder let content: Content
 
     private static var fadeHeight: CGFloat { 24 }
+    private static var scrollSpace: String { "messageOverlayPreviewScroll" }
+
+    /// Le défilement déjà parcouru : le fondu n'existe que tant qu'il reste une
+    /// suite SOUS le cadre. Arrivé au bout, la dernière ligne est NETTE.
+    @State private var scrolledOffset: CGFloat = 0
+
+    private struct ScrollOffsetKey: PreferenceKey {
+        static var defaultValue: CGFloat { 0 }
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+    }
+
+    /// Reste-t-il du contenu sous le cadre ? Pure, testable sans rendu.
+    static func hasContentBelow(contentHeight: CGFloat, visibleHeight: CGFloat, scrolledOffset: CGFloat) -> Bool {
+        contentHeight - scrolledOffset - visibleHeight > 1
+    }
 
     var body: some View {
         let width = naturalSize.width * scale
@@ -218,18 +233,29 @@ struct MessageOverlayPreviewViewport<Content: View>: View {
             .scaleEffect(scale, anchor: anchor)
             .frame(width: width, height: naturalSize.height * scale, alignment: alignment)
         if scrolls {
-            ScrollView(.vertical, showsIndicators: false) { scaled }
-                .frame(width: width, height: visibleHeight)
-                .mask(bottomFade)
+            ScrollView(.vertical, showsIndicators: false) {
+                scaled.background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: ScrollOffsetKey.self,
+                            value: -proxy.frame(in: .named(Self.scrollSpace)).minY)
+                    }
+                )
+            }
+            .coordinateSpace(name: Self.scrollSpace)
+            .onPreferenceChange(ScrollOffsetKey.self) { scrolledOffset = $0 }
+            .frame(width: width, height: visibleHeight)
+            .mask(bottomFade(active: Self.hasContentBelow(
+                contentHeight: naturalSize.height * scale, visibleHeight: visibleHeight, scrolledOffset: scrolledOffset)))
         } else {
             scaled.frame(width: width, height: visibleHeight, alignment: alignment)
         }
     }
 
-    private var bottomFade: some View {
+    private func bottomFade(active: Bool) -> some View {
         VStack(spacing: 0) {
             Rectangle().fill(Color.black)
-            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [.black, active ? .clear : .black], startPoint: .top, endPoint: .bottom)
                 .frame(height: Self.fadeHeight)
         }
     }
