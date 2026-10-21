@@ -366,7 +366,7 @@ export function registerCallsConsultationRoutes(fastify: FastifyInstance, deps: 
 
   fastify.get('/calls/active', {
     preValidation: [requiredAuth],
-    ...ROUTE_RATE_LIMITS.callOperations,
+    ...ROUTE_RATE_LIMITS.activeCallProbe,
     schema: {
       description: 'Retrieve the currently active call for the authenticated user. Used for crash recovery — when the app restarts, it can check if the user was in an active call.',
       tags: ['calls'],
