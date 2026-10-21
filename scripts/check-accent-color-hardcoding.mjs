@@ -302,12 +302,12 @@
 // web `--game-tier-*` (`apps/web/src/styles/game.css`) — la palette fixe des paliers, pas une
 // couleur de conversation. Valeur MESURÉE le 2026-10-08.
 //
-// 2026-10-21 (#11176, la Meesh iOS rejoue la pièce du web, d50c95c584) — littéraux 145 → 158 :
-// les trois dégradés de matière de la pièce (or, prisme, diamant : dix arrêts), l'encre de l'or
-// (`coinGoldInk`), celle du diamant (`coinDiamondInk`) et la veine d'or de l'argent (`coinVein`),
-// dans `MeeshyUI/Game/GameMaterial.swift` — la palette FIXE du jeu, MIROIR des teintes de
-// `packages/shared/design/meesh-coin.json` rendues par le web ; ce n'est pas une couleur de
-// conversation, aucun `accentColor` ne peut la remplacer. Valeur MESURÉE le 2026-10-21.
+// 2026-10-21 (#11449, la pièce Meesh sur iOS) — littéraux 145 → 158 : `d50c95c584` ajoute la
+// géométrie et les matières de la pièce Meesh (`MeeshCoinGeometry`, `MeeshCoinPainter`,
+// `MeeshCoinFaces`) dans `MeeshyUI/Game/GameMaterial.swift` — dégradés or/argent/prisme
+// (`coinGoldInk`, `coinDiamondInk`, `coinVein`, `sparkles`…), même précédent que #9636/#9688 :
+// la matière FIXE d'un objet du jeu, pas une couleur de conversation. Valeur MESURÉE le
+// 2026-10-21 en local (diff par fichier contre ed76ab6af4, seul GameMaterial.swift a bougé).
 const REFERENCE_LITERAL_COLOR_COUNT = 158;
 // 2026-10-06 (#9516, vague 2 du jeu, iOS) — variables inconnues 444 → 445 :
 // `GameAtlasViews.swift` calcule `Color(hex: $0.colorHex)` depuis
@@ -399,9 +399,9 @@ const REFERENCE_LITERAL_COLOR_COUNT = 158;
 // `ProfileDecorSheet.swift` (1) teinte l'aperçu de la bannière par l'accent du PROFIL (`accentHex`, déjà remis à
 // `MeeshyAvatar(accentColor:)`), hors de tout contexte de conversation. Masqué en CI derrière le gate de poids web (#10974) ;
 // valeur MESURÉE le 2026-10-19 en CI (run 39192153480) et en local, commit par commit (c61aac2d11 : +4, c242265209 : +1).
-// 478 -> 479 (2026-10-21, #11176, d50c95c584) : `GameMaterial.swift` (1) — `sparkles`, les cinq éclats qui scintillent sur
-// le prisme, déclarés en hexa puis mappés par `Color(hex: $0)` ; palette FIXE de la pièce, même nature que les littéraux
-// ci-dessus. Valeur MESURÉE le 2026-10-21 en CI (run 39601016826) et en local.
+// 478 -> 479 (2026-10-21, #11449, la pièce Meesh sur iOS) : même commit `d50c95c584` que le littéral ci-dessus,
+// `GameMaterial.swift` (1) — une des variables de matière de la pièce ne passe pas la liste admise. Même précédent
+// (palette fixe du jeu). Valeur MESURÉE le 2026-10-21 en local.
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 479;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
