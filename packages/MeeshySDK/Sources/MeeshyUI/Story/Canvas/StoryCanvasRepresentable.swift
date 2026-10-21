@@ -235,6 +235,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         var lastLoadedImagesVersion: UInt64?
         var lastLoadedAudioURLs: [String: URL]?
         var lastLocalMediaAliases: [String: URL]?
+        /// Cadence d'écriture du binding (#9874) — retenu ici pour que le
+        /// front de queue d'un geste survive aux réévaluations de la vue.
+        var slideWrites: BindingWriteThrottle<StorySlide>?
     }
 
     /// Construit le `StoryReaderContext` d'édition : pont image (bitmaps édités
@@ -276,9 +279,15 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // décoration qui déclare un mouvement le JOUE pendant qu'on compose,
         // comme la vidéo et le son juste au-dessus et juste en dessous.
         view.playsStickerMotionInEditMode = true
-        view.onItemModified = { modified in
+        // Pincer ou tourner un calque modifie la slide à la cadence du doigt :
+        // le canvas UIKit la dessine depuis sa propre copie, et le binding —
+        // dont chaque écriture réévalue le composer — suit à 30 Hz au plus.
+        // La valeur finale part toujours (front de queue du throttle).
+        let slideWrites = BindingWriteThrottle<StorySlide> { modified in
             DispatchQueue.main.async { self.slide = modified }
         }
+        context.coordinator.slideWrites = slideWrites
+        view.onItemModified = { modified in slideWrites.submit(modified) }
         view.onItemTapped = onItemTapped
         view.onItemDoubleTapped = onItemDoubleTapped
         view.editableKinds = editableKinds

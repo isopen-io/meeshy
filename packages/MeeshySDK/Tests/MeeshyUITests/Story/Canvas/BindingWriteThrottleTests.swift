@@ -7,10 +7,11 @@ import XCTest
 @MainActor
 final class BindingWriteThrottleTests: XCTestCase {
 
+    @MainActor
     private final class Harness {
         var now: TimeInterval = 100
         var written: [Int] = []
-        var scheduled: [(delay: TimeInterval, run: () -> Void)] = []
+        var scheduled: [(delay: TimeInterval, run: @MainActor () -> Void)] = []
         lazy var throttle = BindingWriteThrottle<Int>(
             write: { [unowned self] in self.written.append($0) },
             clock: { [unowned self] in self.now },

@@ -149,8 +149,9 @@ public struct StoryTimelineHost: View {
     private var transport: some View {
         TransportBar(
             isPlaying: viewModel.isPlaying,
-            currentTime: viewModel.currentTime,
+            currentTime: 0,
             duration: viewModel.project.slideDuration,
+            playhead: viewModel.playhead,
             zoomScale: viewModel.zoomScale,
             isMuted: viewModel.isMuted,
             showsTimeReadout: true,
@@ -352,16 +353,18 @@ public struct StoryTimelineHost: View {
     /// l'origine des barres du plan.
     private func playheadOverlay(geometry: TimelineGeometry, slideDuration: Double) -> some View {
         GeometryReader { proxy in
-            PlayheadView(
-                currentTime: viewModel.currentTime,
-                totalDuration: Float(slideDuration),
-                geometry: geometry,
-                laneHeight: proxy.size.height,
-                isDark: colorScheme == .dark,
-                onScrub: { viewModel.scrub(to: $0) },
-                onScrubBegan: { viewModel.beginScrub() },
-                onScrubEnded: { viewModel.endScrub() }
-            )
+            PlayheadTimeReader(clock: viewModel.playhead) { time in
+                PlayheadView(
+                    currentTime: time,
+                    totalDuration: Float(slideDuration),
+                    geometry: geometry,
+                    laneHeight: proxy.size.height,
+                    isDark: colorScheme == .dark,
+                    onScrub: { viewModel.scrub(to: $0) },
+                    onScrubBegan: { viewModel.beginScrub() },
+                    onScrubEnded: { viewModel.endScrub() }
+                )
+            }
             .offset(x: Plan2DView.labelColumnWidth)
         }
     }
