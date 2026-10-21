@@ -386,6 +386,32 @@ class WriteBaseline(unittest.TestCase):
         self.assertEqual(set(written["rules"]), {r.id for r in ENGINE.RULES})
 
 
+class EnvironmentRouter(unittest.TestCase):
+    HITS = (
+        "@EnvironmentObject private var router: Router\n",
+        "@EnvironmentObject var router: Router\n",
+        "@EnvironmentObject\n    private var router: Router\n",
+    )
+    MISSES = (
+        "@EnvironmentObject private var deepLinkRouter: DeepLinkRouter\n",
+        "@Environment(\\.routerCommands) private var router\n",
+        "@ObservedObject var router: Router\n",
+        "let router: Router\n",
+        "// @EnvironmentObject var router: Router\n",
+        "@EnvironmentObject private var r: RouterCommands\n",
+    )
+
+    def test_each_router_object_declaration_counts_once(self):
+        for src in self.HITS:
+            with self.subTest(src=src):
+                self.assertEqual(count("environment-router", src), 1)
+
+    def test_lookalikes_do_not_count(self):
+        for src in self.MISSES:
+            with self.subTest(src=src):
+                self.assertEqual(count("environment-router", src), 0)
+
+
 class CommittedBaseline(unittest.TestCase):
     def setUp(self):
         scanned = ENGINE.scan(ENGINE.collect(ENGINE.ROOT))
