@@ -1,6 +1,7 @@
 {
   "rules": {
     "anyview": 96,
+    "async-after": 98,
     "autocapitalization": 0,
     "available-floor": 0,
     "corner-radius-modifier": 0,
@@ -8,13 +9,14 @@
     "fixed-font": 760,
     "foreground-color": 3101,
     "idiom": 0,
-    "logger-subsystem": 5,
+    "logger-subsystem": 4,
     "nonisolated-unsafe": 150,
     "nslock": 48,
     "nslog": 0,
     "observed-theme-singleton": 16,
     "onchange-single": 0,
     "plural-s": 0,
+    "sleep-nanoseconds": 98,
     "status-bar-hidden": 0,
     "try-sleep": 218,
     "uiscreen-main": 1,

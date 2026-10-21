@@ -40,10 +40,15 @@ RULES = (
     _pattern("nslock", r"\bNSLock\(\)"),
     _pattern("nonisolated-unsafe", r"nonisolated\(unsafe\)"),
     _pattern("try-sleep", r"try\?\s*await\s+Task\.sleep"),
+    _pattern("async-after", r"[\w)\]]\.asyncAfter\("),
+    _pattern("sleep-nanoseconds", r"Task\.sleep\(nanoseconds:"),
     _pattern(
         "logger-subsystem",
         r"\bLogger\(subsystem:",
-        ("packages/MeeshySDK/Sources/MeeshySDK/Logging/MeeshyLog.swift",),
+        (
+            "packages/MeeshySDK/Sources/MeeshySDK/Logging/MeeshyLog.swift",
+            "apps/ios/MeeshyBroadcastExtension/SampleHandler.swift",
+        ),
     ),
     _pattern("nslog", r"\bNSLog\("),
     _pattern("fixed-font", r"\.font\(\.system\(size:"),
