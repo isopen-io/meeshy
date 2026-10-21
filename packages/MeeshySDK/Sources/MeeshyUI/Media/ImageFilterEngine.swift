@@ -87,11 +87,13 @@ public final class ImageFilterEngine {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
 
-    private let context: CIContext
+    private let rendering: StoryRenderingContext
 
+    /// Borrows the domain's single Metal-backed context (#9873) — opening the
+    /// editor no longer builds a `CIContext`, and the editor renders in the
+    /// same colour spaces as the scene it feeds.
     public init() {
-        // Metal-backed: CoreImage filters run on the GPU.
-        self.context = CIContext(options: [.useSoftwareRenderer: false])
+        self.rendering = .shared
     }
 
     // MARK: - Full render
@@ -111,7 +113,7 @@ public final class ImageFilterEngine {
         ci = applyAdjustments(ci, state.adjustments, extent: extent)
         ci = applyEffect(ci, effect: state.effect, extent: extent)
 
-        guard let output = context.createCGImage(ci, from: extent) else { return base }
+        guard let output = rendering.bitmap(ci, from: extent, preserving: cg.colorSpace) else { return base }
         return UIImage(cgImage: output, scale: source.scale, orientation: .up)
     }
 
@@ -143,7 +145,7 @@ public final class ImageFilterEngine {
         var output: [ImageFilter: UIImage] = [:]
         for filter in ImageFilter.allCases {
             let filtered = applyFilter(base, filter: filter)
-            if let result = context.createCGImage(filtered, from: extent) {
+            if let result = rendering.bitmap(filtered, from: extent, preserving: cg.colorSpace) {
                 output[filter] = UIImage(cgImage: result)
             }
         }

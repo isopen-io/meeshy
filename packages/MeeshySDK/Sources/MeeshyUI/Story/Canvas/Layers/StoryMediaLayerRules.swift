@@ -105,12 +105,12 @@ enum StoryMediaLayerRules {
     /// La clé de cache suit l'INSTANCE d'image : un bitmap retouché ne resservira
     /// jamais le filtre de l'ancien.
     /// Les RÉGLAGES de l'objet (#9175) suivent le filtre, dans l'ordre de
-    /// l'éditeur d'image : filtre, puis réglages.
+    /// l'éditeur d'image : filtre, puis réglages — cuits en UN passage, par la
+    /// chaîne du fond (`StoryLookBake`, #9873).
     static func filtered(_ image: UIImage?, for media: StoryMediaObject) -> UIImage? {
         guard let image else { return nil }
-        let instance = "\(media.id)-\(ObjectIdentifier(image).hashValue)"
-        let filtree = media.parsedFilter.map { StoryFilterProcessor.apply($0, to: image, imageId: instance) } ?? image
-        return StoryMediaAdjustmentsProcessor.apply(media.adjustments, to: filtree, imageId: "\(instance)-\(media.filter ?? "")")
+        return StoryLookBake.image(image, filter: media.parsedFilter, intensity: 1,
+                                   adjustments: media.adjustments, imageId: media.id)
     }
 
     // MARK: - URL resolution

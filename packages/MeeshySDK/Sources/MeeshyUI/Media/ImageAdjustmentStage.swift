@@ -12,9 +12,8 @@ import MeeshySDK
 /// passent par CETTE fonction, si bien qu'un contraste réglé ici ne peut pas
 /// diverger d'un contraste réglé là.
 ///
-/// `nonisolated` et sans contexte : CIImage → CIImage, pur. Le contexte de rendu
-/// appartient à l'appelant (`ImageFilterEngine` pour l'éditeur,
-/// `StoryMediaAdjustmentsProcessor` pour la scène).
+/// `nonisolated` et sans contexte : CIImage → CIImage, pur. Le rendu passe par
+/// `StoryRenderingContext.shared`, le seul contexte du domaine (#9873).
 nonisolated enum ImageAdjustmentStage {
 
     static func apply(_ input: CIImage, _ adjustments: ImageAdjustments, extent: CGRect) -> CIImage {
@@ -154,7 +153,6 @@ nonisolated enum ImageAdjustmentStage {
 /// qui revient sur une valeur déjà vue ne refait aucun rendu, et un bitmap
 /// remplacé ne resservira jamais les réglages de l'ancien.
 public nonisolated enum StoryMediaAdjustmentsProcessor {
-    private static let context = CIContext()
     nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
         let cache = NSCache<NSString, UIImage>()
         cache.countLimit = 40
@@ -162,19 +160,21 @@ public nonisolated enum StoryMediaAdjustmentsProcessor {
         return cache
     }()
 
-    /// L'image telle quelle sans réglage actif ; sinon la même image réglée,
-    /// à la même échelle et dans la même orientation EXIF.
+    /// L'image telle quelle sans réglage actif ; sinon la même image réglée, à
+    /// la même échelle, redressée (`.up`) et rendue par le contexte partagé
+    /// dans l'espace qui garde sa gamme (#9873).
     public static func apply(_ adjustments: ImageAdjustments?, to image: UIImage, imageId: String) -> UIImage {
-        guard let adjustments, adjustments.activeCount > 0, let cg = image.cgImage else { return image }
+        guard let adjustments, adjustments.activeCount > 0,
+              let input = StoryRenderingContext.orientedSource(of: image) else { return image }
         let key = "\(imageId)|\(signature(adjustments))" as NSString
         if let cached = cache.object(forKey: key) { return cached }
 
-        let input = CIImage(cgImage: cg)
         let extent = input.extent
         guard extent.width >= 1, extent.height >= 1,
-              let output = context.createCGImage(ImageAdjustmentStage.apply(input, adjustments, extent: extent),
-                                                 from: extent) else { return image }
-        let rendered = UIImage(cgImage: output, scale: image.scale, orientation: image.imageOrientation)
+              let output = StoryRenderingContext.shared.bitmap(ImageAdjustmentStage.apply(input, adjustments, extent: extent),
+                                                               from: extent,
+                                                               preserving: image.cgImage?.colorSpace) else { return image }
+        let rendered = UIImage(cgImage: output, scale: image.scale, orientation: .up)
         cache.setObject(rendered, forKey: key, cost: output.bytesPerRow * output.height)
         return rendered
     }
