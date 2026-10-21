@@ -61,20 +61,3 @@ public struct RepostRequest: Encodable {
         self.visibility = visibility
     }
 }
-
-public struct StatusCreateRequest: Encodable {
-    public let type = "STATUS"
-    public let moodEmoji: String
-    public let content: String?
-    public let visibility: String
-    public let visibilityUserIds: [String]?
-
-    public init(moodEmoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil) {
-        self.moodEmoji = moodEmoji; self.content = content; self.visibility = visibility; self.visibilityUserIds = visibilityUserIds
-    }
-}
-
-public struct StoryViewRequest: Encodable {
-    public let viewed = true
-    public init() {}
-}

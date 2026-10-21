@@ -328,7 +328,7 @@ class ShareLinksViewModel: ObservableObject {
         let fetchedStats = try? await s
         links = ShareLinksReloadLaw.linksAfterFetch(current: links, fetched: fetched)
         if let fetchedStats { stats = fetchedStats }
-        if let fetched { try? await CacheCoordinator.shared.shareLinks.save(fetched, for: "list") }
+        if let fetched { await bestEffort("shareLinksView.shareLinks.save", category: .cache) { try await CacheCoordinator.shared.shareLinks.save(fetched, for: "list") } }
         isLoading = false
     }
 
@@ -347,7 +347,7 @@ class ShareLinksViewModel: ObservableObject {
 
     private func persist() {
         let snapshot = links
-        Task { try? await CacheCoordinator.shared.shareLinks.save(snapshot, for: "list") }
+        Task { await bestEffort("shareLinksView.shareLinks.save.2", category: .cache) { try await CacheCoordinator.shared.shareLinks.save(snapshot, for: "list") } }
     }
 
     func loadStats() async {

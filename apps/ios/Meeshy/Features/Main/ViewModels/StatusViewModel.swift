@@ -157,7 +157,7 @@ class StatusViewModel: ObservableObject {
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
                 if mode == .friends { myStatus = statuses.first }
-                try? await CacheCoordinator.shared.statuses.save(entries, for: cacheKey)
+                await bestEffort("statusViewModel.statuses.save", category: .cache) { try await CacheCoordinator.shared.statuses.save(entries, for: cacheKey) }
             } else {
                 if statuses.isEmpty {
                     error = String(localized: "status.load.error", defaultValue: "Impossible de charger les statuts")
@@ -464,7 +464,7 @@ class StatusViewModel: ObservableObject {
 
     private func saveCacheSnapshot() async {
         let cacheKey = "statuses_\(mode)"
-        try? await CacheCoordinator.shared.statuses.save(statuses, for: cacheKey)
+        await bestEffort("statusViewModel.statuses.save.2", category: .cache) { try await CacheCoordinator.shared.statuses.save(statuses, for: cacheKey) }
     }
 
     // MARK: - Current User Info (for preview)
