@@ -1,0 +1,111 @@
+/*
+ * L'APERÇU D'UNE CONVERSATION TENUE (#11211) — le voile, la grappe et la carte.
+ *
+ * Même voile que le menu d'un message (`thread-menu.css`) : noir mêlé, flou de
+ * fond, une entrée en fondu. Le flou est celui du VOILE, posé sur la liste
+ * derrière : la carte, au-dessus de lui, reste nette — ni `transform`, ni
+ * `filter` sur elle, et l'animation ne joue que l'opacité, pour qu'aucune
+ * échelle ne reste en fin d'entrée.
+ */
+.conversation-peek-cluster {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.conversation-peek-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background-color: color-mix(in srgb, black 50%, transparent);
+  backdrop-filter: blur(16px);
+  animation: conversationPeekIn 220ms ease-out;
+}
+
+:root.light .conversation-peek-veil {
+  background-color: color-mix(in srgb, black 40%, transparent);
+}
+
+.conversation-peek {
+  position: fixed;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: conversationPeekIn 220ms ease-out;
+}
+
+.conversation-peek-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 120px;
+  overflow: hidden;
+  border-radius: 20px;
+  background-color: var(--color-ios-card);
+  border: 1px solid var(--color-edge);
+  box-shadow: var(--shadow-cast);
+}
+
+.conversation-peek-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* Les derniers messages tiennent par le BAS, comme le fil : un message
+   plus ancien que la carte ne peut montrer se fond par le haut. */
+.conversation-peek-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  overflow: hidden;
+  padding: 8px 12px 12px;
+  mask-image: linear-gradient(to bottom, transparent 0, black 28px);
+}
+
+.conversation-peek-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-ios-ink-3);
+}
+
+.conversation-peek-skeleton {
+  height: 14px;
+  border-radius: 7px;
+  background-color: var(--color-ios-fill);
+}
+
+.conversation-peek-open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.conversation-peek-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+@keyframes conversationPeekIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-peek-veil,
+  .conversation-peek {
+    animation: none;
+  }
+}

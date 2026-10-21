@@ -215,7 +215,7 @@ public struct ImageFullscreen: View {
     @State private var saveState: SaveState = .idle
     @State private var viewStartTime: Date?
 
-    private enum SaveState {
+    private nonisolated enum SaveState: Equatable, Sendable {
         case idle, saving, saved, failed
     }
 
@@ -238,11 +238,10 @@ public struct ImageFullscreen: View {
                 .onTapGesture { toggleControls() }
 
             if let url = imageUrl {
-                // autoLoad: true — a manual tap to open fullscreen is
-                // explicit user intent and must override the ambient network
-                // policy gate (contract §14.1). Without this, Low Data Mode /
-                // Wi-Fi-only leaves the viewer on an infinite spinner even
-                // though the user just asked to see the image.
+                // autoLoad: true — l'ouverture en plein écran est une intention
+                // explicite qui prime sur la politique réseau ambiante (contrat
+                // §14.1) : sans cela, Low Data Mode / Wi-Fi seul laisse un
+                // spinner infini alors que l'utilisateur a demandé l'image.
                 CachedAsyncImage(url: url.absoluteString, autoLoad: true) {
                     ProgressView().tint(.white)
                 }
@@ -320,6 +319,7 @@ public struct ImageFullscreen: View {
         .statusBar(hidden: true)
         .onAppear { viewStartTime = Date() }
         .onDisappear { reportImageViewed() }
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })
     }
 
     @ViewBuilder
@@ -390,9 +390,6 @@ public struct ImageFullscreen: View {
                     saveState = saved ? .saved : .failed
                 }
                 if saved { HapticFeedback.success() } else { HapticFeedback.error() }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    withAnimation { saveState = .idle }
-                }
             }
         }
     }

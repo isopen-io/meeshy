@@ -45,7 +45,7 @@ final class ConversationDeleteMessageGuardTests: XCTestCase {
             return XCTFail("`requestDeleteMessage` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
-            fn.contains("deliveryStatus == .failed"),
+            fn.contains("outgoingState(of: messageId)?.isFailed == true"),
             "doit distinguer un message JAMAIS envoyé du cas normal."
         )
         XCTAssertTrue(

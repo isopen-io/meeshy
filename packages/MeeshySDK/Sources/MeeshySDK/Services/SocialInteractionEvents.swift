@@ -10,20 +10,19 @@ import Foundation
 /// Le relais des événements v2 émis par le SDK (services, file de mutations)
 /// vers la file de l'app. Sans puits installé, rien ne part : un service
 /// utilisé hors de l'app (extension, test) n'émet rien.
-public final class SocialEventsV2Hub: @unchecked Sendable {
+public final class SocialEventsV2Hub: Sendable {
     public static let shared = SocialEventsV2Hub()
 
-    private let lock = NSLock()
-    private var sink: (@Sendable (SocialEventV2) -> Void)?
+    private let sinkSlot = Locked<(@Sendable (SocialEventV2) -> Void)?>(nil)
 
     public init() {}
 
     public func install(_ sink: @escaping @Sendable (SocialEventV2) -> Void) {
-        lock.withLock { self.sink = sink }
+        sinkSlot.mutate { $0 = sink }
     }
 
     public func emit(_ event: SocialEventV2) {
-        let current = lock.withLock { sink }
+        let current = sinkSlot.read { $0 }
         current?(event)
     }
 }
