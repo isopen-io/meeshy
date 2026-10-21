@@ -103,20 +103,27 @@ function mount(options: {
   readonly sticky?: ConversationReadingMode;
   readonly updatedAt?: number;
   readonly served?: readonly Message[];
+  readonly fails?: boolean;
+  readonly pages?: number;
 }) {
   const requests: string[] = [];
   const fetchImpl = (async (input: RequestInfo | URL) => {
     requests.push(String(input));
+    if (options.fails === true) return new Response('{}', { status: 500 });
     const rows = [...(options.served ?? [])].reverse();
-    return new Response(JSON.stringify({ success: true, data: rows, cursorPagination: { limit: 50, hasMore: false, nextCursor: null } }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, data: rows, cursorPagination: options.pages === undefined ? { limit: 50, hasMore: false, nextCursor: null } : { limit: 50, hasMore: true, nextCursor: `served-${requests.length}` } }), { status: 200 });
   }) as typeof fetch;
   const deps = { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl }) } as const;
   const conversation = options.conversation ?? conversationOf();
   const client = new QueryClient();
   if (options.messages !== null && options.messages !== undefined) {
     client.setQueryData(messagesQueryKey(conversation.id), {
-      pages: [{ messages: options.messages, hasOlder: false, nextCursor: null }],
-      pageParams: [undefined],
+      pages: Array.from({ length: options.pages ?? 1 }, (_, index) => ({
+        messages: options.messages ?? [],
+        hasOlder: index < (options.pages ?? 1) - 1,
+        nextCursor: index < (options.pages ?? 1) - 1 ? `cursor-${index}` : null,
+      })),
+      pageParams: Array.from({ length: options.pages ?? 1 }, (_, index) => (index === 0 ? undefined : `cursor-${index - 1}`)),
     }, options.updatedAt === undefined ? undefined : { updatedAt: options.updatedAt });
   }
   const store = createReadingModeStore(null);
@@ -238,6 +245,23 @@ describe('ConversationPeekCard — le cache d’abord', () => {
     expect(requests.length).toBe(1);
     expect(card().querySelector('[data-peek-skeleton]')).toBeNull();
     expect([...card().querySelectorAll<HTMLElement>('[data-message]')].map((node) => node.dataset.message)).toEqual(['m-1', 'm-2', 'm-3']);
+  });
+
+  test('cache vide et requête en échec ⇒ un état d’échec dit, plus de squelette éternel', async () => {
+    mount({ messages: null, fails: true });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(card().querySelector('[data-peek-skeleton]')).toBeNull();
+    expect(card().querySelector('[data-peek-failed]')?.textContent).toBe('Impossible de charger les messages');
+  });
+
+  test('un fil ouvert sur plusieurs pages ne revalide que sa première page', async () => {
+    const { requests } = mount({ messages: THREE, pages: 4, served: THREE, updatedAt: Date.now() - 10 * 60_000 });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(requests.length).toBe(1);
   });
 
   test('cache frais ⇒ aucun squelette, aucune requête émise', async () => {

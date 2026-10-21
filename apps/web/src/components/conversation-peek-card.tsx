@@ -146,16 +146,24 @@ export function ConversationPeekCard({
   const peerRing = useRingDesign(servedRingOf(peer));
   const [openedAt] = useState(now);
   const [revision, setRevision] = useState(0);
+  const [failed, setFailed] = useState(false);
   const messages = useMemo(() => cachedMessages(client, conversation.id), [client, conversation.id, revision]);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [overflowing, setOverflowing] = useState(false);
 
   useEffect(() => {
     let alive = true;
+    const updatedAtOf = () => client.getQueryState(messagesQueryKey(conversation.id))?.dataUpdatedAt ?? 0;
+    const before = updatedAtOf();
+    setFailed(false);
     client
-      .fetchInfiniteQuery({ ...messagesInfiniteOptions(deps, conversation.id), staleTime: PEEK_STALE_MS })
-      .then(() => alive && setRevision((current) => current + 1))
-      .catch(() => undefined);
+      .fetchInfiniteQuery({ ...messagesInfiniteOptions(deps, conversation.id), staleTime: PEEK_STALE_MS, pages: 1 })
+      .then(() => {
+        if (alive && updatedAtOf() !== before) setRevision((current) => current + 1);
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
     return () => {
       alive = false;
     };
@@ -218,7 +226,12 @@ export function ConversationPeekCard({
         </div>
       </div>
       <div ref={bodyRef} className="conversation-peek-body" inert {...(overflowing ? { 'data-peek-overflowing': '' } : {})} {...(idBase === undefined ? {} : { id: `${idBase}-body` })}>
-        {placed === null ? <PeekSkeleton /> : null}
+        {placed === null && !failed ? <PeekSkeleton /> : null}
+        {placed === null && failed ? (
+          <span data-peek-failed role="status" className="text-title" style={{ color: 'var(--color-ios-ink-3)' }}>
+            {rowMenuText(interfaceLanguage, 'rowMenu.peek.failed')}
+          </span>
+        ) : null}
         {placed !== null && placed.length === 0 ? (
           <span className="text-title" style={{ color: 'var(--color-ios-ink-3)' }}>
             {rowMenuText(interfaceLanguage, 'rowMenu.peek.empty')}

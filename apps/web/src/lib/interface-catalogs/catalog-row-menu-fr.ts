@@ -18,6 +18,7 @@ const fr = {
   'rowMenu.peek.open': 'Ouvrir la conversation',
   'rowMenu.peek.e2ee': 'Chiffrée de bout en bout',
   'rowMenu.peek.empty': 'Aucun message pour l’instant',
+  'rowMenu.peek.failed': 'Impossible de charger les messages',
   'rowMenu.back': 'Retour',
   'rowMenu.block.title': 'Bloquer cet utilisateur ?',
   'rowMenu.block.message': 'Cette personne ne pourra plus vous envoyer de messages. La conversation rejoint vos archives.',

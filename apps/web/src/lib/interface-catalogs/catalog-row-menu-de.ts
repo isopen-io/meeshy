@@ -20,6 +20,7 @@ const de = {
   'rowMenu.peek.open': 'Unterhaltung öffnen',
   'rowMenu.peek.e2ee': 'Ende-zu-Ende-verschlüsselt',
   'rowMenu.peek.empty': 'Noch keine Nachrichten',
+  'rowMenu.peek.failed': 'Nachrichten konnten nicht geladen werden',
   'rowMenu.back': 'Zurück',
   'rowMenu.block.title': 'Diesen Benutzer blockieren?',
   'rowMenu.block.message': 'Diese Person kann Ihnen keine Nachrichten mehr senden. Die Unterhaltung wandert in Ihr Archiv.',

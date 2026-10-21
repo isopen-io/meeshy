@@ -20,6 +20,7 @@ const ar = {
   'rowMenu.peek.open': 'فتح المحادثة',
   'rowMenu.peek.e2ee': 'مشفرة من طرف إلى طرف',
   'rowMenu.peek.empty': 'لا توجد رسائل بعد',
+  'rowMenu.peek.failed': 'تعذّر تحميل الرسائل',
   'rowMenu.back': 'رجوع',
   'rowMenu.block.title': 'حظر هذا المستخدم؟',
   'rowMenu.block.message': 'لن يتمكّن هذا الشخص من إرسال رسائل إليك. تنتقل المحادثة إلى أرشيفك.',
