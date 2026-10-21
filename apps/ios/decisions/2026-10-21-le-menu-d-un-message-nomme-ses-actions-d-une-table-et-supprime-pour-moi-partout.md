@@ -1,0 +1,12 @@
+## 2026-10-21 : le menu d'un message nomme ses actions d'une table, copie ce qu'il affiche, supprime pour moi partout et sert la Rivière (#11233, #11234, #11221, #11224)
+
+**Contexte.** L'audit des appuis longs du 2026-10-20 a laissé quatre écarts hors du lot #11214. « Copier » copiait la traduction préférée même quand le lecteur avait basculé le drapeau de la bulle sur une autre langue. Les trois menus d'un message (appui long, « Plus… », double toucher) tenaient chacun leur table de libellés : « Éditer » ici, « Modifier » là, deux clés pour « Sélectionner », trois pour « Transférer ». « Supprimer pour moi » ne quittait pas l'appareil — et, mesuré, ne retirait même pas le message du fil : le masquage local ne filtrait que le hub de médias. La Rivière composait son propre `.contextMenu` à trois actions, hors de la loi.
+
+**Décision.**
+
+- Le texte affiché a UN site : `BubbleContent.displayedText` (la langue du drapeau, sinon la traduction préférée, sinon l'original — `activeLanguage`, la règle même de la bulle). « Copier » le lit par `MessageExitTransport.copyDisplayed`, sur l'appui long, « Plus… » et la barre rapide.
+- Un acte a UN verbe, et un verbe UN libellé et UN symbole : `MessageActionVerb` (`Components/MessageActionVocabulary.swift`). `PrimaryAction.verb` et `MoreItem.verb` y projettent — le même acte sur le message ou sur une pièce est un verbe. Le double toucher dit « Modifier » comme les deux autres menus. Sept clés orphelines quittent le catalogue.
+- « Supprimer pour moi » appelle `DELETE /messages/:id/delete-for-me` (`PersonalMessageHiding`, SDK), la route du web, que la passerelle diffuse aux autres appareils (`message:hidden-for-me`). Optimiste : la ligne est purgée et masquée avant la réponse ; un refus la rend (relecture serveur `restoreMessagesForMe`) et dit pourquoi. **Hors ligne, le geste est refusé et dit** : un masquage resté local reviendrait au prochain chargement. Un envoi raté se retire localement, quel que soit le mode.
+- La Rivière n'a plus de menu à elle : l'appui long d'une bulle (même geste que la rangée du Fil) ouvre `presentLongPressMenu`, donc la loi d'actions, l'aperçu et les droits des autres modes. « Ouvrir dans le fil » reste une action d'accessibilité nommée de la bulle.
+
+**Conséquences.** Le masquage hors ligne n'est pas mis en file : il faudra une entrée d'outbox pour le différer. « Ouvrir dans le fil » n'a plus de chemin visuel depuis la Rivière. Le miroir Kotlin, gelé, n'a rien reçu.

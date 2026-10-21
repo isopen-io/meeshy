@@ -12,7 +12,7 @@ protocol ConversationCommandProviding: AnyObject {
     func consumeReactionToken() -> Bool
     func addReaction(localId: String, remoteId: String, participantId: String, emoji: String)
     func removeReaction(localId: String, remoteId: String, participantId: String, emoji: String)
-    func deleteLocally(messageId: String)
+    func deleteForMe(messageId: String, serverId: String, restore: (String) async -> Void) async -> ConversationCommandFailure?
     func withdrawUnsent(messageId: String) async
     func deleteForEveryone(messageId: String, serverId: String) async -> ConversationCommandFailure?
     func removeForModeration(messageId: String, serverId: String, reason: String) async -> ConversationCommandFailure?
@@ -72,6 +72,8 @@ final class ConversationCommandHandler: ConversationCommandProviding {
     private let networkMonitor: NetworkMonitorProviding
     private let reactionOutbox: any ReactionOutboxEnqueuing
     private let attachments: any AttachmentDeleting
+    private let personalHiding: any PersonalMessageHiding
+    private let hiddenMessages: LocallyHiddenMessagesStore
     private let now: () -> Date
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-commands")
@@ -90,6 +92,8 @@ final class ConversationCommandHandler: ConversationCommandProviding {
         networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
         reactionOutbox: any ReactionOutboxEnqueuing = LiveReactionOutbox(),
         attachments: any AttachmentDeleting = AttachmentService.shared,
+        personalHiding: any PersonalMessageHiding = MessageService.shared,
+        hiddenMessages: LocallyHiddenMessagesStore = .shared,
         now: @escaping () -> Date = { Date() }
     ) {
         self.state = state
@@ -100,6 +104,8 @@ final class ConversationCommandHandler: ConversationCommandProviding {
         self.networkMonitor = networkMonitor
         self.reactionOutbox = reactionOutbox
         self.attachments = attachments
+        self.personalHiding = personalHiding
+        self.hiddenMessages = hiddenMessages
         self.now = now
         self.reactionLastRefill = now()
     }
@@ -170,8 +176,25 @@ final class ConversationCommandHandler: ConversationCommandProviding {
 
     // MARK: - Delete
 
-    func deleteLocally(messageId: String) {
-        LocallyHiddenMessagesStore.shared.hide(messageId)
+    /// **« Supprimer pour moi » vaut PARTOUT** (#11221) : la route que le web
+    /// appelle déjà, dont la passerelle diffuse le masquage aux autres appareils
+    /// du lecteur. Optimiste — le message quitte le fil avant la réponse ; un
+    /// refus le rend (la ligne purgée se relit par `restore`, qui reçoit l'id
+    /// serveur). Hors ligne, refus dit : un masquage resté local reviendrait au
+    /// prochain chargement, sans que rien l'explique.
+    func deleteForMe(messageId: String, serverId: String, restore: (String) async -> Void) async -> ConversationCommandFailure? {
+        guard networkMonitor.isOnline else { return Self.offlineRemovalRefusal }
+        hiddenMessages.hide(messageId)
+        try? await persistence.purgeMessages(ids: [messageId])
+        do {
+            try await personalHiding.hideForMe(messageId: serverId)
+            StarredMessagesStore.shared.remove(messageId: serverId)
+            return nil
+        } catch {
+            hiddenMessages.unhide(messageId)
+            await restore(serverId)
+            return ConversationCommandFailure(error)
+        }
     }
 
     /// Un message `.failed` n'a jamais atteint le serveur : sa ligne d'outbox, même remise

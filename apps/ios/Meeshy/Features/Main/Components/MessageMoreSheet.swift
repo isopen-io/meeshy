@@ -220,7 +220,7 @@ struct MessageMoreSheet: View {
                     Button {
                         handleMoreItemTap(item)
                     } label: {
-                        Image(systemName: symbol(item))
+                        Image(systemName: item.verb.symbol)
                             .font(.callout.weight(.semibold))
                             .foregroundColor(isActive ? color : theme.textSecondary)
                             .frame(width: 44, height: 44)
@@ -232,7 +232,7 @@ struct MessageMoreSheet: View {
                             .overlay(Circle().stroke(isActive ? color.opacity(0.5) : .clear, lineWidth: MeeshyBorder.emphasis))
                     }
                     .buttonStyle(MorePelletButtonStyle())
-                    .accessibilityLabel(labelText(item))
+                    .accessibilityLabel(item.verb.label)
                     .accessibilityAddTraits(isActive ? [.isSelected] : [])
                 }
             }
@@ -350,12 +350,12 @@ struct MessageMoreSheet: View {
                         )
                         .frame(width: 42, height: 42)
 
-                    Image(systemName: symbol(item))
+                    Image(systemName: item.verb.symbol)
                         .font(.callout.weight(.semibold))
                         .foregroundColor(color)
                 }
 
-                Text(labelText(item))
+                Text(item.verb.label)
                     .font(.caption2.weight(.medium))
                     .foregroundColor(isActive ? color : theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -372,7 +372,7 @@ struct MessageMoreSheet: View {
         .buttonStyle(MorePelletButtonStyle())
         // VoiceOver : annonce le seul libellé (évite la double-lecture
         // « glyphe + texte », ex. « globe, Langue »). Le Button conserve son trait.
-        .accessibilityLabel(labelText(item))
+        .accessibilityLabel(item.verb.label)
         // L'état « ouvert » d'une pastille d'exploration (contenu inline déplié)
         // n'était signalé que par la couleur (fill/stroke/label) — invisible pour
         // VoiceOver (WCAG 1.4.1). Le trait .isSelected l'annonce, iOS le localise.
@@ -426,10 +426,10 @@ struct MessageMoreSheet: View {
         let color = colorFor(item)
         return VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack(spacing: MeeshySpacing.sm) {
-                Image(systemName: symbol(item))
+                Image(systemName: item.verb.symbol)
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(color)
-                Text(labelText(item))
+                Text(item.verb.label)
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
@@ -493,65 +493,6 @@ struct MessageMoreSheet: View {
         case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar,
              .pinSticker, .unpinSticker, .delete, .edit, .copy, .share, .imager:
             EmptyView()
-        }
-    }
-
-    private func symbol(_ item: MoreItem) -> String {
-        switch item {
-        case .reply: return "arrowshape.turn.up.left"
-        case .forward: return "arrowshape.turn.up.right"
-        case .thread: return "bubble.left.and.bubble.right"
-        case .media: return "paperclip.badge.ellipsis"
-        case .pin: return "pin"
-        case .unpin: return "pin.slash"
-        case .star: return "star"
-        case .unstar: return "star.slash"
-        case .pinSticker: return "rectangle.portrait.on.rectangle.portrait.angled"
-        case .unpinSticker: return "rectangle.portrait.slash"
-        case .delete: return "trash"
-        case .edit: return "pencil"
-        case .copy: return "doc.on.doc"
-        case .share: return "square.and.arrow.up"
-        case .imager: return MessageCardExportMenu.imageSymbol
-        case .language: return "globe"
-        case .views: return "eye"
-        case .reactions: return "face.smiling"
-        case .transcription: return "waveform"
-        case .sentiment: return "brain.head.profile"
-        case .history: return "clock.arrow.circlepath"
-        case .report: return "exclamationmark.triangle"
-        }
-    }
-
-    private func labelText(_ item: MoreItem) -> String {
-        switch item {
-        case .reply: return String(localized: "action.reply", defaultValue: "Répondre", bundle: .main)
-        case .forward: return String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)
-        case .thread: return String(localized: "action.thread", defaultValue: "Discussion", bundle: .main)
-        case .media: return String(localized: "action.media", defaultValue: "Média", bundle: .main)
-        case .pin: return String(localized: "action.pin", defaultValue: "Épingler", bundle: .main)
-        case .unpin: return String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
-        case .star: return String(localized: "action.favorite", defaultValue: "Favori", bundle: .main)
-        case .unstar: return String(localized: "action.unfavorite", defaultValue: "Retirer le favori", bundle: .main)
-        // Le libellé NOMME l'objet — « la décoration », pas « le favori ».
-        // Voisin de `star`, il en désigne un autre : le message reste dans sa
-        // conversation, la décoration part dans la palette.
-        case .pinSticker: return String(localized: "action.pinSticker",
-                                        defaultValue: "Épingler la décoration", bundle: .main)
-        case .unpinSticker: return String(localized: "action.unpinSticker",
-                                          defaultValue: "Retirer la décoration", bundle: .main)
-        case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
-        case .edit: return String(localized: "action.edit", defaultValue: "Modifier", bundle: .main)
-        case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
-        case .share: return String(localized: "action.share", defaultValue: "Partager", bundle: .main)
-        case .imager: return MessageCardExportMenu.imageLabel
-        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Traduire", bundle: .main)
-        case .views: return String(localized: "message-detail.tab.views", defaultValue: "Qui a vu", bundle: .main)
-        case .reactions: return String(localized: "message-detail.tab.reactions", defaultValue: "Réactions", bundle: .main)
-        case .transcription: return String(localized: "message-detail.tab.transcription", defaultValue: "Transcription", bundle: .main)
-        case .sentiment: return String(localized: "message-detail.tab.sentiment", defaultValue: "Sentiment", bundle: .main)
-        case .history: return String(localized: "message-detail.tab.history", defaultValue: "Historique", bundle: .main)
-        case .report: return String(localized: "message-detail.tab.report", defaultValue: "Signaler", bundle: .main)
         }
     }
 }

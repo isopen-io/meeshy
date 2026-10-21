@@ -35,10 +35,10 @@ struct RiverConversationHost: View {
     var storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
-    /// Lot 3 — retours au Fil depuis une bulle (appui long), DITS par
-    /// l'appelant qui possède le contrôleur de mode et le composeur.
+    /// « Ouvrir dans le fil » et l'appui long (#11224), DITS par l'appelant
+    /// qui possède le contrôleur de mode et LE menu du message.
     var onOpenInThread: ((String) -> Void)? = nil
-    var onReply: ((String) -> Void)? = nil
+    var onLongPress: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, relayée jusqu'à la bulle.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
@@ -88,7 +88,7 @@ struct RiverConversationHost: View {
         onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
         onViewStory: ((String) -> Void)? = nil,
         onOpenInThread: ((String) -> Void)? = nil,
-        onReply: ((String) -> Void)? = nil,
+        onLongPress: ((String) -> Void)? = nil,
         onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
         onMediaTap: ((MessageAttachment) -> Void)? = nil,
         onPlayQuotedAudio: ((ReplyReference) -> Bool)? = nil,
@@ -106,7 +106,7 @@ struct RiverConversationHost: View {
         self.onOpenProfile = onOpenProfile
         self.onViewStory = onViewStory
         self.onOpenInThread = onOpenInThread
-        self.onReply = onReply
+        self.onLongPress = onLongPress
         self.onConsumeViewOnce = onConsumeViewOnce
         self.onMediaTap = onMediaTap
         self.onPlayQuotedAudio = onPlayQuotedAudio
@@ -232,7 +232,7 @@ struct RiverConversationHost: View {
                 onOpenProfile: onOpenProfile,
                 onViewStory: onViewStory,
                 onOpenInThread: onOpenInThread,
-                onReply: onReply,
+                onLongPress: onLongPress,
                 onConsumeViewOnce: onConsumeViewOnce,
                 onOpenQuotedMedia: openQuotedMedia,
                 onMediaTap: onMediaTap,

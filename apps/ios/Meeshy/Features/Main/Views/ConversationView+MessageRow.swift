@@ -358,10 +358,8 @@ extension ConversationView {
             if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].exitOffer.offers(.copy) }) ?? false {
                 messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: MeeshyColors.trackingAccentHex) {
                     if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                        // Prisme: copy what's actually DISPLAYED (the preferred
-                        // translation when one is showing), never blindly the
-                        // original — matches the long-press menu's Copier below.
-                        MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg)
+                        // Prisme : copie ce que la bulle AFFICHE, drapeau basculé compris (#11233).
+                        MessageExitTransport.copyDisplayed(msg, in: viewModel)
                     }
                     closeReactionBar()
                 }

@@ -53,7 +53,16 @@ public struct ConsumeAfterReadResponse: Decodable, Sendable {
     public let consumed: [String]
 }
 
-public final class MessageService: MessageServiceProviding, AfterReadConsuming, Sendable {
+/// #11221 — « Supprimer pour moi » vaut PARTOUT : le masquage PERSONNEL d'un
+/// message (`DELETE /messages/:id/delete-for-me`), que la passerelle diffuse
+/// aux autres appareils du lecteur (`message:hidden-for-me`). Protocole à
+/// part, comme `AfterReadConsuming` : les faux de `MessageServiceProviding`
+/// n'ont pas à connaître un geste qu'un seul site déclenche.
+public protocol PersonalMessageHiding: Sendable {
+    func hideForMe(messageId: String) async throws
+}
+
+public final class MessageService: MessageServiceProviding, AfterReadConsuming, PersonalMessageHiding, Sendable {
     public static let shared = MessageService()
     private let api: APIClientProviding
 
@@ -212,6 +221,10 @@ public final class MessageService: MessageServiceProviding, AfterReadConsuming, 
 
     public func delete(conversationId: String, messageId: String, reason: String?) async throws {
         try await api.deleteRemovingContent(ConversationsEndpoint.byIdMessagesByMessageId(id: conversationId, messageId: messageId), reason: reason)
+    }
+
+    public func hideForMe(messageId: String) async throws {
+        let _: APIResponse<[String: Bool]> = try await api.delete(MessagesEndpoint.byMessageIdDeleteForMe(messageId: messageId))
     }
 
     public func pin(conversationId: String, messageId: String) async throws {

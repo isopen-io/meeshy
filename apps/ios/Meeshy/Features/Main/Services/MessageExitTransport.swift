@@ -20,6 +20,19 @@ enum MessageExitTransport {
         return true
     }
 
+    /// Copie le texte que la bulle AFFICHE (#11233) — la langue du drapeau
+    /// basculé, la traduction préférée sinon, l'original faute de traduction —
+    /// lu là où la cellule le lit, jamais recomposé par le site d'appel.
+    @discardableResult
+    static func copyDisplayed(_ message: Message, in viewModel: ConversationViewModel) -> Bool {
+        copy(BubbleContent.displayedText(
+            of: message,
+            translations: viewModel.messageTranslations[message.id] ?? [],
+            preferredTranslation: viewModel.preferredTranslation(for: message.id),
+            activeDisplayLangCode: viewModel.bubbleLanguageSelections[message.id]?.activeDisplayLangCode
+        ), of: message)
+    }
+
     /// La requête d'enregistrement de la pièce que le menu désigne — la pièce
     /// VISÉE quand il y en a une (#9908), sinon la première qui n'est pas un
     /// lieu —, ou `nil` quand la loi de sortie la retient. Une pièce visée
