@@ -689,9 +689,9 @@ class ConversationViewModel: ObservableObject, AttachmentSendHosting, Transcript
     }
 
     /// Mémoire des messages déjà vus par la file des vocaux — pilotée par
-    /// `subscribeToMessagesForAudioQueue()` (`ConversationViewModel+AudioQueue.swift`).
+    /// `ConversationAudioQueueFeed` (`subscribeToMessagesForAudioQueue()` dans `+AudioQueue.swift`).
     /// Stockée ici : une extension ne déclare pas de propriété stockée.
-    var audioQueueTracker = AudioQueueAppendTracker()
+    let audioQueueFeed = ConversationAudioQueueFeed()
 
     // MARK: - Mark as Read / Received
 

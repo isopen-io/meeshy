@@ -94,6 +94,15 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
             "func playAudio(attachmentId:", "func audioQueueTail(after attachmentId:",
             "func queuedAudio(for attachment:",
         ]),
+        ("Conversation/TranscriptionRetryScheduler.swift", [
+            "struct TranscriptionRetryScheduler", "static func idsMissingTranscription(",
+        ]),
+        ("Conversation/PrismTranslationLaw.swift", [
+            "enum PrismTranslationLaw", "static func prismTranslation(", "static func dominantSplit(",
+        ]),
+        ("Conversation/ConversationAudioQueueFeed.swift", [
+            "final class ConversationAudioQueueFeed", "func followMessages(", "func followFinishedEvents(",
+        ]),
         ("Conversation/ConversationCommandHandler.swift", [
             "func deleteForEveryone(", "func removeForModeration(", "func togglePin(", "func compensate(",
         ]),

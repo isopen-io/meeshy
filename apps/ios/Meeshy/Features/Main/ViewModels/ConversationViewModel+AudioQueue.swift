@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import MeeshySDK
 
 // MARK: - La file des vocaux d'une conversation
@@ -140,68 +141,19 @@ extension ConversationViewModel {
                    uniquingKeysWith: { first, _ in first })
     }
 
-    /// Subscribes to `$messages` and forwards any newly-inserted audio messages
-    /// — from someone else, in the conversation currently being played by the
-    /// coordinator — into the active playback queue via `appendUpcoming`.
-    ///
-    /// Uses a snapshot of seen message ids to detect genuinely new inserts and
-    /// ignore re-orderings or in-place mutations (edits, reactions, etc.).
     func subscribeToMessagesForAudioQueue() {
-        // Hot-path filter: `$messages` fires on EVERY mutation (insert,
-        // delete, edit, reaction, translation update, …). On a busy
-        // conversation with reactions in burst, that can be 20-50 emissions
-        // per second. The handler only cares about inserts/deletes (those
-        // are the only mutations that change the message-id set), so we
-        // dedupe on the id sequence to skip in-place mutations cheaply.
-        //
-        // Trade-off: an edit that REPLACES a message in place with a new
-        // audio attachment would not refire here. That case is rare in
-        // practice — audio attachments are not typically added to an
-        // existing message — and the tracker's seen-id set
-        // would still skip it correctly if the id is preserved.
-        $messages
-            .map { $0.map(\.id) }
-            .removeDuplicates()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                self.processMessagesForAudioQueueAppend(self.messages)
-            }
+        audioQueueFeed.followMessages(of: self, publishing: $messages.eraseToAnyPublisher())
             .store(in: &cancellables)
     }
 
-    /// Subscribes to the shared `ConversationAudioCoordinator`'s
-    /// `attachmentFinishedPublisher` so this VM records each natural-end /
-    /// failed-load event in `listenedAttachmentIds`. Filters by
-    /// `event.conversationId == self.conversationId` so a coordinator owned
-    /// by another conversation (the singleton is process-wide) NEVER
-    /// pollutes this VM's listened set with foreign attachment ids.
-    /// The subscription auto-cleans on `deinit` via `cancellables`.
     func subscribeToAudioCoordinatorFinishedEvents() {
-        let ownConversationId = conversationId
-        audioCoordinator.attachmentFinishedPublisher
-            .filter { event in event.conversationId == ownConversationId }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.listenedAttachmentIds.insert(event.attachmentId)
-            }
-            .store(in: &cancellables)
+        audioQueueFeed.followFinishedEvents(of: self).store(in: &cancellables)
     }
 
-    private func processMessagesForAudioQueueAppend(_ snapshot: [Message]) {
-        let arrivals = audioQueueTracker.newAudios(
-            in: snapshot,
-            activeConversationId: audioCoordinator.activeContext?.conversationId,
-            conversationId: conversationId,
-            currentUserId: authManager.currentUser?.id,
-            listenedAttachmentIds: listenedAttachmentIds
-        )
-        for (message, attachment) in arrivals {
-            // Piste EFFECTIVE — même loi que playAudio/la tail.
-            audioCoordinator.appendUpcoming(queuedAudio(for: attachment, message: message))
-        }
-    }
+    var audioQueueUserId: String? { authManager.currentUser?.id }
 }
+
+extension ConversationViewModel: ConversationAudioQueueHosting {}
 
 /// La mémoire des messages déjà vus par la file des vocaux : seuls les
 /// INSERTIONS nouvelles d'un autre auteur, dans la conversation jouée,
