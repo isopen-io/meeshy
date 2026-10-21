@@ -153,6 +153,16 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         XCTAssertTrue(text.contains(".accessibilityAction(onActivate)"))
     }
 
+    func test_aucuneActionDAccessibiliteNePorteLeLibellePerform() throws {
+        let root = Self.sourcesRoot
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+        let offenders = files.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .filter { (try? String(contentsOf: $0, encoding: .utf8))?.contains(".accessibilityAction(perform:") == true }
+            .map(\.lastPathComponent)
+        XCTAssertEqual(offenders, [])
+    }
+
     func test_leScannerDistingueUnBoutonDUnGesteNu() {
         let button = ["Button {", "    onTap()", "}"]
         let gesture = ["Text(\"x\")", ".onTapGesture {", "    onTap()", "}"]
