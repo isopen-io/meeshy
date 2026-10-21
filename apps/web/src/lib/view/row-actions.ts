@@ -262,9 +262,16 @@ export type RowSubmenuChoice =
  * bloquer ou débloquer (une confirmation pour bloquer), ou un choix de
  * sous-menu à écrire. L'écran possède les fenêtres et le store ; la ligne,
  * mémoïsée, ne fait que nommer le geste.
+ *
+ * « Inviter » et « Gérer les membres » (revue #11211) ouvrent la fiche, mais
+ * pas sur sa tête comme « Détails » : sur l'ajout de membres, ou sur la liste
+ * des membres. Trois entrées au même effet, sous trois noms, n'en font qu'une.
  */
+export type RowDetailsFocus = 'invite' | 'members';
+
 export type RowIntent =
   | { readonly kind: 'rename' }
+  | { readonly kind: 'details'; readonly focus: RowDetailsFocus }
   | { readonly kind: 'block'; readonly intent: 'block' | 'unblock' }
   | RowSubmenuChoice;
 

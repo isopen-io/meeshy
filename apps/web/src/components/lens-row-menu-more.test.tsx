@@ -134,6 +134,19 @@ describe('LensRow — le favori et les entrées d’iOS', () => {
     ]);
   });
 
+  test('« Inviter » ouvre la fiche sur l’ajout, « Gérer les membres » sur les membres — pas sur sa tête comme « Détails » (revue #11211)', () => {
+    const { intents, details } = mount(group);
+    openMenu();
+    act(() => entry('Inviter')?.click());
+    openMenu();
+    act(() => entry('Gérer les membres')?.click());
+    expect(details).toEqual([]);
+    expect(intents).toEqual([
+      ['c-lyon', { kind: 'details', focus: 'invite' }],
+      ['c-lyon', { kind: 'details', focus: 'members' }],
+    ]);
+  });
+
   test('un membre ordinaire d’un groupe ne renomme ni n’invite (#11211)', () => {
     mount({ ...group, currentUserRole: 'member' } as unknown as Conversation);
     openMenu();
@@ -142,17 +155,12 @@ describe('LensRow — le favori et les entrées d’iOS', () => {
     expect(labels()).toContain('Quitter');
   });
 
-  test('« Quitter » demande le départ, « Inviter » et « Gérer les membres » ouvrent la fiche (#11211)', () => {
+  test('« Quitter » demande le départ (#11211)', () => {
     departureStore.setState({ request: null, failure: null });
-    const { details } = mount(group);
+    mount(group);
     openMenu();
     act(() => entry('Quitter')?.click());
     expect(departureStore.getState().request).toEqual({ conversationId: 'c-lyon', kind: 'leave', returnToList: false });
-    openMenu();
-    act(() => entry('Inviter')?.click());
-    openMenu();
-    act(() => entry('Gérer les membres')?.click());
-    expect(details).toEqual(['c-lyon', 'c-lyon']);
     departureStore.setState({ request: null, failure: null });
   });
 

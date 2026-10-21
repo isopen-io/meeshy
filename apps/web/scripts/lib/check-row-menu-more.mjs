@@ -147,7 +147,7 @@ export async function checkRowMenuMore({ browser, base, check }) {
     const style = card === null ? null : getComputedStyle(card);
     const box = card?.getBoundingClientRect();
     return {
-      dialog: card?.getAttribute('role') ?? null,
+      dialog: (card?.closest('[role="dialog"][aria-modal="true"]')?.querySelector('[role="menu"]') ?? null) !== null,
       transform: style?.transform ?? null,
       filter: style?.filter ?? null,
       rows: card?.querySelectorAll('[data-peek-row]').length ?? 0,
@@ -159,8 +159,8 @@ export async function checkRowMenuMore({ browser, base, check }) {
     };
   });
   check(
-    peek.dialog === 'dialog' && peek.menu && peek.transform === 'none' && peek.filter === 'none' && peek.width <= 340 && peek.left >= 16 && peek.right >= 16 && peek.path === '/chats',
-    `tenir « ${GROUP} » ouvre l'aperçu net (ni transform ni filtre), 340 px au plus et 16 px des bords, au-dessus de ses actions, sans ouvrir le fil (${JSON.stringify(peek)})`,
+    peek.dialog === true && peek.menu && peek.transform === 'none' && peek.filter === 'none' && peek.width <= 340 && peek.left >= 16 && peek.right >= 16 && peek.path === '/chats',
+    `tenir « ${GROUP} » ouvre l'aperçu net (ni transform ni filtre), dans une couche modale qui porte ses actions, 340 px au plus et 16 px des bords, au-dessus de ses actions, sans ouvrir le fil (${JSON.stringify(peek)})`,
   );
   await page.keyboard.press('Escape');
   const peekClosed = await page.evaluate((button) => ({ peek: document.querySelector('[data-conversation-peek]') !== null, focus: document.activeElement?.matches(button) === true }), BUTTON);

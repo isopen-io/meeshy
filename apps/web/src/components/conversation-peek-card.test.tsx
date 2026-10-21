@@ -9,6 +9,7 @@ import { accentOf } from '@/lib/accent';
 import { messagesQueryKey } from '@/lib/api/messages';
 import type { Conversation, Message } from '@/lib/api/types';
 import { loadRowMenuCatalog } from '@/lib/i18n-row-menu-catalog';
+import { resolveThreadMode, toStickyPreference } from '@/lib/reading-mode/decision';
 import { createReadingModeStore } from '@/lib/reading-mode/store';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -18,7 +19,7 @@ import { ConversationPeekCard } from './conversation-peek-card';
 /**
  * TENIR UNE CONVERSATION MONTRE SES DERNIERS MESSAGES (#11211) — dans le mode
  * de lecture qu'elle ouvrirait (bulles en bulles, Script et Focal en rangées
- * plates, Rivière en bulles), à son accent, lus du cache sans requête.
+ * plates, Rivière comme le fil la ramène), à son accent, lus du cache sans requête.
  */
 
 const VIEWER = 'u-moi';
@@ -153,10 +154,19 @@ describe('ConversationPeekCard — le mode et l’accent de la conversation', ()
     expect(card().querySelectorAll('[data-reading-mode="script"]').length).toBe(3);
   });
 
-  test('la Rivière, que l’aperçu ne dessine pas, retombe sur des bulles', () => {
+  test('la Rivière se rend comme le fil la rendrait en l’ouvrant (revue #11211)', () => {
+    const thread = resolveThreadMode({
+      unreadCount: 0,
+      lastOpenedAt: null,
+      now: Date.parse('2026-09-24T10:00:00.000Z'),
+      sticky: toStickyPreference('river'),
+      isAnonymous: false,
+      conversationType: 'group',
+      memberCount: 8,
+    });
     mount({ messages: THREE, sticky: 'river', conversation: conversationOf({ memberCount: 8 }) });
-    expect(card().querySelector('[data-reading-mode]')).toBeNull();
-    expect(card().querySelectorAll('[data-message]').length).toBe(3);
+    expect(thread.mode).not.toBe('river');
+    expect(card().querySelectorAll(`[data-reading-mode="${thread.mode}"]`).length).toBe(3);
   });
 
   test('le Résumé retombe sur Focal', () => {
@@ -170,9 +180,9 @@ describe('ConversationPeekCard — le mode et l’accent de la conversation', ()
     expect(card().style.getPropertyValue('--accent')).toBe(accentOf(conversation));
   });
 
-  test('la carte est un dialogue nommé, nette : ni échelle ni flou', () => {
+  test('la carte est un groupe nommé, nette : ni échelle ni flou', () => {
     mount({ messages: THREE });
-    expect(card().getAttribute('role')).toBe('dialog');
+    expect(card().getAttribute('role')).toBe('group');
     expect(card().getAttribute('aria-label')).toContain('Équipe Lyon');
     expect(card().style.transform).toBe('');
     expect(card().getAttribute('style') ?? '').not.toContain('scale');

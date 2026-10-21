@@ -44,7 +44,7 @@ import '@/styles/conversation-peek.css';
  * carte entière est un geste, ouvrir la conversation.
  */
 
-/** Ce que l'aperçu dessine : la Rivière retombe sur les bulles, le Résumé sur Focal. */
+/** Ce que l'aperçu dessine : ce que le fil dessinerait, le Résumé retombant sur Focal. */
 export type PeekReadingMode = FlatRowMode | 'bubbles';
 
 export const PEEK_MESSAGE_COUNT = 5;
@@ -53,7 +53,9 @@ export const PEEK_MESSAGE_COUNT = 5;
  * LA MÊME DÉCISION QUE LE FIL — `resolveThreadMode`, avec ce que
  * `useThreadReadingMode` lui remet (préférence collante, dernière ouverture,
  * non-lus, effectif), à ceci près que l'aperçu ne NOTE pas d'ouverture : tenir
- * une ligne n'est pas lire.
+ * une ligne n'est pas lire. Aucun mode n'est redécidé ici : la Rivière, que le
+ * fil ne dessine pas encore, y est ramenée par `resolveThreadMode` lui-même, et
+ * l'aperçu montre ce que l'ouverture montrera (revue #11211).
  */
 export function peekReadingMode(input: {
   readonly conversation: Conversation;
@@ -63,7 +65,6 @@ export function peekReadingMode(input: {
   readonly isAnonymous: boolean;
   readonly readingModesEnabled?: boolean;
 }): PeekReadingMode {
-  if (input.sticky === 'river') return 'bubbles';
   const decision = resolveThreadMode({
     unreadCount: unreadOf(input.conversation),
     lastOpenedAt: input.lastOpenedAt,
@@ -98,6 +99,13 @@ export type ConversationPeekCardProps = {
   /** La hauteur que la grappe laisse à la carte (`placeMessageMenuCluster`), 120 à 300. */
   readonly maxHeight: number;
   readonly onOpen: () => void;
+  /**
+   * LES ATTACHES DU LECTEUR D'ÉCRAN (revue #11211) — la grappe qui porte la
+   * carte se nomme par elle (`${idBase}-card`) et son menu se décrit par les
+   * derniers messages (`${idBase}-body`) : le corps est inerte, mais un nœud
+   * DÉSIGNÉ par `aria-describedby` se lit quand même.
+   */
+  readonly idBase?: string;
   readonly client?: QueryClient;
   readonly store?: ReadingModeStore;
   readonly readingModesEnabled?: boolean;
@@ -112,6 +120,7 @@ export function ConversationPeekCard({
   interfaceLanguage,
   maxHeight,
   onOpen,
+  idBase,
   client = appQueryClient,
   store = readingModeStore,
   readingModesEnabled,
@@ -144,8 +153,9 @@ export function ConversationPeekCard({
 
   return (
     <div
-      role="dialog"
+      role="group"
       aria-label={`${title}, ${label}`}
+      {...(idBase === undefined ? {} : { id: `${idBase}-card` })}
       data-peek-card
       data-peek-mode={mode}
       className="conversation-peek-card"
@@ -177,7 +187,7 @@ export function ConversationPeekCard({
           ) : null}
         </div>
       </div>
-      <div className="conversation-peek-body" inert>
+      <div className="conversation-peek-body" inert {...(idBase === undefined ? {} : { id: `${idBase}-body` })}>
         {placed === null ? <PeekSkeleton /> : null}
         {placed !== null && placed.length === 0 ? (
           <span className="text-title" style={{ color: 'var(--color-ios-ink-3)' }}>

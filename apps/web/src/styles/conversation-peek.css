@@ -7,6 +7,12 @@
  * `filter` sur elle, et l'animation ne joue que l'opacité, pour qu'aucune
  * échelle ne reste en fin d'entrée.
  */
+.conversation-peek-cluster {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
 .conversation-peek-veil {
   position: fixed;
   inset: 0;

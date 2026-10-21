@@ -57,6 +57,7 @@ afterEach(() => {
 });
 
 function mount() {
+  const actions: string[] = [];
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -69,11 +70,12 @@ function mount() {
           viewerId="u-moi"
           flags={{ isPinned: false, isMuted: false, isArchived: false }}
           unreadCount={0}
-          onRowAction={() => undefined}
+          onRowAction={(_, action) => actions.push(action)}
         />
       </ul>,
     );
   });
+  return { actions };
 }
 
 const row = (): HTMLElement => {
@@ -172,6 +174,62 @@ describe('LensRow — l’appui long ouvre l’aperçu de la conversation', () =
     });
     expect(peekIsOpen()).toBe(false);
     expect(document.activeElement).toBe(menuButton());
+  });
+
+  test('toucher le voile ne rouvre pas l’aperçu une fois l’appui long écoulé (revue #11211)', async () => {
+    mount();
+    await holdOpen();
+    pointer(textLink(), 'pointerup', 40, 40);
+    const veil = document.body.querySelector<HTMLElement>('[data-conversation-peek-veil]');
+    if (veil === null) throw new Error('voile introuvable');
+    pointer(veil, 'pointerdown', 200, 400);
+    act(() => {
+      veil.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    await wait(LONG_PRESS_MS + 40);
+    expect(peekIsOpen()).toBe(false);
+    expect(container.querySelector('[data-pressing]')).toBeNull();
+  });
+
+  test('le voile ne se retire pas à l’appui : c’est le clic qui le referme, sans clic fantôme dessous', async () => {
+    mount();
+    await holdOpen();
+    pointer(textLink(), 'pointerup', 40, 40);
+    const veil = document.body.querySelector<HTMLElement>('[data-conversation-peek-veil]');
+    if (veil === null) throw new Error('voile introuvable');
+    pointer(veil, 'pointerdown', 200, 400);
+    expect(peekIsOpen()).toBe(true);
+    act(() => {
+      veil.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(peekIsOpen()).toBe(false);
+  });
+
+  test('tenir une entrée du menu puis la toucher agit, sans rouvrir l’aperçu', async () => {
+    const { actions } = mount();
+    await holdOpen();
+    pointer(textLink(), 'pointerup', 40, 40);
+    const pin = [...document.body.querySelectorAll<HTMLButtonElement>('[data-conversation-peek] [role="menu"] button')].find((b) => b.textContent === 'Épingler');
+    if (pin === undefined) throw new Error('« Épingler » introuvable');
+    pointer(pin, 'pointerdown', 60, 300);
+    await wait(LONG_PRESS_MS + 50);
+    pointer(pin, 'pointerup', 60, 300);
+    act(() => {
+      pin.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(actions).toEqual(['pin']);
+  });
+
+  test('le lecteur d’écran lit une couche modale nommée par la carte, dont le menu se décrit par les derniers messages', async () => {
+    mount();
+    await holdOpen();
+    const cluster = document.body.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
+    const menu = cluster?.querySelector<HTMLElement>('[role="menu"]');
+    expect(menu).not.toBeNull();
+    const named = document.getElementById(cluster?.getAttribute('aria-labelledby') ?? '');
+    expect(named?.getAttribute('aria-label')).toContain('Équipe Lyon');
+    const described = document.getElementById(menu?.getAttribute('aria-describedby') ?? '');
+    expect(described?.closest('[data-peek-card]')).not.toBeNull();
   });
 
   test('le bouton ⋮ garde son panneau ancré, sans aperçu', () => {

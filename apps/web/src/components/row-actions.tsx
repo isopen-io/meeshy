@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject } from 'react';
+import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { ConversationActions } from '@meeshy/shared/utils/conversation-action-policy';
@@ -9,6 +9,7 @@ import { impact } from '@/lib/view/haptics';
 import { isContextMenuKey } from '@/lib/view/long-press';
 import { placeMessageMenuCluster, placePopover, placePopoverVertical } from '@/lib/view/popover';
 import { useRovingMenu } from '@/lib/view/roving-menu';
+import { safeAreaInsets } from '@/lib/view/safe-area';
 import {
   rowMenuItems,
   rowSubmenuItems,
@@ -262,6 +263,7 @@ export function RowActions({
   const [peekBox, setPeekBox] = useState<PeekBox>({ top: 0, left: 0, width: PEEK_WIDTH, cardHeight: PEEK_MAX_HEIGHT, menuOffset: 0, menuMaxHeight: 0 });
   const submenuTitle = submenu === null ? undefined : items.find((item) => item.submenu === submenu)?.label;
   const menuLabel = submenuTitle ?? translate(language, 'rowActions.menu');
+  const peekIds = useId();
   const [box, setBox] = useState<{ top: number; right: number; width: number; maxHeight: number }>({
     top: 0,
     right: 0,
@@ -348,10 +350,14 @@ export function RowActions({
     const width = Math.min(PEEK_WIDTH, Math.max(0, window.innerWidth - 2 * PEEK_SIDE));
     const left = row.left + (row.width - width) / 2;
     const menuHeight = count * MENU_ITEM_HEIGHT + MENU_PADDING + MENU_BORDER;
+    /* L'ENCOCHE ET L'INDICATEUR D'ACCUEIL (revue #11211) — lus comme le menu
+       d'un message les lit : dans la PWA iPhone, la grappe ne passe ni sous
+       l'île dynamique ni sous la barre du bas. */
+    const safe = safeAreaInsets();
     const cluster = placeMessageMenuCluster({
       anchor: { top: row.top, bottom: row.top + PEEK_MAX_HEIGHT, left, right: left + width, width, height: PEEK_MAX_HEIGHT },
       viewport: { width: window.innerWidth, height: window.innerHeight },
-      safe: { top: 0, bottom: 0 },
+      safe,
       menuHeight,
       isMine: false,
       railHeight: 0,
@@ -369,7 +375,7 @@ export function RowActions({
       width: cluster.previewWidth,
       cardHeight: Math.max(PEEK_MIN_HEIGHT, cluster.previewHeight),
       menuOffset: Math.max(0, Math.min(cluster.menuLeft - cluster.previewLeft, cluster.previewWidth - MENU_WIDTH)),
-      menuMaxHeight: Math.max(MENU_ITEM_HEIGHT, window.innerHeight - cluster.menuTop - PEEK_SIDE),
+      menuMaxHeight: Math.max(MENU_ITEM_HEIGHT, window.innerHeight - safe.bottom - cluster.menuTop - PEEK_SIDE),
     });
   };
   const place = (count?: number) => (mode === 'peek' ? placeCluster(count) : measure(count));
@@ -486,9 +492,11 @@ export function RowActions({
    * `useLongPress` tient sur la ligne (`LensRow`) : Safari iOS et la PWA
    * iPhone n'émettent pas `contextmenu`, l'appui seul suffit donc. Le clic
    * droit, la touche menu et Maj+F10 restent écoutés ici, sur la ligne, par un
-   * gestionnaire posé UNE fois et qui lit le dernier rendu par référence. Un
-   * hôte plus profond qui a déjà répondu (le menu de l'avatar) a fait
-   * `preventDefault` : la ligne ne rouvre pas par-dessus lui.
+   * gestionnaire NATIF posé UNE fois et qui lit le dernier rendu par référence.
+   * Natif, il passe AVANT les gestionnaires React d'un descendant (délégués à
+   * la racine) : `defaultPrevented` n'y voit qu'un `preventDefault` NATIF
+   * posé plus bas. Un hôte à menu qui entrerait dans la ligne (un avatar)
+   * devra passer par l'arbitrage `claims()` de `long-press.ts` (D-210).
    */
   const gesture = useRef<(fromPress: boolean) => boolean>(openPeek);
   gesture.current = openPeek;
@@ -658,21 +666,27 @@ export function RowActions({
       {open && typeof document !== 'undefined'
         ? createPortal(
             mode === 'peek' && peek !== undefined ? (
-              <>
-                <div
-                  aria-hidden
-                  data-conversation-peek-veil
-                  className="conversation-peek-veil"
-                  onPointerDown={closeAndFocusButton}
-                  onClick={closeAndFocusButton}
-                />
-                <div
-                  ref={menuRef}
-                  data-conversation-peek
-                  className="conversation-peek"
-                  onKeyDown={onMenuKeyDown}
-                  style={{ top: peekBox.top, left: peekBox.left, width: peekBox.width }}
-                >
+              /**
+               * LA GRAPPE EST UNE COUCHE MODALE, VOILE COMPRIS (revue #11211).
+               * Le voile vit DANS `menuRef` : l'appui sur lui n'est plus un
+               * « appui hors du menu » que `useRovingMenu` fermerait au
+               * `pointerdown`. Il ferme au CLIC, le dernier événement du
+               * toucher — retiré au `pointerdown`, Safari iOS synthétisait le
+               * clic de compatibilité sur la ligne d'en dessous, qui s'ouvrait.
+               * Le lecteur d'écran lit une seule couche (`aria-modal`), nommée
+               * par la carte, et le menu se décrit par les derniers messages.
+               */
+              <div
+                ref={menuRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={`${peekIds}-card`}
+                data-conversation-peek-cluster
+                className="conversation-peek-cluster"
+                onKeyDown={onMenuKeyDown}
+              >
+                <div aria-hidden data-conversation-peek-veil className="conversation-peek-veil" onClick={closeAndFocusButton} />
+                <div data-conversation-peek className="conversation-peek" style={{ top: peekBox.top, left: peekBox.left, width: peekBox.width }}>
                   <RowMenuBackDismiss onClose={closeAndFocusButton} />
                   <Suspense fallback={<div aria-hidden className="conversation-peek-card" style={{ height: PEEK_MIN_HEIGHT }} />}>
                     <ConversationPeekCard
@@ -683,11 +697,13 @@ export function RowActions({
                       interfaceLanguage={language}
                       maxHeight={peekBox.cardHeight}
                       onOpen={openConversation}
+                      idBase={peekIds}
                     />
                   </Suspense>
                   <div
                     role="menu"
                     aria-label={menuLabel}
+                    aria-describedby={`${peekIds}-body`}
                     className="overflow-hidden rounded-card py-1 shadow-cast"
                     style={{
                       width: MENU_WIDTH,
@@ -702,7 +718,7 @@ export function RowActions({
                     {panelEntries}
                   </div>
                 </div>
-              </>
+              </div>
             ) : (
               <div
                 ref={menuRef}

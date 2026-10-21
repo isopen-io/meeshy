@@ -17,7 +17,7 @@ import { accentOf, withAccent } from '@/lib/accent';
 import { useColorScheme } from '@/lib/use-color-scheme';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import { conversationRowSwipeSides } from '@/lib/view/conversation-row-swipe';
-import { isRowCallAction, isRowFlagAction, rowConversationActions, type RowActionId, type RowFlagActionId, type RowIntent, type RowMenuMore } from '@/lib/view/row-actions';
+import { isRowCallAction, isRowFlagAction, rowConversationActions, type RowActionId, type RowDetailsFocus, type RowFlagActionId, type RowIntent, type RowMenuMore } from '@/lib/view/row-actions';
 import { useLongPress } from '@/lib/view/long-press';
 import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
@@ -200,9 +200,20 @@ type RowPressProps = ReturnType<typeof useLongPress>;
 const both =
   (first: RowPointerHandler, second: RowPointerHandler): RowPointerHandler =>
   (event) => {
+    if (!startsInRow(event)) return;
     first(event);
     second(event);
   };
+
+/**
+ * UN GESTE NÉ DANS LE PORTAIL N'EST PAS UN GESTE DE LA LIGNE (revue #11211) —
+ * React fait remonter les événements par l'ARBRE des composants : le voile, la
+ * carte et les entrées de l'aperçu, rendus dans `document.body`, atteignent le
+ * `<li>`. Sans ce filtre, toucher le voile relançait le minuteur de la ligne,
+ * et l'aperçu se rouvrait 350 ms après s'être refermé.
+ */
+const startsInRow = (event: ReactPointerEvent<HTMLLIElement>): boolean =>
+  event.target instanceof Node && event.currentTarget.contains(event.target);
 
 function useRowGestures(swipe: RowSwipeProps, press: RowPressProps) {
   const { ref, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onClickCapture } = swipe;
@@ -323,9 +334,12 @@ function LensRowImpl({
      plateforme servi (`GET /me`, déjà en cache dès qu'un écran l'a demandé). */
   const actionsOf = () =>
     rowConversationActions({ conversation, viewer: { id: viewerId, hasAccount: account, isAnonymous: guest, platformRole: servedPlatformRole() } });
+  const openDetailsOn = (focus: RowDetailsFocus) =>
+    onRowIntent === undefined ? onOpenDetails?.(conversation.id) : onRowIntent(conversation.id, { kind: 'details', focus });
   const onAction = (id: RowActionId) => {
     if (id === 'delete' || id === 'leave') return requestDeparture({ conversationId: conversation.id, kind: id, returnToList: false });
-    if (id === 'details' || id === 'invite' || id === 'manageMembers') return onOpenDetails?.(conversation.id);
+    if (id === 'invite' || id === 'manageMembers') return openDetailsOn(id === 'invite' ? 'invite' : 'members');
+    if (id === 'details') return onOpenDetails?.(conversation.id);
     if (id === 'adminOpen') return navigate(href('adminConversation', { conversation: conversation.id }));
     if (id === 'rename') return onRowIntent?.(conversation.id, { kind: 'rename' });
     if (id === 'block') return onRowIntent?.(conversation.id, { kind: 'block', intent: peerBlocked === true ? 'unblock' : 'block' });
