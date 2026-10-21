@@ -407,8 +407,6 @@ struct FocalRow: View {
     // (réactions : fusionnées dans `flagAndReactionsRow` — drapeau premier,
     // même ligne)
 
-
-
     /// La citation est rendue ICI sauf quand le lecteur audio l'héberge. Le
     /// bloc média nu n'en loge aucune : la règle de la bulle
     /// (`visualHostsReply`) n'a pas cours dans la rangée plate.
