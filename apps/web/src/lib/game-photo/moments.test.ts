@@ -93,11 +93,11 @@ describe('chaque moment porte son identité, son emblème et ses mots', () => {
   });
 
   test('la première Meesh, une Meesh numérotée, une Meesh en or', () => {
-    expect(meeshMoment({ number: 1, edition: 'silver' }).title).toBe('Ma première Meesh');
-    expect(meeshMoment({ number: 20, edition: 'silver' }).title).toBe('Meesh n° 20');
-    expect(meeshMoment({ number: 100, edition: 'gold' }).title).toBe('Meesh n° 100 · or');
-    expect(meeshMoment({ number: 1000, edition: 'prism' }).title.replace(/\s/g, ' ')).toBe('Meesh n° 1 000 · prisme');
-    expect(meeshMoment({ number: 20, edition: 'silver' }).id).toBe('meesh:20');
+    expect(meeshMoment({ number: 1 }).title).toBe('Ma première Meesh');
+    expect(meeshMoment({ number: 20 }).title).toBe('Meesh n° 20');
+    expect(meeshMoment({ number: 100 }).title).toBe('Meesh n° 100 · or');
+    expect(meeshMoment({ number: 1000 }).title.replace(/\s/g, ' ')).toBe('Meesh n° 1 000 · prisme');
+    expect(meeshMoment({ number: 20 }).id).toBe('meesh:20');
   });
 
   test('un palier du trésor', () => {
@@ -165,6 +165,15 @@ describe('photoMomentsOfTransition — ce qui se propose APRÈS la célébration
     expect(minted(10)).toEqual(['meesh:10']);
     expect(minted(100)).toEqual(['meesh:100']);
     expect(minted(1000)).toEqual(['meesh:1000']);
+  });
+
+  test('la pièce de la photo se dessine dans la plus haute édition atteinte, et son titre la nomme (#11483)', () => {
+    expect(meeshMoment({ number: 247 }).emblem).toEqual({ kind: 'meesh', number: 247, edition: 'gold' });
+    expect(meeshMoment({ number: 247 }).title).toBe('Meesh n° 247 · or');
+    expect(meeshMoment({ number: 1010 }).emblem).toEqual({ kind: 'meesh', number: 1010, edition: 'prism' });
+    expect(meeshMoment({ number: 90 }).title).toBe('Meesh n° 90');
+    const tenth = photoMomentsOfTransition(view({ score: AT_8, mintedLifetime: 249 }), view({ score: AT_8, mintedLifetime: 250 })).find((m) => m.id === 'meesh:250');
+    expect(tenth?.emblem).toEqual({ kind: 'meesh', number: 250, edition: 'gold' });
   });
 
   test('une Meesh ordinaire ne se propose pas', () => {
