@@ -22,6 +22,12 @@ import { engagementScaleServiceFor } from '../../../services/engagement/Engageme
 
 const ADMIN_ID = '507f1f77bcf86cd799439001';
 
+/** Le barème tel qu'il part sur le fil : `clawbackHours` figé à la loi des 30 jours (#11525). */
+const served = <S extends typeof DEFAULT_ENGAGEMENT_SCALE>(scale: S) => ({
+  ...scale,
+  abuse: { ...scale.abuse, clawbackHours: 720 },
+});
+
 function makePrisma() {
   let stored: { config: unknown; updatedAt: Date; updatedById: string | null } | null = null;
   const auditCreate = jest.fn(async (_args: unknown) => ({}));
@@ -95,7 +101,7 @@ describe('GET /admin/engagement-scale', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
       success: true,
-      data: { scale: DEFAULT_ENGAGEMENT_SCALE, updatedAt: null, updatedBy: null, updatedByPerson: null },
+      data: { scale: served(DEFAULT_ENGAGEMENT_SCALE), updatedAt: null, updatedBy: null, updatedByPerson: null },
     });
   });
 });
@@ -132,7 +138,7 @@ describe('PUT /admin/engagement-scale', () => {
     expect(res.json()).toEqual({
       success: true,
       data: {
-        scale: tuned,
+        scale: served(tuned),
         updatedAt: '2026-09-30T12:00:00.000Z',
         updatedBy: ADMIN_ID,
         // « Réglé par » se NOMME (audit 2026-10-04) : un ObjectId nu ne dit rien.
@@ -273,12 +279,16 @@ describe('les séries, la fidélité et l’ancien écran (#10388)', () => {
 });
 
 // #11491 (décision 2026-10-21) — la reprise d'une publication supprimée suit la
-// loi des 30 jours ; `abuse.clawbackHours` ne gouverne plus rien. Un ancien
-// client l'envoie encore : il est accepté, ignoré, et n'est plus servi.
-describe('la fenêtre de reprise n’est plus un réglage (#11491)', () => {
+// loi des 30 jours ; `abuse.clawbackHours` ne gouverne plus rien. Il n'est plus
+// ÉCRIT ; il reste SERVI, figé à la loi (30 × 24 h), parce qu'une console d'avant
+// la décision (onglet en cache, coque Android embarquant son paquet) décode le
+// barème avec l'ancien `parseAbuse`, qui EXIGE ce champ : sans lui elle déclare
+// le barème illisible et ne peut ni l'afficher ni l'enregistrer (#11525).
+describe('la fenêtre de reprise n’est plus un réglage (#11491, #11525)', () => {
   const legacyAbuse = { ...DEFAULT_ENGAGEMENT_SCALE.abuse, clawbackHours: 48 };
+  const servedAbuse = { ...DEFAULT_ENGAGEMENT_SCALE.abuse, clawbackHours: 720 };
 
-  it('accepte le clawbackHours d’un ancien client, ne l’écrit pas et ne le sert plus', async () => {
+  it('accepte le clawbackHours d’un ancien client sans l’écrire, et sert la loi des 30 jours', async () => {
     const bundle = makePrisma();
     const put = await call('ADMIN', 'PUT', { scale: { ...DEFAULT_ENGAGEMENT_SCALE, abuse: legacyAbuse } }, bundle);
     const get = await call('ADMIN', 'GET', undefined, bundle);
@@ -287,14 +297,11 @@ describe('la fenêtre de reprise n’est plus un réglage (#11491)', () => {
     const written = (bundle.upsert.mock.calls[0]?.[0] as { update: { config: { abuse: Record<string, unknown> } } }).update.config;
     expect(written.abuse).not.toHaveProperty('clawbackHours');
     for (const res of [put.res, get.res]) {
-      expect(res.json().data.scale.abuse).toEqual({
-        heavyPoints: DEFAULT_ENGAGEMENT_SCALE.abuse.heavyPoints,
-        unverifiedMaxPoints: DEFAULT_ENGAGEMENT_SCALE.abuse.unverifiedMaxPoints,
-      });
+      expect(res.json().data.scale.abuse).toEqual(servedAbuse);
     }
   });
 
-  it('ne sert pas la valeur orpheline d’un barème stocké avant la décision', async () => {
+  it('ne sert pas la valeur orpheline d’un barème stocké avant la décision : il sert la loi', async () => {
     const bundle = makePrisma();
     (bundle.prisma.engagementScaleConfig.findUnique as unknown as jest.Mock).mockImplementation(async () => ({
       config: { ...DEFAULT_ENGAGEMENT_SCALE, abuse: { ...legacyAbuse, clawbackHours: 9999 } },
@@ -304,6 +311,15 @@ describe('la fenêtre de reprise n’est plus un réglage (#11491)', () => {
     const { res } = await call('ADMIN', 'GET', undefined, bundle);
 
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.scale.abuse).not.toHaveProperty('clawbackHours');
+    expect(res.json().data.scale.abuse).toEqual(servedAbuse);
+  });
+
+  it('reste lisible par le décodeur d’une console d’avant la décision, qui exige un entier de 0 à 720', async () => {
+    const { res } = await call('ADMIN', 'GET');
+    const { clawbackHours } = res.json().data.scale.abuse;
+
+    expect(Number.isInteger(clawbackHours)).toBe(true);
+    expect(clawbackHours).toBeGreaterThanOrEqual(0);
+    expect(clawbackHours).toBeLessThanOrEqual(24 * 30);
   });
 });
