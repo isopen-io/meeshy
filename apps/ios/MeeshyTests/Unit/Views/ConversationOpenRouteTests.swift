@@ -54,6 +54,22 @@ final class ConversationOpenRouteTests: XCTestCase {
         XCTAssertTrue(ConversationOpenRoute.resolve(conversationId, searching: true).presentsLockSheet)
     }
 
+    /// Une fenêtre détachée (menu « Ouvrir dans une nouvelle fenêtre », glissé
+    /// vers le bord de l'iPad) monte le fil sans la liste : jamais pour une
+    /// conversation verrouillée.
+    func test_mayDetach_conversationLockedByPin_neverOffersAWindow() {
+        let locks = ConversationLockManager.shared
+        let conversationId = "open-route-\(UUID().uuidString)"
+        locks.setLock(conversationId: conversationId, pin: "1234")
+        defer { locks.removeLock(conversationId: conversationId) }
+
+        XCTAssertFalse(ConversationOpenRoute.mayDetach(conversationId))
+    }
+
+    func test_mayDetach_conversationWithoutLock_offersAWindow() {
+        XCTAssertTrue(ConversationOpenRoute.mayDetach("open-route-\(UUID().uuidString)"))
+    }
+
     func test_resolve_conversationWithoutLock_opens() {
         XCTAssertEqual(
             ConversationOpenRoute.resolve("open-route-\(UUID().uuidString)", searching: false),

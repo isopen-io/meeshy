@@ -256,6 +256,20 @@ final class LongPressPreviewGuardTests: XCTestCase {
         }
     }
 
+    /// Une fenêtre détachée ne demande pas le PIN : les deux portes vers elle
+    /// (l'entrée du menu natif, le glissé de rangée) lisent la loi du verrou.
+    func test_detachedWindowPaths_readTheLock() throws {
+        let overlay = normalizedCode(try source(Self.overlayPath))
+        XCTAssertTrue(overlay.contains("DetachedWindowOpener.shared.isAvailable, ConversationOpenRoute.mayDetach(conversation.id)"))
+        let rows = normalizedCode(try source(Self.nativePath))
+        XCTAssertTrue(rows.contains("ConversationOpenRoute.mayDetach(conversation.id)"))
+        for path in [Self.overlayPath, Self.nativePath] {
+            let normalized = normalizedCode(try source(path))
+            XCTAssertFalse(normalized.contains("router.navigateToConversation("), "\(path) : une ouverture passe par `openConversation`")
+            XCTAssertFalse(normalized.contains("router.push(.conversation"), "\(path) : une ouverture passe par `openConversation`")
+        }
+    }
+
     /// La porte elle-même : le toucher d'une rangée, le clavier et l'appui long
     /// lisent la même loi, et la feuille de verrou garde la recherche demandée.
     func test_openConversation_isTheSingleLockGate() throws {

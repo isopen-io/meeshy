@@ -152,6 +152,7 @@ struct ConversationRowItem: View {
                             conversationId: conversation.id,
                             title: conversation.name,
                             opensWindow: UIApplication.shared.supportsMultipleScenes
+                                && ConversationOpenRoute.mayDetach(conversation.id)
                         )
                         onDragBegan(provider.token)
                         return provider

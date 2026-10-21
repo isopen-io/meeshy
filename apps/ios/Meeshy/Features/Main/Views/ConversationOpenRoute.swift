@@ -28,6 +28,14 @@ enum ConversationOpenRoute: Equatable {
         resolve(isLocked: locks.isLocked(conversationId), searching: searching)
     }
 
+    /// Une fenêtre détachée monte le fil sans repasser par la liste : elle ne
+    /// s'offre donc qu'à une conversation que le PIN ne garde pas.
+    static func mayDetach(isLocked: Bool) -> Bool { !isLocked }
+
+    static func mayDetach(_ conversationId: String, locks: ConversationLockManager = .shared) -> Bool {
+        mayDetach(isLocked: locks.isLocked(conversationId))
+    }
+
     var presentsLockSheet: Bool {
         guard case .unlockFirst = self else { return false }
         return true

@@ -30,7 +30,7 @@ extension ConversationListView {
     func conversationContextMenu(for conversation: Conversation) -> some View {
         // Sa propre fenêtre (iPad) : écrire à cette personne ou à ce groupe pendant qu'une autre conversation
         // reste ouverte dans la fenêtre principale.
-        if DetachedWindowOpener.shared.isAvailable {
+        if DetachedWindowOpener.shared.isAvailable, ConversationOpenRoute.mayDetach(conversation.id) {
             Button {
                 HapticFeedback.light()
                 DetachedWindowOpener.shared.open(.conversation(id: conversation.id))
