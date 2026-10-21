@@ -12,10 +12,25 @@ import { ENGAGEMENT_LONG_FIXTURE, GAME_LONG_FLAG, gameBlockLongFixture, gameLong
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { ProgressionBody } from './progression';
+import { ConceptFiche } from './progression-concept';
+import type { GameActions } from './progression-game-actions';
 import { GeneratedAchievements } from './progression-parts';
 
+const IDLE: GameActions = {
+  mint: () => undefined,
+  reroll: () => undefined,
+  claimChest: () => undefined,
+  buyFreeze: () => undefined,
+  relight: () => undefined,
+  pending: { mint: false, rerollId: null, chest: false, freeze: false, relight: false },
+  errors: {},
+  celebration: null,
+  strikeKey: 0,
+};
+
 /**
- * AUCUNE PAGE DE « PROGRESSION » NE GLISSE DE CÔTÉ (#9563, amendement n° 3).
+ * AUCUNE PAGE NI AUCUNE FICHE DU JEU NE GLISSE DE CÔTÉ (#9563, amendement n° 3 ; étendu à tout le jeu par #11178,
+ * épopée § 3.3 : « rien ne glisse de côté, nulle part dans le jeu »).
  *
  * La mesure vraie est celle d'un navigateur (`scripts/check-phone-frame.mjs`,
  * 320 px, sept langues, valeurs longues). Ce témoin garde ce qui la PRODUIT, à
@@ -32,7 +47,8 @@ const sourcesOf = (dir: string, keep: (name: string) => boolean): readonly strin
 
 const PROGRESSION_SOURCES = [
   ...sourcesOf('routes', (name) => name.startsWith('progression')),
-  ...sourcesOf('components', (name) => name.startsWith('game-') || name.startsWith('progression-')),
+  ...sourcesOf('components', (name) => name.startsWith('game-') || name.startsWith('progression-') || name === 'player-banner.tsx'),
+  ...sourcesOf('components/game', () => true),
 ];
 
 const stripComments = (source: string): string => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
@@ -44,10 +60,14 @@ const SCROLLER = new RegExp(`${ATTRIBUTE}"([^"]*\\boverflow-y-auto\\b[^"]*)"`, '
 const PAGE = new RegExp(`<main id="contenu" ${ATTRIBUTE}"([^"]*)"`, 'g');
 
 describe('aucun conteneur ne défile de côté', () => {
-  test('le témoin parcourt bien les routes de Progression et les pièces du jeu', () => {
-    expect(PROGRESSION_SOURCES.length).toBeGreaterThan(40);
+  test('le témoin parcourt les routes de Progression, les pièces du jeu, les fiches et les dessins du jeu', () => {
+    expect(PROGRESSION_SOURCES.length).toBeGreaterThan(75);
     expect(PROGRESSION_SOURCES).toContain('routes/progression-parts.tsx');
+    expect(PROGRESSION_SOURCES).toContain('routes/progression-concept.tsx');
     expect(PROGRESSION_SOURCES).toContain('components/game-missions.tsx');
+    expect(PROGRESSION_SOURCES).toContain('components/game-fiche-heads.tsx');
+    expect(PROGRESSION_SOURCES).toContain('components/game/mint-ceremony.tsx');
+    expect(PROGRESSION_SOURCES).toContain('components/player-banner.tsx');
   });
 
   test('aucune classe `overflow-x-auto`, `overflow-x-scroll`, `overflow-auto` ni `overflow-scroll`', () => {
@@ -116,26 +136,57 @@ describe('les valeurs longues', () => {
     localStorage.removeItem(GAME_LONG_FLAG);
   });
 
-  test('le nom et la valeur d’une carte passent à la ligne ENTRE eux : ni nom écrasé lettre à lettre, ni valeur poussée hors de la carte', () => {
+  test('une carte empile son nom, sa valeur et sa ligne : le nom et la ligne passent à la ligne, la valeur se borne à la carte', () => {
     const page = dom(renderToStaticMarkup(<ProgressionBody progress={long()} now={NOW} />));
-    const heads = [...page.querySelectorAll('[data-concept-head]')];
+    const heads = [...page.querySelectorAll('[data-concept-card] [data-concept-head]')];
     expect(heads.length).toBeGreaterThanOrEqual(15);
+    for (const row of page.querySelectorAll('[data-progression-row] [data-concept-head]')) expect(row.className).toContain('flex-wrap');
     for (const head of heads) {
-      expect(head.className).toContain('flex-wrap');
+      expect(head.className).toContain('flex-col');
       expect(head.className).toContain('min-w-0');
+      expect(head.querySelector('[data-concept-name]')?.className).toContain('break-words');
       const value = head.querySelector('[data-concept-value]');
-      if (value !== null) {
-        expect(value.className).toContain('max-w-full');
-        expect(value.className).toContain('truncate');
-        expect(value.className).not.toContain('shrink-0');
+      expect(value?.className).toContain('max-w-full');
+      expect(value?.className).toContain('truncate');
+      expect(value?.className).not.toContain('shrink-0');
+      const line = head.querySelector('[data-concept-line]');
+      if (line !== null) {
+        expect(line.className).toContain('break-words');
+        expect(line.className).not.toContain('whitespace-nowrap');
       }
     }
   });
 
+  const fiches = (): readonly HTMLElement[] =>
+    PROGRESSION_CONCEPTS.map((concept) =>
+      dom(renderToStaticMarkup(<ConceptFiche concept={concept} progress={long()} host={{ actions: IDLE, online: true }} now={NOW} />)),
+    );
+
+  test('sur chaque fiche, un texte qui ne passe pas à la ligne est borné à sa rangée : il rétrécit et se tronque', () => {
+    const pages = [dom(renderToStaticMarkup(<ProgressionBody progress={long()} now={NOW} />)), ...fiches()];
+    const unbreakable = pages.flatMap((page) => [...page.querySelectorAll('.whitespace-nowrap')]);
+    expect(unbreakable.length).toBeGreaterThan(5);
+    for (const node of unbreakable) {
+      const text = node.textContent ?? '';
+      expect({ text, bounded: node.className.includes('max-w-full') || node.closest('.max-w-full') !== null }).toEqual({ text, bounded: true });
+    }
+  });
+
+  test('la tête de l’Héritage et des Étincelles, et le cadre de la frappe, passent à la ligne sur les valeurs longues', () => {
+    const [points, meesh] = (['points', 'meesh'] as const).map((concept) =>
+      dom(renderToStaticMarkup(<ConceptFiche concept={concept} progress={long()} host={{ actions: IDLE, online: true }} now={NOW} />)),
+    );
+    for (const page of [points, meesh]) {
+      const head = page?.querySelector('[data-fiche-head]');
+      expect(head?.className).toContain('break-words');
+      expect(head?.className).toContain('max-w-full');
+    }
+    expect(meesh?.querySelector('[data-game-mint-band]')?.className).toContain('w-full');
+  });
+
   test('une pastille plus longue que sa rangée rétrécit et se tronque : elle porte `max-w-full` et `truncate`', () => {
-    const pages = [renderToStaticMarkup(<ProgressionBody progress={long()} now={NOW} />)].map(dom);
-    const chips = pages.flatMap((page) => [...page.querySelectorAll('[data-chip]')]);
-    expect(chips.length).toBeGreaterThan(15);
+    const chips = fiches().flatMap((page) => [...page.querySelectorAll('[data-chip]')]);
+    expect(chips.length).toBeGreaterThan(5);
     for (const chip of chips) {
       const text = chip.textContent ?? '';
       expect({ text, bounded: chip.className.includes('max-w-full'), cut: chip.className.includes('truncate') || chip.querySelector('.truncate') !== null }).toEqual({ text, bounded: true, cut: true });

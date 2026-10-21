@@ -53,8 +53,8 @@ describe('le texte (D13)', () => {
   it('une étape : la phrase au singulier ; plusieurs : la phrase groupée qui porte leur nombre', () => {
     expect(photoMomentNotificationKey(1)).toBe('game.photoMoment');
     expect(photoMomentNotificationKey(3)).toBe('game.photoMoments');
-    expect(notificationString('fr', photoMomentNotificationKey(1), { count: 1 })).toBe('Un moment de ton aventure peut rejoindre ton carnet.');
-    expect(notificationString('fr', photoMomentNotificationKey(3), { count: 3 })).toBe('3 moments à immortaliser dans ton carnet.');
+    expect(notificationString('fr', photoMomentNotificationKey(1), { count: 1 })).toBe('Tes aïeux se sont manifestés : ce moment peut rejoindre ta Chronique.');
+    expect(notificationString('fr', photoMomentNotificationKey(3), { count: 3 })).toBe('3 signes de tes aïeux à immortaliser dans ta Chronique.');
   });
 
   it('existe dans les huit langues, jamais la clé brute, et le groupé dit son nombre', () => {

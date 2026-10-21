@@ -182,7 +182,7 @@ describe('le refus d’un pseudonyme de ligue cite le tiret bas', () => {
 describe('translateGame', () => {
   test('interpole les paramètres', async () => {
     await loadGameCatalog('en');
-    expect(translateGame('en', 'game.level.to_next', { points: '12 points', level: '5' })).toBe('12 points more before level 5');
+    expect(translateGame('en', 'game.level.to_next', { points: '12 points', level: '5' })).toBe('12 points to level 5');
   });
 });
 
