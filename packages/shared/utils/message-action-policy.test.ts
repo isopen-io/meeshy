@@ -155,6 +155,17 @@ describe('messageActionsFor — ce que la passerelle accorde sans le droit d’�
     expect(actions({ conversation: { type: 'global' } }).verdicts.pin).toBe('pin');
   });
 
+  it('épingler met un message en avant pour tous : il faut le droit d’écrire, comme la passerelle (#11219)', () => {
+    const announcements = { type: 'broadcast', isAnnouncementChannel: true } as const;
+    const pinned = { pinnedAt: '2026-10-20T10:00:00Z' } as const;
+    expect(actions({ conversation: announcements }).verdicts.pin).toBeNull();
+    expect(actions({ message: pinned, conversation: announcements }).verdicts.pin).toBeNull();
+    expect(actions({ conversation: announcements, viewer: { conversationRole: 'admin' } }).verdicts.pin).toBe('pin');
+    expect(actions({ conversation: { defaultWriteRole: 'moderator' } }).verdicts.pin).toBeNull();
+    expect(actions({ conversation: { closedAt: '2026-10-19T00:00:00Z' } }).verdicts.pin).toBeNull();
+    expect(actions({ message: pinned, conversation: { isActive: false } }).verdicts.pin).toBeNull();
+  });
+
   it('un message épinglé propose « Désépingler », jamais « Épingler »', () => {
     const { verdicts, groups } = actions({ message: { pinnedAt: '2026-10-20T10:00:00Z' } });
     expect(verdicts.pin).toBe('unpin');
