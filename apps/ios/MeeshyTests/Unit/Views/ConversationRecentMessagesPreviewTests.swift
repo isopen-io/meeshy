@@ -55,12 +55,30 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
         XCTAssertEqual(ConversationPreviewRenderer.kind(mode: .river), .flatRow)
     }
 
-    /// La loi est `landing` puis `usesFlatRow`, cas pour cas — jamais une table
-    /// recopiée qui dériverait à l'ajout d'un mode.
-    func test_kind_matchesTheLandedThreadRowForEveryMode() {
+    /// La table attendue, écrite à la main et EXHAUSTIVE : un mode ajouté ne
+    /// compile pas tant qu'on n'a pas dit quelle face son aperçu montre.
+    private func expectedKind(_ mode: ConversationReadingMode) -> ConversationPreviewRenderer.Kind {
+        switch mode {
+        case .script, .focal, .summary, .river: return .flatRow
+        case .bubbles: return .bubble
+        }
+    }
+
+    func test_kind_everyMode_matchesTheDeclaredTable() {
         for mode in ConversationReadingMode.allCases {
-            let landed = ReadingModeController.landing(.init(mode: mode, reason: .default)).mode
-            XCTAssertEqual(ConversationPreviewRenderer.kind(mode: mode) == .flatRow, landed.usesFlatRow, "\(mode)")
+            XCTAssertEqual(ConversationPreviewRenderer.kind(mode: mode), expectedKind(mode), "\(mode)")
+        }
+    }
+
+    /// Les deux aperçus d'appui long — la conversation et le message — lisent la
+    /// même face pour chaque mode qui MONTRE le fil. Ils ne divergent que sur
+    /// le Résumé et la Rivière, et pour une raison : l'aperçu d'un message est
+    /// la cellule VISIBLE, celui d'une conversation est le fil tel qu'il
+    /// S'OUVRIRA (`landing`). Une troisième divergence serait une dérive.
+    func test_kind_agreesWithTheMessagePreview_onEveryModeThatShowsTheThread() {
+        for mode in ConversationReadingMode.allCases where mode != .summary && mode != .river {
+            let message = MessageOverlayPreviewKind.resolve(readingMode: mode)
+            XCTAssertEqual(ConversationPreviewRenderer.kind(mode: mode) == .flatRow, message == .flatRow, "\(mode)")
         }
     }
 
@@ -183,6 +201,28 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
         XCTAssertEqual(ConversationPreviewRenderer.contentWidth(cardWidth: 10), 0)
     }
 
+    // MARK: - Le fondu : seulement si quelque chose est effacé
+
+    /// Une conversation de deux messages tient dans la carte : rien n'est
+    /// masqué au-dessus, la rangée du haut reste nette.
+    func test_fadesTop_contentShorterThanTheViewport_staysSharp() {
+        XCTAssertFalse(ConversationPreviewRenderer.fadesTop(contentHeight: 120, viewportHeight: 280))
+    }
+
+    func test_fadesTop_contentExactlyFillingTheViewport_staysSharp() {
+        XCTAssertFalse(ConversationPreviewRenderer.fadesTop(contentHeight: 280, viewportHeight: 280))
+    }
+
+    /// Le fil dépasse : le haut, coupé, s'efface.
+    func test_fadesTop_contentOverflowingTheViewport_fades() {
+        XCTAssertTrue(ConversationPreviewRenderer.fadesTop(contentHeight: 420, viewportHeight: 280))
+    }
+
+    /// Avant la première mesure, l'aperçu est net plutôt que flou.
+    func test_fadesTop_unmeasuredViewport_staysSharp() {
+        XCTAssertFalse(ConversationPreviewRenderer.fadesTop(contentHeight: 420, viewportHeight: 0))
+    }
+
     // MARK: - Le header : interactif ou non
 
     /// L'aperçu natif d'iOS 26 n'est pas interactif : ses boutons y seraient
@@ -194,6 +234,14 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
 
     func test_headerTarget_isAtLeastFortyFourPoints() {
         XCTAssertGreaterThanOrEqual(ConversationPreviewRenderer.headerTargetSize, 44)
+    }
+
+    /// Volet gauche étroit de l'iPad : trois cibles de 44 pt ne tiennent plus
+    /// sous le titre. La rangée se replie sur le cercle de 32 pt, sa cible
+    /// gardant 44 pt de HAUT — elle ne déborde jamais de la carte.
+    func test_headerTarget_narrowColumn_foldsToTheCompactCircle() {
+        XCTAssertLessThan(ConversationPreviewRenderer.compactHeaderTargetSize, ConversationPreviewRenderer.headerTargetSize)
+        XCTAssertEqual(ConversationPreviewRenderer.compactHeaderTargetSize, 32)
     }
 
     func test_isEndToEnd_readsTheConversationEncryptionMode() {

@@ -158,7 +158,7 @@ final class LongPressPreviewGuardTests: XCTestCase {
         let normalized = normalizedCode(try source(Self.renderPath))
         XCTAssertTrue(normalized.contains(".environment(\\.bubbleSkin, skin)"), "la bulle porte la peau de la conversation")
         XCTAssertTrue(
-            normalized.contains(".environment(\\.bubbleContainerWidth, Self.bubbleContainerWidth(cardWidth: cardWidth))"),
+            normalized.contains(".environment(\\.bubbleContainerWidth, ConversationPreviewRenderer.bubbleEnvironmentWidth(cardWidth: cardWidth))"),
             "la bulle se mesure à la largeur intérieure de la carte"
         )
     }
@@ -179,9 +179,43 @@ final class LongPressPreviewGuardTests: XCTestCase {
         XCTAssertTrue(normalized.contains("isInteractive: false"))
         let helpers = normalizedCode(try source(Self.helpersPath))
         XCTAssertTrue(
-            helpers.contains("if ConversationPreviewRenderer.showsHeaderActions(isInteractive: isInteractive) { headerActions"),
+            helpers.contains("if ConversationPreviewRenderer.showsHeaderActions(isInteractive: isInteractive) { ViewThatFits(in: .horizontal) { headerActions("),
             "`headerActions` n'est monté que si l'aperçu est interactif"
         )
+    }
+
+    /// Le fondu du haut n'efface que ce qui dépasse : le fil s'ancre en BAS de
+    /// la carte, et une conversation courte reste nette jusqu'à sa première
+    /// rangée.
+    func test_recentMessages_topFade_onlyWhenTheThreadOverflows() throws {
+        let normalized = normalizedCode(try source(Self.renderPath))
+        XCTAssertTrue(normalized.contains(".frame(minHeight: viewportHeight, alignment: .bottom)"))
+        XCTAssertTrue(normalized.contains(".mask { topFade(isActive: ConversationPreviewRenderer.fadesTop(contentHeight: contentHeight, viewportHeight: viewportHeight)) }"))
+    }
+
+    /// Les boutons d'en-tête se replient quand trois cibles de 44 pt ne tiennent
+    /// plus (volet gauche étroit de l'iPad), au lieu de déborder de la carte.
+    func test_headerActions_foldInANarrowColumn() throws {
+        let helpers = normalizedCode(try source(Self.helpersPath))
+        XCTAssertTrue(helpers.contains("ViewThatFits(in: .horizontal) { headerActions(targetSize: ConversationPreviewRenderer.headerTargetSize) headerActions(targetSize: ConversationPreviewRenderer.compactHeaderTargetSize) }"))
+    }
+
+    /// VoiceOver ne lit pas « 1 messages non lus » : le compte des non-lus se
+    /// décline au pluriel dans les sept langues, l'arabe sur ses six formes.
+    func test_unreadCountLabel_isPluralizedInEveryLanguage() throws {
+        let data = try XCTUnwrap(try source("Meeshy/Localizable.xcstrings").data(using: .utf8))
+        let catalog = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(catalog["strings"] as? [String: Any])
+        let entry = try XCTUnwrap(strings["preview.unread.a11y"] as? [String: Any])
+        let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
+        for locale in ["fr", "en", "es", "de", "it", "pt-BR", "ar"] {
+            let unit = try XCTUnwrap(localizations[locale] as? [String: Any], locale)
+            let plural = try XCTUnwrap((unit["variations"] as? [String: Any])?["plural"] as? [String: Any], locale)
+            let expected: Set<String> = locale == "ar" ? ["zero", "one", "two", "few", "many", "other"] : ["one", "other"]
+            XCTAssertEqual(Set(plural.keys), expected, locale)
+        }
+        let helpers = normalizedCode(try source(Self.helpersPath))
+        XCTAssertTrue(helpers.contains("String(localized: \"preview.unread.a11y\", defaultValue: \"\\(conversation.userState.unreadCount) messages non lus\", bundle: .main)"))
     }
 
     /// Le repli < iOS 26 lit Réduire les animations : l'entrée devient un

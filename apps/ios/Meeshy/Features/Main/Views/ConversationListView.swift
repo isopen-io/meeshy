@@ -504,14 +504,10 @@ struct ConversationListView: View {
         .overlay { KeyboardCursorRing(isActive: keyboardCursor == conversation.id, accentColor: conversation.accentColor) }
     }
 
-    /// La porte UNIQUE d'ouverture depuis la liste : le verrou par PIN n'est
-    /// vérifié nulle part ailleurs (`ConversationOpenRoute`).
     func openConversation(_ conversation: Conversation, searching: Bool = false) {
         let route = ConversationOpenRoute.resolve(conversation.id, searching: searching)
-        guard route.presentsLockSheet else {
-            if route.armsSearchNow { router.pendingOpenSearch = true }
-            return onSelect(conversation)
-        }
+        if route.armsSearchNow { router.pendingOpenSearch = true }
+        guard route.presentsLockSheet else { return onSelect(conversation) }
         sheetTargets.searchAfterUnlock = route.searchesAfterUnlock
         lockSheetMode = .openConversation
         sheetTargets.lockSheet = conversation

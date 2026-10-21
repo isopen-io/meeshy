@@ -15,6 +15,11 @@ import MeeshyUI
 /// l'aperçu, qui montre des messages, s'y pose comme « Aller au message » —
 /// `ReadingModeController.landing`, la même loi.
 ///
+/// L'aperçu d'un MESSAGE (`MessageOverlayPreviewKind`) lit la même face pour
+/// chaque mode qui montre le fil. Il ne diverge que sur le Résumé et la
+/// Rivière, parce qu'il répond à une autre question : la cellule VISIBLE sous
+/// le doigt, là où celui-ci montre le fil tel qu'il S'OUVRIRA.
+///
 /// Toutes pures : la vue ne décide rien qu'un test ne puisse interroger.
 enum ConversationPreviewRenderer {
     enum Kind: Equatable {
@@ -57,6 +62,10 @@ enum ConversationPreviewRenderer {
     static let rowSpacing: CGFloat = MeeshySpacing.md
     /// La cible d'un contrôle de l'en-tête, quand l'aperçu est interactif.
     static let headerTargetSize: CGFloat = MeeshyControlSize.tapTarget
+    /// La cible repliée quand trois cibles pleines ne tiennent pas sous le
+    /// titre (volet gauche étroit de l'iPad) : le cercle lui-même, la hauteur
+    /// gardant `headerTargetSize`.
+    static let compactHeaderTargetSize: CGFloat = MeeshyControlSize.compact
     /// La hauteur, en fraction, du fondu qui efface le haut du fil.
     static let topFadeLength: CGFloat = 0.14
 
@@ -120,6 +129,19 @@ enum ConversationPreviewRenderer {
         contentWidth(cardWidth: cardWidth)
     }
 
+    /// Ce que la vue POSE dans `\.bubbleContainerWidth` : la colonne intérieure
+    /// de la carte, ou rien tant que la carte n'est pas mesurée.
+    static func bubbleEnvironmentWidth(cardWidth: CGFloat) -> CGFloat? {
+        let width = bubbleContainerWidth(cardWidth: cardWidth)
+        return width > 0 ? width : nil
+    }
+
+    /// Le fondu du haut n'efface que ce qui DÉPASSE : un fil qui tient dans la
+    /// carte reste net jusqu'à sa première rangée.
+    static func fadesTop(contentHeight: CGFloat, viewportHeight: CGFloat) -> Bool {
+        viewportHeight > 0 && contentHeight > viewportHeight + 0.5
+    }
+
     /// L'aperçu natif d'iOS 26 n'est pas interactif : un bouton y serait inerte.
     static func showsHeaderActions(isInteractive: Bool) -> Bool {
         isInteractive
@@ -167,6 +189,8 @@ struct ConversationRecentMessagesPreview: View {
     /// Les heures d'une rangée au repos ne se montrent qu'au défilement : la
     /// carte porte son propre révélé, fermé, comme l'aperçu d'un message.
     @StateObject private var timestampReveal = FocalTimestampRevealState()
+    @State private var contentHeight: CGFloat = 0
+    @State private var viewportHeight: CGFloat = 0
 
     private var kind: ConversationPreviewRenderer.Kind { ConversationPreviewRenderer.kind(mode: readingMode) }
 
@@ -214,8 +238,13 @@ struct ConversationRecentMessagesPreview: View {
                 }
                 .padding(.horizontal, ConversationPreviewRenderer.margin)
                 .padding(.vertical, MeeshySpacing.md)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+                // Ancré en BAS, comme le fil : une conversation courte se pose
+                // au-dessus du bord inférieur, jamais sous le fondu.
+                .frame(minHeight: viewportHeight, alignment: .bottom)
             }
-            .mask { topFade }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { viewportHeight = $0 }
+            .mask { topFade(isActive: ConversationPreviewRenderer.fadesTop(contentHeight: contentHeight, viewportHeight: viewportHeight)) }
             .onAppear {
                 guard let lastID = messages.last?.id else { return }
                 proxy.scrollTo(lastID, anchor: .bottom)
@@ -272,13 +301,8 @@ struct ConversationRecentMessagesPreview: View {
         )
         .equatable()
         .environment(\.bubbleSkin, skin)
-        .environment(\.bubbleContainerWidth, Self.bubbleContainerWidth(cardWidth: cardWidth))
+        .environment(\.bubbleContainerWidth, ConversationPreviewRenderer.bubbleEnvironmentWidth(cardWidth: cardWidth))
         .allowsHitTesting(false)
-    }
-
-    private static func bubbleContainerWidth(cardWidth: CGFloat) -> CGFloat? {
-        let width = ConversationPreviewRenderer.bubbleContainerWidth(cardWidth: cardWidth)
-        return width > 0 ? width : nil
     }
 
     private func sealedRow(_ message: Message) -> some View {
@@ -302,10 +326,10 @@ struct ConversationRecentMessagesPreview: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var topFade: some View {
+    private func topFade(isActive: Bool) -> some View {
         LinearGradient(
             stops: [
-                .init(color: .clear, location: 0),
+                .init(color: isActive ? .clear : .black, location: 0),
                 .init(color: .black, location: ConversationPreviewRenderer.topFadeLength)
             ],
             startPoint: .top,

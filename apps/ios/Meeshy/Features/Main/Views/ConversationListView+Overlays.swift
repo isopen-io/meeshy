@@ -70,9 +70,8 @@ extension ConversationListView {
 
         // Rechercher dans la conversation — MÊME chemin que le bouton
         // « Rechercher » de l'aperçu du fallback custom (`onSearch`, SSOT) :
-        // la porte du verrou (`openConversation`) arme `pendingOpenSearch` —
-        // après le PIN si la conversation est verrouillée — puis ouvre la
-        // conversation, qui consomme le flag et présente la recherche. Sur iOS 26+ l'aperçu natif est statique
+        // la porte du verrou (`openConversation`, après le PIN) arme
+        // `pendingOpenSearch` et ouvre la conversation. Sur iOS 26+ l'aperçu natif est statique
         // (non cliquable) — l'action vit donc dans le menu (décision 2026-07-14).
         Button {
             HapticFeedback.light()
@@ -466,10 +465,7 @@ extension ConversationListView {
                             isDirect: conversation.type == .direct,
                             readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation),
                             onCall: previewCallAction(for: conversation),
-                            onSearch: {
-                                dismissContextMenu()
-                                openConversation(conversation, searching: true)
-                            },
+                            onSearch: { dismissContextMenu(); openConversation(conversation, searching: true) },
                             onInfo: { dismissContextMenu(); sheetTargets.info = conversation },
                             onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
                         )
@@ -479,8 +475,7 @@ extension ConversationListView {
                         // contenu défilait dans la carte au lieu de la déplacer
                         // (vérifié frame par frame 2026-07-03).
                         .scrollDisabled(true)
-                        // Toucher la carte ouvre la conversation (parité native),
-                        // par la porte du verrou, comme le toucher d'une rangée.
+                        // Toucher la carte ouvre la conversation, par la porte du verrou.
                         .contentShape(Rectangle())
                         .onTapGesture {
                             dismissContextMenu()

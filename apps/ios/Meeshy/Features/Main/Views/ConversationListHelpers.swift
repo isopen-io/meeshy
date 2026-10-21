@@ -265,7 +265,13 @@ struct ConversationPreviewView: View {
                     Spacer(minLength: 0)
                     headerIndicators
                     if ConversationPreviewRenderer.showsHeaderActions(isInteractive: isInteractive) {
-                        headerActions
+                        // Trois cibles de 44 pt ne tiennent pas sous le titre
+                        // dans le volet gauche étroit de l'iPad : la rangée se
+                        // replie sur le cercle au lieu de déborder de la carte.
+                        ViewThatFits(in: .horizontal) {
+                            headerActions(targetSize: ConversationPreviewRenderer.headerTargetSize)
+                            headerActions(targetSize: ConversationPreviewRenderer.compactHeaderTargetSize)
+                        }
                     }
                 }
             }
@@ -390,24 +396,20 @@ struct ConversationPreviewView: View {
                             )
                         )
                     )
-                    .accessibilityLabel(Text(String(
-                        format: String(localized: "preview.unread.a11y", defaultValue: "%lld messages non lus", bundle: .main),
-                        conversation.userState.unreadCount
-                    )))
+                    .accessibilityLabel(Text(String(localized: "preview.unread.a11y", defaultValue: "\(conversation.userState.unreadCount) messages non lus", bundle: .main)))
             }
         }
     }
 
     // MARK: - Header action buttons (glass call / search / info)
 
-    @ViewBuilder
-    private var headerActions: some View {
+    private func headerActions(targetSize: CGFloat) -> some View {
         HStack(spacing: 0) {
             if let onCall {
-                headerGlassButton(icon: "phone.fill", label: String(localized: "context.call", defaultValue: "Appeler", bundle: .main), action: onCall)
+                headerGlassButton(icon: "phone.fill", label: String(localized: "context.call", defaultValue: "Appeler", bundle: .main), targetSize: targetSize, action: onCall)
             }
 
-            headerGlassButton(icon: "magnifyingglass", label: String(localized: "context.search", defaultValue: "Rechercher", bundle: .main)) { onSearch?() }
+            headerGlassButton(icon: "magnifyingglass", label: String(localized: "context.search", defaultValue: "Rechercher", bundle: .main), targetSize: targetSize) { onSearch?() }
 
             if isDirect {
                 Menu {
@@ -422,32 +424,33 @@ struct ConversationPreviewView: View {
                         Label(String(localized: "profile.title", defaultValue: "Profil", bundle: .main), systemImage: "person.crop.circle")
                     }
                 } label: {
-                    headerGlassButtonLabel(icon: "info.circle.fill")
+                    headerGlassButtonLabel(icon: "info.circle.fill", targetSize: targetSize)
                 }
                 .accessibilityLabel(Text(String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main)))
             } else {
-                headerGlassButton(icon: "info.circle.fill", label: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main)) { onInfo?() }
+                headerGlassButton(icon: "info.circle.fill", label: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main), targetSize: targetSize) { onInfo?() }
             }
         }
     }
 
-    private func headerGlassButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+    private func headerGlassButton(icon: String, label: String, targetSize: CGFloat, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            headerGlassButtonLabel(icon: icon)
+            headerGlassButtonLabel(icon: icon, targetSize: targetSize)
         }
         .buttonStyle(PlainButtonStyle())
         .accessibilityLabel(Text(label))
     }
 
     /// Le cercle de verre garde sa taille (32 pt) ; la cible, elle, fait au
-    /// moins 44 pt (HIG) — le doigt n'a pas à viser le dessin.
-    private func headerGlassButtonLabel(icon: String) -> some View {
+    /// moins 44 pt (HIG) — le doigt n'a pas à viser le dessin. Repliée
+    /// (`compactHeaderTargetSize`), elle garde 44 pt de haut.
+    private func headerGlassButtonLabel(icon: String, targetSize: CGFloat) -> some View {
         Image(systemName: icon)
             .font(.footnote.weight(.semibold))
             .foregroundColor(.white)
             .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
-            .frame(width: ConversationPreviewRenderer.headerTargetSize, height: ConversationPreviewRenderer.headerTargetSize)
+            .frame(width: targetSize, height: ConversationPreviewRenderer.headerTargetSize)
             .contentShape(Rectangle())
     }
 
