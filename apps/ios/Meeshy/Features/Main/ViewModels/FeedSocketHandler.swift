@@ -284,11 +284,11 @@ final class FeedSocketHandler {
     // MARK: - Translation Handler
 
     private func handlePostTranslationUpdated(_ data: SocketPostTranslationUpdatedData) async {
-        try? await persistence.upsertPostTranslation(
+        await bestEffort("feedSocketHandler.postTranslation.upsert", category: .grdb) { try await persistence.upsertPostTranslation(
             postId: data.postId,
             language: data.language,
             translatedText: data.translation.text
-        )
+        ) }
     }
 }
 

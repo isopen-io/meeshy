@@ -4,8 +4,8 @@
  * catalogue `catalog-pt.ts`, qu'il RÉPAND.
  */
 const ptEngagement = {
-  'engagement.pill.streak.one': 'Chama de {count} dia',
-  'engagement.pill.streak.other': 'Chama de {count} dias',
+  'engagement.pill.streak.one': '{count} dia',
+  'engagement.pill.streak.other': '{count} dias',
   'engagement.pill.points.one': '{total} faísca, {today} hoje',
   'engagement.pill.points.other': '{total} faíscas, {today} hoje',
   'engagement.pill.total.one': '{total} faísca ganha nesta conversa',

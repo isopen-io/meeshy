@@ -78,6 +78,7 @@ const registryOf = (index: PackIndex, domain: AppearancePackDomain): readonly Re
     removable: entry.removable,
     hidden: entry.hidden,
     price: entry.price,
+    reward: entry.reward,
     version: entry.version,
     project: (installed: boolean, owned: boolean) => appearancePackDetail(entry, installed, owned, index.itemCount(entry)),
   }));

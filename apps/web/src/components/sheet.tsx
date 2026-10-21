@@ -209,7 +209,7 @@ export function Sheet({
           >
             <Glyph name="x" size={20} />
           </button>
-          <h2 id={titleId} className="flex-1 text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+          <h2 id={titleId} data-sheet-title="" className="flex-1 text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             {title}
           </h2>
           {accessory}

@@ -196,6 +196,17 @@ final class ConversationEngagementStoreTests: XCTestCase {
         XCTAssertFalse(text.contains("5"))
     }
 
+    func test_accessibilityText_withStreak_saysOnlyTheDuration_neverTheFlameNorASeries() {
+        let text = ConversationEngagementPill.accessibilityText(for: snapshot(total: 120, today: 12, streak: 4))
+
+        XCTAssertTrue(text.hasPrefix(ConversationEngagementPill.streakDaysText(4)), "la série ne dit que sa durée (#11484) : \(text)")
+        XCTAssertNotEqual(ConversationEngagementPill.streakDaysText(1), ConversationEngagementPill.streakDaysText(4).replacingOccurrences(of: "4", with: "1"),
+                          "un jour, des jours : le singulier a sa forme")
+        for word in ["Flamme", "Flame", "Série", "streak"] {
+            XCTAssertFalse(text.localizedCaseInsensitiveContains(word), "« \(word) » dans la série d'une conversation : \(text)")
+        }
+    }
+
     // MARK: - La série dans la liste (#9025)
 
     func test_streakMark_runningStreak_showsDaysAndTotalPoints() {

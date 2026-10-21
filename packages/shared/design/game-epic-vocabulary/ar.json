@@ -124,12 +124,13 @@
     {
       "pattern": "(?<!شظية\\s)(?<!شظايا\\s)(?<![\\p{L}\\p{M}\\p{N}])(?:[وف]?[بكل]?(?:ال)?|[وف]?لل)(?:نجم|نجوم)[\\p{L}\\p{M}]*",
       "flags": "u",
-      "instead": "«خطوات» (الرحلة)، «عصور» (الانبعاث)",
+      "instead": "«خطوات» (الرحلة)، «عصور» (الانبعاث)، «العتبات» (الوسام)",
       "keys": [
         "game.season.",
         "game.prestige.",
         "game.fact.strides",
-        "game.fact.rebirths"
+        "game.fact.rebirths",
+        "game.badge.stars_label"
       ]
     },
     {
@@ -218,6 +219,14 @@
       "instead": "المفرد: اللعبة تخاطب البطل وحده (le jeu tutoie)",
       "keys": [
         "game."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{M}\\p{N}])(?:[وف]?[بكل]?(?:ال)?|[وف]?لل)لهب[\\p{L}\\p{M}]*",
+      "flags": "u",
+      "instead": "«N أيام» تحت 🔥: اللهب لهب البطل، لا لهب محادثة",
+      "keys": [
+        "engagement.pill.streak."
       ]
     }
   ],
@@ -333,6 +342,8 @@
     "game.gauge.treasury": "الإرث",
     "game.gauge.flame": "اللهب",
     "game.fact.strides": "الخطوات",
-    "game.fact.rebirths": "الانبعاثات"
+    "game.fact.rebirths": "الانبعاثات",
+    "game.badge.stars_label": "العتبات",
+    "game.badge.ladder_title": "العتبات السبع"
   }
 }

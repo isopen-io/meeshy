@@ -205,7 +205,7 @@ export class CommentReactionService {
     if (result.count > 0) {
       await this.updateCommentReactionSummary(commentId);
       // Retirer le like reprend ce qu'il a rapporté (#9584).
-      removed.forEach(({ id }) => reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(id), {}, this.engagement));
+      removed.forEach(({ id }) => reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(id), this.engagement));
     }
 
     return result.count > 0;

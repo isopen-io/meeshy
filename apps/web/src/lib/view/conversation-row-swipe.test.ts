@@ -8,6 +8,7 @@ import {
   ROW_SWIPE_MAX_ACTIONS,
   conversationRowSwipeSides,
   rowSwipeEngages,
+  rowSwipePaint,
   rowSwipeOffset,
   rowSwipeSettle,
   rowSwipeWidths,
@@ -170,5 +171,24 @@ describe('rowSwipeSettle — où la ligne se pose au relâcher', () => {
   test('ouverte : continuer dans le même sens la laisse ouverte', () => {
     expect(settle(152, 80)).toBe(152);
     expect(settle(-228, -80)).toBe(-228);
+  });
+});
+
+describe('rowSwipePaint — le décalage voyage en `translate`, jamais en largeur (#11314)', () => {
+  test('LTR : tirer vers la droite découvre le bord de DÉBUT, caché à gauche (−100 %)', () => {
+    expect(rowSwipePaint({ offset: 40, sign: 1 })).toEqual({ swipe: '40px', reveal: '40px', hide: '-100%' });
+  });
+
+  test('LTR : tirer vers la gauche découvre le bord de FIN, caché à droite (+100 %)', () => {
+    expect(rowSwipePaint({ offset: -40, sign: 1 })).toEqual({ swipe: '-40px', reveal: '40px', hide: '100%' });
+  });
+
+  test('RTL : le signe physique s’inverse, et le côté caché avec lui', () => {
+    expect(rowSwipePaint({ offset: 40, sign: -1 })).toEqual({ swipe: '-40px', reveal: '40px', hide: '100%' });
+    expect(rowSwipePaint({ offset: -40, sign: -1 })).toEqual({ swipe: '40px', reveal: '40px', hide: '-100%' });
+  });
+
+  test('au retour à zéro le côté caché ne change pas : la fermeture glisse vers SON bord', () => {
+    expect(rowSwipePaint({ offset: 0, sign: 1 }).hide).toBeNull();
   });
 });

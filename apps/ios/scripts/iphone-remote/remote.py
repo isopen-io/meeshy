@@ -11,7 +11,7 @@ def main() -> int:
     try:
         # iPhone relié en Wi-Fi : iproxy (USB seulement) ne passe pas, viser l'adresse du tunnel CoreDevice
         # (`devicectl device info details` → Tunnel IP Address) par IPHONE_REMOTE_HOST.
-        connection = socket.create_connection((os.environ.get("IPHONE_REMOTE_HOST", "127.0.0.1"), 8100), timeout=120)
+        connection = socket.create_connection((os.environ.get("IPHONE_REMOTE_HOST", "127.0.0.1"), int(os.environ.get("IPHONE_REMOTE_PORT", "8100"))), timeout=120)
     except ConnectionRefusedError:
         print("télécommande injoignable : lancer d'abord « iphone-remote.sh start »", file=sys.stderr)
         return 2

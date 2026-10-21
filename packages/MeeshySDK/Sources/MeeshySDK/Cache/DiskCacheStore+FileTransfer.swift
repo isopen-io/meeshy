@@ -26,7 +26,11 @@ extension DiskCacheStore {
     /// Rejoindre un téléchargement déjà en vol ne rapporte aucune progression.
     /// Annuler la `Task` appelante annule le transfert qu'elle a OUVERT, jamais
     /// celui qu'elle a seulement rejoint.
-    public func data(for urlString: String, progress: @escaping MediaFileDownloader.ProgressHandler) async throws -> Data {
+    public func data(
+        for urlString: String,
+        profile: MediaTransferProfile = .standard,
+        progress: @escaping MediaFileDownloader.ProgressHandler
+    ) async throws -> Data {
         let result = await load(for: urlString)
         if let data = result.snapshot()?.first { return data }
         let url = try Self.remoteURL(urlString)
@@ -34,6 +38,7 @@ extension DiskCacheStore {
             for: urlString,
             url: url,
             transfer: .streamedToFile,
+            profile: profile,
             progress: progress,
             cancelsWithCaller: true
         )
@@ -85,9 +90,10 @@ extension DiskCacheStore {
     func streamedNetworkData(
         for urlString: String,
         request: URLRequest,
+        profile: MediaTransferProfile,
         progress: MediaFileDownloader.ProgressHandler?
     ) async throws -> Data {
-        let download = try await fileDownloader.download(request, progress: progress)
+        let download = try await fileDownloader.download(request, profile: profile, progress: progress)
         defer { discardStagedFile(download.fileURL) }
         guard let http = download.response as? HTTPURLResponse else {
             throw DiskCacheError.notCached(urlString)

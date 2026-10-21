@@ -111,7 +111,7 @@ struct GuestConversationContainer: View {
                 anonymousSession: context,
                 showsOwnConnectionBanner: true
             )
-            .environmentObject(router)
+            .modifier(MeeshyRouterInjection(router: router))
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
             .reportsConversationViewing(context.conversationId)

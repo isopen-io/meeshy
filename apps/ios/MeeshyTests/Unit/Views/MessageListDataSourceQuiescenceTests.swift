@@ -152,10 +152,16 @@ final class MessageListDataSourceQuiescenceTests: XCTestCase {
     func test_applySnapshotSortAvantSaConstruction() throws {
         // Ancre sur la SIGNATURE, jamais sur sa PORTÉE (#7222 : `applySnapshot`
         // est passée `internal` — voir `ConversationSelectionGuardTests`).
-        let body = try Self.body(of: "func applySnapshot(", in: Self.stripped(
-            "Meeshy/Features/Main/Views/MessageListViewController.swift"))
+        // e29680f424 (#11129) : la prépa est une étape nommée et mémoïsée,
+        // `snapshotPrep()` — c'est elle qui paye `reversed` ; la garde doit
+        // précéder son APPEL.
+        let unit = try Self.stripped("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let body = try Self.body(of: "func applySnapshot(", in: unit)
         let garde = try XCTUnwrap(body.range(of: "guard rendersThread else { return }"))
-        let prepa = try XCTUnwrap(body.range(of: "store.messages.reversed()"))
+        let prepa = try XCTUnwrap(body.range(of: "snapshotPrep()"))
+        let etape = try Self.body(of: "func snapshotPrep(", in: unit)
+        XCTAssertNotNil(etape.range(of: "store.messages.reversed()"),
+                        "L'étape nommée porte la construction O(n) que la garde épargne.")
 
         XCTAssertTrue(garde.lowerBound < prepa.lowerBound,
                       "La garde précède la construction, sinon on paye la prépa pour rien.")

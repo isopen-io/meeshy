@@ -15,7 +15,7 @@ struct CommunityLinksView: View {
     private var back: PanelBackAction {
         PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
     }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     private let accent = MeeshyColors.communityAccent
     private let accentHex = MeeshyColors.communityAccentHex

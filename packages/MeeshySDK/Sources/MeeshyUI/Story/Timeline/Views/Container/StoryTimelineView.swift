@@ -323,29 +323,50 @@ public struct StoryTimelineView: View {
     }
 
     // MARK: - Hoisted computed properties (MEDIUM 7)
-    // Keyed only on viewModel.project — stable when currentTime / zoomScale change.
+    // Mémoïsés sur la révision du projet (#9874) : un calcul par version du
+    // projet, pas un par body. Les caches ne sont jamais observés.
+
+    private struct CompactKey: Equatable {
+        let revision: UInt
+        let selectedClipId: String?
+    }
+
+    @State private var allTracksMemo = KeyedMemo<UInt, [CompactTrack]>()
+    @State private var compactTracksMemo = KeyedMemo<CompactKey, [CompactTrack]>()
+    @State private var junctionsMemo = KeyedMemo<UInt, [TransitionJunction]>()
+    @State private var keyframeMarkersMemo = KeyedMemo<UInt, [KeyframeMarker]>()
 
     private var hoistedAllTracks: [CompactTrack] {
-        Self.resolveAllTracks(project: viewModel.project)
+        allTracksMemo.value(for: viewModel.projectRevision) {
+            Self.resolveAllTracks(project: viewModel.project)
+        }
     }
 
     private var hoistedCompactTracks: [CompactTrack] {
-        Self.resolveCompactTracks(
-            project: viewModel.project,
-            selectedClipId: viewModel.selection.selectedClipId,
-            maxCount: Self.compactMaxTracks
-        )
+        let key = CompactKey(revision: viewModel.projectRevision,
+                             selectedClipId: viewModel.selection.selectedClipId)
+        return compactTracksMemo.value(for: key) {
+            Self.resolveCompactTracks(
+                project: viewModel.project,
+                selectedClipId: key.selectedClipId,
+                maxCount: Self.compactMaxTracks
+            )
+        }
     }
 
     private var hoistedJunctions: [TransitionJunction] {
-        TransitionJunctionResolver.resolve(
-            project: viewModel.project,
-            slideDuration: viewModel.project.slideDuration
-        )
+        junctionsMemo.value(for: viewModel.projectRevision) {
+            TransitionJunctionResolver.resolve(
+                project: viewModel.project,
+                slideDuration: viewModel.project.slideDuration
+            )
+        }
     }
 
     private var hoistedKeyframeMarkers: [KeyframeMarker] {
-        KeyframeMarkerResolver.resolve(project: viewModel.project)
+        keyframeMarkersMemo.value(for: viewModel.projectRevision) {
+            KeyframeMarkerResolver.resolve(project: viewModel.project)
+        }
     }
 
     // MARK: - Body
@@ -412,8 +433,9 @@ public struct StoryTimelineView: View {
     private var transport: some View {
         TransportBar(
             isPlaying: viewModel.isPlaying,
-            currentTime: viewModel.currentTime,
+            currentTime: 0,
             duration: viewModel.project.slideDuration,
+            playhead: viewModel.playhead,
             zoomScale: viewModel.zoomScale,
             isMuted: viewModel.isMuted,
             showsTimeReadout: Self.transportShowsTimeReadout,
@@ -463,7 +485,7 @@ public struct StoryTimelineView: View {
                 TimelineScrubArea(
                     totalDuration: viewModel.project.slideDuration,
                     geometry: geometry,
-                    currentTime: viewModel.currentTime,
+                    playhead: viewModel.playhead,
                     isDark: colorScheme == .dark,
                     minLaneWidth: 200,
                     rulerHeight: 22,

@@ -9,6 +9,8 @@ import XCTest
 /// garde le même flux (non bloquant, résultat ignoré, annulation silencieuse)
 /// mais journalise toute autre erreur.
 ///
+/// Il couvre l'app, ses extensions ET le SDK.
+///
 /// Ce cliquet compte, ligne par ligne, les écritures silencieuses restantes
 /// et ne tolère que celles de `allowance`. Il tient dans les deux sens : un
 /// fichier absent de la table n'en a pas le droit, et un nom qui n'écrit plus
@@ -17,13 +19,6 @@ final class SilentPersistenceWriteGuardTests: XCTestCase {
 
     private static let allowance: [String: Int] = [
         "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+StoreObservation.swift": 2,
-        "apps/ios/Meeshy/Features/Main/ViewModels/FeedSocketHandler.swift": 1,
-        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift": 13,
-        "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift": 1,
-        "apps/ios/Meeshy/Features/Main/Views/FeedCommentsSheet+Loading.swift": 3,
-        "apps/ios/Meeshy/Features/Main/Views/FeedCommentsSheet.swift": 2,
-        "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift": 1,
-        "apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift": 4,
     ]
 
     private static let scannedTrees = [
@@ -33,9 +28,12 @@ final class SilentPersistenceWriteGuardTests: XCTestCase {
         "apps/ios/MeeshyWidgets",
         "apps/ios/MeeshyShareExtension",
         "apps/ios/MeeshyBroadcastExtension",
+        "packages/MeeshySDK/Sources",
     ]
 
     private static let silentWritePattern = #"try\?\s*await\s+[A-Za-z_.]*\.(save|applyEvent|upsert|write)"#
+
+    private static let boundValuePattern = #"^(?:(?:if|guard)\s+)?(?:let|var)\s+[^=]+=\s*try\?"#
 
     func test_aucuneEcriturePersistanteSilencieuseHorsTolerance() throws {
         let counts = try silentWriteCounts()
@@ -79,6 +77,9 @@ final class SilentPersistenceWriteGuardTests: XCTestCase {
         let lines = try swiftSources(in: "apps/ios/Meeshy")
             .reduce(0) { $0 + $1.source.split(separator: "\n", omittingEmptySubsequences: false).count }
         XCTAssertGreaterThan(lines, 500, "le balayage ne lit presque rien : le détecteur est aveugle")
+        let sdkLines = try swiftSources(in: "packages/MeeshySDK/Sources")
+            .reduce(0) { $0 + $1.source.split(separator: "\n", omittingEmptySubsequences: false).count }
+        XCTAssertGreaterThan(sdkLines, 500, "le balayage ne lit pas le SDK : le détecteur est aveugle")
     }
 
     func test_leDetecteurReconnaitLesFormesDuDepot() {
@@ -87,6 +88,8 @@ final class SilentPersistenceWriteGuardTests: XCTestCase {
             "_ = try? await messagePersistence.applyEvent(localId: id, event: .retryExhausted)",
             "try? await persistence.upsertPostTranslation(",
             #"Task { try? await CacheCoordinator.shared.shareLinks.save(snapshot, for: "list") }"#,
+            #"_ = try? await db.write { db in try db.execute(sql: "DELETE FROM t") }"#,
+            #"try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: k)"#,
         ]
         let ignored = [
             #"await bestEffort("feed.cache.save", category: .cache) { try await feed.save(p, for: "k") }"#,
@@ -94,6 +97,8 @@ final class SilentPersistenceWriteGuardTests: XCTestCase {
             "// try? await x.save(y)",
             "/// try? await x.save(y)",
             "* try? await x.save(y)",
+            "let removed: Removed?? = try? await context.pool.write { db -> Removed? in",
+            "guard let saved = try? await store.save(x) else { return }",
         ]
         recognised.forEach { XCTAssertTrue(Self.isSilentWrite($0), $0) }
         ignored.forEach { XCTAssertFalse(Self.isSilentWrite($0), $0) }
@@ -102,6 +107,7 @@ final class SilentPersistenceWriteGuardTests: XCTestCase {
     static func isSilentWrite(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { return false }
+        guard trimmed.range(of: boundValuePattern, options: .regularExpression) == nil else { return false }
         return trimmed.range(of: silentWritePattern, options: .regularExpression) != nil
     }
 

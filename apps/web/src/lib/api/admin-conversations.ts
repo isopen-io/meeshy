@@ -85,8 +85,9 @@ export const ADMIN_MESSAGES_PAGE_SIZE = 30;
 
 export const adminConversationsQueryKey = (adresse: string) => [ADMIN_SOUVERAIN_PREFIXE, 'conversations', adresse] as const;
 
-export const adminConversationMessagesQueryKey = (conversationId: string, offset: number) =>
-  [ADMIN_SOUVERAIN_PREFIXE, 'messages', conversationId, offset] as const;
+/** UNE clé pour tout le fil (#11457) : ses pages vivent dans la même requête infinie. */
+export const adminConversationThreadQueryKey = (conversationId: string) =>
+  [ADMIN_SOUVERAIN_PREFIXE, 'messages', conversationId] as const;
 
 const asTextOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;
@@ -375,3 +376,33 @@ export async function loadAdminSovereignThread(
 
   return { ok: true, data: decodeAdminSovereignThread(pageServie(result), params.offset) };
 }
+
+/** Le fil recousu — les pages servies, dans l'ordre où on le LIT (#11457). */
+export type AdminSovereignThread = Pick<AdminSovereignThreadPage, 'messages' | 'protectedIds' | 'ephemeralDurations'>;
+
+/**
+ * **LES PAGES SE RECOUSENT DU PLUS ANCIEN AU PLUS RÉCENT** (#11457). La passerelle
+ * sert `createdAt DESC` par offset : la page 0 est la plus RÉCENTE et chaque page
+ * suivante remonte le temps ; chacune est déjà ascendante (`decodeAdminSovereignThread`).
+ * La plus ancienne passe donc en tête. Un message arrivé entre deux chargements
+ * décale les offsets et rend une rangée deux fois : la première occurrence, dans
+ * l'ordre du fil, est la seule gardée.
+ */
+export function mergeAdminThreadPages(pages: readonly AdminSovereignThreadPage[]): AdminSovereignThread {
+  const chronological = [...pages].reverse();
+  const all = chronological.flatMap((page) => page.messages);
+  const firstIndex = new Map<string, number>();
+  all.forEach((message, index) => {
+    if (!firstIndex.has(message.id)) firstIndex.set(message.id, index);
+  });
+  const messages = all.filter((message, index) => firstIndex.get(message.id) === index);
+  return {
+    messages,
+    protectedIds: new Set(chronological.flatMap((page) => [...page.protectedIds])),
+    ephemeralDurations: new Map(chronological.flatMap((page) => [...page.ephemeralDurations])),
+  };
+}
+
+/** L'offset de la page plus ANCIENNE suivante, ou `undefined` quand le fil est remonté jusqu'au début. */
+export const nextAdminThreadOffset = (page: AdminSovereignThreadPage): number | undefined =>
+  page.hasMore ? page.offset + ADMIN_MESSAGES_PAGE_SIZE : undefined;

@@ -265,13 +265,7 @@ struct ConversationPreviewView: View {
                     Spacer(minLength: 0)
                     headerIndicators
                     if ConversationPreviewRenderer.showsHeaderActions(isInteractive: isInteractive) {
-                        // Trois cibles de 44 pt ne tiennent pas sous le titre
-                        // dans le volet gauche étroit de l'iPad : la rangée se
-                        // replie sur le cercle au lieu de déborder de la carte.
-                        ViewThatFits(in: .horizontal) {
-                            headerActions(targetSize: ConversationPreviewRenderer.headerTargetSize)
-                            headerActions(targetSize: ConversationPreviewRenderer.compactHeaderTargetSize)
-                        }
+                        foldingHeaderActions
                     }
                 }
             }
@@ -315,7 +309,8 @@ struct ConversationPreviewView: View {
             isDirect: isDirect,
             isDark: isDark,
             currentUserId: AuthManager.shared.currentUser?.id ?? "",
-            cardWidth: cardWidth
+            cardWidth: cardWidth,
+            backdrop: ConversationPreviewRenderer.backdrop(for: conversation, computedAccentHex: accentColor, isDark: isDark)
         )
     }
 
@@ -402,6 +397,18 @@ struct ConversationPreviewView: View {
     }
 
     // MARK: - Header action buttons (glass call / search / info)
+
+    /// Trois cibles de 44 pt ne tiennent pas sous le titre dans le volet gauche
+    /// étroit de l'iPad : la rangée se replie sur le cercle au lieu de déborder
+    /// de la carte. Un membre à lui seul (#11411) : `ViewThatFits` mesure ses
+    /// candidats sur le rendu asynchrone d'iOS 26, et posé au fil de `header`, il
+    /// emportait dans sa mesure tout ce que l'en-tête construit avant lui.
+    private var foldingHeaderActions: some View {
+        ViewThatFits(in: .horizontal) {
+            headerActions(targetSize: ConversationPreviewRenderer.headerTargetSize)
+            headerActions(targetSize: ConversationPreviewRenderer.compactHeaderTargetSize)
+        }
+    }
 
     private func headerActions(targetSize: CGFloat) -> some View {
         HStack(spacing: 0) {

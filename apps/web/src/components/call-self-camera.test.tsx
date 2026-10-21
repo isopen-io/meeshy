@@ -128,6 +128,9 @@ describe('mon image pendant un appel', () => {
     return { find, press, full, done };
   };
 
+  /** Les rangées se posent par `translate: x y` (#11314), relatif à la vignette. */
+  const offsetY = (element: HTMLElement): number => Number.parseFloat(element.style.translate.split(' ')[1] ?? '');
+
   test('en coin, aucun zoom : ni capsule, ni colonne — les commandes de ma caméra vivent AUTOUR de ma vignette, jamais dedans (#8626, #8747)', () => {
     fresh();
     const view = mount(call(zoomCamera()));
@@ -139,8 +142,8 @@ describe('mon image pendant un appel', () => {
     expect(view.find('[data-call-corner] [data-test-row]')).toBeNull();
     const above = view.find('[data-call-self-row="effects"]') as HTMLElement;
     const below = view.find('[data-call-self-row="camera"]') as HTMLElement;
-    expect(Number.parseFloat(above.style.top) + Number.parseFloat(above.style.height)).toBeLessThanOrEqual(-8);
-    expect(Number.parseFloat(below.style.top)).toBeGreaterThanOrEqual(Number.parseFloat((view.find('[data-call-corner-frame]') as HTMLElement).style.height) + 8);
+    expect(offsetY(above) + Number.parseFloat(above.style.height)).toBeLessThanOrEqual(-8);
+    expect(offsetY(below)).toBeGreaterThanOrEqual(Number.parseFloat((view.find('[data-call-corner-frame]') as HTMLElement).style.height) + 8);
     view.done();
   });
 

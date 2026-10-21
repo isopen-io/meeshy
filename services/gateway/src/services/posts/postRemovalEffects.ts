@@ -37,6 +37,8 @@ export interface RemovedPostRecord {
   id: string;
   authorId: string;
   type?: string | null;
+  /** La date de publication : elle décide si la reprise s'applique (trente jours, #11467). */
+  createdAt: Date;
 }
 
 /** Qui a tranché, et pourquoi si la surface le demande. */
@@ -97,10 +99,11 @@ export async function applyPostRemovalEffects(
     }
   }
 
-  // Les points d'un contenu lourd retiré dans la fenêtre du barème reviennent
-  // sur le compte de son AUTEUR (#8959) — que le retrait vienne de lui ou d'un
-  // modérateur : c'est ici, et non dans chaque route, pour que les deux
-  // chemins de retrait l'appliquent. Hors du chemin, ne rejette jamais.
+  // Les points d'une publication retirée moins d'un mois après sa publication
+  // reviennent sur le compte de son AUTEUR (#8959, #11467) — que le retrait
+  // vienne de lui ou d'un modérateur : c'est ici, et non dans chaque route,
+  // pour que les deux chemins de retrait l'appliquent. Hors du chemin, ne
+  // rejette jamais.
   reclaimRemovedContent(prisma, post, engagement);
 
   // Les notifications que le post a produites. Placées juste après l'audit —

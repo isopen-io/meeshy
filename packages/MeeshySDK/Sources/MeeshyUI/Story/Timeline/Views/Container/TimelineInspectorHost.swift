@@ -597,7 +597,7 @@ public struct TimelineInspectorHost: View {
             onTransformChanged: { [viewModel] field in
                 viewModel.setClipTransform(id: clipId, field: field)
             },
-            playheadTime: viewModel.currentTime,
+            playhead: viewModel.playhead,
             onAddVolumePoint: { [viewModel] volume in
                 viewModel.addKeyframeAtPlayhead(volume: volume)
             },

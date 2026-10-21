@@ -17,7 +17,8 @@ enum LoginServerPicker {
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
-    @StateObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     // Normal login form state
     @State private var username = ""

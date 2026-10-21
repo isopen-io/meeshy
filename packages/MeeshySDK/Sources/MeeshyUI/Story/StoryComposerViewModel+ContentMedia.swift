@@ -364,7 +364,8 @@ public extension StoryComposerViewModel {
     private func applyAudioWaveform(_ samples: [Float], to objectId: String) {
         var effects = currentEffects
         guard let index = effects.audioPlayerObjects?.firstIndex(where: { $0.id == objectId }) else { return }
-        effects.audioPlayerObjects?[index].waveformSamples = samples
+        // Le champ publié est normalisé au pic (contrat serveur et web) ; la mesure du cache est absolue.
+        effects.audioPlayerObjects?[index].waveformSamples = WaveformScale.peakNormalized(samples)
         currentEffects = effects
     }
 }

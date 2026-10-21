@@ -1,10 +1,20 @@
 /*
  * UNE LIGNE DE CONVERSATION SE BALAIE (#10580) — `conversation-row-swipe.tsx`.
  *
- * Le décalage voyage par deux propriétés personnalisées posées sur le `<li>`
+ * Le décalage voyage par trois propriétés personnalisées posées sur le `<li>`
  * HORS React, une par image du geste : `--row-swipe` (le déplacement physique
- * du contenu) et `--row-reveal` (la largeur découverte). Aucun rendu pendant
+ * du contenu), `--row-reveal` (la largeur découverte) et `--row-hide` (le côté
+ * d'où le conteneur d'actions attend : `-100%` ou `100%`). Aucun rendu pendant
  * le balayage.
+ *
+ * LES ACTIONS RESTENT AU BORD, LA FENÊTRE S'OUVRE SANS LARGEUR ANIMÉE (#11314).
+ * Comme `SwipeableRow.swift`, où les fonds d'action sont FIXES sous la ligne et
+ * découvrent d'abord l'action du bord : le conteneur a la largeur de la ligne,
+ * rogne, et glisse de `--row-swipe` en `translate` (la fenêtre) ; la piste
+ * glisse de l'inverse (`-hide - swipe`, en % de SA largeur) et reste donc
+ * clouée au bord de l'écran. Les deux suivent la même courbe : leur somme est
+ * constante à chaque image, ressort compris. La piste ne change de largeur
+ * qu'AU-DELÀ de sa zone (l'élastique), jamais sous l'effet d'une transition.
  *
  * `translate`, JAMAIS `transform` : la scène de la Lentille réécrit le
  * `transform` du premier enfant de la rangée à chaque image de défilement
@@ -26,20 +36,21 @@
 .row-swipe-actions {
   position: absolute;
   inset-block: 0;
+  inset-inline: 0;
   display: flex;
   overflow: hidden;
-  width: var(--row-reveal, 0px);
-  transition: width 400ms cubic-bezier(0.3, 1.25, 0.5, 1);
+  translate: calc(var(--row-swipe, 0px) + var(--row-hide, -100%)) 0;
+  transition: translate 400ms cubic-bezier(0.3, 1.25, 0.5, 1);
 }
 
+/* La piste part du bord INTÉRIEUR du conteneur, et sa contre-translation la
+   ramène au bord de l'écran : la première action y est découverte d'abord. */
 .row-swipe-actions[data-row-swipe-actions='leading'] {
-  inset-inline-start: 0;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 .row-swipe-actions[data-row-swipe-actions='trailing'] {
-  inset-inline-end: 0;
-  justify-content: flex-end;
+  justify-content: flex-start;
 }
 
 /* La piste garde la largeur de sa zone tant que la ligne n'a pas tout
@@ -48,7 +59,9 @@
 .row-swipe-track {
   display: flex;
   flex: none;
-  width: max(100%, var(--row-swipe-zone));
+  width: max(var(--row-swipe-zone), var(--row-reveal, 0px));
+  translate: calc(-1 * var(--row-hide, -100%) - var(--row-swipe, 0px)) 0;
+  transition: translate 400ms cubic-bezier(0.3, 1.25, 0.5, 1);
 }
 
 [data-row-swipe-actions='trailing'] > .row-swipe-track {
@@ -93,7 +106,8 @@
 }
 
 [data-row-swipe='dragging'] > .lens-row,
-[data-row-swipe='dragging'] > .row-swipe-actions {
+[data-row-swipe='dragging'] > .row-swipe-actions,
+[data-row-swipe='dragging'] > .row-swipe-actions > .row-swipe-track {
   transition: none;
 }
 
@@ -110,7 +124,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   [data-row-swipe] > .lens-row,
-  .row-swipe-actions {
+  .row-swipe-actions,
+  .row-swipe-track {
     transition: none;
   }
 }

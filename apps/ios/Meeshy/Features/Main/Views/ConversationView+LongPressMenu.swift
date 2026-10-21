@@ -126,13 +126,14 @@ extension ConversationView {
     func pieceOverlayContent(for message: Message) -> AnyView? {
         guard MessagePieceTarget.piece(overlayState.overlayPieceId, in: message) != nil else { return nil }
         let messageId = message.id
+        let menu = MessageMenuContext.make(message: message, viewModel: viewModel, authority: menuAuthority)
         return AnyView(
             MessagePieceOverlay(
                 message: message,
                 accentHex: accentColor,
                 focusedPieceId: $overlayState.overlayPieceId,
                 isPresented: $overlayState.showOverlayMenu,
-                canDelete: message.isMe || isCurrentUserAdminOrMod || canRemoveMessage(message),
+                canDelete: menu.canDeleteOnServer, canForward: menu.canForward,
                 onReact: { piece, emoji in
                     viewModel.toggleAttachmentReaction(attachmentId: piece.id, messageId: messageId, emoji: emoji)
                 },
@@ -182,24 +183,22 @@ extension ConversationView {
                 titleVisibility: .visible,
                 presenting: overlayState.deleteConfirmMessageId
             ) { msgId in
-                // "Delete for everyone" only if the user authored the
-                // message AND the 2-hour window hasn't elapsed — matches
-                // WhatsApp's "Delete for everyone" gating.
-                if let idx = viewModel.messageIndex(for: msgId),
-                   viewModel.canDeleteForEveryone(viewModel.messages[idx]) {
+                // Les verdicts de la fabrique (#11214) : pour tous, retirer, pour moi.
+                let verdicts = MessageMenuContext.make(messageId: msgId, viewModel: viewModel, authority: menuAuthority)
+                if verdicts.canDeleteForEveryone {
                     Button(String(localized: "conversation.view.delete_for_everyone", bundle: .main), role: .destructive) {
-                        Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }
-                        overlayState.deleteConfirmMessageId = nil
+                        Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }; overlayState.deleteConfirmMessageId = nil
                     }
                 }
-                if let idx = viewModel.messageIndex(for: msgId), canRemoveMessage(viewModel.messages[idx]) {
+                if verdicts.canRemove {
                     ContentRemovalOffer.messageButton(before: { overlayState.deleteConfirmMessageId = nil }) { reason in
                         Task { await viewModel.removeMessage(messageId: msgId, reason: reason) }
                     }
                 }
-                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
-                    Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }
-                    overlayState.deleteConfirmMessageId = nil
+                if verdicts.canDeleteForMe {
+                    Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
+                        Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }; overlayState.deleteConfirmMessageId = nil
+                    }
                 }
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { overlayState.deleteConfirmMessageId = nil }
             } message: { _ in
@@ -208,7 +207,7 @@ extension ConversationView {
             // #4024 — même contrat que la confirmation ci-dessus, sur la
             // SÉLECTION entière plutôt qu'un seul message : "pour tous"
             // n'apparaît que si `selectionAllowsDeleteForAll` (TOUS les
-            // messages sélectionnés sont miens ET encore dans la fenêtre).
+            // messages sélectionnés sont miens, sans fenêtre — #11214).
             .confirmationDialog(
                 String(localized: "conversation.view.delete_message.title", bundle: .main),
                 isPresented: $overlayState.deleteConfirmSelectionActive,
@@ -221,8 +220,10 @@ extension ConversationView {
                 }
                 ContentRemovalOffer.selectionButton(selectedMessagesInThreadOrder, ids: overlayState.selectedMessageIds,
                     viewModel: viewModel, mayRemove: canRemoveMessage, onConfirmed: endSelectionMode)
-                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
-                    deleteSelectedMessages(mode: .local)
+                if selectionAllowsDeleteForMe {
+                    Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
+                        deleteSelectedMessages(mode: .local)
+                    }
                 }
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
             } message: {
